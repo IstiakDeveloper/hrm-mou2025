@@ -303,7 +303,7 @@ export default function ZKTecoDashboard({ devices, flash }: ZKTecoDashboardProps
                       <div className="flex flex-col items-center justify-center">
                         <Server className="h-12 w-12 text-gray-400 mb-2" />
                         <p>No attendance devices found.</p>
-                        <Link href={route('zkteco.devices.create')}>
+                        <Link href="">
                           <Button
                             variant="link"
                             className="px-2 font-normal mt-2"

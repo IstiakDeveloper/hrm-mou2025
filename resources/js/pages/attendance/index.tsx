@@ -48,7 +48,9 @@ import {
   BarChart,
   RefreshCw,
   Building,
-  Users
+  Users,
+  AlertCircle,
+  Info
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -59,6 +61,7 @@ import {
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Department {
   id: number;
@@ -129,6 +132,16 @@ interface AttendancesResponse {
   meta: PaginationMeta;
 }
 
+interface UserPermissions {
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canSyncDevices: boolean;
+  isEmployee: boolean;
+  isBranchManager: boolean;
+  isDepartmentHead: boolean;
+}
+
 interface AttendanceIndexProps {
   attendances: AttendancesResponse;
   branches: Branch[];
@@ -141,9 +154,10 @@ interface AttendanceIndexProps {
     search: string;
   };
   date: string;
+  userPermissions: UserPermissions;
 }
 
-export default function AttendanceIndex({ attendances, branches, departments, filters, date }: AttendanceIndexProps) {
+export default function AttendanceIndex({ attendances, branches, departments, filters, date, userPermissions }: AttendanceIndexProps) {
   const [search, setSearch] = useState(filters.search || '');
   const [branchId, setBranchId] = useState(filters.branch_id || null);
   const [departmentId, setDepartmentId] = useState(filters.department_id || null);
@@ -221,6 +235,10 @@ export default function AttendanceIndex({ attendances, branches, departments, fi
   // Check if pagination data exists
   const hasPagination = attendances.meta && attendances.links;
 
+  // Check if user can see branch/department filters
+  const canFilterByBranch = userPermissions.isBranchManager || !userPermissions.isEmployee;
+  const canFilterByDepartment = userPermissions.isDepartmentHead || userPermissions.isBranchManager || !userPermissions.isEmployee;
+
   return (
     <Layout>
       <Head title="Daily Attendance" />
@@ -252,17 +270,21 @@ export default function AttendanceIndex({ attendances, branches, departments, fi
               </PopoverContent>
             </Popover>
 
-            <Link href={route('attendance.create')}>
-              <Button className="flex items-center">
-                <Plus className="mr-1 h-4 w-4" />
-                Add Attendance
-              </Button>
-            </Link>
+            {userPermissions.canCreate && (
+              <Link href={route('attendance.create')}>
+                <Button className="flex items-center">
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add Attendance
+                </Button>
+              </Link>
+            )}
 
-            <Button variant="outline" className="flex items-center" onClick={syncAttendance}>
-              <RefreshCw className="mr-1 h-4 w-4" />
-              Sync Devices
-            </Button>
+            {userPermissions.canSyncDevices && (
+              <Button variant="outline" className="flex items-center" onClick={syncAttendance}>
+                <RefreshCw className="mr-1 h-4 w-4" />
+                Sync Devices
+              </Button>
+            )}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -284,28 +306,48 @@ export default function AttendanceIndex({ attendances, branches, departments, fi
                     <span>Attendance Report</span>
                   </DropdownMenuItem>
                 </Link>
-                <Link href={route('attendance.devices.index')}>
-                  <DropdownMenuItem className="cursor-pointer">
-                    <Clock className="mr-2 h-4 w-4" />
-                    <span>Manage Devices</span>
-                  </DropdownMenuItem>
-                </Link>
-                <Link href={route('attendance.settings.index')}>
-                  <DropdownMenuItem className="cursor-pointer">
-                    <Clock className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </DropdownMenuItem>
-                </Link>
+                {/* Only show device management for users with sync permission */}
+                {userPermissions.canSyncDevices && (
+                  <>
+                    <Link href={route('attendance.devices.index')}>
+                      <DropdownMenuItem className="cursor-pointer">
+                        <Clock className="mr-2 h-4 w-4" />
+                        <span>Manage Devices</span>
+                      </DropdownMenuItem>
+                    </Link>
+                    <Link href={route('attendance.settings.index')}>
+                      <DropdownMenuItem className="cursor-pointer">
+                        <Clock className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
+                      </DropdownMenuItem>
+                    </Link>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
 
+        {/* Role-based Context Message */}
+        {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
+          <Alert className="mb-6">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              You are viewing your own attendance records.
+              {userPermissions.canCreate && " You can add your own attendance records."}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Filters */}
         <Card className="mb-6">
           <CardHeader className="pb-3">
             <CardTitle>Filters</CardTitle>
-            <CardDescription>Filter attendance by name, branch, department or status</CardDescription>
+            <CardDescription>
+              {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead
+                ? "Filter your attendance records"
+                : "Filter attendance by name, branch, department or status"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
@@ -322,43 +364,49 @@ export default function AttendanceIndex({ attendances, branches, departments, fi
                 </div>
               </div>
 
-              <div className="w-full md:w-64">
-                <Select
-                  value={branchId || undefined}
-                  onValueChange={(value) => setBranchId(value === "all" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Branches</SelectItem>
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Only show branch filter if user can filter by branch */}
+              {canFilterByBranch && branches.length > 1 && (
+                <div className="w-full md:w-64">
+                  <Select
+                    value={branchId || undefined}
+                    onValueChange={(value) => setBranchId(value === "all" ? null : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Branches</SelectItem>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id.toString()}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              <div className="w-full md:w-64">
-                <Select
-                  value={departmentId || undefined}
-                  onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((department) => (
-                      <SelectItem key={department.id} value={department.id.toString()}>
-                        {department.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Only show department filter if user can filter by department */}
+              {canFilterByDepartment && departments.length > 1 && (
+                <div className="w-full md:w-64">
+                  <Select
+                    value={departmentId || undefined}
+                    onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map((department) => (
+                        <SelectItem key={department.id} value={department.id.toString()}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="w-full md:w-64">
                 <Select
@@ -404,7 +452,9 @@ export default function AttendanceIndex({ attendances, branches, departments, fi
                   <TableHead>Status</TableHead>
                   <TableHead>Device</TableHead>
                   <TableHead>Remarks</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {(userPermissions.canEdit || userPermissions.canDelete) && (
+                    <TableHead className="text-right">Actions</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -453,37 +503,43 @@ export default function AttendanceIndex({ attendances, branches, departments, fi
                       <TableCell>
                         {attendance.remarks || '-'}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => router.get(route('attendance.edit', attendance.id))}
-                              className="cursor-pointer"
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              <span>Edit</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(attendance.id)}
-                              className="cursor-pointer text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
+                      {(userPermissions.canEdit || userPermissions.canDelete) && (
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {userPermissions.canEdit && (
+                                <DropdownMenuItem
+                                  onClick={() => router.get(route('attendance.edit', attendance.id))}
+                                  className="cursor-pointer"
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                              )}
+                              {userPermissions.canDelete && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(attendance.id)}
+                                  className="cursor-pointer text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={userPermissions.canEdit || userPermissions.canDelete ? 8 : 7} className="h-24 text-center">
                       No attendance records found for this day.
                       {(search || branchId || departmentId || status) && (
                         <Button

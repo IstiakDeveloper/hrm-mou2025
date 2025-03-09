@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,8 @@ import {
   Calendar,
   Clock,
   User,
-  MapPin
+  MapPin,
+  AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Employee {
   id: number;
@@ -35,16 +37,27 @@ interface Device {
   name: string;
 }
 
+interface UserInfo {
+  employee_id: number | null;
+  branch_id: number | null;
+  department_id: number | null;
+  isEmployee: boolean;
+  isBranchManager: boolean;
+  isDepartmentHead: boolean;
+  isAdmin: boolean;
+}
+
 interface AttendanceCreateProps {
   employees: Employee[];
   devices: Device[];
   date: string;
   statuses: string[];
+  userInfo: UserInfo;
 }
 
-export default function AttendanceCreate({ employees, devices, date, statuses }: AttendanceCreateProps) {
+export default function AttendanceCreate({ employees, devices, date, statuses, userInfo }: AttendanceCreateProps) {
   const { data, setData, post, processing, errors } = useForm({
-    employee_id: '',
+    employee_id: userInfo.isEmployee ? String(userInfo.employee_id) : '',
     date: date,
     check_in: '',
     check_out: '',
@@ -56,6 +69,13 @@ export default function AttendanceCreate({ employees, devices, date, statuses }:
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [getLocation, setGetLocation] = useState(false);
+
+  // Update employee_id when userInfo changes
+  useEffect(() => {
+    if (userInfo.isEmployee && userInfo.employee_id) {
+      setData('employee_id', String(userInfo.employee_id));
+    }
+  }, [userInfo.employee_id]);
 
   const handleGetLocation = () => {
     setGetLocation(true);
@@ -106,9 +126,37 @@ export default function AttendanceCreate({ employees, devices, date, statuses }:
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Create Attendance Record</h1>
           <p className="mt-1 text-gray-500">
-            Add a new attendance record for an employee
+            Add a new attendance record {userInfo.isEmployee ? 'for yourself' : 'for an employee'}
           </p>
         </div>
+
+        {/* Display contextual help based on role */}
+        {userInfo.isEmployee && !userInfo.isAdmin && !userInfo.isBranchManager && !userInfo.isDepartmentHead && (
+          <Alert className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              As an employee, you can only add attendance records for yourself.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {userInfo.isBranchManager && (
+          <Alert className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              As a branch manager, you can add attendance records for all employees in your branch.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {userInfo.isDepartmentHead && (
+          <Alert className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              As a department head, you can add attendance records for all employees in your department.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <form onSubmit={submit}>
           <Card className="max-w-3xl mx-auto">
@@ -119,7 +167,7 @@ export default function AttendanceCreate({ employees, devices, date, statuses }:
                 </div>
                 <div>
                   <CardTitle>Attendance Details</CardTitle>
-                  <CardDescription>Enter attendance information for an employee</CardDescription>
+                  <CardDescription>Enter attendance information {userInfo.isEmployee ? 'for yourself' : 'for an employee'}</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -131,6 +179,7 @@ export default function AttendanceCreate({ employees, devices, date, statuses }:
                 <Select
                   value={data.employee_id}
                   onValueChange={(value) => setData('employee_id', value)}
+                  disabled={userInfo.isEmployee && !userInfo.isAdmin} // Disable if regular employee
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select employee" />

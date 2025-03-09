@@ -52,6 +52,19 @@ interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
+interface MenuItemType {
+  title: string;
+  icon: React.ReactNode;
+  path: string;
+  hasSubmenu: boolean;
+  permission?: string;
+  submenu?: {
+    title: string;
+    path: string;
+    permission?: string;
+  }[];
+}
+
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const { auth, notifications } = usePage().props as any;
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -90,8 +103,52 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       .toUpperCase();
   };
 
-  // Improved Menu Structure based on web.php routes
-  const menuItems = [
+  // Check if user has permission
+  const hasPermission = (permission?: string): boolean => {
+    if (!permission) return true;
+
+
+    // Get permissions from user's role
+    const rolePermissions = auth?.user?.role?.permissions;
+
+    // Handle case where permissions are stored as a JSON string
+    let parsedPermissions = rolePermissions;
+    if (typeof rolePermissions === 'string') {
+      try {
+        parsedPermissions = JSON.parse(rolePermissions);
+      } catch (e) {
+        console.error('Error parsing permissions:', e);
+        return false;
+      }
+    }
+
+    // If we couldn't parse permissions or they don't exist, return false
+    if (!parsedPermissions) {
+      // During development, you might want to return true for all permissions
+      // return true;
+      return false;
+    }
+
+    return parsedPermissions.includes(permission);
+  };
+
+  // Log user and role info on component mount
+  useEffect(() => {
+
+    const rolePermissions = auth?.user?.role?.permissions;
+
+    // Try to parse if it's a string
+    if (typeof rolePermissions === 'string') {
+      try {
+        const parsed = JSON.parse(rolePermissions);
+      } catch (e) {
+        console.error('Could not parse permissions:', e);
+      }
+    }
+  }, []);
+
+  // Improved Menu Structure based on web.php routes with permissions
+  const menuItems: MenuItemType[] = [
     {
       title: 'Dashboard',
       icon: <LayoutDashboard className="w-5 h-5" />,
@@ -103,10 +160,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: <Users className="w-5 h-5" />,
       path: '/employees',
       hasSubmenu: true,
+      permission: 'employees.view',
       submenu: [
-        { title: 'All Employees', path: '/employees' },
-        { title: 'Add Employee', path: '/employees/create' },
-        { title: 'Organization Chart', path: '/organization-chart' },
+        { title: 'All Employees', path: '/employees', permission: 'employees.view' },
+        { title: 'Add Employee', path: '/employees/create', permission: 'employees.create' },
+        { title: 'Edit Employee', path: '/employees/:id/edit', permission: 'employees.edit' },
+        { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view' },
       ]
     },
     {
@@ -114,9 +173,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: <Building className="w-5 h-5" />,
       path: '/branches',
       hasSubmenu: true,
+      permission: 'branches.view',
       submenu: [
-        { title: 'All Branches', path: '/branches' },
-        { title: 'Add Branch', path: '/branches/create' },
+        { title: 'All Branches', path: '/branches', permission: 'branches.view' },
+        { title: 'Add Branch', path: '/branches/create', permission: 'branches.create' },
+        { title: 'Edit Branch', path: '/branches/:id/edit', permission: 'branches.edit' },
       ]
     },
     {
@@ -124,11 +185,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: <Briefcase className="w-5 h-5" />,
       path: '/departments',
       hasSubmenu: true,
+      permission: 'departments.view',
       submenu: [
-        { title: 'Departments', path: '/departments' },
-        { title: 'Add Department', path: '/departments/create' },
-        { title: 'Designations', path: '/designations' },
-        { title: 'Add Designation', path: '/designations/create' },
+        { title: 'Departments', path: '/departments', permission: 'departments.view' },
+        { title: 'Add Department', path: '/departments/create', permission: 'departments.create' },
+        { title: 'Designations', path: '/designations', permission: 'designations.view' },
+        { title: 'Add Designation', path: '/designations/create', permission: 'designations.create' },
       ]
     },
     {
@@ -136,14 +198,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: <ClipboardList className="w-5 h-5" />,
       path: '/attendance',
       hasSubmenu: true,
+      permission: 'attendance.view',
       submenu: [
-        { title: 'Daily Attendance', path: '/attendance' },
-        { title: 'Monthly View', path: '/attendance/monthly' },
-        { title: 'Report', path: '/attendance/report' },
-        { title: 'Add Attendance', path: '/attendance/create' },
-        { title: 'Attendance Devices', path: '/attendance/devices' },
-        { title: 'Device Settings', path: '/attendance/settings' },
-        { title: 'ZKTeco Integration', path: '/zkteco' },
+        { title: 'Daily Attendance', path: '/attendance', permission: 'attendance.view' },
+        { title: 'Monthly View', path: '/attendance/monthly', permission: 'attendance.view' },
+        { title: 'Report', path: '/attendance/report', permission: 'attendance.view' },
+        { title: 'Add Attendance', path: '/attendance/create', permission: 'attendance.create' },
+        { title: 'Attendance Devices', path: '/attendance/devices', permission: 'attendance.view' },
+        { title: 'Device Settings', path: '/attendance/settings', permission: 'attendance.view' },
+        { title: 'ZKTeco Integration', path: '/zkteco', permission: 'attendance.view' },
       ]
     },
     {
@@ -151,13 +214,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: <Calendar className="w-5 h-5" />,
       path: '/leave',
       hasSubmenu: true,
+      permission: 'leaves.view',
       submenu: [
-        { title: 'Leave Applications', path: '/leave/applications' },
+        { title: 'Leave Applications', path: '/leave/applications', permission: 'leaves.view' },
         { title: 'Apply for Leave', path: '/leave/applications/create' },
-        { title: 'Leave Types', path: '/leave/types' },
-        { title: 'Leave Balance', path: '/leave/balances' },
-        { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk' },
-        { title: 'Leave Report', path: '/leave/applications/report' },
+        { title: 'Leave Types', path: '/leave/types', permission: 'leaves.view' },
+        { title: 'Add Leave Type', path: '/leave/types/create', permission: 'leaves.create' },
+        { title: 'Leave Balance', path: '/leave/balances', permission: 'leaves.view' },
+        { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk', permission: 'leaves.create' },
+        { title: 'Leave Report', path: '/leave/applications/report', permission: 'leaves.view' },
       ]
     },
     {
@@ -170,7 +235,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         { title: 'New Movement', path: '/movements/create' },
         { title: 'Movement Report', path: '/movements/report' },
         { title: 'Transfers', path: '/transfers' },
-        { title: 'New Transfer', path: '/transfers/create' },
+        { title: 'New Transfer', path: '/transfers/create', permission: 'transfers.create' },
         { title: 'Transfer Report', path: '/transfers/report' },
       ]
     },
@@ -181,7 +246,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       hasSubmenu: true,
       submenu: [
         { title: 'All Holidays', path: '/holidays' },
-        { title: 'Add Holiday', path: '/holidays/create' },
+        { title: 'Add Holiday', path: '/holidays/create', permission: 'holidays.create' },
         { title: 'Holiday Calendar', path: '/holiday-calendar' },
       ]
     },
@@ -190,13 +255,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: <BarChart className="w-5 h-5" />,
       path: '/reports',
       hasSubmenu: true,
+      permission: 'reports.view',
       submenu: [
-        { title: 'Overview', path: '/reports' },
-        { title: 'Attendance Report', path: '/reports/attendance' },
-        { title: 'Leave Report', path: '/reports/leave' },
-        { title: 'Movement Report', path: '/reports/movement' },
-        { title: 'Transfer Report', path: '/reports/transfer' },
-        { title: 'Employee Report', path: '/reports/employee' },
+        { title: 'Overview', path: '/reports', permission: 'reports.view' },
+        { title: 'Attendance Report', path: '/reports/attendance', permission: 'reports.view' },
+        { title: 'Leave Report', path: '/reports/leave', permission: 'reports.view' },
+        { title: 'Movement Report', path: '/reports/movement', permission: 'reports.view' },
+        { title: 'Transfer Report', path: '/reports/transfer', permission: 'reports.view' },
+        { title: 'Employee Report', path: '/reports/employee', permission: 'reports.view' },
       ]
     },
     {
@@ -204,10 +270,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       icon: <User className="w-5 h-5" />,
       path: '/admin/users',
       hasSubmenu: true,
+      permission: 'users.view',
       submenu: [
-        { title: 'All Users', path: '/admin/users' },
-        { title: 'Add User', path: '/admin/users/create' },
-        { title: 'Roles & Permissions', path: '/admin/roles' },
+        { title: 'All Users', path: '/admin/users', permission: 'users.view' },
+        { title: 'Add User', path: '/admin/users/create', permission: 'users.create' },
+        { title: 'Roles & Permissions', path: '/admin/roles', permission: 'users.view' },
       ]
     },
     {
@@ -222,9 +289,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     },
   ];
 
-  // Desktop sidebar menu item component - improved with tooltip for collapsed state
-  const DesktopMenuItem = ({ item }: { item: any }) => (
-    item.hasSubmenu ? (
+  // Desktop sidebar menu item component - improved with tooltip for collapsed state and permission checks
+  const DesktopMenuItem = ({ item }: { item: MenuItemType }) => {
+    // Skip rendering if user doesn't have permission
+    if (item.permission && !hasPermission(item.permission)) return null;
+
+    // Filter submenu items based on permissions
+    const permittedSubmenu = item.submenu?.filter(subItem => !subItem.permission || hasPermission(subItem.permission));
+
+    // Don't render menu with empty submenu after filtering
+    if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
+
+    return item.hasSubmenu ? (
       <Collapsible
         open={!collapsed && activeMenu === item.title}
         onOpenChange={() => !collapsed && toggleMenu(item.title)}
@@ -254,7 +330,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         </CollapsibleTrigger>
         {!collapsed && (
           <CollapsibleContent className="pl-8 space-y-1 mt-1">
-            {item.submenu.map((subItem: any, idx: number) => (
+            {permittedSubmenu?.map((subItem, idx) => (
               <Link
                 key={idx}
                 href={subItem.path}
@@ -285,12 +361,21 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           {collapsed && <TooltipContent side="right">{item.title}</TooltipContent>}
         </Tooltip>
       </TooltipProvider>
-    )
-  );
+    );
+  };
 
-  // Mobile sidebar menu item component
-  const MobileMenuItem = ({ item }: { item: any }) => (
-    item.hasSubmenu ? (
+  // Mobile sidebar menu item component with permission checks
+  const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
+    // Skip rendering if user doesn't have permission
+    if (item.permission && !hasPermission(item.permission)) return null;
+
+    // Filter submenu items based on permissions
+    const permittedSubmenu = item.submenu?.filter(subItem => !subItem.permission || hasPermission(subItem.permission));
+
+    // Don't render menu with empty submenu after filtering
+    if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
+
+    return item.hasSubmenu ? (
       <Collapsible
         open={activeMenu === item.title}
         onOpenChange={() => toggleMenu(item.title)}
@@ -310,7 +395,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="pl-8 space-y-1 mt-1">
-          {item.submenu.map((subItem: any, idx: number) => (
+          {permittedSubmenu?.map((subItem, idx) => (
             <Link
               key={idx}
               href={subItem.path}
@@ -335,8 +420,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         {item.icon}
         <span className="text-sm font-medium">{item.title}</span>
       </Link>
-    )
-  );
+    );
+  };
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -359,6 +444,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
         <ScrollArea className="flex-1 px-3 py-4">
           <nav className="space-y-1">
+            {/* Only render menu items that the user has permission to see */}
             {menuItems.map((item, idx) => (
               <DesktopMenuItem key={idx} item={item} />
             ))}
@@ -413,6 +499,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
           <ScrollArea className="h-[calc(100vh-160px)] px-3 py-4">
             <nav className="space-y-1">
+              {/* Only render menu items that the user has permission to see */}
               {menuItems.map((item, idx) => (
                 <MobileMenuItem key={idx} item={item} />
               ))}

@@ -161,13 +161,14 @@ Route::middleware(['auth'])->group(function () {
         Route::prefix('applications')->name('applications.')->group(function () {
             Route::get('/', [LeaveApplicationController::class, 'index'])->name('index');
             Route::get('/create', [LeaveApplicationController::class, 'create'])->name('create');
+            Route::get('/report', [LeaveApplicationController::class, 'report'])->name('report');
             Route::post('/', [LeaveApplicationController::class, 'store'])->name('store');
             Route::get('/{application}', [LeaveApplicationController::class, 'show'])->name('show');
             Route::post('/{application}/cancel', [LeaveApplicationController::class, 'cancel'])->name('cancel');
             Route::post('/{application}/approve', [LeaveApplicationController::class, 'approve'])->name('approve')->middleware('permission:leaves.approve');
             Route::post('/{application}/reject', [LeaveApplicationController::class, 'reject'])->name('reject')->middleware('permission:leaves.approve');
             Route::get('/{application}/document/{index}', [LeaveApplicationController::class, 'downloadDocument'])->name('download-document');
-            Route::get('/report', [LeaveApplicationController::class, 'report'])->name('report');
+
         });
     });
 

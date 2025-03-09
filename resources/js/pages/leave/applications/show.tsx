@@ -283,7 +283,7 @@ export default function Show({ application, canApprove }: ShowProps) {
                   <h3 className="text-sm font-medium text-gray-500">Leave Type</h3>
                   <p className="mt-1">
                     <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                      {application.leaveType?.name}
+                      {application.leave_type?.name}
                     </Badge>
                   </p>
                 </div>

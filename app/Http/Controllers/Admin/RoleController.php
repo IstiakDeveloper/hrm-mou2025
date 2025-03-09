@@ -158,6 +158,8 @@ class RoleController extends Controller
                 'attendance.create' => 'Create Attendance',
                 'attendance.edit' => 'Edit Attendance',
                 'attendance.delete' => 'Delete Attendance',
+                'attendance.sync' => 'Sync Attendance Devices',
+                'attendance.admin' => 'Advanced Attendance Management',
             ],
             'leaves' => [
                 'leaves.view' => 'View Leaves',
@@ -182,6 +184,11 @@ class RoleController extends Controller
             ],
             'reports' => [
                 'reports.view' => 'View Reports',
+                'reports.export' => 'Export Reports',
+            ],
+            'special' => [
+                'branch_manager' => 'Branch Manager Privileges',
+                'department_head' => 'Department Head Privileges',
             ],
         ];
     }

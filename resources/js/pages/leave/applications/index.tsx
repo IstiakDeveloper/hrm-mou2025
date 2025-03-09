@@ -182,6 +182,7 @@ export default function ApplicationsIndex({
     }, { preserveState: true });
   };
 
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleSearch();
@@ -435,7 +436,7 @@ export default function ApplicationsIndex({
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                          {application.leaveType && application.leaveType.name}
+                        {application.leave_type && application.leave_type.name}
                         </Badge>
                       </TableCell>
                       <TableCell>

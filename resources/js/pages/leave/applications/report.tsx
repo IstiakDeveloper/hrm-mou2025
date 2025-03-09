@@ -50,6 +50,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 
 interface Department {
   id: number;
@@ -189,7 +190,7 @@ export default function Report({
 
   // Aggregate leaves by type
   const leaveTypeData = applications.data.reduce((acc, app) => {
-    const type = app.leaveType.name;
+    const type = app.leaveType?.name;
     const existingType = acc.find(t => t.name === type);
 
     if (existingType) {
@@ -275,16 +276,8 @@ export default function Report({
     document.body.removeChild(link);
   };
 
-  const ChartTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-2 border shadow-sm">
-          <p className="font-medium">{payload[0].name}: {payload[0].value}</p>
-        </div>
-      );
-    }
-    return null;
-  };
+  // Calculate total for percentages
+  const totalApplications = statusData.reduce((sum, item) => sum + item.value, 0);
 
   return (
     <Layout>
@@ -513,53 +506,62 @@ export default function Report({
           </CardContent>
         </Card>
 
-        {/* Charts */}
+        {/* Charts replaced with ShadCN UI components */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Status Distribution Card */}
           <Card>
             <CardHeader>
               <CardTitle>Leave Status Distribution</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<ChartTooltip />} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="space-y-4">
+                {statusData.map((status) => (
+                  <div key={status.name} className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">{status.name}</span>
+                      <span className="text-muted-foreground">
+                        {status.value} ({totalApplications > 0 ? Math.round((status.value / totalApplications) * 100) : 0}%)
+                      </span>
+                    </div>
+                    <Progress value={totalApplications > 0 ? (status.value / totalApplications) * 100 : 0}
+                              className="h-2"
+                              style={{backgroundColor: `${status.color}20`}} // Lighter background
+                              indicatorClassName={`bg-[${status.color}]`} />
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
 
+          {/* Leave Days by Type Card */}
           <Card>
             <CardHeader>
               <CardTitle>Leave Days by Type</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={leaveTypeData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="value" name="Days" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="space-y-4">
+                {leaveTypeData.map((type, index) => {
+                  // Find the maximum value for scaling
+                  const maxValue = Math.max(...leaveTypeData.map(item => item.value));
+                  // Generate a different color for each type
+                  const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#84cc16'];
+                  const color = colors[index % colors.length];
+
+                  return (
+                    <div key={type.name} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">{type.name}</span>
+                        <span className="text-muted-foreground">{type.value} days</span>
+                      </div>
+                      <Progress
+                        value={maxValue > 0 ? (type.value / maxValue) * 100 : 0}
+                        className="h-2"
+                        style={{backgroundColor: `${color}20`}} // Lighter background
+                        indicatorClassName={`bg-[${color}]`}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -604,7 +606,7 @@ export default function Report({
                           {application.employee.department.name}
                         </Badge>
                       </TableCell>
-                      <TableCell>{application.leaveType.name}</TableCell>
+                      <TableCell>{application.leaveType?.name}</TableCell>
                       <TableCell>{format(new Date(application.start_date), 'MMM d, yyyy')}</TableCell>
                       <TableCell>{format(new Date(application.end_date), 'MMM d, yyyy')}</TableCell>
                       <TableCell>{application.days}</TableCell>

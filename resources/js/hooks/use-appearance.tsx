@@ -1,46 +1,46 @@
 import { useCallback, useEffect, useState } from 'react';
 
+// We still define the type for potential future use, but we'll only use 'light'
 export type Appearance = 'light' | 'dark' | 'system';
 
-const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+// No longer need these functions since we're always using light theme
+// const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+// const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+// const handleSystemThemeChange = () => {...}
 
-const applyTheme = (appearance: Appearance) => {
-    const isDark = appearance === 'dark' || (appearance === 'system' && prefersDark());
-
-    document.documentElement.classList.toggle('dark', isDark);
-};
-
-const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-const handleSystemThemeChange = () => {
-    const currentAppearance = localStorage.getItem('appearance') as Appearance;
-    applyTheme(currentAppearance || 'system');
+const applyLightTheme = () => {
+  // Remove 'dark' class to ensure light theme
+  document.documentElement.classList.remove('dark');
 };
 
 export function initializeTheme() {
-    const savedAppearance = (localStorage.getItem('appearance') as Appearance) || 'system';
+  // Always apply light theme, ignore saved preference
+  applyLightTheme();
 
-    applyTheme(savedAppearance);
+  // Store 'light' as the preference
+  localStorage.setItem('appearance', 'light');
 
-    // Add the event listener for system theme changes...
-    mediaQuery.addEventListener('change', handleSystemThemeChange);
+  // No need for event listeners anymore
 }
 
 export function useAppearance() {
-    const [appearance, setAppearance] = useState<Appearance>('system');
+  // Always initialize with 'light'
+  const [appearance, setAppearance] = useState<Appearance>('light');
 
-    const updateAppearance = useCallback((mode: Appearance) => {
-        setAppearance(mode);
-        localStorage.setItem('appearance', mode);
-        applyTheme(mode);
-    }, []);
+  const updateAppearance = useCallback(() => {
+    // Force light theme regardless of what's passed
+    setAppearance('light');
+    localStorage.setItem('appearance', 'light');
+    applyLightTheme();
+  }, []);
 
-    useEffect(() => {
-        const savedAppearance = localStorage.getItem('appearance') as Appearance | null;
-        updateAppearance(savedAppearance || 'system');
+  useEffect(() => {
+    // Always set to light on component mount
+    updateAppearance();
 
-        return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
-    }, [updateAppearance]);
+    // No cleanup needed since we don't have event listeners
+  }, [updateAppearance]);
 
-    return { appearance, updateAppearance } as const;
+  // We still return both values for API compatibility
+  return { appearance, updateAppearance } as const;
 }
