@@ -147,7 +147,9 @@ class LeaveBalanceController extends Controller
      */
     public function allocateBulk()
     {
-        $employees = Employee::where('status', 'active')->get();
+        $employees = Employee::with(['department', 'designation'])
+        ->where('status', 'active')
+        ->get();
         $departments = Department::all();
         $leaveTypes = LeaveType::all();
         $currentYear = Carbon::now()->year;

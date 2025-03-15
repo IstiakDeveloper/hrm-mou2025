@@ -38,11 +38,18 @@ use Inertia\Inertia;
 
 // Public Routes
 Route::get('/', function () {
+    // If user is already logged in, redirect to dashboard
+    if (Auth::check()) {
+        return redirect()->route('dashboard');
+    }
+    // Otherwise redirect to login
     return redirect()->route('login');
 });
 
 // Authentication Routes
-Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+Route::get('/login', [AuthController::class, 'showLogin'])
+    ->name('login')
+    ->middleware('guest');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
@@ -135,8 +142,8 @@ Route::middleware(['auth'])->group(function () {
 
     // Leave Management
     Route::prefix('leave')->name('leave.')->group(function () {
-        // Leave Types
-        Route::middleware(['permission:leaves.view'])->prefix('types')->name('types.')->group(function () {
+
+        Route::middleware(['permission:leaves_type.view'])->prefix('types')->name('types.')->group(function () {
             Route::get('/', [LeaveTypeController::class, 'index'])->name('index');
             Route::get('/create', [LeaveTypeController::class, 'create'])->name('create');
             Route::post('/', [LeaveTypeController::class, 'store'])->name('store');
@@ -145,7 +152,7 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/{leaveType}', [LeaveTypeController::class, 'destroy'])->name('destroy');
         });
 
-        // Leave Balances
+
         Route::middleware(['permission:leaves.view'])->prefix('balances')->name('balances.')->group(function () {
             Route::get('/', [LeaveBalanceController::class, 'index'])->name('index');
             Route::get('/create', [LeaveBalanceController::class, 'create'])->name('create');
@@ -157,7 +164,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/reset-for-new-year', [LeaveBalanceController::class, 'resetForNewYear'])->name('reset-for-new-year');
         });
 
-        // Leave Applications
+
         Route::prefix('applications')->name('applications.')->group(function () {
             Route::get('/', [LeaveApplicationController::class, 'index'])->name('index');
             Route::get('/create', [LeaveApplicationController::class, 'create'])->name('create');
@@ -218,7 +225,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Reports
-    Route::middleware(['permission:reports.view'])->prefix( 'reports')->name('reports.')->group(function () {
+    Route::middleware(['permission:reports.view'])->prefix('reports')->name('reports.')->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
         Route::get('/attendance', [ReportController::class, 'attendance'])->name('attendance');
         Route::get('/leave', [ReportController::class, 'leave'])->name('leave');

@@ -364,7 +364,7 @@ export default function EmployeeIndex({
                           <div className="flex items-center space-x-3">
                             <Avatar className="h-9 w-9">
                               {employee.photo ? (
-                                <AvatarImage src={employee.photo} alt={`${employee.first_name} ${employee.last_name}`} />
+                                <AvatarImage src={`/storage/${employee.photo}`} alt={`${employee.first_name} ${employee.last_name}`} />
                               ) : (
                                 <AvatarFallback className="bg-primary/10 text-primary">
                                   {getEmployeeInitials(employee.first_name, employee.last_name)}

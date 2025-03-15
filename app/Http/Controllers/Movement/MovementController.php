@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Movement;
 
 use App\Http\Controllers\Controller;
+use App\Mail\NewMovementNotification;
+use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Movement;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 
 class MovementController extends Controller
@@ -16,25 +20,149 @@ class MovementController extends Controller
     /**
      * Display a listing of movements.
      */
+
     public function index(Request $request)
     {
         $user = Auth::user();
+        \Log::info('User accessing movements:', [
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'employee_id' => $user->employee_id,
+        ]);
+
         $query = Movement::with(['employee.department', 'employee.designation', 'approver']);
 
-        // If user is not an admin, filter by relevant movements
-        if (!$user->hasPermission('movements.view')) {
-            if ($user->employee) {
-                // Regular employee can only see their own movements
-                $query->where('employee_id', $user->employee->id);
-            } elseif ($user->hasPermission('movements.approve')) {
-                // User with approval permission but no employee record (like branch admin)
-                $query->where('status', 'pending');
+        // Get the current user's employee_id (if they have one)
+        $userEmployeeId = $user->employee_id;
+
+        // Check for special permissions
+        $hasViewPermission = $user->hasPermission('movements.view');
+        $hasApprovePermission = $user->hasPermission('movements.approve');
+        $hasEmployeeViewPermission = $user->hasPermission('employees.view');
+        $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
+
+        // Determine if user is a branch head
+        $isBranchHead = false;
+        $userBranchId = $user->branch_id;
+        if ($userEmployeeId && $userBranchId) {
+            $branch = Branch::find($userBranchId);
+            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
+
+            \Log::info('Branch head check:', [
+                'employee_id' => $userEmployeeId,
+                'is_branch_head' => $isBranchHead,
+                'branch_id' => $userBranchId,
+            ]);
+        }
+
+        // Determine if user is a department head
+        $isDepartmentHead = false;
+        $userDepartmentId = null;
+        if ($userEmployeeId) {
+            $employee = Employee::find($userEmployeeId);
+            if ($employee && $employee->department_id) {
+                $userDepartmentId = $employee->department_id;
+                $department = Department::find($employee->department_id);
+                $isDepartmentHead = $department && $department->head_employee_id == $userEmployeeId;
+
+                \Log::info('Department head check:', [
+                    'employee_id' => $userEmployeeId,
+                    'is_department_head' => $isDepartmentHead,
+                    'department_id' => $userDepartmentId,
+                ]);
             }
         }
 
+        // Special handling for regular employees with view permission
+        $isRegularEmployeeWithViewPermission = $userEmployeeId && $hasViewPermission &&
+            !$hasApprovePermission && !$isBranchManager &&
+            !$isBranchHead && !$isDepartmentHead &&
+            !$hasEmployeeViewPermission;
+
+        // Apply filters based on user's role and permissions
+        if (
+            ($userEmployeeId && !$hasViewPermission && !$hasApprovePermission && !$isBranchManager &&
+                !$isBranchHead && !$isDepartmentHead) || $isRegularEmployeeWithViewPermission
+        ) {
+            // Regular employee with no special permissions - ONLY see their own movements
+            // OR regular employee with view permission who is not an admin - still only see their own
+            $query->where('employee_id', $userEmployeeId);
+            \Log::info('Regular employee - filtering to show only their own movements', [
+                'employee_id' => $userEmployeeId
+            ]);
+        } elseif ($isBranchHead || ($isBranchManager && $userBranchId)) {
+            // Branch head or manager - see movements from their branch
+            $query->whereHas('employee', function ($q) use ($userBranchId) {
+                $q->where('current_branch_id', $userBranchId);
+            });
+            \Log::info('Branch head/manager - filtering by branch', [
+                'branch_id' => $userBranchId
+            ]);
+        } elseif ($isDepartmentHead) {
+            // Department head - see movements from their department
+            if ($userDepartmentId) {
+                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
+                    $q->where('department_id', $userDepartmentId);
+                });
+                \Log::info('Department head - filtering by department', [
+                    'department_id' => $userDepartmentId
+                ]);
+            } else {
+                // Fallback to own movements if no department association
+                $query->where('employee_id', $userEmployeeId);
+            }
+        } elseif ($hasApprovePermission && $userEmployeeId && !$hasEmployeeViewPermission) {
+            // User with approve permission but not full employee view permission
+            if ($userDepartmentId) {
+                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
+                    $q->where('department_id', $userDepartmentId);
+                });
+                \Log::info('Approver - filtering by department', [
+                    'department_id' => $userDepartmentId
+                ]);
+            } else {
+                // Fallback to pending movements if no department association
+                $query->where('status', 'pending');
+                \Log::info('Approver without department - showing only pending movements');
+            }
+        } elseif ($hasViewPermission && $hasEmployeeViewPermission) {
+            // Full admin with both movements.view and employees.view - see all movements
+            \Log::info('Full admin - showing all movements');
+        } elseif ($hasViewPermission && !$hasEmployeeViewPermission) {
+            // User with movements.view but not employees.view - apply restrictions
+            if ($isBranchHead || ($isBranchManager && $userBranchId)) {
+                $query->whereHas('employee', function ($q) use ($userBranchId) {
+                    $q->where('current_branch_id', $userBranchId);
+                });
+                \Log::info('Admin with branch restriction - filtering by branch', [
+                    'branch_id' => $userBranchId
+                ]);
+            } elseif ($userEmployeeId && $userDepartmentId) {
+                // Admin with department restrictions
+                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
+                    $q->where('department_id', $userDepartmentId);
+                });
+                \Log::info('Admin with department restriction - filtering by department', [
+                    'department_id' => $userDepartmentId
+                ]);
+            }
+        } else {
+            // Edge case - no permissions to view any movements
+            if ($userEmployeeId) {
+                $query->where('employee_id', $userEmployeeId);
+                \Log::info('Edge case - showing only user\'s movements', [
+                    'employee_id' => $userEmployeeId
+                ]);
+            } else {
+                $query->where('id', 0); // No results
+                \Log::info('Edge case - no matching condition - showing no movements');
+            }
+        }
+
+        // Apply user-selected filters
         $query->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
-            })
+            $query->where('status', $status);
+        })
             ->when($request->department_id, function ($query, $departmentId) {
                 $query->whereHas('employee', function ($q) use ($departmentId) {
                     $q->where('department_id', $departmentId);
@@ -55,8 +183,8 @@ class MovementController extends Controller
             ->when($request->search, function ($query, $search) {
                 $query->whereHas('employee', function ($q) use ($search) {
                     $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere('employee_id', 'like', "%{$search}%");
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%");
                 });
             });
 
@@ -64,16 +192,131 @@ class MovementController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $departments = Department::all();
-        $employees = Employee::where('status', 'active')->get();
+        // Get accessible departments and employees
+        $departments = $this->getAccessibleDepartments($user);
+        $employees = $this->getAccessibleEmployees($user);
 
         return Inertia::render('movement/index', [
             'movements' => $movements,
             'departments' => $departments,
             'employees' => $employees,
             'filters' => $request->only(['status', 'department_id', 'employee_id', 'movement_type', 'from_date', 'to_date', 'search']),
-            'canApprove' => $user->hasPermission('movements.approve'),
+            'canApprove' => $hasApprovePermission,
+            'userPermissions' => [
+                'canView' => $hasViewPermission,
+                'canCreate' => $user->hasPermission('movements.create'),
+                'canEdit' => $user->hasPermission('movements.edit'),
+                'canApprove' => $hasApprovePermission,
+                'isBranchManager' => $isBranchManager,
+                'isBranchHead' => $isBranchHead,
+                'isDepartmentHead' => $isDepartmentHead,
+                'userBranchId' => $userBranchId,
+                'userDepartmentId' => $userDepartmentId,
+                'isEmployee' => $userEmployeeId ? true : false,
+                'employeeId' => $userEmployeeId,
+            ],
         ]);
+    }
+
+    /**
+     * Get departments accessible to the user based on permissions
+     */
+    private function getAccessibleDepartments($user)
+    {
+        // If user has full employee view permission, show all departments
+        if ($user->hasPermission('employees.view')) {
+            return Department::all();
+        }
+
+        $userEmployeeId = $user->employee_id;
+        $userBranchId = $user->branch_id;
+
+        // Check if user is branch head
+        $isBranchHead = false;
+        if ($userEmployeeId && $userBranchId) {
+            $branch = Branch::find($userBranchId);
+            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
+        }
+
+        // Branch managers and branch heads see departments in their branch
+        if (($user->hasPermission('branch_manager') || $isBranchHead) && $userBranchId) {
+            return Department::whereHas('employees', function ($q) use ($userBranchId) {
+                $q->where('current_branch_id', $userBranchId);
+            })->get();
+        }
+
+        // Department heads see only their department
+        if ($userEmployeeId) {
+            $employee = Employee::find($userEmployeeId);
+            if ($employee && $employee->department_id) {
+                $department = Department::find($employee->department_id);
+                if ($department && $department->head_employee_id == $userEmployeeId) {
+                    return Department::where('id', $employee->department_id)->get();
+                }
+
+                // Regular employees see their own department only
+                return Department::where('id', $employee->department_id)->get();
+            }
+        }
+
+        // Default - show no departments
+        return collect([]);
+    }
+
+    /**
+     * Get employees accessible to the user based on permissions
+     */
+    private function getAccessibleEmployees($user)
+    {
+        // If user has full employee view permission, show all active employees
+        if ($user->hasPermission('employees.view')) {
+            return Employee::where('status', 'active')->get();
+        }
+
+        $userEmployeeId = $user->employee_id;
+        $userBranchId = $user->branch_id;
+
+        // Check if user is branch head
+        $isBranchHead = false;
+        if ($userEmployeeId && $userBranchId) {
+            $branch = Branch::find($userBranchId);
+            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
+        }
+
+        // Branch managers and branch heads see employees in their branch
+        if (($user->hasPermission('branch_manager') || $isBranchHead) && $userBranchId) {
+            return Employee::where('status', 'active')
+                ->where('current_branch_id', $userBranchId)
+                ->get();
+        }
+
+        // Department heads see employees in their department
+        if ($userEmployeeId) {
+            $employee = Employee::find($userEmployeeId);
+            if ($employee && $employee->department_id) {
+                $department = Department::find($employee->department_id);
+                if ($department && $department->head_employee_id == $userEmployeeId) {
+                    return Employee::where('status', 'active')
+                        ->where('department_id', $employee->department_id)
+                        ->get();
+                }
+
+                // Team leaders see their direct reports
+                $directReports = Employee::where('status', 'active')
+                    ->where('reporting_to', $userEmployeeId)
+                    ->get();
+
+                if ($directReports->count() > 0) {
+                    return $directReports;
+                }
+
+                // Regular employees just see themselves
+                return Employee::where('id', $userEmployeeId)->get();
+            }
+        }
+
+        // Default - show no employees
+        return collect([]);
     }
 
     /**
@@ -123,7 +366,7 @@ class MovementController extends Controller
         $employeeId = $user->hasPermission('movements.create') ? $request->employee_id : $employee->id;
 
         // Create movement
-        Movement::create([
+        $movement = Movement::create([
             'employee_id' => $employeeId,
             'movement_type' => $request->movement_type,
             'from_datetime' => $request->from_datetime,
@@ -134,8 +377,112 @@ class MovementController extends Controller
             'status' => 'pending',
         ]);
 
+        $this->sendNotificationsToManagers($movement, $employee);
+
         return redirect()->route('movements.index')
             ->with('success', 'Movement request submitted successfully.');
+    }
+
+
+    /**
+     * Send notifications to department heads and branch heads
+     */
+    private function sendNotificationsToManagers(Movement $movement, Employee $employee)
+    {
+        try {
+            // Find department head
+            $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+
+            // Find branch head
+            $branchHeads = $this->getBranchHeads($employee->branch_id);
+
+            // Combine unique recipients
+            $recipients = $departmentHeads->merge($branchHeads)->unique('id');
+
+            if ($recipients->isEmpty()) {
+                \Log::info('No department or branch heads found for notification', [
+                    'employee_id' => $employee->id,
+                    'department_id' => $employee->department_id,
+                    'branch_id' => $employee->branch_id
+                ]);
+                return;
+            }
+
+            // Send emails to all recipients
+            foreach ($recipients as $recipient) {
+                try {
+                    \Log::info('Attempting to send mail to: ' . $recipient->email);
+                    Mail::to($recipient->email)->send(new NewMovementNotification($movement, $employee, $recipient));
+                    \Log::info('Mail sent successfully to: ' . $recipient->email);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to send email to ' . $recipient->email, [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error in sendNotificationsToManagers', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+    /**
+     * Get users who are department heads for the given department
+     */
+    private function getDepartmentHeads($departmentId)
+    {
+        if (!$departmentId) {
+            \Log::info('No department ID provided');
+            return collect([]);
+        }
+
+        $heads = User::whereHas('roles', function ($query) {
+            // For JSON stored as string
+            $query->where(function ($q) {
+                $q->whereRaw("JSON_CONTAINS(permissions, '\"department_head\"')")
+                    ->orWhereRaw("permissions LIKE '%department_head%'");
+            });
+        })
+            ->whereHas('employee', function ($query) use ($departmentId) {
+                $query->where('department_id', $departmentId);
+            })
+            ->get(['id', 'name', 'email']);
+
+        \Log::info('Department heads found: ' . $heads->count(), [
+            'department_id' => $departmentId,
+            'heads' => $heads->pluck('email')->toArray()
+        ]);
+
+        return $heads;
+    }
+
+    private function getBranchHeads($branchId)
+    {
+        if (!$branchId) {
+            \Log::info('No branch ID provided');
+            return collect([]);
+        }
+
+        $heads = User::whereHas('roles', function ($query) {
+            // For JSON stored as string
+            $query->where(function ($q) {
+                $q->whereRaw("JSON_CONTAINS(permissions, '\"branch_manager\"')")
+                    ->orWhereRaw("permissions LIKE '%branch_manager%'");
+            });
+        })
+            ->whereHas('employee', function ($query) use ($branchId) {
+                $query->where('branch_id', $branchId);
+            })
+            ->get(['id', 'name', 'email']);
+
+        \Log::info('Branch heads found: ' . $heads->count(), [
+            'branch_id' => $branchId,
+            'heads' => $heads->pluck('email')->toArray()
+        ]);
+
+        return $heads;
     }
 
     /**
@@ -163,8 +510,10 @@ class MovementController extends Controller
         $employee = $user->employee;
 
         // Check if user can edit this movement
-        if (!$user->hasPermission('movements.edit') &&
-            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')) {
+        if (
+            !$user->hasPermission('movements.edit') &&
+            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
+        ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to edit this movement request.');
         }
@@ -190,8 +539,10 @@ class MovementController extends Controller
         $employee = $user->employee;
 
         // Check if user can update this movement
-        if (!$user->hasPermission('movements.edit') &&
-            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')) {
+        if (
+            !$user->hasPermission('movements.edit') &&
+            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
+        ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to update this movement request.');
         }
@@ -235,8 +586,10 @@ class MovementController extends Controller
         $employee = $user->employee;
 
         // Check if user can cancel this movement
-        if (!$user->hasPermission('movements.edit') &&
-            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')) {
+        if (
+            !$user->hasPermission('movements.edit') &&
+            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
+        ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to cancel this movement request.');
         }
@@ -254,8 +607,37 @@ class MovementController extends Controller
     public function approve(Request $request, Movement $movement)
     {
         $user = Auth::user();
+        $employee = $user->employee;
 
-        if (!$user->hasPermission('movements.approve')) {
+        // Check if user can approve this movement based on various conditions
+        $canApprove = false;
+
+        // Condition 1: User has explicit movement.approve permission
+        if ($user->hasPermission('movements.approve')) {
+            $canApprove = true;
+        }
+
+        // Condition 2: User is a branch manager for the employee's branch
+        else if (
+            $employee &&
+            $movement->employee->branch_id &&
+            $employee->branch_id === $movement->employee->branch_id &&
+            $user->hasPermission('branch_manager')
+        ) {
+            $canApprove = true;
+        }
+
+        // Condition 3: User is a department head for the employee's department
+        else if (
+            $employee &&
+            $movement->employee->department_id &&
+            $employee->department_id === $movement->employee->department_id &&
+            $user->hasPermission('department_head')
+        ) {
+            $canApprove = true;
+        }
+
+        if (!$canApprove) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to approve movement requests.');
         }
@@ -287,8 +669,37 @@ class MovementController extends Controller
     public function reject(Request $request, Movement $movement)
     {
         $user = Auth::user();
+        $employee = $user->employee;
 
-        if (!$user->hasPermission('movements.approve')) {
+        // Check if user can reject this movement based on various conditions
+        $canReject = false;
+
+        // Condition 1: User has explicit movement.approve permission
+        if ($user->hasPermission('movements.approve')) {
+            $canReject = true;
+        }
+
+        // Condition 2: User is a branch manager for the employee's branch
+        else if (
+            $employee &&
+            $movement->employee->branch_id &&
+            $employee->branch_id === $movement->employee->branch_id &&
+            $user->hasPermission('branch_manager')
+        ) {
+            $canReject = true;
+        }
+
+        // Condition 3: User is a department head for the employee's department
+        else if (
+            $employee &&
+            $movement->employee->department_id &&
+            $employee->department_id === $movement->employee->department_id &&
+            $user->hasPermission('department_head')
+        ) {
+            $canReject = true;
+        }
+
+        if (!$canReject) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to reject movement requests.');
         }
@@ -319,8 +730,10 @@ class MovementController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('movements.edit') &&
-            (!$user->employee || $user->employee->id !== $movement->employee_id)) {
+        if (
+            !$user->hasPermission('movements.edit') &&
+            (!$user->employee || $user->employee->id !== $movement->employee_id)
+        ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to mark this movement as completed.');
         }

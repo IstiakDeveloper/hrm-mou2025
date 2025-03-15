@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { EyeIcon, EyeOffIcon, ArrowLeft, User as UserIcon, Lock, Building, Users, Briefcase, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Employee {
   id: number;
@@ -33,11 +34,10 @@ interface User {
   id: number;
   name: string;
   email: string;
-  role_id: number | null;
   employee_id: number | null;
   branch_id: number | null;
   active_status: boolean;
-  role?: Role;
+  roles?: Role[]; // Changed from role to roles array
   employee?: Employee;
   branch?: Branch;
 }
@@ -53,12 +53,15 @@ interface UserEditProps {
 }
 
 export default function UserEdit({ user, roles, employees, branches, errors }: UserEditProps) {
+  // Extract role IDs from user.roles
+  const userRoleIds = user.roles ? user.roles.map(role => role.id) : [];
+
   const { data, setData, put, processing } = useForm({
     name: user.name || '',
     email: user.email || '',
     password: '',
     password_confirmation: '',
-    role_id: user.role_id ? user.role_id.toString() : '',
+    role_ids: userRoleIds, // Use the array of role IDs
     employee_id: user.employee_id ? user.employee_id.toString() : '',
     branch_id: user.branch_id ? user.branch_id.toString() : '',
     active_status: user.active_status,
@@ -115,6 +118,19 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
       case 4: return 'bg-green-400';
       case 5: return 'bg-green-500';
       default: return 'bg-gray-200';
+    }
+  };
+
+  // Handle role selection
+  const handleRoleToggle = (roleId: number) => {
+    const currentRoles = [...data.role_ids];
+    
+    if (currentRoles.includes(roleId)) {
+      // Remove role if already selected
+      setData('role_ids', currentRoles.filter(id => id !== roleId));
+    } else {
+      // Add role if not selected
+      setData('role_ids', [...currentRoles, roleId]);
     }
   };
 
@@ -298,36 +314,38 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                     <Lock className="h-5 w-5 text-purple-600" />
                   </div>
                   <div>
-                    <CardTitle>Role & Association</CardTitle>
-                    <CardDescription>Update user system role and associations</CardDescription>
+                    <CardTitle>Roles & Association</CardTitle>
+                    <CardDescription>Update user system roles and associations</CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="role">
-                      System Role <span className="text-red-500">*</span>
+                    <Label htmlFor="roles">
+                      System Roles <span className="text-red-500">*</span>
                     </Label>
-                    <Select
-                      value={data.role_id ? data.role_id.toString() : undefined}
-                      onValueChange={value => setData('role_id', value)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map(role => (
-                          <SelectItem key={role.id} value={role.id.toString()}>
+                    <div className="space-y-2 border rounded-md p-3">
+                      {roles.map(role => (
+                        <div key={role.id} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`role-${role.id}`} 
+                            checked={data.role_ids.includes(role.id)}
+                            onCheckedChange={() => handleRoleToggle(role.id)}
+                          />
+                          <Label 
+                            htmlFor={`role-${role.id}`} 
+                            className="font-normal cursor-pointer"
+                          >
                             {role.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.role_id && <p className="mt-1 text-sm text-red-500">{errors.role_id}</p>}
-                    {data.role_id && (
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                    {errors.role_ids && <p className="mt-1 text-sm text-red-500">{errors.role_ids}</p>}
+                    {data.role_ids.length > 0 && (
                       <p className="mt-1 text-xs text-gray-500">
-                        {roles.find(r => r.id.toString() === data.role_id)?.description || ''}
+                        {data.role_ids.length} role(s) selected
                       </p>
                     )}
                   </div>

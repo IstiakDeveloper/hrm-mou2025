@@ -46,9 +46,23 @@ class User extends Authenticatable
         return $this->belongsTo(Branch::class);
     }
 
+
+    // In User.php model
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    // Helper method to check permissions
     public function hasPermission($permission)
     {
-        return $this->role && in_array($permission, json_decode($this->role->permissions, true) ?? []);
+        foreach ($this->roles as $role) {
+            $permissions = json_decode($role->permissions, true) ?? [];
+            if (in_array($permission, $permissions)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 

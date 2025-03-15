@@ -140,9 +140,29 @@ interface MovementIndexProps {
         search?: string;
     };
     canApprove: boolean;
+    userPermissions: {
+        canView: boolean;
+        canCreate: boolean;
+        canEdit: boolean;
+        canApprove: boolean;
+        isBranchManager: boolean;
+        isBranchHead: boolean;
+        isDepartmentHead: boolean;
+        userBranchId: number | null;
+        userDepartmentId: number | null;
+        isEmployee: boolean;
+        employeeId: number | null;
+    };
 }
 
-export default function MovementIndex({ movements, departments, employees, filters, canApprove }: MovementIndexProps) {
+export default function MovementIndex({
+    movements,
+    departments,
+    employees,
+    filters,
+    canApprove,
+    userPermissions
+}: MovementIndexProps) {
     const [status, setStatus] = useState(filters.status || '');
     const [departmentId, setDepartmentId] = useState(filters.department_id || '');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || '');
@@ -463,68 +483,81 @@ export default function MovementIndex({ movements, departments, employees, filte
                                                             <span>View Details</span>
                                                         </DropdownMenuItem>
 
-                                                        {movement.status === 'pending' && (
-                                                            <>
-                                                                <DropdownMenuItem
-                                                                    onClick={() => router.get(route('movements.edit', movement.id))}
-                                                                    className="cursor-pointer"
-                                                                >
-                                                                    <span>Edit</span>
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem
-                                                                    onClick={() => {
-                                                                        if (confirm('Are you sure you want to cancel this movement request?')) {
-                                                                            router.post(route('movements.cancel', movement.id));
-                                                                        }
-                                                                    }}
-                                                                    className="cursor-pointer text-red-600"
-                                                                >
-                                                                    <span>Cancel</span>
-                                                                </DropdownMenuItem>
-                                                            </>
-                                                        )}
+                                                        {/* Edit/Cancel - only show for user's own movements or admins */}
+                                                        {movement.status === 'pending' &&
+                                                            (movement.employee_id === userPermissions.employeeId ||
+                                                                userPermissions.canEdit) && (
+                                                                <>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => router.get(route('movements.edit', movement.id))}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <span>Edit</span>
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => {
+                                                                            if (confirm('Are you sure you want to cancel this movement request?')) {
+                                                                                router.post(route('movements.cancel', movement.id));
+                                                                            }
+                                                                        }}
+                                                                        className="cursor-pointer text-red-600"
+                                                                    >
+                                                                        <span>Cancel</span>
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
 
-                                                        {canApprove && movement.status === 'pending' && (
-                                                            <>
+                                                        {/* Approve/Reject - only show for users with approve permission */}
+                                                        {movement.status === 'pending' &&
+                                                            (userPermissions.canApprove ||
+                                                                (userPermissions.isBranchHead && movement.employee.current_branch_id === userPermissions.userBranchId) ||
+                                                                (userPermissions.isDepartmentHead && movement.employee.department_id === userPermissions.userDepartmentId)) && (
+                                                                <>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => {
+                                                                            if (confirm('Are you sure you want to approve this movement request?')) {
+                                                                                router.post(route('movements.approve', movement.id));
+                                                                            }
+                                                                        }}
+                                                                        className="cursor-pointer text-green-600"
+                                                                    >
+                                                                        <Check className="mr-2 h-4 w-4" />
+                                                                        <span>Approve</span>
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => {
+                                                                            const remarks = prompt('Please provide a reason for rejection:');
+                                                                            if (remarks) {
+                                                                                router.post(route('movements.reject', movement.id), { remarks });
+                                                                            }
+                                                                        }}
+                                                                        className="cursor-pointer text-red-600"
+                                                                    >
+                                                                        <X className="mr-2 h-4 w-4" />
+                                                                        <span>Reject</span>
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
+
+                                                        {/* Mark as Completed - show for user's own approved movements or users with appropriate permissions */}
+                                                        {movement.status === 'approved' &&
+                                                            (movement.employee_id === userPermissions.employeeId ||
+                                                                userPermissions.canEdit ||
+                                                                userPermissions.canApprove ||
+                                                                (userPermissions.isBranchHead && movement.employee.current_branch_id === userPermissions.userBranchId) ||
+                                                                (userPermissions.isDepartmentHead && movement.employee.department_id === userPermissions.userDepartmentId)) && (
                                                                 <DropdownMenuItem
                                                                     onClick={() => {
-                                                                        if (confirm('Are you sure you want to approve this movement request?')) {
-                                                                            router.post(route('movements.approve', movement.id));
+                                                                        if (confirm('Mark this movement as completed?')) {
+                                                                            router.post(route('movements.complete', movement.id));
                                                                         }
                                                                     }}
                                                                     className="cursor-pointer text-green-600"
                                                                 >
                                                                     <Check className="mr-2 h-4 w-4" />
-                                                                    <span>Approve</span>
+                                                                    <span>Mark as Completed</span>
                                                                 </DropdownMenuItem>
-                                                                <DropdownMenuItem
-                                                                    onClick={() => {
-                                                                        const remarks = prompt('Please provide a reason for rejection:');
-                                                                        if (remarks) {
-                                                                            router.post(route('movements.reject', movement.id), { remarks });
-                                                                        }
-                                                                    }}
-                                                                    className="cursor-pointer text-red-600"
-                                                                >
-                                                                    <X className="mr-2 h-4 w-4" />
-                                                                    <span>Reject</span>
-                                                                </DropdownMenuItem>
-                                                            </>
-                                                        )}
-
-                                                        {movement.status === 'approved' && (
-                                                            <DropdownMenuItem
-                                                                onClick={() => {
-                                                                    if (confirm('Mark this movement as completed?')) {
-                                                                        router.post(route('movements.complete', movement.id));
-                                                                    }
-                                                                }}
-                                                                className="cursor-pointer text-green-600"
-                                                            >
-                                                                <Check className="mr-2 h-4 w-4" />
-                                                                <span>Mark as Completed</span>
-                                                            </DropdownMenuItem>
-                                                        )}
+                                                            )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -550,7 +583,6 @@ export default function MovementIndex({ movements, departments, employees, filte
                         </Table>
                     </CardContent>
                 </Card>
-
                 {/* Pagination */}
                 {hasPagination && movements.meta.last_page > 1 && (
                     <div className="mt-6">

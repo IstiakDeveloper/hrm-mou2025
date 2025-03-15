@@ -15,8 +15,8 @@ class RoleController extends Controller
     public function index(Request $request)
     {
         $roles = Role::when($request->search, function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%");
-            })
+            $query->where('name', 'like', "%{$search}%");
+        })
             ->orderBy('id')
             ->paginate(10)
             ->withQueryString();
@@ -163,6 +163,7 @@ class RoleController extends Controller
             ],
             'leaves' => [
                 'leaves.view' => 'View Leaves',
+                'leaves_type.view' => 'View Leave Type',
                 'leaves.create' => 'Create Leaves',
                 'leaves.edit' => 'Edit Leaves',
                 'leaves.delete' => 'Delete Leaves',
@@ -181,6 +182,16 @@ class RoleController extends Controller
                 'movements.edit' => 'Edit Movements',
                 'movements.delete' => 'Delete Movements',
                 'movements.approve' => 'Approve Movements',
+            ],
+            'holidays' => [
+                'holidays.view' => 'View Holidays',
+                'holidays.create' => 'Create Holidays',
+                'holidays.edit' => 'Edit Holidays',
+                'holidays.delete' => 'Delete Holidays',
+            ],
+            'profile' => [
+                'profile.view' => 'View Profile',
+                'profile.edit' => 'Edit Profile',
             ],
             'reports' => [
                 'reports.view' => 'View Reports',

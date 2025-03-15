@@ -45,14 +45,17 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+interface Role {
+  id: number;
+  name: string;
+}
+
 interface UserData {
   id: number;
   name: string;
   email: string;
   active_status: boolean;
-  role: {
-    name: string;
-  } | null;
+  roles: Role[]; // Changed from single role to array of roles
   employee: {
     employee_id: string;
     first_name: string;
@@ -128,6 +131,54 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
     return user.name;
   };
 
+  // Helper to display roles with proper styling
+  const renderUserRoles = (roles: Role[]) => {
+    if (!roles || roles.length === 0) {
+      return <span className="text-gray-500">-</span>;
+    }
+
+    // If more than 2 roles, show the first 2 and a "+X more" badge
+    if (roles.length > 2) {
+      return (
+        <div className="flex flex-wrap gap-1">
+          {roles.slice(0, 2).map(role => (
+            <Badge
+              key={role.id}
+              variant={
+                role.name === 'Super Admin' ? 'default' :
+                role.name === 'HR Admin' ? 'secondary' : 'outline'
+              }
+              className="font-normal"
+            >
+              {role.name}
+            </Badge>
+          ))}
+          <Badge variant="outline" className="bg-gray-100">
+            +{roles.length - 2} more
+          </Badge>
+        </div>
+      );
+    }
+
+    // Otherwise, just show all roles
+    return (
+      <div className="flex flex-wrap gap-1">
+        {roles.map(role => (
+          <Badge
+            key={role.id}
+            variant={
+              role.name === 'Super Admin' ? 'default' :
+              role.name === 'HR Admin' ? 'secondary' : 'outline'
+            }
+            className="font-normal"
+          >
+            {role.name}
+          </Badge>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <Layout>
       <Head title="User Management" />
@@ -191,7 +242,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
                   <TableRow className="bg-gray-50">
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
+                    <TableHead>Roles</TableHead> {/* Changed from Role to Roles */}
                     <TableHead>Branch</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -225,19 +276,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
-                          {user.role ? (
-                            <Badge
-                              variant={
-                                user.role.name === 'Super Admin' ? 'default' :
-                                user.role.name === 'HR Admin' ? 'secondary' : 'outline'
-                              }
-                              className="font-normal"
-                            >
-                              {user.role.name}
-                            </Badge>
-                          ) : (
-                            <span className="text-gray-500">-</span>
-                          )}
+                          {renderUserRoles(user.roles)}
                         </TableCell>
                         <TableCell>
                           {user.branch ? user.branch.name : '-'}

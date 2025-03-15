@@ -15,7 +15,8 @@ class BranchController extends Controller
      */
     public function index(Request $request)
     {
-        $branches = Branch::with('headEmployee')
+        // Query branches
+        $branches = Branch::query()
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('branch_code', 'like', "%{$search}%");
@@ -24,8 +25,33 @@ class BranchController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+        // Get all head employee IDs from the branches
+        $headEmployeeIds = $branches->pluck('head_employee_id')->filter()->unique()->values()->toArray();
+
+        // Get all the head employees in a single query
+        $headEmployees = [];
+        if (!empty($headEmployeeIds)) {
+            $employees = \App\Models\Employee::whereIn('id', $headEmployeeIds)
+                ->select('id', 'employee_id', 'first_name', 'last_name')
+                ->get()
+                ->keyBy('id')
+                ->toArray();
+
+            $headEmployees = $employees;
+        }
+
+        // Convert branches collection to array and manually add head employee data
+        $branchesData = $branches->toArray();
+        foreach ($branchesData['data'] as &$branch) {
+            if (!empty($branch['head_employee_id']) && isset($headEmployees[$branch['head_employee_id']])) {
+                $branch['headEmployee'] = $headEmployees[$branch['head_employee_id']];
+            } else {
+                $branch['headEmployee'] = null;
+            }
+        }
+
         return Inertia::render('branch/index', [
-            'branches' => $branches,
+            'branches' => $branchesData,
             'filters' => $request->only(['search']),
         ]);
     }
@@ -118,13 +144,22 @@ class BranchController extends Controller
      */
     public function show(Branch $branch)
     {
+        // Load the branch relationships
         $branch->load('headEmployee');
+
+        // Create a separate variable for the head employee
+        $headEmployee = null;
+        if ($branch->head_employee_id) {
+            $headEmployee = Employee::find($branch->head_employee_id);
+        }
 
         $employees = Employee::where('current_branch_id', $branch->id)
             ->with(['department', 'designation'])
             ->paginate(10);
+
         return Inertia::render('branch/show', [
             'branch' => $branch,
+            'headEmployee' => $headEmployee, // Pass the head employee separately
             'employees' => $employees,
         ]);
     }

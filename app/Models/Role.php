@@ -28,4 +28,21 @@ class Role extends Model
     {
         return $this->belongsToMany(User::class, 'role_user');
     }
+
+    public function parent()
+    {
+        return $this->belongsTo(Role::class, 'parent_id');
+    }
+
+    public function getAllPermissions()
+    {
+        $permissions = json_decode($this->permissions, true) ?? [];
+
+        if ($this->parent) {
+            $parentPermissions = $this->parent->getAllPermissions();
+            $permissions = array_merge($permissions, $parentPermissions);
+        }
+
+        return array_unique($permissions);
+    }
 }

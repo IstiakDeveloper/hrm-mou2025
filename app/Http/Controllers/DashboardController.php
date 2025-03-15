@@ -30,6 +30,13 @@ class DashboardController extends Controller
         // Basic stats - filtered by branch for branch managers if applicable
         $stats = $this->getFilteredStats($user);
 
+        // Get the user's roles
+        $roles = $user->roles;
+        $primaryRole = $roles->isNotEmpty() ? $roles->first()->name : 'User';
+
+        // Get all role names for display
+        $roleNames = $roles->pluck('name')->toArray();
+
         // Get attendance stats if user has attendance.view permission
         $attendanceStats = $user->hasPermission('attendance.view')
             ? $this->getAttendanceStats($user, $today)
@@ -212,9 +219,9 @@ class DashboardController extends Controller
 
         // Apply filters based on user role - branch managers can see transfers to or from their branch
         if ($isBranchManager && $branchId) {
-            $baseQuery->where(function($q) use ($branchId) {
+            $baseQuery->where(function ($q) use ($branchId) {
                 $q->where('from_branch_id', $branchId)
-                  ->orWhere('to_branch_id', $branchId);
+                    ->orWhere('to_branch_id', $branchId);
             });
         }
 
@@ -239,7 +246,7 @@ class DashboardController extends Controller
         $departmentId = $user->employee->department_id ?? null;
 
         $query = LeaveApplication::with(['employee', 'leaveType'])
-                                ->orderBy('created_at', 'desc');
+            ->orderBy('created_at', 'desc');
 
         if ($isBranchManager && $branchId) {
             $query->whereHas('employee', function ($q) use ($branchId) {
@@ -265,7 +272,7 @@ class DashboardController extends Controller
         $departmentId = $user->employee->department_id ?? null;
 
         $query = Movement::with('employee')
-                        ->orderBy('created_at', 'desc');
+            ->orderBy('created_at', 'desc');
 
         if ($isBranchManager && $branchId) {
             $query->whereHas('employee', function ($q) use ($branchId) {
@@ -289,12 +296,12 @@ class DashboardController extends Controller
         $branchId = $user->branch_id;
 
         $query = Transfer::with(['employee', 'fromBranch', 'toBranch'])
-                        ->orderBy('created_at', 'desc');
+            ->orderBy('created_at', 'desc');
 
         if ($isBranchManager && $branchId) {
-            $query->where(function($q) use ($branchId) {
+            $query->where(function ($q) use ($branchId) {
                 $q->where('from_branch_id', $branchId)
-                  ->orWhere('to_branch_id', $branchId);
+                    ->orWhere('to_branch_id', $branchId);
             });
         }
 

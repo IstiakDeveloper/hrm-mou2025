@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Branch extends Model
 {
@@ -22,7 +23,8 @@ class Branch extends Model
         'is_head_office' => 'boolean',
     ];
 
-    public function headEmployee()
+
+    public function headEmployee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'head_employee_id');
     }

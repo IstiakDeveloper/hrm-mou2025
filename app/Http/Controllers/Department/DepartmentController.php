@@ -16,7 +16,9 @@ class DepartmentController extends Controller
      */
     public function index(Request $request)
     {
-        $departments = Department::with(['headEmployee', 'branch', 'parentDepartment'])
+        // Query departments
+        $departments = Department::query()
+            ->with(['branch', 'parentDepartment'])
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%");
             })
@@ -27,10 +29,35 @@ class DepartmentController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+        // Get all head employee IDs from the departments
+        $headEmployeeIds = $departments->pluck('head_employee_id')->filter()->unique()->values()->toArray();
+
+        // Get all the head employees in a single query
+        $headEmployees = [];
+        if (!empty($headEmployeeIds)) {
+            $employees = \App\Models\Employee::whereIn('id', $headEmployeeIds)
+                ->select('id', 'employee_id', 'first_name', 'last_name', 'photo')
+                ->get()
+                ->keyBy('id')
+                ->toArray();
+
+            $headEmployees = $employees;
+        }
+
+        // Convert to array and manually set head employees
+        $departmentsArray = $departments->toArray();
+        foreach ($departmentsArray['data'] as &$department) {
+            if (!empty($department['head_employee_id']) && isset($headEmployees[$department['head_employee_id']])) {
+                $department['headEmployee'] = $headEmployees[$department['head_employee_id']];
+            } else {
+                $department['headEmployee'] = null;
+            }
+        }
+
         $branches = Branch::all();
 
         return Inertia::render('department/index', [
-            'departments' => $departments,
+            'departments' => $departmentsArray,
             'branches' => $branches,
             'filters' => $request->only(['search', 'branch_id']),
         ]);
@@ -144,14 +171,33 @@ class DepartmentController extends Controller
      */
     public function show(Department $department)
     {
-        $department->load(['headEmployee', 'branch', 'parentDepartment']);
+        // Load basic relationships without headEmployee
+        $department->load(['branch', 'parentDepartment']);
 
+        // Fetch employees for this department
         $employees = Employee::where('department_id', $department->id)
             ->with(['designation'])
             ->paginate(10);
 
+        // Convert department to array for manipulation
+        $departmentArray = $department->toArray();
+
+        // Directly fetch the head employee if it exists
+        if ($department->head_employee_id) {
+            $headEmployee = Employee::select('id', 'employee_id', 'first_name', 'last_name', 'photo')
+                ->find($department->head_employee_id);
+
+            if ($headEmployee) {
+                $departmentArray['headEmployee'] = $headEmployee->toArray();
+            } else {
+                $departmentArray['headEmployee'] = null;
+            }
+        } else {
+            $departmentArray['headEmployee'] = null;
+        }
+
         return Inertia::render('department/show', [
-            'department' => $department,
+            'department' => $departmentArray,
             'employees' => $employees,
         ]);
     }

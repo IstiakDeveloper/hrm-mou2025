@@ -19,7 +19,7 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        $users = User::with('role', 'employee', 'branch')
+        $users = User::with('roles', 'employee', 'branch')
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
@@ -56,24 +56,30 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-            'role_id' => 'required|exists:roles,id',
-            'employee_id' => 'nullable|exists:employees,id',
-            'branch_id' => 'nullable|exists:branches,id',
-            'active_status' => 'boolean',
+            // ... existing validation
+            'role_ids' => 'required|array',
+            'role_ids.*' => 'exists:roles,id',
         ]);
 
-        User::create([
+        // Use the first selected role as the primary role
+        $primaryRoleId = $request->role_ids[0] ?? null;
+
+        if (!$primaryRoleId) {
+            return back()->withErrors(['role_ids' => 'At least one role must be selected'])->withInput();
+        }
+
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role_id' => $request->role_id,
+            'role_id' => $primaryRoleId, // Use first selected role as primary
             'employee_id' => $request->employee_id,
             'branch_id' => $request->branch_id,
             'active_status' => $request->active_status ?? true,
         ]);
+
+        // Sync roles
+        $user->roles()->sync($request->role_ids);
 
         return redirect()->route('admin.users.index')
             ->with('success', 'User created successfully.');
@@ -88,6 +94,9 @@ class UserController extends Controller
         $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name')->get();
         $branches = Branch::all();
 
+        // Load roles relationship to have access to all assigned roles
+        $user->load('roles');
+
         return Inertia::render('admin/users/edit', [
             'user' => $user,
             'roles' => $roles,
@@ -99,9 +108,12 @@ class UserController extends Controller
     /**
      * Update the specified user.
      */
+    /**
+     * Update the specified user.
+     */
     public function update(Request $request, User $user)
     {
-        $request->validate([
+        $rules = [
             'name' => 'required|string|max:255',
             'email' => [
                 'required',
@@ -111,24 +123,40 @@ class UserController extends Controller
                 Rule::unique('users')->ignore($user->id),
             ],
             'password' => 'nullable|string|min:8|confirmed',
-            'role_id' => 'required|exists:roles,id',
+            'role_ids' => 'required|array', // Changed from role_id to role_ids
+            'role_ids.*' => 'exists:roles,id', // Validate each role ID
             'employee_id' => 'nullable|exists:employees,id',
             'branch_id' => 'nullable|exists:branches,id',
             'active_status' => 'boolean',
-        ]);
+        ];
 
-        $user->name = $request->name;
-        $user->email = $request->email;
-        $user->role_id = $request->role_id;
-        $user->employee_id = $request->employee_id;
-        $user->branch_id = $request->branch_id;
-        $user->active_status = $request->active_status ?? $user->active_status;
-
-        if ($request->filled('password')) {
-            $user->password = Hash::make($request->password);
+        // If it's just a status update, we only validate the active_status field
+        if ($request->has('active_status') && count($request->all()) === 1) {
+            $rules = ['active_status' => 'boolean'];
         }
 
-        $user->save();
+        $request->validate($rules);
+
+        // Only update provided fields in a status-only update
+        if ($request->has('active_status') && count($request->all()) === 1) {
+            $user->active_status = $request->active_status;
+            $user->save();
+        } else {
+            $user->name = $request->name;
+            $user->email = $request->email;
+            $user->employee_id = $request->employee_id;
+            $user->branch_id = $request->branch_id;
+            $user->active_status = $request->active_status ?? $user->active_status;
+
+            if ($request->filled('password')) {
+                $user->password = Hash::make($request->password);
+            }
+
+            $user->save();
+
+            // Sync roles (this will remove roles not in the array and add new ones)
+            $user->roles()->sync($request->role_ids);
+        }
 
         return redirect()->route('admin.users.index')
             ->with('success', 'User updated successfully.');
