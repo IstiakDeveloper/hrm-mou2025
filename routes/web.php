@@ -22,6 +22,7 @@ use App\Http\Controllers\Report\ReportController;
 use App\Http\Controllers\Transfer\TransferController;
 use App\Http\Controllers\ZKTeco\ZKDeviceController;
 use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -45,6 +46,19 @@ Route::get('/', function () {
     // Otherwise redirect to login
     return redirect()->route('login');
 });
+
+Route::get('/storage-link', function () {
+    Artisan::call('storage:link');
+
+    return response()->json(['message' => 'Storage link created successfully.']);
+})->name('storage.link');
+
+// Route for running migrations
+Route::get('/migrate', function () {
+    Artisan::call('migrate');
+
+    return response()->json(['message' => 'Migrations run successfully.']);
+})->name('migrate');
 
 // Authentication Routes
 Route::get('/login', [AuthController::class, 'showLogin'])
@@ -236,3 +250,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/export-excel', [ReportController::class, 'exportExcel'])->name('export-excel');
     });
 });
+
+// Attendance Device Biometric ID Management
+Route::get('/attendance/devices/biometric-ids', [AttendanceDeviceController::class, 'biometricIds'])
+    ->name('attendance.devices.biometric-ids');
+Route::put('/attendance/employees/{employee}/biometric-id', [AttendanceDeviceController::class, 'updateBiometricId'])
+    ->name('attendance.employees.biometric-id');
+
+// Attendance Device Sync Report
+Route::get('/attendance/devices/sync-report', [AttendanceDeviceController::class, 'syncReport'])
+    ->name('attendance.devices.sync-report');

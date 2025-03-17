@@ -48,7 +48,10 @@ import {
   Search,
   Activity,
   Network,
-  Building
+  Building,
+  RefreshCw,
+  Clock,
+  UserCheck
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -66,6 +69,8 @@ interface AttendanceDevice {
   branch_id: number;
   status: string;
   branch: Branch;
+  last_sync_at: string | null;
+  last_sync_status: string | null;
 }
 
 interface PaginationLinks {
@@ -143,11 +148,42 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
     router.post(route('attendance.devices.test-connection', id));
   };
 
+  const formatDateTime = (dateTime: string | null) => {
+    if (!dateTime) return 'Never';
+
+    const date = new Date(dateTime);
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   const getStatusBadge = (status: string) => {
     const statusColors: Record<string, string> = {
       active: 'bg-green-100 text-green-800',
       inactive: 'bg-red-100 text-red-800',
       maintenance: 'bg-yellow-100 text-yellow-800'
+    };
+
+    const statusColor = statusColors[status] || 'bg-gray-100 text-gray-800';
+
+    return (
+      <Badge variant="outline" className={`${statusColor} border-0`}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </Badge>
+    );
+  };
+
+  const getSyncStatusBadge = (status: string | null) => {
+    if (!status) return null;
+
+    const statusColors: Record<string, string> = {
+      success: 'bg-green-100 text-green-800',
+      partial: 'bg-yellow-100 text-yellow-800',
+      failed: 'bg-red-100 text-red-800'
     };
 
     const statusColor = statusColors[status] || 'bg-gray-100 text-gray-800';
@@ -172,7 +208,19 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
             </p>
           </div>
 
-          <div className="mt-4 md:mt-0">
+          <div className="mt-4 md:mt-0 flex space-x-2">
+            <Link href={route('attendance.devices.biometric-ids')}>
+              <Button variant="outline" className="flex items-center">
+                <UserCheck className="mr-1 h-4 w-4" />
+                Biometric IDs
+              </Button>
+            </Link>
+            <Link href={route('attendance.devices.sync-report')}>
+              <Button variant="outline" className="flex items-center">
+                <RefreshCw className="mr-1 h-4 w-4" />
+                Sync Report
+              </Button>
+            </Link>
             <Link href={route('attendance.devices.create')}>
               <Button className="flex items-center">
                 <Plus className="mr-1 h-4 w-4" />
@@ -263,8 +311,9 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                   <TableHead>Device ID</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead>IP Address</TableHead>
-                  <TableHead>Port</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Last Sync</TableHead>
+                  <TableHead>Sync Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -285,12 +334,20 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                       <TableCell>
                         <div className="flex items-center">
                           <Network className="mr-2 h-4 w-4 text-gray-400" />
-                          <span>{device.ip_address}</span>
+                          <span>{device.ip_address}:{device.port}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{device.port}</TableCell>
                       <TableCell>
                         {getStatusBadge(device.status)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <Clock className="mr-2 h-4 w-4 text-gray-400" />
+                          <span>{formatDateTime(device.last_sync_at)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getSyncStatusBadge(device.last_sync_status)}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -329,7 +386,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       No devices found.
                       {(search || branchId || status) && (
                         <Button

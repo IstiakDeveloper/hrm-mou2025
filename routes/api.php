@@ -1,0 +1,33 @@
+<?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\API\ZKTecoAPIController;
+use App\Http\Controllers\API\BranchEmployeeAPIController;
+use App\Http\Controllers\API\EmployeeAPIController;
+
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register API routes for your application. These
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "api" middleware group.
+|
+*/
+
+Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+    return $request->user();
+});
+
+// ZKTeco Attendance API
+Route::post('/zkteco/sync', [ZKTecoAPIController::class, 'syncAttendance']);
+
+// Employee Sync API
+Route::post('/employees/sync', [EmployeeAPIController::class, 'syncEmployees']);
+
+// Branch Employee APIs
+Route::get('/branch/{branchId}/employees', [BranchEmployeeAPIController::class, 'getEmployeesByBranch']);
+Route::get('/device/{deviceId}/employees', [BranchEmployeeAPIController::class, 'getEmployeesByDevice']);
+Route::post('/device/push-employees', [BranchEmployeeAPIController::class, 'pushEmployeesToDevice']);

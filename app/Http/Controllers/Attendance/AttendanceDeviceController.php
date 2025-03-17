@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Attendance;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceDevice;
 use App\Models\Branch;
+use App\Models\Employee;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
 
 class AttendanceDeviceController extends Controller
@@ -19,8 +21,8 @@ class AttendanceDeviceController extends Controller
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('device_id', 'like', "%{$search}%")
-                      ->orWhere('ip_address', 'like', "%{$search}%");
+                        ->orWhere('device_id', 'like', "%{$search}%")
+                        ->orWhere('ip_address', 'like', "%{$search}%");
                 });
             })
             ->when($request->branch_id, function ($query, $branchId) {
@@ -49,6 +51,9 @@ class AttendanceDeviceController extends Controller
     public function create()
     {
         $branches = Branch::all();
+
+        // Debug to see what's being passed
+        \Log::info('Branches for device create:', ['count' => $branches->count()]);
 
         return Inertia::render('attendance/devices/create', [
             'branches' => $branches,
@@ -133,11 +138,66 @@ class AttendanceDeviceController extends Controller
      */
     public function testConnection(AttendanceDevice $device)
     {
-        // Implementation for testing ZKTeco device connection would go here
-        // This would typically involve connecting to the device via SDK/API
+        try {
+            // Simple ping test to the device IP
+            $ping = Http::timeout(5)->get("http://{$device->ip_address}:{$device->port}");
 
-        dd('test clicked');
-        return redirect()->route('attendance.devices.index')
-            ->with('success', 'Connection to device successful.');
+            // Just checking if connection is established, don't care about the response
+            if ($ping->failed()) {
+                return redirect()->route('attendance.devices.index')
+                    ->with('error', "Failed to connect to device at {$device->ip_address}:{$device->port}");
+            }
+
+            return redirect()->route('attendance.devices.index')
+                ->with('success', 'Connection to device successful.');
+        } catch (\Exception $e) {
+            return redirect()->route('attendance.devices.index')
+                ->with('error', "Connection error: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Show employee biometric ID management screen.
+     */
+    public function biometricIds()
+    {
+        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name', 'biometric_id', 'department_id', 'current_branch_id')
+            ->with(['department:id,name', 'branch:id,name'])
+            ->orderBy('first_name')
+            ->paginate(15);
+
+        return Inertia::render('attendance/devices/biometric-ids', [
+            'employees' => $employees
+        ]);
+    }
+
+    /**
+     * Update employee biometric ID.
+     */
+    public function updateBiometricId(Request $request, Employee $employee)
+    {
+        $request->validate([
+            'biometric_id' => 'required|string|max:50|unique:employees,biometric_id,' . $employee->id,
+        ]);
+
+        $employee->biometric_id = $request->biometric_id;
+        $employee->save();
+
+        return redirect()->route('attendance.devices.biometric-ids')
+            ->with('success', "Biometric ID updated for {$employee->first_name} {$employee->last_name}.");
+    }
+
+    /**
+     * Generate a report of device sync status.
+     */
+    public function syncReport()
+    {
+        $devices = AttendanceDevice::with('branch')
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('attendance/devices/sync-report', [
+            'devices' => $devices
+        ]);
     }
 }

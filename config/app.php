@@ -28,6 +28,20 @@ return [
 
     'env' => env('APP_ENV', 'production'),
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | ZKTeco Integration Settings
+    |--------------------------------------------------------------------------
+    |
+    | These settings are used by the ZKTeco attendance integration
+    |
+    */
+    'zkteco_api_key' => env('ZKTECO_API_KEY', 'AWSKJSKJ934895395834985834958345'),
+    'zkteco_auto_register_devices' => env('ZKTECO_AUTO_REGISTER_DEVICES', true),
+
+
+
     /*
     |--------------------------------------------------------------------------
     | Application Debug Mode

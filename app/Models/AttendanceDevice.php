@@ -16,6 +16,12 @@ class AttendanceDevice extends Model
         'port',
         'branch_id',
         'status',
+        'last_sync_at',
+        'last_sync_status',
+    ];
+
+    protected $casts = [
+        'last_sync_at' => 'datetime',
     ];
 
     public function branch()

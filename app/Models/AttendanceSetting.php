@@ -19,10 +19,20 @@ class AttendanceSetting extends Model
     ];
 
     protected $casts = [
-        'work_start_time' => 'datetime',
-        'work_end_time' => 'datetime',
+        // Use string for time fields instead of datetime
         'weekend_days' => 'array',
     ];
+
+    // Add accessor methods to format the time fields properly
+    public function getWorkStartTimeAttribute($value)
+    {
+        return $value; // Return the raw time string (09:00:00)
+    }
+
+    public function getWorkEndTimeAttribute($value)
+    {
+        return $value; // Return the raw time string (19:00:00)
+    }
 
     public function branch()
     {

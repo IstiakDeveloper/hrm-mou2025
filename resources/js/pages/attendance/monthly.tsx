@@ -36,11 +36,16 @@ import {
   User,
   Building,
   Users,
-  BarChart
+  BarChart,
+  Clock,
+  AlertCircle,
+  Info,
+  Download
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format, parse } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Department {
   id: number;
@@ -74,6 +79,8 @@ interface Attendance {
   check_in: string | null;
   check_out: string | null;
   status: string;
+  remarks: string | null;
+  auto_remarks: string | null;
 }
 
 interface PaginationLinks {
@@ -104,6 +111,15 @@ interface EmployeesResponse {
   meta: PaginationMeta;
 }
 
+interface UserPermissions {
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  isEmployee: boolean;
+  isBranchManager: boolean;
+  isDepartmentHead: boolean;
+}
+
 interface AttendanceMonthlyProps {
   employees: EmployeesResponse;
   attendances: Record<string, Attendance[]>;
@@ -117,6 +133,7 @@ interface AttendanceMonthlyProps {
   };
   month: string;
   daysInMonth: number;
+  userPermissions: UserPermissions;
 }
 
 export default function AttendanceMonthly({
@@ -126,7 +143,8 @@ export default function AttendanceMonthly({
   departments,
   filters,
   month,
-  daysInMonth
+  daysInMonth,
+  userPermissions
 }: AttendanceMonthlyProps) {
   const [search, setSearch] = useState(filters.search || '');
   const [branchId, setBranchId] = useState(filters.branch_id || null);
@@ -207,9 +225,49 @@ export default function AttendanceMonthly({
     if (!attendances[employeeId]) return null;
 
     const dateToFind = `${month}-${day.toString().padStart(2, '0')}`;
-    const attendance = attendances[employeeId].find(a => a.date === dateToFind);
+    const attendance = attendances[employeeId].find(a => {
+      // Convert both date formats to yyyy-MM-dd for comparison
+      const attendanceDate = new Date(a.date).toISOString().split('T')[0];
+      const searchDate = new Date(dateToFind).toISOString().split('T')[0];
+      return attendanceDate === searchDate;
+    });
 
     return attendance ? attendance.status : null;
+  };
+
+  const getAttendanceTooltip = (employeeId: number, day: number) => {
+    if (!attendances[employeeId]) return null;
+
+    const dateToFind = `${month}-${day.toString().padStart(2, '0')}`;
+    const attendance = attendances[employeeId].find(a => {
+      const attendanceDate = new Date(a.date).toISOString().split('T')[0];
+      const searchDate = new Date(dateToFind).toISOString().split('T')[0];
+      return attendanceDate === searchDate;
+    });
+
+    if (!attendance) return null;
+
+    let tooltipContent = attendance.status.charAt(0).toUpperCase() + attendance.status.slice(1).replace('_', ' ');
+
+    // Add check-in and check-out times if present
+    if (attendance.check_in) {
+      const checkInTime = new Date(`1970-01-01T${attendance.check_in}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      tooltipContent += `\nIn: ${checkInTime}`;
+    }
+
+    if (attendance.check_out) {
+      const checkOutTime = new Date(`1970-01-01T${attendance.check_out}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      tooltipContent += `\nOut: ${checkOutTime}`;
+    }
+
+    // Add remarks if available
+    if (attendance.auto_remarks) {
+      tooltipContent += `\n${attendance.auto_remarks}`;
+    } else if (attendance.remarks) {
+      tooltipContent += `\n${attendance.remarks}`;
+    }
+
+    return tooltipContent;
   };
 
   // Calculate summary for each employee
@@ -224,8 +282,8 @@ export default function AttendanceMonthly({
       leave: 0
     };
 
-    attendances[employeeId].forEach(attendance => {
-      if (summary.hasOwnProperty(attendance.status)) {
+    attendances[employeeId]?.forEach(attendance => {
+      if (Object.prototype.hasOwnProperty.call(summary, attendance.status)) {
         summary[attendance.status as keyof typeof summary]++;
       }
     });
@@ -235,6 +293,10 @@ export default function AttendanceMonthly({
 
   // Check if pagination data exists
   const hasPagination = employees.meta && employees.links;
+
+  // Check if user can see branch/department filters
+  const canFilterByBranch = userPermissions.isBranchManager || !userPermissions.isEmployee;
+  const canFilterByDepartment = userPermissions.isDepartmentHead || userPermissions.isBranchManager || !userPermissions.isEmployee;
 
   return (
     <Layout>
@@ -292,14 +354,37 @@ export default function AttendanceMonthly({
                 View Report
               </Button>
             </Link>
+
+            {userPermissions.canCreate && (
+              <Link href={route('attendance.create')}>
+                <Button className="flex items-center">
+                  <Clock className="mr-1 h-4 w-4" />
+                  Add Attendance
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
+
+        {/* Role-based Context Message */}
+        {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
+          <Alert className="mb-6">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              You are viewing your own monthly attendance records.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Filters */}
         <Card className="mb-6">
           <CardHeader className="pb-3">
             <CardTitle>Filters</CardTitle>
-            <CardDescription>Filter employees by name, branch or department</CardDescription>
+            <CardDescription>
+              {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead
+                ? "Filter your attendance records"
+                : "Filter employees by name, branch or department"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
@@ -316,43 +401,49 @@ export default function AttendanceMonthly({
                 </div>
               </div>
 
-              <div className="w-full md:w-64">
-                <Select
-                  value={branchId || undefined}
-                  onValueChange={(value) => setBranchId(value === "all" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Branches</SelectItem>
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Only show branch filter if user can filter by branch */}
+              {canFilterByBranch && branches.length > 1 && (
+                <div className="w-full md:w-64">
+                  <Select
+                    value={branchId || undefined}
+                    onValueChange={(value) => setBranchId(value === "all" ? null : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Branches</SelectItem>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id.toString()}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              <div className="w-full md:w-64">
-                <Select
-                  value={departmentId || undefined}
-                  onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((department) => (
-                      <SelectItem key={department.id} value={department.id.toString()}>
-                        {department.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Only show department filter if user can filter by department */}
+              {canFilterByDepartment && departments.length > 1 && (
+                <div className="w-full md:w-64">
+                  <Select
+                    value={departmentId || undefined}
+                    onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map((department) => (
+                        <SelectItem key={department.id} value={department.id.toString()}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="flex space-x-2">
                 <Button variant="outline" onClick={resetFilters}>
@@ -367,26 +458,30 @@ export default function AttendanceMonthly({
         </Card>
 
         {/* Legend */}
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-4 flex flex-wrap gap-4">
           <div className="flex items-center">
-            <span className="inline-block w-5 h-5 rounded-full bg-green-100 mr-1"></span>
-            <span className="text-sm">P - Present</span>
+            <span className="inline-block w-6 h-6 rounded-full bg-green-100 mr-2 flex items-center justify-center text-xs font-bold text-green-800">P</span>
+            <span className="text-sm">Present</span>
           </div>
           <div className="flex items-center">
-            <span className="inline-block w-5 h-5 rounded-full bg-red-100 mr-1"></span>
-            <span className="text-sm">A - Absent</span>
+            <span className="inline-block w-6 h-6 rounded-full bg-red-100 mr-2 flex items-center justify-center text-xs font-bold text-red-800">A</span>
+            <span className="text-sm">Absent</span>
           </div>
           <div className="flex items-center">
-            <span className="inline-block w-5 h-5 rounded-full bg-orange-100 mr-1"></span>
-            <span className="text-sm">L - Late</span>
+            <span className="inline-block w-6 h-6 rounded-full bg-orange-100 mr-2 flex items-center justify-center text-xs font-bold text-orange-800">L</span>
+            <span className="text-sm">Late</span>
           </div>
           <div className="flex items-center">
-            <span className="inline-block w-5 h-5 rounded-full bg-yellow-100 mr-1"></span>
-            <span className="text-sm">H - Half Day</span>
+            <span className="inline-block w-6 h-6 rounded-full bg-yellow-100 mr-2 flex items-center justify-center text-xs font-bold text-yellow-800">H</span>
+            <span className="text-sm">Half Day</span>
           </div>
           <div className="flex items-center">
-            <span className="inline-block w-5 h-5 rounded-full bg-blue-100 mr-1"></span>
-            <span className="text-sm">LV - Leave</span>
+            <span className="inline-block w-6 h-6 rounded-full bg-blue-100 mr-2 flex items-center justify-center text-xs font-bold text-blue-800">LV</span>
+            <span className="text-sm">Leave</span>
+          </div>
+          <div className="flex items-center">
+            <span className="inline-block w-6 h-6 rounded-full bg-gray-100 mr-2 flex items-center justify-center text-xs font-bold text-gray-800">-</span>
+            <span className="text-sm">No Record</span>
           </div>
         </div>
 
@@ -395,16 +490,16 @@ export default function AttendanceMonthly({
           <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-white z-10 min-w-[200px]">Employee</TableHead>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[200px]">Employee</TableHead>
                   {days.map(day => (
                     <TableHead key={day} className="text-center min-w-[40px]">{day}</TableHead>
                   ))}
-                  <TableHead className="text-center min-w-[60px]">P</TableHead>
-                  <TableHead className="text-center min-w-[60px]">A</TableHead>
-                  <TableHead className="text-center min-w-[60px]">L</TableHead>
-                  <TableHead className="text-center min-w-[60px]">H</TableHead>
-                  <TableHead className="text-center min-w-[60px]">LV</TableHead>
+                  <TableHead className="text-center min-w-[60px] bg-green-50">P</TableHead>
+                  <TableHead className="text-center min-w-[60px] bg-red-50">A</TableHead>
+                  <TableHead className="text-center min-w-[60px] bg-orange-50">L</TableHead>
+                  <TableHead className="text-center min-w-[60px] bg-yellow-50">H</TableHead>
+                  <TableHead className="text-center min-w-[60px] bg-blue-50">LV</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -412,23 +507,29 @@ export default function AttendanceMonthly({
                   employees.data.map((employee) => {
                     const summary = getEmployeeSummary(employee.id);
                     return (
-                      <TableRow key={employee.id}>
-                        <TableCell className="font-medium sticky left-0 bg-white z-10">
-                          <div>
-                            {employee.first_name} {employee.last_name}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {employee.employee_id}
+                      <TableRow key={employee.id} className="hover:bg-gray-50">
+                        <TableCell className="font-medium sticky left-0 bg-white z-10 hover:bg-gray-50">
+                          <div className="flex items-center space-x-2">
+                            <User className="h-4 w-4 text-gray-400" />
+                            <div>
+                              <div className="font-medium">{employee.first_name} {employee.last_name}</div>
+                              <div className="text-xs text-gray-500 flex items-center">
+                                <span className="mr-1">{employee.employee_id}</span>
+                                <span className="mx-1">•</span>
+                                <span>{employee.department.name}</span>
+                              </div>
+                            </div>
                           </div>
                         </TableCell>
                         {days.map(day => {
                           const status = getAttendanceStatus(employee.id, day);
+                          const tooltip = getAttendanceTooltip(employee.id, day);
                           return (
                             <TableCell key={day} className="p-1 text-center">
                               {status ? (
                                 <div
-                                  className={`w-8 h-8 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-xs font-medium`}
-                                  title={status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                                  className={`w-8 h-8 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-xs font-medium cursor-help`}
+                                  title={tooltip || status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
                                 >
                                   {getStatusCode(status)}
                                 </div>
@@ -440,20 +541,20 @@ export default function AttendanceMonthly({
                             </TableCell>
                           );
                         })}
-                        <TableCell className="text-center">
-                          <Badge className="bg-green-100 text-green-800 border-0">{summary.present}</Badge>
+                        <TableCell className="text-center bg-green-50">
+                          <Badge variant="outline" className="bg-green-100 text-green-800 border-0">{summary.present}</Badge>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className="bg-red-100 text-red-800 border-0">{summary.absent}</Badge>
+                        <TableCell className="text-center bg-red-50">
+                          <Badge variant="outline" className="bg-red-100 text-red-800 border-0">{summary.absent}</Badge>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className="bg-orange-100 text-orange-800 border-0">{summary.late}</Badge>
+                        <TableCell className="text-center bg-orange-50">
+                          <Badge variant="outline" className="bg-orange-100 text-orange-800 border-0">{summary.late}</Badge>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className="bg-yellow-100 text-yellow-800 border-0">{summary.half_day}</Badge>
+                        <TableCell className="text-center bg-yellow-50">
+                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-0">{summary.half_day}</Badge>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className="bg-blue-100 text-blue-800 border-0">{summary.leave}</Badge>
+                        <TableCell className="text-center bg-blue-50">
+                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-0">{summary.leave}</Badge>
                         </TableCell>
                       </TableRow>
                     );
@@ -461,16 +562,24 @@ export default function AttendanceMonthly({
                 ) : (
                   <TableRow>
                     <TableCell colSpan={days.length + 6} className="h-24 text-center">
-                      No employees found.
-                      {(search || branchId || departmentId) && (
-                        <Button
-                          variant="link"
-                          onClick={resetFilters}
-                          className="px-2 font-normal"
-                        >
-                          Clear filters
-                        </Button>
-                      )}
+                      <div className="flex flex-col items-center justify-center text-gray-500">
+                        <AlertCircle className="h-8 w-8 mb-2" />
+                        <h3 className="font-medium">No employees found</h3>
+                        <p className="text-sm mt-1">
+                          {(search || branchId || departmentId)
+                            ? "Try adjusting your filters to see more results."
+                            : "There are no employees to display for this month."}
+                        </p>
+                        {(search || branchId || departmentId) && (
+                          <Button
+                            variant="outline"
+                            onClick={resetFilters}
+                            className="mt-4"
+                          >
+                            Reset Filters
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
@@ -484,50 +593,47 @@ export default function AttendanceMonthly({
           <div className="mt-6">
             <Pagination>
               <PaginationContent>
-                {employees.meta.current_page > 1 && employees.links.prev && (
+                {employees.meta.current_page > 1 && (
                   <PaginationItem>
                     <PaginationPrevious
-                      href={employees.links.prev || '#'}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        router.get(employees.links.prev || '', {
-                          search,
-                          month: currentMonth,
-                          branch_id: branchId || '',
-                          department_id: departmentId || ''
-                        }, { preserveState: true });
-                      }}
+                      href={route('attendance.monthly', {
+                        page: employees.meta.current_page - 1,
+                        search,
+                        month: currentMonth,
+                        branch_id: branchId || '',
+                        department_id: departmentId || ''
+                      })}
                     />
                   </PaginationItem>
                 )}
 
-                {employees.meta.links.filter(link => !link.label.includes('&laquo;') && !link.label.includes('&raquo;')).map((link, i) => {
-                  const isPageNumber = !isNaN(Number(link.label));
+                {employees.meta.links.map((link, i) => {
+                  // Skip previous/next links as we handle them separately
+                  if (link.label === '&laquo; Previous' || link.label === 'Next &raquo;') {
+                    return null;
+                  }
 
-                  if (!isPageNumber && link.label === '...') {
+                  // For ellipsis
+                  if (link.label === '...') {
                     return (
-                      <PaginationItem key={i}>
+                      <PaginationItem key={`ellipsis-${i}`}>
                         <PaginationEllipsis />
                       </PaginationItem>
                     );
                   }
 
+                  // For numbered links
                   return (
                     <PaginationItem key={i}>
                       <PaginationLink
-                        href={link.url || '#'}
+                        href={route('attendance.monthly', {
+                          page: link.label,
+                          search,
+                          month: currentMonth,
+                          branch_id: branchId || '',
+                          department_id: departmentId || ''
+                        })}
                         isActive={link.active}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (link.url) {
-                            router.get(link.url, {
-                              search,
-                              month: currentMonth,
-                              branch_id: branchId || '',
-                              department_id: departmentId || ''
-                            }, { preserveState: true });
-                          }
-                        }}
                       >
                         {link.label}
                       </PaginationLink>
@@ -535,19 +641,16 @@ export default function AttendanceMonthly({
                   );
                 })}
 
-                {employees.meta.current_page < employees.meta.last_page && employees.links.next && (
+                {employees.meta.current_page < employees.meta.last_page && (
                   <PaginationItem>
                     <PaginationNext
-                      href={employees.links.next || '#'}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        router.get(employees.links.next || '', {
-                          search,
-                          month: currentMonth,
-                          branch_id: branchId || '',
-                          department_id: departmentId || ''
-                        }, { preserveState: true });
-                      }}
+                      href={route('attendance.monthly', {
+                        page: employees.meta.current_page + 1,
+                        search,
+                        month: currentMonth,
+                        branch_id: branchId || '',
+                        department_id: departmentId || ''
+                      })}
                     />
                   </PaginationItem>
                 )}

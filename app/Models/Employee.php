@@ -17,6 +17,7 @@ class Employee extends Model
         'email',
         'phone',
         'gender',
+        'blood_group',
         'date_of_birth',
         'joining_date',
         'address',

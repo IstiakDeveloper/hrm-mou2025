@@ -62,6 +62,7 @@ interface Employee {
   email: string;
   phone: string;
   gender: string;
+  blood_group: string;
   date_of_birth: string;
   joining_date: string;
   address: string;
@@ -208,7 +209,7 @@ export default function EmployeeShow({ employee }: EmployeeShowProps) {
                 <CardContent className="pt-6">
                   <dl className="space-y-4">
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Employee ID</dt>
+                      <dt className="text-sm font-medium text-gray-500">Employee Pin</dt>
                       <dd className="mt-1 text-sm text-gray-900">{employee.employee_id}</dd>
                     </div>
                     <div>
@@ -235,6 +236,12 @@ export default function EmployeeShow({ employee }: EmployeeShowProps) {
                       <dt className="text-sm font-medium text-gray-500">Gender</dt>
                       <dd className="mt-1 text-sm text-gray-900 capitalize">
                         {employee.gender || 'Not specified'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Blood Group</dt>
+                      <dd className="mt-1 text-sm text-gray-900 capitalize">
+                        {employee.blood_group || 'Not specified'}
                       </dd>
                     </div>
                   </dl>
@@ -378,13 +385,19 @@ export default function EmployeeShow({ employee }: EmployeeShowProps) {
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-sm font-medium text-gray-500">Employee ID</dt>
+                        <dt className="text-sm font-medium text-gray-500">Employee Pin</dt>
                         <dd className="mt-1 text-sm text-gray-900">{employee.employee_id}</dd>
                       </div>
                       <div>
                         <dt className="text-sm font-medium text-gray-500">Gender</dt>
                         <dd className="mt-1 text-sm text-gray-900 capitalize">
                           {employee.gender || 'Not specified'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500">Blood Group</dt>
+                        <dd className="mt-1 text-sm text-gray-900 capitalize">
+                          {employee.blood_group || 'Not specified'}
                         </dd>
                       </div>
                       <div>
