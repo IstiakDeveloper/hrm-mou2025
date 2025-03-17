@@ -273,7 +273,7 @@ class AttendanceController extends Controller
         // Apply filters based on user permissions and role
         $this->applyEmployeeFilters($employeesQuery, $user, $request);
 
-        $employees = $employeesQuery->paginate(15)->withQueryString();
+        $employees = $employeesQuery->paginate(100)->withQueryString();
 
         $employeeIds = $employees->pluck('id')->toArray();
 

@@ -53,7 +53,6 @@ class ZKTecoAPIController extends Controller
     private function isRequestFromDevice(Request $request)
     {
         // ZKTeco devices typically use specific User-Agent strings or have specific payload formats
-        // You may need to adjust this based on your specific device's behavior
         $userAgent = $request->header('User-Agent');
 
         // Check for ZKTeco specific headers or payload structure
@@ -236,8 +235,16 @@ class ZKTecoAPIController extends Controller
             return false;
         }
 
-        // Find employee by employee_id instead of biometric_id
-        $employee = Employee::where('employee_id', $record['id'])->first();
+        // Find employee by employee_id
+        $employee = Employee::where('employee_id', (string)$record['id'])->first();
+
+        // Log the employee lookup details for debugging
+        Log::info('ZKTeco sync: Employee lookup details', [
+            'record_id' => $record['id'],
+            'record_id_type' => gettype($record['id']),
+            'employee_found' => ($employee !== null)
+        ]);
+
         if (!$employee) {
             Log::warning('ZKTeco sync: Unknown employee_id from direct push', [
                 'employee_id' => $record['id'],
@@ -248,28 +255,30 @@ class ZKTecoAPIController extends Controller
 
         // Parse timestamp - handle different timestamp formats
         try {
+            // Log the timestamp we're trying to parse
+            Log::info('ZKTeco sync: Parsing timestamp', [
+                'raw_timestamp' => $record['timestamp']
+            ]);
+
             // Try standard format first
             $timestamp = Carbon::parse($record['timestamp']);
-        } catch (\Exception $e) {
-            try {
-                // Try alternative formats that devices might send
-                $timestamp = Carbon::createFromFormat('Y-m-d H:i:s', $record['timestamp']);
-            } catch (\Exception $e2) {
-                try {
-                    // Try yet another format
-                    $timestamp = Carbon::createFromFormat('d/m/Y H:i:s', $record['timestamp']);
-                } catch (\Exception $e3) {
-                    Log::error('ZKTeco sync: Unable to parse timestamp from direct push', [
-                        'timestamp' => $record['timestamp'],
-                        'error' => $e3->getMessage()
-                    ]);
-                    return false;
-                }
-            }
-        }
 
-        $date = $timestamp->format('Y-m-d');
-        $time = $timestamp->format('H:i:s');
+            $date = $timestamp->format('Y-m-d');
+            $time = $timestamp->format('H:i:s');
+
+            // Log the parsed components
+            Log::info('ZKTeco sync: Parsed timestamp components', [
+                'date' => $date,
+                'time' => $time,
+                'full_datetime' => $timestamp->format('Y-m-d H:i:s')
+            ]);
+        } catch (\Exception $e) {
+            Log::error('ZKTeco sync: Error parsing timestamp', [
+                'timestamp' => $record['timestamp'],
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
 
         // Determine check-in or check-out based on record state or punch type
         // Different devices use different conventions
@@ -387,8 +396,16 @@ class ZKTecoAPIController extends Controller
      */
     private function processAgentRecord($record, $device)
     {
-        // Find employee by employee_id instead of biometric_id
-        $employee = Employee::where('employee_id', $record['id'])->first();
+        // Find employee by employee_id
+        $employee = Employee::where('employee_id', (string)$record['id'])->first();
+
+        // Log the employee lookup details for debugging
+        Log::info('ZKTeco sync: Employee lookup details', [
+            'record_id' => $record['id'],
+            'record_id_type' => gettype($record['id']),
+            'employee_found' => ($employee !== null)
+        ]);
+
         if (!$employee) {
             Log::warning('ZKTeco sync: Unknown employee_id from agent', [
                 'employee_id' => $record['id'],
@@ -397,16 +414,36 @@ class ZKTecoAPIController extends Controller
             return false;
         }
 
-        // Parse timestamp
-        $timestamp = Carbon::parse($record['timestamp']);
-        $date = $timestamp->format('Y-m-d');
-        $time = $timestamp->format('H:i:s');
+        try {
+            // Log the timestamp we're trying to parse
+            Log::info('ZKTeco sync: Parsing timestamp', [
+                'raw_timestamp' => $record['timestamp']
+            ]);
 
-        // Determine check-in or check-out based on state
-        // State = 0 typically means check-in, state = 1 means check-out
-        $isCheckIn = ($record['type'] == 0);
+            // Parse timestamp
+            $timestamp = Carbon::parse($record['timestamp']);
 
-        return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
+            $date = $timestamp->format('Y-m-d');
+            $time = $timestamp->format('H:i:s');
+
+            // Log the parsed components
+            Log::info('ZKTeco sync: Parsed timestamp components', [
+                'date' => $date,
+                'time' => $time,
+                'full_datetime' => $timestamp->format('Y-m-d H:i:s')
+            ]);
+
+            // Determine check-in or check-out based on state
+            $isCheckIn = ($record['type'] == 0);
+
+            return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
+        } catch (\Exception $e) {
+            Log::error('ZKTeco sync: Error parsing timestamp', [
+                'timestamp' => $record['timestamp'],
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 
     /**
@@ -416,6 +453,14 @@ class ZKTecoAPIController extends Controller
     {
         // Use database transaction for data integrity
         return DB::transaction(function () use ($employee, $device, $date, $time, $isCheckIn) {
+            // Log the values being used
+            Log::info('ZKTeco sync: Saving attendance record', [
+                'employee_id' => $employee->id,
+                'date' => $date,
+                'time' => $time,
+                'isCheckIn' => $isCheckIn
+            ]);
+
             // Find existing attendance for this date
             $attendance = Attendance::where('employee_id', $employee->id)
                 ->where('date', $date)
@@ -455,47 +500,8 @@ class ZKTecoAPIController extends Controller
     }
 
     /**
-     * Process user data from the device to sync biometric IDs
-     */
-    private function processUserData($userData, $device)
-    {
-        $updated = 0;
-        $skipped = 0;
-
-        foreach ($userData as $user) {
-            if (!isset($user['uid']) || !isset($user['id'])) {
-                $skipped++;
-                continue;
-            }
-
-            // Find employee by employee_id
-            $employee = Employee::where('employee_id', $user['id'])->first();
-            if (!$employee) {
-                $skipped++;
-                continue;
-            }
-
-            // Update biometric ID if different
-            if ($employee->biometric_id != $user['uid']) {
-                $employee->biometric_id = $user['uid'];
-                $employee->save();
-                $updated++;
-            } else {
-                $skipped++;
-            }
-        }
-
-        Log::info('ZKTeco sync: User data processed', [
-            'updated' => $updated,
-            'skipped' => $skipped,
-            'total' => count($userData)
-        ]);
-
-        return true;
-    }
-
-    /**
      * Update attendance status based on check-in and check-out times
+     * Fixed to properly handle date and time parsing
      */
     private function updateAttendanceStatus($attendance)
     {
@@ -517,39 +523,82 @@ class ZKTecoAPIController extends Controller
             return;
         }
 
-        $workStartTime = Carbon::parse($attendance->date . ' ' . $settings->work_start_time);
-        $lateThreshold = $workStartTime->copy()->addMinutes($settings->late_threshold_minutes);
+        // Debug the date and time being used
+        Log::info('ZKTeco sync: Update attendance status', [
+            'attendance_date' => $attendance->date,
+            'attendance_check_in' => $attendance->check_in,
+            'work_start_time' => $settings->work_start_time
+        ]);
 
-        // Calculate status
-        if ($attendance->check_in) {
-            $checkInTime = Carbon::parse($attendance->date . ' ' . $attendance->check_in);
+        try {
+            // Carefully construct date-time strings
+            $dateStr = $attendance->date;
+            $startTimeStr = $settings->work_start_time;
 
-            // Mark as late if check-in time is after late threshold
-            if ($checkInTime->gt($lateThreshold)) {
-                $attendance->status = 'late';
+            // Create work start time correctly
+            $workStartTimeString = "{$dateStr} {$startTimeStr}";
+            Log::info('ZKTeco sync: Parsing work start time', ['datetime' => $workStartTimeString]);
+
+            $workStartTime = Carbon::parse($workStartTimeString);
+            $lateThreshold = $workStartTime->copy()->addMinutes($settings->late_threshold_minutes);
+
+            // Calculate status
+            if ($attendance->check_in) {
+                // Construct check-in datetime string carefully
+                $checkInTimeStr = $attendance->check_in;
+                $checkInDateTimeString = "{$dateStr} {$checkInTimeStr}";
+
+                Log::info('ZKTeco sync: Parsing check-in time', ['datetime' => $checkInDateTimeString]);
+                $checkInTime = Carbon::parse($checkInDateTimeString);
+
+                // Mark as late if check-in time is after late threshold
+                if ($checkInTime->gt($lateThreshold)) {
+                    $attendance->status = 'late';
+                } else {
+                    $attendance->status = 'present';
+                }
             } else {
-                $attendance->status = 'present';
-            }
-        } else {
-            // No check-in record
-            $attendance->status = 'absent';
-        }
-
-        // Check for half-day based on working hours
-        if ($attendance->check_in && $attendance->check_out) {
-            $checkInTime = Carbon::parse($attendance->date . ' ' . $attendance->check_in);
-            $checkOutTime = Carbon::parse($attendance->date . ' ' . $attendance->check_out);
-
-            // Handle case where check-out is next day
-            if ($checkOutTime->lt($checkInTime)) {
-                $checkOutTime->addDay();
+                // No check-in record
+                $attendance->status = 'absent';
             }
 
-            $hoursWorked = $checkInTime->diffInHours($checkOutTime);
+            // Check for half-day based on working hours
+            if ($attendance->check_in && $attendance->check_out) {
+                // Construct datetime strings carefully
+                $checkInTimeStr = $attendance->check_in;
+                $checkOutTimeStr = $attendance->check_out;
 
-            if ($hoursWorked < $settings->half_day_hours && $attendance->status != 'absent') {
-                $attendance->status = 'half_day';
+                $checkInDateTimeString = "{$dateStr} {$checkInTimeStr}";
+                $checkOutDateTimeString = "{$dateStr} {$checkOutTimeStr}";
+
+                Log::info('ZKTeco sync: Parsing check-in/out times for hours calculation', [
+                    'check_in' => $checkInDateTimeString,
+                    'check_out' => $checkOutDateTimeString
+                ]);
+
+                $checkInTime = Carbon::parse($checkInDateTimeString);
+                $checkOutTime = Carbon::parse($checkOutDateTimeString);
+
+                // Handle case where check-out is next day
+                if ($checkOutTime->lt($checkInTime)) {
+                    $checkOutTime->addDay();
+                }
+
+                $hoursWorked = $checkInTime->diffInHours($checkOutTime);
+
+                if ($hoursWorked < $settings->half_day_hours && $attendance->status != 'absent') {
+                    $attendance->status = 'half_day';
+                }
             }
+        } catch (\Exception $e) {
+            // Log the error and set a default status
+            Log::error('ZKTeco sync: Error calculating attendance status', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Set a default status
+            $attendance->status = $attendance->check_in ? 'present' : 'absent';
         }
     }
 
@@ -620,6 +669,46 @@ class ZKTecoAPIController extends Controller
             ->exists();
 
         return $leaveExists;
+    }
+
+    /**
+     * Process user data from the device to sync biometric IDs
+     */
+    private function processUserData($userData, $device)
+    {
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($userData as $user) {
+            if (!isset($user['uid']) || !isset($user['id'])) {
+                $skipped++;
+                continue;
+            }
+
+            // Find employee by employee_id - ensure string comparison
+            $employee = Employee::where('employee_id', (string)$user['id'])->first();
+            if (!$employee) {
+                $skipped++;
+                continue;
+            }
+
+            // Update biometric ID if different
+            if ($employee->biometric_id != $user['uid']) {
+                $employee->biometric_id = $user['uid'];
+                $employee->save();
+                $updated++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        Log::info('ZKTeco sync: User data processed', [
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'total' => count($userData)
+        ]);
+
+        return true;
     }
 
     /**
