@@ -43,7 +43,7 @@ class AttendanceController extends Controller
                 });
             });
 
-        $attendances = $query->paginate(20)->withQueryString();
+        $attendances = $query->paginate(100)->withQueryString();
 
         // Format check-in and check-out times to AM/PM format and generate remarks
         $attendances->getCollection()->transform(function ($attendance) {
@@ -93,168 +93,168 @@ class AttendanceController extends Controller
      * Generate remarks for the attendance record based on settings
      */
 
-     private function generateRemarks($attendance)
-     {
-         // Skip if no check-in or check-out
-         if (!$attendance->check_in || !$attendance->check_out) {
-             if (!$attendance->check_in && !$attendance->check_out) {
-                 $attendance->auto_remarks = 'Absent';
-             } elseif (!$attendance->check_in) {
-                 $attendance->auto_remarks = 'Missing check-in';
-             } elseif (!$attendance->check_out) {
-                 $attendance->auto_remarks = 'Missing check-out';
-             }
-             return;
-         }
+    private function generateRemarks($attendance)
+    {
+        // Skip if no check-in or check-out
+        if (!$attendance->check_in || !$attendance->check_out) {
+            if (!$attendance->check_in && !$attendance->check_out) {
+                $attendance->auto_remarks = 'Absent';
+            } elseif (!$attendance->check_in) {
+                $attendance->auto_remarks = 'Missing check-in';
+            } elseif (!$attendance->check_out) {
+                $attendance->auto_remarks = 'Missing check-out';
+            }
+            return;
+        }
 
-         // Get branch ID from the employee
-         $branchId = $attendance->employee->current_branch_id;
+        // Get branch ID from the employee
+        $branchId = $attendance->employee->current_branch_id;
 
-         // Get attendance settings for the branch
-         $settings = AttendanceSetting::where('branch_id', $branchId)->first();
+        // Get attendance settings for the branch
+        $settings = AttendanceSetting::where('branch_id', $branchId)->first();
 
-         if (!$settings) {
-             $attendance->auto_remarks = 'No attendance settings found for branch';
-             return;
-         }
+        if (!$settings) {
+            $attendance->auto_remarks = 'No attendance settings found for branch';
+            return;
+        }
 
-         try {
-             // Parse date, extracting only the date portion
-             $attendanceDate = Carbon::parse($attendance->date)->startOfDay();
+        try {
+            // Parse date, extracting only the date portion
+            $attendanceDate = Carbon::parse($attendance->date)->startOfDay();
 
-             // Parse check-in and check-out times directly
-             $checkInDateTime = Carbon::parse($attendance->check_in);
-             $checkOutDateTime = Carbon::parse($attendance->check_out);
+            // Parse check-in and check-out times directly
+            $checkInDateTime = Carbon::parse($attendance->check_in);
+            $checkOutDateTime = Carbon::parse($attendance->check_out);
 
-             // Set the date portion of the check-in and check-out to the attendance date
-             $checkInDateTime = $attendanceDate->copy()->setHour($checkInDateTime->hour)
-                 ->setMinute($checkInDateTime->minute)
-                 ->setSecond($checkInDateTime->second);
+            // Set the date portion of the check-in and check-out to the attendance date
+            $checkInDateTime = $attendanceDate->copy()->setHour($checkInDateTime->hour)
+                ->setMinute($checkInDateTime->minute)
+                ->setSecond($checkInDateTime->second);
 
-             $checkOutDateTime = $attendanceDate->copy()->setHour($checkOutDateTime->hour)
-                 ->setMinute($checkOutDateTime->minute)
-                 ->setSecond($checkOutDateTime->second);
+            $checkOutDateTime = $attendanceDate->copy()->setHour($checkOutDateTime->hour)
+                ->setMinute($checkOutDateTime->minute)
+                ->setSecond($checkOutDateTime->second);
 
-             // If check-out is before check-in, assume it's next day
-             if ($checkOutDateTime->lt($checkInDateTime)) {
-                 $checkOutDateTime->addDay();
-             }
+            // If check-out is before check-in, assume it's next day
+            if ($checkOutDateTime->lt($checkInDateTime)) {
+                $checkOutDateTime->addDay();
+            }
 
-             // Parse work times from settings
-             $workStartTime = Carbon::parse($settings->work_start_time);
-             $workEndTime = Carbon::parse($settings->work_end_time);
+            // Parse work times from settings
+            $workStartTime = Carbon::parse($settings->work_start_time);
+            $workEndTime = Carbon::parse($settings->work_end_time);
 
-             // Create full datetime objects for work times
-             $workStartDateTime = $attendanceDate->copy()->setHour($workStartTime->hour)
-                 ->setMinute($workStartTime->minute)
-                 ->setSecond($workStartTime->second);
+            // Create full datetime objects for work times
+            $workStartDateTime = $attendanceDate->copy()->setHour($workStartTime->hour)
+                ->setMinute($workStartTime->minute)
+                ->setSecond($workStartTime->second);
 
-             $workEndDateTime = $attendanceDate->copy()->setHour($workEndTime->hour)
-                 ->setMinute($workEndTime->minute)
-                 ->setSecond($workEndTime->second);
+            $workEndDateTime = $attendanceDate->copy()->setHour($workEndTime->hour)
+                ->setMinute($workEndTime->minute)
+                ->setSecond($workEndTime->second);
 
-             // Check if it's a weekend
-             $weekendDays = json_decode($settings->weekend_days, true);
-             $dayOfWeek = $attendanceDate->dayOfWeek;
-             $isWeekend = in_array($dayOfWeek, $weekendDays);
+            // Check if it's a weekend
+            $weekendDays = json_decode($settings->weekend_days, true);
+            $dayOfWeek = $attendanceDate->dayOfWeek;
+            $isWeekend = in_array($dayOfWeek, $weekendDays);
 
-             if ($isWeekend) {
-                 $attendance->auto_remarks = 'Weekend work';
-                 return;
-             }
+            if ($isWeekend) {
+                $attendance->auto_remarks = 'Weekend work';
+                return;
+            }
 
-             // Calculate late by threshold
-             $lateThreshold = $workStartDateTime->copy()->addMinutes($settings->late_threshold_minutes);
+            // Calculate late by threshold
+            $lateThreshold = $workStartDateTime->copy()->addMinutes($settings->late_threshold_minutes);
 
-             // Determine if employee is late
-             $isLate = $checkInDateTime->gt($lateThreshold);
+            // Determine if employee is late
+            $isLate = $checkInDateTime->gt($lateThreshold);
 
-             // Calculate early departure
-             $isEarlyDeparture = $checkOutDateTime->lt($workEndDateTime);
+            // Calculate early departure
+            $isEarlyDeparture = $checkOutDateTime->lt($workEndDateTime);
 
-             // Calculate hours worked (simple integer hour value)
-             $hoursWorked = $checkInDateTime->floatDiffInHours($checkOutDateTime);
-             $isHalfDay = $hoursWorked < $settings->half_day_hours;
+            // Calculate hours worked (simple integer hour value)
+            $hoursWorked = $checkInDateTime->floatDiffInHours($checkOutDateTime);
+            $isHalfDay = $hoursWorked < $settings->half_day_hours;
 
-             // Calculate overtime
-             $isOvertime = $checkOutDateTime->gt($workEndDateTime);
+            // Calculate overtime
+            $isOvertime = $checkOutDateTime->gt($workEndDateTime);
 
-             // Generate remarks
-             $remarks = [];
+            // Generate remarks
+            $remarks = [];
 
-             // Add Late remark if needed
-             if ($isLate && $checkInDateTime->gt($workStartDateTime)) {
-                 if ($checkInDateTime->diffInHours($workStartDateTime) > 0) {
-                     $lateHours = $checkInDateTime->diffInHours($workStartDateTime);
-                     $lateMinutes = $checkInDateTime->diffInMinutes($workStartDateTime) % 60;
+            // Add Late remark if needed
+            if ($isLate && $checkInDateTime->gt($workStartDateTime)) {
+                if ($checkInDateTime->diffInHours($workStartDateTime) > 0) {
+                    $lateHours = $checkInDateTime->diffInHours($workStartDateTime);
+                    $lateMinutes = $checkInDateTime->diffInMinutes($workStartDateTime) % 60;
 
-                     // Format the late message
-                     if ($lateHours > 0 && $lateMinutes > 0) {
-                         $remarks[] = "Late by {$lateHours}h {$lateMinutes}m";
-                     } elseif ($lateHours > 0) {
-                         $remarks[] = "Late by {$lateHours}h";
-                     } else {
-                         $remarks[] = "Late by {$lateMinutes}m";
-                     }
-                 } else {
-                     $lateMinutes = $checkInDateTime->diffInMinutes($workStartDateTime);
-                     if ($lateMinutes > 0) {
-                         $remarks[] = "Late by {$lateMinutes}m";
-                     }
-                 }
-             }
+                    // Format the late message
+                    if ($lateHours > 0 && $lateMinutes > 0) {
+                        $remarks[] = "Late by {$lateHours}h {$lateMinutes}m";
+                    } elseif ($lateHours > 0) {
+                        $remarks[] = "Late by {$lateHours}h";
+                    } else {
+                        $remarks[] = "Late by {$lateMinutes}m";
+                    }
+                } else {
+                    $lateMinutes = $checkInDateTime->diffInMinutes($workStartDateTime);
+                    if ($lateMinutes > 0) {
+                        $remarks[] = "Late by {$lateMinutes}m";
+                    }
+                }
+            }
 
-             // Add Early Departure remark if needed
-             if ($isEarlyDeparture && $workEndDateTime->gt($checkOutDateTime)) {
-                 if ($workEndDateTime->diffInHours($checkOutDateTime) > 0) {
-                     $earlyHours = $workEndDateTime->diffInHours($checkOutDateTime);
-                     $earlyMinutes = $workEndDateTime->diffInMinutes($checkOutDateTime) % 60;
+            // Add Early Departure remark if needed
+            if ($isEarlyDeparture && $workEndDateTime->gt($checkOutDateTime)) {
+                if ($workEndDateTime->diffInHours($checkOutDateTime) > 0) {
+                    $earlyHours = $workEndDateTime->diffInHours($checkOutDateTime);
+                    $earlyMinutes = $workEndDateTime->diffInMinutes($checkOutDateTime) % 60;
 
-                     // Format the early departure message
-                     if ($earlyHours > 0 && $earlyMinutes > 0) {
-                         $remarks[] = "Left early by {$earlyHours}h {$earlyMinutes}m";
-                     } elseif ($earlyHours > 0) {
-                         $remarks[] = "Left early by {$earlyHours}h";
-                     } else {
-                         $remarks[] = "Left early by {$earlyMinutes}m";
-                     }
-                 } else {
-                     $earlyMinutes = $workEndDateTime->diffInMinutes($checkOutDateTime);
-                     if ($earlyMinutes > 0) {
-                         $remarks[] = "Left early by {$earlyMinutes}m";
-                     }
-                 }
-             }
+                    // Format the early departure message
+                    if ($earlyHours > 0 && $earlyMinutes > 0) {
+                        $remarks[] = "Left early by {$earlyHours}h {$earlyMinutes}m";
+                    } elseif ($earlyHours > 0) {
+                        $remarks[] = "Left early by {$earlyHours}h";
+                    } else {
+                        $remarks[] = "Left early by {$earlyMinutes}m";
+                    }
+                } else {
+                    $earlyMinutes = $workEndDateTime->diffInMinutes($checkOutDateTime);
+                    if ($earlyMinutes > 0) {
+                        $remarks[] = "Left early by {$earlyMinutes}m";
+                    }
+                }
+            }
 
-             // Add Half Day remark if needed
-             if ($isHalfDay) {
-                 // Round the hours worked to 1 decimal place for cleaner display
-                 $hoursWorkedRounded = round($hoursWorked, 1);
-                 $remarks[] = "Half day ({$hoursWorkedRounded}h)";
-             }
+            // Add Half Day remark if needed
+            if ($isHalfDay) {
+                // Round the hours worked to 1 decimal place for cleaner display
+                $hoursWorkedRounded = round($hoursWorked, 1);
+                $remarks[] = "Half day ({$hoursWorkedRounded}h)";
+            }
 
-             // Add Overtime remark if needed
-             if ($isOvertime && $checkOutDateTime->gt($workEndDateTime)) {
-                 $otHours = $checkOutDateTime->diffInHours($workEndDateTime);
-                 $otMinutes = $checkOutDateTime->diffInMinutes($workEndDateTime) % 60;
+            // Add Overtime remark if needed
+            if ($isOvertime && $checkOutDateTime->gt($workEndDateTime)) {
+                $otHours = $checkOutDateTime->diffInHours($workEndDateTime);
+                $otMinutes = $checkOutDateTime->diffInMinutes($workEndDateTime) % 60;
 
-                 // Format the overtime message
-                 if ($otHours > 0 && $otMinutes > 0) {
-                     $remarks[] = "Overtime {$otHours}h {$otMinutes}m";
-                 } elseif ($otHours > 0) {
-                     $remarks[] = "Overtime {$otHours}h";
-                 } elseif ($otMinutes > 0) {
-                     $remarks[] = "Overtime {$otMinutes}m";
-                 }
-             }
+                // Format the overtime message
+                if ($otHours > 0 && $otMinutes > 0) {
+                    $remarks[] = "Overtime {$otHours}h {$otMinutes}m";
+                } elseif ($otHours > 0) {
+                    $remarks[] = "Overtime {$otHours}h";
+                } elseif ($otMinutes > 0) {
+                    $remarks[] = "Overtime {$otMinutes}m";
+                }
+            }
 
-             $attendance->auto_remarks = !empty($remarks) ? implode(', ', $remarks) : 'Regular';
-         } catch (\Exception $e) {
-             // Log the error for debugging
-             \Log::error('Error generating remarks: ' . $e->getMessage());
-             $attendance->auto_remarks = 'Error calculating remarks: ' . $e->getMessage();
-         }
-     }
+            $attendance->auto_remarks = !empty($remarks) ? implode(', ', $remarks) : 'Regular';
+        } catch (\Exception $e) {
+            // Log the error for debugging
+            \Log::error('Error generating remarks: ' . $e->getMessage());
+            $attendance->auto_remarks = 'Error calculating remarks: ' . $e->getMessage();
+        }
+    }
 
     /**
      * Display monthly attendance view.
@@ -406,7 +406,21 @@ class AttendanceController extends Controller
             abort(403, 'You do not have permission to edit this attendance record.');
         }
 
+        // Load the employee relationship
         $attendance->load('employee');
+
+        // Format check-in and check-out times to make them consistent with the index view
+        if ($attendance->check_in) {
+            $attendance->check_in_formatted = date('h:i A', strtotime($attendance->check_in));
+        }
+
+        if ($attendance->check_out) {
+            $attendance->check_out_formatted = date('h:i A', strtotime($attendance->check_out));
+        }
+
+        // Generate automatic remarks just like in the index method
+        $this->generateRemarks($attendance);
+
         $devices = AttendanceDevice::all();
 
         return Inertia::render('attendance/edit', [
@@ -433,8 +447,8 @@ class AttendanceController extends Controller
         }
 
         $request->validate([
-            'check_in' => 'nullable|date_format:H:i',
-            'check_out' => 'nullable|date_format:H:i',
+            'check_in' => 'nullable',
+            'check_out' => 'nullable',
             'status' => 'required|in:present,absent,late,half_day,leave',
             'device_id' => 'nullable|exists:attendance_devices,id',
             'location_coordinates' => 'nullable|array',

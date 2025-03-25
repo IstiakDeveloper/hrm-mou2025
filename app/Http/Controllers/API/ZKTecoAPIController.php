@@ -236,7 +236,7 @@ class ZKTecoAPIController extends Controller
         }
 
         // Find employee by employee_id
-        $employee = Employee::where('employee_id', (string)$record['id'])->first();
+        $employee = Employee::where('employee_id', (string) $record['id'])->first();
 
         // Log the employee lookup details for debugging
         Log::info('ZKTeco sync: Employee lookup details', [
@@ -265,13 +265,27 @@ class ZKTecoAPIController extends Controller
 
             $date = $timestamp->format('Y-m-d');
             $time = $timestamp->format('H:i:s');
+            $hour = (int) $timestamp->format('H');
 
             // Log the parsed components
             Log::info('ZKTeco sync: Parsed timestamp components', [
                 'date' => $date,
                 'time' => $time,
+                'hour' => $hour,
                 'full_datetime' => $timestamp->format('Y-m-d H:i:s')
             ]);
+
+            // Determine check-in or check-out based on time of day
+            // Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
+            $isCheckIn = ($hour < 12);
+
+            // Log the automatic time-based determination
+            Log::info('ZKTeco sync: Auto-determined punch type', [
+                'hour' => $hour,
+                'isCheckIn' => $isCheckIn
+            ]);
+
+            return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
         } catch (\Exception $e) {
             Log::error('ZKTeco sync: Error parsing timestamp', [
                 'timestamp' => $record['timestamp'],
@@ -279,20 +293,6 @@ class ZKTecoAPIController extends Controller
             ]);
             return false;
         }
-
-        // Determine check-in or check-out based on record state or punch type
-        // Different devices use different conventions
-        $isCheckIn = true; // Default to check-in
-
-        if (isset($record['state'])) {
-            // Some devices use state (0 = in, 1 = out)
-            $isCheckIn = ($record['state'] == 0);
-        } else if (isset($record['type'])) {
-            // Some devices use type (0 = in, 1 = out)
-            $isCheckIn = ($record['type'] == 0);
-        }
-
-        return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
     }
 
     /**
@@ -397,7 +397,7 @@ class ZKTecoAPIController extends Controller
     private function processAgentRecord($record, $device)
     {
         // Find employee by employee_id
-        $employee = Employee::where('employee_id', (string)$record['id'])->first();
+        $employee = Employee::where('employee_id', (string) $record['id'])->first();
 
         // Log the employee lookup details for debugging
         Log::info('ZKTeco sync: Employee lookup details', [
@@ -425,16 +425,25 @@ class ZKTecoAPIController extends Controller
 
             $date = $timestamp->format('Y-m-d');
             $time = $timestamp->format('H:i:s');
+            $hour = (int) $timestamp->format('H');
 
             // Log the parsed components
             Log::info('ZKTeco sync: Parsed timestamp components', [
                 'date' => $date,
                 'time' => $time,
+                'hour' => $hour,
                 'full_datetime' => $timestamp->format('Y-m-d H:i:s')
             ]);
 
-            // Determine check-in or check-out based on state
-            $isCheckIn = ($record['type'] == 0);
+            // Determine check-in or check-out based on time of day
+            // Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
+            $isCheckIn = ($hour < 12);
+
+            // Log the automatic time-based determination
+            Log::info('ZKTeco sync: Auto-determined punch type', [
+                'hour' => $hour,
+                'isCheckIn' => $isCheckIn
+            ]);
 
             return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
         } catch (\Exception $e) {
@@ -686,7 +695,7 @@ class ZKTecoAPIController extends Controller
             }
 
             // Find employee by employee_id - ensure string comparison
-            $employee = Employee::where('employee_id', (string)$user['id'])->first();
+            $employee = Employee::where('employee_id', (string) $user['id'])->first();
             if (!$employee) {
                 $skipped++;
                 continue;

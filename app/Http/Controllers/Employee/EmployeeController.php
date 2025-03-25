@@ -88,7 +88,7 @@ class EmployeeController extends Controller
             'date_of_birth' => 'nullable|date',
             'joining_date' => 'required|date',
             'address' => 'nullable|string',
-            'photo' => 'nullable|image|max:2048',
+            'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048', // ফাইল টাইপ এবং finfo ব্যবহার না করে mimes দিয়ে ভ্যালিডেশন
             'nid' => 'nullable|string|unique:employees',
             'emergency_contact' => 'nullable|string',
             'department_id' => 'required|exists:departments,id',
@@ -104,8 +104,25 @@ class EmployeeController extends Controller
 
         // Handle photo upload
         if ($request->hasFile('photo')) {
-            $path = $request->file('photo')->store('employee_photos', 'public');
-            $employeeData['photo'] = $path;
+            try {
+                $photo = $request->file('photo');
+
+                // ম্যানুয়ালি ফাইল এক্সটেনশন যাচাই
+                $extension = $photo->getClientOriginalExtension();
+                $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif'];
+
+                if (!in_array(strtolower($extension), $allowedExtensions)) {
+                    return back()->withErrors(['photo' => 'Invalid image format. Only jpg, jpeg, png, and gif are allowed.']);
+                }
+
+                // ছবি আপলোড
+                $filename = time() . '_' . uniqid() . '.' . $extension;
+                $photo->move(public_path('storage/employee_photos'), $filename);
+                $employeeData['photo'] = 'employee_photos/' . $filename;
+
+            } catch (\Exception $e) {
+                return back()->withErrors(['photo' => 'Error uploading image: ' . $e->getMessage()]);
+            }
         }
 
         // Convert bank account details to JSON
@@ -157,7 +174,7 @@ class EmployeeController extends Controller
             'date_of_birth' => 'nullable|date',
             'joining_date' => 'required|date',
             'address' => 'nullable|string',
-            'photo' => 'nullable|image|max:2048',
+            'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048', // ফাইল টাইপ এবং finfo ব্যবহার না করে mimes দিয়ে ভ্যালিডেশন
             'nid' => 'nullable|string|unique:employees,nid,' . $employee->id,
             'emergency_contact' => 'nullable|string',
             'department_id' => 'required|exists:departments,id',
@@ -173,13 +190,33 @@ class EmployeeController extends Controller
 
         // Handle photo upload
         if ($request->hasFile('photo')) {
-            // Delete old photo if exists
-            if ($employee->photo) {
-                Storage::disk('public')->delete($employee->photo);
-            }
+            try {
+                // Delete old photo if exists
+                if ($employee->photo) {
+                    $oldPhotoPath = public_path('storage/' . $employee->photo);
+                    if (file_exists($oldPhotoPath)) {
+                        unlink($oldPhotoPath);
+                    }
+                }
 
-            $path = $request->file('photo')->store('employee_photos', 'public');
-            $employeeData['photo'] = $path;
+                $photo = $request->file('photo');
+
+                // ম্যানুয়ালি ফাইল এক্সটেনশন যাচাই
+                $extension = $photo->getClientOriginalExtension();
+                $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif'];
+
+                if (!in_array(strtolower($extension), $allowedExtensions)) {
+                    return back()->withErrors(['photo' => 'Invalid image format. Only jpg, jpeg, png, and gif are allowed.']);
+                }
+
+                // ছবি আপলোড
+                $filename = time() . '_' . uniqid() . '.' . $extension;
+                $photo->move(public_path('storage/employee_photos'), $filename);
+                $employeeData['photo'] = 'employee_photos/' . $filename;
+
+            } catch (\Exception $e) {
+                return back()->withErrors(['photo' => 'Error uploading image: ' . $e->getMessage()]);
+            }
         }
 
         // Convert bank account details to JSON
@@ -210,22 +247,39 @@ class EmployeeController extends Controller
      */
     public function destroy(Employee $employee)
     {
-        // Check if employee has a user account
-        $user = User::where('employee_id', $employee->id)->first();
-        if ($user) {
+        try {
+            // Check if employee has a user account
+            $user = User::where('employee_id', $employee->id)->first();
+            if ($user) {
+                return redirect()->route('employees.index')
+                    ->with('error', 'Cannot delete employee that has a user account.');
+            }
+
+            // Delete photo if exists
+            if ($employee->photo) {
+                $photoPath = public_path('storage/' . $employee->photo);
+                if (file_exists($photoPath)) {
+                    unlink($photoPath);
+                }
+            }
+
+            // Delete employee
+            $deleted = $employee->delete();
+
+            if (!$deleted) {
+                return redirect()->route('employees.index')
+                    ->with('error', 'Failed to delete employee. Please try again.');
+            }
+
             return redirect()->route('employees.index')
-                ->with('error', 'Cannot delete employee that has a user account.');
+                ->with('success', 'Employee deleted successfully.');
+        } catch (\Exception $e) {
+            // Log the error
+            \Log::error('Employee deletion error: ' . $e->getMessage());
+
+            return redirect()->route('employees.index')
+                ->with('error', 'An error occurred while deleting the employee: ' . $e->getMessage());
         }
-
-        // Delete photo if exists
-        if ($employee->photo) {
-            Storage::disk('public')->delete($employee->photo);
-        }
-
-        $employee->delete();
-
-        return redirect()->route('employees.index')
-            ->with('success', 'Employee deleted successfully.');
     }
 
     /**

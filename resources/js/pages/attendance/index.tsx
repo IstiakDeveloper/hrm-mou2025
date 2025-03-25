@@ -634,15 +634,23 @@ export default function AttendanceIndex({
                         </Table>
                     </CardContent>
                 </Card>
-
                 {/* Pagination */}
-                {hasPagination && attendances.meta.last_page > 1 && (
-                    <div className="mt-4 flex justify-center">
-                        <Pagination>
-                            <PaginationContent>
-                                {attendances.meta.current_page > 1 && (
-                                    <PaginationItem>
-                                        <PaginationPrevious
+                {attendances.meta && attendances.meta.last_page > 1 && (
+                    <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6 mt-4">
+                        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm text-gray-700">
+                                    Showing <span className="font-medium">{(attendances.meta.current_page - 1) * 20 + 1}</span> to{' '}
+                                    <span className="font-medium">
+                                        {Math.min(attendances.meta.current_page * 20, attendances.meta.total)}
+                                    </span>{' '}
+                                    of <span className="font-medium">{attendances.meta.total}</span> attendance records
+                                </p>
+                            </div>
+                            <div>
+                                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                    {attendances.meta.current_page > 1 && (
+                                        <Link
                                             href={route('attendance.index', {
                                                 page: attendances.meta.current_page - 1,
                                                 search,
@@ -651,29 +659,35 @@ export default function AttendanceIndex({
                                                 department_id: departmentId || '',
                                                 status: status || ''
                                             })}
-                                        />
-                                    </PaginationItem>
-                                )}
+                                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
+                                        >
+                                            <span className="sr-only">Previous</span>
+                                            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                                        </Link>
+                                    )}
 
-                                {attendances.meta.links.map((link, i) => {
-                                    // Skip previous/next links as we handle them separately
-                                    if (link.label === '&laquo; Previous' || link.label === 'Next &raquo;') {
-                                        return null;
-                                    }
+                                    {attendances.meta.links && attendances.meta.links.slice(1, -1).map((link, i) => {
+                                        // Skip links that are just labels and not actual page links
+                                        if (link.label === '&laquo; Previous' || link.label === 'Next &raquo;') {
+                                            return null;
+                                        }
 
-                                    // For ellipsis
-                                    if (link.label === '...') {
+                                        // Handle ellipsis
+                                        if (link.label === '...') {
+                                            return (
+                                                <span
+                                                    key={`ellipsis-${i}`}
+                                                    className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300"
+                                                >
+                                                    ...
+                                                </span>
+                                            );
+                                        }
+
+                                        // Regular page links
                                         return (
-                                            <PaginationItem key={`ellipsis-${i}`}>
-                                                <PaginationEllipsis />
-                                            </PaginationItem>
-                                        );
-                                    }
-
-                                    // For numbered links
-                                    return (
-                                        <PaginationItem key={i}>
-                                            <PaginationLink
+                                            <Link
+                                                key={i}
                                                 href={route('attendance.index', {
                                                     page: link.label,
                                                     search,
@@ -682,17 +696,19 @@ export default function AttendanceIndex({
                                                     department_id: departmentId || '',
                                                     status: status || ''
                                                 })}
-                                                isActive={link.active}
+                                                className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${link.active
+                                                        ? 'z-10 bg-primary text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary'
+                                                        : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
+                                                    }`}
+                                                aria-current={link.active ? 'page' : undefined}
                                             >
                                                 {link.label}
-                                            </PaginationLink>
-                                        </PaginationItem>
-                                    );
-                                })}
+                                            </Link>
+                                        );
+                                    })}
 
-                                {attendances.meta.current_page < attendances.meta.last_page && (
-                                    <PaginationItem>
-                                        <PaginationNext
+                                    {attendances.meta.current_page < attendances.meta.last_page && (
+                                        <Link
                                             href={route('attendance.index', {
                                                 page: attendances.meta.current_page + 1,
                                                 search,
@@ -701,11 +717,15 @@ export default function AttendanceIndex({
                                                 department_id: departmentId || '',
                                                 status: status || ''
                                             })}
-                                        />
-                                    </PaginationItem>
-                                )}
-                            </PaginationContent>
-                        </Pagination>
+                                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
+                                        >
+                                            <span className="sr-only">Next</span>
+                                            <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                                        </Link>
+                                    )}
+                                </nav>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
