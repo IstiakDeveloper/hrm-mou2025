@@ -39,8 +39,9 @@ class UserController extends Controller
      */
     public function create()
     {
+        // Include email field in the employee selection
+        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name', 'email')->get();
         $roles = Role::all();
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name')->get();
         $branches = Branch::all();
 
         return Inertia::render('admin/users/create', [
@@ -56,23 +57,34 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            // ... existing validation
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
             'role_ids' => 'required|array',
             'role_ids.*' => 'exists:roles,id',
+            'employee_id' => 'required|exists:employees,id', // Changed to required
+            'branch_id' => 'nullable|exists:branches,id',
+            'active_status' => 'boolean',
         ]);
 
         // Use the first selected role as the primary role
-        $primaryRoleId = $request->role_ids[0] ?? null;
+        $primaryRoleId = $request->primary_role_id ?? ($request->role_ids[0] ?? null);
 
         if (!$primaryRoleId) {
             return back()->withErrors(['role_ids' => 'At least one role must be selected'])->withInput();
+        }
+
+        // Verify that employee email matches the provided email
+        $employee = Employee::find($request->employee_id);
+        if ($employee && $employee->email !== $request->email) {
+            return back()->withErrors(['email' => 'The email must match the selected employee\'s email'])->withInput();
         }
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role_id' => $primaryRoleId, // Use first selected role as primary
+            'role_id' => $primaryRoleId, // Use primary role or first selected
             'employee_id' => $request->employee_id,
             'branch_id' => $request->branch_id,
             'active_status' => $request->active_status ?? true,
@@ -91,7 +103,7 @@ class UserController extends Controller
     public function edit(User $user)
     {
         $roles = Role::all();
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name')->get();
+        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name', 'email')->get();
         $branches = Branch::all();
 
         // Load roles relationship to have access to all assigned roles
@@ -108,9 +120,6 @@ class UserController extends Controller
     /**
      * Update the specified user.
      */
-    /**
-     * Update the specified user.
-     */
     public function update(Request $request, User $user)
     {
         $rules = [
@@ -123,9 +132,9 @@ class UserController extends Controller
                 Rule::unique('users')->ignore($user->id),
             ],
             'password' => 'nullable|string|min:8|confirmed',
-            'role_ids' => 'required|array', // Changed from role_id to role_ids
-            'role_ids.*' => 'exists:roles,id', // Validate each role ID
-            'employee_id' => 'nullable|exists:employees,id',
+            'role_ids' => 'required|array',
+            'role_ids.*' => 'exists:roles,id',
+            'employee_id' => 'required|exists:employees,id', // Changed to required
             'branch_id' => 'nullable|exists:branches,id',
             'active_status' => 'boolean',
         ];
@@ -142,6 +151,14 @@ class UserController extends Controller
             $user->active_status = $request->active_status;
             $user->save();
         } else {
+            // Verify that employee email matches the provided email
+            if ($request->employee_id) {
+                $employee = Employee::find($request->employee_id);
+                if ($employee && $employee->email !== $request->email) {
+                    return back()->withErrors(['email' => 'The email must match the selected employee\'s email'])->withInput();
+                }
+            }
+
             $user->name = $request->name;
             $user->email = $request->email;
             $user->employee_id = $request->employee_id;
@@ -153,6 +170,12 @@ class UserController extends Controller
             }
 
             $user->save();
+
+            // Set primary role if provided
+            if ($request->primary_role_id) {
+                $user->role_id = $request->primary_role_id;
+                $user->save();
+            }
 
             // Sync roles (this will remove roles not in the array and add new ones)
             $user->roles()->sync($request->role_ids);

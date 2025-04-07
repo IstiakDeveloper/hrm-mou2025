@@ -18,6 +18,7 @@ class Attendance extends Model
         'device_id',
         'location_coordinates',
         'remarks',
+        'movement_id', // নতুন ফিল্ড যোগ করুন
     ];
 
     protected $casts = [
@@ -37,6 +38,12 @@ class Attendance extends Model
         return $this->belongsTo(AttendanceDevice::class, 'device_id');
     }
 
+    // মুভমেন্টের সাথে রিলেশন যোগ করুন
+    public function movement()
+    {
+        return $this->belongsTo(Movement::class);
+    }
+
     public function getWorkHoursAttribute()
     {
         if ($this->check_in && $this->check_out) {
@@ -44,5 +51,10 @@ class Attendance extends Model
         }
 
         return 0;
+    }
+
+    public function isOnDuty()
+    {
+        return $this->status === 'on_duty';
     }
 }

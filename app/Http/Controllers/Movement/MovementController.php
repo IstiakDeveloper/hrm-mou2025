@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Movement;
 
 use App\Http\Controllers\Controller;
 use App\Mail\NewMovementNotification;
+use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
@@ -12,6 +13,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 
@@ -577,32 +579,9 @@ class MovementController extends Controller
             ->with('success', 'Movement request updated successfully.');
     }
 
-    /**
-     * Cancel the specified movement.
-     */
-    public function cancel(Movement $movement)
-    {
-        $user = Auth::user();
-        $employee = $user->employee;
-
-        // Check if user can cancel this movement
-        if (
-            !$user->hasPermission('movements.edit') &&
-            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
-        ) {
-            return redirect()->route('movements.index')
-                ->with('error', 'You do not have permission to cancel this movement request.');
-        }
-
-        $movement->status = 'cancelled';
-        $movement->save();
-
-        return redirect()->route('movements.index')
-            ->with('success', 'Movement request cancelled successfully.');
-    }
 
     /**
-     * Approve the specified movement.
+     * Approve the specified movement and update attendance records.
      */
     public function approve(Request $request, Movement $movement)
     {
@@ -651,20 +630,86 @@ class MovementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
-        // Update movement
-        $movement->status = 'approved';
-        $movement->approved_by = $user->id;
-        if ($request->filled('remarks')) {
-            $movement->remarks = $request->remarks;
-        }
-        $movement->save();
+        // Start a database transaction
+        DB::beginTransaction();
 
-        return redirect()->route('movements.index')
-            ->with('success', 'Movement request approved successfully.');
+        try {
+            // Update movement
+            $movement->status = 'approved';
+            $movement->approved_by = $user->id;
+            if ($request->filled('remarks')) {
+                $movement->remarks = $request->remarks;
+            }
+            $movement->save();
+
+            // For official movements, create/update attendance records
+            if ($movement->movement_type === 'official') {
+                // Get all dates between from_datetime and to_datetime (inclusive)
+                $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
+                $endDate = Carbon::parse($movement->to_datetime)->startOfDay();
+                $currentDate = $startDate->copy();
+
+                while ($currentDate->lte($endDate)) {
+                    $dateStr = $currentDate->format('Y-m-d');
+
+                    // Check if an attendance record already exists for this date
+                    $attendance = Attendance::firstOrNew([
+                        'employee_id' => $movement->employee_id,
+                        'date' => $dateStr,
+                    ]);
+
+                    // Set to on_duty status and link to movement
+                    $attendance->status = 'on_duty';
+                    $attendance->movement_id = $movement->id;
+
+                    // Set check-in and check-out times if they correspond to this date
+                    if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
+                        $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
+                    }
+
+                    if ($currentDate->isSameDay(Carbon::parse($movement->to_datetime))) {
+                        $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
+                    }
+
+                    // Add purpose as remarks
+                    $remarks = "On official movement: " . $movement->purpose;
+                    if ($attendance->remarks) {
+                        // Don't duplicate remarks if they already exist
+                        if (strpos($attendance->remarks, $remarks) === false) {
+                            $attendance->remarks = $attendance->remarks . ' | ' . $remarks;
+                        }
+                    } else {
+                        $attendance->remarks = $remarks;
+                    }
+
+                    $attendance->save();
+
+                    // Move to next day
+                    $currentDate->addDay();
+                }
+            }
+
+            DB::commit();
+
+            return redirect()->route('movements.index')
+                ->with('success', 'Movement request approved successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Error approving movement: ' . $e->getMessage(), [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('movements.index')
+                ->with('error', 'An error occurred while approving the movement.');
+        }
     }
 
+
     /**
-     * Reject the specified movement.
+     * Reject the specified movement and clean up any attendance records.
      */
     public function reject(Request $request, Movement $movement)
     {
@@ -713,18 +758,97 @@ class MovementController extends Controller
             'remarks' => 'required|string',
         ]);
 
-        // Update movement
-        $movement->status = 'rejected';
-        $movement->approved_by = $user->id;
-        $movement->remarks = $request->remarks;
-        $movement->save();
+        // Start a database transaction
+        DB::beginTransaction();
 
-        return redirect()->route('movements.index')
-            ->with('success', 'Movement request rejected successfully.');
+        try {
+            // Update movement
+            $movement->status = 'rejected';
+            $movement->approved_by = $user->id;
+            $movement->remarks = $request->remarks;
+            $movement->save();
+
+            // Remove any associated attendance records that have this movement_id
+            // This is to clean up if this movement was pre-approved and then rejected
+            Attendance::where('movement_id', $movement->id)->update([
+                'movement_id' => null,
+                'remarks' => DB::raw("CONCAT(IFNULL(remarks, ''), ' | Movement rejected: " . addslashes($request->remarks) . "')"),
+                // Do not automatically change status, let the attendance system handle it based on check-in/out
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('movements.index')
+                ->with('success', 'Movement request rejected successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Error rejecting movement: ' . $e->getMessage(), [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('movements.index')
+                ->with('error', 'An error occurred while rejecting the movement.');
+        }
+    }
+
+    /**
+     * Cancel the specified movement and clean up any attendance records.
+     */
+    public function cancel(Movement $movement)
+    {
+        $user = Auth::user();
+        $employee = $user->employee;
+
+        // Check if user can cancel this movement
+        if (
+            !$user->hasPermission('movements.edit') &&
+            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
+        ) {
+            return redirect()->route('movements.index')
+                ->with('error', 'You do not have permission to cancel this movement request.');
+        }
+
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            $movement->status = 'cancelled';
+            $movement->save();
+
+            // Clean up any attendance records that might have been created for this movement
+            // This is to clean up if this movement was pre-approved and then cancelled
+            Attendance::where('movement_id', $movement->id)->update([
+                'movement_id' => null,
+                'remarks' => DB::raw("CONCAT(IFNULL(remarks, ''), ' | Movement cancelled by user')"),
+                // Do not automatically change status, let the attendance system handle it based on check-in/out
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('movements.index')
+                ->with('success', 'Movement request cancelled successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Error cancelling movement: ' . $e->getMessage(), [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('movements.index')
+                ->with('error', 'An error occurred while cancelling the movement.');
+        }
     }
 
     /**
      * Mark the movement as completed.
+     */
+    /**
+     * Mark the movement as completed and update attendance records.
      */
     public function complete(Movement $movement)
     {
@@ -743,11 +867,85 @@ class MovementController extends Controller
                 ->with('error', 'Only approved movements can be marked as completed.');
         }
 
-        $movement->status = 'completed';
-        $movement->save();
+        // Start a database transaction to ensure data integrity
+        DB::beginTransaction();
 
-        return redirect()->route('movements.index')
-            ->with('success', 'Movement marked as completed successfully.');
+        try {
+            // 1. Update movement with returned status
+            $movement->status = 'completed';
+            $movement->is_returned = true;
+            $movement->actual_return_datetime = now(); // Use current time as return time
+            $movement->save();
+
+            // 2. Only create/update attendance records for official movements
+            if ($movement->movement_type === 'official') {
+                // Get all dates between from_datetime and to_datetime (inclusive)
+                $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
+                $endDate = Carbon::parse($movement->to_datetime)->startOfDay();
+                $currentDate = $startDate->copy();
+
+                // Loop through each day
+                while ($currentDate->lte($endDate)) {
+                    $dateStr = $currentDate->format('Y-m-d');
+
+                    // Check if an attendance record already exists for this date
+                    $attendance = Attendance::firstOrNew([
+                        'employee_id' => $movement->employee_id,
+                        'date' => $dateStr,
+                    ]);
+
+                    // Update attendance status to on_duty and link to movement
+                    $attendance->status = 'on_duty';
+                    $attendance->movement_id = $movement->id;
+
+                    // Set check-in and check-out times if they correspond to this date
+                    if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
+                        $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
+                    }
+
+                    if ($currentDate->isSameDay(Carbon::parse($movement->to_datetime))) {
+                        $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
+                    }
+
+                    // If we're on the actual return date (which could be different from planned date)
+                    if ($movement->actual_return_datetime && $currentDate->isSameDay(Carbon::parse($movement->actual_return_datetime))) {
+                        $attendance->check_out = Carbon::parse($movement->actual_return_datetime)->format('H:i:s');
+                    }
+
+                    // Add remarks to explain this was a movement
+                    $remarks = "On official movement: " . $movement->purpose;
+                    if ($attendance->remarks) {
+                        // Don't duplicate remarks if they already exist
+                        if (strpos($attendance->remarks, $remarks) === false) {
+                            $attendance->remarks = $attendance->remarks . ' | ' . $remarks;
+                        }
+                    } else {
+                        $attendance->remarks = $remarks;
+                    }
+
+                    $attendance->save();
+
+                    // Move to next day
+                    $currentDate->addDay();
+                }
+            }
+
+            DB::commit();
+
+            return redirect()->route('movements.index')
+                ->with('success', 'Movement marked as completed successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Error completing movement: ' . $e->getMessage(), [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('movements.index')
+                ->with('error', 'An error occurred while completing the movement.');
+        }
     }
 
     /**

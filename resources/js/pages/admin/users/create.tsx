@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,7 @@ interface Employee {
     employee_id: string;
     first_name: string;
     last_name: string;
+    email?: string; // Add email property to Employee interface
 }
 
 interface Branch {
@@ -44,7 +45,8 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
         email: '',
         password: '',
         password_confirmation: '',
-        role_ids: [] as number[], // Changed from role_id to role_ids array
+        role_ids: [] as number[],
+        primary_role_id: '',
         employee_id: '',
         branch_id: '',
         active_status: true,
@@ -52,8 +54,25 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
 
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
     const [passwordStrength, setPasswordStrength] = useState<number>(0);
+
+    // Handle employee selection and auto-populate email
+    const handleEmployeeChange = (value: string) => {
+        const employeeId = value === 'none' ? '' : value;
+        setData('employee_id', employeeId);
+
+        // Find the selected employee
+        if (employeeId) {
+            const selectedEmployee = employees.find(emp => emp.id.toString() === employeeId);
+            if (selectedEmployee && selectedEmployee.email) {
+                // Auto-populate email field with employee's email
+                setData('email', selectedEmployee.email);
+
+                // Optionally set name if you want to auto-populate it too
+                setData('name', `${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
+            }
+        }
+    };
 
     const checkPasswordStrength = (password: string) => {
         let score = 0;
@@ -159,6 +178,131 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
 
                 <form onSubmit={submit}>
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                        {/* Reordered to put Employee Selection first */}
+                        <Card className="shadow-sm">
+                            <CardHeader className="border-b bg-gray-50">
+                                <div className="flex items-center space-x-3">
+                                    <div className="rounded-full bg-purple-100 p-1.5">
+                                        <Briefcase className="h-5 w-5 text-purple-600" />
+                                    </div>
+                                    <div>
+                                        <CardTitle>Employee Association</CardTitle>
+                                        <CardDescription>Link this user to an employee record</CardDescription>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <div className="space-y-5">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="employee_id" className="flex items-center gap-1">
+                                            <Briefcase className="h-4 w-4" />
+                                            <span>Select Employee <span className="text-red-500">*</span></span>
+                                        </Label>
+                                        <Select
+                                            value={data.employee_id ? data.employee_id.toString() : undefined}
+                                            onValueChange={handleEmployeeChange}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Select an employee" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {employees.map(employee => (
+                                                    <SelectItem key={employee.id} value={employee.id.toString()}>
+                                                        {employee.first_name} {employee.last_name} ({employee.employee_id})
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {errors.employee_id && <p className="mt-1 text-sm text-red-500">{errors.employee_id}</p>}
+                                        <p className="text-xs text-gray-500">
+                                            Select an employee to link with this user account. Email will be auto-populated.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="branch_id" className="flex items-center gap-1">
+                                            <Building className="h-4 w-4" />
+                                            <span>Branch (Optional)</span>
+                                        </Label>
+                                        <Select
+                                            value={data.branch_id ? data.branch_id.toString() : undefined}
+                                            onValueChange={value => setData('branch_id', value === 'none' ? '' : value)}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Select a branch" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">None</SelectItem>
+                                                {branches.map(branch => (
+                                                    <SelectItem key={branch.id} value={branch.id.toString()}>
+                                                        {branch.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {errors.branch_id && <p className="mt-1 text-sm text-red-500">{errors.branch_id}</p>}
+                                        <p className="text-xs text-gray-500">
+                                            Associate this user account with a specific branch
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="roles">
+                                            System Roles <span className="text-red-500">*</span>
+                                        </Label>
+                                        <div className="space-y-4 border rounded-md p-3">
+                                            {roles.map(role => (
+                                                <div key={role.id} className="space-y-1">
+                                                    <div className="flex items-center space-x-2">
+                                                        <Checkbox
+                                                            id={`role-${role.id}`}
+                                                            checked={data.role_ids.includes(role.id)}
+                                                            onCheckedChange={() => handleRoleToggle(role.id)}
+                                                        />
+                                                        <Label
+                                                            htmlFor={`role-${role.id}`}
+                                                            className="font-normal cursor-pointer"
+                                                        >
+                                                            {role.name}
+                                                        </Label>
+                                                    </div>
+                                                    {data.role_ids.includes(role.id) && (
+                                                        <div className="pl-6">
+                                                            <div className="flex items-center space-x-2">
+                                                                <input
+                                                                    type="radio"
+                                                                    id={`primary-${role.id}`}
+                                                                    name="primary_role"
+                                                                    value={role.id}
+                                                                    checked={data.primary_role_id === role.id}
+                                                                    onChange={() => setData('primary_role_id', role.id)}
+                                                                    className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                                                                />
+                                                                <Label
+                                                                    htmlFor={`primary-${role.id}`}
+                                                                    className="text-xs text-gray-600 font-normal cursor-pointer"
+                                                                >
+                                                                    Set as primary role
+                                                                </Label>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {errors.role_ids && <p className="mt-1 text-sm text-red-500">{errors.role_ids}</p>}
+                                        {errors.primary_role_id && <p className="mt-1 text-sm text-red-500">{errors.primary_role_id}</p>}
+                                        {data.role_ids.length > 0 && (
+                                            <p className="mt-1 text-xs text-gray-500">
+                                                {data.role_ids.length} role(s) selected
+                                                {data.primary_role_id && ` (Primary: ${roles.find(r => r.id === data.primary_role_id)?.name})`}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         {/* Account Information */}
                         <Card className="shadow-sm">
                             <CardHeader className="border-b bg-gray-50">
@@ -198,8 +342,15 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
                                             value={data.email}
                                             onChange={e => setData('email', e.target.value)}
                                             placeholder="user@example.com"
+                                            readOnly={!!data.employee_id} // Make it read-only if an employee is selected
+                                            className={!!data.employee_id ? "bg-gray-50" : ""}
                                         />
                                         {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+                                        {!!data.employee_id && (
+                                            <p className="text-xs text-gray-500">
+                                                Email is auto-populated from the selected employee
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">
@@ -292,134 +443,6 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
                                 </div>
                             </CardContent>
                         </Card>
-
-                        {/* System Role & Association */}
-                        <Card className="shadow-sm">
-                            <CardHeader className="border-b bg-gray-50">
-                                <div className="flex items-center space-x-3">
-                                    <div className="rounded-full bg-purple-100 p-1.5">
-                                        <Lock className="h-5 w-5 text-purple-600" />
-                                    </div>
-                                    <div>
-                                        <CardTitle>Roles & Association</CardTitle>
-                                        <CardDescription>User system roles and associations</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="pt-6">
-                                <div className="space-y-5">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="roles">
-                                            System Roles <span className="text-red-500">*</span>
-                                        </Label>
-                                        <div className="space-y-4 border rounded-md p-3">
-                                            {roles.map(role => (
-                                                <div key={role.id} className="space-y-1">
-                                                    <div className="flex items-center space-x-2">
-                                                        <Checkbox
-                                                            id={`role-${role.id}`}
-                                                            checked={data.role_ids.includes(role.id)}
-                                                            onCheckedChange={() => handleRoleToggle(role.id)}
-                                                        />
-                                                        <Label
-                                                            htmlFor={`role-${role.id}`}
-                                                            className="font-normal cursor-pointer"
-                                                        >
-                                                            {role.name}
-                                                        </Label>
-                                                    </div>
-                                                    {data.role_ids.includes(role.id) && (
-                                                        <div className="pl-6">
-                                                            <div className="flex items-center space-x-2">
-                                                                <input
-                                                                    type="radio"
-                                                                    id={`primary-${role.id}`}
-                                                                    name="primary_role"
-                                                                    value={role.id}
-                                                                    checked={data.primary_role_id === role.id}
-                                                                    onChange={() => setData('primary_role_id', role.id)}
-                                                                    className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
-                                                                />
-                                                                <Label
-                                                                    htmlFor={`primary-${role.id}`}
-                                                                    className="text-xs text-gray-600 font-normal cursor-pointer"
-                                                                >
-                                                                    Set as primary role
-                                                                </Label>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        {errors.role_ids && <p className="mt-1 text-sm text-red-500">{errors.role_ids}</p>}
-                                        {errors.primary_role_id && <p className="mt-1 text-sm text-red-500">{errors.primary_role_id}</p>}
-                                        {data.role_ids.length > 0 && (
-                                            <p className="mt-1 text-xs text-gray-500">
-                                                {data.role_ids.length} role(s) selected
-                                                {data.primary_role_id && ` (Primary: ${roles.find(r => r.id === data.primary_role_id)?.name})`}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <Separator />
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="employee_id" className="flex items-center gap-1">
-                                            <Briefcase className="h-4 w-4" />
-                                            <span>Link to Employee (Optional)</span>
-                                        </Label>
-                                        <Select
-                                            value={data.employee_id ? data.employee_id.toString() : undefined}
-                                            onValueChange={value => setData('employee_id', value === 'none' ? '' : value)}
-                                        >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select an employee" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="none">None</SelectItem>
-                                                {employees.map(employee => (
-                                                    <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                        {employee.first_name} {employee.last_name} ({employee.employee_id})
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {errors.employee_id && <p className="mt-1 text-sm text-red-500">{errors.employee_id}</p>}
-                                        <p className="text-xs text-gray-500">
-                                            Associate this user account with an employee record
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="branch_id" className="flex items-center gap-1">
-                                            <Building className="h-4 w-4" />
-                                            <span>Branch (Optional)</span>
-                                        </Label>
-                                        <Select
-                                            value={data.branch_id ? data.branch_id.toString() : undefined}
-                                            onValueChange={value => setData('branch_id', value === 'none' ? '' : value)}
-                                        >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select a branch" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="none">None</SelectItem>
-                                                {branches.map(branch => (
-                                                    <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                        {branch.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {errors.branch_id && <p className="mt-1 text-sm text-red-500">{errors.branch_id}</p>}
-                                        <p className="text-xs text-gray-500">
-                                            Associate this user account with a specific branch
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
                     </div>
 
                     <div className="mt-6 flex justify-end space-x-3">
@@ -428,7 +451,7 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
                                 Cancel
                             </Button>
                         </Link>
-                        <Button type="submit" disabled={processing}>
+                        <Button type="submit" disabled={processing || !data.employee_id}>
                             {processing ? 'Creating...' : 'Create User'}
                         </Button>
                     </div>

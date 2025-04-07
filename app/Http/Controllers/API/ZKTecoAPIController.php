@@ -475,18 +475,36 @@ class ZKTecoAPIController extends Controller
                 ->where('date', $date)
                 ->first();
 
+            // Check for movement
+            $isOnMovement = $this->isEmployeeOnMovement($employee->id, $date);
+
+            // Get movement record if exists
+            $movement = null;
+            if ($isOnMovement) {
+                $movement = \App\Models\Movement::where('employee_id', $employee->id)
+                    ->whereIn('status', ['approved', 'completed'])
+                    ->where('movement_type', 'official')
+                    ->where('from_datetime', '<=', Carbon::parse($date)->endOfDay())
+                    ->where('to_datetime', '>=', Carbon::parse($date)->startOfDay())
+                    ->first();
+            }
+
             if ($attendance) {
                 // Update existing attendance
                 if ($isCheckIn && (!$attendance->check_in || Carbon::parse($time)->format('H:i') < Carbon::parse($attendance->check_in)->format('H:i'))) {
                     $attendance->check_in = $time;
                     $attendance->device_id = $device->id;
-                    $this->updateAttendanceStatus($attendance);
-                    $attendance->save();
                 } elseif (!$isCheckIn && (!$attendance->check_out || Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_out)->format('H:i'))) {
                     $attendance->check_out = $time;
-                    $this->updateAttendanceStatus($attendance);
-                    $attendance->save();
                 }
+
+                // Link to movement if exists and not already linked
+                if ($movement && !$attendance->movement_id) {
+                    $attendance->movement_id = $movement->id;
+                }
+
+                $this->updateAttendanceStatus($attendance);
+                $attendance->save();
             } else {
                 // Create new attendance record
                 $attendance = new Attendance();
@@ -500,6 +518,11 @@ class ZKTecoAPIController extends Controller
                     $attendance->check_out = $time;
                 }
 
+                // Link to movement if exists
+                if ($movement) {
+                    $attendance->movement_id = $movement->id;
+                }
+
                 $this->updateAttendanceStatus($attendance);
                 $attendance->save();
             }
@@ -509,8 +532,7 @@ class ZKTecoAPIController extends Controller
     }
 
     /**
-     * Update attendance status based on check-in and check-out times
-     * Fixed to properly handle date and time parsing
+     * Update attendance status based on check-in and check-out times, leave status, and movement status
      */
     private function updateAttendanceStatus($attendance)
     {
@@ -519,6 +541,14 @@ class ZKTecoAPIController extends Controller
 
         if ($isOnLeave) {
             $attendance->status = 'leave';
+            return;
+        }
+
+        // Check if the employee is on approved movement for this date
+        $isOnMovement = $this->isEmployeeOnMovement($attendance->employee_id, $attendance->date);
+
+        if ($isOnMovement) {
+            $attendance->status = 'on_duty';
             return;
         }
 
@@ -612,6 +642,24 @@ class ZKTecoAPIController extends Controller
     }
 
     /**
+     * Check if an employee is on approved movement for a specific date
+     */
+    private function isEmployeeOnMovement($employeeId, $date)
+    {
+        $dateObj = Carbon::parse($date);
+
+        // Check for approved movement that covers this date
+        $movementExists = \App\Models\Movement::where('employee_id', $employeeId)
+            ->whereIn('status', ['approved', 'completed'])
+            ->where('movement_type', 'official') // শুধু অফিশিয়াল মুভমেন্ট চেক করুন
+            ->where('from_datetime', '<=', $dateObj->endOfDay())
+            ->where('to_datetime', '>=', $dateObj->startOfDay())
+            ->exists();
+
+        return $movementExists;
+    }
+
+    /**
      * Process absent employees for today
      * This creates attendance records for employees who didn't clock in
      */
@@ -639,15 +687,44 @@ class ZKTecoAPIController extends Controller
                 ->first();
 
             if (!$attendance) {
-                // Create a new attendance record marked as absent
+                // Create a new attendance record
                 $attendance = new Attendance();
                 $attendance->employee_id = $employee->id;
                 $attendance->date = $today;
-                $attendance->status = 'absent';
+                $attendance->status = 'absent'; // ডিফল্ট স্ট্যাটাস
 
                 // Check if employee is on leave
                 if ($this->isEmployeeOnLeave($employee->id, $today)) {
                     $attendance->status = 'leave';
+                }
+                // Check if employee is on movement
+                else if ($this->isEmployeeOnMovement($employee->id, $today)) {
+                    $attendance->status = 'on_duty';
+
+                    // Find the relevant movement
+                    $movement = \App\Models\Movement::where('employee_id', $employee->id)
+                        ->whereIn('status', ['approved', 'completed'])
+                        ->where('movement_type', 'official')
+                        ->where('from_datetime', '<=', Carbon::today()->endOfDay())
+                        ->where('to_datetime', '>=', Carbon::today()->startOfDay())
+                        ->first();
+
+                    // Link attendance to movement
+                    if ($movement) {
+                        $attendance->movement_id = $movement->id;
+
+                        // Set check-in and check-out if the movement starts or ends today
+                        $fromDate = Carbon::parse($movement->from_datetime)->format('Y-m-d');
+                        $toDate = Carbon::parse($movement->to_datetime)->format('Y-m-d');
+
+                        if ($fromDate == $today) {
+                            $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
+                        }
+
+                        if ($toDate == $today) {
+                            $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
+                        }
+                    }
                 }
 
                 $attendance->save();
