@@ -9,6 +9,8 @@ use App\Models\AttendanceSetting;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\Holiday;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -472,6 +474,196 @@ class AttendanceController extends Controller
             ->with('success', 'Attendance record updated successfully.');
     }
 
+    /**
+     * Generate attendance sheet PDF report.
+     */
+    public function generatePdf(Request $request)
+    {
+        $user = Auth::user();
+
+        // Check if user has permission to export reports
+        if (!$user->hasPermission('reports.export')) {
+            abort(403, 'You do not have permission to export attendance reports.');
+        }
+
+        // Get date range from request
+        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
+        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+
+        // Get all dates in the range for the report
+        $dateRange = [];
+        $currentDate = $startDate->copy();
+        while ($currentDate->lte($endDate)) {
+            $dateRange[] = $currentDate->format('Y-m-d');
+            $currentDate->addDay();
+        }
+
+        // Collection to hold attendance data by date
+        $attendanceByDate = collect();
+
+        // Retrieve branch ID for weekend settings
+        $branchId = $request->branch_id;
+        if (!$branchId && $user->branch_id) {
+            $branchId = $user->branch_id;
+        } elseif (!$branchId && $user->employee && $user->employee->current_branch_id) {
+            $branchId = $user->employee->current_branch_id;
+        }
+
+        // Get weekend settings
+        $weekendDays = [];
+        if ($branchId) {
+            $attendanceSettings = AttendanceSetting::where('branch_id', $branchId)->first();
+            if ($attendanceSettings) {
+                $weekendDays = json_decode($attendanceSettings->weekend_days, true) ?: [];
+            }
+        }
+
+        // Get holidays within date range
+        $holidays = Holiday ::whereBetween('date', [$startDate, $endDate]);
+
+        // If branch is specified, filter holidays by applicable branches
+        if ($branchId) {
+            $holidays->where(function ($query) use ($branchId) {
+                $query->whereJsonContains('applicable_branches', $branchId)
+                    ->orWhereNull('applicable_branches');
+            });
+        }
+
+        // Get holidays
+        $holidaysCollection = $holidays->get();
+
+        // Create a lookup map for holidays by date
+        $holidayMap = $holidaysCollection->keyBy('date');
+
+        // Loop through each date and get attendance data
+        foreach ($dateRange as $date) {
+            $dateObj = Carbon::parse($date);
+
+            // Check if it's a weekend
+            $isWeekend = in_array($dateObj->dayOfWeek, $weekendDays);
+
+            // Check if it's a holiday
+            $isHoliday = $holidayMap->has($date);
+            $holiday = $isHoliday ? $holidayMap->get($date) : null;
+
+            // Base query with appropriate relationships
+            $query = Attendance::with(['employee.department', 'employee.designation', 'device'])
+                ->whereDate('date', $date);
+
+            // Apply filters based on user permissions and role
+            $this->applyUserFilters($query, $user, $request);
+
+            // Apply branch and department filters
+            if ($request->branch_id) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('current_branch_id', $request->branch_id);
+                });
+            }
+
+            if ($request->department_id) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('department_id', $request->department_id);
+                });
+            }
+
+            $attendances = $query->get();
+
+            // Format check-in and check-out times to AM/PM format and generate remarks
+            $attendances->transform(function ($attendance) {
+                if ($attendance->check_in) {
+                    // Parse only the time portion of the existing datetime
+                    $attendance->check_in_formatted = date('h:i A', strtotime($attendance->check_in));
+                }
+
+                if ($attendance->check_out) {
+                    $attendance->check_out_formatted = date('h:i A', strtotime($attendance->check_out));
+                }
+
+                // Generate remarks based on attendance settings
+                $this->generateRemarks($attendance);
+
+                return $attendance;
+            });
+
+            // Store weekend and holiday status with attendances
+            $dateData = [
+                'attendances' => $attendances,
+                'is_weekend' => $isWeekend,
+                'is_holiday' => $isHoliday,
+                'holiday' => $holiday
+            ];
+
+            // Add to collection with date as key
+            $attendanceByDate->put($date, $dateData);
+        }
+
+        // Get branch and department if filtered
+        $branchName = null;
+        $departmentName = null;
+
+        if ($request->branch_id) {
+            $branch = Branch::find($request->branch_id);
+            $branchName = $branch ? $branch->name : null;
+        }
+
+        if ($request->department_id) {
+            $department = Department::find($request->department_id);
+            $departmentName = $department ? $department->name : null;
+        }
+
+        // Create the PDF
+        $pdf = PDF::loadView('reports.attendance-sheet', [
+            'attendanceByDate' => $attendanceByDate,
+            'dateRange' => $dateRange,
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'branchName' => $branchName,
+            'departmentName' => $departmentName,
+        ]);
+
+        // Set PDF options
+        $pdf->setPaper('a4', 'landscape');
+        $pdf->setOptions([
+            'isRemoteEnabled' => true,
+            'isHtml5ParserEnabled' => true,
+        ]);
+
+        // Generate file name
+        $fileName = 'attendance_report_' . $startDate->format('Y-m-d') . '_to_' . $endDate->format('Y-m-d') . '.pdf';
+
+        // Return the PDF for download
+        return $pdf->download($fileName);
+    }
+
+
+    /**
+     * Display attendance sheet report page.
+     */
+    public function sheetReport(Request $request)
+    {
+        $user = Auth::user();
+        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(7);
+        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+
+        // Get branches and departments that user has access to
+        $branches = $this->getAccessibleBranches($user);
+        $departments = $this->getAccessibleDepartments($user);
+
+        return Inertia::render('attendance/sheet-report', [
+            'branches' => $branches,
+            'departments' => $departments,
+            'filters' => $request->only(['start_date', 'end_date', 'branch_id', 'department_id']),
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'userPermissions' => [
+                'canExportPdf' => $user->hasPermission('reports.export'),
+                'canExportExcel' => $user->hasPermission('reports.export'),
+                'isEmployee' => $user->employee_id ? true : false,
+                'isBranchManager' => $user->hasPermission('branch_manager'),
+                'isDepartmentHead' => $user->hasPermission('department_head'),
+            ],
+        ]);
+    }
     /**
      * Delete the specified attendance record.
      */

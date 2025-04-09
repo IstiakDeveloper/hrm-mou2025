@@ -54,7 +54,8 @@ import {
     CheckCircle,
     XCircle,
     AlertTriangle,
-    MessageSquare
+    MessageSquare,
+    FileText
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -347,6 +348,13 @@ export default function AttendanceIndex({
                                     <DropdownMenuItem className="cursor-pointer">
                                         <Calendar className="mr-2 h-4 w-4" />
                                         <span>Monthly View</span>
+                                    </DropdownMenuItem>
+                                </Link>
+
+                                <Link href={route('attendance.sheet-report')}>
+                                    <DropdownMenuItem className="cursor-pointer">
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        <span>Attendance Sheet PDF</span>
                                     </DropdownMenuItem>
                                 </Link>
                                 <Link href={route('attendance.report')}>
@@ -697,8 +705,8 @@ export default function AttendanceIndex({
                                                     status: status || ''
                                                 })}
                                                 className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${link.active
-                                                        ? 'z-10 bg-primary text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary'
-                                                        : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
+                                                    ? 'z-10 bg-primary text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary'
+                                                    : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
                                                     }`}
                                                 aria-current={link.active ? 'page' : undefined}
                                             >

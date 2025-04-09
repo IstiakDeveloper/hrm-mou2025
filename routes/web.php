@@ -128,6 +128,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{attendance}/edit', [AttendanceController::class, 'edit'])->name('edit');
         Route::put('/{attendance}', [AttendanceController::class, 'update'])->name('update');
         Route::delete('/{attendance}', [AttendanceController::class, 'destroy'])->name('destroy');
+        Route::get('/pdf', [AttendanceController::class, 'generatePdf'])->name('pdf');
+        Route::get('/sheet-report', [AttendanceController::class, 'sheetReport'])->name('sheet-report');
+
 
         // Attendance Device Management
         Route::prefix('devices')->name('devices.')->group(function () {
