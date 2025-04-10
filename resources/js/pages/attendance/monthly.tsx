@@ -358,6 +358,21 @@ export default function AttendanceMonthly({
                             </Button>
                         </Link>
 
+                        <Link
+                            href={route('exports.attendance.monthly', {
+                                search,
+                                month: currentMonth,
+                                branch_id: branchId || '',
+                                department_id: departmentId || ''
+                            })}
+                            target="_blank"
+                        >
+                            <Button variant="outline" className="flex items-center">
+                                <Download className="mr-1 h-4 w-4" />
+                                Export PDF
+                            </Button>
+                        </Link>
+
                         {userPermissions.canCreate && (
                             <Link href={route('attendance.create')}>
                                 <Button className="flex items-center">

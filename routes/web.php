@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Attendance\AttendanceController;
 use App\Http\Controllers\Attendance\AttendanceDeviceController;
 use App\Http\Controllers\Attendance\AttendanceSettingController;
+use App\Http\Controllers\AttendanceExportController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Branch\BranchController;
 use App\Http\Controllers\DashboardController;
@@ -157,6 +158,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/sync-devices', [AttendanceController::class, 'syncDevices'])->name('sync-devices');
     });
 
+
     // Leave Management
     Route::prefix('leave')->name('leave.')->group(function () {
 
@@ -263,3 +265,11 @@ Route::put('/attendance/employees/{employee}/biometric-id', [AttendanceDeviceCon
 // Attendance Device Sync Report
 Route::get('/attendance/devices/sync-report', [AttendanceDeviceController::class, 'syncReport'])
     ->name('attendance.devices.sync-report');
+
+
+// Add this route section after your existing attendance routes
+
+// PDF Export routes - separate from main attendance routes to avoid conflicts
+Route::middleware(['auth', 'permission:attendance.view'])->prefix('exports')->name('exports.')->group(function () {
+    Route::get('/attendance/monthly', [AttendanceExportController::class, 'exportMonthlyPdf'])->name('attendance.monthly');
+});
