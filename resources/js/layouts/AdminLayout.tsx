@@ -188,6 +188,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             submenu: [
                 { title: 'All Employees', path: '/employees', permission: 'employees.view' },
                 { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view' },
+                { title: 'Employee Report', path: '/employee/dashboard', permission: 'employees.view' },
             ]
         },
         {

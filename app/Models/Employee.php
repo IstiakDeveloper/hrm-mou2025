@@ -119,4 +119,10 @@ class Employee extends Model
     {
         return $this->hasMany(EmployeeDocument::class);
     }
+
+
+    public function currentBranch()
+    {
+        return $this->belongsTo(Branch::class, 'current_branch_id');
+    }
 }

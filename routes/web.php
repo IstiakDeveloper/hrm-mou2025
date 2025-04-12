@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Attendance\AttendanceController;
 use App\Http\Controllers\Attendance\AttendanceDeviceController;
+use App\Http\Controllers\Attendance\AttendanceReportController;
 use App\Http\Controllers\Attendance\AttendanceSettingController;
 use App\Http\Controllers\AttendanceExportController;
 use App\Http\Controllers\Auth\AuthController;
@@ -12,7 +13,10 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Department\DepartmentController;
 use App\Http\Controllers\Designation\DesignationController;
 use App\Http\Controllers\Employee\EmployeeController;
+use App\Http\Controllers\Employee\EmployeeDashboardController;
 use App\Http\Controllers\Employee\EmployeeDocumentController;
+use App\Http\Controllers\Employee\EmployeeLeaveController;
+use App\Http\Controllers\Employee\EmployeeMovementController;
 use App\Http\Controllers\Holiday\HolidayController;
 use App\Http\Controllers\Leave\LeaveApplicationController;
 use App\Http\Controllers\Leave\LeaveBalanceController;
@@ -101,6 +105,7 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/{document}', [EmployeeDocumentController::class, 'update'])->name('update');
             Route::delete('/{document}', [EmployeeDocumentController::class, 'destroy'])->name('destroy');
             Route::get('/{document}/download', [EmployeeDocumentController::class, 'download'])->name('download');
+
         });
     });
 
@@ -273,3 +278,30 @@ Route::get('/attendance/devices/sync-report', [AttendanceDeviceController::class
 Route::middleware(['auth', 'permission:attendance.view'])->prefix('exports')->name('exports.')->group(function () {
     Route::get('/attendance/monthly', [AttendanceExportController::class, 'exportMonthlyPdf'])->name('attendance.monthly');
 });
+
+
+// Attendance Report Routes
+Route::middleware(['auth', 'permission:attendance.view'])->group(function () {
+    Route::get('/attendance/report', [AttendanceReportController::class, 'index'])
+        ->name('attendance.report');
+    Route::post('/attendance/report', [AttendanceReportController::class, 'index']);
+
+    Route::post('/attendance/report/pdf', [AttendanceReportController::class, 'downloadPdf'])->name('attendance.report.pdf');
+    Route::get('employees/{employee}/leaves', [EmployeeLeaveController::class, 'index'])
+        ->name('employees.leaves.index');
+
+    Route::get('employees/{employee}/movements', [EmployeeMovementController::class, 'index'])
+        ->name('employees.movements.index');
+
+    Route::get('employees/{employee}/leaves/download', [EmployeeLeaveController::class, 'downloadPdf'])
+        ->name('employees.leaves.download');
+
+    Route::get('employees/{employee}/movements/download', [EmployeeMovementController::class, 'downloadPdf'])
+        ->name('employees.movements.download');
+
+    Route::get('employee/dashboard', [EmployeeDashboardController::class, 'index'])->name('employee.dashboard');
+    Route::get('employee/dashboard/pdf', [EmployeeDashboardController::class, 'downloadPdf'])->name('employee.dashboard.pdf');
+});
+
+
+

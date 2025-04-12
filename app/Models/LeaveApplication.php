@@ -49,4 +49,11 @@ class LeaveApplication extends Model
     {
         return $this->hasMany(LeaveApproval::class);
     }
+
+    public function approvedBy()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
 }
+
+

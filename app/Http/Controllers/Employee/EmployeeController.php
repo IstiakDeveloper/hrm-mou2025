@@ -230,15 +230,42 @@ class EmployeeController extends Controller
             ->with('success', 'Employee updated successfully.');
     }
 
-    /**
-     * Display the specified employee.
-     */
     public function show(Employee $employee)
     {
-        $employee->load(['department', 'designation', 'branch', 'manager']);
+        $employee->load([
+            'department',
+            'designation',
+            'branch',
+            'manager',
+            'leaveApplications.leaveType',
+            'leaveBalances.leaveType',
+            'movements'
+        ]);
+
+        // Get current year leave balances
+        $currentYearLeaveBalances = $employee->leaveBalances()
+            ->where('year', date('Y'))
+            ->with('leaveType')
+            ->get();
+
+        // Get recent leave applications (last 5)
+        $recentLeaveApplications = $employee->leaveApplications()
+            ->with('leaveType')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
+
+        // Get recent movements (last 5)
+        $recentMovements = $employee->movements()
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
 
         return Inertia::render('employee/show', [
             'employee' => $employee,
+            'currentYearLeaveBalances' => $currentYearLeaveBalances,
+            'recentLeaveApplications' => $recentLeaveApplications,
+            'recentMovements' => $recentMovements,
         ]);
     }
 
