@@ -78,9 +78,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // Profile
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::patch('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
 
     // Admin Routes
     Route::prefix('admin')->name('admin.')->middleware(['permission:users.view'])->group(function () {
@@ -236,8 +233,6 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Holiday Management
-    Route::resource('holidays', HolidayController::class);
-    Route::get('/holiday-calendar', [HolidayController::class, 'calendar'])->name('holidays.calendar');
 
     // ZKTeco Integration
     Route::middleware(['permission:attendance.view'])->prefix('zkteco')->name('zkteco.')->group(function () {
@@ -301,6 +296,12 @@ Route::middleware(['auth', 'permission:attendance.view'])->group(function () {
 
     Route::get('employee/dashboard', [EmployeeDashboardController::class, 'index'])->name('employee.dashboard');
     Route::get('employee/dashboard/pdf', [EmployeeDashboardController::class, 'downloadPdf'])->name('employee.dashboard.pdf');
+    Route::resource('holidays', HolidayController::class);
+    Route::get('/holiday-calendar', [HolidayController::class, 'calendar'])->name('holidays.calendar');
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::patch('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
+
 });
 
 
