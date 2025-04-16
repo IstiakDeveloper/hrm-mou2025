@@ -1,0 +1,851 @@
+<?php
+
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Controller;
+use App\Models\Attendance;
+use App\Models\AttendanceDevice;
+use App\Models\Branch;
+use App\Models\Employee;
+use App\Models\LeaveApplication;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+
+class ZKTecoAPIController extends Controller
+{
+    /**
+     * Process attendance data from ZKTeco devices
+     */
+    public function syncAttendance(Request $request)
+    {
+        Log::info('ZKTeco sync: Received data', [
+            'ip' => $request->ip(),
+            'method' => $request->method(),
+            'data_size' => is_array($request->all()) ? count($request->all()) : 0
+        ]);
+
+        // Skip API key validation if request is coming directly from device
+        $directFromDevice = $this->isRequestFromDevice($request);
+
+        if (!$directFromDevice && $request->header('Authorization') !== 'Bearer ' . config('app.zkteco_api_key')) {
+            Log::warning('ZKTeco sync: Invalid API key used');
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized access',
+            ], 401);
+        }
+
+        // Handle direct push from device (different format than agent push)
+        if ($directFromDevice) {
+            return $this->handleDirectDevicePush($request);
+        }
+
+        // Handle data pushed from ZKTeco agent
+        return $this->handleAgentPush($request);
+    }
+
+    /**
+     * Check if request is coming directly from ZKTeco device
+     */
+    private function isRequestFromDevice(Request $request)
+    {
+        // ZKTeco devices typically use specific User-Agent strings or have specific payload formats
+        $userAgent = $request->header('User-Agent');
+
+        // Check for ZKTeco specific headers or payload structure
+        if (
+            strpos($userAgent, 'ZKTeco') !== false ||
+            $request->has('SN') ||
+            $request->has('DeviceName') ||
+            $request->has('AttLogs')
+        ) {
+            return true;
+        }
+
+        // Check if the request contains raw attendance data in ZKTeco format
+        if ($request->has('punch') || $request->has('pin')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Handle attendance data pushed directly from ZKTeco device
+     */
+    private function handleDirectDevicePush(Request $request)
+    {
+        Log::info('ZKTeco sync: Direct device push detected', [
+            'data' => $request->all()
+        ]);
+
+        // Try to identify the device by IP
+        $deviceIp = $request->ip();
+        $device = AttendanceDevice::where('ip_address', $deviceIp)->first();
+
+        if (!$device) {
+            // If we can't identify by IP, check for device SN in the request
+            $serialNumber = $request->input('SN');
+            if ($serialNumber) {
+                $device = AttendanceDevice::where('serial_number', $serialNumber)->first();
+            }
+
+            // If still not found, try to auto-register
+            if (!$device && config('app.zkteco_auto_register_devices', false)) {
+                $device = $this->autoRegisterDevice($request);
+            }
+
+            // If we still can't identify the device, reject the request
+            if (!$device) {
+                Log::warning('ZKTeco sync: Unknown device from direct push', [
+                    'ip' => $deviceIp,
+                    'data' => $request->all()
+                ]);
+
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unknown device. Please register this device first.',
+                ], 404);
+            }
+        }
+
+        // Process attendance data based on the format
+        $processed = 0;
+        $skipped = 0;
+        $errors = 0;
+
+        // Extract attendance logs from request based on device format
+        $attendanceLogs = $this->extractAttendanceLogs($request);
+
+        if (empty($attendanceLogs)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'No valid attendance data found in request',
+            ], 400);
+        }
+
+        // Process each attendance record
+        foreach ($attendanceLogs as $record) {
+            try {
+                $result = $this->processDirectPushRecord($record, $device);
+                if ($result === true) {
+                    $processed++;
+                } else {
+                    $skipped++;
+                }
+            } catch (\Exception $e) {
+                Log::error('ZKTeco sync: Error processing direct push record', [
+                    'record' => $record,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                $errors++;
+            }
+        }
+
+        // Update device last sync time
+        $device->last_sync_at = now();
+        $device->last_sync_status = $errors === 0 ? 'success' : 'partial';
+        $device->save();
+
+        // Process absent employees for today
+        $this->processAbsentEmployees($device);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Direct push attendance data processed successfully',
+            'summary' => [
+                'processed' => $processed,
+                'skipped' => $skipped,
+                'errors' => $errors,
+                'total' => count($attendanceLogs)
+            ]
+        ]);
+    }
+
+    /**
+     * Extract attendance logs from various ZKTeco device formats
+     */
+    private function extractAttendanceLogs(Request $request)
+    {
+        $logs = [];
+
+        // Format 1: AttLogs format
+        if ($request->has('AttLogs') && is_array($request->input('AttLogs'))) {
+            return $request->input('AttLogs');
+        }
+
+        // Format 2: Array of punch records
+        if ($request->has('punch') && is_array($request->input('punch'))) {
+            foreach ($request->input('punch') as $punch) {
+                if (isset($punch['pin']) && isset($punch['time'])) {
+                    $logs[] = [
+                        'id' => $punch['pin'],
+                        'timestamp' => $punch['time'],
+                        'state' => $punch['status'] ?? 0,
+                        'type' => $punch['type'] ?? 0
+                    ];
+                }
+            }
+            return $logs;
+        }
+
+        // Format 3: Single punch record
+        if ($request->has('pin') && $request->has('time')) {
+            $logs[] = [
+                'id' => $request->input('pin'),
+                'timestamp' => $request->input('time'),
+                'state' => $request->input('status', 0),
+                'type' => $request->input('type', 0)
+            ];
+            return $logs;
+        }
+
+        // Format 4: Raw POST data (some devices send data as raw form post)
+        $content = $request->getContent();
+        if (!empty($content) && strpos($content, 'pin=') !== false) {
+            parse_str($content, $data);
+            if (isset($data['pin']) && isset($data['time'])) {
+                $logs[] = [
+                    'id' => $data['pin'],
+                    'timestamp' => $data['time'],
+                    'state' => $data['status'] ?? 0,
+                    'type' => $data['type'] ?? 0
+                ];
+            }
+            return $logs;
+        }
+
+        return $logs;
+    }
+
+    /**
+     * Process a record from direct device push
+     */
+    private function processDirectPushRecord($record, $device)
+    {
+        // Validate record has minimum required fields
+        if (!isset($record['id']) || !isset($record['timestamp'])) {
+            Log::warning('ZKTeco sync: Invalid direct push record format', [
+                'record' => $record
+            ]);
+            return false;
+        }
+
+        // Find employee by employee_id
+        $employee = Employee::where('employee_id', (string) $record['id'])->first();
+
+        // Log the employee lookup details for debugging
+        Log::info('ZKTeco sync: Employee lookup details', [
+            'record_id' => $record['id'],
+            'record_id_type' => gettype($record['id']),
+            'employee_found' => ($employee !== null)
+        ]);
+
+        if (!$employee) {
+            Log::warning('ZKTeco sync: Unknown employee_id from direct push', [
+                'employee_id' => $record['id'],
+                'device_id' => $device->id
+            ]);
+            return false;
+        }
+
+        // Parse timestamp - handle different timestamp formats
+        try {
+            // Log the timestamp we're trying to parse
+            Log::info('ZKTeco sync: Parsing timestamp', [
+                'raw_timestamp' => $record['timestamp']
+            ]);
+
+            // Try standard format first
+            $timestamp = Carbon::parse($record['timestamp']);
+
+            $date = $timestamp->format('Y-m-d');
+            $time = $timestamp->format('H:i:s');
+            $hour = (int) $timestamp->format('H');
+
+            // Log the parsed components
+            Log::info('ZKTeco sync: Parsed timestamp components', [
+                'date' => $date,
+                'time' => $time,
+                'hour' => $hour,
+                'full_datetime' => $timestamp->format('Y-m-d H:i:s')
+            ]);
+
+            // Determine check-in or check-out based on time of day
+            // Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
+            $isCheckIn = ($hour < 12);
+
+            // Log the automatic time-based determination
+            Log::info('ZKTeco sync: Auto-determined punch type', [
+                'hour' => $hour,
+                'isCheckIn' => $isCheckIn
+            ]);
+
+            return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
+        } catch (\Exception $e) {
+            Log::error('ZKTeco sync: Error parsing timestamp', [
+                'timestamp' => $record['timestamp'],
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Handle attendance data pushed from ZKTeco agent
+     */
+    private function handleAgentPush(Request $request)
+    {
+        // Validate the request data
+        $validator = Validator::make($request->all(), [
+            'device_id' => 'required|integer',
+            'device_name' => 'required|string',
+            'device_ip' => 'required|ip',
+            'attendance_data' => 'required|array',
+            'attendance_data.*.uid' => 'required|integer',
+            'attendance_data.*.id' => 'required|string',
+            'attendance_data.*.state' => 'required|integer',
+            'attendance_data.*.timestamp' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            Log::error('ZKTeco sync: Invalid data format from agent', [
+                'errors' => $validator->errors()->toArray()
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Invalid data format',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // Verify device exists
+        $device = AttendanceDevice::where('device_id', $request->device_id)->first();
+        if (!$device) {
+            Log::warning('ZKTeco sync: Unknown device from agent', [
+                'device_id' => $request->device_id,
+                'device_name' => $request->device_name,
+                'device_ip' => $request->device_ip
+            ]);
+
+            // Option to auto-register the device
+            if (config('app.zkteco_auto_register_devices', false)) {
+                $device = $this->registerDevice($request);
+            } else {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unknown device. Please register this device first.',
+                ], 404);
+            }
+        }
+
+        // Process attendance records
+        $processed = 0;
+        $skipped = 0;
+        $errors = 0;
+
+        foreach ($request->attendance_data as $record) {
+            try {
+                $result = $this->processAgentRecord($record, $device);
+                if ($result === true) {
+                    $processed++;
+                } else {
+                    $skipped++;
+                }
+            } catch (\Exception $e) {
+                Log::error('ZKTeco sync: Error processing agent record', [
+                    'record' => $record,
+                    'error' => $e->getMessage(),
+                ]);
+                $errors++;
+            }
+        }
+
+        // Update device last sync time
+        $device->last_sync_at = now();
+        $device->last_sync_status = $errors === 0 ? 'success' : 'partial';
+        $device->save();
+
+        // Process absent employees
+        $this->processAbsentEmployees($device);
+
+        // Process user data if provided (to sync employee biometric IDs)
+        if (isset($request->user_data) && is_array($request->user_data)) {
+            $this->processUserData($request->user_data, $device);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Attendance data processed successfully',
+            'summary' => [
+                'processed' => $processed,
+                'skipped' => $skipped,
+                'errors' => $errors,
+                'total' => count($request->attendance_data)
+            ]
+        ]);
+    }
+
+    /**
+     * Process a record from agent push
+     */
+    private function processAgentRecord($record, $device)
+    {
+        // Find employee by employee_id
+        $employee = Employee::where('employee_id', (string) $record['id'])->first();
+
+        // Log the employee lookup details for debugging
+        Log::info('ZKTeco sync: Employee lookup details', [
+            'record_id' => $record['id'],
+            'record_id_type' => gettype($record['id']),
+            'employee_found' => ($employee !== null)
+        ]);
+
+        if (!$employee) {
+            Log::warning('ZKTeco sync: Unknown employee_id from agent', [
+                'employee_id' => $record['id'],
+                'device_id' => $device->id
+            ]);
+            return false;
+        }
+
+        try {
+            // Log the timestamp we're trying to parse
+            Log::info('ZKTeco sync: Parsing timestamp', [
+                'raw_timestamp' => $record['timestamp']
+            ]);
+
+            // Parse timestamp
+            $timestamp = Carbon::parse($record['timestamp']);
+
+            $date = $timestamp->format('Y-m-d');
+            $time = $timestamp->format('H:i:s');
+            $hour = (int) $timestamp->format('H');
+
+            // Log the parsed components
+            Log::info('ZKTeco sync: Parsed timestamp components', [
+                'date' => $date,
+                'time' => $time,
+                'hour' => $hour,
+                'full_datetime' => $timestamp->format('Y-m-d H:i:s')
+            ]);
+
+            // Determine check-in or check-out based on time of day
+            // Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
+            $isCheckIn = ($hour < 12);
+
+            // Log the automatic time-based determination
+            Log::info('ZKTeco sync: Auto-determined punch type', [
+                'hour' => $hour,
+                'isCheckIn' => $isCheckIn
+            ]);
+
+            return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
+        } catch (\Exception $e) {
+            Log::error('ZKTeco sync: Error parsing timestamp', [
+                'timestamp' => $record['timestamp'],
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Save attendance record to database
+     */
+    private function saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn)
+    {
+        // Use database transaction for data integrity
+        return DB::transaction(function () use ($employee, $device, $date, $time, $isCheckIn) {
+            // Log the values being used
+            Log::info('ZKTeco sync: Saving attendance record', [
+                'employee_id' => $employee->id,
+                'date' => $date,
+                'time' => $time,
+                'isCheckIn' => $isCheckIn
+            ]);
+
+            // Find existing attendance for this date
+            $attendance = Attendance::where('employee_id', $employee->id)
+                ->where('date', $date)
+                ->first();
+
+            // Check for movement
+            $isOnMovement = $this->isEmployeeOnMovement($employee->id, $date);
+
+            // Get movement record if exists
+            $movement = null;
+            if ($isOnMovement) {
+                $movement = \App\Models\Movement::where('employee_id', $employee->id)
+                    ->whereIn('status', ['approved', 'completed'])
+                    ->where('movement_type', 'official')
+                    ->where('from_datetime', '<=', Carbon::parse($date)->endOfDay())
+                    ->where('to_datetime', '>=', Carbon::parse($date)->startOfDay())
+                    ->first();
+            }
+
+            if ($attendance) {
+                // Update existing attendance
+                if ($isCheckIn && (!$attendance->check_in || Carbon::parse($time)->format('H:i') < Carbon::parse($attendance->check_in)->format('H:i'))) {
+                    $attendance->check_in = $time;
+                    $attendance->device_id = $device->id;
+                } elseif (!$isCheckIn && (!$attendance->check_out || Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_out)->format('H:i'))) {
+                    $attendance->check_out = $time;
+                }
+
+                // Link to movement if exists and not already linked
+                if ($movement && !$attendance->movement_id) {
+                    $attendance->movement_id = $movement->id;
+                }
+
+                $this->updateAttendanceStatus($attendance);
+                $attendance->save();
+            } else {
+                // Create new attendance record
+                $attendance = new Attendance();
+                $attendance->employee_id = $employee->id;
+                $attendance->date = $date;
+                $attendance->device_id = $device->id;
+
+                if ($isCheckIn) {
+                    $attendance->check_in = $time;
+                } else {
+                    $attendance->check_out = $time;
+                }
+
+                // Link to movement if exists
+                if ($movement) {
+                    $attendance->movement_id = $movement->id;
+                }
+
+                $this->updateAttendanceStatus($attendance);
+                $attendance->save();
+            }
+
+            return true;
+        });
+    }
+
+    /**
+     * Update attendance status based on check-in and check-out times, leave status, and movement status
+     */
+    private function updateAttendanceStatus($attendance)
+    {
+        // First check if the employee is on approved leave for this date
+        $isOnLeave = $this->isEmployeeOnLeave($attendance->employee_id, $attendance->date);
+
+        if ($isOnLeave) {
+            $attendance->status = 'leave';
+            return;
+        }
+
+        // Check if the employee is on approved movement for this date
+        $isOnMovement = $this->isEmployeeOnMovement($attendance->employee_id, $attendance->date);
+
+        if ($isOnMovement) {
+            $attendance->status = 'on_duty';
+            return;
+        }
+
+        // Get branch work settings
+        $branchId = $attendance->employee->current_branch_id;
+        $settings = \App\Models\AttendanceSetting::where('branch_id', $branchId)->first();
+
+        if (!$settings) {
+            // Use default settings if branch-specific settings not found
+            $attendance->status = $attendance->check_in ? 'present' : 'absent';
+            return;
+        }
+
+        // Debug the date and time being used
+        Log::info('ZKTeco sync: Update attendance status', [
+            'attendance_date' => $attendance->date,
+            'attendance_check_in' => $attendance->check_in,
+            'work_start_time' => $settings->work_start_time
+        ]);
+
+        try {
+            // Carefully construct date-time strings
+            $dateStr = $attendance->date;
+            $startTimeStr = $settings->work_start_time;
+
+            // Create work start time correctly
+            $workStartTimeString = "{$dateStr} {$startTimeStr}";
+            Log::info('ZKTeco sync: Parsing work start time', ['datetime' => $workStartTimeString]);
+
+            $workStartTime = Carbon::parse($workStartTimeString);
+            $lateThreshold = $workStartTime->copy()->addMinutes($settings->late_threshold_minutes);
+
+            // Calculate status
+            if ($attendance->check_in) {
+                // Construct check-in datetime string carefully
+                $checkInTimeStr = $attendance->check_in;
+                $checkInDateTimeString = "{$dateStr} {$checkInTimeStr}";
+
+                Log::info('ZKTeco sync: Parsing check-in time', ['datetime' => $checkInDateTimeString]);
+                $checkInTime = Carbon::parse($checkInDateTimeString);
+
+                // Mark as late if check-in time is after late threshold
+                if ($checkInTime->gt($lateThreshold)) {
+                    $attendance->status = 'late';
+                } else {
+                    $attendance->status = 'present';
+                }
+            } else {
+                // No check-in record
+                $attendance->status = 'absent';
+            }
+
+            // Check for half-day based on working hours
+            if ($attendance->check_in && $attendance->check_out) {
+                // Construct datetime strings carefully
+                $checkInTimeStr = $attendance->check_in;
+                $checkOutTimeStr = $attendance->check_out;
+
+                $checkInDateTimeString = "{$dateStr} {$checkInTimeStr}";
+                $checkOutDateTimeString = "{$dateStr} {$checkOutTimeStr}";
+
+                Log::info('ZKTeco sync: Parsing check-in/out times for hours calculation', [
+                    'check_in' => $checkInDateTimeString,
+                    'check_out' => $checkOutDateTimeString
+                ]);
+
+                $checkInTime = Carbon::parse($checkInDateTimeString);
+                $checkOutTime = Carbon::parse($checkOutDateTimeString);
+
+                // Handle case where check-out is next day
+                if ($checkOutTime->lt($checkInTime)) {
+                    $checkOutTime->addDay();
+                }
+
+                $hoursWorked = $checkInTime->diffInHours($checkOutTime);
+
+                if ($hoursWorked < $settings->half_day_hours && $attendance->status != 'absent') {
+                    $attendance->status = 'half_day';
+                }
+            }
+        } catch (\Exception $e) {
+            // Log the error and set a default status
+            Log::error('ZKTeco sync: Error calculating attendance status', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Set a default status
+            $attendance->status = $attendance->check_in ? 'present' : 'absent';
+        }
+    }
+
+    /**
+     * Check if an employee is on approved movement for a specific date
+     */
+    private function isEmployeeOnMovement($employeeId, $date)
+    {
+        $dateObj = Carbon::parse($date);
+
+        // Check for approved movement that covers this date
+        $movementExists = \App\Models\Movement::where('employee_id', $employeeId)
+            ->whereIn('status', ['approved', 'completed'])
+            ->where('movement_type', 'official') // শুধু অফিশিয়াল মুভমেন্ট চেক করুন
+            ->where('from_datetime', '<=', $dateObj->endOfDay())
+            ->where('to_datetime', '>=', $dateObj->startOfDay())
+            ->exists();
+
+        return $movementExists;
+    }
+
+    /**
+     * Process absent employees for today
+     * This creates attendance records for employees who didn't clock in
+     */
+    private function processAbsentEmployees($device)
+    {
+        $today = Carbon::today()->format('Y-m-d');
+        $branch = $device->branch;
+
+        if (!$branch) {
+            Log::warning('ZKTeco sync: Device not associated with a branch, skipping absent processing');
+            return;
+        }
+
+        // Get all active employees in this branch
+        $employees = Employee::where('status', 'active')
+            ->where('current_branch_id', $branch->id)
+            ->get();
+
+        $processed = 0;
+
+        foreach ($employees as $employee) {
+            // Check if attendance record already exists for today
+            $attendance = Attendance::where('employee_id', $employee->id)
+                ->where('date', $today)
+                ->first();
+
+            if (!$attendance) {
+                // Create a new attendance record
+                $attendance = new Attendance();
+                $attendance->employee_id = $employee->id;
+                $attendance->date = $today;
+                $attendance->status = 'absent'; // ডিফল্ট স্ট্যাটাস
+
+                // Check if employee is on leave
+                if ($this->isEmployeeOnLeave($employee->id, $today)) {
+                    $attendance->status = 'leave';
+                }
+                // Check if employee is on movement
+                else if ($this->isEmployeeOnMovement($employee->id, $today)) {
+                    $attendance->status = 'on_duty';
+
+                    // Find the relevant movement
+                    $movement = \App\Models\Movement::where('employee_id', $employee->id)
+                        ->whereIn('status', ['approved', 'completed'])
+                        ->where('movement_type', 'official')
+                        ->where('from_datetime', '<=', Carbon::today()->endOfDay())
+                        ->where('to_datetime', '>=', Carbon::today()->startOfDay())
+                        ->first();
+
+                    // Link attendance to movement
+                    if ($movement) {
+                        $attendance->movement_id = $movement->id;
+
+                        // Set check-in and check-out if the movement starts or ends today
+                        $fromDate = Carbon::parse($movement->from_datetime)->format('Y-m-d');
+                        $toDate = Carbon::parse($movement->to_datetime)->format('Y-m-d');
+
+                        if ($fromDate == $today) {
+                            $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
+                        }
+
+                        if ($toDate == $today) {
+                            $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
+                        }
+                    }
+                }
+
+                $attendance->save();
+                $processed++;
+            }
+        }
+
+        Log::info('ZKTeco sync: Processed absent employees', [
+            'date' => $today,
+            'branch' => $branch->name,
+            'processed' => $processed,
+            'total_employees' => $employees->count()
+        ]);
+    }
+
+    /**
+     * Check if an employee is on approved leave for a specific date
+     */
+    private function isEmployeeOnLeave($employeeId, $date)
+    {
+        $dateObj = Carbon::parse($date);
+
+        // Check for approved leave applications that cover this date
+        $leaveExists = LeaveApplication::where('employee_id', $employeeId)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $dateObj)
+            ->where('end_date', '>=', $dateObj)
+            ->exists();
+
+        return $leaveExists;
+    }
+
+    /**
+     * Process user data from the device to sync biometric IDs
+     */
+    private function processUserData($userData, $device)
+    {
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($userData as $user) {
+            if (!isset($user['uid']) || !isset($user['id'])) {
+                $skipped++;
+                continue;
+            }
+
+            // Find employee by employee_id - ensure string comparison
+            $employee = Employee::where('employee_id', (string) $user['id'])->first();
+            if (!$employee) {
+                $skipped++;
+                continue;
+            }
+
+            // Update biometric ID if different
+            if ($employee->biometric_id != $user['uid']) {
+                $employee->biometric_id = $user['uid'];
+                $employee->save();
+                $updated++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        Log::info('ZKTeco sync: User data processed', [
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'total' => count($userData)
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Auto-register a device from direct push
+     */
+    private function autoRegisterDevice(Request $request)
+    {
+        // Get default branch
+        $branch = Branch::first();
+
+        $device = new AttendanceDevice();
+        $device->device_id = mt_rand(10000, 99999); // Generate a random device ID
+        $device->name = $request->input('DeviceName', 'Auto Registered Device');
+        $device->ip_address = $request->ip();
+        $device->port = 4370; // Default ZKTeco port
+        $device->serial_number = $request->input('SN', '');
+        $device->branch_id = $branch ? $branch->id : null;
+        $device->status = 'active';
+        $device->save();
+
+        Log::info('ZKTeco sync: Auto-registered device from direct push', [
+            'device_id' => $device->device_id,
+            'device_name' => $device->name,
+            'ip' => $device->ip_address
+        ]);
+
+        return $device;
+    }
+
+    /**
+     * Register a new device from agent push
+     */
+    private function registerDevice(Request $request)
+    {
+        // Get default branch
+        $branch = Branch::first();
+
+        $device = new AttendanceDevice();
+        $device->device_id = $request->device_id;
+        $device->name = $request->device_name;
+        $device->ip_address = $request->device_ip;
+        $device->port = 4370; // Default ZKTeco port
+        $device->branch_id = $branch ? $branch->id : null;
+        $device->status = 'active';
+        $device->save();
+
+        Log::info('ZKTeco sync: Auto-registered device from agent', [
+            'device_id' => $device->device_id,
+            'device_name' => $device->name
+        ]);
+
+        return $device;
+    }
+}
