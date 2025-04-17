@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\Branch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -80,10 +81,13 @@ class UserController extends Controller
             return back()->withErrors(['email' => 'The email must match the selected employee\'s email'])->withInput();
         }
 
+        // Store the plain password temporarily for the email
+        $plainPassword = $request->password;
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($plainPassword),
             'role_id' => $primaryRoleId, // Use primary role or first selected
             'employee_id' => $request->employee_id,
             'branch_id' => $request->branch_id,
@@ -93,8 +97,42 @@ class UserController extends Controller
         // Sync roles
         $user->roles()->sync($request->role_ids);
 
+        // Send welcome email with login information
+        $this->sendWelcomeEmail($user, $plainPassword);
+
         return redirect()->route('admin.users.index')
-            ->with('success', 'User created successfully.');
+            ->with('success', 'User created successfully and welcome email sent.');
+    }
+
+    /**
+     * Send welcome email with login information to the new user
+     */
+    private function sendWelcomeEmail(User $user, string $password)
+    {
+        // Get site URL from config or environment
+        $siteUrl = config('app.url');
+
+        // Get the employee details
+        $employee = $user->employee;
+
+        // Prepare the role names
+        $roleNames = $user->roles->pluck('name')->implode(', ');
+
+        // Send email using Laravel's Mail facade
+        Mail::send(
+            'emails.welcome_user',
+            [
+                'user' => $user,
+                'employee' => $employee,
+                'password' => $password,
+                'siteUrl' => $siteUrl,
+                'roleNames' => $roleNames,
+            ],
+            function ($message) use ($user) {
+                $message->to($user->email, $user->name)
+                    ->subject('Welcome to ' . config('app.name') . ' - Your Account Information');
+            }
+        );
     }
 
     /**

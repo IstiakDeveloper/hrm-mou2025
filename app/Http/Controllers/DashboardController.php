@@ -35,7 +35,7 @@ class DashboardController extends Controller
         $primaryRole = $roles->isNotEmpty() ? $roles->first()->name : 'User';
 
         // Check if user has employee role and redirect to employee dashboard
-        if ($primaryRole === 'Employee') {
+        if ($primaryRole !== 'Super Admin') {
             return $this->employeeDashboard($user, $today);
         }
 
