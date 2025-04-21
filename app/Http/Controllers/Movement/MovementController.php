@@ -335,9 +335,9 @@ class MovementController extends Controller
         }
 
 
-        $employees = $user->hasPermission('movements.create') ?
-            Employee::where('status', 'active')->get() :
-            collect([$employee]);
+        $employees = $user->hasPermission('movements.create')
+            ? Employee::where('status', 'active')->with(['department', 'designation'])->get() // Eager load department
+            : collect([$employee]);
 
 
         return Inertia::render('movement/create', [

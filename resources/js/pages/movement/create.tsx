@@ -86,6 +86,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
     const [fromDateOpen, setFromDateOpen] = useState(false);
     const [toDateOpen, setToDateOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('details');
+    const [showDropdown, setShowDropdown] = useState(false);
 
     // Quick templates for movement types
     const officialTemplates = [
@@ -99,6 +100,53 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         { title: 'Bank Errand', purpose: 'Visit to bank for personal financial matters', hours: 1 },
         { title: 'Family Emergency', purpose: 'Attending to urgent family matter', hours: 4 }
     ];
+
+    const branches = [
+        "01 Naogaon Sadar",
+        "02 Atrai",
+        "03 Raninagar",
+        "04 Bhabanipur",
+        "05 Bandaikhara",
+        "06 Kritipur",
+        "07 Abadpukur",
+        "08 Hapania",
+        "09 Badalgachi",
+        "10 Saharpukur",
+        "11 Adamdighi",
+        "12 Shailgachi",
+        "13 Betgari",
+        "14 Tilakpur",
+        "15 Santahar",
+        "16 Charagpur",
+        "17 Nazipur",
+        "18 Mohadebpur",
+        "19 Paharpur",
+        "20 Chatra",
+        "21 Sapahar",
+        "22 Chaubaria Hat",
+        "23 Fatepur",
+        "24 Shishahat",
+        "25 Hat Gangopara",
+        "26 Katkhoir",
+        "27 Hatkoroi",
+        "28 Khajura",
+        "29 Shibpur",
+        "30 Dighirhat",
+        "31 Naldanga",
+        "32 Samaspara",
+        "33 Rajbari",
+        "34 Agradigun",
+        "35 Dorgadanga",
+        "36 Nachol",
+        "37 Akkelpur",
+        "38 Khetlal",
+        "39 Chanpara",
+        "40 Kichok"
+      ];
+
+    const filteredBranches = destination
+    ? branches.filter(branch => branch.toLowerCase().includes(destination.toLowerCase()))
+    : branches;
 
     // Set default times on component mount
     useEffect(() => {
@@ -428,7 +476,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                 </Alert>
                                             )}
 
-                                            <div className="space-y-2">
+                                            <div className="space-y-2 relative">
                                                 <Label htmlFor="destination">Destination</Label>
                                                 <div className="relative">
                                                     <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
@@ -436,12 +484,34 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                         id="destination"
                                                         placeholder="Where are you going?"
                                                         value={destination}
-                                                        onChange={(e) => setDestination(e.target.value)}
+                                                        onChange={(e) => {
+                                                            setDestination(e.target.value);
+                                                            setShowDropdown(true);
+                                                        }}
+                                                        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                                                         className="pl-10"
                                                     />
                                                 </div>
                                                 {errors.destination && (
                                                     <p className="text-sm font-medium text-red-500">{errors.destination}</p>
+                                                )}
+
+                                                {/* Dropdown */}
+                                                {showDropdown && filteredBranches.length > 0 && (
+                                                    <ul className="absolute z-10 w-full bg-white border border-gray-200 shadow-md rounded-md max-h-48 overflow-y-auto">
+                                                        {filteredBranches.map((branch, index) => (
+                                                            <li
+                                                                key={index}
+                                                                onClick={() => {
+                                                                    setDestination(branch);
+                                                                    setShowDropdown(false);
+                                                                }}
+                                                                className="px-4 py-2 hover:bg-blue-100 cursor-pointer text-sm"
+                                                            >
+                                                                {branch}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
                                                 )}
                                             </div>
 
@@ -457,7 +527,21 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                 {errors.purpose && (
                                                     <p className="text-sm font-medium text-red-500">{errors.purpose}</p>
                                                 )}
+
+                                                {/* Demo options */}
+                                                <div className="text-sm text-gray-500 space-x-2 pt-2">
+                                                    <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Branch Audit")}>
+                                                        Branch Audit
+                                                    </span>
+                                                    <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Audit Monitor")}>
+                                                        Audit Monitor
+                                                    </span>
+                                                    <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Officer Monitor")}>
+                                                        Officer Monitor
+                                                    </span>
+                                                </div>
                                             </div>
+
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="remarks">Remarks (Optional)</Label>

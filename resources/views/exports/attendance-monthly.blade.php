@@ -96,6 +96,8 @@
         .status-h { background-color: #fef3c7; }
         .status-lv { background-color: #dbeafe; }
         .status-od { background-color: #e0e7ff; }
+        .status-hl { background-color: #d8b4fe; }
+        .status-w { background-color: #cbd5e1; }
 
         .footer {
             margin-top: 15px;
@@ -131,6 +133,8 @@
         <div class="legend-item">H = Half Day</div>
         <div class="legend-item">LV = Leave</div>
         <div class="legend-item">OD = On Duty</div>
+        <div class="legend-item">HL = Holiday</div>
+        <div class="legend-item">W = Weekend</div>
         <div class="legend-item">- = No Record</div>
     </div>
 
@@ -147,6 +151,8 @@
                 <th class="status-h">H</th>
                 <th class="status-lv">LV</th>
                 <th class="status-od">OD</th>
+                <th class="status-hl">HL</th>
+                <th class="status-w">W</th>
             </tr>
         </thead>
         <tbody>
@@ -176,6 +182,8 @@
                             elseif ($status === 'half_day') { $statusClass = 'status-h'; $statusCode = 'H'; }
                             elseif ($status === 'leave') { $statusClass = 'status-lv'; $statusCode = 'LV'; }
                             elseif ($status === 'on_duty') { $statusClass = 'status-od'; $statusCode = 'OD'; }
+                            elseif ($status === 'holiday') { $statusClass = 'status-hl'; $statusCode = 'HL'; }
+                            elseif ($status === 'weekend') { $statusClass = 'status-w'; $statusCode = 'W'; }
                         @endphp
                         <td class="{{ $statusClass }}">{{ $statusCode }}</td>
                     @endfor
@@ -186,6 +194,8 @@
                     <td class="status-h">{{ $summary['half_day'] }}</td>
                     <td class="status-lv">{{ $summary['leave'] }}</td>
                     <td class="status-od">{{ $summary['on_duty'] }}</td>
+                    <td class="status-hl">{{ $summary['holiday'] }}</td>
+                    <td class="status-w">{{ $summary['weekend'] }}</td>
                 </tr>
             @endforeach
         </tbody>

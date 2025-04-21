@@ -280,7 +280,6 @@ class AttendanceController extends Controller
         $this->applyEmployeeFilters($employeesQuery, $user, $request);
 
         $employees = $employeesQuery->paginate(100)->withQueryString();
-
         $employeeIds = $employees->pluck('id')->toArray();
 
         $attendances = Attendance::whereIn('employee_id', $employeeIds)
@@ -292,6 +291,53 @@ class AttendanceController extends Controller
         $branches = $this->getAccessibleBranches($user);
         $departments = $this->getAccessibleDepartments($user);
 
+        // Fetch holidays for the month - returning as array compatible with frontend
+        $holidays = Holiday::where(function ($query) use ($startDate, $endDate) {
+            $query->whereBetween('date', [$startDate, $endDate])
+                ->orWhere(function ($q) use ($startDate, $endDate) {
+                    $q->where('is_recurring', true)
+                        ->whereRaw(
+                            'MONTH(date) = ? AND DAY(date) BETWEEN ? AND ?',
+                            [$startDate->month, 1, $endDate->day]
+                        );
+                });
+        })->get()->map(function ($holiday) {
+            return [
+                'id' => $holiday->id,
+                'title' => $holiday->title,
+                'date' => $holiday->date,
+                'description' => $holiday->description,
+                'is_recurring' => $holiday->is_recurring,
+                'applicable_branches' => $holiday->applicable_branches,
+            ];
+        })->toArray();
+
+        // Fetch attendance settings for all relevant branches
+        $branchIds = $employees->pluck('branch.id')->unique()->toArray();
+        $attendanceSettings = AttendanceSetting::whereIn('branch_id', $branchIds)
+            ->get()
+            ->mapWithKeys(function ($setting) {
+                return [
+                    $setting->branch_id => [
+                        'weekend_days' => json_decode($setting->weekend_days),
+                        'work_start_time' => $setting->work_start_time,
+                        'work_end_time' => $setting->work_end_time,
+                        'late_threshold_minutes' => $setting->late_threshold_minutes,
+                        'half_day_hours' => $setting->half_day_hours,
+                    ]
+                ];
+            })->toArray();
+
+        // Generate calendar dates for the month
+        $calendarDates = [];
+        for ($day = 1; $day <= $daysInMonth; $day++) {
+            $date = $month->copy()->setDay($day);
+            $calendarDates[$day] = [
+                'date' => $date->format('Y-m-d'),
+                'day_of_week' => $date->dayOfWeek,
+            ];
+        }
+
         return Inertia::render('attendance/monthly', [
             'employees' => $employees,
             'attendances' => $attendances,
@@ -300,6 +346,9 @@ class AttendanceController extends Controller
             'filters' => $request->only(['month', 'branch_id', 'department_id', 'search']),
             'month' => $month->format('Y-m'),
             'daysInMonth' => $daysInMonth,
+            'holidays' => $holidays,
+            'attendanceSettings' => $attendanceSettings,
+            'calendarDates' => $calendarDates,
             'userPermissions' => [
                 'canCreate' => $user->hasPermission('attendance.create'),
                 'canEdit' => $user->hasPermission('attendance.edit'),

@@ -26,7 +26,6 @@ class AttendanceExportController extends Controller
 
         $user = Auth::user();
 
-
         try {
             $month = $request->month ? Carbon::parse($request->month . '-01') : Carbon::today()->startOfMonth();
             $startDate = $month->copy()->startOfMonth();
@@ -48,6 +47,19 @@ class AttendanceExportController extends Controller
             }
 
             $employeeIds = $employees->pluck('id')->toArray();
+            $branchIds = $employees->pluck('current_branch_id')->unique()->toArray();
+
+            // Get holidays for the month
+            $holidays = Holiday::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                ->get()
+                ->groupBy(function ($holiday) {
+                    return Carbon::parse($holiday->date)->format('Y-m-d');
+                });
+
+            // Get weekend settings for each branch
+            $weekendSettings = AttendanceSetting::whereIn('branch_id', $branchIds)
+                ->get()
+                ->keyBy('branch_id');
 
             $attendances = Attendance::whereIn('employee_id', $employeeIds)
                 ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
@@ -64,33 +76,74 @@ class AttendanceExportController extends Controller
                     'late' => 0,
                     'half_day' => 0,
                     'leave' => 0,
-                    'on_duty' => 0
+                    'on_duty' => 0,
+                    'holiday' => 0,
+                    'weekend' => 0
                 ];
 
                 $dailyStatus = [];
 
+                // Get weekend days for this employee's branch
+                $weekendDays = [];
+                if ($employee->current_branch_id && isset($weekendSettings[$employee->current_branch_id])) {
+                    $weekendDays = json_decode($weekendSettings[$employee->current_branch_id]->weekend_days, true) ?? [];
+                }
+
                 // Generate daily status for each day
                 for ($day = 1; $day <= $daysInMonth; $day++) {
-                    $dateToFind = $month->format('Y-m') . '-' . str_pad($day, 2, '0', STR_PAD_LEFT);
+                    $currentDate = Carbon::parse($month->format('Y-m') . '-' . str_pad($day, 2, '0', STR_PAD_LEFT));
+                    $dateToFind = $currentDate->format('Y-m-d');
                     $status = null;
+                    $isHoliday = false;
+                    $isWeekend = false;
 
-                    if (isset($attendances[$employee->id])) {
-                        foreach ($attendances[$employee->id] as $attendance) {
-                            $attendanceDate = Carbon::parse($attendance->date)->format('Y-m-d');
-                            if ($attendanceDate === $dateToFind) {
-                                $status = $attendance->status;
+                    // Check if it's a holiday
+                    $holiday = isset($holidays[$dateToFind]) ? $holidays[$dateToFind]->first() : null;
+                    if ($holiday) {
+                        // Check if holiday applies to this employee's branch
+                        $applicableBranches = json_decode($holiday->applicable_branches, true) ?? [];
+                        if (empty($applicableBranches) || in_array($employee->current_branch_id, $applicableBranches)) {
+                            $status = 'holiday';
+                            $isHoliday = true;
+                            $summary['holiday']++;
+                        }
+                    }
 
-                                // Update summary counts
-                                if (isset($summary[$status])) {
-                                    $summary[$status]++;
+                    // Check if it's a weekend
+                    if (!$isHoliday && in_array($currentDate->dayOfWeek, $weekendDays)) {
+                        $status = 'weekend';
+                        $isWeekend = true;
+                        $summary['weekend']++;
+                    }
+
+                    // If not a holiday or weekend, check attendance records
+                    if (!$isHoliday && !$isWeekend) {
+                        if (isset($attendances[$employee->id])) {
+                            foreach ($attendances[$employee->id] as $attendance) {
+                                $attendanceDate = Carbon::parse($attendance->date)->format('Y-m-d');
+                                if ($attendanceDate === $dateToFind) {
+                                    $status = $attendance->status;
+
+                                    // Update summary counts
+                                    if (isset($summary[$status])) {
+                                        $summary[$status]++;
+                                    }
+                                    break;
                                 }
-                                break;
                             }
+                        }
+
+                        // If no attendance record and it's not a holiday or weekend, leave as null (no record)
+                        if ($status === null) {
+                            // Keep status as null to indicate no record
+                            // Don't increment any summary counters
                         }
                     }
 
                     $dailyStatus[$day] = [
-                        'status' => $status
+                        'status' => $status,
+                        'is_holiday' => $isHoliday,
+                        'is_weekend' => $isWeekend
                     ];
                 }
 

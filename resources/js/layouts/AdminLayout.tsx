@@ -78,7 +78,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     // Get current path for highlighting active menu
     const currentPath = window.location.pathname;
-
+    const employee = auth?.employee;
+    const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
     // Toggle mobile navigation
     const toggleMobileNav = () => {
         setIsMobileNavOpen(!isMobileNavOpen);
@@ -516,7 +517,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Avatar className="w-8 h-8 cursor-pointer">
-                                        <AvatarImage src={auth.user.avatar || ''} alt={auth.user.name} />
+                                        <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
                                         <AvatarFallback>{getInitials(auth.user.name)}</AvatarFallback>
                                     </Avatar>
                                 </TooltipTrigger>
@@ -529,7 +530,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     ) : (
                         <Link href="/profile" className="flex items-center gap-3 p-2 rounded-md hover:bg-muted">
                             <Avatar className="w-8 h-8">
-                                <AvatarImage src={auth.user.avatar || ''} alt={auth.user.name} />
+                                <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
                                 <AvatarFallback>{getInitials(auth.user.name)}</AvatarFallback>
                             </Avatar>
                             <div className="truncate">
@@ -653,7 +654,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
                                         <Avatar className="h-8 w-8">
-                                            <AvatarImage src={auth.user.avatar || ''} alt={auth.user.name} />
+                                            <AvatarImage src={photoUrl} alt={auth.user.name} />
                                             <AvatarFallback>{getInitials(auth.user.name)}</AvatarFallback>
                                         </Avatar>
                                     </Button>

@@ -120,6 +120,20 @@ interface UserPermissions {
     isDepartmentHead: boolean;
 }
 
+interface Holiday {
+    id: number;
+    title: string;
+    date: string;
+    description: string | null;
+    is_recurring: boolean;
+    applicable_branches: number[] | null;
+}
+
+interface AttendanceSetting {
+    branch_id: number;
+    weekend_days: number[];
+}
+
 interface AttendanceMonthlyProps {
     employees: EmployeesResponse;
     attendances: Record<string, Attendance[]>;
@@ -134,6 +148,8 @@ interface AttendanceMonthlyProps {
     month: string;
     daysInMonth: number;
     userPermissions: UserPermissions;
+    holidays: Holiday[];
+    attendanceSettings: Record<number, AttendanceSetting>;
 }
 
 export default function AttendanceMonthly({
@@ -144,7 +160,9 @@ export default function AttendanceMonthly({
     filters,
     month,
     daysInMonth,
-    userPermissions
+    userPermissions,
+    holidays = [],
+    attendanceSettings = {}
 }: AttendanceMonthlyProps) {
     const [search, setSearch] = useState(filters.search || '');
     const [branchId, setBranchId] = useState(filters.branch_id || null);
@@ -164,6 +182,50 @@ export default function AttendanceMonthly({
 
     const prevMonthString = format(prevMonth, 'yyyy-MM');
     const nextMonthString = format(nextMonth, 'yyyy-MM');
+
+    // Check if a date is a holiday
+    const isHoliday = (day: number): boolean => {
+        if (!holidays || !Array.isArray(holidays)) {
+            return false;
+        }
+
+        // Add one day to fix the holiday display issue
+        const adjustedDay = day - 1;
+        const dateToCheck = `${month}-${adjustedDay.toString().padStart(2, '0')}`;
+
+        return holidays.some(holiday => {
+            const holidayDate = holiday.date.split('T')[0];
+            return holidayDate.endsWith(dateToCheck) || holidayDate === dateToCheck;
+        });
+    };
+
+    // Get holiday details for a specific day
+    const getHolidayDetails = (day: number) => {
+        // Add one day to fix the holiday display issue
+        const adjustedDay = day - 1;
+        const dateToCheck = `${month}-${adjustedDay.toString().padStart(2, '0')}`;
+
+        return holidays.find(holiday => {
+            const holidayDate = holiday.date.split('T')[0];
+            return holidayDate.endsWith(dateToCheck) || holidayDate === dateToCheck;
+        });
+    };
+
+    // Check if a date is a weekend for an employee
+    const isWeekend = (day: number, branchId: number): boolean => {
+        if (!attendanceSettings || !attendanceSettings[branchId] || !attendanceSettings[branchId].weekend_days) {
+            return false;
+        }
+
+        // Use the actual day for weekend check (without the -1 adjustment)
+        const dateToFind = `${month}-${day.toString().padStart(2, '0')}`;
+
+        // Parse the date to get the day of week
+        const date = new Date(`${month}-${day.toString().padStart(2, '0')}`);
+        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+
+        return attendanceSettings[branchId].weekend_days.includes(dayOfWeek);
+    };
 
     const handleSearch = () => {
         router.get(route('attendance.monthly'), {
@@ -207,69 +269,158 @@ export default function AttendanceMonthly({
         }, { preserveState: true });
     };
 
-    const getStatusColor = (status: string) => {
-        const statusColors: Record<string, string> = {
-            present: 'bg-green-100',
-            absent: 'bg-red-100',
-            late: 'bg-orange-100',
-            half_day: 'bg-yellow-100',
-            leave: 'bg-blue-100',
-            on_duty: 'bg-indigo-100' // অন ডিউটির জন্য রঙ যোগ করা হয়েছে
-        };
-
-        return statusColors[status] || 'bg-gray-100';
+    const getStatusColor = (status: string): string => {
+        switch (status) {
+            case 'present':
+                return 'bg-green-100 text-green-800';
+            case 'absent':
+                return 'bg-red-100 text-red-800';
+            case 'late':
+                return 'bg-orange-100 text-orange-800';
+            case 'on_duty':
+                return 'bg-indigo-100 text-indigo-800';
+            case 'half_day':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'weekend':
+                return 'bg-teal-100 text-teal-800';
+            case 'holiday':
+                return 'bg-purple-100 text-purple-800';
+            case 'leave':
+                return 'bg-indigo-100 text-indigo-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
     };
 
-    const getStatusCode = (status: string) => {
-        const statusCodes: Record<string, string> = {
-            present: 'P',
-            absent: 'A',
-            late: 'L',
-            half_day: 'H',
-            leave: 'LV',
-            on_duty: 'OD' // অন ডিউটির জন্য কোড যোগ করা হয়েছে
-        };
-
-        return statusCodes[status] || '-';
+    // Get short code for status badge
+    const getStatusCode = (status: string): string => {
+        switch (status) {
+            case 'present':
+                return 'P';
+            case 'absent':
+                return 'A';
+            case 'late':
+                return 'L';
+            case 'on_duty':
+                return 'OD';
+            case 'half_day':
+                return 'H';
+            case 'weekend':
+                return 'W';
+            case 'holiday':
+                return 'H';
+            case 'leave':
+                return 'L';
+            default:
+                return '-';
+        }
     };
 
-    const getAttendanceStatus = (employeeId: number, day: number) => {
+
+    const getAttendanceStatus = (employeeId: number, day: number, branchId: number) => {
+        // First check if it's a holiday - using actual day number
+        if (isHoliday(day)) {
+            return 'holiday';
+        }
+
+        // Then check if it's a weekend - using actual day number
+        if (isWeekend(day, branchId)) {
+            return 'weekend';
+        }
+
+        // Continue with existing logic for attendance (using day-1)
         if (!attendances[employeeId]) return null;
 
-        const dateToFind = `${month}-${day.toString().padStart(2, '0')}`;
-        const attendance = attendances[employeeId].find(a => {
-            // Convert both date formats to yyyy-MM-dd for comparison
-            const attendanceDate = new Date(a.date).toISOString().split('T')[0];
-            const searchDate = new Date(dateToFind).toISOString().split('T')[0];
-            return attendanceDate === searchDate;
+        // Format date for the previous day as that's what our data seems to contain
+        const lookupDay = day - 1; // Add one day to align with actual date
+        const dateToFind = `${month}-${lookupDay.toString().padStart(2, '0')}`;
+
+        // Find the attendance record for the adjusted date
+        const attendance = attendances[employeeId]?.find(a => {
+            // Extract just the date part for comparison
+            const attendanceDate = a.date.split('T')[0];
+            return attendanceDate.endsWith(dateToFind) || attendanceDate === dateToFind;
         });
 
         return attendance ? attendance.status : null;
     };
 
-    const getAttendanceTooltip = (employeeId: number, day: number) => {
+    // Fix the tooltip function to properly display times
+    const getAttendanceTooltip = (employeeId: number, day: number, branchId: number) => {
+        // Holiday tooltip - using actual day number
+        if (isHoliday(day)) {
+            const dateToFind = `${month}-${day.toString().padStart(2, '0')}`;
+
+            const holiday = holidays.find(h => {
+                const holidayDate = h.date.split('T')[0];
+                return holidayDate.endsWith(dateToFind) || holidayDate === dateToFind;
+            });
+
+            return holiday ? `Holiday: ${holiday.title}${holiday.description ? '\n' + holiday.description : ''}` : 'Holiday';
+        }
+
+        // Weekend tooltip - using actual day number
+        if (isWeekend(day, branchId)) {
+            return 'Weekend';
+        }
+
+        // Continue with existing logic for attendance (using day-1)
         if (!attendances[employeeId]) return null;
 
-        const dateToFind = `${month}-${day.toString().padStart(2, '0')}`;
-        const attendance = attendances[employeeId].find(a => {
-            const attendanceDate = new Date(a.date).toISOString().split('T')[0];
-            const searchDate = new Date(dateToFind).toISOString().split('T')[0];
-            return attendanceDate === searchDate;
+        // Use the same +1 day offset as in getAttendanceStatus
+        const lookupDay = day - 1;
+        const dateToFind = `${month}-${lookupDay.toString().padStart(2, '0')}`;
+
+        const attendance = attendances[employeeId]?.find(a => {
+            const attendanceDate = a.date.split('T')[0];
+            return attendanceDate.endsWith(dateToFind) || attendanceDate === dateToFind;
         });
 
         if (!attendance) return null;
 
-        let tooltipContent = attendance.status.charAt(0).toUpperCase() + attendance.status.slice(1).replace('_', ' ');
+        // Format tooltip with status and times
+        let tooltipContent = attendance.status.charAt(0).toUpperCase() +
+            attendance.status.slice(1).replace('_', ' ');
 
-        // Add check-in and check-out times if present
+        // Format check-in time safely
         if (attendance.check_in) {
-            const checkInTime = new Date(`1970-01-01T${attendance.check_in}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            tooltipContent += `\nIn: ${checkInTime}`;
+            try {
+                // Handle time formats correctly
+                const timeStr = attendance.check_in.split('T').pop()?.split('.')[0];
+                const timeParts = timeStr?.split(':') || [];
+
+                if (timeParts.length >= 2) {
+                    const hour = parseInt(timeParts[0]);
+                    const minute = timeParts[1];
+                    const formattedHour = hour % 12 || 12;
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    tooltipContent += `\nIn: ${formattedHour}:${minute} ${ampm}`;
+                } else {
+                    tooltipContent += `\nIn: ${attendance.check_in}`;
+                }
+            } catch (e) {
+                tooltipContent += `\nIn: ${attendance.check_in}`;
+            }
         }
 
+        // Format check-out time safely
         if (attendance.check_out) {
-            const checkOutTime = new Date(`1970-01-01T${attendance.check_out}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            tooltipContent += `\nOut: ${checkOutTime}`;
+            try {
+                const timeStr = attendance.check_out.split('T').pop()?.split('.')[0];
+                const timeParts = timeStr?.split(':') || [];
+
+                if (timeParts.length >= 2) {
+                    const hour = parseInt(timeParts[0]);
+                    const minute = timeParts[1];
+                    const formattedHour = hour % 12 || 12;
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    tooltipContent += `\nOut: ${formattedHour}:${minute} ${ampm}`;
+                } else {
+                    tooltipContent += `\nOut: ${attendance.check_out}`;
+                }
+            } catch (e) {
+                tooltipContent += `\nOut: ${attendance.check_out}`;
+            }
         }
 
         // Add remarks if available
@@ -283,23 +434,42 @@ export default function AttendanceMonthly({
     };
 
     // Calculate summary for each employee
-    const getEmployeeSummary = (employeeId: number) => {
-        if (!attendances[employeeId]) return { present: 0, absent: 0, late: 0, half_day: 0, leave: 0, on_duty: 0 };
-
+    const getEmployeeSummary = (employeeId: number, branchId: number) => {
+        // Initialize summary object with all status types including weekend and holiday
         const summary = {
             present: 0,
             absent: 0,
             late: 0,
             half_day: 0,
             leave: 0,
-            on_duty: 0  // অন ডিউটি যোগ করা হয়েছে
+            on_duty: 0,
+            weekend: 0,
+            holiday: 0
         };
 
-        attendances[employeeId]?.forEach(attendance => {
-            if (Object.prototype.hasOwnProperty.call(summary, attendance.status)) {
-                summary[attendance.status as keyof typeof summary]++;
+        // First count existing attendance records
+        if (attendances[employeeId]) {
+            attendances[employeeId]?.forEach(attendance => {
+                if (Object.prototype.hasOwnProperty.call(summary, attendance.status)) {
+                    summary[attendance.status as keyof typeof summary]++;
+                }
+            });
+        }
+
+        // Then count holidays and weekends for this month
+        for (let day = 1; day <= daysInMonth; day++) {
+            // Check if it's a holiday
+            if (isHoliday(day)) {
+                summary.holiday++;
+                continue; // Skip to next day if it's a holiday
             }
-        });
+
+            // Check if it's a weekend
+            if (isWeekend(day, branchId)) {
+                summary.weekend++;
+                continue; // Skip to next day if it's a weekend
+            }
+        }
 
         return summary;
     };
@@ -506,6 +676,14 @@ export default function AttendanceMonthly({
                         <span className="text-sm">On Duty</span>
                     </div>
                     <div className="flex items-center">
+                        <span className="w-6 h-6 rounded-full bg-purple-100 mr-2 flex items-center justify-center text-xs font-bold text-purple-800">H</span>
+                        <span className="text-sm">Holiday</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="w-6 h-6 rounded-full bg-teal-200 mr-2 flex items-center justify-center text-xs font-bold text-gray-800">W</span>
+                        <span className="text-sm">Weekend</span>
+                    </div>
+                    <div className="flex items-center">
                         <span className="w-6 h-6 rounded-full bg-gray-100 mr-2 flex items-center justify-center text-xs font-bold text-gray-800">-</span>
                         <span className="text-sm">No Record</span>
                     </div>
@@ -527,12 +705,14 @@ export default function AttendanceMonthly({
                                     <TableHead className="text-center min-w-[60px] bg-yellow-50">H</TableHead>
                                     <TableHead className="text-center min-w-[60px] bg-blue-50">LV</TableHead>
                                     <TableHead className="text-center min-w-[60px] bg-indigo-50">OD</TableHead>
+                                    <TableHead className="text-center min-w-[60px] bg-teal-50">W</TableHead>
+                                    <TableHead className="text-center min-w-[60px] bg-purple-50">HO</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {employees.data && employees.data.length > 0 ? (
                                     employees.data.map((employee) => {
-                                        const summary = getEmployeeSummary(employee.id);
+                                        const summary = getEmployeeSummary(employee.id, employee.branch.id);
                                         return (
                                             <TableRow key={employee.id} className="hover:bg-gray-50">
                                                 <TableCell className="font-medium sticky left-0 bg-white z-10 hover:bg-gray-50">
@@ -549,8 +729,8 @@ export default function AttendanceMonthly({
                                                     </div>
                                                 </TableCell>
                                                 {days.map(day => {
-                                                    const status = getAttendanceStatus(employee.id, day);
-                                                    const tooltip = getAttendanceTooltip(employee.id, day);
+                                                    const status = getAttendanceStatus(employee.id, day, employee.branch.id);
+                                                    const tooltip = getAttendanceTooltip(employee.id, day, employee.branch.id);
                                                     return (
                                                         <TableCell key={day} className="p-1 text-center">
                                                             {status ? (
@@ -586,12 +766,19 @@ export default function AttendanceMonthly({
                                                 <TableCell className="text-center bg-indigo-50">
                                                     <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-0">{summary.on_duty}</Badge>
                                                 </TableCell>
+                                                {/* New columns for Weekend and Holiday */}
+                                                <TableCell className="text-center bg-blue-50">
+                                                    <Badge variant="outline" className="bg-teal-100 text-teal-800 border-0">{summary.weekend}</Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center bg-purple-50">
+                                                    <Badge variant="outline" className="bg-purple-100 text-purple-800 border-0">{summary.holiday}</Badge>
+                                                </TableCell>
                                             </TableRow>
                                         );
                                     })
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={days.length + 6} className="h-24 text-center">
+                                        <TableCell colSpan={days.length + 8} className="h-24 text-center">
                                             <div className="flex flex-col items-center justify-center text-gray-500">
                                                 <AlertCircle className="h-8 w-8 mb-2" />
                                                 <h3 className="font-medium">No employees found</h3>
