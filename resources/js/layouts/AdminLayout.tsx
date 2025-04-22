@@ -312,8 +312,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 <CollapsibleTrigger asChild>
                     <div
                         className={`flex items-center justify-between w-full p-2 rounded-md cursor-pointer transition-colors duration-200 group ${isActive(item.path)
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'hover:bg-gray-100 text-gray-700'
+                            ? 'bg-blue-50 text-blue-700 font-medium'
+                            : 'hover:bg-gray-100 text-gray-700'
                             }`}
                     >
                         <TooltipProvider delayDuration={200}>
@@ -321,8 +321,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 <TooltipTrigger asChild>
                                     <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
                                         <div className={`${isActive(item.path)
-                                                ? 'text-blue-700'
-                                                : 'text-gray-600 group-hover:text-gray-900'
+                                            ? 'text-blue-700'
+                                            : 'text-gray-600 group-hover:text-gray-900'
                                             }`}>
                                             {item.icon}
                                         </div>
@@ -345,8 +345,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 key={idx}
                                 href={subItem.path}
                                 className={`block p-2 rounded-md text-sm transition-colors duration-200 ${currentPath === subItem.path
-                                        ? 'bg-blue-50 text-blue-700 font-medium'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                                     }`}
                             >
                                 {subItem.title}
@@ -362,13 +362,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <Link
                             href={item.path}
                             className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-2 rounded-md transition-colors duration-200 ${isActive(item.path)
-                                    ? 'bg-blue-50 text-blue-700 font-medium'
-                                    : 'hover:bg-gray-100 text-gray-700'
+                                ? 'bg-blue-50 text-blue-700 font-medium'
+                                : 'hover:bg-gray-100 text-gray-700'
                                 }`}
                         >
                             <div className={`${isActive(item.path)
-                                    ? 'text-blue-700'
-                                    : 'text-gray-600'
+                                ? 'text-blue-700'
+                                : 'text-gray-600'
                                 }`}>
                                 {item.icon}
                             </div>
@@ -401,14 +401,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 <CollapsibleTrigger asChild>
                     <div
                         className={`flex items-center justify-between w-full p-3 rounded-md cursor-pointer transition-colors duration-200 ${isActive(item.path)
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'hover:bg-gray-100 text-gray-700'
+                            ? 'bg-blue-50 text-blue-700 font-medium'
+                            : 'hover:bg-gray-100 text-gray-700'
                             }`}
                     >
                         <div className="flex items-center gap-3">
                             <div className={`${isActive(item.path)
-                                    ? 'text-blue-700'
-                                    : 'text-gray-600'
+                                ? 'text-blue-700'
+                                : 'text-gray-600'
                                 }`}>
                                 {item.icon}
                             </div>
@@ -424,8 +424,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             key={idx}
                             href={subItem.path}
                             className={`block p-3 rounded-md text-sm transition-colors duration-200 ${currentPath === subItem.path
-                                    ? 'bg-blue-50 text-blue-700 font-medium'
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                                ? 'bg-blue-50 text-blue-700 font-medium'
+                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                                 }`}
                             onClick={toggleMobileNav}
                         >
@@ -438,14 +438,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <Link
                 href={item.path}
                 className={`flex items-center gap-3 p-3 rounded-md transition-colors duration-200 ${isActive(item.path)
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'hover:bg-gray-100 text-gray-700'
+                    ? 'bg-blue-50 text-blue-700 font-medium'
+                    : 'hover:bg-gray-100 text-gray-700'
                     }`}
                 onClick={toggleMobileNav}
             >
                 <div className={`${isActive(item.path)
-                        ? 'text-blue-700'
-                        : 'text-gray-600'
+                    ? 'text-blue-700'
+                    : 'text-gray-600'
                     }`}>
                     {item.icon}
                 </div>
@@ -524,13 +524,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 <div className={`py-5 px-4 border-b flex ${collapsed ? 'justify-center' : 'justify-between'} items-center bg-blue-700 text-white`}>
                     {!collapsed && (
                         <Link href="/dashboard" className="flex items-center gap-2">
-                            <BookOpen className="w-6 h-6 text-white" />
+                            <img src='/logo.png' className="w-6 h-6 text-white" />
                             <span className="text-xl font-bold">HRM Mousumi</span>
                         </Link>
                     )}
                     {collapsed && (
                         <Link href="/dashboard">
-                            <BookOpen className="w-6 h-6 text-white" />
+                            <img src='/logo.png' className="w-6 h-6 text-white" />
                         </Link>
                     )}
                     <Button
@@ -589,8 +589,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     <div className="p-4 border-b bg-blue-700 text-white">
                         <div className="flex items-center justify-between">
                             <Link href="/dashboard" className="flex items-center gap-2">
-                                <BookOpen className="w-6 h-6 text-white" />
-                                <span className="text-xl font-bold">HRM Admin</span>
+                                <img src='/logo.png' className="w-6 h-6 text-white" />
+                                <span className="text-md font-bold">HRM Admin</span>
                             </Link>
                             <Button variant="ghost" size="icon" onClick={toggleMobileNav} className="text-white hover:bg-blue-600">
                                 <X className="w-5 h-5" />
@@ -635,8 +635,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                         <div className="md:hidden flex items-center">
                             <Link href="/dashboard" className="flex items-center gap-2">
-                                <BookOpen className="w-6 h-6 text-blue-700" />
-                                <span className="text-xl font-bold text-gray-900">HRM Admin</span>
+                                <img src='/logo.png' className="w-6 h-6 text-white" />
+                                <span className="text-md font-bold text-gray-900">HRM Admin</span>
                             </Link>
                         </div>
 
