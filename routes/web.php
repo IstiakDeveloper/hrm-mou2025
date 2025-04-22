@@ -295,7 +295,19 @@ Route::middleware(['auth', 'permission:attendance.view'])->group(function () {
         ->name('employees.movements.download');
 
     Route::get('employee/dashboard', [EmployeeDashboardController::class, 'index'])->name('employee.dashboard');
-    Route::get('employee/dashboard/pdf', [EmployeeDashboardController::class, 'downloadPdf'])->name('employee.dashboard.pdf');
+
+    // Employee Dashboard PDF Reports
+    Route::middleware(['auth'])->group(function () {
+
+        Route::get('employee.dashboard.leave.pdf', [EmployeeDashboardController::class, 'downloadLeavePdf'])
+            ->name('employee.dashboard.leave.pdf');
+
+        Route::get('/employee/dashboard/attendance/pdf', [EmployeeDashboardController::class, 'downloadAttendancePdf'])
+            ->name('employee.dashboard.attendance.pdf');
+
+        Route::get('/employee/dashboard/movement/pdf', [EmployeeDashboardController::class,'downloadMovementPdf'])->name('employee.dashboard.movement.pdf');
+    });
+
     Route::resource('holidays', HolidayController::class)->middleware('permission:transfers.edit');
     Route::get('/holiday-calendar', [HolidayController::class, 'calendar'])->name('holidays.calendar');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

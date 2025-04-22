@@ -528,7 +528,7 @@ class EmployeeDashboardController extends Controller
                     ->orWhereBetween('end_date', [$fromDate, $toDate])
                     ->orWhere(function ($q) use ($fromDate, $toDate) {
                         $q->where('start_date', '<=', $fromDate)
-                           ->where('end_date', '>=', $toDate);
+                            ->where('end_date', '>=', $toDate);
                     });
             })
             ->with('leaveType')
@@ -613,7 +613,7 @@ class EmployeeDashboardController extends Controller
                     ->whereDate('to_datetime', '<=', $toDate)
                     ->orWhere(function ($q) use ($fromDate, $toDate) {
                         $q->whereDate('from_datetime', '<=', $fromDate)
-                           ->whereDate('to_datetime', '>=', $toDate);
+                            ->whereDate('to_datetime', '>=', $toDate);
                     });
             })
             ->orderBy('from_datetime', 'desc')
@@ -741,6 +741,244 @@ class EmployeeDashboardController extends Controller
 
             // Return with error message
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Generate and download attendance PDF report
+     */
+    public function downloadAttendancePdf(Request $request)
+    {
+        // Validate the request
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+        ]);
+
+        $employeeId = $request->employee_id;
+        $fromDate = $request->from_date;
+        $toDate = $request->to_date;
+        $filterType = $request->input('filter_type', 'custom');
+
+        // Get employee details
+        $employee = Employee::with(['department', 'designation'])
+            ->findOrFail($employeeId);
+
+        // Get attendance data for the report with fixed future date handling
+        $attendanceData = $this->getAttendanceData($employeeId, $fromDate, $toDate, true);
+        $attendanceSummary = $this->generateAttendanceSummary($attendanceData);
+
+        try {
+            // Configure mPDF
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8',
+                'format' => 'A4',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 15,
+                'margin_bottom' => 15,
+                'margin_header' => 10,
+                'margin_footer' => 10,
+            ]);
+
+            // Add document metadata
+            $mpdf->SetTitle('Attendance Report - ' . $employee->first_name . ' ' . $employee->last_name);
+            $mpdf->SetAuthor(config('app.name'));
+            $mpdf->SetCreator(config('app.name'));
+
+            // Start building the HTML content for the PDF
+            $html = view('reports.employee_attendance_pdf', [
+                'employee' => $employee,
+                'attendanceData' => $attendanceData,
+                'attendanceSummary' => $attendanceSummary,
+                'fromDate' => $fromDate,
+                'toDate' => $toDate,
+                'filterType' => $filterType,
+                'generatedAt' => Carbon::now()->format('M d, Y H:i')
+            ])->render();
+
+            // Write HTML to the PDF document
+            $mpdf->WriteHTML($html);
+
+            // Set the download filename
+            $filename = 'Attendance_Report_' . str_replace(' ', '_', $employee->first_name) . '_' . date('Y-m-d') . '.pdf';
+
+            // Output the PDF
+            return response()->make(
+                $mpdf->Output($filename, 'S'),
+                200,
+                [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                    'Cache-Control' => 'public, must-revalidate, max-age=0',
+                    'Pragma' => 'public',
+                ]
+            );
+        } catch (\Exception $e) {
+            // Log the error
+            Log::error('Attendance PDF generation error: ' . $e->getMessage());
+
+            // Return with error message
+            return back()->with('error', 'Failed to generate attendance PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Generate and download leave PDF report
+     */
+    public function downloadLeavePdf(Request $request)
+    {
+        // Validate the request
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+        ]);
+
+        $employeeId = $request->employee_id;
+        $fromDate = $request->from_date;
+        $toDate = $request->to_date;
+        $filterType = $request->input('filter_type', 'custom');
+
+        // Get employee details
+        $employee = Employee::with(['department', 'designation'])
+            ->findOrFail($employeeId);
+
+        // Get leave data for the report
+        $leaveData = $this->getLeaveData($employeeId, $fromDate, $toDate);
+        $leaveSummary = $this->generateLeaveSummary($employeeId, $fromDate, $toDate);
+
+        try {
+            // Configure mPDF
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8',
+                'format' => 'A4',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 15,
+                'margin_bottom' => 15,
+                'margin_header' => 10,
+                'margin_footer' => 10,
+            ]);
+
+            // Add document metadata
+            $mpdf->SetTitle('Leave Report - ' . $employee->first_name . ' ' . $employee->last_name);
+            $mpdf->SetAuthor(config('app.name'));
+            $mpdf->SetCreator(config('app.name'));
+
+            // Start building the HTML content for the PDF
+            $html = view('reports.employee_leave_pdf', [
+                'employee' => $employee,
+                'leaveData' => $leaveData,
+                'leaveSummary' => $leaveSummary,
+                'fromDate' => $fromDate,
+                'toDate' => $toDate,
+                'filterType' => $filterType,
+                'generatedAt' => Carbon::now()->format('M d, Y H:i')
+            ])->render();
+
+            // Write HTML to the PDF document
+            $mpdf->WriteHTML($html);
+
+            // Set the download filename
+            $filename = 'Leave_Report_' . str_replace(' ', '_', $employee->first_name) . '_' . date('Y-m-d') . '.pdf';
+
+            // Output the PDF
+            return response()->make(
+                $mpdf->Output($filename, 'S'),
+                200,
+                [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                    'Cache-Control' => 'public, must-revalidate, max-age=0',
+                    'Pragma' => 'public',
+                ]
+            );
+        } catch (\Exception $e) {
+            // Log the error
+            Log::error('Leave PDF generation error: ' . $e->getMessage());
+
+            // Return with error message
+            return back()->with('error', 'Failed to generate leave PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Generate and download movement PDF report
+     */
+    public function downloadMovementPdf(Request $request)
+    {
+        // Validate the request
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
+        ]);
+
+        $employeeId = $request->employee_id;
+        $fromDate = $request->from_date;
+        $toDate = $request->to_date;
+        $filterType = $request->input('filter_type', 'custom');
+
+        // Get employee details
+        $employee = Employee::with(['department', 'designation'])
+            ->findOrFail($employeeId);
+
+        // Get movement data for the report
+        $movementData = $this->getMovementData($employeeId, $fromDate, $toDate);
+
+        try {
+            // Configure mPDF
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8',
+                'format' => 'A4',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 15,
+                'margin_bottom' => 15,
+                'margin_header' => 10,
+                'margin_footer' => 10,
+            ]);
+
+            // Add document metadata
+            $mpdf->SetTitle('Movement Report - ' . $employee->first_name . ' ' . $employee->last_name);
+            $mpdf->SetAuthor(config('app.name'));
+            $mpdf->SetCreator(config('app.name'));
+
+            // Start building the HTML content for the PDF
+            $html = view('reports.employee_movement_pdf', [
+                'employee' => $employee,
+                'movementData' => $movementData,
+                'fromDate' => $fromDate,
+                'toDate' => $toDate,
+                'filterType' => $filterType,
+                'generatedAt' => Carbon::now()->format('M d, Y H:i')
+            ])->render();
+
+            // Write HTML to the PDF document
+            $mpdf->WriteHTML($html);
+
+            // Set the download filename
+            $filename = 'Movement_Report_' . str_replace(' ', '_', $employee->first_name) . '_' . date('Y-m-d') . '.pdf';
+
+            // Output the PDF
+            return response()->make(
+                $mpdf->Output($filename, 'S'),
+                200,
+                [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                    'Cache-Control' => 'public, must-revalidate, max-age=0',
+                    'Pragma' => 'public',
+                ]
+            );
+        } catch (\Exception $e) {
+            // Log the error
+            Log::error('Movement PDF generation error: ' . $e->getMessage());
+
+            // Return with error message
+            return back()->with('error', 'Failed to generate movement PDF: ' . $e->getMessage());
         }
     }
 }

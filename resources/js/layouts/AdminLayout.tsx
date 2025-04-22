@@ -80,6 +80,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const currentPath = window.location.pathname;
     const employee = auth?.employee;
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
+
     // Toggle mobile navigation
     const toggleMobileNav = () => {
         setIsMobileNavOpen(!isMobileNavOpen);
@@ -95,7 +96,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         setActiveMenu(activeMenu === menu ? null : menu);
     };
 
-    // Check if a menu item is active
     // Check if a menu item is active - more precise implementation
     const isActive = (path: string) => {
         // For exact matches or path followed by slash or nothing
@@ -311,23 +311,31 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             >
                 <CollapsibleTrigger asChild>
                     <div
-                        className={`flex items-center justify-between w-full p-2 rounded-md cursor-pointer group ${isActive(item.path) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                        className={`flex items-center justify-between w-full p-2 rounded-md cursor-pointer transition-colors duration-200 group ${isActive(item.path)
+                                ? 'bg-blue-50 text-blue-700 font-medium'
+                                : 'hover:bg-gray-100 text-gray-700'
                             }`}
                     >
                         <TooltipProvider delayDuration={200}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
-                                        <div className={`${isActive(item.path) ? 'text-primary' : ''}`}>
+                                        <div className={`${isActive(item.path)
+                                                ? 'text-blue-700'
+                                                : 'text-gray-600 group-hover:text-gray-900'
+                                            }`}>
                                             {item.icon}
                                         </div>
                                         {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
                                     </div>
                                 </TooltipTrigger>
-                                {collapsed && <TooltipContent side="right">{item.title}</TooltipContent>}
+                                {collapsed && <TooltipContent side="right" className="bg-blue-800 text-white font-semibold">{item.title}</TooltipContent>}
                             </Tooltip>
                         </TooltipProvider>
-                        {!collapsed && <ChevronDown className={`w-4 h-4 transition-transform ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />}
+                        {!collapsed && (
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isActive(item.path) ? 'text-blue-700' : 'text-gray-500'
+                                } ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />
+                        )}
                     </div>
                 </CollapsibleTrigger>
                 {!collapsed && (
@@ -336,7 +344,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             <Link
                                 key={idx}
                                 href={subItem.path}
-                                className={`block p-2 rounded-md text-sm ${currentPath === subItem.path ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                                className={`block p-2 rounded-md text-sm transition-colors duration-200 ${currentPath === subItem.path
+                                        ? 'bg-blue-50 text-blue-700 font-medium'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                                     }`}
                             >
                                 {subItem.title}
@@ -351,14 +361,21 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     <TooltipTrigger asChild>
                         <Link
                             href={item.path}
-                            className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-2 rounded-md ${isActive(item.path) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                            className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-2 rounded-md transition-colors duration-200 ${isActive(item.path)
+                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                    : 'hover:bg-gray-100 text-gray-700'
                                 }`}
                         >
-                            {item.icon}
+                            <div className={`${isActive(item.path)
+                                    ? 'text-blue-700'
+                                    : 'text-gray-600'
+                                }`}>
+                                {item.icon}
+                            </div>
                             {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
                         </Link>
                     </TooltipTrigger>
-                    {collapsed && <TooltipContent side="right">{item.title}</TooltipContent>}
+                    {collapsed && <TooltipContent side="right" className="bg-blue-800 text-white font-semibold">{item.title}</TooltipContent>}
                 </Tooltip>
             </TooltipProvider>
         );
@@ -383,14 +400,22 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             >
                 <CollapsibleTrigger asChild>
                     <div
-                        className={`flex items-center justify-between w-full p-3 rounded-md cursor-pointer ${isActive(item.path) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                        className={`flex items-center justify-between w-full p-3 rounded-md cursor-pointer transition-colors duration-200 ${isActive(item.path)
+                                ? 'bg-blue-50 text-blue-700 font-medium'
+                                : 'hover:bg-gray-100 text-gray-700'
                             }`}
                     >
                         <div className="flex items-center gap-3">
-                            {item.icon}
+                            <div className={`${isActive(item.path)
+                                    ? 'text-blue-700'
+                                    : 'text-gray-600'
+                                }`}>
+                                {item.icon}
+                            </div>
                             <span className="text-sm font-medium">{item.title}</span>
                         </div>
-                        <ChevronDown className={`w-4 h-4 transition-transform ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${activeMenu === item.title ? 'transform rotate-180' : ''
+                            } ${isActive(item.path) ? 'text-blue-700' : 'text-gray-500'}`} />
                     </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pl-8 space-y-1 mt-1">
@@ -398,7 +423,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <Link
                             key={idx}
                             href={subItem.path}
-                            className={`block p-3 rounded-md text-sm ${currentPath === subItem.path ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                            className={`block p-3 rounded-md text-sm transition-colors duration-200 ${currentPath === subItem.path
+                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                                 }`}
                             onClick={toggleMobileNav}
                         >
@@ -410,11 +437,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         ) : (
             <Link
                 href={item.path}
-                className={`flex items-center gap-3 p-3 rounded-md ${isActive(item.path) ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                className={`flex items-center gap-3 p-3 rounded-md transition-colors duration-200 ${isActive(item.path)
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'hover:bg-gray-100 text-gray-700'
                     }`}
                 onClick={toggleMobileNav}
             >
-                {item.icon}
+                <div className={`${isActive(item.path)
+                        ? 'text-blue-700'
+                        : 'text-gray-600'
+                    }`}>
+                    {item.icon}
+                </div>
                 <span className="text-sm font-medium">{item.title}</span>
             </Link>
         );
@@ -486,24 +520,31 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     return (
         <div className="flex h-screen bg-gray-50">
             {/* Desktop Sidebar */}
-            <aside className={`hidden md:flex flex-col border-r bg-white transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}>
-                <div className={`p-4 border-b flex ${collapsed ? 'justify-center' : 'justify-between'} items-center`}>
+            <aside className={`hidden md:flex flex-col border-r bg-white shadow-sm transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}>
+                <div className={`py-5 px-4 border-b flex ${collapsed ? 'justify-center' : 'justify-between'} items-center bg-blue-700 text-white`}>
                     {!collapsed && (
                         <Link href="/dashboard" className="flex items-center gap-2">
-                            <BookOpen className="w-6 h-6 text-primary" />
-                            <span className="text-xl font-bold">HRM Admin</span>
+                            <BookOpen className="w-6 h-6 text-white" />
+                            <span className="text-xl font-bold">HRM Mousumi</span>
                         </Link>
                     )}
                     {collapsed && (
-                        <BookOpen className="w-6 h-6 text-primary" />
+                        <Link href="/dashboard">
+                            <BookOpen className="w-6 h-6 text-white" />
+                        </Link>
                     )}
-                    <Button variant="ghost" size="sm" onClick={toggleSidebar} className={`${collapsed ? 'hidden' : ''}`}>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={toggleSidebar}
+                        className={`${collapsed ? 'hidden' : ''} hover:bg-blue-600 text-white`}
+                    >
                         <Menu className="w-5 h-5" />
                     </Button>
                 </div>
 
                 <ScrollArea className="flex-1 px-3 py-4">
-                    <nav className="space-y-1">
+                    <nav className="space-y-1.5">
                         {/* Only render menu items that the user has permission to see */}
                         {menuItems.map((item, idx) => (
                             <DesktopMenuItem key={idx} item={item} />
@@ -511,31 +552,31 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </nav>
                 </ScrollArea>
 
-                <div className={`p-4 border-t ${collapsed ? 'flex justify-center' : ''}`}>
+                <div className={`p-4 border-t bg-gray-50 ${collapsed ? 'flex justify-center' : ''}`}>
                     {collapsed ? (
                         <TooltipProvider delayDuration={200}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Avatar className="w-8 h-8 cursor-pointer">
+                                    <Avatar className="w-8 h-8 cursor-pointer border-2 border-blue-500">
                                         <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                        <AvatarFallback>{getInitials(auth.user.name)}</AvatarFallback>
+                                        <AvatarFallback className="bg-blue-700 text-white">{getInitials(auth.user.name)}</AvatarFallback>
                                     </Avatar>
                                 </TooltipTrigger>
-                                <TooltipContent side="right">
+                                <TooltipContent side="right" className="bg-blue-800 text-white">
                                     <p className="font-medium">{auth.user.name}</p>
-                                    <p className="text-xs text-muted-foreground">{auth.user.email}</p>
+                                    <p className="text-xs text-blue-100">{auth.user.email}</p>
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                     ) : (
-                        <Link href="/profile" className="flex items-center gap-3 p-2 rounded-md hover:bg-muted">
-                            <Avatar className="w-8 h-8">
+                        <Link href="/profile" className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100 transition-colors duration-200">
+                            <Avatar className="w-8 h-8 border-2 border-blue-500">
                                 <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                <AvatarFallback>{getInitials(auth.user.name)}</AvatarFallback>
+                                <AvatarFallback className="bg-blue-700 text-white">{getInitials(auth.user.name)}</AvatarFallback>
                             </Avatar>
                             <div className="truncate">
-                                <p className="text-sm font-medium">{auth.user.name}</p>
-                                <p className="text-xs text-muted-foreground truncate">{auth.user.email}</p>
+                                <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{auth.user.email}</p>
                             </div>
                         </Link>
                     )}
@@ -544,21 +585,21 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
             {/* Mobile Sidebar */}
             <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
-                <SheetContent side="left" className="w-[300px] sm:w-[350px] p-0">
-                    <div className="p-4 border-b">
+                <SheetContent side="left" className="w-[300px] sm:w-[350px] p-0 border-r-0">
+                    <div className="p-4 border-b bg-blue-700 text-white">
                         <div className="flex items-center justify-between">
                             <Link href="/dashboard" className="flex items-center gap-2">
-                                <BookOpen className="w-6 h-6 text-primary" />
+                                <BookOpen className="w-6 h-6 text-white" />
                                 <span className="text-xl font-bold">HRM Admin</span>
                             </Link>
-                            <Button variant="ghost" size="icon" onClick={toggleMobileNav}>
+                            <Button variant="ghost" size="icon" onClick={toggleMobileNav} className="text-white hover:bg-blue-600">
                                 <X className="w-5 h-5" />
                             </Button>
                         </div>
                     </div>
 
                     <ScrollArea className="h-[calc(100vh-160px)] px-3 py-4">
-                        <nav className="space-y-1">
+                        <nav className="space-y-1.5">
                             {/* Only render menu items that the user has permission to see */}
                             {menuItems.map((item, idx) => (
                                 <MobileMenuItem key={idx} item={item} />
@@ -566,15 +607,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </nav>
                     </ScrollArea>
 
-                    <div className="p-4 border-t">
-                        <Link href="/profile" className="flex items-center gap-3 p-3 rounded-md hover:bg-muted" onClick={toggleMobileNav}>
-                            <Avatar className="w-8 h-8">
-                                <AvatarImage src={auth.user.avatar || ''} alt={auth.user.name} />
-                                <AvatarFallback>{getInitials(auth.user.name)}</AvatarFallback>
+                    <div className="p-4 border-t bg-gray-50">
+                        <Link href="/profile" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200" onClick={toggleMobileNav}>
+                            <Avatar className="w-8 h-8 border-2 border-blue-500">
+                                <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
+                                <AvatarFallback className="bg-blue-700 text-white">{getInitials(auth.user.name)}</AvatarFallback>
                             </Avatar>
                             <div>
-                                <p className="text-sm font-medium">{auth.user.name}</p>
-                                <p className="text-xs text-muted-foreground">{auth.user.email}</p>
+                                <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
+                                <p className="text-xs text-gray-500">{auth.user.email}</p>
                             </div>
                         </Link>
                     </div>
@@ -587,21 +628,21 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 <header className="bg-white border-b shadow-sm">
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center md:hidden">
-                            <Button variant="ghost" size="icon" onClick={toggleMobileNav}>
+                            <Button variant="ghost" size="icon" onClick={toggleMobileNav} className="text-gray-700">
                                 <Menu className="w-5 h-5" />
                             </Button>
                         </div>
 
                         <div className="md:hidden flex items-center">
                             <Link href="/dashboard" className="flex items-center gap-2">
-                                <BookOpen className="w-6 h-6 text-primary" />
-                                <span className="text-xl font-bold">HRM Admin</span>
+                                <BookOpen className="w-6 h-6 text-blue-700" />
+                                <span className="text-xl font-bold text-gray-900">HRM Admin</span>
                             </Link>
                         </div>
 
                         <div className="hidden md:block">
                             {collapsed && (
-                                <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+                                <Button variant="ghost" size="icon" onClick={toggleSidebar} className="text-gray-700 hover:bg-gray-100">
                                     <Menu className="w-5 h-5" />
                                 </Button>
                             )}
@@ -611,38 +652,38 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             {/* Notifications */}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="relative">
+                                    <Button variant="ghost" size="icon" className="relative text-gray-700 hover:bg-gray-100">
                                         <Bell className="w-5 h-5" />
                                         {notifications && notifications.length > 0 && (
-                                            <Badge className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] px-1 flex items-center justify-center">
+                                            <Badge className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] px-1 flex items-center justify-center bg-blue-600 text-white">
                                                 {notifications.length}
                                             </Badge>
                                         )}
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-80">
-                                    <DropdownMenuLabel className="font-semibold">Notifications</DropdownMenuLabel>
+                                <DropdownMenuContent align="end" className="w-80 border shadow-lg rounded-md">
+                                    <DropdownMenuLabel className="font-semibold text-gray-900">Notifications</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     {notifications && notifications.length > 0 ? (
                                         <ScrollArea className="h-80">
                                             {notifications.map((notification: any, idx: number) => (
-                                                <DropdownMenuItem key={idx} className="p-3 cursor-pointer">
+                                                <DropdownMenuItem key={idx} className="p-3 cursor-pointer hover:bg-gray-100">
                                                     <div>
-                                                        <p className="font-medium">{notification.title}</p>
-                                                        <p className="text-sm text-muted-foreground">{notification.message}</p>
-                                                        <p className="text-xs text-muted-foreground mt-1">{notification.time}</p>
+                                                        <p className="font-medium text-gray-900">{notification.title}</p>
+                                                        <p className="text-sm text-gray-600">{notification.message}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">{notification.time}</p>
                                                     </div>
                                                 </DropdownMenuItem>
                                             ))}
                                         </ScrollArea>
                                     ) : (
-                                        <div className="p-4 text-center text-muted-foreground">
-                                            No new notifications
+                                        <div className="p-4 text-center text-gray-500">
+                                            <p>No new notifications</p>
                                         </div>
                                     )}
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem asChild className="cursor-pointer">
-                                        <Link href="/admin/notifications" className="w-full text-center">
+                                    <DropdownMenuItem asChild className="p-2 text-center cursor-pointer">
+                                        <Link href="/notifications" className="w-full text-blue-600 font-medium">
                                             View all notifications
                                         </Link>
                                     </DropdownMenuItem>
@@ -652,25 +693,36 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             {/* User Menu */}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
-                                        <Avatar className="h-8 w-8">
-                                            <AvatarImage src={photoUrl} alt={auth.user.name} />
-                                            <AvatarFallback>{getInitials(auth.user.name)}</AvatarFallback>
+                                    <Button variant="ghost" size="sm" className="flex items-center gap-2 hover:bg-gray-100">
+                                        <Avatar className="w-8 h-8 border-2 border-blue-500">
+                                            <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
+                                            <AvatarFallback className="bg-blue-700 text-white">{getInitials(auth.user.name)}</AvatarFallback>
                                         </Avatar>
+                                        <div className="hidden md:block text-left">
+                                            <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
+                                            <p className="text-xs text-gray-500">{auth.user.email}</p>
+                                        </div>
+                                        <ChevronDown className="w-4 h-4 text-gray-500" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel className="font-semibold">My Account</DropdownMenuLabel>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem asChild>
-                                        <Link href="/profile">Profile</Link>
+                                        <Link href="/profile" className="cursor-pointer">
+                                            <User className="w-4 h-4 mr-2" />
+                                            Profile
+                                        </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem asChild>
-                                        <Link href="/profile">Settings</Link>
+                                        <Link href="/settings" className="cursor-pointer">
+                                            <Settings className="w-4 h-4 mr-2" />
+                                            Settings
+                                        </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem asChild>
-                                        <Link href="/logout" method="post" as="button" className="w-full text-left text-red-500 hover:text-red-600">
+                                        <Link href="/logout" method="post" as="button" className="cursor-pointer w-full text-left">
                                             <LogOut className="w-4 h-4 mr-2" />
                                             Logout
                                         </Link>
@@ -681,61 +733,77 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </div>
                 </header>
 
-                {/* Main Content */}
-                <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
-                    <div className="mb-4 space-y-2">
-                        {flash.success && showSuccess && (
-                            <Alert variant="success" className="border-green-500 bg-green-50 relative">
-                                <CheckCircle className="h-4 w-4 text-green-500" />
-                                <AlertDescription>{flash.success}</AlertDescription>
-                                <button
-                                    onClick={() => setShowSuccess(false)}
-                                    className="absolute top-2 right-2 p-1 rounded-full hover:bg-green-100"
-                                >
-                                    <X className="h-4 w-4 text-green-500" />
-                                </button>
-                            </Alert>
-                        )}
-                        {flash.error && showError && (
-                            <Alert variant="destructive" className="relative">
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertDescription>{flash.error}</AlertDescription>
-                                <button
-                                    onClick={() => setShowError(false)}
-                                    className="absolute top-2 right-2 p-1 rounded-full hover:bg-red-700"
-                                >
-                                    <X className="h-4 w-4 text-white" />
-                                </button>
-                            </Alert>
-                        )}
-                        {flash.warning && showWarning && (
-                            <Alert className="border-amber-500 bg-amber-50 relative">
-                                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                                <AlertDescription>{flash.warning}</AlertDescription>
-                                <button
-                                    onClick={() => setShowWarning(false)}
-                                    className="absolute top-2 right-2 p-1 rounded-full hover:bg-amber-100"
-                                >
-                                    <X className="h-4 w-4 text-amber-500" />
-                                </button>
-                            </Alert>
-                        )}
-                        {flash.info && showInfo && (
-                            <Alert className="border-blue-500 bg-blue-50 relative">
-                                <Info className="h-4 w-4 text-blue-500" />
-                                <AlertDescription>{flash.info}</AlertDescription>
-                                <button
-                                    onClick={() => setShowInfo(false)}
-                                    className="absolute top-2 right-2 p-1 rounded-full hover:bg-blue-100"
-                                >
-                                    <X className="h-4 w-4 text-blue-500" />
-                                </button>
-                            </Alert>
-                        )}
-                    </div>
+                {/* Flash Messages/Alerts */}
+                <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80">
+                    {showSuccess && (
+                        <Alert variant="success" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5">
+                            <CheckCircle className="h-4 w-4" />
+                            <AlertDescription>{flash.success}</AlertDescription>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1 text-green-800 hover:bg-green-100 h-6 w-6"
+                                onClick={() => setShowSuccess(false)}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </Alert>
+                    )}
+                    {showError && (
+                        <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 animate-in fade-in slide-in-from-top-5">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>{flash.error}</AlertDescription>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1 text-red-800 hover:bg-red-100 h-6 w-6"
+                                onClick={() => setShowError(false)}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </Alert>
+                    )}
+                    {showWarning && (
+                        <Alert variant="warning" className="bg-yellow-50 border-yellow-200 text-yellow-800 animate-in fade-in slide-in-from-top-5">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertDescription>{flash.warning}</AlertDescription>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1 text-yellow-800 hover:bg-yellow-100 h-6 w-6"
+                                onClick={() => setShowWarning(false)}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </Alert>
+                    )}
+                    {showInfo && (
+                        <Alert variant="info" className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-5">
+                            <Info className="h-4 w-4" />
+                            <AlertDescription>{flash.info}</AlertDescription>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1 text-blue-800 hover:bg-blue-100 h-6 w-6"
+                                onClick={() => setShowInfo(false)}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </Alert>
+                    )}
+                </div>
 
+                {/* Main Content Area */}
+                <main className="flex-1 overflow-auto bg-gray-50 p-4 md:p-6">
                     {children}
                 </main>
+
+                {/* Footer */}
+                <footer className="border-t py-4 bg-white">
+                    <div className="container mx-auto px-4 text-center text-sm text-gray-600">
+                        <p>&copy; {new Date().getFullYear()} HRM Admin. All rights reserved.</p>
+                    </div>
+                </footer>
             </div>
         </div>
     );
