@@ -10,6 +10,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Movement;
 use App\Models\User;
+use App\Notifications\HrmNotification;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -348,6 +349,7 @@ class MovementController extends Controller
         ]);
     }
 
+
     /**
      * Store a newly created movement.
      */
@@ -367,7 +369,11 @@ class MovementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
+        // Determine which employee ID to use
         $employeeId = $user->hasPermission('movements.create') ? $request->employee_id : $employee->id;
+
+        // Get the actual employee object (might be different from current user's employee)
+        $targetEmployee = $employeeId == $employee->id ? $employee : \App\Models\Employee::find($employeeId);
 
         // Create movement
         $movement = Movement::create([
@@ -381,57 +387,204 @@ class MovementController extends Controller
             'status' => 'pending',
         ]);
 
-        $this->sendNotificationsToManagers($movement, $employee);
+        // Send notifications to department heads and branch heads
+        $this->sendNotificationsToManagers($movement, $targetEmployee);
 
         return redirect()->route('movements.index')
             ->with('success', 'Movement request submitted successfully.');
     }
 
-
     /**
-     * Send notifications to department heads and branch heads
+     * Send notifications to managers about a new movement request
+     *
+     * @param Movement $movement
+     * @param Employee $employee
+     * @return void
+     */
+    /**
+     * Send notifications to managers about a new movement request
+     *
+     * @param Movement $movement
+     * @param Employee $employee
+     * @return void
      */
     private function sendNotificationsToManagers(Movement $movement, Employee $employee)
     {
+        \Log::info('Starting sendNotificationsToManagers', [
+            'movement_id' => $movement->id,
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->first_name . ' ' . $employee->last_name
+        ]);
+
         try {
             // Find department head
-            $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+            try {
+                \Log::info('Attempting to get department heads', ['department_id' => $employee->department_id]);
+                $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+                \Log::info('Found department heads', ['count' => $departmentHeads->count()]);
+            } catch (\Exception $e) {
+                \Log::error('Failed to get department heads: ' . $e->getMessage(), [
+                    'department_id' => $employee->department_id,
+                    'trace' => $e->getTraceAsString()
+                ]);
+                $departmentHeads = collect([]);
+            }
 
             // Find branch head
-            $branchHeads = $this->getBranchHeads($employee->branch_id);
+            try {
+                \Log::info('Attempting to get branch heads', ['branch_id' => $employee->branch_id]);
+                $branchHeads = $this->getBranchHeads($employee->branch_id);
+                \Log::info('Found branch heads', ['count' => $branchHeads->count()]);
+            } catch (\Exception $e) {
+                \Log::error('Failed to get branch heads: ' . $e->getMessage(), [
+                    'branch_id' => $employee->branch_id,
+                    'trace' => $e->getTraceAsString()
+                ]);
+                $branchHeads = collect([]);
+            }
+
+            // Find Super Admin users
+            try {
+                \Log::info('Attempting to get super admins');
+                $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
+                    $query->where('name', 'Super Admin');
+                })->get();
+                \Log::info('Found super admins', ['count' => $superAdmins->count()]);
+            } catch (\Exception $e) {
+                \Log::error('Failed to get super admins: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString()
+                ]);
+                $superAdmins = collect([]);
+            }
 
             // Combine unique recipients
-            $recipients = $departmentHeads->merge($branchHeads)->unique('id');
+            try {
+                $recipients = $departmentHeads->merge($branchHeads)->merge($superAdmins)->unique('id');
+                \Log::info('Combined unique recipients', ['total_count' => $recipients->count()]);
 
-            if ($recipients->isEmpty()) {
-                \Log::info('No department or branch heads found for notification', [
-                    'employee_id' => $employee->id,
-                    'department_id' => $employee->department_id,
-                    'branch_id' => $employee->branch_id
+                if ($recipients->isEmpty()) {
+                    \Log::warning('No recipients found for movement notification');
+                    return;
+                }
+            } catch (\Exception $e) {
+                \Log::error('Failed to combine recipients: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString()
                 ]);
                 return;
             }
 
-            // Send emails to all recipients
+            // Format movement date/time for notification message
+            try {
+                $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
+                $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
+
+                // Construct full employee name
+                $employeeName = $employee->first_name . ' ' . $employee->last_name;
+
+                // Notification details
+                $title = 'New Movement Request';
+                $message = "{$employeeName} has submitted a {$movement->movement_type} movement request from {$fromDate} to {$toDate} for {$movement->purpose}.";
+                $link = route('movements.show', $movement->id);
+
+                \Log::info('Prepared notification content', [
+                    'title' => $title,
+                    'message' => $message,
+                    'link' => $link
+                ]);
+            } catch (\Exception $e) {
+                \Log::error('Failed to prepare notification content: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString()
+                ]);
+                return;
+            }
+
+            // Send emails and in-app notifications to all recipients
+            \Log::info('Starting to process each recipient');
             foreach ($recipients as $recipient) {
                 try {
-                    \Log::info('Attempting to send mail to: ' . $recipient->email);
-                    Mail::to($recipient->email)->send(new NewMovementNotification($movement, $employee, $recipient));
-                    \Log::info('Mail sent successfully to: ' . $recipient->email);
+                    \Log::info('Processing recipient', [
+                        'recipient_id' => $recipient->id ?? 'unknown',
+                        'recipient_email' => $recipient->email ?? 'unknown'
+                    ]);
+
+                    // Find corresponding user for this recipient
+                    $recipientUser = null;
+
+                    // Check if this is directly a User object
+                    if (isset($recipient->id) && $recipient instanceof \App\Models\User) {
+                        $recipientUser = $recipient;
+                        \Log::info('Recipient is a User object', ['user_id' => $recipientUser->id]);
+                    }
+                    // Check if this is an Employee with a user relationship
+                    elseif (isset($recipient->user_id)) {
+                        $recipientUser = \App\Models\User::find($recipient->user_id);
+                        \Log::info('Found user from employee user_id', ['user_id' => $recipientUser->id ?? 'not found']);
+                    }
+                    // Try to find user by email
+                    elseif (isset($recipient->email)) {
+                        $recipientUser = \App\Models\User::where('email', $recipient->email)->first();
+                        \Log::info('Found user by email', ['user_id' => $recipientUser->id ?? 'not found']);
+                    }
+
+                    // Send in-app notification if we found a user
+                    if ($recipientUser) {
+                        try {
+                            \Log::info('Sending in-app notification', ['user_id' => $recipientUser->id]);
+                            $recipientUser->notify(new \App\Notifications\HrmNotification(
+                                $title,
+                                $message,
+                                'info',
+                                $link
+                            ));
+                            \Log::info('In-app notification sent successfully');
+                        } catch (\Exception $e) {
+                            \Log::error('Failed to send in-app notification: ' . $e->getMessage(), [
+                                'user_id' => $recipientUser->id,
+                                'trace' => $e->getTraceAsString()
+                            ]);
+                        }
+                    } else {
+                        \Log::warning('No user found for this recipient', [
+                            'recipient_id' => $recipient->id ?? 'unknown',
+                            'recipient_email' => $recipient->email ?? 'unknown'
+                        ]);
+                    }
+
+                    // Send email notification
+                    try {
+                        if (isset($recipient->email)) {
+                            \Log::info('Sending email notification', ['to' => $recipient->email]);
+                            Mail::to($recipient->email)->send(new NewMovementNotification($movement, $employee, $recipient));
+                            \Log::info('Email notification sent successfully');
+                        } else {
+                            \Log::warning('No email found for recipient');
+                        }
+                    } catch (\Exception $e) {
+                        \Log::error('Failed to send email notification: ' . $e->getMessage(), [
+                            'to' => $recipient->email ?? 'unknown',
+                            'trace' => $e->getTraceAsString()
+                        ]);
+                    }
                 } catch (\Exception $e) {
-                    \Log::error('Failed to send email to ' . $recipient->email, [
-                        'error' => $e->getMessage(),
+                    \Log::error('Failed to process recipient: ' . $e->getMessage(), [
+                        'recipient_id' => $recipient->id ?? 'unknown',
+                        'recipient_email' => $recipient->email ?? 'unknown',
                         'trace' => $e->getTraceAsString()
                     ]);
+                    // Continue to next recipient if there's an error
+                    continue;
                 }
             }
+            \Log::info('Completed sendNotificationsToManagers method');
         } catch (\Exception $e) {
-            \Log::error('Error in sendNotificationsToManagers', [
-                'error' => $e->getMessage(),
+            \Log::error('Critical error in sendNotificationsToManagers: ' . $e->getMessage(), [
+                'movement_id' => $movement->id,
+                'employee_id' => $employee->id,
                 'trace' => $e->getTraceAsString()
             ]);
         }
     }
+
     /**
      * Get users who are department heads for the given department
      */
@@ -692,6 +845,90 @@ class MovementController extends Controller
             }
 
             DB::commit();
+
+            // Handle notifications - separated from main transaction to prevent failures from blocking approval
+            try {
+                // Make sure employee relationship is loaded
+                if (!$movement->relationLoaded('employee')) {
+                    $movement->load('employee');
+                }
+
+                // Check if the employee exists and has a user account
+                if ($movement->employee) {
+                    // Use relationship or direct lookup by user_id
+                    $employeeUser = null;
+                    if (isset($movement->employee->user_id)) {
+                        $employeeUser = \App\Models\User::find($movement->employee->user_id);
+                    } else {
+                        // Fallback to looking up by employee_id
+                        $employeeUser = \App\Models\User::where('employee_id', $movement->employee_id)->first();
+                    }
+
+                    if ($employeeUser) {
+                        // Format movement date/time for notification message
+                        $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
+                        $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
+
+                        // Notification details
+                        $title = 'Movement Request Approved';
+                        $message = "Your {$movement->movement_type} movement request from {$fromDate} to {$toDate} has been approved.";
+                        $link = route('movements.show', $movement->id);
+
+                        // Send in-app notification
+                        $employeeUser->notify(new \App\Notifications\HrmNotification(
+                            $title,
+                            $message,
+                            'success',
+                            $link
+                        ));
+
+                        // Log successful in-app notification
+                        \Log::info('In-app notification sent successfully for movement approval', [
+                            'movement_id' => $movement->id,
+                            'employee_id' => $movement->employee_id,
+                            'user_id' => $employeeUser->id
+                        ]);
+
+                        // Only send email if the user has a valid email
+                        if ($employeeUser->email && filter_var($employeeUser->email, FILTER_VALIDATE_EMAIL)) {
+                            Mail::to($employeeUser->email)->send(new \App\Mail\MovementApprovedNotification($movement));
+
+                            // Log successful email notification
+                            \Log::info('Email notification sent successfully for movement approval', [
+                                'movement_id' => $movement->id,
+                                'employee_id' => $movement->employee_id,
+                                'email' => $employeeUser->email
+                            ]);
+                        } else {
+                            \Log::warning('Movement approval email notification not sent - invalid or missing email', [
+                                'movement_id' => $movement->id,
+                                'employee_id' => $movement->employee_id,
+                                'email' => $employeeUser->email ?? 'null'
+                            ]);
+                        }
+                    } else {
+                        // Log warning if user account not found
+                        \Log::warning('Employee user account not found for movement approval notifications', [
+                            'movement_id' => $movement->id,
+                            'employee_id' => $movement->employee_id
+                        ]);
+                    }
+                } else {
+                    // Log warning if employee not found
+                    \Log::warning('Employee not found for movement approval notifications', [
+                        'movement_id' => $movement->id,
+                        'employee_id' => $movement->employee_id
+                    ]);
+                }
+            } catch (\Exception $e) {
+                // Log notification errors but don't fail the approval process
+                \Log::error('Error sending movement approval notification: ' . $e->getMessage(), [
+                    'movement_id' => $movement->id,
+                    'employee_id' => $movement->employee_id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
 
             return redirect()->route('movements.index')
                 ->with('success', 'Movement request approved successfully.');

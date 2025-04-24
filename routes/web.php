@@ -22,6 +22,7 @@ use App\Http\Controllers\Leave\LeaveApplicationController;
 use App\Http\Controllers\Leave\LeaveBalanceController;
 use App\Http\Controllers\Leave\LeaveTypeController;
 use App\Http\Controllers\Movement\MovementController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Report\ReportController;
 use App\Http\Controllers\Transfer\TransferController;
@@ -305,7 +306,7 @@ Route::middleware(['auth', 'permission:attendance.view'])->group(function () {
         Route::get('/employee/dashboard/attendance/pdf', [EmployeeDashboardController::class, 'downloadAttendancePdf'])
             ->name('employee.dashboard.attendance.pdf');
 
-        Route::get('/employee/dashboard/movement/pdf', [EmployeeDashboardController::class,'downloadMovementPdf'])->name('employee.dashboard.movement.pdf');
+        Route::get('/employee/dashboard/movement/pdf', [EmployeeDashboardController::class, 'downloadMovementPdf'])->name('employee.dashboard.movement.pdf');
     });
 
     Route::resource('holidays', HolidayController::class)->middleware('permission:transfers.edit');
@@ -314,6 +315,15 @@ Route::middleware(['auth', 'permission:attendance.view'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::patch('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
 
+
+    // Add these routes to your routes/web.php file
+    Route::middleware(['auth'])->group(function () {
+        Route::get('/notifications', [App\Http\Controllers\NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/unread-count', [App\Http\Controllers\NotificationController::class, 'getUnreadCount']);
+        Route::get('/notifications/latest', [App\Http\Controllers\NotificationController::class, 'getLatestNotifications']);
+        Route::post('/notifications/{id}/mark-as-read', [App\Http\Controllers\NotificationController::class, 'markAsRead']);
+        Route::post('/notifications/mark-all-as-read', [App\Http\Controllers\NotificationController::class, 'markAllAsRead']);
+    });
 });
 
 

@@ -52,6 +52,8 @@ import {
 import { ScrollArea } from "@/Components/ui/scroll-area";
 import { Badge } from "@/Components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/Components/ui/tooltip";
+import NotificationDropdown from '@/components/notification-dropdown';
+import NotificationComponent from '@/components/notification-component';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -650,45 +652,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                         <div className="flex items-center ml-auto gap-3">
                             {/* Notifications */}
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="relative text-gray-700 hover:bg-gray-100">
-                                        <Bell className="w-5 h-5" />
-                                        {notifications && notifications.length > 0 && (
-                                            <Badge className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] px-1 flex items-center justify-center bg-blue-600 text-white">
-                                                {notifications.length}
-                                            </Badge>
-                                        )}
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-80 border shadow-lg rounded-md">
-                                    <DropdownMenuLabel className="font-semibold text-gray-900">Notifications</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    {notifications && notifications.length > 0 ? (
-                                        <ScrollArea className="h-80">
-                                            {notifications.map((notification: any, idx: number) => (
-                                                <DropdownMenuItem key={idx} className="p-3 cursor-pointer hover:bg-gray-100">
-                                                    <div>
-                                                        <p className="font-medium text-gray-900">{notification.title}</p>
-                                                        <p className="text-sm text-gray-600">{notification.message}</p>
-                                                        <p className="text-xs text-gray-500 mt-1">{notification.time}</p>
-                                                    </div>
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </ScrollArea>
-                                    ) : (
-                                        <div className="p-4 text-center text-gray-500">
-                                            <p>No new notifications</p>
-                                        </div>
-                                    )}
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem asChild className="p-2 text-center cursor-pointer">
-                                        <Link href="/notifications" className="w-full text-blue-600 font-medium">
-                                            View all notifications
-                                        </Link>
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                            <NotificationDropdown />
 
                             {/* User Menu */}
                             <DropdownMenu>

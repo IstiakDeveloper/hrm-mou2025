@@ -15,6 +15,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -672,31 +673,15 @@ class LeaveApplicationController extends Controller
             'documents.*' => 'file|mimes:jpeg,png,jpg,pdf,doc,docx|max:2048',
         ]);
 
-        // CRITICAL FIX: Correctly parse and calculate date differences
         try {
             // Parse dates using Carbon and ensure they are formatted consistently
             $startDate = Carbon::parse($request->start_date)->startOfDay();
             $endDate = Carbon::parse($request->end_date)->startOfDay();
 
-            // Log the actual date objects for debugging
-            \Log::info("Leave application date calculation:", [
-                'start_date_raw' => $request->start_date,
-                'end_date_raw' => $request->end_date,
-                'start_date_parsed' => $startDate->toDateString(),
-                'end_date_parsed' => $endDate->toDateString(),
-            ]);
-
             // Calculate days INCLUDING both start and end date (add 1 to the difference)
-            // For example: March 11 to March 14 should be 4 days
             $diffDays = $startDate->diffInDays($endDate);
             $days = $diffDays + 1;
-
-            \Log::info("Date calculation result:", [
-                'diff_days' => $diffDays,
-                'total_days' => $days,
-            ]);
         } catch (\Exception $e) {
-            \Log::error("Error calculating leave days: " . $e->getMessage());
             return redirect()->back()->withErrors([
                 'date_calculation' => 'Error calculating leave days. Please check your dates.',
             ])->withInput();
@@ -750,9 +735,9 @@ class LeaveApplicationController extends Controller
         $leaveApplication = LeaveApplication::create([
             'employee_id' => $employee->id,
             'leave_type_id' => $request->leave_type_id,
-            'start_date' => $startDate->toDateString(),  // Ensure consistent date format
-            'end_date' => $endDate->toDateString(),      // Ensure consistent date format
-            'days' => $days,                             // Correctly calculated days
+            'start_date' => $startDate->toDateString(),
+            'end_date' => $endDate->toDateString(),
+            'days' => $days,
             'reason' => $request->reason,
             'status' => $status,
             'approved_by' => $approvedBy,
@@ -785,16 +770,7 @@ class LeaveApplicationController extends Controller
 
                 // Send email notifications
                 $this->sendLeaveNotifications($leaveApplication, $employee, $leaveType);
-
-                \Log::info('Leave application notification emails sent successfully', [
-                    'application_id' => $leaveApplication->id,
-                    'employee_id' => $employee->id
-                ]);
             } catch (\Exception $e) {
-                \Log::error('Failed to send leave application notification emails', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
                 // Continue with the application creation even if emails fail
             }
         }
@@ -808,48 +784,82 @@ class LeaveApplicationController extends Controller
      */
     private function sendLeaveNotifications($leaveApplication, $employee, $leaveType)
     {
-        // Get department head
-        $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+        try {
+            // Get department head
+            $departmentHeads = $this->getDepartmentHeads($employee->department_id);
 
-        // Get branch head
-        $branchHeads = $this->getBranchHeads($employee->current_branch_id);
+            // Get branch head
+            $branchHeads = $this->getBranchHeads($employee->current_branch_id);
 
-        // Combine unique recipients
-        $recipients = $departmentHeads->merge($branchHeads)->unique('id');
+            // Find Super Admin users
+            $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
+                $query->where('name', 'Super Admin');
+            })->get();
 
-        \Log::info('Preparing to send leave application notifications', [
-            'department_heads_count' => $departmentHeads->count(),
-            'branch_heads_count' => $branchHeads->count(),
-            'total_recipients' => $recipients->count(),
-            'employee_id' => $employee->id,
-            'employee_name' => $employee->first_name . ' ' . $employee->last_name,
-            'leave_application_id' => $leaveApplication->id,
-            'leave_type' => $leaveType->name
-        ]);
+            // Combine unique recipients
+            $recipients = $departmentHeads->merge($branchHeads)->merge($superAdmins)->unique('id');
 
-        // Send emails to all recipients
-        foreach ($recipients as $recipient) {
-            // Skip if recipient is the employee who submitted the application
-            if ($recipient->employee_id === $employee->id) {
-                \Log::info('Skipping notification to employee who submitted the application', [
-                    'employee_id' => $employee->id,
-                    'recipient_id' => $recipient->id
-                ]);
-                continue;
+            if ($recipients->isEmpty()) {
+                return;
             }
 
-            try {
-                \Log::info('Sending leave notification to: ' . $recipient->email);
-                Mail::to($recipient->email)->send(
-                    new LeaveApplicationNotification($leaveApplication, $employee, $leaveType, $recipient)
-                );
-                \Log::info('Leave notification sent successfully to: ' . $recipient->email);
-            } catch (\Exception $e) {
-                \Log::error('Failed to send leave notification to ' . $recipient->email, [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
+            // Format dates for notification message
+            $startDate = Carbon::parse($leaveApplication->start_date)->format('M d, Y');
+            $endDate = Carbon::parse($leaveApplication->end_date)->format('M d, Y');
+
+            // Construct employee full name
+            $employeeName = $employee->first_name . ' ' . $employee->last_name;
+
+            // Notification details
+            $title = 'New Leave Application';
+            $message = "{$employeeName} has applied for {$leaveApplication->days} day(s) of {$leaveType->name} leave from {$startDate} to {$endDate}.";
+            $link = route('leave.applications.show', $leaveApplication->id);
+
+            // Send emails and in-app notifications to all recipients
+            foreach ($recipients as $recipient) {
+                // Skip if recipient is the employee who submitted the application
+                if (isset($recipient->employee_id) && $recipient->employee_id === $employee->id) {
+                    continue;
+                }
+
+                try {
+                    // Find corresponding user for this recipient
+                    $recipientUser = null;
+
+                    // Check if this is directly a User object
+                    if (isset($recipient->id) && $recipient instanceof \App\Models\User) {
+                        $recipientUser = $recipient;
+                    }
+                    // Check if this is an Employee with a user relationship
+                    elseif (isset($recipient->user_id)) {
+                        $recipientUser = \App\Models\User::find($recipient->user_id);
+                    }
+                    // Try to find user by email
+                    elseif (isset($recipient->email)) {
+                        $recipientUser = \App\Models\User::where('email', $recipient->email)->first();
+                    }
+
+                    // Send in-app notification if we found a user
+                    if ($recipientUser) {
+                        $recipientUser->notify(new \App\Notifications\HrmNotification(
+                            $title,
+                            $message,
+                            'info',
+                            $link
+                        ));
+                    }
+
+                    // Send email notification
+                    Mail::to($recipient->email)->send(
+                        new LeaveApplicationNotification($leaveApplication, $employee, $leaveType, $recipient)
+                    );
+                } catch (\Exception $e) {
+                    // Continue to next recipient if there's an error
+                    continue;
+                }
             }
+        } catch (\Exception $e) {
+            // Silent fail
         }
     }
 
@@ -977,9 +987,7 @@ class LeaveApplicationController extends Controller
             ->with('success', 'Leave application cancelled successfully.');
     }
 
-    /**
-     * Approve the specified leave application.
-     */
+
     /**
      * Approve the specified leave application.
      */
@@ -1019,26 +1027,121 @@ class LeaveApplicationController extends Controller
             'comments' => 'nullable|string',
         ]);
 
-        // Update leave application
-        $application->status = 'approved';
-        $application->approved_by = $user->id;
-        $application->save();
+        // Start a database transaction
+        DB::beginTransaction();
 
-        // Create approval record
-        LeaveApproval::create([
-            'leave_application_id' => $application->id,
-            'approved_by' => $user->id,
-            'level' => 1,
-            'status' => 'approved',
-            'comments' => $request->comments,
-            'approved_at' => now(),
-        ]);
+        try {
+            // Update leave application
+            $application->status = 'approved';
+            $application->approved_by = $user->id;
+            $application->save();
 
-        // Update leave balance
-        $this->updateLeaveBalance($application->employee_id, $application->leave_type_id, $application->days);
+            // Create approval record
+            LeaveApproval::create([
+                'leave_application_id' => $application->id,
+                'approved_by' => $user->id,
+                'level' => 1,
+                'status' => 'approved',
+                'comments' => $request->comments,
+                'approved_at' => now(),
+            ]);
 
-        return redirect()->route('leave.applications.index')
-            ->with('success', 'Leave application approved successfully.');
+            // Update leave balance
+            $this->updateLeaveBalance($application->employee_id, $application->leave_type_id, $application->days);
+
+            // Get employee and leave type for notification - ensure they exist
+            $employee = Employee::find($application->employee_id);
+            $leaveType = LeaveType::find($application->leave_type_id);
+
+            // Find employee's user account - improved retrieval
+            $employeeUser = null;
+            if ($employee) {
+                $employeeUser = User::where('employee_id', $employee->id)->first();
+
+                // Format dates for notification message
+                $startDate = Carbon::parse($application->start_date)->format('M d, Y');
+                $endDate = Carbon::parse($application->end_date)->format('M d, Y');
+
+                // Notification details
+                $title = 'Leave Application Approved';
+                $message = "Your {$application->days} day(s) {$leaveType->name} leave request from {$startDate} to {$endDate} has been approved.";
+                $link = route('leave.applications.show', $application->id);
+
+                if ($employeeUser) {
+                    try {
+                        // Send in-app notification
+                        $employeeUser->notify(new \App\Notifications\HrmNotification(
+                            $title,
+                            $message,
+                            'success',
+                            $link
+                        ));
+
+                        // Log successful in-app notification
+                        \Log::info('In-app notification sent successfully', [
+                            'application_id' => $application->id,
+                            'employee_id' => $employee->id,
+                            'user_id' => $employeeUser->id
+                        ]);
+
+                        // Only send email if the user has a valid email
+                        if ($employeeUser->email && filter_var($employeeUser->email, FILTER_VALIDATE_EMAIL)) {
+                            Mail::to($employeeUser->email)->send(
+                                new \App\Mail\LeaveApprovedNotification($application, $employee, $leaveType)
+                            );
+
+                            // Log successful email notification
+                            \Log::info('Email notification sent successfully', [
+                                'application_id' => $application->id,
+                                'employee_id' => $employee->id,
+                                'email' => $employeeUser->email
+                            ]);
+                        } else {
+                            \Log::warning('Email notification not sent - invalid or missing email', [
+                                'application_id' => $application->id,
+                                'employee_id' => $employee->id,
+                                'email' => $employeeUser->email ?? 'null'
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        // Log notification error but continue with the process
+                        \Log::error('Error sending notifications: ' . $e->getMessage(), [
+                            'application_id' => $application->id,
+                            'employee_id' => $employee->id,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString()
+                        ]);
+                    }
+                } else {
+                    // Log warning if user account not found
+                    \Log::warning('Employee user account not found for notifications', [
+                        'application_id' => $application->id,
+                        'employee_id' => $employee->id
+                    ]);
+                }
+            } else {
+                // Log warning if employee not found
+                \Log::warning('Employee not found for notifications', [
+                    'application_id' => $application->id,
+                    'employee_id' => $application->employee_id
+                ]);
+            }
+
+            DB::commit();
+
+            return redirect()->route('leave.applications.index')
+                ->with('success', 'Leave application approved successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error approving leave application: ' . $e->getMessage(), [
+                'application_id' => $application->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('leave.applications.index')
+                ->with('error', 'An error occurred while approving the leave application.');
+        }
     }
 
     /**
