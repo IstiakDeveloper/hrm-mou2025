@@ -785,6 +785,15 @@ class MovementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
+        // Debug information before processing
+        \Log::info('Movement data before approval:', [
+            'movement_id' => $movement->id,
+            'employee_id' => $movement->employee_id,
+            'purpose' => $movement->purpose,
+            'destination' => $movement->destination,
+            'remarks' => $movement->remarks,
+        ]);
+
         // Start a database transaction
         DB::beginTransaction();
 
@@ -792,10 +801,23 @@ class MovementController extends Controller
             // Update movement
             $movement->status = 'approved';
             $movement->approved_by = $user->id;
+
+            // Handle remarks in a safe way
             if ($request->filled('remarks')) {
+                // Store the remarks directly without encoding manipulation
                 $movement->remarks = $request->remarks;
             }
-            $movement->save();
+
+            // Save the movement with simple updates first
+            $saveResult = $movement->save();
+
+            // Log the save result
+            \Log::info('Movement status update result:', [
+                'movement_id' => $movement->id,
+                'save_result' => $saveResult,
+                'new_status' => $movement->status,
+                'approved_by' => $movement->approved_by
+            ]);
 
             // For official movements, create/update attendance records
             if ($movement->movement_type === 'official') {
@@ -826,10 +848,11 @@ class MovementController extends Controller
                         $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
                     }
 
-                    // Add purpose as remarks
-                    $remarks = "On official movement: " . $movement->purpose;
+                    // Create a simple prefix for the remarks to avoid encoding issues
+                    $remarks = "On official movement";
+
                     if ($attendance->remarks) {
-                        // Don't duplicate remarks if they already exist
+                        // Only add the prefix if it's not already there
                         if (strpos($attendance->remarks, $remarks) === false) {
                             $attendance->remarks = $attendance->remarks . ' | ' . $remarks;
                         }
@@ -846,9 +869,15 @@ class MovementController extends Controller
 
             DB::commit();
 
-            // Handle notifications - separated from main transaction to prevent failures from blocking approval
+            // Log success after transaction
+            \Log::info('Movement approval transaction completed successfully', [
+                'movement_id' => $movement->id,
+                'employee_id' => $movement->employee_id,
+            ]);
+
+            // Handle notifications in a separate try-catch to avoid affecting the main process
             try {
-                // Make sure employee relationship is loaded
+                // Only load employee if not already loaded
                 if (!$movement->relationLoaded('employee')) {
                     $movement->load('employee');
                 }
@@ -869,65 +898,57 @@ class MovementController extends Controller
                         $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
                         $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
 
-                        // Notification details
+                        // Keep notification simple to avoid encoding issues
                         $title = 'Movement Request Approved';
-                        $message = "Your {$movement->movement_type} movement request from {$fromDate} to {$toDate} has been approved.";
+                        $message = "Your movement request from {$fromDate} to {$toDate} has been approved.";
                         $link = route('movements.show', $movement->id);
 
                         // Send in-app notification
-                        $employeeUser->notify(new \App\Notifications\HrmNotification(
-                            $title,
-                            $message,
-                            'success',
-                            $link
-                        ));
+                        try {
+                            $employeeUser->notify(new \App\Notifications\HrmNotification(
+                                $title,
+                                $message,
+                                'success',
+                                $link
+                            ));
 
-                        // Log successful in-app notification
-                        \Log::info('In-app notification sent successfully for movement approval', [
-                            'movement_id' => $movement->id,
-                            'employee_id' => $movement->employee_id,
-                            'user_id' => $employeeUser->id
-                        ]);
+                            \Log::info('In-app notification sent successfully', [
+                                'movement_id' => $movement->id,
+                                'user_id' => $employeeUser->id
+                            ]);
+                        } catch (\Exception $notificationError) {
+                            \Log::error('Error sending in-app notification: ' . $notificationError->getMessage(), [
+                                'movement_id' => $movement->id
+                            ]);
+                            // Continue with the process even if notification fails
+                        }
 
                         // Only send email if the user has a valid email
                         if ($employeeUser->email && filter_var($employeeUser->email, FILTER_VALIDATE_EMAIL)) {
-                            Mail::to($employeeUser->email)->send(new \App\Mail\MovementApprovedNotification($movement));
+                            try {
+                                Mail::to($employeeUser->email)->send(new \App\Mail\MovementApprovedNotification($movement));
 
-                            // Log successful email notification
-                            \Log::info('Email notification sent successfully for movement approval', [
-                                'movement_id' => $movement->id,
-                                'employee_id' => $movement->employee_id,
-                                'email' => $employeeUser->email
-                            ]);
-                        } else {
-                            \Log::warning('Movement approval email notification not sent - invalid or missing email', [
-                                'movement_id' => $movement->id,
-                                'employee_id' => $movement->employee_id,
-                                'email' => $employeeUser->email ?? 'null'
-                            ]);
+                                \Log::info('Email notification sent successfully', [
+                                    'movement_id' => $movement->id,
+                                    'email' => $employeeUser->email
+                                ]);
+                            } catch (\Exception $mailException) {
+                                \Log::error('Error sending email notification: ' . $mailException->getMessage(), [
+                                    'movement_id' => $movement->id,
+                                    'email' => $employeeUser->email
+                                ]);
+                                // Continue with the process even if email fails
+                            }
                         }
-                    } else {
-                        // Log warning if user account not found
-                        \Log::warning('Employee user account not found for movement approval notifications', [
-                            'movement_id' => $movement->id,
-                            'employee_id' => $movement->employee_id
-                        ]);
                     }
-                } else {
-                    // Log warning if employee not found
-                    \Log::warning('Employee not found for movement approval notifications', [
-                        'movement_id' => $movement->id,
-                        'employee_id' => $movement->employee_id
-                    ]);
                 }
-            } catch (\Exception $e) {
+            } catch (\Exception $notificationException) {
                 // Log notification errors but don't fail the approval process
-                \Log::error('Error sending movement approval notification: ' . $e->getMessage(), [
+                \Log::error('Error in notification process: ' . $notificationException->getMessage(), [
                     'movement_id' => $movement->id,
-                    'employee_id' => $movement->employee_id,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
+                    'error' => $notificationException->getMessage()
                 ]);
+                // Do not throw - approval should succeed even if notifications fail
             }
 
             return redirect()->route('movements.index')
@@ -935,14 +956,17 @@ class MovementController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
+            // Detailed error logging
             \Log::error('Error approving movement: ' . $e->getMessage(), [
                 'movement_id' => $movement->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile()
             ]);
 
             return redirect()->route('movements.index')
-                ->with('error', 'An error occurred while approving the movement.');
+                ->with('error', 'An error occurred while approving the movement: ' . $e->getMessage());
         }
     }
 
