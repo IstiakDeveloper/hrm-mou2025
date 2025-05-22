@@ -216,6 +216,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{movement}/complete', [MovementController::class, 'complete'])->name('complete');
 
 
+        Route::get('/report/download', [MovementController::class, 'downloadReport'])->name('report.download');
     });
 
     // Transfer Management
@@ -254,6 +255,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/employee', [ReportController::class, 'employee'])->name('employee');
         Route::post('/export-pdf', [ReportController::class, 'exportPdf'])->name('export-pdf');
         Route::post('/export-excel', [ReportController::class, 'exportExcel'])->name('export-excel');
+
+        Route::get('/leave/pdf', [ReportController::class, 'downloadLeaveReportPdf'])->name('leave.pdf');
+
+    // Optional: Excel download route (if you want to add Excel export later)
+    Route::get('/leave/excel', [ReportController::class, 'downloadLeaveReportExcel'])->name('leave.excel');
     });
 });
 
@@ -299,14 +305,20 @@ Route::middleware(['auth', 'permission:attendance.view'])->group(function () {
 
     // Employee Dashboard PDF Reports
     Route::middleware(['auth'])->group(function () {
-
-        Route::get('employee.dashboard.leave.pdf', [EmployeeDashboardController::class, 'downloadLeavePdf'])
+        // আপডেট করা প্রথম রাউট
+        Route::get('/employee/dashboard/leave/pdf', [EmployeeDashboardController::class, 'downloadLeavePdf'])
             ->name('employee.dashboard.leave.pdf');
 
+        // এগুলি ঠিক আছে
         Route::get('/employee/dashboard/attendance/pdf', [EmployeeDashboardController::class, 'downloadAttendancePdf'])
             ->name('employee.dashboard.attendance.pdf');
 
-        Route::get('/employee/dashboard/movement/pdf', [EmployeeDashboardController::class, 'downloadMovementPdf'])->name('employee.dashboard.movement.pdf');
+        Route::get('/employee/dashboard/movement/pdf', [EmployeeDashboardController::class, 'downloadMovementPdf'])
+            ->name('employee.dashboard.movement.pdf');
+
+        // নতুন যোগ করা রাউট
+        Route::get('/employee/dashboard/pdf', [EmployeeDashboardController::class, 'downloadPdf'])
+            ->name('employee.dashboard.pdf');
     });
 
     Route::resource('holidays', HolidayController::class)->middleware('permission:transfers.edit');

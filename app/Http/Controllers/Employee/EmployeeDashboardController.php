@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Mpdf\Mpdf;
 
+
 class EmployeeDashboardController extends Controller
 {
     /**
@@ -167,6 +168,9 @@ class EmployeeDashboardController extends Controller
     /**
      * Get attendance data for the selected employee and date range
      */
+    /**
+     * Enhanced getAttendanceData method with proper movement integration
+     */
     private function getAttendanceData($employeeId, $fromDate, $toDate)
     {
         // Create date range
@@ -179,12 +183,25 @@ class EmployeeDashboardController extends Controller
             $dateRange[] = $date->format('Y-m-d');
         }
 
-        // Get all attendances within date range
+        // Get all attendances within date range WITH movements
         $attendances = DB::table('attendances')
             ->select('attendances.*', 'attendance_devices.name as device_name')
             ->leftJoin('attendance_devices', 'attendances.device_id', '=', 'attendance_devices.id')
             ->where('attendances.employee_id', $employeeId)
             ->whereBetween('attendances.date', [$fromDate, $toDate])
+            ->get();
+
+        // Get all movements that overlap with the date range
+        $movements = Movement::where('employee_id', $employeeId)
+            ->where(function ($query) use ($fromDate, $toDate) {
+                $query->whereBetween(DB::raw('DATE(from_datetime)'), [$fromDate, $toDate])
+                    ->orWhereBetween(DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), [$fromDate, $toDate])
+                    ->orWhere(function ($q) use ($fromDate, $toDate) {
+                        $q->where(DB::raw('DATE(from_datetime)'), '<=', $fromDate)
+                            ->where(DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $toDate);
+                    });
+            })
+            ->whereIn('status', ['active', 'completed'])
             ->get();
 
         // Instantiate Attendance model for method access
@@ -208,11 +225,90 @@ class EmployeeDashboardController extends Controller
                 'check_in' => null,
                 'check_out' => null,
                 'remarks' => null,
-                'device' => null
+                'device' => null,
+                // Movement fields
+                'has_movement' => false,
+                'multiple_movements' => false,
+                'total_movements' => 0,
+                'movements' => [],
+                'movement_type' => null,
+                'movement_purpose' => null,
+                'movement_destination' => null,
+                'movement_from' => null,
+                'movement_to' => null,
+                'movement_status' => null,
+                'movement_id' => null,
+                'auto_remarks' => null,
+
+
             ];
 
-            // Determine status
+            // Check for movements on this specific date
+            $movementsOnDate = $movements->filter(function ($movement) use ($date) {
+                $fromDate = Carbon::parse($movement->from_datetime)->format('Y-m-d');
+
+                // Use actual_return_datetime if available and movement is completed, otherwise use to_datetime
+                $toDate = ($movement->status === 'completed' && $movement->actual_return_datetime)
+                    ? Carbon::parse($movement->actual_return_datetime)->format('Y-m-d')
+                    : Carbon::parse($movement->to_datetime)->format('Y-m-d');
+
+                return $date >= $fromDate && $date <= $toDate;
+            });
+
+            // Determine status (including movement consideration)
             $status = $attendanceModel->determineDateStatus($employeeId, $date);
+
+            // If there are movements on this date, add movement information
+            if ($movementsOnDate->count() > 0) {
+                $reportData['has_movement'] = true;
+                $reportData['total_movements'] = $movementsOnDate->count();
+                $reportData['multiple_movements'] = $movementsOnDate->count() > 1;
+
+                // For multiple movements, store all movement details
+                if ($reportData['multiple_movements']) {
+                    $reportData['movements'] = $movementsOnDate->map(function ($movement) {
+                        return [
+                            'id' => $movement->id,
+                            'movement_type' => $movement->movement_type,
+                            'purpose' => $movement->purpose,
+                            'destination' => $movement->destination,
+                            'from_datetime' => $movement->from_datetime,
+                            'to_datetime' => $movement->to_datetime,
+                            'actual_return_datetime' => $movement->actual_return_datetime,
+                            'status' => $movement->status
+                        ];
+                    })->toArray();
+                } else {
+                    // For single movement, store direct fields
+                    $singleMovement = $movementsOnDate->first();
+                    $reportData['movement_id'] = $singleMovement->id;
+                    $reportData['movement_type'] = $singleMovement->movement_type;
+                    $reportData['movement_purpose'] = $singleMovement->purpose;
+                    $reportData['movement_destination'] = $singleMovement->destination;
+                    $reportData['movement_from'] = Carbon::parse($singleMovement->from_datetime)->format('h:i A');
+
+                    // Use actual return time if completed, otherwise planned time
+                    $endTime = ($singleMovement->status === 'completed' && $singleMovement->actual_return_datetime)
+                        ? $singleMovement->actual_return_datetime
+                        : $singleMovement->to_datetime;
+                    $reportData['movement_to'] = Carbon::parse($endTime)->format('h:i A');
+                    $reportData['movement_status'] = $singleMovement->status;
+
+                    // Store all movement details for popover
+                    $reportData['movements'] = [
+                        [
+                            'id' => $singleMovement->id,
+                            'movement_type' => $singleMovement->movement_type,
+                            'purpose' => $singleMovement->purpose,
+                            'destination' => $singleMovement->destination,
+                            'from_datetime' => $singleMovement->from_datetime,
+                            'to_datetime' => $singleMovement->to_datetime,
+                            'actual_return_datetime' => $singleMovement->actual_return_datetime,
+                            'status' => $singleMovement->status
+                        ]
+                    ];
+                }
+            }
 
             // If attendance record exists, format it
             if ($existingAttendance) {
@@ -239,35 +335,61 @@ class EmployeeDashboardController extends Controller
                 $reportData['status'] = $status;
                 $reportData['check_in'] = $checkIn;
                 $reportData['check_out'] = $checkOut;
-                $reportData['remarks'] = $attendanceRecord->auto_remarks;
                 $reportData['device'] = $device;
+
+                // Enhanced remarks with movement information
+                $remarks = $attendanceRecord->auto_remarks;
+                if ($reportData['has_movement']) {
+                    $movementInfo = [];
+                    if ($reportData['multiple_movements']) {
+                        $movementInfo[] = $reportData['total_movements'] . ' movements';
+                    } else {
+                        $movementInfo[] = ucfirst($reportData['movement_type']) . ' movement: ' . $reportData['movement_purpose'];
+                    }
+                    $remarks = implode(' | ', $movementInfo) . ($remarks ? ' | ' . $remarks : '');
+                }
+                $reportData['remarks'] = $remarks;
+                $reportData['auto_remarks'] = $remarks;
             } else {
                 // Set appropriate data based on status
                 switch ($status) {
                     case 'leave':
                         $reportData['status'] = 'leave';
                         $reportData['remarks'] = 'On approved leave';
+                        $reportData['auto_remarks'] = 'On approved leave';
                         break;
 
                     case 'on_duty':
                         $reportData['status'] = 'on_duty';
-                        $reportData['remarks'] = 'On official movement';
+                        $movementRemarks = 'On official movement';
+                        if ($reportData['has_movement']) {
+                            if ($reportData['multiple_movements']) {
+                                $movementRemarks = $reportData['total_movements'] . ' movements';
+                            } else {
+                                $movementRemarks = 'Movement: ' . $reportData['movement_purpose'];
+                            }
+                        }
+                        $reportData['remarks'] = $movementRemarks;
+                        $reportData['auto_remarks'] = $movementRemarks;
                         break;
 
                     case 'holiday':
                         $reportData['status'] = 'holiday';
                         $reportData['remarks'] = 'Holiday';
+                        $reportData['auto_remarks'] = 'Holiday';
                         break;
 
                     case 'weekend':
                         $reportData['status'] = 'weekend';
                         $reportData['remarks'] = 'Weekend';
+                        $reportData['auto_remarks'] = 'Weekend';
                         break;
 
                     case 'absent':
                     default:
                         $reportData['status'] = 'absent';
                         $reportData['remarks'] = 'Absent';
+                        $reportData['auto_remarks'] = 'Absent';
                         break;
                 }
             }
@@ -621,10 +743,32 @@ class EmployeeDashboardController extends Controller
             ->map(function ($movement) {
                 // Format date times
                 $fromDateTime = Carbon::parse($movement->from_datetime);
-                $toDateTime = Carbon::parse($movement->to_datetime);
 
-                // Calculate duration in hours
+                // If movement is completed and has actual return time, use that
+                // Otherwise use the planned to_datetime
+                $toDateTime = $movement->status === 'completed' && $movement->actual_return_datetime
+                    ? Carbon::parse($movement->actual_return_datetime)
+                    : Carbon::parse($movement->to_datetime);
+
+                // Calculate duration in hours between from_datetime and actual return time (if completed)
+                // or the planned to_datetime (if still active)
                 $durationInHours = $fromDateTime->floatDiffInHours($toDateTime);
+
+                // Determine the time range format based on status
+                $timeRange = $this->formatDateTimeRange($movement->from_datetime, $movement->status === 'completed' && $movement->actual_return_datetime
+                    ? $movement->actual_return_datetime
+                    : $movement->to_datetime);
+
+                // Add a note for completed movements with actual return time
+                if ($movement->status === 'completed' && $movement->actual_return_datetime) {
+                    $plannedToDateTime = Carbon::parse($movement->to_datetime);
+                    $actualToDateTime = Carbon::parse($movement->actual_return_datetime);
+
+                    // Add "Actual return: " note if different from planned
+                    if ($plannedToDateTime->format('Y-m-d H:i') !== $actualToDateTime->format('Y-m-d H:i')) {
+                        $timeRange .= ' (Actual: ' . $actualToDateTime->format('M d, Y H:i') . ')';
+                    }
+                }
 
                 return [
                     'id' => $movement->id,
@@ -632,10 +776,15 @@ class EmployeeDashboardController extends Controller
                     'purpose' => $movement->purpose,
                     'destination' => $movement->destination,
                     'from_datetime' => $movement->from_datetime,
-                    'to_datetime' => $movement->to_datetime,
+                    'to_datetime' => $movement->status === 'completed' && $movement->actual_return_datetime
+                        ? $movement->actual_return_datetime
+                        : $movement->to_datetime,
+                    'planned_to_datetime' => $movement->to_datetime,
+                    'actual_return_datetime' => $movement->actual_return_datetime,
                     'status' => $movement->status,
+                    'is_returned' => $movement->is_returned,
                     'remarks' => $movement->remarks,
-                    'formatted_time_range' => $this->formatDateTimeRange($movement->from_datetime, $movement->to_datetime),
+                    'formatted_time_range' => $timeRange,
                     'duration_hours' => round($durationInHours, 1)
                 ];
             });
@@ -683,6 +832,12 @@ class EmployeeDashboardController extends Controller
         $attendanceData = $this->getAttendanceData($employeeId, $fromDate, $toDate);
         $leaveData = $this->getLeaveData($employeeId, $fromDate, $toDate);
         $movementData = $this->getMovementData($employeeId, $fromDate, $toDate);
+
+        // If movementData is a Collection, convert it to array
+        if ($movementData instanceof \Illuminate\Support\Collection) {
+            $movementData = $movementData->toArray();
+        }
+
         $attendanceSummary = $this->generateAttendanceSummary($attendanceData);
         $leaveSummary = $this->generateLeaveSummary($employeeId, $fromDate, $toDate);
 
@@ -737,7 +892,11 @@ class EmployeeDashboardController extends Controller
             );
         } catch (\Exception $e) {
             // Log the error
-            Log::error('PDF generation error: ' . $e->getMessage());
+            Log::error('PDF generation error: ' . $e->getMessage(), [
+                'employee_id' => $employeeId,
+                'from_date' => $fromDate,
+                'to_date' => $toDate
+            ]);
 
             // Return with error message
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
@@ -790,7 +949,7 @@ class EmployeeDashboardController extends Controller
             // Start building the HTML content for the PDF
             $html = view('reports.employee_attendance_pdf', [
                 'employee' => $employee,
-                'attendanceData' => $attendanceData,
+                'attendanceData' => $attendanceData, // ✅ এতেই movement data আছে
                 'attendanceSummary' => $attendanceSummary,
                 'fromDate' => $fromDate,
                 'toDate' => $toDate,
@@ -927,6 +1086,11 @@ class EmployeeDashboardController extends Controller
 
         // Get movement data for the report
         $movementData = $this->getMovementData($employeeId, $fromDate, $toDate);
+
+        // Convert to array if it's a Collection
+        if ($movementData instanceof \Illuminate\Support\Collection) {
+            $movementData = $movementData->toArray();
+        }
 
         try {
             // Configure mPDF

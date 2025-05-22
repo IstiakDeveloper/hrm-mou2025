@@ -57,7 +57,11 @@ import {
     MessageSquare,
     FileText,
     ChevronRight,
-    ChevronLeft
+    ChevronLeft,
+    User,
+    Building2,
+    Navigation,
+    MapPin
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -97,6 +101,16 @@ interface Device {
     name: string;
 }
 
+interface Movement {
+    id: number;
+    movement_type: string;
+    purpose: string;
+    destination: string;
+    status: string;
+    from_datetime: string;
+    actual_return_datetime: string;
+}
+
 interface Attendance {
     id: number;
     employee_id: number;
@@ -109,9 +123,22 @@ interface Attendance {
     device_id: number | null;
     location_coordinates: string | null;
     remarks: string | null;
-    auto_remarks: string | null;  // Added for automatic remarks
+    auto_remarks: string | null;
     employee: Employee;
     device: Device | null;
+
+    // Movement related properties
+    has_movement: boolean;
+    multiple_movements: boolean;
+    movements?: Movement[];
+    total_movements?: number;
+    movement_type?: string;
+    movement_purpose?: string;
+    movement_destination?: string;
+    movement_status?: string;
+    movement_from?: string;
+    movement_to?: string;
+    movement_id?: number;
 }
 
 interface PaginationLinks {
@@ -183,6 +210,7 @@ export default function AttendanceIndex({
     const [status, setStatus] = useState(filters.status || null);
     const [currentDate, setCurrentDate] = useState(date);
     const [calendarOpen, setCalendarOpen] = useState(false);
+    const [movementFilter, setMovementFilter] = useState(null);
 
     const handleSearch = () => {
         router.get(route('attendance.index'), {
@@ -190,7 +218,8 @@ export default function AttendanceIndex({
             date: currentDate,
             branch_id: branchId || '',
             department_id: departmentId || '',
-            status: status || ''
+            status: status || '',
+            movement_filter: movementFilter || ''
         }, { preserveState: true });
     };
 
@@ -231,6 +260,41 @@ export default function AttendanceIndex({
 
     const syncAttendance = () => {
         router.post(route('attendance.sync-devices'));
+    };
+
+    const getMovementBadge = (type) => {
+        return (
+            <Badge variant="outline" className={type === 'official' ?
+                'bg-blue-100 text-blue-800 border-blue-200' :
+                'bg-amber-100 text-amber-800 border-amber-200'}>
+                <Building2 className="mr-1 h-3 w-3" />
+                {type === 'official' ? 'Official' : 'Personal'}
+            </Badge>
+        );
+    };
+
+    const getMovementStatusBadge = (status) => {
+        const statusConfig = {
+            'active': {
+                className: 'bg-green-100 text-green-800 border-green-200',
+                icon: <Clock className="mr-1 h-3 w-3" />,
+                text: 'Active'
+            },
+            'completed': {
+                className: 'bg-gray-100 text-gray-800 border-gray-200',
+                icon: <CheckCircle className="mr-1 h-3 w-3" />,
+                text: 'Completed'
+            }
+        };
+
+        const config = statusConfig[status] || statusConfig['active'];
+
+        return (
+            <Badge variant="outline" className={config.className}>
+                {config.icon}
+                {config.text}
+            </Badge>
+        );
     };
 
     const getStatusBadge = (status: string) => {
@@ -469,6 +533,22 @@ export default function AttendanceIndex({
 
                             <div className="w-full md:w-64">
                                 <Select
+                                    value={movementFilter || undefined}
+                                    onValueChange={(value) => setMovementFilter(value === "all" ? null : value)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Movement Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Records</SelectItem>
+                                        <SelectItem value="with-movement">With Movement</SelectItem>
+                                        <SelectItem value="without-movement">Without Movement</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="w-full md:w-64">
+                                <Select
                                     value={status || undefined}
                                     onValueChange={(value) => setStatus(value === "all" ? null : value)}
                                 >
@@ -510,7 +590,7 @@ export default function AttendanceIndex({
                                     <TableHead>Check Out</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Device</TableHead>
-                                    <TableHead>Remarks</TableHead>
+                                    <TableHead>Movement & Remarks</TableHead>
                                     {(userPermissions.canEdit || userPermissions.canDelete) && (
                                         <TableHead className="text-right">Actions</TableHead>
                                     )}
@@ -519,97 +599,399 @@ export default function AttendanceIndex({
                             <TableBody>
                                 {attendances.data && attendances.data.length > 0 ? (
                                     attendances.data.map((attendance) => (
-                                        <TableRow key={attendance.id} className="hover:bg-gray-50">
+                                        <TableRow
+                                            key={attendance.id}
+                                            className={attendance.has_movement ?
+                                                "hover:bg-blue-50/50 border-l-2 border-l-blue-200" :
+                                                "hover:bg-gray-50"
+                                            }
+                                        >
                                             <TableCell>
-                                                <div className="font-medium">
-                                                    {attendance.employee.first_name} {attendance.employee.last_name}
-                                                </div>
-                                                <div className="text-xs text-gray-500">
-                                                    {attendance.employee.employee_id}
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="flex-shrink-0">
+                                                        <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
+                                                            <User className="h-4 w-4 text-white" />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-medium text-gray-900">
+                                                            {attendance.employee.first_name} {attendance.employee.last_name}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 font-mono">
+                                                            ID: {attendance.employee.employee_id}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </TableCell>
+
                                             <TableCell>
-                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                    {attendance.employee.department.name}
-                                                </Badge>
-                                                <div className="text-xs text-gray-500 mt-1">
-                                                    {attendance.employee.designation.name}
+                                                <div className="space-y-1">
+                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                                        <Building2 className="mr-1 h-3 w-3" />
+                                                        {attendance.employee.department.name}
+                                                    </Badge>
+                                                    <div className="text-xs text-gray-500">
+                                                        {attendance.employee.designation.name}
+                                                    </div>
                                                 </div>
                                             </TableCell>
+
                                             <TableCell>
                                                 {attendance.check_in_formatted ? (
-                                                    <div className="flex items-center text-green-700 font-medium">
-                                                        <Clock className="mr-1 h-4 w-4 text-green-500" />
-                                                        {attendance.check_in_formatted}
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                                                        <div className="text-green-700 font-medium">
+                                                            <Clock className="inline mr-1 h-4 w-4 text-green-500" />
+                                                            {attendance.check_in_formatted}
+                                                        </div>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-500">-</span>
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="h-2 w-2 rounded-full bg-gray-300"></div>
+                                                        <span className="text-gray-500">Not checked in</span>
+                                                    </div>
                                                 )}
                                             </TableCell>
+
                                             <TableCell>
                                                 {attendance.check_out_formatted ? (
-                                                    <div className="flex items-center text-orange-700 font-medium">
-                                                        <Clock className="mr-1 h-4 w-4 text-orange-500" />
-                                                        {attendance.check_out_formatted}
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="h-2 w-2 rounded-full bg-orange-500"></div>
+                                                        <div className="text-orange-700 font-medium">
+                                                            <Clock className="inline mr-1 h-4 w-4 text-orange-500" />
+                                                            {attendance.check_out_formatted}
+                                                        </div>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-500">-</span>
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="h-2 w-2 rounded-full bg-gray-300"></div>
+                                                        <span className="text-gray-500">Not checked out</span>
+                                                    </div>
                                                 )}
                                             </TableCell>
+
                                             <TableCell>
                                                 {getStatusBadge(attendance.status)}
                                             </TableCell>
+
                                             <TableCell>
                                                 {attendance.device ? (
-                                                    <div className="text-sm">
-                                                        <span className="font-medium">{attendance.device.name}</span>
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                                                        <div className="text-sm">
+                                                            <span className="font-medium">{attendance.device.name}</span>
+                                                        </div>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-500">-</span>
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="h-2 w-2 rounded-full bg-gray-300"></div>
+                                                        <span className="text-gray-500">Manual entry</span>
+                                                    </div>
                                                 )}
                                             </TableCell>
+
                                             <TableCell>
-                                                {attendance.auto_remarks ? (
-                                                    <div className="flex items-center text-sm">
-                                                        {getRemarksIcon(attendance.auto_remarks)}
-                                                        <span>{attendance.auto_remarks}</span>
-                                                    </div>
-                                                ) : attendance.remarks ? (
-                                                    <div className="flex items-center text-sm">
-                                                        <MessageSquare className="mr-1 h-4 w-4 text-gray-500" />
-                                                        <span>{attendance.remarks}</span>
+                                                {attendance.has_movement ? (
+                                                    <div className="space-y-2">
+                                                        {attendance.multiple_movements ? (
+                                                            <Popover>
+                                                                <PopoverTrigger asChild>
+                                                                    <div className="cursor-pointer hover:bg-blue-50 p-2 rounded-md border border-blue-200 transition-all duration-200">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex items-center space-x-2">
+                                                                                <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200">
+                                                                                    <Navigation className="mr-1 h-3 w-3" />
+                                                                                    {attendance.total_movements} Movements
+                                                                                </Badge>
+                                                                            </div>
+                                                                            <Info className="h-4 w-4 text-blue-500" />
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-600 mt-1">
+                                                                            Multiple movements on this day
+                                                                        </div>
+                                                                    </div>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-96" sideOffset={5} align="start">
+                                                                    <div className="space-y-4">
+                                                                        <h4 className="font-semibold text-lg flex items-center">
+                                                                            <Navigation className="mr-2 h-5 w-5 text-red-500" />
+                                                                            {attendance.total_movements} Movements Today
+                                                                        </h4>
+
+                                                                        <div className="max-h-64 overflow-y-auto space-y-3">
+                                                                            {attendance.movements?.map((movement, index) => (
+                                                                                <div key={movement.id} className="border-b pb-3 last:border-b-0">
+                                                                                    <div className="flex items-center justify-between mb-2">
+                                                                                        <Badge variant="outline" className={movement.movement_type === 'official' ?
+                                                                                            'bg-blue-100 text-blue-800 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-200'}>
+                                                                                            <Building2 className="mr-1 h-3 w-3" />
+                                                                                            {index + 1}. {movement.movement_type}
+                                                                                        </Badge>
+                                                                                        <Badge variant="outline" className={
+                                                                                            movement.status === 'completed'
+                                                                                                ? 'bg-green-100 text-green-800 border-green-200'
+                                                                                                : 'bg-blue-100 text-blue-800 border-blue-200'
+                                                                                        }>
+                                                                                            {movement.status === 'completed' ? (
+                                                                                                <CheckCircle className="mr-1 h-3 w-3" />
+                                                                                            ) : (
+                                                                                                <Clock className="mr-1 h-3 w-3" />
+                                                                                            )}
+                                                                                            {movement.status}
+                                                                                        </Badge>
+                                                                                    </div>
+
+                                                                                    <div className="text-sm space-y-1">
+                                                                                        <div>
+                                                                                            <span className="text-gray-500 font-medium">Purpose:</span>
+                                                                                            <div className="mt-1 p-2 bg-gray-50 rounded text-xs">
+                                                                                                {movement.purpose?.length > 80 ? (
+                                                                                                    <div>
+                                                                                                        {movement.purpose.substring(0, 80)}...
+                                                                                                        <Link
+                                                                                                            href={route('movements.show', movement.id)}
+                                                                                                            className="text-blue-600 hover:underline ml-1"
+                                                                                                        >
+                                                                                                            Read Full
+                                                                                                        </Link>
+                                                                                                    </div>
+                                                                                                ) : (
+                                                                                                    movement.purpose
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+
+                                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                                            <div>
+                                                                                                <span className="text-gray-500">Destination:</span>
+                                                                                                <div className="font-medium flex items-center">
+                                                                                                    <MapPin className="mr-1 h-3 w-3 text-gray-400" />
+                                                                                                    {movement.destination}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <span className="text-gray-500">Time:</span>
+                                                                                                <div className="font-medium flex items-center">
+                                                                                                    <Clock className="mr-1 h-3 w-3 text-gray-400" />
+                                                                                                    {new Date(movement.from_datetime).toLocaleTimeString('en-US', {
+                                                                                                        hour: '2-digit',
+                                                                                                        minute: '2-digit',
+                                                                                                        hour12: true
+                                                                                                    })} - {new Date(movement.actual_return_datetime).toLocaleTimeString('en-US', {
+                                                                                                        hour: '2-digit',
+                                                                                                        minute: '2-digit',
+                                                                                                        hour12: true
+                                                                                                    })}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+
+                                                                        <div className="pt-3 border-t flex justify-between">
+                                                                            <span className="text-xs text-gray-400">
+                                                                                {attendance.total_movements} movements total
+                                                                            </span>
+                                                                            <span className="text-xs text-gray-400">
+                                                                                Click outside to close
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        ) : (
+                                                            // Single movement popover
+                                                            <Popover>
+                                                                <PopoverTrigger asChild>
+                                                                    <div className="cursor-pointer hover:bg-blue-50 p-2 rounded-md border border-transparent hover:border-blue-200 transition-all duration-200">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex items-center space-x-2">
+                                                                                {getMovementBadge(attendance.movement_type)}
+                                                                                <span className="text-sm font-medium">Movement</span>
+                                                                            </div>
+                                                                            <Info className="h-4 w-4 text-blue-500" />
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-600 mt-1">
+                                                                            <Navigation className="inline mr-1 h-3 w-3" />
+                                                                            {attendance.movement_purpose?.length > 30
+                                                                                ? `${attendance.movement_purpose.substring(0, 30)}...`
+                                                                                : attendance.movement_purpose
+                                                                            }
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-500 mt-1">
+                                                                            <Clock className="inline mr-1 h-3 w-3" />
+                                                                            {attendance.movement_from} - {attendance.movement_to}
+                                                                        </div>
+                                                                    </div>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-80" sideOffset={5} align="start">
+                                                                    <div className="space-y-4">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <h4 className="font-semibold text-lg flex items-center">
+                                                                                <Navigation className="mr-2 h-5 w-5 text-blue-500" />
+                                                                                Movement Details
+                                                                            </h4>
+                                                                            <Badge variant="outline" className={
+                                                                                attendance.movement_status === 'completed'
+                                                                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                                                                    : 'bg-blue-100 text-blue-800 border-blue-200'
+                                                                            }>
+                                                                                {attendance.movement_status === 'completed' ? (
+                                                                                    <CheckCircle className="mr-1 h-3 w-3" />
+                                                                                ) : (
+                                                                                    <Clock className="mr-1 h-3 w-3" />
+                                                                                )}
+                                                                                {attendance.movement_status}
+                                                                            </Badge>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                                                            <div className="space-y-2">
+                                                                                <div>
+                                                                                    <span className="text-gray-500 font-medium">Type:</span>
+                                                                                    <div className="mt-1">
+                                                                                        {getMovementBadge(attendance.movement_type)}
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div>
+                                                                                    <span className="text-gray-500 font-medium">Duration:</span>
+                                                                                    <div className="mt-1 flex items-center text-gray-700">
+                                                                                        <Clock className="mr-1 h-4 w-4" />
+                                                                                        {attendance.movement_from} - {attendance.movement_to}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="space-y-2">
+                                                                                <div>
+                                                                                    <span className="text-gray-500 font-medium">Destination:</span>
+                                                                                    <div className="mt-1 flex items-center text-gray-700">
+                                                                                        <MapPin className="mr-1 h-4 w-4" />
+                                                                                        {attendance.movement_destination}
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div>
+                                                                                    <span className="text-gray-500 font-medium">Status:</span>
+                                                                                    <div className="mt-1">
+                                                                                        <Badge variant="outline" className={
+                                                                                            attendance.movement_status === 'completed'
+                                                                                                ? 'bg-green-100 text-green-800 border-green-200'
+                                                                                                : 'bg-blue-100 text-blue-800 border-blue-200'
+                                                                                        }>
+                                                                                            {attendance.movement_status === 'completed' ? (
+                                                                                                <CheckCircle className="mr-1 h-3 w-3" />
+                                                                                            ) : (
+                                                                                                <Clock className="mr-1 h-3 w-3" />
+                                                                                            )}
+                                                                                            {attendance.movement_status}
+                                                                                        </Badge>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div>
+                                                                            <span className="text-gray-500 font-medium">Purpose:</span>
+                                                                            <div className="mt-1 p-2 bg-gray-50 rounded-md text-sm text-gray-700">
+                                                                                {attendance.movement_purpose}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
+                                                                            <Link
+                                                                                href={route('movements.show', attendance.movement_id)}
+                                                                                className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center"
+                                                                            >
+                                                                                <FileText className="mr-1 h-4 w-4" />
+                                                                                View Full Movement Record
+                                                                            </Link>
+                                                                            <span className="text-xs text-gray-400">
+                                                                                Click outside to close
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        )}
+
+                                                        {/* Auto Remarks for movement records */}
+                                                        {attendance.auto_remarks && (
+                                                            <div className="flex items-center text-xs text-gray-500 bg-gray-50 p-1 rounded">
+                                                                {getRemarksIcon(attendance.auto_remarks)}
+                                                                <span className="ml-1">{attendance.auto_remarks}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-500">-</span>
+                                                    // No movement - show regular remarks
+                                                    <div className="space-y-2">
+                                                        {attendance.auto_remarks ? (
+                                                            <div className="flex items-center text-sm bg-gray-50 p-2 rounded-md">
+                                                                {getRemarksIcon(attendance.auto_remarks)}
+                                                                <span className="ml-2">{attendance.auto_remarks}</span>
+                                                            </div>
+                                                        ) : attendance.remarks ? (
+                                                            <div className="flex items-center text-sm bg-blue-50 p-2 rounded-md">
+                                                                <MessageSquare className="mr-2 h-4 w-4 text-blue-500 flex-shrink-0" />
+                                                                <span className="text-gray-700">{attendance.remarks}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center text-sm text-gray-400">
+                                                                <MessageSquare className="mr-2 h-4 w-4" />
+                                                                <span>No additional notes</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </TableCell>
+
                                             {(userPermissions.canEdit || userPermissions.canDelete) && (
                                                 <TableCell className="text-right">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
                                                                 <span className="sr-only">Open menu</span>
                                                                 <MoreHorizontal className="h-4 w-4" />
                                                             </Button>
                                                         </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
+                                                        <DropdownMenuContent align="end" className="w-48">
                                                             {userPermissions.canEdit && (
                                                                 <DropdownMenuItem
                                                                     onClick={() => router.get(route('attendance.edit', attendance.id))}
                                                                     className="cursor-pointer"
                                                                 >
                                                                     <Edit className="mr-2 h-4 w-4" />
-                                                                    <span>Edit</span>
+                                                                    <span>Edit Attendance</span>
                                                                 </DropdownMenuItem>
                                                             )}
-                                                            {userPermissions.canDelete && (
-                                                                <DropdownMenuItem
-                                                                    onClick={() => handleDelete(attendance.id)}
-                                                                    className="cursor-pointer text-red-600 focus:text-red-600"
-                                                                >
-                                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                                    <span>Delete</span>
+
+                                                            {attendance.has_movement && (
+                                                                <DropdownMenuItem asChild>
+                                                                    <Link
+                                                                        href={route('movements.show', attendance.movement_id)}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <Navigation className="mr-2 h-4 w-4" />
+                                                                        <span>View Movement</span>
+                                                                    </Link>
                                                                 </DropdownMenuItem>
+                                                            )}
+
+                                                            {userPermissions.canDelete && (
+                                                                <>
+                                                                    <div className="border-t my-1"></div>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => handleDelete(attendance.id)}
+                                                                        className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                                                    >
+                                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                                        <span>Delete Record</span>
+                                                                    </DropdownMenuItem>
+                                                                </>
                                                             )}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
@@ -619,19 +1001,23 @@ export default function AttendanceIndex({
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-6">
-                                            <div className="flex flex-col items-center justify-center text-gray-500">
-                                                <AlertCircle className="h-8 w-8 mb-2" />
-                                                <h3 className="font-medium">No records found</h3>
-                                                <p className="text-sm mt-1">
-                                                    {userPermissions.isEmployee
-                                                        ? "You don't have any attendance records for this date."
-                                                        : "No attendance records found for the selected filters."}
-                                                </p>
+                                        <TableCell colSpan={8} className="text-center py-12">
+                                            <div className="flex flex-col items-center justify-center text-gray-500 space-y-4">
+                                                <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
+                                                    <AlertCircle className="h-8 w-8 text-gray-400" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <h3 className="font-medium text-lg text-gray-700">No attendance records found</h3>
+                                                    <p className="text-sm max-w-md">
+                                                        {userPermissions.isEmployee
+                                                            ? "You don't have any attendance records for this date. Your attendance will appear here once you check in."
+                                                            : "No attendance records found for the selected date and filters. Try adjusting your search criteria or select a different date."}
+                                                    </p>
+                                                </div>
                                                 {userPermissions.canCreate && (
                                                     <Link href={route('attendance.create')}>
-                                                        <Button className="mt-4 flex items-center" variant="outline">
-                                                            <Plus className="mr-1 h-4 w-4" />
+                                                        <Button className="mt-4 flex items-center" variant="default">
+                                                            <Plus className="mr-2 h-4 w-4" />
                                                             Add Attendance Record
                                                         </Button>
                                                     </Link>
@@ -644,6 +1030,7 @@ export default function AttendanceIndex({
                         </Table>
                     </CardContent>
                 </Card>
+
                 {/* Pagination */}
                 {attendances.meta && attendances.meta.last_page > 1 && (
                     <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6 mt-4">

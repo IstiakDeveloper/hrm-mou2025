@@ -8,8 +8,10 @@ use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveApplication;
+use App\Models\LeaveType;
 use App\Models\Movement;
 use App\Models\Transfer;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -132,15 +134,17 @@ class ReportController extends Controller
         ]);
     }
 
-    /**
-     * Generate leave report.
-     */
     public function leave(Request $request)
     {
         $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
 
-        $query = LeaveApplication::with(['employee.department', 'employee.designation', 'leaveType'])
+        $baseQuery = LeaveApplication::with([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch', // Add branch relation if needed
+            'leaveType'
+        ])
             ->whereBetween('start_date', [$startDate, $endDate])
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
@@ -155,33 +159,155 @@ class ReportController extends Controller
             })
             ->when($request->employee_id, function ($query, $employeeId) {
                 $query->where('employee_id', $employeeId);
+            })
+            ->when($request->branch_id, function ($query, $branchId) {
+                $query->whereHas('employee', function ($q) use ($branchId) {
+                    $q->where('current_branch_id', $branchId);
+                });
             });
 
-        $applications = $query->orderBy('start_date', 'desc')
+        // Get paginated results
+        $applications = $baseQuery->clone()
+            ->orderBy('start_date', 'desc')
             ->paginate(15)
             ->withQueryString();
 
-        // Summary statistics
+        // Summary statistics - using separate queries to avoid issues with pagination
         $summary = [
-            'total' => $query->count(),
-            'approved' => $query->where('status', 'approved')->count(),
-            'rejected' => $query->where('status', 'rejected')->count(),
-            'pending' => $query->where('status', 'pending')->count(),
-            'totalDays' => $query->where('status', 'approved')->sum('days'),
+            'total' => $baseQuery->clone()->count(),
+            'approved' => $baseQuery->clone()->where('status', 'approved')->count(),
+            'rejected' => $baseQuery->clone()->where('status', 'rejected')->count(),
+            'pending' => $baseQuery->clone()->where('status', 'pending')->count(),
+            'totalDays' => $baseQuery->clone()->where('status', 'approved')->sum('days'),
         ];
 
-        $departments = Department::all();
-        $employees = Employee::where('status', 'active')->get();
+        // Get filter data
+        $departments = Department::select('id', 'name')->orderBy('name')->get();
+
+        $employees = Employee::select('id', 'first_name', 'last_name', 'employee_id', 'department_id')
+            ->with('department:id,name')
+            ->where('status', 'active')
+            ->orderBy('first_name')
+            ->get()
+            ->map(function ($employee) {
+                $employee->full_name = trim($employee->first_name . ' ' . ($employee->last_name ?? ''));
+                return $employee;
+            });
+
+        $leaveTypes = LeaveType::select('id', 'name', 'days_allowed', 'is_paid')->orderBy('name')->get();
+
+        $branches = Branch::select('id', 'name', 'branch_code')->orderBy('name')->get();
 
         return Inertia::render('report/leave', [
             'applications' => $applications,
             'departments' => $departments,
             'employees' => $employees,
-            'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'leave_type_id', 'employee_id']),
+            'leaveTypes' => $leaveTypes,
+            'branches' => $branches,
+            'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'leave_type_id', 'employee_id', 'branch_id']),
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'summary' => $summary,
         ]);
+    }
+
+
+    public function downloadLeaveReportPdf(Request $request)
+    {
+        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
+        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+
+        $baseQuery = LeaveApplication::with([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch',
+            'leaveType'
+        ])
+            ->whereBetween('start_date', [$startDate, $endDate])
+            ->when($request->status, function ($query, $status) {
+                $query->where('status', $status);
+            })
+            ->when($request->department_id, function ($query, $departmentId) {
+                $query->whereHas('employee', function ($q) use ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                });
+            })
+            ->when($request->leave_type_id, function ($query, $leaveTypeId) {
+                $query->where('leave_type_id', $leaveTypeId);
+            })
+            ->when($request->employee_id, function ($query, $employeeId) {
+                $query->where('employee_id', $employeeId);
+            })
+            ->when($request->branch_id, function ($query, $branchId) {
+                $query->whereHas('employee', function ($q) use ($branchId) {
+                    $q->where('current_branch_id', $branchId);
+                });
+            });
+
+        // Get all applications (no pagination for PDF)
+        $applications = $baseQuery->clone()
+            ->orderBy('start_date', 'desc')
+            ->get();
+
+        // Summary statistics
+        $summary = [
+            'total' => $baseQuery->clone()->count(),
+            'approved' => $baseQuery->clone()->where('status', 'approved')->count(),
+            'rejected' => $baseQuery->clone()->where('status', 'rejected')->count(),
+            'pending' => $baseQuery->clone()->where('status', 'pending')->count(),
+            'totalDays' => $baseQuery->clone()->where('status', 'approved')->sum('days'),
+        ];
+
+        // Get filter data for display
+        $departments = Department::select('id', 'name')->get()->keyBy('id');
+        $employees = Employee::select('id', 'first_name', 'last_name', 'employee_id')
+            ->get()
+            ->keyBy('id')
+            ->map(function ($employee) {
+                $employee->full_name = trim($employee->first_name . ' ' . ($employee->last_name ?? ''));
+                return $employee;
+            });
+        $leaveTypes = LeaveType::select('id', 'name')->get()->keyBy('id');
+        $branches = Branch::select('id', 'name', 'branch_code')->get()->keyBy('id');
+
+        // Prepare filter labels for display
+        $filterLabels = [];
+        if ($request->status) {
+            $filterLabels[] = 'Status: ' . ucfirst($request->status);
+        }
+        if ($request->department_id && isset($departments[$request->department_id])) {
+            $filterLabels[] = 'Department: ' . $departments[$request->department_id]->name;
+        }
+        if ($request->employee_id && isset($employees[$request->employee_id])) {
+            $filterLabels[] = 'Employee: ' . $employees[$request->employee_id]->full_name;
+        }
+        if ($request->leave_type_id && isset($leaveTypes[$request->leave_type_id])) {
+            $filterLabels[] = 'Leave Type: ' . $leaveTypes[$request->leave_type_id]->name;
+        }
+        if ($request->branch_id && isset($branches[$request->branch_id])) {
+            $filterLabels[] = 'Branch: ' . $branches[$request->branch_id]->name;
+        }
+
+        $data = [
+            'applications' => $applications,
+            'summary' => $summary,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'filterLabels' => $filterLabels,
+            'generatedAt' => Carbon::now(),
+            'companyName' => config('app.name', 'Company Name'), // You can customize this
+        ];
+
+        // Generate PDF
+        $pdf = Pdf::loadView('reports.leave-report-pdf', $data);
+
+        // Set paper size and orientation
+        $pdf->setPaper('A4', 'landscape'); // Landscape for better table view
+
+        // Generate filename
+        $filename = 'leave-report-' . $startDate->format('Y-m-d') . '-to-' . $endDate->format('Y-m-d') . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     /**
@@ -334,9 +460,9 @@ class ReportController extends Controller
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere('employee_id', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
                 });
             });
 
@@ -371,8 +497,14 @@ class ReportController extends Controller
             'departments' => $departments,
             'designations' => $designations,
             'filters' => $request->only([
-                'branch_id', 'department_id', 'designation_id', 'status',
-                'gender', 'join_start_date', 'join_end_date', 'search'
+                'branch_id',
+                'department_id',
+                'designation_id',
+                'status',
+                'gender',
+                'join_start_date',
+                'join_end_date',
+                'search'
             ]),
             'statuses' => ['active', 'inactive', 'on_leave', 'terminated'],
             'genders' => ['male', 'female', 'other'],

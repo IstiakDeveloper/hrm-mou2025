@@ -73,6 +73,27 @@
             font-weight: bold;
         }
 
+        .badge-active {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+
+        .note {
+            font-size: 8px;
+            color: #666;
+            font-style: italic;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .actual-time {
+            font-size: 8px;
+            color: #155724;
+            font-style: italic;
+            display: block;
+            margin-top: 2px;
+        }
+
         .badge-present {
             background-color: #d4edda;
             color: #155724;
@@ -204,7 +225,6 @@
     </div>
 
     <!-- Attendance Summary Section -->
-    <!-- Attendance Summary Section -->
     <div class="section">
         <h3 class="section-title">Attendance Summary</h3>
 
@@ -252,12 +272,13 @@
         <table>
             <thead>
                 <tr>
-                    <th>Date</th>
-                    <th>Day</th>
-                    <th>Status</th>
-                    <th>Check In</th>
-                    <th>Check Out</th>
-                    <th>Remarks</th>
+                    <th width="12%">Date</th>
+                    <th width="8%">Day</th>
+                    <th width="8%">Status</th>
+                    <th width="10%">Check In</th>
+                    <th width="10%">Check Out</th>
+                    <th width="25%">Movement Info</th>
+                    <th width="27%">Remarks</th>
                 </tr>
             </thead>
             <tbody>
@@ -272,11 +293,104 @@
                         </td>
                         <td>{{ $record['check_in'] ?? '-' }}</td>
                         <td>{{ $record['check_out'] ?? '-' }}</td>
-                        <td>{{ $record['remarks'] ?? '-' }}</td>
+                        <td style="font-size: 8px; vertical-align: top;">
+                            @if (isset($record['has_movement']) && $record['has_movement'])
+                                @foreach ($record['movement_details'] as $index => $movement)
+                                    <div style="margin-bottom: 3px; padding: 2px; border-left: 2px solid #007bff;">
+                                        <strong style="color: #004085;">{{ ucfirst($movement['type']) }}:</strong><br>
+                                        <strong>Purpose:</strong>
+                                        @if (strlen($movement['purpose']) > 35)
+                                            {{ substr($movement['purpose'], 0, 35) }}...
+                                        @else
+                                            {{ $movement['purpose'] }}
+                                        @endif
+                                        <br>
+                                        <strong>From:</strong>
+                                        {{ Carbon\Carbon::parse($movement['from_datetime'])->format('M d, H:i') }}<br>
+                                        <strong>To:</strong>
+                                        {{ Carbon\Carbon::parse($movement['effective_to_datetime'])->format('M d, H:i') }}
+                                        @if ($movement['status'] === 'completed' && $movement['actual_return_datetime'])
+                                            <span style="color: #155724; font-weight: bold;"> (Actual)</span>
+                                        @else
+                                            <span style="color: #856404;"> (Planned)</span>
+                                        @endif
+                                        <br>
+                                        <strong>Destination:</strong>
+                                        @if (strlen($movement['destination']) > 25)
+                                            {{ substr($movement['destination'], 0, 25) }}...
+                                        @else
+                                            {{ $movement['destination'] }}
+                                        @endif
+                                        <br>
+                                        <span class="badge badge-{{ $movement['status'] }}" style="margin-top: 2px;">
+                                            {{ ucfirst($movement['status']) }}
+                                        </span>
+                                    </div>
+                                    @if (!$loop->last)
+                                        <hr style="margin: 2px 0; border: 0.5px solid #dee2e6;">
+                                    @endif
+                                @endforeach
+                            @else
+                                <span style="color: #6c757d; font-style: italic;">No Movement</span>
+                            @endif
+                        </td>
+                        <td style="font-size: 8px; vertical-align: top;">
+                            @if (isset($record['has_movement']) && $record['has_movement'])
+                                {{-- Enhanced remarks with movement context --}}
+                                @php
+                                    $movementTypes = array_unique(array_column($record['movement_details'], 'type'));
+                                    $movementCount = count($record['movement_details']);
+                                @endphp
+
+                                @if ($movementCount > 1)
+                                    <strong style="color: #dc3545;">{{ $movementCount }} movements on this
+                                        day</strong><br>
+                                @endif
+
+                                <span style="color: #155724;">
+                                    {{ implode(', ', array_map('ucfirst', $movementTypes)) }} movement(s)
+                                </span>
+
+                                @if (isset($record['remarks']) && $record['remarks'] && !str_contains($record['remarks'], 'Movement'))
+                                    <br><strong>Additional:</strong> {{ $record['remarks'] }}
+                                @endif
+                            @else
+                                {{ $record['remarks'] ?? '-' }}
+                            @endif
+                        </td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
+
+        {{-- Movement Summary for Attendance Section --}}
+        @php
+            $totalMovementDays = 0;
+            $totalMovements = 0;
+            foreach ($attendanceData as $record) {
+                if (isset($record['has_movement']) && $record['has_movement']) {
+                    $totalMovementDays++;
+                    $totalMovements += count($record['movement_details']);
+                }
+            }
+        @endphp
+
+        @if ($totalMovements > 0)
+            <div style="margin-top: 10px; padding: 8px; background-color: #f8f9fa; border: 1px solid #dee2e6;">
+                <h5 style="margin: 0 0 5px 0; font-size: 10px; color: #495057;">Movement Summary in Attendance Period:
+                </h5>
+                <table style="width: 100%; font-size: 8px; margin: 0;">
+                    <tr>
+                        <td style="padding: 2px; border: none;"><strong>Days with Movement:</strong>
+                            {{ $totalMovementDays }}</td>
+                        <td style="padding: 2px; border: none;"><strong>Total Movements:</strong> {{ $totalMovements }}
+                        </td>
+                        <td style="padding: 2px; border: none;"><strong>Movement Rate:</strong>
+                            {{ round(($totalMovementDays / count($attendanceData)) * 100, 1) }}%</td>
+                    </tr>
+                </table>
+            </div>
+        @endif
     </div>
 
     <!-- Leave Summary Section -->
@@ -351,17 +465,51 @@
         @endif
     </div>
 
-    <!-- Movement Section -->
     <div class="section">
         <h3 class="section-title">Movements</h3>
 
+
+        <div style="font-size: 9px; margin-top: 10px;">
+            <p><strong>Summary:</strong></p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                        <strong>Total Movements:</strong> {{ count($movementData) }}
+                    </td>
+                    <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                        <strong>Active Movements:</strong>
+                        {{ count(array_filter($movementData, function ($m) {return $m['status'] === 'active';})) }}
+                    </td>
+                    <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                        <strong>Completed Movements:</strong>
+                        {{ count(array_filter($movementData, function ($m) {return $m['status'] === 'completed';})) }}
+                    </td>
+                </tr>
+                <tr>
+                    <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                        <strong>Official Movements:</strong>
+                        {{ count(array_filter($movementData, function ($m) {return $m['type'] === 'official';})) }}
+                    </td>
+                    <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                        <strong>Personal Movements:</strong>
+                        {{ count(array_filter($movementData, function ($m) {return $m['type'] === 'personal';})) }}
+                    </td>
+                    <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                        <strong>Total Hours:</strong> {{ array_sum(array_column($movementData, 'duration_hours')) }}
+                        hours
+                    </td>
+                </tr>
+            </table>
+        </div>
         @if (count($movementData) > 0)
             <table>
                 <thead>
                     <tr>
                         <th>Type</th>
                         <th>Purpose</th>
-                        <th>Time Period</th>
+                        <th>From</th>
+                        <th>Expected Return</th>
+                        <th>Actual Return</th>
                         <th>Duration</th>
                         <th>Destination</th>
                         <th>Status</th>
@@ -376,8 +524,35 @@
                                 </span>
                             </td>
                             <td>{{ $movement['purpose'] }}</td>
-                            <td>{{ $movement['formatted_time_range'] }}</td>
-                            <td>{{ $movement['duration_hours'] }} hours</td>
+                            <td>
+                                {{ Carbon\Carbon::parse($movement['from_datetime'])->format('M d, Y H:i') }}
+                            </td>
+                            <td>
+                                {{ Carbon\Carbon::parse($movement['planned_to_datetime'])->format('M d, Y H:i') }}
+                            </td>
+                            <td>
+                                @if ($movement['status'] === 'completed' && isset($movement['actual_return_datetime']))
+                                    <span class="highlight">
+                                        {{ Carbon\Carbon::parse($movement['actual_return_datetime'])->format('M d, Y H:i') }}
+                                    </span>
+                                @else
+                                    <span class="note">
+                                        @if ($movement['status'] === 'active')
+                                            (In Progress)
+                                        @else
+                                            -
+                                        @endif
+                                    </span>
+                                @endif
+                            </td>
+                            <td>
+                                {{ $movement['duration_hours'] }} hours
+                                @if ($movement['status'] === 'completed' && isset($movement['actual_return_datetime']))
+                                    <span class="actual-time">(Actual)</span>
+                                @elseif($movement['status'] === 'active')
+                                    <span class="expected-time">(Expected)</span>
+                                @endif
+                            </td>
                             <td>{{ $movement['destination'] ?? '-' }}</td>
                             <td>
                                 <span class="badge badge-{{ $movement['status'] }}">

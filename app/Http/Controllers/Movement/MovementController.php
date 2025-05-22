@@ -23,7 +23,6 @@ class MovementController extends Controller
     /**
      * Display a listing of movements.
      */
-
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -33,14 +32,13 @@ class MovementController extends Controller
             'employee_id' => $user->employee_id,
         ]);
 
-        $query = Movement::with(['employee.department', 'employee.designation', 'approver']);
+        $query = Movement::with(['employee.department', 'employee.designation']);
 
         // Get the current user's employee_id (if they have one)
         $userEmployeeId = $user->employee_id;
 
         // Check for special permissions
         $hasViewPermission = $user->hasPermission('movements.view');
-        $hasApprovePermission = $user->hasPermission('movements.approve');
         $hasEmployeeViewPermission = $user->hasPermission('employees.view');
         $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
 
@@ -50,12 +48,6 @@ class MovementController extends Controller
         if ($userEmployeeId && $userBranchId) {
             $branch = Branch::find($userBranchId);
             $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
-
-            \Log::info('Branch head check:', [
-                'employee_id' => $userEmployeeId,
-                'is_branch_head' => $isBranchHead,
-                'branch_id' => $userBranchId,
-            ]);
         }
 
         // Determine if user is a department head
@@ -67,98 +59,57 @@ class MovementController extends Controller
                 $userDepartmentId = $employee->department_id;
                 $department = Department::find($employee->department_id);
                 $isDepartmentHead = $department && $department->head_employee_id == $userEmployeeId;
-
-                \Log::info('Department head check:', [
-                    'employee_id' => $userEmployeeId,
-                    'is_department_head' => $isDepartmentHead,
-                    'department_id' => $userDepartmentId,
-                ]);
             }
         }
 
         // Special handling for regular employees with view permission
         $isRegularEmployeeWithViewPermission = $userEmployeeId && $hasViewPermission &&
-            !$hasApprovePermission && !$isBranchManager &&
-            !$isBranchHead && !$isDepartmentHead &&
+            !$isBranchManager && !$isBranchHead && !$isDepartmentHead &&
             !$hasEmployeeViewPermission;
 
         // Apply filters based on user's role and permissions
         if (
-            ($userEmployeeId && !$hasViewPermission && !$hasApprovePermission && !$isBranchManager &&
+            ($userEmployeeId && !$hasViewPermission && !$isBranchManager &&
                 !$isBranchHead && !$isDepartmentHead) || $isRegularEmployeeWithViewPermission
         ) {
-            // Regular employee with no special permissions - ONLY see their own movements
-            // OR regular employee with view permission who is not an admin - still only see their own
+            // Regular employee - ONLY see their own movements
             $query->where('employee_id', $userEmployeeId);
-            \Log::info('Regular employee - filtering to show only their own movements', [
-                'employee_id' => $userEmployeeId
-            ]);
         } elseif ($isBranchHead || ($isBranchManager && $userBranchId)) {
             // Branch head or manager - see movements from their branch
             $query->whereHas('employee', function ($q) use ($userBranchId) {
                 $q->where('current_branch_id', $userBranchId);
             });
-            \Log::info('Branch head/manager - filtering by branch', [
-                'branch_id' => $userBranchId
-            ]);
         } elseif ($isDepartmentHead) {
             // Department head - see movements from their department
             if ($userDepartmentId) {
                 $query->whereHas('employee', function ($q) use ($userDepartmentId) {
                     $q->where('department_id', $userDepartmentId);
                 });
-                \Log::info('Department head - filtering by department', [
-                    'department_id' => $userDepartmentId
-                ]);
             } else {
                 // Fallback to own movements if no department association
                 $query->where('employee_id', $userEmployeeId);
             }
-        } elseif ($hasApprovePermission && $userEmployeeId && !$hasEmployeeViewPermission) {
-            // User with approve permission but not full employee view permission
-            if ($userDepartmentId) {
-                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
-                    $q->where('department_id', $userDepartmentId);
-                });
-                \Log::info('Approver - filtering by department', [
-                    'department_id' => $userDepartmentId
-                ]);
-            } else {
-                // Fallback to pending movements if no department association
-                $query->where('status', 'pending');
-                \Log::info('Approver without department - showing only pending movements');
-            }
         } elseif ($hasViewPermission && $hasEmployeeViewPermission) {
             // Full admin with both movements.view and employees.view - see all movements
-            \Log::info('Full admin - showing all movements');
+            // No additional filtering needed
         } elseif ($hasViewPermission && !$hasEmployeeViewPermission) {
             // User with movements.view but not employees.view - apply restrictions
             if ($isBranchHead || ($isBranchManager && $userBranchId)) {
                 $query->whereHas('employee', function ($q) use ($userBranchId) {
                     $q->where('current_branch_id', $userBranchId);
                 });
-                \Log::info('Admin with branch restriction - filtering by branch', [
-                    'branch_id' => $userBranchId
-                ]);
             } elseif ($userEmployeeId && $userDepartmentId) {
                 // Admin with department restrictions
                 $query->whereHas('employee', function ($q) use ($userDepartmentId) {
                     $q->where('department_id', $userDepartmentId);
                 });
-                \Log::info('Admin with department restriction - filtering by department', [
-                    'department_id' => $userDepartmentId
-                ]);
             }
         } else {
             // Edge case - no permissions to view any movements
             if ($userEmployeeId) {
                 $query->where('employee_id', $userEmployeeId);
-                \Log::info('Edge case - showing only user\'s movements', [
-                    'employee_id' => $userEmployeeId
-                ]);
             } else {
                 $query->where('id', 0); // No results
-                \Log::info('Edge case - no matching condition - showing no movements');
             }
         }
 
@@ -204,12 +155,10 @@ class MovementController extends Controller
             'departments' => $departments,
             'employees' => $employees,
             'filters' => $request->only(['status', 'department_id', 'employee_id', 'movement_type', 'from_date', 'to_date', 'search']),
-            'canApprove' => $hasApprovePermission,
             'userPermissions' => [
                 'canView' => $hasViewPermission,
                 'canCreate' => $user->hasPermission('movements.create'),
                 'canEdit' => $user->hasPermission('movements.edit'),
-                'canApprove' => $hasApprovePermission,
                 'isBranchManager' => $isBranchManager,
                 'isBranchHead' => $isBranchHead,
                 'isDepartmentHead' => $isDepartmentHead,
@@ -335,11 +284,9 @@ class MovementController extends Controller
                 ->with('error', 'You do not have permission to create movement requests.');
         }
 
-
         $employees = $user->hasPermission('movements.create')
-            ? Employee::where('status', 'active')->with(['department', 'designation'])->get() // Eager load department
+            ? Employee::where('status', 'active')->with(['department', 'designation'])->get()
             : collect([$employee]);
-
 
         return Inertia::render('movement/create', [
             'employees' => $employees,
@@ -384,29 +331,100 @@ class MovementController extends Controller
             'purpose' => $request->purpose,
             'destination' => $request->destination,
             'remarks' => $request->remarks,
-            'status' => 'pending',
+            'status' => 'active', // Set as active instead of pending
         ]);
 
         // Send notifications to department heads and branch heads
         $this->sendNotificationsToManagers($movement, $targetEmployee);
 
+        // For official movements, update attendance records
+        if ($movement->movement_type === 'official') {
+            $this->updateAttendanceForMovement($movement);
+        }
+
         return redirect()->route('movements.index')
-            ->with('success', 'Movement request submitted successfully.');
+            ->with('success', 'Movement created successfully.');
     }
 
     /**
-     * Send notifications to managers about a new movement request
-     *
-     * @param Movement $movement
-     * @param Employee $employee
-     * @return void
+     * Update attendance records for a movement
      */
     /**
-     * Send notifications to managers about a new movement request
-     *
-     * @param Movement $movement
-     * @param Employee $employee
-     * @return void
+     * Update attendance records for a movement
+     */
+    private function updateAttendanceForMovement(Movement $movement)
+    {
+        // Get all dates between from_datetime and to_datetime (inclusive)
+        $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
+        $endDate = Carbon::parse($movement->to_datetime)->startOfDay();
+        $currentDate = $startDate->copy();
+
+        // Loop through each day
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+
+            // Check if an attendance record already exists for this date
+            $attendance = Attendance::where('employee_id', $movement->employee_id)
+                ->where('date', $dateStr)
+                ->first();
+
+            if (!$attendance) {
+                // If no attendance record exists, create a new one
+                $attendance = new Attendance();
+                $attendance->employee_id = $movement->employee_id;
+                $attendance->date = $dateStr;
+                $attendance->status = 'present'; // Set as present for official movement
+
+                // Set check-in and check-out times based on movement times
+                if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
+                    $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
+                }
+
+                if ($currentDate->isSameDay(Carbon::parse($movement->to_datetime))) {
+                    $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
+                }
+            } else {
+                // Important: Do NOT overwrite existing times
+
+                // Only set check-in if it doesn't exist
+                if (!$attendance->check_in && $currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
+                    $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
+                }
+
+                // Only set check-out if it doesn't exist
+                if (!$attendance->check_out && $currentDate->isSameDay(Carbon::parse($movement->to_datetime))) {
+                    $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
+                }
+
+                // Update status to present if it was absent
+                if ($attendance->status == 'absent') {
+                    $attendance->status = 'present';
+                }
+            }
+
+            // Link to movement
+            $attendance->movement_id = $movement->id;
+
+            // Add remarks about movement
+            $remarks = "On official movement: " . $movement->purpose;
+            if ($attendance->remarks) {
+                // Don't duplicate remarks if they already exist
+                if (strpos($attendance->remarks, $remarks) === false) {
+                    $attendance->remarks = $attendance->remarks . ' | ' . $remarks;
+                }
+            } else {
+                $attendance->remarks = $remarks;
+            }
+
+            $attendance->save();
+
+            // Move to next day
+            $currentDate->addDay();
+        }
+    }
+
+    /**
+     * Send notifications to managers about a new movement
      */
     private function sendNotificationsToManagers(Movement $movement, Employee $employee)
     {
@@ -418,170 +436,82 @@ class MovementController extends Controller
 
         try {
             // Find department head
-            try {
-                \Log::info('Attempting to get department heads', ['department_id' => $employee->department_id]);
+            $departmentHeads = collect([]);
+            if ($employee->department_id) {
                 $departmentHeads = $this->getDepartmentHeads($employee->department_id);
-                \Log::info('Found department heads', ['count' => $departmentHeads->count()]);
-            } catch (\Exception $e) {
-                \Log::error('Failed to get department heads: ' . $e->getMessage(), [
-                    'department_id' => $employee->department_id,
-                    'trace' => $e->getTraceAsString()
-                ]);
-                $departmentHeads = collect([]);
             }
 
             // Find branch head
-            try {
-                \Log::info('Attempting to get branch heads', ['branch_id' => $employee->branch_id]);
+            $branchHeads = collect([]);
+            if ($employee->branch_id) {
                 $branchHeads = $this->getBranchHeads($employee->branch_id);
-                \Log::info('Found branch heads', ['count' => $branchHeads->count()]);
-            } catch (\Exception $e) {
-                \Log::error('Failed to get branch heads: ' . $e->getMessage(), [
-                    'branch_id' => $employee->branch_id,
-                    'trace' => $e->getTraceAsString()
-                ]);
-                $branchHeads = collect([]);
             }
 
             // Find Super Admin users
-            try {
-                \Log::info('Attempting to get super admins');
-                $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
-                    $query->where('name', 'Super Admin');
-                })->get();
-                \Log::info('Found super admins', ['count' => $superAdmins->count()]);
-            } catch (\Exception $e) {
-                \Log::error('Failed to get super admins: ' . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString()
-                ]);
-                $superAdmins = collect([]);
-            }
+            $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
+                $query->where('name', 'Super Admin');
+            })->get();
 
             // Combine unique recipients
-            try {
-                $recipients = $departmentHeads->merge($branchHeads)->merge($superAdmins)->unique('id');
-                \Log::info('Combined unique recipients', ['total_count' => $recipients->count()]);
+            $recipients = $departmentHeads->merge($branchHeads)->merge($superAdmins)->unique('id');
 
-                if ($recipients->isEmpty()) {
-                    \Log::warning('No recipients found for movement notification');
-                    return;
-                }
-            } catch (\Exception $e) {
-                \Log::error('Failed to combine recipients: ' . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString()
-                ]);
+            if ($recipients->isEmpty()) {
+                \Log::warning('No recipients found for movement notification');
                 return;
             }
 
             // Format movement date/time for notification message
-            try {
-                $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
-                $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
+            $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
+            $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
 
-                // Construct full employee name
-                $employeeName = $employee->first_name . ' ' . $employee->last_name;
+            // Construct full employee name
+            $employeeName = $employee->first_name . ' ' . $employee->last_name;
 
-                // Notification details
-                $title = 'New Movement Request';
-                $message = "{$employeeName} has submitted a {$movement->movement_type} movement request from {$fromDate} to {$toDate} for {$movement->purpose}.";
-                $link = route('movements.show', $movement->id);
-
-                \Log::info('Prepared notification content', [
-                    'title' => $title,
-                    'message' => $message,
-                    'link' => $link
-                ]);
-            } catch (\Exception $e) {
-                \Log::error('Failed to prepare notification content: ' . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString()
-                ]);
-                return;
-            }
+            // Notification details
+            $title = 'New Movement Created';
+            $message = "{$employeeName} has created a {$movement->movement_type} movement from {$fromDate} to {$toDate} for {$movement->purpose}.";
+            $link = route('movements.show', $movement->id);
 
             // Send emails and in-app notifications to all recipients
-            \Log::info('Starting to process each recipient');
             foreach ($recipients as $recipient) {
                 try {
-                    \Log::info('Processing recipient', [
-                        'recipient_id' => $recipient->id ?? 'unknown',
-                        'recipient_email' => $recipient->email ?? 'unknown'
-                    ]);
-
                     // Find corresponding user for this recipient
                     $recipientUser = null;
 
                     // Check if this is directly a User object
                     if (isset($recipient->id) && $recipient instanceof \App\Models\User) {
                         $recipientUser = $recipient;
-                        \Log::info('Recipient is a User object', ['user_id' => $recipientUser->id]);
                     }
                     // Check if this is an Employee with a user relationship
                     elseif (isset($recipient->user_id)) {
                         $recipientUser = \App\Models\User::find($recipient->user_id);
-                        \Log::info('Found user from employee user_id', ['user_id' => $recipientUser->id ?? 'not found']);
                     }
                     // Try to find user by email
                     elseif (isset($recipient->email)) {
                         $recipientUser = \App\Models\User::where('email', $recipient->email)->first();
-                        \Log::info('Found user by email', ['user_id' => $recipientUser->id ?? 'not found']);
                     }
 
                     // Send in-app notification if we found a user
                     if ($recipientUser) {
-                        try {
-                            \Log::info('Sending in-app notification', ['user_id' => $recipientUser->id]);
-                            $recipientUser->notify(new \App\Notifications\HrmNotification(
-                                $title,
-                                $message,
-                                'info',
-                                $link
-                            ));
-                            \Log::info('In-app notification sent successfully');
-                        } catch (\Exception $e) {
-                            \Log::error('Failed to send in-app notification: ' . $e->getMessage(), [
-                                'user_id' => $recipientUser->id,
-                                'trace' => $e->getTraceAsString()
-                            ]);
-                        }
-                    } else {
-                        \Log::warning('No user found for this recipient', [
-                            'recipient_id' => $recipient->id ?? 'unknown',
-                            'recipient_email' => $recipient->email ?? 'unknown'
-                        ]);
+                        $recipientUser->notify(new \App\Notifications\HrmNotification(
+                            $title,
+                            $message,
+                            'info',
+                            $link
+                        ));
                     }
 
                     // Send email notification
-                    try {
-                        if (isset($recipient->email)) {
-                            \Log::info('Sending email notification', ['to' => $recipient->email]);
-                            Mail::to($recipient->email)->send(new NewMovementNotification($movement, $employee, $recipient));
-                            \Log::info('Email notification sent successfully');
-                        } else {
-                            \Log::warning('No email found for recipient');
-                        }
-                    } catch (\Exception $e) {
-                        \Log::error('Failed to send email notification: ' . $e->getMessage(), [
-                            'to' => $recipient->email ?? 'unknown',
-                            'trace' => $e->getTraceAsString()
-                        ]);
+                    if (isset($recipient->email)) {
+                        Mail::to($recipient->email)->send(new NewMovementNotification($movement, $employee, $recipient));
                     }
                 } catch (\Exception $e) {
-                    \Log::error('Failed to process recipient: ' . $e->getMessage(), [
-                        'recipient_id' => $recipient->id ?? 'unknown',
-                        'recipient_email' => $recipient->email ?? 'unknown',
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                    // Continue to next recipient if there's an error
+                    \Log::error('Failed to process recipient: ' . $e->getMessage());
                     continue;
                 }
             }
-            \Log::info('Completed sendNotificationsToManagers method');
         } catch (\Exception $e) {
-            \Log::error('Critical error in sendNotificationsToManagers: ' . $e->getMessage(), [
-                'movement_id' => $movement->id,
-                'employee_id' => $employee->id,
-                'trace' => $e->getTraceAsString()
-            ]);
+            \Log::error('Critical error in sendNotificationsToManagers: ' . $e->getMessage());
         }
     }
 
@@ -647,16 +577,90 @@ class MovementController extends Controller
      */
     public function show(Movement $movement)
     {
-        $movement->load(['employee.department', 'employee.designation', 'approver']);
+        $movement->load(['employee.department', 'employee.designation']);
 
         $user = Auth::user();
-        $canApprove = $user->hasPermission('movements.approve');
+        $userEmployee = $user->employee;
+        $canClose = false;
+
+        // User can close the movement if they are the employee who created it
+        // and the movement is still active
+        if ($userEmployee && $userEmployee->id === $movement->employee_id && $movement->status === 'active') {
+            $canClose = true;
+        }
 
         return Inertia::render('movement/show', [
             'movement' => $movement,
-            'canApprove' => $canApprove,
+            'canClose' => $canClose,
         ]);
     }
+
+    /**
+     * Mark the movement as completed.
+     */
+    public function complete(Request $request, Movement $movement)
+    {
+        $user = Auth::user();
+        $userEmployee = $user->employee;
+
+        // Check if user can close this movement
+        if (!$userEmployee || $userEmployee->id !== $movement->employee_id) {
+            return redirect()->route('movements.index')
+                ->with('error', 'You do not have permission to close this movement.');
+        }
+
+        if ($movement->status !== 'active') {
+            return redirect()->route('movements.index')
+                ->with('error', 'This movement has already been closed.');
+        }
+
+        // Validate the request
+        $request->validate([
+            'actual_return_datetime' => 'nullable|date',
+        ]);
+
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            // Update movement status
+            $movement->status = 'completed';
+            $movement->is_returned = true;
+
+            // Use provided return time or current time
+            $returnDateTime = $request->filled('actual_return_datetime')
+                ? Carbon::parse($request->actual_return_datetime)
+                : now();
+
+            $movement->actual_return_datetime = $returnDateTime;
+            $movement->save();
+
+            // Update attendance records for official movements
+            if ($movement->movement_type === 'official') {
+                $this->updateAttendanceForCompletion($movement, $returnDateTime);
+            }
+
+            // Send notifications about movement completion
+            $this->sendCompletionNotifications($movement, $returnDateTime);
+
+            DB::commit();
+
+            return redirect()->route('movements.show', $movement->id)
+                ->with('success', 'Movement closed successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Error closing movement: ' . $e->getMessage(), [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('movements.index')
+                ->with('error', 'An error occurred while closing the movement: ' . $e->getMessage());
+        }
+    }
+
 
     /**
      * Show form to edit a movement.
@@ -1108,106 +1112,137 @@ class MovementController extends Controller
     }
 
     /**
-     * Mark the movement as completed.
+     * Update attendance records when a movement is completed
      */
-    /**
-     * Mark the movement as completed and update attendance records.
-     */
-    public function complete(Movement $movement)
+    private function updateAttendanceForCompletion(Movement $movement, $returnDateTime)
     {
-        $user = Auth::user();
+        // Get all dates covered by this movement
+        $movementDates = $movement->getDatesAttribute();
 
-        if (
-            !$user->hasPermission('movements.edit') &&
-            (!$user->employee || $user->employee->id !== $movement->employee_id)
-        ) {
-            return redirect()->route('movements.index')
-                ->with('error', 'You do not have permission to mark this movement as completed.');
-        }
+        foreach ($movementDates as $date) {
+            // Find attendance record for this date
+            $attendance = Attendance::where('employee_id', $movement->employee_id)
+                ->where('date', $date)
+                ->first();
 
-        if ($movement->status !== 'approved') {
-            return redirect()->route('movements.index')
-                ->with('error', 'Only approved movements can be marked as completed.');
-        }
+            if (!$attendance) {
+                // Create new attendance record if none exists
+                $attendance = new Attendance();
+                $attendance->employee_id = $movement->employee_id;
+                $attendance->date = $date;
+                $attendance->status = 'present'; // Mark as present since they were on duty
 
-        // Start a database transaction to ensure data integrity
-        DB::beginTransaction();
+                // Set check-in and check-out times from movement if this is the only record
+                if ($movement->from_datetime->format('Y-m-d') == $date) {
+                    $attendance->check_in = $movement->from_datetime->format('H:i:s');
+                }
 
-        try {
-            // 1. Update movement with returned status
-            $movement->status = 'completed';
-            $movement->is_returned = true;
-            $movement->actual_return_datetime = now(); // Use current time as return time
-            $movement->save();
+                if ($returnDateTime->format('Y-m-d') == $date) {
+                    $attendance->check_out = $returnDateTime->format('H:i:s');
+                }
+            } else {
+                // CRITICAL PART: DO NOT OVERWRITE EXISTING CHECK-IN/CHECK-OUT TIMES!
+                // Only update status and link to movement
 
-            // 2. Only create/update attendance records for official movements
-            if ($movement->movement_type === 'official') {
-                // Get all dates between from_datetime and to_datetime (inclusive)
-                $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
-                $endDate = Carbon::parse($movement->to_datetime)->startOfDay();
-                $currentDate = $startDate->copy();
+                // If attendance has no check-in and this is the movement start date, set it
+                if (!$attendance->check_in && $movement->from_datetime->format('Y-m-d') == $date) {
+                    $attendance->check_in = $movement->from_datetime->format('H:i:s');
+                }
 
-                // Loop through each day
-                while ($currentDate->lte($endDate)) {
-                    $dateStr = $currentDate->format('Y-m-d');
-
-                    // Check if an attendance record already exists for this date
-                    $attendance = Attendance::firstOrNew([
-                        'employee_id' => $movement->employee_id,
-                        'date' => $dateStr,
-                    ]);
-
-                    // Update attendance status to on_duty and link to movement
-                    $attendance->status = 'on_duty';
-                    $attendance->movement_id = $movement->id;
-
-                    // Set check-in and check-out times if they correspond to this date
-                    if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
-                        $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
-                    }
-
-                    if ($currentDate->isSameDay(Carbon::parse($movement->to_datetime))) {
-                        $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
-                    }
-
-                    // If we're on the actual return date (which could be different from planned date)
-                    if ($movement->actual_return_datetime && $currentDate->isSameDay(Carbon::parse($movement->actual_return_datetime))) {
-                        $attendance->check_out = Carbon::parse($movement->actual_return_datetime)->format('H:i:s');
-                    }
-
-                    // Add remarks to explain this was a movement
-                    $remarks = "On official movement: " . $movement->purpose;
-                    if ($attendance->remarks) {
-                        // Don't duplicate remarks if they already exist
-                        if (strpos($attendance->remarks, $remarks) === false) {
-                            $attendance->remarks = $attendance->remarks . ' | ' . $remarks;
-                        }
-                    } else {
-                        $attendance->remarks = $remarks;
-                    }
-
-                    $attendance->save();
-
-                    // Move to next day
-                    $currentDate->addDay();
+                // If attendance has no check-out and this is the return date, set it
+                if (!$attendance->check_out && $returnDateTime->format('Y-m-d') == $date) {
+                    $attendance->check_out = $returnDateTime->format('H:i:s');
                 }
             }
 
-            DB::commit();
+            // Link attendance to movement (this is the key part)
+            $attendance->movement_id = $movement->id;
 
-            return redirect()->route('movements.index')
-                ->with('success', 'Movement marked as completed successfully.');
+            // Ensure status is 'present' if it was 'absent'
+            if ($attendance->status == 'absent') {
+                $attendance->status = 'present';
+            }
+
+            // Add remarks about movement completion
+            $returnInfo = "Movement completed: " . $returnDateTime->format('Y-m-d H:i:s');
+            if ($attendance->remarks) {
+                if (strpos($attendance->remarks, "Movement completed:") === false) {
+                    $attendance->remarks .= " | " . $returnInfo;
+                }
+            } else {
+                $attendance->remarks = "On official movement: " . $movement->purpose . " | " . $returnInfo;
+            }
+
+            $attendance->save();
+        }
+    }
+
+    /**
+     * Send notifications about movement completion
+     */
+    private function sendCompletionNotifications(Movement $movement, $returnDateTime)
+    {
+        try {
+            // Load employee if not already loaded
+            if (!$movement->relationLoaded('employee')) {
+                $movement->load('employee');
+            }
+
+            // Find appropriate managers to notify
+            $recipients = collect();
+
+            // Add department heads
+            if ($movement->employee->department_id) {
+                $departmentHeads = $this->getDepartmentHeads($movement->employee->department_id);
+                $recipients = $recipients->merge($departmentHeads);
+            }
+
+            // Add branch heads
+            if ($movement->employee->branch_id) {
+                $branchHeads = $this->getBranchHeads($movement->employee->branch_id);
+                $recipients = $recipients->merge($branchHeads);
+            }
+
+            // Add any super admins
+            $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
+                $query->where('name', 'Super Admin');
+            })->get();
+            $recipients = $recipients->merge($superAdmins);
+
+            // Format times for message
+            $fromDate = Carbon::parse($movement->from_datetime)->format('M d, Y h:i A');
+            $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
+            $returnDate = $returnDateTime->format('M d, Y h:i A');
+
+            // Prepare employee name
+            $employeeName = $movement->employee->first_name . ' ' . $movement->employee->last_name;
+
+            // Create notification content
+            $title = 'Movement Completed';
+            $message = "{$employeeName} has returned from their {$movement->movement_type} movement ({$fromDate} to {$toDate}). Actual return time: {$returnDate}";
+            $link = route('movements.show', $movement->id);
+
+            // Send notifications to each recipient
+            foreach ($recipients as $recipient) {
+                // Send in-app notification
+                if (isset($recipient->id)) {
+                    $recipient->notify(new HrmNotification(
+                        $title,
+                        $message,
+                        'info',
+                        $link
+                    ));
+                }
+
+                // Send email notification
+                if (isset($recipient->email)) {
+                    // You would need to create this mail class
+                    Mail::to($recipient->email)->send(new \App\Mail\MovementCompletedNotification($movement, $returnDateTime));
+                }
+            }
         } catch (\Exception $e) {
-            DB::rollBack();
-
-            \Log::error('Error completing movement: ' . $e->getMessage(), [
-                'movement_id' => $movement->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return redirect()->route('movements.index')
-                ->with('error', 'An error occurred while completing the movement.');
+            // Log error but don't stop the process
+            \Log::error('Error sending completion notifications: ' . $e->getMessage());
         }
     }
 
@@ -1216,10 +1251,18 @@ class MovementController extends Controller
      */
     public function report(Request $request)
     {
-        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
-        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+        $timezone = config('app.timezone', 'Asia/Dhaka');
 
-        $query = Movement::with(['employee.department', 'employee.designation', 'approver'])
+        // Parse dates with specified timezone
+        $startDate = $request->start_date
+            ? Carbon::parse($request->start_date)->setTimezone($timezone)->startOfDay()
+            : Carbon::today($timezone)->subDays(30)->startOfDay();
+
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)->setTimezone($timezone)->endOfDay()
+            : Carbon::today($timezone)->endOfDay();
+
+        $query = Movement::with(['employee.department', 'employee.designation'])
             ->whereBetween('from_datetime', [$startDate, $endDate])
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
@@ -1245,10 +1288,12 @@ class MovementController extends Controller
             'total' => $query->count(),
             'official' => $query->where('movement_type', 'official')->count(),
             'personal' => $query->where('movement_type', 'personal')->count(),
-            'approved' => $query->where('status', 'approved')->count(),
-            'rejected' => $query->where('status', 'rejected')->count(),
-            'pending' => $query->where('status', 'pending')->count(),
+            'active' => $query->where('status', 'active')->count(),
             'completed' => $query->where('status', 'completed')->count(),
+            // Keep old summary keys for backward compatibility with frontend
+            'approved' => 0,
+            'rejected' => 0,
+            'pending' => $query->where('status', 'active')->count(), // Map 'active' to 'pending' for compatibility
         ];
 
         $departments = Department::all();
@@ -1265,4 +1310,68 @@ class MovementController extends Controller
             'movementTypes' => ['official', 'personal'],
         ]);
     }
+
+    /**
+     * Download movement report as PDF.
+     */
+    public function downloadReport(Request $request)
+    {
+        $timezone = config('app.timezone', 'Asia/Dhaka');
+
+        // Parse dates with specified timezone
+        $startDate = $request->start_date
+            ? Carbon::parse($request->start_date)->setTimezone($timezone)->startOfDay()
+            : Carbon::today($timezone)->subDays(30)->startOfDay();
+
+        $endDate = $request->end_date
+            ? Carbon::parse($request->end_date)->setTimezone($timezone)->endOfDay()
+            : Carbon::today($timezone)->endOfDay();
+
+        $query = Movement::with(['employee.department', 'employee.designation'])
+            ->whereBetween('from_datetime', [$startDate, $endDate])
+            ->when($request->status, function ($query, $status) {
+                $query->where('status', $status);
+            })
+            ->when($request->department_id, function ($query, $departmentId) {
+                $query->whereHas('employee', function ($q) use ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                });
+            })
+            ->when($request->movement_type, function ($query, $movementType) {
+                $query->where('movement_type', $movementType);
+            })
+            ->when($request->employee_id, function ($query, $employeeId) {
+                $query->where('employee_id', $employeeId);
+            });
+
+        $movements = $query->orderBy('from_datetime', 'desc')->get();
+
+        // Summary statistics
+        $summary = [
+            'total' => $movements->count(),
+            'official' => $movements->where('movement_type', 'official')->count(),
+            'personal' => $movements->where('movement_type', 'personal')->count(),
+            'active' => $movements->where('status', 'active')->count(),
+            'completed' => $movements->where('status', 'completed')->count(),
+        ];
+
+        // Generate PDF
+        $pdf = app('dompdf.wrapper');
+        $pdf->loadView('pdf.movement-report', [
+            'movements' => $movements,
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'summary' => $summary,
+            'filters' => [
+                'status' => $request->status,
+                'department_id' => $request->department_id,
+                'movement_type' => $request->movement_type,
+                'employee_id' => $request->employee_id,
+            ],
+        ]);
+
+        return $pdf->download('movement-report-' . now()->format('Y-m-d') . '.pdf');
+    }
+
+
 }

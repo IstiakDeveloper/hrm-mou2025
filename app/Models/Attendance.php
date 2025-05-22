@@ -19,7 +19,8 @@ class Attendance extends Model
         'device_id',
         'location_coordinates',
         'remarks',
-        'movement_id', // নতুন ফিল্ড যোগ করুন
+        'movement_id'
+
     ];
 
     protected $casts = [
@@ -39,7 +40,6 @@ class Attendance extends Model
         return $this->belongsTo(AttendanceDevice::class, 'device_id');
     }
 
-    // মুভমেন্টের সাথে রিলেশন যোগ করুন
     public function movement()
     {
         return $this->belongsTo(Movement::class);
@@ -63,73 +63,97 @@ class Attendance extends Model
     /**
      * Determine the attendance status for a specific date
      */
+    /**
+     * Determine the status of an employee for a specific date
+     */
     public function determineDateStatus($employeeId, $date)
     {
-        // Retrieve the employee with a null check
-        $employee = Employee::find($employeeId);
-        if (!$employee) {
-            return 'absent';
-        }
+        $carbonDate = Carbon::parse($date);
 
-        // Check for existing attendance record
-        $attendance = self::where('employee_id', $employeeId)
-            ->whereDate('date', $date)
-            ->first();
-
-        // If attendance record exists, use its status
-        if ($attendance) {
-            return $this->determineAttendanceStatus($attendance);
-        }
-
-        // Check for approved leave
-        $leave = LeaveApplication::where('employee_id', $employeeId)
+        // Check for approved leave first
+        $isOnLeave = LeaveApplication::where('employee_id', $employeeId)
             ->where('status', 'approved')
             ->where('start_date', '<=', $date)
             ->where('end_date', '>=', $date)
-            ->first();
+            ->exists();
 
-        if ($leave) {
+        if ($isOnLeave) {
             return 'leave';
         }
 
-        // Check for approved movement
-        $movement = Movement::where('employee_id', $employeeId)
-            ->where('status', 'approved')
-            ->whereDate('from_datetime', '<=', $date)
-            ->whereDate('to_datetime', '>=', $date)
-            ->first();
+        // Check for movement (using actual_return_datetime if completed)
+        $isOnMovement = Movement::where('employee_id', $employeeId)
+            ->whereIn('status', ['active', 'completed'])
+            ->where('movement_type', 'official')
+            ->where(function ($query) use ($date) {
+                $query->where(function ($q) use ($date) {
+                    // For active movements, use to_datetime
+                    $q->where('status', 'active')
+                        ->whereDate('from_datetime', '<=', $date)
+                        ->whereDate('to_datetime', '>=', $date);
+                })->orWhere(function ($q) use ($date) {
+                    // For completed movements, use actual_return_datetime if available
+                    $q->where('status', 'completed')
+                        ->whereDate('from_datetime', '<=', $date)
+                        ->where(function ($subQ) use ($date) {
+                        $subQ->whereNotNull('actual_return_datetime')
+                            ->whereDate('actual_return_datetime', '>=', $date)
+                            ->orWhere(function ($fallbackQ) use ($date) {
+                                $fallbackQ->whereNull('actual_return_datetime')
+                                    ->whereDate('to_datetime', '>=', $date);
+                            });
+                    });
+                });
+            })
+            ->exists();
 
-        if ($movement) {
+        if ($isOnMovement) {
             return 'on_duty';
         }
 
-        // Check for holidays
-        $holiday = Holiday::whereDate('date', $date)
-            ->first();
+        // Check for holiday
+        $isHoliday = Holiday::where('date', $date)
+            ->where(function ($query) use ($employeeId) {
+                // Get employee's branch for holiday filtering
+                $employee = Employee::find($employeeId);
+                if ($employee && $employee->current_branch_id) {
+                    $query->whereJsonContains('applicable_branches', (string) $employee->current_branch_id)
+                        ->orWhereNull('applicable_branches');
+                } else {
+                    $query->whereNull('applicable_branches');
+                }
+            })
+            ->exists();
 
-        if ($holiday) {
+        if ($isHoliday) {
             return 'holiday';
         }
 
-        // Check if it's a weekend
-        $carbonDate = Carbon::parse($date);
-
-        // Get the employee's branch ID safely
-        $branchId = $employee->current_branch_id ?? $employee->branch_id ?? null;
-
-        if ($branchId) {
-            $attendanceSetting = AttendanceSetting::where('branch_id', $branchId)->first();
-
-            if ($attendanceSetting) {
-                $weekendDays = json_decode($attendanceSetting->weekend_days ?? '[]', true);
-
+        // Check for weekend
+        $employee = Employee::find($employeeId);
+        if ($employee && $employee->current_branch_id) {
+            $attendanceSettings = AttendanceSetting::where('branch_id', $employee->current_branch_id)->first();
+            if ($attendanceSettings) {
+                $weekendDays = json_decode($attendanceSettings->weekend_days ?? '[]', true);
                 if (in_array($carbonDate->dayOfWeek, $weekendDays)) {
                     return 'weekend';
                 }
             }
         }
 
-        // Default to absent if no other status is found
+        // Check if there's an actual attendance record
+        $hasAttendance = self::where('employee_id', $employeeId)
+            ->where('date', $date)
+            ->exists();
+
+        if ($hasAttendance) {
+            $attendance = self::where('employee_id', $employeeId)
+                ->where('date', $date)
+                ->first();
+            return $attendance->status;
+        }
+
+        // Default to absent if no other status applies
         return 'absent';
     }
 
@@ -156,4 +180,6 @@ class Attendance extends Model
         // Fallback to absent if nothing matches
         return 'absent';
     }
+
+
 }

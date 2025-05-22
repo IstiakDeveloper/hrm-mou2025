@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Movement Report - {{ $employee->first_name }} {{ $employee->last_name }}</title>
@@ -52,7 +53,8 @@
             font-size: 9px;
         }
 
-        th, td {
+        th,
+        td {
             padding: 5px;
             text-align: left;
             border-bottom: 1px solid #ddd;
@@ -71,12 +73,42 @@
             font-weight: bold;
         }
 
-        .badge-pending { background-color: #fff3cd; color: #856404; }
-        .badge-approved { background-color: #d4edda; color: #155724; }
-        .badge-rejected { background-color: #f8d7da; color: #721c24; }
-        .badge-completed { background-color: #cce5ff; color: #004085; }
-        .badge-official { background-color: #d1ecf1; color: #0c5460; }
-        .badge-personal { background-color: #e2e3e5; color: #383d41; }
+        /* Updated badge colors */
+        .badge-active {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+
+        .badge-completed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .badge-official {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .badge-personal {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+
+        /* Legacy badge colors for backward compatibility */
+        .badge-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .badge-approved {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .badge-rejected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
 
         .footer {
             margin-top: 20px;
@@ -84,13 +116,41 @@
             font-size: 8px;
             color: #777;
         }
+
+        .note {
+            font-size: 8px;
+            color: #666;
+            font-style: italic;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .actual-time {
+            font-size: 8px;
+            color: #155724;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .expected-time {
+            font-size: 8px;
+            color: #004085;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .highlight {
+            font-weight: bold;
+            color: #155724;
+        }
     </style>
 </head>
 
 <body>
     <div class="header">
         <h1>Movement Report</h1>
-        <p>Period: {{ Carbon\Carbon::parse($fromDate)->format('M d, Y') }} to {{ Carbon\Carbon::parse($toDate)->format('M d, Y') }}</p>
+        <p>Period: {{ Carbon\Carbon::parse($fromDate)->format('M d, Y') }} to
+            {{ Carbon\Carbon::parse($toDate)->format('M d, Y') }}</p>
         <p>Generated on: {{ $generatedAt }}</p>
     </div>
 
@@ -106,6 +166,38 @@
         </table>
     </div>
 
+    <div style="font-size: 9px; margin-top: 10px;">
+        <p><strong>Summary:</strong></p>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                    <strong>Total Movements:</strong> {{ count($movementData) }}
+                </td>
+                <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                    <strong>Active Movements:</strong>
+                    {{ count(array_filter($movementData, function ($m) {return $m['status'] === 'active';})) }}
+                </td>
+                <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                    <strong>Completed Movements:</strong>
+                    {{ count(array_filter($movementData, function ($m) {return $m['status'] === 'completed';})) }}
+                </td>
+            </tr>
+            <tr>
+                <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                    <strong>Official Movements:</strong>
+                    {{ count(array_filter($movementData, function ($m) {return $m['type'] === 'official';})) }}
+                </td>
+                <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                    <strong>Personal Movements:</strong>
+                    {{ count(array_filter($movementData, function ($m) {return $m['type'] === 'personal';})) }}
+                </td>
+                <td width="33%" style="border: 1px solid #ddd; padding: 5px;">
+                    <strong>Total Hours:</strong> {{ array_sum(array_column($movementData, 'duration_hours')) }} hours
+                </td>
+            </tr>
+        </table>
+    </div>
+
     <!-- Movement Section -->
     <div class="section">
         <h3 class="section-title">Movements</h3>
@@ -116,7 +208,9 @@
                     <tr>
                         <th>Type</th>
                         <th>Purpose</th>
-                        <th>Time Period</th>
+                        <th>From</th>
+                        <th>Expected Return</th>
+                        <th>Actual Return</th>
                         <th>Duration</th>
                         <th>Destination</th>
                         <th>Status</th>
@@ -131,8 +225,35 @@
                                 </span>
                             </td>
                             <td>{{ $movement['purpose'] }}</td>
-                            <td>{{ $movement['formatted_time_range'] }}</td>
-                            <td>{{ $movement['duration_hours'] }} hours</td>
+                            <td>
+                                {{ Carbon\Carbon::parse($movement['from_datetime'])->format('M d, Y H:i') }}
+                            </td>
+                            <td>
+                                {{ Carbon\Carbon::parse($movement['planned_to_datetime'])->format('M d, Y H:i') }}
+                            </td>
+                            <td>
+                                @if ($movement['status'] === 'completed' && isset($movement['actual_return_datetime']))
+                                    <span class="highlight">
+                                        {{ Carbon\Carbon::parse($movement['actual_return_datetime'])->format('M d, Y H:i') }}
+                                    </span>
+                                @else
+                                    <span class="note">
+                                        @if ($movement['status'] === 'active')
+                                            (In Progress)
+                                        @else
+                                            -
+                                        @endif
+                                    </span>
+                                @endif
+                            </td>
+                            <td>
+                                {{ $movement['duration_hours'] }} hours
+                                @if ($movement['status'] === 'completed' && isset($movement['actual_return_datetime']))
+                                    <span class="actual-time">(Actual)</span>
+                                @elseif($movement['status'] === 'active')
+                                    <span class="expected-time">(Expected)</span>
+                                @endif
+                            </td>
                             <td>{{ $movement['destination'] ?? '-' }}</td>
                             <td>
                                 <span class="badge badge-{{ $movement['status'] }}">
@@ -152,4 +273,5 @@
         <p>This is a system-generated report. For any discrepancies, please contact HR department.</p>
     </div>
 </body>
+
 </html>

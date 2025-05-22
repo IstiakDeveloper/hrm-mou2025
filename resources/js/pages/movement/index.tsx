@@ -45,10 +45,12 @@ import {
     Plus,
     RefreshCcw,
     Search,
-    X
+    X,
+    Clock,
+    AlertCircle
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import {
     Popover,
     PopoverContent,
@@ -56,6 +58,7 @@ import {
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Employee {
     id: number;
@@ -92,10 +95,12 @@ interface Movement {
     purpose: string;
     destination: string;
     remarks: string | null;
-    status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
-    approved_by: number | null;
+    status: 'active' | 'completed';
+    is_returned: boolean;
+    actual_return_datetime: string | null;
     employee: Employee;
-    approver: User | null;
+    approved_by?: number | null;
+    approver?: User | null;
 }
 
 interface PaginationLinks {
@@ -208,14 +213,8 @@ export default function MovementIndex({
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'pending':
-                return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>;
-            case 'approved':
-                return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Approved</Badge>;
-            case 'rejected':
-                return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Rejected</Badge>;
-            case 'cancelled':
-                return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">Cancelled</Badge>;
+            case 'active':
+                return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Active</Badge>;
             case 'completed':
                 return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Completed</Badge>;
             default:
@@ -234,6 +233,26 @@ export default function MovementIndex({
         }
     };
 
+    // Calculate duration between from and actual return time
+    const calculateDuration = (movement: Movement) => {
+        if (movement.status === 'completed' && movement.actual_return_datetime) {
+            const fromTime = new Date(movement.from_datetime);
+            const returnTime = new Date(movement.actual_return_datetime);
+
+            const hours = differenceInHours(returnTime, fromTime);
+            const minutes = differenceInMinutes(returnTime, fromTime) % 60;
+
+            return `${hours}h ${minutes}m`;
+        }
+        return null;
+    };
+
+    // Check if user can close a movement
+    const canCloseMovement = (movement: Movement) => {
+        return movement.status === 'active' &&
+            movement.employee_id === userPermissions.employeeId;
+    };
+
     // Check if pagination data exists
     const hasPagination = movements.meta && movements.links;
 
@@ -250,7 +269,7 @@ export default function MovementIndex({
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        {canApprove && (
+                        {userPermissions.canView && (
                             <Link href={route('movements.report')}>
                                 <Button variant="outline" className="flex items-center">
                                     <CalendarRange className="mr-1 h-4 w-4" />
@@ -298,10 +317,7 @@ export default function MovementIndex({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Statuses</SelectItem>
-                                        <SelectItem value="pending">Pending</SelectItem>
-                                        <SelectItem value="approved">Approved</SelectItem>
-                                        <SelectItem value="rejected">Rejected</SelectItem>
-                                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                                        <SelectItem value="active">Active</SelectItem>
                                         <SelectItem value="completed">Completed</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -432,9 +448,10 @@ export default function MovementIndex({
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Type</TableHead>
                                     <TableHead>From</TableHead>
-                                    <TableHead>To</TableHead>
+                                    <TableHead>Return Time</TableHead>
                                     <TableHead>Destination</TableHead>
                                     <TableHead>Status</TableHead>
+                                    <TableHead>Duration</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -459,13 +476,45 @@ export default function MovementIndex({
                                                 {format(new Date(movement.from_datetime), 'MMM dd, yyyy HH:mm')}
                                             </TableCell>
                                             <TableCell>
-                                                {format(new Date(movement.to_datetime), 'MMM dd, yyyy HH:mm')}
+                                                {movement.status === 'completed' && movement.actual_return_datetime ? (
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger>
+                                                                <span className="text-green-600 font-medium">
+                                                                    {format(new Date(movement.actual_return_datetime), 'MMM dd, yyyy HH:mm')}
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>
+                                                                <div className="text-xs">
+                                                                    <div>Expected: {format(new Date(movement.to_datetime), 'MMM dd, yyyy HH:mm')}</div>
+                                                                    <div className="font-semibold">Actual return time</div>
+                                                                </div>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                ) : (
+                                                    <span>
+                                                        {format(new Date(movement.to_datetime), 'MMM dd, yyyy HH:mm')}
+                                                        {movement.status === 'active' && (
+                                                            <span className="ml-1 text-xs text-blue-600">(Expected)</span>
+                                                        )}
+                                                    </span>
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 <span className="truncate max-w-[150px] block">{movement.destination}</span>
                                             </TableCell>
                                             <TableCell>
                                                 {getStatusBadge(movement.status)}
+                                            </TableCell>
+                                            <TableCell>
+                                                {movement.status === 'completed' && movement.actual_return_datetime ? (
+                                                    <span className="text-sm text-green-600 font-medium">
+                                                        {calculateDuration(movement)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-gray-500">In progress</span>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
@@ -483,79 +532,27 @@ export default function MovementIndex({
                                                             <span>View Details</span>
                                                         </DropdownMenuItem>
 
-                                                        {/* Edit/Cancel - only show for user's own movements or admins */}
-                                                        {movement.status === 'pending' &&
+                                                        {/* Edit option - only show for user's own active movements or admins */}
+                                                        {movement.status === 'active' &&
                                                             (movement.employee_id === userPermissions.employeeId ||
                                                                 userPermissions.canEdit) && (
-                                                                <>
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => router.get(route('movements.edit', movement.id))}
-                                                                        className="cursor-pointer"
-                                                                    >
-                                                                        <span>Edit</span>
-                                                                    </DropdownMenuItem>
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => {
-                                                                            if (confirm('Are you sure you want to cancel this movement request?')) {
-                                                                                router.post(route('movements.cancel', movement.id));
-                                                                            }
-                                                                        }}
-                                                                        className="cursor-pointer text-red-600"
-                                                                    >
-                                                                        <span>Cancel</span>
-                                                                    </DropdownMenuItem>
-                                                                </>
-                                                            )}
-
-                                                        {/* Approve/Reject - only show for users with approve permission */}
-                                                        {movement.status === 'pending' &&
-                                                            (userPermissions.canApprove ||
-                                                                (userPermissions.isBranchHead && movement.employee.current_branch_id === userPermissions.userBranchId) ||
-                                                                (userPermissions.isDepartmentHead && movement.employee.department_id === userPermissions.userDepartmentId)) && (
-                                                                <>
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => {
-                                                                            if (confirm('Are you sure you want to approve this movement request?')) {
-                                                                                router.post(route('movements.approve', movement.id));
-                                                                            }
-                                                                        }}
-                                                                        className="cursor-pointer text-green-600"
-                                                                    >
-                                                                        <Check className="mr-2 h-4 w-4" />
-                                                                        <span>Approve</span>
-                                                                    </DropdownMenuItem>
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => {
-                                                                            const remarks = prompt('Please provide a reason for rejection:');
-                                                                            if (remarks) {
-                                                                                router.post(route('movements.reject', movement.id), { remarks });
-                                                                            }
-                                                                        }}
-                                                                        className="cursor-pointer text-red-600"
-                                                                    >
-                                                                        <X className="mr-2 h-4 w-4" />
-                                                                        <span>Reject</span>
-                                                                    </DropdownMenuItem>
-                                                                </>
-                                                            )}
-
-                                                        {/* Mark as Completed - show for user's own approved movements or users with appropriate permissions */}
-                                                        {movement.status === 'approved' &&
-                                                            (movement.employee_id === userPermissions.employeeId ||
-                                                                userPermissions.canEdit ||
-                                                                userPermissions.canApprove ||
-                                                                (userPermissions.isBranchHead && movement.employee.current_branch_id === userPermissions.userBranchId) ||
-                                                                (userPermissions.isDepartmentHead && movement.employee.department_id === userPermissions.userDepartmentId)) && (
                                                                 <DropdownMenuItem
-                                                                    onClick={() => {
-                                                                        if (confirm('Mark this movement as completed?')) {
-                                                                            router.post(route('movements.complete', movement.id));
-                                                                        }
-                                                                    }}
+                                                                    onClick={() => router.get(route('movements.edit', movement.id))}
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <span>Edit</span>
+                                                                </DropdownMenuItem>
+                                                            )}
+
+                                                        {/* Close Movement - show for user's own active movements */}
+                                                        {movement.status === 'active' &&
+                                                            canCloseMovement(movement) && (
+                                                                <DropdownMenuItem
+                                                                    onClick={() => router.get(route('movements.show', movement.id))}
                                                                     className="cursor-pointer text-green-600"
                                                                 >
                                                                     <Check className="mr-2 h-4 w-4" />
-                                                                    <span>Mark as Completed</span>
+                                                                    <span>Close Movement</span>
                                                                 </DropdownMenuItem>
                                                             )}
                                                     </DropdownMenuContent>
@@ -565,7 +562,7 @@ export default function MovementIndex({
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="h-24 text-center">
+                                        <TableCell colSpan={8} className="h-24 text-center">
                                             No movement requests found.
                                             {(search || status || departmentId || employeeId || movementType || fromDate || toDate) && (
                                                 <Button
@@ -667,6 +664,51 @@ export default function MovementIndex({
                             </PaginationContent>
                         </Pagination>
                     </div>
+                )}
+
+                {/* Active Movements Summary Card */}
+                {userPermissions.isEmployee && (
+                    <Card className="mt-6">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Your Active Movements</CardTitle>
+                            <CardDescription>Movements that need to be closed upon return</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {movements.data.filter(m =>
+                                m.status === 'active' &&
+                                m.employee_id === userPermissions.employeeId
+                            ).length > 0 ? (
+                                <div className="space-y-4">
+                                    {movements.data.filter(m =>
+                                        m.status === 'active' &&
+                                        m.employee_id === userPermissions.employeeId
+                                    ).map(movement => (
+                                        <div key={`active-${movement.id}`} className="flex justify-between items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                            <div>
+                                                <div className="font-medium">{movement.destination}</div>
+                                                <div className="text-sm text-gray-600">
+                                                    {format(new Date(movement.from_datetime), 'MMM dd, yyyy HH:mm')} - {format(new Date(movement.to_datetime), 'MMM dd, yyyy HH:mm')}
+                                                </div>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                onClick={() => router.get(route('movements.show', movement.id))}
+                                                className="bg-green-600 hover:bg-green-700"
+                                            >
+                                                <Check className="mr-1 h-4 w-4" />
+                                                Close
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-center text-gray-500 py-4">
+                                    <AlertCircle className="h-5 w-5 mr-2" />
+                                    <span>No active movements found.</span>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 )}
             </div>
         </Layout>

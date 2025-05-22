@@ -142,11 +142,11 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         "38 Khetlal",
         "39 Chanpara",
         "40 Kichok"
-      ];
+    ];
 
     const filteredBranches = destination
-    ? branches.filter(branch => branch.toLowerCase().includes(destination.toLowerCase()))
-    : branches;
+        ? branches.filter(branch => branch.toLowerCase().includes(destination.toLowerCase()))
+        : branches;
 
     // Set default times on component mount
     useEffect(() => {
@@ -295,10 +295,8 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                 <div className="space-y-2">
                                                     <Label htmlFor="employee">Employee</Label>
                                                     <Select
-
                                                         value={employeeId}
                                                         onValueChange={setEmployeeId}
-                                                        disabled={isAdmin} // 👈 disables for non-admins
                                                     >
                                                         <SelectTrigger id="employee">
                                                             <SelectValue placeholder="Select Employee" />
@@ -316,8 +314,6 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     )}
                                                 </div>
                                             )}
-
-
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="movementType">Movement Type</Label>
@@ -534,7 +530,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                         Branch Audit
                                                     </span>
                                                     <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Audit Monitor")}>
-                                                        Audit Monitor
+                                                        Branch Monitor
                                                     </span>
                                                     <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Officer Monitor")}>
                                                         Officer Monitor
@@ -564,7 +560,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     </Button>
                                                 </Link>
                                                 <Button type="submit" disabled={submitting}>
-                                                    {submitting ? 'Submitting...' : 'Submit Request'}
+                                                    {submitting ? 'Submitting...' : 'Create Movement'}
                                                 </Button>
                                             </div>
                                         </form>
@@ -728,11 +724,11 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                     </div>
 
                                     <div className="mt-6 pt-4 border-t">
-                                        <h3 className="font-medium mb-3">Request Guidelines</h3>
+                                        <h3 className="font-medium mb-3">Movement Guidelines</h3>
                                         <div className="space-y-2 text-sm text-gray-600">
                                             <div className="flex items-start">
                                                 <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                                                <p>Submit requests at least 24 hours in advance when possible</p>
+                                                <p>Create a movement before leaving the office</p>
                                             </div>
                                             <div className="flex items-start">
                                                 <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
@@ -740,11 +736,11 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                             </div>
                                             <div className="flex items-start">
                                                 <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                                                <p>For official movements, approval must be obtained before departure</p>
+                                                <p>Don't forget to close the movement when you return</p>
                                             </div>
                                             <div className="flex items-start">
                                                 <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                                                <p>Mark the movement as completed upon return</p>
+                                                <p>Your actual return time will be tracked automatically</p>
                                             </div>
                                         </div>
                                     </div>
@@ -785,7 +781,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p className="max-w-xs">
-                                                    Official movements are work-related and may require approval. Personal movements are for non-work errands or appointments.
+                                                    Official movements are work-related. Personal movements are for non-work errands or appointments.
                                                 </p>
                                             </TooltipContent>
                                         </Tooltip>
@@ -793,13 +789,13 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <div className="flex justify-between items-center cursor-help p-2 rounded hover:bg-gray-50">
-                                                    <span className="font-medium">Approval Process</span>
+                                                    <span className="font-medium">Closing Movements</span>
                                                     <AlertCircle className="h-4 w-4 text-blue-500" />
                                                 </div>
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p className="max-w-xs">
-                                                    Movements require approval from a manager or supervisor before they are considered authorized.
+                                                    When you return to the office, remember to close your movement so your actual return time can be recorded.
                                                 </p>
                                             </TooltipContent>
                                         </Tooltip>
@@ -807,13 +803,13 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <div className="flex justify-between items-center cursor-help p-2 rounded hover:bg-gray-50">
-                                                    <span className="font-medium">Approval Process</span>
+                                                    <span className="font-medium">Attendance Tracking</span>
                                                     <AlertCircle className="h-4 w-4 text-blue-500" />
                                                 </div>
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p className="max-w-xs">
-                                                    Movements require approval from a manager or supervisor before they are considered authorized.
+                                                    Official movements will be counted as "on duty" in your attendance records.
                                                 </p>
                                             </TooltipContent>
                                         </Tooltip>

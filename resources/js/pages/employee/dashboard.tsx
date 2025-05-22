@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
     ArrowLeft,
     Calendar,
@@ -28,10 +29,54 @@ import {
     CalendarDays,
     BarChart3,
     FileText,
+    Navigation,
+    Building2,
+    Info,
+    MessageSquare,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-// Type definitions
+// Enhanced type definitions
+interface AttendanceRecord {
+    date: string;
+    day: string;
+    status: 'present' | 'absent' | 'leave' | 'on_duty' | 'weekend' | 'holiday';
+    check_in: string | null;
+    check_out: string | null;
+    remarks: string | null;
+    device: {
+        id: number;
+        name: string;
+    } | null;
+    // Movement fields
+    has_movement?: boolean;
+    multiple_movements?: boolean;
+    total_movements?: number;
+    movements?: Array<{
+        id: number;
+        movement_type: string;
+        purpose: string;
+        destination: string;
+        from_datetime: string;
+        to_datetime: string;
+        actual_return_datetime?: string;
+        status: string;
+    }>;
+    movement_type?: string;
+    movement_purpose?: string;
+    movement_destination?: string;
+    movement_from?: string;
+    movement_to?: string;
+    movement_status?: string;
+    movement_id?: number;
+    auto_remarks?: string;
+
+
+
+}
+
+
+// ... (other interfaces remain the same)
 interface Department {
     id: number;
     name: string;
@@ -57,19 +102,6 @@ interface EmployeeOption {
     name: string;
     department: string;
     designation: string;
-}
-
-interface AttendanceRecord {
-    date: string;
-    day: string;
-    status: 'present' | 'absent' | 'leave' | 'on_duty' | 'weekend' | 'holiday';
-    check_in: string | null;
-    check_out: string | null;
-    remarks: string | null;
-    device: {
-        id: number;
-        name: string;
-    } | null;
 }
 
 interface LeaveRecord {
@@ -105,7 +137,10 @@ interface MovementRecord {
     destination: string | null;
     from_datetime: string;
     to_datetime: string;
-    status: 'pending' | 'approved' | 'rejected' | 'completed';
+    planned_to_datetime?: string;
+    actual_return_datetime?: string | null;
+    status: 'active' | 'completed';
+    is_returned?: boolean;
     remarks: string | null;
     formatted_time_range: string;
     duration_hours: number;
@@ -179,6 +214,15 @@ export default function EmployeeDashboard({
     const [searchQuery, setSearchQuery] = useState('');
     const [filteredEmployees, setFilteredEmployees] = useState(employees);
     const [showSearchResults, setShowSearchResults] = useState(false);
+
+    // Debug log for attendance data
+    useEffect(() => {
+        if (attendanceData && attendanceData.length > 0) {
+            console.log('Attendance Data Sample:', attendanceData[0]);
+            const hasMovementData = attendanceData.some(record => record.has_movement);
+            console.log('Has movement data:', hasMovementData);
+        }
+    }, [attendanceData]);
 
     // Helper function to handle employee search
     useEffect(() => {
@@ -266,13 +310,14 @@ export default function EmployeeDashboard({
     // Helper function to get status badge for movements
     const getMovementStatusBadge = (status: string) => {
         const statusConfig = {
+            active: { color: 'bg-blue-100 text-blue-800', icon: <Clock className="h-3 w-3 mr-1" /> },
+            completed: { color: 'bg-green-100 text-green-800', icon: <CheckCircle className="h-3 w-3 mr-1" /> },
             pending: { color: 'bg-yellow-100 text-yellow-800', icon: <AlertCircle className="h-3 w-3 mr-1" /> },
             approved: { color: 'bg-green-100 text-green-800', icon: <CheckCircle className="h-3 w-3 mr-1" /> },
             rejected: { color: 'bg-red-100 text-red-800', icon: <XCircle className="h-3 w-3 mr-1" /> },
-            completed: { color: 'bg-blue-100 text-blue-800', icon: <CheckCircle className="h-3 w-3 mr-1" /> },
         };
 
-        const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
+        const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.active;
 
         return (
             <Badge variant="outline" className={`${config.color} border-0 flex items-center`}>
@@ -315,10 +360,9 @@ export default function EmployeeDashboard({
         router.get(route('employee.dashboard'), params);
     };
 
-    // Download PDF report
+    // Download PDF functions
     const downloadPdf = () => {
         const params = new URLSearchParams();
-
         params.append('employee_id', filters.employeeId.toString());
         params.append('filter_type', filters.filterType);
 
@@ -338,15 +382,11 @@ export default function EmployeeDashboard({
 
     const downloadMovementPdf = () => {
         const params = new URLSearchParams();
-
-        // Add current filter parameters
         if (filters) {
             if (filters.employeeId) {
                 params.append('employee_id', filters.employeeId.toString());
             }
-
             params.append('filter_type', filters.filterType);
-
             if (filters.filterType === 'year') {
                 params.append('year', filters.year);
             } else if (filters.filterType === 'custom' && filters.fromDate && filters.toDate) {
@@ -357,23 +397,17 @@ export default function EmployeeDashboard({
                 params.append('to_date', dateRange.to);
             }
         }
-
-        // Use the route provided in your example
         const url = `${route('employee.dashboard.movement.pdf')}?${params.toString()}`;
         window.open(url, '_blank');
     };
 
     const downloadAttendancePdf = () => {
         const params = new URLSearchParams();
-
-        // Add current filter parameters
         if (filters) {
             if (filters.employeeId) {
                 params.append('employee_id', filters.employeeId.toString());
             }
-
             params.append('filter_type', filters.filterType);
-
             if (filters.filterType === 'year') {
                 params.append('year', filters.year);
             } else if (filters.filterType === 'custom' && filters.fromDate && filters.toDate) {
@@ -384,23 +418,17 @@ export default function EmployeeDashboard({
                 params.append('to_date', dateRange.to);
             }
         }
-
-        // Use the route provided in your example
         const url = `${route('employee.dashboard.attendance.pdf')}?${params.toString()}`;
         window.open(url, '_blank');
     };
 
     const downloadLeavePdf = () => {
         const params = new URLSearchParams();
-
-        // Add current filter parameters
         if (filters) {
             if (filters.employeeId) {
                 params.append('employee_id', filters.employeeId.toString());
             }
-
             params.append('filter_type', filters.filterType);
-
             if (filters.filterType === 'year') {
                 params.append('year', filters.year);
             } else if (filters.filterType === 'custom' && filters.fromDate && filters.toDate) {
@@ -411,8 +439,6 @@ export default function EmployeeDashboard({
                 params.append('to_date', dateRange.to);
             }
         }
-
-        // Use the route provided in your example
         const url = `${route('employee.dashboard.leave.pdf')}?${params.toString()}`;
         window.open(url, '_blank');
     };
@@ -819,6 +845,7 @@ export default function EmployeeDashboard({
                             </TabsContent>
 
                             {/* Attendance Tab */}
+                            {/* Enhanced Attendance Tab with Movement Integration */}
                             <TabsContent value="attendance">
                                 <Card className="shadow-sm">
                                     <CardHeader className="bg-gray-50 border-b">
@@ -853,28 +880,301 @@ export default function EmployeeDashboard({
                                                         <TableHead>Status</TableHead>
                                                         <TableHead>Check In</TableHead>
                                                         <TableHead>Check Out</TableHead>
+                                                        <TableHead>Movement</TableHead>
                                                         <TableHead>Remarks</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
                                                     {attendanceData.length > 0 ? (
-                                                        attendanceData.map((record, index) => (
-                                                            <TableRow key={index}>
-                                                                <TableCell>{format(new Date(record.date), 'dd MMM yyyy')}</TableCell>
-                                                                <TableCell>{record.day}</TableCell>
-                                                                <TableCell>{getAttendanceStatusBadge(record.status)}</TableCell>
-                                                                <TableCell>{record.check_in || '-'}</TableCell>
-                                                                <TableCell>{record.check_out || '-'}</TableCell>
-                                                                <TableCell>
-                                                                    <div className="max-w-xs truncate" title={record.remarks || ''}>
-                                                                        {record.remarks || '-'}
-                                                                    </div>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        ))
+                                                        attendanceData.map((record, index) => {
+                                                            // Debug log for movement data
+                                                            if (record.has_movement) {
+                                                                console.log('Movement data for', record.date, ':', {
+                                                                    has_movement: record.has_movement,
+                                                                    multiple_movements: record.multiple_movements,
+                                                                    total_movements: record.total_movements,
+                                                                    movement_type: record.movement_type,
+                                                                    movement_purpose: record.movement_purpose
+                                                                });
+                                                            }
+                                                            return (
+                                                                <TableRow
+                                                                    key={index}
+                                                                    className={record.has_movement ?
+                                                                        "hover:bg-blue-50/50 border-l-2 border-l-blue-200" :
+                                                                        "hover:bg-gray-50"
+                                                                    }
+                                                                >
+                                                                    <TableCell>{format(new Date(record.date), 'dd MMM yyyy')}</TableCell>
+                                                                    <TableCell>{record.day}</TableCell>
+                                                                    <TableCell>{getAttendanceStatusBadge(record.status)}</TableCell>
+                                                                    <TableCell>{record.check_in || '-'}</TableCell>
+                                                                    <TableCell>{record.check_out || '-'}</TableCell>
+
+                                                                    {/* Enhanced Movement Column */}
+                                                                    <TableCell>
+                                                                        {record.has_movement ? (
+                                                                            <div className="space-y-2">
+                                                                                {record.multiple_movements ? (
+                                                                                    <Popover>
+                                                                                        <PopoverTrigger asChild>
+                                                                                            <div className="cursor-pointer hover:bg-blue-50 p-2 rounded-md border border-blue-200 transition-all duration-200">
+                                                                                                <div className="flex items-center justify-between">
+                                                                                                    <div className="flex items-center space-x-2">
+                                                                                                        <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200">
+                                                                                                            <Navigation className="mr-1 h-3 w-3" />
+                                                                                                            {record.total_movements} Movements
+                                                                                                        </Badge>
+                                                                                                    </div>
+                                                                                                    <Info className="h-4 w-4 text-blue-500" />
+                                                                                                </div>
+                                                                                                <div className="text-xs text-gray-600 mt-1">
+                                                                                                    Multiple movements on this day
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </PopoverTrigger>
+                                                                                        <PopoverContent className="w-96" sideOffset={5} align="start">
+                                                                                            <div className="space-y-4">
+                                                                                                <h4 className="font-semibold text-lg flex items-center">
+                                                                                                    <Navigation className="mr-2 h-5 w-5 text-red-500" />
+                                                                                                    {record.total_movements} Movements Today
+                                                                                                </h4>
+
+                                                                                                <div className="max-h-64 overflow-y-auto space-y-3">
+                                                                                                    {Array.isArray(record.movements) && record.movements.map((movement, movIndex) => (
+                                                                                                        <div key={movement.id} className="border-b pb-3 last:border-b-0">
+                                                                                                            <div className="flex items-center justify-between mb-2">
+                                                                                                                <Badge variant="outline" className={movement.movement_type === 'official' ?
+                                                                                                                    'bg-blue-100 text-blue-800 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-200'}>
+                                                                                                                    <Building2 className="mr-1 h-3 w-3" />
+                                                                                                                    {movIndex + 1}. {movement.movement_type}
+                                                                                                                </Badge>
+                                                                                                                <Badge variant="outline" className={
+                                                                                                                    movement.status === 'completed'
+                                                                                                                        ? 'bg-green-100 text-green-800 border-green-200'
+                                                                                                                        : 'bg-blue-100 text-blue-800 border-blue-200'
+                                                                                                                }>
+                                                                                                                    {movement.status === 'completed' ? (
+                                                                                                                        <CheckCircle className="mr-1 h-3 w-3" />
+                                                                                                                    ) : (
+                                                                                                                        <Clock className="mr-1 h-3 w-3" />
+                                                                                                                    )}
+                                                                                                                    {movement.status}
+                                                                                                                </Badge>
+                                                                                                            </div>
+
+                                                                                                            <div className="text-sm space-y-1">
+                                                                                                                <div>
+                                                                                                                    <span className="text-gray-500 font-medium">Purpose:</span>
+                                                                                                                    <div className="mt-1 p-2 bg-gray-50 rounded text-xs">
+                                                                                                                        {movement.purpose?.length > 80 ? (
+                                                                                                                            <div>
+                                                                                                                                {movement.purpose.substring(0, 80)}...
+                                                                                                                                <button
+                                                                                                                                    className="text-blue-600 hover:underline ml-1"
+                                                                                                                                    onClick={() => alert(movement.purpose)}
+                                                                                                                                >
+                                                                                                                                    Read Full
+                                                                                                                                </button>
+                                                                                                                            </div>
+                                                                                                                        ) : (
+                                                                                                                            movement.purpose
+                                                                                                                        )}
+                                                                                                                    </div>
+                                                                                                                </div>
+
+                                                                                                                <div className="grid grid-cols-2 gap-2">
+                                                                                                                    <div>
+                                                                                                                        <span className="text-gray-500">Destination:</span>
+                                                                                                                        <div className="font-medium flex items-center">
+                                                                                                                            <MapPin className="mr-1 h-3 w-3 text-gray-400" />
+                                                                                                                            {movement.destination}
+                                                                                                                        </div>
+                                                                                                                    </div>
+                                                                                                                    <div>
+                                                                                                                        <span className="text-gray-500">Time:</span>
+                                                                                                                        <div className="font-medium flex items-center">
+                                                                                                                            <Clock className="mr-1 h-3 w-3 text-gray-400" />
+                                                                                                                            {new Date(movement.from_datetime).toLocaleTimeString('en-US', {
+                                                                                                                                hour: '2-digit',
+                                                                                                                                minute: '2-digit',
+                                                                                                                                hour12: true
+                                                                                                                            })} - {new Date(movement.actual_return_datetime || movement.to_datetime).toLocaleTimeString('en-US', {
+                                                                                                                                hour: '2-digit',
+                                                                                                                                minute: '2-digit',
+                                                                                                                                hour12: true
+                                                                                                                            })}
+                                                                                                                        </div>
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    ))}
+                                                                                                </div>
+
+                                                                                                <div className="pt-3 border-t flex justify-between">
+                                                                                                    <span className="text-xs text-gray-400">
+                                                                                                        {record.total_movements} movements total
+                                                                                                    </span>
+                                                                                                    <span className="text-xs text-gray-400">
+                                                                                                        Click outside to close
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </PopoverContent>
+                                                                                    </Popover>
+                                                                                ) : (
+                                                                                    // Single movement display
+                                                                                    <Popover>
+                                                                                        <PopoverTrigger asChild>
+                                                                                            <div className="cursor-pointer hover:bg-blue-50 p-2 rounded-md border border-transparent hover:border-blue-200 transition-all duration-200">
+                                                                                                <div className="flex items-center justify-between">
+                                                                                                    <div className="flex items-center space-x-2">
+                                                                                                        <Badge variant="outline" className={record.movement_type === 'official' ?
+                                                                                                            'bg-blue-100 text-blue-800 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-200'}>
+                                                                                                            <Building2 className="mr-1 h-3 w-3" />
+                                                                                                            {record.movement_type}
+                                                                                                        </Badge>
+                                                                                                        <span className="text-sm font-medium">Movement</span>
+                                                                                                    </div>
+                                                                                                    <Info className="h-4 w-4 text-blue-500" />
+                                                                                                </div>
+                                                                                                <div className="text-xs text-gray-600 mt-1">
+                                                                                                    <Navigation className="inline mr-1 h-3 w-3" />
+                                                                                                    {record.movement_purpose?.length > 30
+                                                                                                        ? `${record.movement_purpose.substring(0, 30)}...`
+                                                                                                        : record.movement_purpose
+                                                                                                    }
+                                                                                                </div>
+                                                                                                <div className="text-xs text-gray-500 mt-1">
+                                                                                                    <Clock className="inline mr-1 h-3 w-3" />
+                                                                                                    {record.movement_from} - {record.movement_to}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </PopoverTrigger>
+                                                                                        <PopoverContent className="w-80" sideOffset={5} align="start">
+                                                                                            <div className="space-y-4">
+                                                                                                <div className="flex items-center justify-between">
+                                                                                                    <h4 className="font-semibold text-lg flex items-center">
+                                                                                                        <Navigation className="mr-2 h-5 w-5 text-blue-500" />
+                                                                                                        Movement Details
+                                                                                                    </h4>
+                                                                                                    <Badge variant="outline" className={
+                                                                                                        record.movement_status === 'completed'
+                                                                                                            ? 'bg-green-100 text-green-800 border-green-200'
+                                                                                                            : 'bg-blue-100 text-blue-800 border-blue-200'
+                                                                                                    }>
+                                                                                                        {record.movement_status === 'completed' ? (
+                                                                                                            <CheckCircle className="mr-1 h-3 w-3" />
+                                                                                                        ) : (
+                                                                                                            <Clock className="mr-1 h-3 w-3" />
+                                                                                                        )}
+                                                                                                        {record.movement_status}
+                                                                                                    </Badge>
+                                                                                                </div>
+
+                                                                                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                                                                                    <div className="space-y-2">
+                                                                                                        <div>
+                                                                                                            <span className="text-gray-500 font-medium">Type:</span>
+                                                                                                            <div className="mt-1">
+                                                                                                                <Badge variant="outline" className={record.movement_type === 'official' ?
+                                                                                                                    'bg-blue-100 text-blue-800 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-200'}>
+                                                                                                                    <Building2 className="mr-1 h-3 w-3" />
+                                                                                                                    {record.movement_type}
+                                                                                                                </Badge>
+                                                                                                            </div>
+                                                                                                        </div>
+
+                                                                                                        <div>
+                                                                                                            <span className="text-gray-500 font-medium">Duration:</span>
+                                                                                                            <div className="mt-1 flex items-center text-gray-700">
+                                                                                                                <Clock className="mr-1 h-4 w-4" />
+                                                                                                                {record.movement_from} - {record.movement_to}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    </div>
+
+                                                                                                    <div className="space-y-2">
+                                                                                                        <div>
+                                                                                                            <span className="text-gray-500 font-medium">Destination:</span>
+                                                                                                            <div className="mt-1 flex items-center text-gray-700">
+                                                                                                                <MapPin className="mr-1 h-4 w-4" />
+                                                                                                                {record.movement_destination}
+                                                                                                            </div>
+                                                                                                        </div>
+
+                                                                                                        <div>
+                                                                                                            <span className="text-gray-500 font-medium">Status:</span>
+                                                                                                            <div className="mt-1">
+                                                                                                                <Badge variant="outline" className={
+                                                                                                                    record.movement_status === 'completed'
+                                                                                                                        ? 'bg-green-100 text-green-800 border-green-200'
+                                                                                                                        : 'bg-blue-100 text-blue-800 border-blue-200'
+                                                                                                                }>
+                                                                                                                    {record.movement_status === 'completed' ? (
+                                                                                                                        <CheckCircle className="mr-1 h-3 w-3" />
+                                                                                                                    ) : (
+                                                                                                                        <Clock className="mr-1 h-3 w-3" />
+                                                                                                                    )}
+                                                                                                                    {record.movement_status}
+                                                                                                                </Badge>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </div>
+
+                                                                                                <div>
+                                                                                                    <span className="text-gray-500 font-medium">Purpose:</span>
+                                                                                                    <div className="mt-1 p-2 bg-gray-50 rounded-md text-sm text-gray-700">
+                                                                                                        {record.movement_purpose}
+                                                                                                    </div>
+                                                                                                </div>
+
+                                                                                                <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
+                                                                                                    <button
+                                                                                                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center"
+                                                                                                        onClick={() => window.open(`/movements/${record.movement_id}`, '_blank')}
+                                                                                                    >
+                                                                                                        <FileText className="mr-1 h-4 w-4" />
+                                                                                                        View Full Movement Record
+                                                                                                    </button>
+                                                                                                    <span className="text-xs text-gray-400">
+                                                                                                        Click outside to close
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </PopoverContent>
+                                                                                    </Popover>
+                                                                                )}
+
+                                                                                {/* Auto Remarks for movement records */}
+                                                                                {record.auto_remarks && (
+                                                                                    <div className="flex items-center text-xs text-gray-500 bg-gray-50 p-1 rounded">
+                                                                                        <MessageSquare className="mr-1 h-3 w-3" />
+                                                                                        <span className="ml-1">{record.auto_remarks}</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="flex items-center text-sm text-gray-400">
+                                                                                <Navigation className="mr-2 h-4 w-4" />
+                                                                                <span>No movement</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </TableCell>
+
+                                                                    <TableCell>
+                                                                        <div className="max-w-xs truncate" title={record.remarks || ''}>
+                                                                            {record.remarks || '-'}
+                                                                        </div>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })
                                                     ) : (
                                                         <TableRow>
-                                                            <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+                                                            <TableCell colSpan={7} className="text-center py-6 text-gray-500">
                                                                 No attendance records found for the selected period
                                                             </TableCell>
                                                         </TableRow>
@@ -1049,10 +1349,26 @@ export default function EmployeeDashboard({
                                                                 <TableCell>
                                                                     <div className="flex items-center text-sm">
                                                                         <Timer className="h-4 w-4 mr-1.5 text-gray-400 flex-shrink-0" />
-                                                                        <span className="truncate">{movement.formatted_time_range}</span>
+                                                                        <div>
+                                                                            <span className="truncate">{movement.formatted_time_range}</span>
+                                                                            {movement.status === 'active' && (
+                                                                                <div className="text-xs text-blue-600 mt-0.5">
+                                                                                    (In Progress)
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </TableCell>
-                                                                <TableCell>{movement.duration_hours} hours</TableCell>
+                                                                <TableCell>
+                                                                    <div>
+                                                                        {movement.duration_hours} hours
+                                                                        {movement.status === 'completed' && movement.actual_return_datetime && (
+                                                                            <div className="text-xs text-green-600 mt-0.5">
+                                                                                (Actual duration)
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
                                                                 <TableCell>
                                                                     <div className="flex items-center text-sm">
                                                                         {movement.destination ? (

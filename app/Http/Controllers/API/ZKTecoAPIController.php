@@ -455,21 +455,12 @@ class ZKTecoAPIController extends Controller
         }
     }
 
-    /**
-     * Save attendance record to database
-     */
+
+    // Update saveAttendanceRecord method in ZKTecoAPIController.php
     private function saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn)
     {
         // Use database transaction for data integrity
         return DB::transaction(function () use ($employee, $device, $date, $time, $isCheckIn) {
-            // Log the values being used
-            Log::info('ZKTeco sync: Saving attendance record', [
-                'employee_id' => $employee->id,
-                'date' => $date,
-                'time' => $time,
-                'isCheckIn' => $isCheckIn
-            ]);
-
             // Find existing attendance for this date
             $attendance = Attendance::where('employee_id', $employee->id)
                 ->where('date', $date)
@@ -482,7 +473,7 @@ class ZKTecoAPIController extends Controller
             $movement = null;
             if ($isOnMovement) {
                 $movement = \App\Models\Movement::where('employee_id', $employee->id)
-                    ->whereIn('status', ['approved', 'completed'])
+                    ->whereIn('status', ['approved', 'completed', 'active'])
                     ->where('movement_type', 'official')
                     ->where('from_datetime', '<=', Carbon::parse($date)->endOfDay())
                     ->where('to_datetime', '>=', Carbon::parse($date)->startOfDay())
@@ -532,7 +523,7 @@ class ZKTecoAPIController extends Controller
     }
 
     /**
-     * Update attendance status based on check-in and check-out times, leave status, and movement status
+     * Update attendance status based on check-in and check-out times, leave status, andovement status
      */
     private function updateAttendanceStatus($attendance)
     {
