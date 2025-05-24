@@ -9,6 +9,7 @@ use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
 use App\Models\Movement;
 use App\Models\AttendanceSetting;
+use App\Models\Holiday;
 use App\Models\LeaveType;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -165,9 +166,59 @@ class EmployeeDashboardController extends Controller
         return min($dates);
     }
 
+
     /**
-     * Get attendance data for the selected employee and date range
+     * Enhanced method to determine date status with proper priority
      */
+    private function determineDateStatusEnhanced($date, $holidays, $weekendDays, $isOnLeave, $hasMovement, $hasAttendance)
+    {
+        $currentDate = Carbon::parse($date);
+        $dayOfWeek = $currentDate->dayOfWeek;
+
+        // Enhanced debug logging
+        Log::info('Status determination for date', [
+            'date' => $date,
+            'holidays_array' => $holidays,
+            'is_holiday' => in_array($date, $holidays),
+            'has_attendance' => $hasAttendance,
+            'is_on_leave' => $isOnLeave,
+            'has_movement' => $hasMovement,
+            'day_of_week' => $dayOfWeek,
+            'weekend_days' => $weekendDays
+        ]);
+
+        // Priority order:
+        // 1. If there's attendance record -> 'present'
+        if ($hasAttendance) {
+            Log::info("Status: present (has attendance)");
+            return 'present';
+        }
+
+        // 2. If on approved leave -> 'leave'
+        if ($isOnLeave) {
+            Log::info("Status: leave (on approved leave)");
+            return 'leave';
+        }
+
+        // 3. If has movement -> 'on_duty'
+        if ($hasMovement) {
+            Log::info("Status: on_duty (has movement)");
+            return 'on_duty';
+        }
+
+        // 4. If it's a holiday -> 'holiday'
+        if (in_array($date, $holidays)) {
+            return 'holiday';
+        }
+
+        // 5. If it's weekend -> 'weekend'
+        if (in_array($dayOfWeek, $weekendDays)) {
+            return 'weekend';
+        }
+
+
+        return 'absent';
+    }
     /**
      * Enhanced getAttendanceData method with proper movement integration
      */
@@ -182,6 +233,21 @@ class EmployeeDashboardController extends Controller
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dateRange[] = $date->format('Y-m-d');
         }
+
+        // Get employee details to fetch branch-specific holidays
+        $employee = Employee::with(['department', 'designation'])->findOrFail($employeeId);
+        $branchId = $employee->current_branch_id;
+
+        $holidays = Holiday::whereBetween('date', [$fromDate, $toDate])
+            ->pluck('date')
+            ->map(function ($date) {
+                // Ensure date is in Y-m-d format
+                return Carbon::parse($date)->format('Y-m-d');
+            })
+            ->toArray();
+
+
+
 
         // Get all attendances within date range WITH movements
         $attendances = DB::table('attendances')
@@ -204,15 +270,32 @@ class EmployeeDashboardController extends Controller
             ->whereIn('status', ['active', 'completed'])
             ->get();
 
+        // Get leave applications for the period
+        $leaves = LeaveApplication::where('employee_id', $employeeId)
+            ->where('status', 'approved')
+            ->where(function ($query) use ($fromDate, $toDate) {
+                $query->whereBetween('start_date', [$fromDate, $toDate])
+                    ->orWhereBetween('end_date', [$fromDate, $toDate])
+                    ->orWhere(function ($q) use ($fromDate, $toDate) {
+                        $q->where('start_date', '<=', $fromDate)
+                            ->where('end_date', '>=', $toDate);
+                    });
+            })
+            ->get();
+
+        // Get attendance settings for weekend determination
+        $attendanceSettings = AttendanceSetting::where('branch_id', $branchId)->first();
+        $weekendDays = $attendanceSettings ? json_decode($attendanceSettings->weekend_days ?? '[]', true) : [];
+
         // Instantiate Attendance model for method access
         $attendanceModel = new Attendance();
 
-        // Prepare report data
         $reports = [];
 
         foreach ($dateRange as $date) {
             $currentDate = Carbon::parse($date);
             $dayName = $currentDate->format('l');
+            $dayOfWeek = $currentDate->dayOfWeek;
 
             // Find existing attendance record
             $existingAttendance = $attendances->firstWhere('date', $date);
@@ -239,15 +322,11 @@ class EmployeeDashboardController extends Controller
                 'movement_status' => null,
                 'movement_id' => null,
                 'auto_remarks' => null,
-
-
             ];
 
             // Check for movements on this specific date
             $movementsOnDate = $movements->filter(function ($movement) use ($date) {
                 $fromDate = Carbon::parse($movement->from_datetime)->format('Y-m-d');
-
-                // Use actual_return_datetime if available and movement is completed, otherwise use to_datetime
                 $toDate = ($movement->status === 'completed' && $movement->actual_return_datetime)
                     ? Carbon::parse($movement->actual_return_datetime)->format('Y-m-d')
                     : Carbon::parse($movement->to_datetime)->format('Y-m-d');
@@ -255,8 +334,20 @@ class EmployeeDashboardController extends Controller
                 return $date >= $fromDate && $date <= $toDate;
             });
 
-            // Determine status (including movement consideration)
-            $status = $attendanceModel->determineDateStatus($employeeId, $date);
+            // Check for leave on this date
+            $isOnLeave = $leaves->filter(function ($leave) use ($date) {
+                return $date >= $leave->start_date && $date <= $leave->end_date;
+            })->count() > 0;
+
+            // Determine status with proper priority order
+            $status = $this->determineDateStatusEnhanced(
+                $date,
+                $holidays,
+                $weekendDays,
+                $isOnLeave,
+                $movementsOnDate->count() > 0,
+                !is_null($existingAttendance)
+            );
 
             // If there are movements on this date, add movement information
             if ($movementsOnDate->count() > 0) {
@@ -287,14 +378,12 @@ class EmployeeDashboardController extends Controller
                     $reportData['movement_destination'] = $singleMovement->destination;
                     $reportData['movement_from'] = Carbon::parse($singleMovement->from_datetime)->format('h:i A');
 
-                    // Use actual return time if completed, otherwise planned time
                     $endTime = ($singleMovement->status === 'completed' && $singleMovement->actual_return_datetime)
                         ? $singleMovement->actual_return_datetime
                         : $singleMovement->to_datetime;
                     $reportData['movement_to'] = Carbon::parse($endTime)->format('h:i A');
                     $reportData['movement_status'] = $singleMovement->status;
 
-                    // Store all movement details for popover
                     $reportData['movements'] = [
                         [
                             'id' => $singleMovement->id,
@@ -375,8 +464,8 @@ class EmployeeDashboardController extends Controller
 
                     case 'holiday':
                         $reportData['status'] = 'holiday';
-                        $reportData['remarks'] = 'Holiday';
-                        $reportData['auto_remarks'] = 'Holiday';
+                        $reportData['remarks'] = 'Public Holiday';
+                        $reportData['auto_remarks'] = 'Public Holiday';
                         break;
 
                     case 'weekend':
@@ -471,7 +560,7 @@ class EmployeeDashboardController extends Controller
             }
 
             // Calculate late by threshold
-            $lateThreshold = $workStartDateTime->copy()->addMinutes($settings->late_threshold_minutes ?? 0);
+            $lateThreshold = $workStartDateTime->copy()->addMinutes((int) ($settings->late_threshold_minutes ?? 0));
 
             // Determine if employee is late
             $isLate = $checkInDateTime->gt($lateThreshold);
@@ -557,8 +646,6 @@ class EmployeeDashboardController extends Controller
 
             $attendance->auto_remarks = !empty($remarks) ? implode(', ', $remarks) : 'Regular';
         } catch (\Exception $e) {
-            // Log the error for debugging
-            Log::error('Error generating remarks: ' . $e->getMessage());
             $attendance->auto_remarks = 'Regular';
         }
     }
@@ -629,7 +716,7 @@ class EmployeeDashboardController extends Controller
             }
         }
 
-        // Calculate attendance percentage
+        // Calculate attendance percentage (exclude holidays and weekends from working days)
         $workingDays = $summary['total_days'] - $summary['weekend'] - $summary['holiday'];
         $summary['attendance_percentage'] = $workingDays > 0
             ? round((($summary['present'] + $summary['on_duty'] + $summary['leave']) / $workingDays) * 100, 2)
@@ -1146,3 +1233,4 @@ class EmployeeDashboardController extends Controller
         }
     }
 }
+
