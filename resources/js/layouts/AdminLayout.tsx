@@ -20,12 +20,14 @@ import {
     FileText,
     Activity,
     LayoutDashboard,
-    Award
+    Award,
+    CalendarDays,
+    MapPin,
+    Building2
 } from 'lucide-react';
 
 import { Button } from '@/Components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/Components/ui/avatar';
-
 import { Toast, ToastAction } from '@/Components/ui/toast';
 import { useToast } from '@/Components/ui/use-toast';
 import { Alert, AlertDescription } from '@/Components/ui/alert';
@@ -53,7 +55,6 @@ import { ScrollArea } from "@/Components/ui/scroll-area";
 import { Badge } from "@/Components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/Components/ui/tooltip";
 import NotificationDropdown from '@/components/notification-dropdown';
-import NotificationComponent from '@/components/notification-component';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -83,28 +84,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const employee = auth?.employee;
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
 
-    // Toggle mobile navigation
-    const toggleMobileNav = () => {
-        setIsMobileNavOpen(!isMobileNavOpen);
-    };
+    // Toggle functions
+    const toggleMobileNav = () => setIsMobileNavOpen(!isMobileNavOpen);
+    const toggleSidebar = () => setCollapsed(!collapsed);
+    const toggleMenu = (menu: string) => setActiveMenu(activeMenu === menu ? null : menu);
 
-    // Toggle sidebar collapse state
-    const toggleSidebar = () => {
-        setCollapsed(!collapsed);
-    };
-
-    // Toggle menu items with submenu
-    const toggleMenu = (menu: string) => {
-        setActiveMenu(activeMenu === menu ? null : menu);
-    };
-
-    // Check if a menu item is active - more precise implementation
+    // Check if a menu item is active
     const isActive = (path: string) => {
-        // For exact matches or path followed by slash or nothing
         return currentPath === path ||
-            (path !== '/' &&
-                (currentPath.startsWith(path + '/') ||
-                    currentPath === path));
+               (path !== '/' && (currentPath.startsWith(path + '/') || currentPath === path));
     };
 
     // Get initials from name for Avatar fallback
@@ -116,65 +104,35 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             .toUpperCase();
     };
 
-    // Replace the hasPermission function with this updated version
+    // Updated permission check function
     const hasPermission = (permission?: string): boolean => {
         if (!permission) return true;
 
-        // If user has no roles, they have no permissions
         if (!auth?.user?.roles || auth.user.roles.length === 0) {
             return false;
         }
 
-        // Check each role for the permission
         for (const role of auth.user.roles) {
             let rolePermissions = role.permissions;
 
-            // Handle case where permissions are stored as a JSON string
             if (typeof rolePermissions === 'string') {
                 try {
                     rolePermissions = JSON.parse(rolePermissions);
                 } catch (e) {
                     console.error('Error parsing permissions for role:', role.name, e);
-                    continue; // Skip this role if we can't parse permissions
+                    continue;
                 }
             }
 
-            // If this role has the permission, return true
             if (rolePermissions && rolePermissions.includes(permission)) {
                 return true;
             }
         }
 
-        // No role had the required permission
         return false;
     };
 
-    // Update useEffect to log roles info (for debugging)
-    useEffect(() => {
-        if (auth?.user?.roles) {
-            console.log('User roles:', auth.user.roles);
-
-            auth.user.roles.forEach((role, index) => {
-                const rolePermissions = role.permissions;
-
-                // Try to parse if it's a string
-                if (typeof rolePermissions === 'string') {
-                    try {
-                        const parsed = JSON.parse(rolePermissions);
-                        console.log(`Role ${index + 1} (${role.name}) permissions:`, parsed);
-                    } catch (e) {
-                        console.error(`Could not parse permissions for role ${index + 1} (${role.name}):`, e);
-                    }
-                } else {
-                    console.log(`Role ${index + 1} (${role.name}) permissions:`, rolePermissions);
-                }
-            });
-        } else {
-            console.log('User has no roles assigned');
-        }
-    }, []);
-
-    // Improved Menu Structure based on web.php routes with permissions
+    // Organized Menu Structure with EXACT permission names matching web.php
     const menuItems: MenuItemType[] = [
         {
             title: 'Dashboard',
@@ -191,12 +149,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             submenu: [
                 { title: 'All Employees', path: '/employees', permission: 'employees.view' },
                 { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view' },
-                { title: 'Employee Report', path: '/employee/dashboard', permission: 'employees.view' },
+                { title: 'Employee Dashboard', path: '/employee/dashboard', permission: 'employees.view' },
             ]
         },
         {
-            title: 'HRM Admin Setup',
-            icon: <Building className="w-5 h-5" />,
+            title: 'Organization Setup',
+            icon: <Building2 className="w-5 h-5" />,
             path: '/branches',
             hasSubmenu: true,
             permission: 'branches.view',
@@ -215,24 +173,24 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             submenu: [
                 { title: 'Daily Attendance', path: '/attendance', permission: 'attendance.view' },
                 { title: 'Monthly View', path: '/attendance/monthly', permission: 'attendance.view' },
-                { title: 'Report', path: '/attendance/report', permission: 'leaves_type.view' },
-                { title: 'Attendance Devices', path: '/attendance/devices', permission: 'leaves_type.view' },
-                { title: 'Device Settings', path: '/attendance/settings', permission: 'leaves_type.view' },
-                { title: 'ZKTeco Integration', path: '/zkteco', permission: 'leaves_type.view' },
+                { title: 'Attendance Report', path: '/attendance/report', permission: 'attendance.view' },
+                { title: 'Attendance Devices', path: '/attendance/devices', permission: 'attendance.admin' },
+                { title: 'Device Settings', path: '/attendance/settings', permission: 'attendance.admin' },
+                { title: 'ZKTeco Integration', path: '/zkteco', permission: 'attendance.admin' },
             ]
         },
         {
             title: 'Leave Management',
-            icon: <Calendar className="w-5 h-5" />,
+            icon: <CalendarDays className="w-5 h-5" />,
             path: '/leave',
             hasSubmenu: true,
-            permission: 'leaves.view',
+            permission: 'leave-applications.view',
             submenu: [
-                { title: 'Leave Applications', path: '/leave/applications', permission: 'leaves.view' },
-                { title: 'Leave Types', path: '/leave/types', permission: 'leaves_type.view' },
-                { title: 'Leave Balance', path: '/leave/balances', permission: 'leaves_type.view' },
-                { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk', permission: 'leaves_type.view' },
-                { title: 'Leave Report', path: '/leave/applications/report', permission: 'leaves.view' },
+                { title: 'Leave Applications', path: '/leave/applications', permission: 'leave-applications.view' },
+                { title: 'Leave Types', path: '/leave/types', permission: 'leave-types.view' },
+                { title: 'Leave Balances', path: '/leave/balances', permission: 'leave-balances.view' },
+                { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk', permission: 'leave-balances.admin' },
+                { title: 'Leave Report', path: '/leave/applications/report', permission: 'reports.view' },
             ]
         },
         {
@@ -240,9 +198,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             icon: <Activity className="w-5 h-5" />,
             path: '/movements',
             hasSubmenu: true,
+            permission: 'movements.view',
             submenu: [
-                { title: 'Movements', path: '/movements' },
-                { title: 'Transfers', path: '/transfers', permission: 'transfers.edit' },
+                { title: 'Movements', path: '/movements', permission: 'movements.view' },
+                { title: 'Movement Report', path: '/movements/report', permission: 'reports.view' },
+                { title: 'Transfers', path: '/transfers', permission: 'transfers.view' },
+                { title: 'Transfer Report', path: '/transfers/report', permission: 'reports.view' },
             ]
         },
         {
@@ -250,9 +211,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             icon: <Award className="w-5 h-5" />,
             path: '/holidays',
             hasSubmenu: true,
+            permission: 'holidays.view',
             submenu: [
-                { title: 'All Holidays', path: '/holidays', permission: 'leaves_type.view' },
-                { title: 'Holiday Calendar', path: '/holiday-calendar' },
+                { title: 'All Holidays', path: '/holidays', permission: 'holidays.view' },
+                { title: 'Holiday Calendar', path: '/holidays/calendar', permission: 'holidays.view' },
             ]
         },
         {
@@ -262,8 +224,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             hasSubmenu: true,
             permission: 'reports.view',
             submenu: [
-                { title: 'Overview', path: '/reports', permission: 'reports.view' },
-                { title: 'Attendance Report', path: '/reports/attendance', permission: 'reports.view' },
+                { title: 'Attendance Report', path: '/attendance/sheet-report', permission: 'reports.view' },
                 { title: 'Leave Report', path: '/reports/leave', permission: 'reports.view' },
                 { title: 'Movement Report', path: '/reports/movement', permission: 'reports.view' },
                 { title: 'Transfer Report', path: '/reports/transfer', permission: 'reports.view' },
@@ -275,11 +236,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             icon: <User className="w-5 h-5" />,
             path: '/admin/users',
             hasSubmenu: true,
-            permission: 'users.view',
+            permission: 'admin.access',
             submenu: [
                 { title: 'All Users', path: '/admin/users', permission: 'users.view' },
                 { title: 'Add User', path: '/admin/users/create', permission: 'users.create' },
-                { title: 'Roles & Permissions', path: '/admin/roles', permission: 'users.view' },
+                { title: 'Roles & Permissions', path: '/admin/roles', permission: 'roles.view' },
             ]
         },
         {
@@ -294,15 +255,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
     ];
 
-    // Desktop sidebar menu item component - improved with tooltip for collapsed state and permission checks
+    // Desktop sidebar menu item component
     const DesktopMenuItem = ({ item }: { item: MenuItemType }) => {
-        // Skip rendering if user doesn't have permission
         if (item.permission && !hasPermission(item.permission)) return null;
 
-        // Filter submenu items based on permissions
-        const permittedSubmenu = item.submenu?.filter(subItem => !subItem.permission || hasPermission(subItem.permission));
+        const permittedSubmenu = item.submenu?.filter(subItem =>
+            !subItem.permission || hasPermission(subItem.permission)
+        );
 
-        // Don't render menu with empty submenu after filtering
         if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
 
         return item.hasSubmenu ? (
@@ -313,43 +273,53 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             >
                 <CollapsibleTrigger asChild>
                     <div
-                        className={`flex items-center justify-between w-full p-2 rounded-md cursor-pointer transition-colors duration-200 group ${isActive(item.path)
-                            ? 'bg-blue-50 text-blue-700 font-medium'
-                            : 'hover:bg-gray-100 text-gray-700'
-                            }`}
+                        className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 group ${
+                            isActive(item.path)
+                                ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                : 'hover:bg-gray-50 text-gray-700'
+                        }`}
                     >
                         <TooltipProvider delayDuration={200}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
-                                        <div className={`${isActive(item.path)
-                                            ? 'text-blue-700'
-                                            : 'text-gray-600 group-hover:text-gray-900'
-                                            }`}>
+                                        <div className={`${
+                                            isActive(item.path)
+                                                ? 'text-blue-700'
+                                                : 'text-gray-600 group-hover:text-gray-900'
+                                        }`}>
                                             {item.icon}
                                         </div>
-                                        {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
+                                        {!collapsed && (
+                                            <span className="text-sm font-medium">{item.title}</span>
+                                        )}
                                     </div>
                                 </TooltipTrigger>
-                                {collapsed && <TooltipContent side="right" className="bg-blue-800 text-white font-semibold">{item.title}</TooltipContent>}
+                                {collapsed && (
+                                    <TooltipContent side="right" className="bg-gray-900 text-white font-medium">
+                                        {item.title}
+                                    </TooltipContent>
+                                )}
                             </Tooltip>
                         </TooltipProvider>
                         {!collapsed && (
-                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isActive(item.path) ? 'text-blue-700' : 'text-gray-500'
-                                } ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
+                                isActive(item.path) ? 'text-blue-700' : 'text-gray-500'
+                            } ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />
                         )}
                     </div>
                 </CollapsibleTrigger>
                 {!collapsed && (
-                    <CollapsibleContent className="pl-8 space-y-1 mt-1">
+                    <CollapsibleContent className="pl-8 space-y-1 mt-2">
                         {permittedSubmenu?.map((subItem, idx) => (
                             <Link
                                 key={idx}
                                 href={subItem.path}
-                                className={`block p-2 rounded-md text-sm transition-colors duration-200 ${currentPath === subItem.path
-                                    ? 'bg-blue-50 text-blue-700 font-medium'
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                                    }`}
+                                className={`block p-2.5 rounded-md text-sm transition-all duration-200 ${
+                                    currentPath === subItem.path
+                                        ? 'bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-500'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
                             >
                                 {subItem.title}
                             </Link>
@@ -363,35 +333,40 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     <TooltipTrigger asChild>
                         <Link
                             href={item.path}
-                            className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-2 rounded-md transition-colors duration-200 ${isActive(item.path)
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'hover:bg-gray-100 text-gray-700'
-                                }`}
+                            className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-lg transition-all duration-200 ${
+                                isActive(item.path)
+                                    ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                    : 'hover:bg-gray-50 text-gray-700'
+                            }`}
                         >
-                            <div className={`${isActive(item.path)
-                                ? 'text-blue-700'
-                                : 'text-gray-600'
-                                }`}>
+                            <div className={`${
+                                isActive(item.path) ? 'text-blue-700' : 'text-gray-600'
+                            }`}>
                                 {item.icon}
                             </div>
-                            {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
+                            {!collapsed && (
+                                <span className="text-sm font-medium">{item.title}</span>
+                            )}
                         </Link>
                     </TooltipTrigger>
-                    {collapsed && <TooltipContent side="right" className="bg-blue-800 text-white font-semibold">{item.title}</TooltipContent>}
+                    {collapsed && (
+                        <TooltipContent side="right" className="bg-gray-900 text-white font-medium">
+                            {item.title}
+                        </TooltipContent>
+                    )}
                 </Tooltip>
             </TooltipProvider>
         );
     };
 
-    // Mobile sidebar menu item component with permission checks
+    // Mobile sidebar menu item component
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
-        // Skip rendering if user doesn't have permission
         if (item.permission && !hasPermission(item.permission)) return null;
 
-        // Filter submenu items based on permissions
-        const permittedSubmenu = item.submenu?.filter(subItem => !subItem.permission || hasPermission(subItem.permission));
+        const permittedSubmenu = item.submenu?.filter(subItem =>
+            !subItem.permission || hasPermission(subItem.permission)
+        );
 
-        // Don't render menu with empty submenu after filtering
         if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
 
         return item.hasSubmenu ? (
@@ -402,33 +377,35 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             >
                 <CollapsibleTrigger asChild>
                     <div
-                        className={`flex items-center justify-between w-full p-3 rounded-md cursor-pointer transition-colors duration-200 ${isActive(item.path)
-                            ? 'bg-blue-50 text-blue-700 font-medium'
-                            : 'hover:bg-gray-100 text-gray-700'
-                            }`}
+                        className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                            isActive(item.path)
+                                ? 'bg-blue-50 text-blue-700 font-medium'
+                                : 'hover:bg-gray-50 text-gray-700'
+                        }`}
                     >
                         <div className="flex items-center gap-3">
-                            <div className={`${isActive(item.path)
-                                ? 'text-blue-700'
-                                : 'text-gray-600'
-                                }`}>
+                            <div className={`${
+                                isActive(item.path) ? 'text-blue-700' : 'text-gray-600'
+                            }`}>
                                 {item.icon}
                             </div>
                             <span className="text-sm font-medium">{item.title}</span>
                         </div>
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${activeMenu === item.title ? 'transform rotate-180' : ''
-                            } ${isActive(item.path) ? 'text-blue-700' : 'text-gray-500'}`} />
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
+                            activeMenu === item.title ? 'transform rotate-180' : ''
+                        } ${isActive(item.path) ? 'text-blue-700' : 'text-gray-500'}`} />
                     </div>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="pl-8 space-y-1 mt-1">
+                <CollapsibleContent className="pl-8 space-y-1 mt-2">
                     {permittedSubmenu?.map((subItem, idx) => (
                         <Link
                             key={idx}
                             href={subItem.path}
-                            className={`block p-3 rounded-md text-sm transition-colors duration-200 ${currentPath === subItem.path
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                                }`}
+                            className={`block p-3 rounded-md text-sm transition-all duration-200 ${
+                                currentPath === subItem.path
+                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
                             onClick={toggleMobileNav}
                         >
                             {subItem.title}
@@ -439,16 +416,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         ) : (
             <Link
                 href={item.path}
-                className={`flex items-center gap-3 p-3 rounded-md transition-colors duration-200 ${isActive(item.path)
-                    ? 'bg-blue-50 text-blue-700 font-medium'
-                    : 'hover:bg-gray-100 text-gray-700'
-                    }`}
+                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${
+                    isActive(item.path)
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'hover:bg-gray-50 text-gray-700'
+                }`}
                 onClick={toggleMobileNav}
             >
-                <div className={`${isActive(item.path)
-                    ? 'text-blue-700'
-                    : 'text-gray-600'
-                    }`}>
+                <div className={`${
+                    isActive(item.path) ? 'text-blue-700' : 'text-gray-600'
+                }`}>
                     {item.icon}
                 </div>
                 <span className="text-sm font-medium">{item.title}</span>
@@ -456,6 +433,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         );
     };
 
+    // Flash message handling
     const { flash } = usePage().props as any;
     const { toast } = useToast();
     const [showSuccess, setShowSuccess] = useState(false);
@@ -464,10 +442,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const [showInfo, setShowInfo] = useState(false);
 
     useEffect(() => {
-        // Set initial visibility based on flash messages
         if (flash.success) {
             setShowSuccess(true);
-            // Auto-close after 5 seconds
             const timer = setTimeout(() => setShowSuccess(false), 5000);
             return () => clearTimeout(timer);
         }
@@ -522,17 +498,22 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     return (
         <div className="flex h-screen bg-gray-50">
             {/* Desktop Sidebar */}
-            <aside className={`hidden md:flex flex-col border-r bg-white shadow-sm transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}>
-                <div className={`py-5 px-4 border-b flex ${collapsed ? 'justify-center' : 'justify-between'} items-center bg-blue-700 text-white`}>
+            <aside className={`hidden md:flex flex-col border-r bg-white shadow-sm transition-all duration-300 ${
+                collapsed ? 'w-16' : 'w-64'
+            }`}>
+                {/* Header */}
+                <div className={`py-4 px-4 border-b flex ${
+                    collapsed ? 'justify-center' : 'justify-between'
+                } items-center bg-gradient-to-r from-blue-600 to-blue-700 text-white`}>
                     {!collapsed && (
                         <Link href="/dashboard" className="flex items-center gap-2">
-                            <img src='/logo.png' className="w-6 h-6 text-white" />
-                            <span className="text-xl font-bold">HRM Mousumi</span>
+                            <img src='/logo.png' className="w-7 h-7" alt="Logo" />
+                            <span className="text-xl font-bold">HRM System</span>
                         </Link>
                     )}
                     {collapsed && (
                         <Link href="/dashboard">
-                            <img src='/logo.png' className="w-6 h-6 text-white" />
+                            <img src='/logo.png' className="w-7 h-7" alt="Logo" />
                         </Link>
                     )}
                     <Button
@@ -545,36 +526,44 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </Button>
                 </div>
 
+                {/* Navigation Menu */}
                 <ScrollArea className="flex-1 px-3 py-4">
-                    <nav className="space-y-1.5">
-                        {/* Only render menu items that the user has permission to see */}
+                    <nav className="space-y-2">
                         {menuItems.map((item, idx) => (
                             <DesktopMenuItem key={idx} item={item} />
                         ))}
                     </nav>
                 </ScrollArea>
 
+                {/* User Profile Section */}
                 <div className={`p-4 border-t bg-gray-50 ${collapsed ? 'flex justify-center' : ''}`}>
                     {collapsed ? (
                         <TooltipProvider delayDuration={200}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Avatar className="w-8 h-8 cursor-pointer border-2 border-blue-500">
+                                    <Avatar className="w-10 h-10 cursor-pointer border-2 border-blue-500">
                                         <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                        <AvatarFallback className="bg-blue-700 text-white">{getInitials(auth.user.name)}</AvatarFallback>
+                                        <AvatarFallback className="bg-blue-700 text-white text-sm">
+                                            {getInitials(auth.user.name)}
+                                        </AvatarFallback>
                                     </Avatar>
                                 </TooltipTrigger>
-                                <TooltipContent side="right" className="bg-blue-800 text-white">
+                                <TooltipContent side="right" className="bg-gray-900 text-white">
                                     <p className="font-medium">{auth.user.name}</p>
-                                    <p className="text-xs text-blue-100">{auth.user.email}</p>
+                                    <p className="text-xs text-gray-300">{auth.user.email}</p>
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                     ) : (
-                        <Link href="/profile" className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100 transition-colors duration-200">
-                            <Avatar className="w-8 h-8 border-2 border-blue-500">
+                        <Link
+                            href="/profile"
+                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                        >
+                            <Avatar className="w-10 h-10 border-2 border-blue-500">
                                 <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                <AvatarFallback className="bg-blue-700 text-white">{getInitials(auth.user.name)}</AvatarFallback>
+                                <AvatarFallback className="bg-blue-700 text-white text-sm">
+                                    {getInitials(auth.user.name)}
+                                </AvatarFallback>
                             </Avatar>
                             <div className="truncate">
                                 <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
@@ -588,32 +577,45 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             {/* Mobile Sidebar */}
             <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
                 <SheetContent side="left" className="w-[300px] sm:w-[350px] p-0 border-r-0">
-                    <div className="p-4 border-b bg-blue-700 text-white">
+                    {/* Mobile Header */}
+                    <div className="p-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 text-white">
                         <div className="flex items-center justify-between">
                             <Link href="/dashboard" className="flex items-center gap-2">
-                                <img src='/logo.png' className="w-6 h-6 text-white" />
-                                <span className="text-md font-bold">HRM Admin</span>
+                                <img src='/logo.png' className="w-6 h-6" alt="Logo" />
+                                <span className="text-lg font-bold">HRM System</span>
                             </Link>
-                            <Button variant="ghost" size="icon" onClick={toggleMobileNav} className="text-white hover:bg-blue-600">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={toggleMobileNav}
+                                className="text-white hover:bg-blue-600"
+                            >
                                 <X className="w-5 h-5" />
                             </Button>
                         </div>
                     </div>
 
+                    {/* Mobile Navigation */}
                     <ScrollArea className="h-[calc(100vh-160px)] px-3 py-4">
-                        <nav className="space-y-1.5">
-                            {/* Only render menu items that the user has permission to see */}
+                        <nav className="space-y-2">
                             {menuItems.map((item, idx) => (
                                 <MobileMenuItem key={idx} item={item} />
                             ))}
                         </nav>
                     </ScrollArea>
 
+                    {/* Mobile User Profile */}
                     <div className="p-4 border-t bg-gray-50">
-                        <Link href="/profile" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200" onClick={toggleMobileNav}>
-                            <Avatar className="w-8 h-8 border-2 border-blue-500">
+                        <Link
+                            href="/profile"
+                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                            onClick={toggleMobileNav}
+                        >
+                            <Avatar className="w-10 h-10 border-2 border-blue-500">
                                 <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                <AvatarFallback className="bg-blue-700 text-white">{getInitials(auth.user.name)}</AvatarFallback>
+                                <AvatarFallback className="bg-blue-700 text-white text-sm">
+                                    {getInitials(auth.user.name)}
+                                </AvatarFallback>
                             </Avatar>
                             <div>
                                 <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
@@ -629,27 +631,36 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 {/* Top Navbar */}
                 <header className="bg-white border-b shadow-sm">
                     <div className="flex items-center justify-between px-4 py-3">
+                        {/* Mobile Menu Button */}
                         <div className="flex items-center md:hidden">
                             <Button variant="ghost" size="icon" onClick={toggleMobileNav} className="text-gray-700">
                                 <Menu className="w-5 h-5" />
                             </Button>
                         </div>
 
+                        {/* Mobile Logo */}
                         <div className="md:hidden flex items-center">
                             <Link href="/dashboard" className="flex items-center gap-2">
-                                <img src='/logo.png' className="w-6 h-6 text-white" />
-                                <span className="text-md font-bold text-gray-900">HRM Admin</span>
+                                <img src='/logo.png' className="w-6 h-6" alt="Logo" />
+                                <span className="text-lg font-bold text-gray-900">HRM System</span>
                             </Link>
                         </div>
 
+                        {/* Desktop Expand Button */}
                         <div className="hidden md:block">
                             {collapsed && (
-                                <Button variant="ghost" size="icon" onClick={toggleSidebar} className="text-gray-700 hover:bg-gray-100">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={toggleSidebar}
+                                    className="text-gray-700 hover:bg-gray-100"
+                                >
                                     <Menu className="w-5 h-5" />
                                 </Button>
                             )}
                         </div>
 
+                        {/* Right Side Items */}
                         <div className="flex items-center ml-auto gap-3">
                             {/* Notifications */}
                             <NotificationDropdown />
@@ -660,7 +671,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     <Button variant="ghost" size="sm" className="flex items-center gap-2 hover:bg-gray-100">
                                         <Avatar className="w-8 h-8 border-2 border-blue-500">
                                             <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                            <AvatarFallback className="bg-blue-700 text-white">{getInitials(auth.user.name)}</AvatarFallback>
+                                            <AvatarFallback className="bg-blue-700 text-white text-xs">
+                                                {getInitials(auth.user.name)}
+                                            </AvatarFallback>
                                         </Avatar>
                                         <div className="hidden md:block text-left">
                                             <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
@@ -678,12 +691,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                             Profile
                                         </Link>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                        <Link href="/settings" className="cursor-pointer">
-                                            <Settings className="w-4 h-4 mr-2" />
-                                            Settings
-                                        </Link>
-                                    </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem asChild>
                                         <Link href="/logout" method="post" as="button" className="cursor-pointer w-full text-left">
@@ -697,7 +704,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </div>
                 </header>
 
-                {/* Flash Messages/Alerts */}
+                {/* Flash Messages */}
                 <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80">
                     {showSuccess && (
                         <Alert variant="success" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5">
@@ -758,14 +765,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 </div>
 
                 {/* Main Content Area */}
-                <main className="flex-1 overflow-auto bg-gray-50 p-4 md:p-6">
+                <main className="flex-1 overflow-auto bg-gray-50">
                     {children}
                 </main>
 
                 {/* Footer */}
-                <footer className="border-t py-4 bg-white">
+                <footer className="border-t py-3 bg-white">
                     <div className="container mx-auto px-4 text-center text-sm text-gray-600">
-                        <p>&copy; {new Date().getFullYear()} HRM Admin. All rights reserved.</p>
+                        <p>&copy; {new Date().getFullYear()} HRM System. All rights reserved.</p>
                     </div>
                 </footer>
             </div>

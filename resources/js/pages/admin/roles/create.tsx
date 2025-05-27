@@ -8,32 +8,84 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, Shield, Check, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Shield, Check, AlertTriangle, Users, Building2, ClipboardList, Calendar, Activity, BarChart, Settings, Award } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
-interface PermissionSection {
-  [key: string]: {
-    [key: string]: string;
-  };
+// Types matching the RoleController structure
+interface PermissionCategory {
+  label: string;
+  description: string;
+  color: string;
+}
+
+interface PermissionCategories {
+  [key: string]: PermissionCategory;
+}
+
+interface AvailablePermissions {
+  [key: string]: string;
 }
 
 interface RoleCreateProps {
-  permissions: PermissionSection;
+  permissions: AvailablePermissions;
+  permission_categories: PermissionCategories;
   errors: {
     [key: string]: string;
   };
 }
 
-export default function RoleCreate({ permissions, errors }: RoleCreateProps) {
+export default function RoleCreate({ permissions, permission_categories, errors }: RoleCreateProps) {
   const { data, setData, post, processing } = useForm({
     name: '',
     description: '',
     permissions: [] as string[],
   });
 
-  const [activeTab, setActiveTab] = useState<string>(Object.keys(permissions)[0] || 'users');
+  const [activeTab, setActiveTab] = useState<string>(Object.keys(permission_categories)[0] || 'admin');
+
+  // Group permissions by category based on the controller logic
+  const getPermissionsByCategory = (category: string): AvailablePermissions => {
+    const categoryMap: { [key: string]: string[] } = {
+      admin: ['admin.access'],
+      users: ['users.view', 'users.create', 'users.edit', 'users.delete'],
+      roles: ['roles.view', 'roles.create', 'roles.edit', 'roles.delete'],
+      employees: ['employees.view', 'employees.create', 'employees.edit', 'employees.delete'],
+      organization: [
+        'branches.view', 'branches.create', 'branches.edit', 'branches.delete',
+        'departments.view', 'departments.create', 'departments.edit', 'departments.delete',
+        'designations.view', 'designations.create', 'designations.edit', 'designations.delete'
+      ],
+      attendance: [
+        'attendance.view', 'attendance.create', 'attendance.edit', 'attendance.delete',
+        'attendance.sync', 'attendance.admin'
+      ],
+      leave: [
+        'leave-types.view', 'leave-types.create', 'leave-types.edit', 'leave-types.delete',
+        'leave-balances.view', 'leave-balances.create', 'leave-balances.edit', 'leave-balances.delete', 'leave-balances.admin',
+        'leave-applications.view', 'leave-applications.create', 'leave-applications.edit', 'leave-applications.cancel', 'leave-applications.approve'
+      ],
+      movement: [
+        'movements.view', 'movements.create', 'movements.edit', 'movements.cancel', 'movements.complete', 'movements.approve',
+        'transfers.view', 'transfers.create', 'transfers.edit', 'transfers.approve'
+      ],
+      holidays: ['holidays.view', 'holidays.create', 'holidays.edit', 'holidays.delete'],
+      reports: ['reports.view', 'reports.export']
+    };
+
+    const categoryPermissions: AvailablePermissions = {};
+    const permissionKeys = categoryMap[category] || [];
+
+    permissionKeys.forEach(key => {
+      if (permissions[key]) {
+        categoryPermissions[key] = permissions[key];
+      }
+    });
+
+    return categoryPermissions;
+  };
 
   const handlePermissionChange = (permission: string, checked: boolean) => {
     const newPermissions = checked
@@ -43,41 +95,106 @@ export default function RoleCreate({ permissions, errors }: RoleCreateProps) {
     setData('permissions', newPermissions);
   };
 
-  const handleSelectAllInModule = (module: string, checked: boolean) => {
-    const modulePermissions = Object.keys(permissions[module]);
+  const handleSelectAllInCategory = (category: string, checked: boolean) => {
+    const categoryPermissions = Object.keys(getPermissionsByCategory(category));
 
     if (checked) {
-      // Add all permissions from this module
+      // Add all permissions from this category
       const newPermissions = [...data.permissions];
-      modulePermissions.forEach(permission => {
+      categoryPermissions.forEach(permission => {
         if (!newPermissions.includes(permission)) {
           newPermissions.push(permission);
         }
       });
       setData('permissions', newPermissions);
     } else {
-      // Remove all permissions from this module
+      // Remove all permissions from this category
       const newPermissions = data.permissions.filter(
-        permission => !modulePermissions.includes(permission)
+        permission => !categoryPermissions.includes(permission)
       );
       setData('permissions', newPermissions);
     }
   };
 
-  const isModuleFullySelected = (module: string): boolean => {
-    const modulePermissions = Object.keys(permissions[module]);
-    return modulePermissions.every(permission => data.permissions.includes(permission));
+  const isCategoryFullySelected = (category: string): boolean => {
+    const categoryPermissions = Object.keys(getPermissionsByCategory(category));
+    return categoryPermissions.length > 0 && categoryPermissions.every(permission => data.permissions.includes(permission));
   };
 
-  const isModulePartiallySelected = (module: string): boolean => {
-    const modulePermissions = Object.keys(permissions[module]);
-    return modulePermissions.some(permission => data.permissions.includes(permission)) &&
-           !isModuleFullySelected(module);
+  const isCategoryPartiallySelected = (category: string): boolean => {
+    const categoryPermissions = Object.keys(getPermissionsByCategory(category));
+    return categoryPermissions.some(permission => data.permissions.includes(permission)) &&
+           !isCategoryFullySelected(category);
+  };
+
+  const getCategoryIcon = (category: string) => {
+    const iconMap: { [key: string]: React.ReactNode } = {
+      admin: <Shield className="h-4 w-4" />,
+      users: <Users className="h-4 w-4" />,
+      roles: <Settings className="h-4 w-4" />,
+      employees: <Users className="h-4 w-4" />,
+      organization: <Building2 className="h-4 w-4" />,
+      attendance: <ClipboardList className="h-4 w-4" />,
+      leave: <Calendar className="h-4 w-4" />,
+      movement: <Activity className="h-4 w-4" />,
+      holidays: <Award className="h-4 w-4" />,
+      reports: <BarChart className="h-4 w-4" />
+    };
+
+    return iconMap[category] || <Shield className="h-4 w-4" />;
+  };
+
+  const getCategoryColorClasses = (color: string) => {
+    const colorMap: { [key: string]: string } = {
+      red: 'bg-red-100 text-red-700 border-red-200',
+      purple: 'bg-purple-100 text-purple-700 border-purple-200',
+      indigo: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+      blue: 'bg-blue-100 text-blue-700 border-blue-200',
+      gray: 'bg-gray-100 text-gray-700 border-gray-200',
+      green: 'bg-green-100 text-green-700 border-green-200',
+      yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+      orange: 'bg-orange-100 text-orange-700 border-orange-200',
+      pink: 'bg-pink-100 text-pink-700 border-pink-200',
+      teal: 'bg-teal-100 text-teal-700 border-teal-200'
+    };
+
+    return colorMap[color] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    post(route('admin.roles.store'));
+
+    // Ensure permissions are valid array of strings
+    const cleanPermissions = data.permissions.filter(p =>
+      typeof p === 'string' && p.trim() !== '' && Object.keys(permissions).includes(p)
+    );
+
+    const submitData = {
+      name: data.name.trim(),
+      description: data.description.trim(),
+      permissions: cleanPermissions
+    };
+
+    // Debug log to check data
+    console.log('Submitting role creation:', {
+      originalData: data,
+      cleanedData: submitData,
+      availablePermissions: Object.keys(permissions)
+    });
+
+    post(route('admin.roles.store'), {
+      data: submitData,
+      onSuccess: (page) => {
+        console.log('Creation successful:', page);
+      },
+      onError: (errors) => {
+        console.log('Creation errors:', errors);
+        console.log('Invalid permissions found:', cleanPermissions.filter(p => !Object.keys(permissions).includes(p)));
+      },
+      onFinish: () => {
+        console.log('Creation finished');
+      }
+    });
   };
 
   return (
@@ -85,92 +202,124 @@ export default function RoleCreate({ permissions, errors }: RoleCreateProps) {
       <Head title="Create Role" />
 
       <div className="container mx-auto py-8">
+        {/* Breadcrumb */}
         <div className="mb-6">
           <Link
             href={route('admin.roles.index')}
-            className="flex w-fit items-center text-gray-500 hover:text-gray-700"
+            className="flex w-fit items-center text-gray-500 hover:text-gray-700 transition-colors"
           >
-            <ArrowLeft className="mr-1 h-4 w-4" />
+            <ArrowLeft className="mr-2 h-4 w-4" />
             <span>Back to Roles</span>
           </Link>
         </div>
 
+        {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Create New Role</h1>
-          <p className="mt-1 text-gray-500">
-            Define a new role with specific permissions for system access
+          <p className="mt-2 text-gray-600">
+            Define a new role with specific permissions for system access control
           </p>
         </div>
 
         <form onSubmit={submit}>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* Role Information */}
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            {/* Role Information Card */}
             <div className="lg:col-span-1">
-              <Card className="shadow-sm">
-                <CardHeader className="border-b bg-gray-50">
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="border-b bg-gray-50/50">
                   <div className="flex items-center space-x-3">
-                    <div className="rounded-full bg-purple-100 p-1.5">
+                    <div className="rounded-full bg-purple-100 p-2">
                       <Shield className="h-5 w-5 text-purple-600" />
                     </div>
                     <div>
-                      <CardTitle>Role Information</CardTitle>
-                      <CardDescription>Basic role details</CardDescription>
+                      <CardTitle className="text-lg">Role Information</CardTitle>
+                      <CardDescription>Basic role details and description</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4 pt-6">
+                <CardContent className="space-y-6 pt-6">
+                  {/* Role Name */}
                   <div className="space-y-2">
-                    <Label htmlFor="name">
+                    <Label htmlFor="name" className="text-sm font-medium">
                       Role Name <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="name"
                       value={data.name}
                       onChange={e => setData('name', e.target.value)}
-                      placeholder="Enter role name"
+                      placeholder="e.g., HR Manager, Department Head"
+                      className={errors.name ? 'border-red-300 focus:border-red-500' : ''}
                     />
-                    {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
+                    {errors.name && (
+                      <p className="text-sm text-red-600 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        {errors.name}
+                      </p>
+                    )}
                   </div>
 
+                  {/* Description */}
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="description" className="text-sm font-medium">
+                      Description
+                    </Label>
                     <Textarea
                       id="description"
                       value={data.description}
                       onChange={e => setData('description', e.target.value)}
-                      placeholder="Brief description about this role"
+                      placeholder="Brief description about this role and its responsibilities"
                       rows={4}
+                      className={errors.description ? 'border-red-300 focus:border-red-500' : ''}
                     />
-                    {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
+                    {errors.description && (
+                      <p className="text-sm text-red-600 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        {errors.description}
+                      </p>
+                    )}
                   </div>
 
-                  <Alert className="bg-blue-50 border-blue-200">
-                    <AlertTriangle className="h-4 w-4 text-blue-600" />
-                    <AlertDescription className="text-blue-700">
-                      Select permissions from the right panel to define role access
+                  {/* Permission Count Info */}
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                    <div className="flex items-center space-x-2">
+                      <Check className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-900">
+                        {data.permissions.length} Permission{data.permissions.length !== 1 ? 's' : ''} Selected
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-blue-700">
+                      Configure permissions from the panel on the right
+                    </p>
+                  </div>
+
+                  {/* Info Alert */}
+                  <Alert className="bg-amber-50 border-amber-200">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800">
+                      Carefully select permissions as they control user access to system features
                     </AlertDescription>
                   </Alert>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Permissions */}
+            {/* Permissions Card */}
             <div className="lg:col-span-2">
-              <Card className="shadow-sm">
-                <CardHeader className="border-b bg-gray-50">
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="border-b bg-gray-50/50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className="rounded-full bg-green-100 p-1.5">
+                      <div className="rounded-full bg-green-100 p-2">
                         <Check className="h-5 w-5 text-green-600" />
                       </div>
                       <div>
-                        <CardTitle>Role Permissions</CardTitle>
-                        <CardDescription>Configure access permissions</CardDescription>
+                        <CardTitle className="text-lg">Role Permissions</CardTitle>
+                        <CardDescription>Configure system access permissions by category</CardDescription>
                       </div>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      <span className="font-medium">{data.permissions.length}</span> permissions selected
-                    </div>
+                    <Badge variant="outline" className="bg-white">
+                      {data.permissions.length} / {Object.keys(permissions).length} permissions
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -179,86 +328,162 @@ export default function RoleCreate({ permissions, errors }: RoleCreateProps) {
                     onValueChange={setActiveTab}
                     className="w-full"
                   >
-                    <TabsList className="flex h-auto w-full justify-start overflow-auto rounded-none border-b bg-gray-100 px-4 py-2">
-                      {Object.keys(permissions).map(module => (
-                        <TabsTrigger
-                          key={module}
-                          value={module}
-                          className="relative data-[state=active]:bg-white"
-                        >
-                          <span className="capitalize">{module}</span>
-                          {isModuleFullySelected(module) && (
-                            <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-green-500" />
-                          )}
-                          {isModulePartiallySelected(module) && (
-                            <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-amber-500" />
-                          )}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
+                    {/* Category Tabs - Proper Horizontal Scrolling */}
+                    <div className="border-b bg-gray-50/30 overflow-x-auto">
+                      <div className="flex min-w-max">
+                        <TabsList className="flex h-auto w-auto justify-start rounded-none bg-transparent p-0 min-w-max">
+                          {Object.entries(permission_categories).map(([categoryKey, category]) => {
+                            const categoryPermissions = getPermissionsByCategory(categoryKey);
+                            const permissionCount = Object.keys(categoryPermissions).length;
 
-                    {Object.keys(permissions).map(module => (
-                      <TabsContent
-                        key={module}
-                        value={module}
-                        className="border-none p-0 pt-0"
-                      >
-                        <div className="border-b bg-gray-50 px-6 py-3">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`select-all-${module}`}
-                              checked={isModuleFullySelected(module)}
-                              onCheckedChange={(checked) =>
-                                handleSelectAllInModule(module, checked === true)
-                              }
-                            />
-                            <Label
-                              htmlFor={`select-all-${module}`}
-                              className="font-medium capitalize"
-                            >
-                              Select All {module} Permissions
-                            </Label>
-                          </div>
-                        </div>
-
-                        <ScrollArea className="h-[300px] p-6">
-                          <div className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-2">
-                            {Object.entries(permissions[module]).map(([key, label]) => (
-                              <div
-                                key={key}
-                                className="flex items-center space-x-2 rounded-md border p-3 shadow-sm"
+                            return (
+                              <TabsTrigger
+                                key={categoryKey}
+                                value={categoryKey}
+                                className="relative flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:border-blue-500 data-[state=active]:bg-white data-[state=active]:shadow-sm whitespace-nowrap flex-shrink-0"
                               >
+                                {getCategoryIcon(categoryKey)}
+                                <div className="flex flex-col items-start">
+                                  <span className="font-medium text-sm">{category.label}</span>
+                                  <span className="text-xs text-gray-500">{permissionCount} permissions</span>
+                                </div>
+
+                                {/* Status indicator */}
+                                {isCategoryFullySelected(categoryKey) && (
+                                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-green-500 border-2 border-white" />
+                                )}
+                                {isCategoryPartiallySelected(categoryKey) && (
+                                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-amber-500 border-2 border-white" />
+                                )}
+                              </TabsTrigger>
+                            );
+                          })}
+                        </TabsList>
+                      </div>
+                    </div>
+
+                    {/* Permission Content for each Category */}
+                    {Object.entries(permission_categories).map(([categoryKey, category]) => {
+                      const categoryPermissions = getPermissionsByCategory(categoryKey);
+
+                      return (
+                        <TabsContent
+                          key={categoryKey}
+                          value={categoryKey}
+                          className="border-none p-0 mt-0"
+                        >
+                          {/* Category Header with Select All */}
+                          <div className={`border-b px-6 py-4 ${getCategoryColorClasses(category.color)}`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
                                 <Checkbox
-                                  id={key}
-                                  checked={data.permissions.includes(key)}
+                                  id={`select-all-${categoryKey}`}
+                                  checked={isCategoryFullySelected(categoryKey)}
                                   onCheckedChange={(checked) =>
-                                    handlePermissionChange(key, checked === true)
+                                    handleSelectAllInCategory(categoryKey, checked === true)
                                   }
                                 />
-                                <Label htmlFor={key} className="flex-1 cursor-pointer text-sm">
-                                  {label}
-                                </Label>
+                                <div>
+                                  <Label
+                                    htmlFor={`select-all-${categoryKey}`}
+                                    className="font-semibold cursor-pointer"
+                                  >
+                                    Select All {category.label}
+                                  </Label>
+                                  <p className="text-sm opacity-90 mt-0.5">
+                                    {category.description}
+                                  </p>
+                                </div>
                               </div>
-                            ))}
+                              <Badge variant="outline" className="bg-white/50">
+                                {Object.keys(categoryPermissions).length} permissions
+                              </Badge>
+                            </div>
                           </div>
-                        </ScrollArea>
-                      </TabsContent>
-                    ))}
+
+                          {/* Permissions Grid */}
+                          <div className="p-6">
+                            {Object.keys(categoryPermissions).length > 0 ? (
+                              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                {Object.entries(categoryPermissions).map(([key, label]) => (
+                                  <div
+                                    key={key}
+                                    className={`flex items-center space-x-3 rounded-lg border p-4 transition-colors hover:bg-gray-50 ${
+                                      data.permissions.includes(key)
+                                        ? 'border-blue-300 bg-blue-50'
+                                        : 'border-gray-200'
+                                    }`}
+                                  >
+                                    <Checkbox
+                                      id={key}
+                                      checked={data.permissions.includes(key)}
+                                      onCheckedChange={(checked) =>
+                                        handlePermissionChange(key, checked === true)
+                                      }
+                                    />
+                                    <div className="flex-1">
+                                      <Label
+                                        htmlFor={key}
+                                        className="cursor-pointer text-sm font-medium"
+                                      >
+                                        {label}
+                                      </Label>
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        {key}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-8 text-gray-500">
+                                <Shield className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                <p>No permissions available in this category</p>
+                              </div>
+                            )}
+                          </div>
+                        </TabsContent>
+                      );
+                    })}
                   </Tabs>
-                  {errors.permissions && <p className="p-4 text-sm text-red-500">{errors.permissions}</p>}
+
+                  {/* Global permission error */}
+                  {errors.permissions && (
+                    <div className="p-4 bg-red-50 border-t border-red-200">
+                      <p className="text-sm text-red-600 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        {errors.permissions}
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end space-x-3">
+          {/* Form Actions */}
+          <div className="mt-8 flex justify-end space-x-4">
             <Link href={route('admin.roles.index')}>
-              <Button type="button" variant="outline" className="border-gray-300">
+              <Button type="button" variant="outline" className="border-gray-300 hover:bg-gray-50">
                 Cancel
               </Button>
             </Link>
-            <Button type="submit" disabled={processing}>
-              {processing ? 'Creating...' : 'Create Role'}
+            <Button
+              type="submit"
+              disabled={processing || !data.name.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {processing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Creating Role...
+                </>
+              ) : (
+                <>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Create Role
+                </>
+              )}
             </Button>
           </div>
         </form>

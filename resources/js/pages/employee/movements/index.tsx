@@ -35,7 +35,7 @@ interface Movement {
     employee_id: number;
     movement_type: 'official' | 'personal';
     from_datetime: string;
-    to_datetime: string;
+    actual_return_datetime: string;
     purpose: string;
     destination: string | null;
     remarks: string | null;
@@ -343,10 +343,10 @@ export default function EmployeeMovements({
                                                 <TableCell>
                                                     <div className="flex items-center text-sm">
                                                         <Timer className="h-4 w-4 mr-1.5 text-gray-400 flex-shrink-0" />
-                                                        <span className="truncate">{formatDateTimeRange(movement.from_datetime, movement.to_datetime)}</span>
+                                                        <span className="truncate">{formatDateTimeRange(movement.from_datetime, movement.actual_return_datetime)}</span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{calculateDuration(movement.from_datetime, movement.to_datetime)} hours</TableCell>
+                                                <TableCell>{calculateDuration(movement.from_datetime, movement.actual_return_datetime)} hours</TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center text-sm">
                                                         {movement.destination ? (

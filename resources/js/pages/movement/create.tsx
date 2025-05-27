@@ -206,10 +206,15 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         return Object.keys(newErrors).length === 0;
     };
 
+
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
 
-        if (!validateForm()) return;
+        if (!validateForm()) {
+            // যদি validation fail হয় তাহলে details tab এ switch করুন
+            setActiveTab('details');
+            return;
+        }
 
         setSubmitting(true);
 
@@ -227,6 +232,8 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         }, {
             onError: (errors) => {
                 setErrors(errors);
+                // Server error এর ক্ষেত্রেও details tab এ switch করুন
+                setActiveTab('details');
                 setSubmitting(false);
             },
             onFinish: () => setSubmitting(false)
@@ -297,6 +304,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <Select
                                                         value={employeeId}
                                                         onValueChange={setEmployeeId}
+                                                        disabled
                                                     >
                                                         <SelectTrigger id="employee">
                                                             <SelectValue placeholder="Select Employee" />
@@ -529,7 +537,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Branch Audit")}>
                                                         Branch Audit
                                                     </span>
-                                                    <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Audit Monitor")}>
+                                                    <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Branch Monitor")}>
                                                         Branch Monitor
                                                     </span>
                                                     <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Officer Monitor")}>

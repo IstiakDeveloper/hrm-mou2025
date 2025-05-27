@@ -420,15 +420,15 @@ export default function AttendanceIndex({
                                 <Link href={route('attendance.sheet-report')}>
                                     <DropdownMenuItem className="cursor-pointer">
                                         <FileText className="mr-2 h-4 w-4" />
-                                        <span>Attendance Sheet PDF</span>
+                                        <span>Attendance Report</span>
                                     </DropdownMenuItem>
                                 </Link>
-                                <Link href={route('attendance.report')}>
+                                {/* <Link href={route('attendance.report')}>
                                     <DropdownMenuItem className="cursor-pointer">
                                         <BarChart className="mr-2 h-4 w-4" />
                                         <span>Attendance Report</span>
                                     </DropdownMenuItem>
-                                </Link>
+                                </Link> */}
                                 {/* Only show device management for users with sync permission */}
                                 {userPermissions.canSyncDevices && (
                                     <>

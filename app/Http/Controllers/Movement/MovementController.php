@@ -311,9 +311,9 @@ class MovementController extends Controller
             'movement_type' => 'required|in:official,personal',
             'from_datetime' => 'required|date',
             'to_datetime' => 'required|date|after:from_datetime',
-            'purpose' => 'required|string',
-            'destination' => 'required|string',
-            'remarks' => 'nullable|string',
+            'purpose' => ['required', 'string', 'english_only'], // Using custom rule
+            'destination' => ['required', 'string', 'english_only'], // Using custom rule
+            'remarks' => ['nullable', 'string', 'english_only'], // Using custom rule
         ]);
 
         // Determine which employee ID to use

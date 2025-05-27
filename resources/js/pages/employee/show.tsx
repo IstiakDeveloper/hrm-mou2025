@@ -102,7 +102,7 @@ interface Movement {
     employee_id: number;
     movement_type: 'official' | 'personal';
     from_datetime: string;
-    to_datetime: string;
+    actual_return_datetime: string;
     purpose: string;
     destination: string | null;
     remarks: string | null;
@@ -396,7 +396,7 @@ export default function EmployeeShow({
                                 </div>
                                 <div className="flex items-center text-sm text-gray-500 mb-1">
                                     <Timer className="h-4 w-4 mr-1.5 text-gray-400" />
-                                    <span>{formatDateTimeRange(movement.from_datetime, movement.to_datetime)}</span>
+                                    <span>{formatDateTimeRange(movement.from_datetime, movement.actual_return_datetime)}</span>
                                 </div>
                                 {movement.destination && (
                                     <div className="flex items-center text-sm text-gray-500 mt-1">
