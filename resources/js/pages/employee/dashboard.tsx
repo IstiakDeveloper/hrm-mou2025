@@ -35,6 +35,7 @@ import {
     MessageSquare,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import LeavePdfExport from '@/pages/employee/LeavePdfExport';
 
 // Enhanced type definitions
 interface AttendanceRecord {
@@ -844,7 +845,7 @@ export default function EmployeeDashboard({
                                 </div>
                             </TabsContent>
 
-                            {/* Attendance Tab */}
+
                             {/* Enhanced Attendance Tab with Movement Integration */}
                             <TabsContent value="attendance">
                                 <Card className="shadow-sm">
@@ -1186,7 +1187,7 @@ export default function EmployeeDashboard({
                                 </Card>
                             </TabsContent>
 
-                            {/* Leave Tab */}
+                            {/* Leave Tab - Fixed Version */}
                             <TabsContent value="leave">
                                 <div className="space-y-6">
                                     {/* Leave Balances */}
@@ -1200,11 +1201,16 @@ export default function EmployeeDashboard({
                                                     <CardTitle>Leave Balances ({leaveSummary?.year || new Date().getFullYear()})</CardTitle>
                                                     <CardDescription>Available leave balance for the current year</CardDescription>
                                                 </div>
-                                                {leaveData.length > 0 && (
-                                                    <Button onClick={downloadLeavePdf} variant="outline" size="sm" className="flex items-center">
-                                                        <Download className="mr-1 h-4 w-4" />
-                                                        Export PDF
-                                                    </Button>
+                                                {(leaveData.length > 0 || leaveSummary?.balances?.length > 0) && (
+                                                    <LeavePdfExport
+                                                        leaveData={leaveData}
+                                                        leaveSummary={leaveSummary}
+                                                        employee={{
+                                                            id: selectedEmployee?.id || 0,  // ✅ Fixed: Use selectedEmployee instead of employee
+                                                            report_from_date: dateRange.from || '',  // ✅ Fixed: Use dateRange instead of fromDate
+                                                            report_to_date: dateRange.to || ''  // ✅ Fixed: Use dateRange instead of toDate
+                                                        }}
+                                                    />
                                                 )}
                                             </div>
                                         </CardHeader>
@@ -1257,7 +1263,6 @@ export default function EmployeeDashboard({
                                                     <CardTitle>Leave Applications</CardTitle>
                                                     <CardDescription>History of leave requests in the selected period</CardDescription>
                                                 </div>
-
                                             </div>
                                         </CardHeader>
                                         <CardContent className="p-0">

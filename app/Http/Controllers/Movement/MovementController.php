@@ -577,18 +577,25 @@ class MovementController extends Controller
      */
     public function show(Movement $movement)
     {
+        // Eager load related models to avoid N+1 issues
         $movement->load(['employee.department', 'employee.designation']);
 
+        // Get the currently authenticated user and their associated employee record
         $user = Auth::user();
         $userEmployee = $user->employee;
+
+        // Determine if the user can close the movement
         $canClose = false;
 
-        // User can close the movement if they are the employee who created it
-        // and the movement is still active
-        if ($userEmployee && $userEmployee->id === $movement->employee_id && $movement->status === 'active') {
+        if (
+            $userEmployee &&
+            (int) $userEmployee->id === (int) $movement->employee_id &&
+            $movement->status === 'active'
+        ) {
             $canClose = true;
         }
 
+        // Render the inertia view with the movement details and permission flag
         return Inertia::render('movement/show', [
             'movement' => $movement,
             'canClose' => $canClose,
@@ -600,11 +607,12 @@ class MovementController extends Controller
      */
     public function complete(Request $request, Movement $movement)
     {
+
         $user = Auth::user();
         $userEmployee = $user->employee;
 
-        // Check if user can close this movement
-        if (!$userEmployee || $userEmployee->id !== $movement->employee_id) {
+        // Check if user can close this movement - with proper type casting
+        if (!$userEmployee || (int) $userEmployee->id !== (int) $movement->employee_id) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to close this movement.');
         }
@@ -652,12 +660,15 @@ class MovementController extends Controller
 
             \Log::error('Error closing movement: ' . $e->getMessage(), [
                 'movement_id' => $movement->id,
+                'user_id' => $user->id,
+                'employee_id' => $userEmployee ? $userEmployee->id : null,
+                'movement_employee_id' => $movement->employee_id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
             return redirect()->route('movements.index')
-                ->with('error', 'An error occurred while closing the movement: ' . $e->getMessage());
+                ->with('error', 'An error occurred while closing the movement. Please try again.');
         }
     }
 

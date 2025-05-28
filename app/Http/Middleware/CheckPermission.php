@@ -20,7 +20,19 @@ class CheckPermission
         $user = Auth::user();
 
         if (!$user->hasPermission($permission)) {
-            abort(403, 'Unauthorized action.');
+            // Error route এ additional data pass করুন
+            return redirect()->route('error.403', [
+                'permission' => $permission,
+                'reason' => 'missing_permission'
+            ]);
+
+            // অথবা session এ data store করে redirect
+            // return redirect()->route('error.403')->with([
+            //     'error_type' => 'permission_denied',
+            //     'required_permission' => $permission,
+            //     'user_permissions' => $user->permissions->pluck('name'),
+            //     'attempted_url' => $request->url()
+            // ]);
         }
 
         return $next($request);

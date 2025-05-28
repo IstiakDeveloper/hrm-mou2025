@@ -29,7 +29,9 @@ use App\Http\Controllers\Transfer\TransferController;
 use App\Http\Controllers\ZKTeco\ZKDeviceController;
 use App\Models\Role;
 use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -42,6 +44,54 @@ use Inertia\Inertia;
 | Permission Structure: module.action (e.g., users.view, employees.create)
 |
 */
+Route::get('/error/403', function (Request $request) {
+    return Inertia::render('Errors/Unauthorized', [
+        'permission' => $request->get('permission'),
+        'reason' => $request->get('reason'),
+        'errorDetails' => session('error_type') ? [
+            'type' => session('error_type'),
+            'required_permission' => session('required_permission'),
+            'user_permissions' => session('user_permissions'),
+            'attempted_url' => session('attempted_url')
+        ] : null
+    ]);
+})->name('error.403');
+
+Route::get('/error/404', function () {
+    return Inertia::render('Errors/NotFound');
+})->name('error.404');
+
+// Generic error route
+Route::get('/error/{type}', function ($type, Request $request) {
+    $pages = [
+        '403' => 'Errors/Unauthorized',
+        '404' => 'Errors/NotFound',
+        '500' => 'Errors/ServerError'
+    ];
+
+    $component = $pages[$type] ?? 'Errors/NotFound';
+
+    return Inertia::render($component, [
+        'errorType' => $type,
+        'permission' => $request->get('permission'),
+        'reason' => $request->get('reason')
+    ]);
+})->name('error.show');
+
+Route::get('/error/{type}', function ($type) {
+    $pages = [
+        '403' => 'Errors/Unauthorized',
+        '404' => 'Errors/NotFound',
+        '500' => 'Errors/ServerError'
+    ];
+
+    $component = $pages[$type] ?? 'Errors/NotFound';
+
+    return Inertia::render($component, [
+        'errorType' => $type
+    ]);
+})->name('error.show');
+
 
 // ====================
 // PUBLIC ROUTES
@@ -155,6 +205,8 @@ Route::middleware(['auth'])->group(function () {
         // Employee Dashboard (for viewing individual employee data)
         Route::get('employee/dashboard', [EmployeeDashboardController::class, 'index'])
             ->name('employee.dashboard');
+
+        Route::get('employee/leave/pdf', [EmployeeDashboardController::class, 'downloadLeavePdf'])->name('employee.leave.pdf');
 
         // Employee Documents Management
         Route::prefix('employees/{employee}/documents')->name('employees.documents.')->group(function () {
@@ -388,7 +440,12 @@ Route::middleware(['auth'])->group(function () {
 
         // Leave Applications Management
         Route::prefix('applications')->name('applications.')->group(function () {
-            // View applications (employees can see their own, managers can see team's)
+
+            Route::get('/report', [LeaveApplicationController::class, 'report'])
+                ->name('report')
+                ->middleware('permission:reports.view');
+
+
             Route::get('/', [LeaveApplicationController::class, 'index'])
                 ->name('index')
                 ->middleware('permission:leave-applications.view');
@@ -421,9 +478,7 @@ Route::middleware(['auth'])->group(function () {
                 ->middleware('permission:leave-applications.view');
 
             // Reports
-            Route::get('/report', [LeaveApplicationController::class, 'report'])
-                ->name('report')
-                ->middleware('permission:reports.view');
+
         });
     });
 

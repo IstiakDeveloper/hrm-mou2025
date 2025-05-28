@@ -294,11 +294,10 @@ export default function EmployeeDashboard({
                                             <span>{movement.destination}</span>
                                             <Badge
                                                 variant="outline"
-                                                className={`${
-                                                    movement.movement_type === 'official'
+                                                className={`${movement.movement_type === 'official'
                                                         ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                                                         : 'bg-purple-50 text-purple-700 border-purple-200'
-                                                }`}
+                                                    }`}
                                             >
                                                 {movement.movement_type.charAt(0).toUpperCase() + movement.movement_type.slice(1)}
                                             </Badge>
@@ -322,7 +321,7 @@ export default function EmployeeDashboard({
                                     </div>
                                     <Button
                                         className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
-                                        onClick={() => handleCloseMovement(movement.id)}
+                                        onClick={() => router.get(route('movements.show', movement.id))}
                                         disabled={isSubmitting}
                                     >
                                         {isSubmitting ? (
@@ -412,11 +411,10 @@ export default function EmployeeDashboard({
                         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                                 <Badge
-                                    className={`${
-                                        todayAttendance
+                                    className={`${todayAttendance
                                             ? "bg-green-100 text-green-800 border-green-300"
                                             : "bg-yellow-100 text-yellow-800 border-yellow-300"
-                                    }`}
+                                        }`}
                                 >
                                     {getAttendanceStatus(todayAttendance)}
                                 </Badge>
@@ -491,11 +489,10 @@ export default function EmployeeDashboard({
                                                     </div>
                                                 </div>
                                                 <Badge
-                                                    className={`text-xs ${
-                                                        attendance.status === "Present"
+                                                    className={`text-xs ${attendance.status === "Present"
                                                             ? "bg-green-100 text-green-800"
                                                             : "bg-yellow-100 text-yellow-800"
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {attendance.status}
                                                 </Badge>
@@ -596,11 +593,10 @@ export default function EmployeeDashboard({
                                                             </div>
                                                         </div>
                                                         <Badge
-                                                            className={`${
-                                                                leave.status === "Approved" ? "bg-green-100 text-green-800" :
-                                                                leave.status === "Rejected" ? "bg-red-100 text-red-800" :
-                                                                "bg-yellow-100 text-yellow-800"
-                                                            }`}
+                                                            className={`${leave.status === "Approved" ? "bg-green-100 text-green-800" :
+                                                                    leave.status === "Rejected" ? "bg-red-100 text-red-800" :
+                                                                        "bg-yellow-100 text-yellow-800"
+                                                                }`}
                                                         >
                                                             {leave.status}
                                                         </Badge>
@@ -643,11 +639,10 @@ export default function EmployeeDashboard({
                                                                         {movement.destination}
                                                                         <Badge
                                                                             variant="outline"
-                                                                            className={`${
-                                                                                movement.movement_type === 'official'
+                                                                            className={`${movement.movement_type === 'official'
                                                                                     ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                                                                                     : 'bg-purple-50 text-purple-700 border-purple-200'
-                                                                            }`}
+                                                                                }`}
                                                                         >
                                                                             {movement.movement_type.charAt(0).toUpperCase() + movement.movement_type.slice(1)}
                                                                         </Badge>
@@ -657,11 +652,10 @@ export default function EmployeeDashboard({
                                                                     </div>
                                                                 </div>
                                                                 <Badge
-                                                                    className={`${
-                                                                        movement.status === 'active'
+                                                                    className={`${movement.status === 'active'
                                                                             ? 'bg-blue-100 text-blue-700'
                                                                             : 'bg-green-100 text-green-700'
-                                                                    }`}
+                                                                        }`}
                                                                 >
                                                                     {movement.status === 'active' ? 'Active' : 'Completed'}
                                                                 </Badge>

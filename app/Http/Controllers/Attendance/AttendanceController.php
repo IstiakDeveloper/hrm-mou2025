@@ -21,141 +21,141 @@ class AttendanceController extends Controller
     /**
      * Display a listing of attendances.
      */
-/**
- * Display a listing of attendances.
- */
-public function index(Request $request)
-{
-    $user = Auth::user();
-    $date = $request->date ? Carbon::parse($request->date) : Carbon::today();
+    /**
+     * Display a listing of attendances.
+     */
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+        $date = $request->date ? Carbon::parse($request->date) : Carbon::today();
 
-    // Change this line to include movement relationship
-    $query = Attendance::with(['employee.department', 'employee.designation', 'device'])
-        ->whereDate('date', $date);
+        // Change this line to include movement relationship
+        $query = Attendance::with(['employee.department', 'employee.designation', 'device'])
+            ->whereDate('date', $date);
 
-    $this->applyUserFilters($query, $user, $request);
+        $this->applyUserFilters($query, $user, $request);
 
-    $query->when($request->status, function ($query, $status) {
-        $query->where('status', $status);
-    })->when($request->search, function ($query, $search) {
-        $query->whereHas('employee', function ($q) use ($search) {
-            $q->where('first_name', 'like', "%{$search}%")
-                ->orWhere('last_name', 'like', "%{$search}%")
-                ->orWhere('employee_id', 'like', "%{$search}%");
+        $query->when($request->status, function ($query, $status) {
+            $query->where('status', $status);
+        })->when($request->search, function ($query, $search) {
+            $query->whereHas('employee', function ($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%");
+            });
         });
-    });
 
-    $attendances = $query->paginate(100)->withQueryString();
+        $attendances = $query->paginate(100)->withQueryString();
 
-    // Format times, remarks, and ADD MOVEMENT DATA
-    $attendances->getCollection()->transform(function ($attendance) use ($date) {
-        if ($attendance->check_in) {
-            $attendance->check_in_formatted = date('h:i A', strtotime($attendance->check_in));
-        }
-        if ($attendance->check_out) {
-            $attendance->check_out_formatted = date('h:i A', strtotime($attendance->check_out));
-        }
-
-        // Get ALL movements for this employee on this date
-        $movements = \App\Models\Movement::where('employee_id', $attendance->employee_id)
-            ->where(function ($query) use ($date) {
-                $dateStr = $date->format('Y-m-d');
-                $query->whereDate('from_datetime', '<=', $dateStr)
-                      ->whereDate('actual_return_datetime', '>=', $dateStr);
-            })
-            ->whereIn('status', ['active', 'completed'])
-            ->orderBy('from_datetime')
-            ->get();
-
-        if ($movements->count() > 0) {
-            $attendance->has_movement = true;
-
-            if ($movements->count() > 1) {
-                // Multiple movements on the same day
-                $attendance->multiple_movements = true;
-                $attendance->movements = $movements->map(function($movement) {
-                    return [
-                        'id' => $movement->id,
-                        'movement_type' => $movement->movement_type,
-                        'purpose' => $movement->purpose,
-                        'destination' => $movement->destination,
-                        'status' => $movement->status,
-                        'from_datetime' => $movement->from_datetime,
-                        'actual_return_datetime' => $movement->actual_return_datetime,
-                    ];
-                });
-                $attendance->total_movements = $movements->count();
-
-                // For display purposes, use the first movement details
-                $firstMovement = $movements->first();
-                $attendance->movement_type = $firstMovement->movement_type;
-                $attendance->movement_purpose = $firstMovement->purpose;
-                $attendance->movement_destination = $firstMovement->destination;
-                $attendance->movement_status = $firstMovement->status;
-                $attendance->movement_from = Carbon::parse($firstMovement->from_datetime)->format('h:i A');
-                $attendance->movement_to = Carbon::parse($firstMovement->actual_return_datetime)->format('h:i A');
-                $attendance->movement_id = $firstMovement->id;
-            } else {
-                // Single movement
-                $movement = $movements->first();
-                $attendance->multiple_movements = false;
-                $attendance->movement_type = $movement->movement_type;
-                $attendance->movement_purpose = $movement->purpose;
-                $attendance->movement_destination = $movement->destination;
-                $attendance->movement_status = $movement->status;
-                $attendance->movement_from = Carbon::parse($movement->from_datetime)->format('h:i A');
-                $attendance->movement_to = Carbon::parse($movement->actual_return_datetime)->format('h:i A');
-                $attendance->movement_id = $movement->id;
+        // Format times, remarks, and ADD MOVEMENT DATA
+        $attendances->getCollection()->transform(function ($attendance) use ($date) {
+            if ($attendance->check_in) {
+                $attendance->check_in_formatted = date('h:i A', strtotime($attendance->check_in));
             }
-        } else {
-            $attendance->has_movement = false;
-            $attendance->multiple_movements = false;
-        }
+            if ($attendance->check_out) {
+                $attendance->check_out_formatted = date('h:i A', strtotime($attendance->check_out));
+            }
 
-        $this->generateRemarks($attendance);
-        return $attendance;
-    });
+            // Get ALL movements for this employee on this date
+            $movements = \App\Models\Movement::where('employee_id', $attendance->employee_id)
+                ->where(function ($query) use ($date) {
+                    $dateStr = $date->format('Y-m-d');
+                    $query->whereDate('from_datetime', '<=', $dateStr)
+                        ->whereDate('actual_return_datetime', '>=', $dateStr);
+                })
+                ->whereIn('status', ['active', 'completed'])
+                ->orderBy('from_datetime')
+                ->get();
 
-    // Rest of your existing code...
+            if ($movements->count() > 0) {
+                $attendance->has_movement = true;
 
-    $formattedAttendances = [
-        'data' => $attendances->items(),
-        'meta' => [
-            'current_page' => $attendances->currentPage(),
-            'from' => $attendances->firstItem(),
-            'last_page' => $attendances->lastPage(),
-            'links' => $attendances->linkCollection()->toArray(),
-            'path' => $attendances->path(),
-            'per_page' => $attendances->perPage(),
-            'to' => $attendances->lastItem(),
-            'total' => $attendances->total(),
-        ],
-        'links' => [
-            'first' => $attendances->url(1),
-            'last' => $attendances->url($attendances->lastPage()),
-            'prev' => $attendances->previousPageUrl(),
-            'next' => $attendances->nextPageUrl(),
-        ],
-    ];
+                if ($movements->count() > 1) {
+                    // Multiple movements on the same day
+                    $attendance->multiple_movements = true;
+                    $attendance->movements = $movements->map(function ($movement) {
+                        return [
+                            'id' => $movement->id,
+                            'movement_type' => $movement->movement_type,
+                            'purpose' => $movement->purpose,
+                            'destination' => $movement->destination,
+                            'status' => $movement->status,
+                            'from_datetime' => $movement->from_datetime,
+                            'actual_return_datetime' => $movement->actual_return_datetime,
+                        ];
+                    });
+                    $attendance->total_movements = $movements->count();
 
-    return Inertia::render('attendance/index', [
-        'attendances' => $formattedAttendances,
-        'branches' => $this->getAccessibleBranches($user),
-        'departments' => $this->getAccessibleDepartments($user),
-        'filters' => $request->only(['date', 'branch_id', 'department_id', 'status', 'search']),
-        'date' => $date->format('Y-m-d'),
-        'readableDate' => $date->format('l, F j, Y'),
-        'userPermissions' => [
-            'canCreate' => $user->hasPermission('attendance.create'),
-            'canEdit' => $user->hasPermission('attendance.edit'),
-            'canDelete' => $user->hasPermission('attendance.delete'),
-            'canSyncDevices' => $user->hasPermission('attendance.sync'),
-            'isEmployee' => $user->employee_id ? true : false,
-            'isBranchManager' => $user->hasPermission('branch_manager'),
-            'isDepartmentHead' => $user->hasPermission('department_head'),
-        ],
-    ]);
-}
+                    // For display purposes, use the first movement details
+                    $firstMovement = $movements->first();
+                    $attendance->movement_type = $firstMovement->movement_type;
+                    $attendance->movement_purpose = $firstMovement->purpose;
+                    $attendance->movement_destination = $firstMovement->destination;
+                    $attendance->movement_status = $firstMovement->status;
+                    $attendance->movement_from = Carbon::parse($firstMovement->from_datetime)->format('h:i A');
+                    $attendance->movement_to = Carbon::parse($firstMovement->actual_return_datetime)->format('h:i A');
+                    $attendance->movement_id = $firstMovement->id;
+                } else {
+                    // Single movement
+                    $movement = $movements->first();
+                    $attendance->multiple_movements = false;
+                    $attendance->movement_type = $movement->movement_type;
+                    $attendance->movement_purpose = $movement->purpose;
+                    $attendance->movement_destination = $movement->destination;
+                    $attendance->movement_status = $movement->status;
+                    $attendance->movement_from = Carbon::parse($movement->from_datetime)->format('h:i A');
+                    $attendance->movement_to = Carbon::parse($movement->actual_return_datetime)->format('h:i A');
+                    $attendance->movement_id = $movement->id;
+                }
+            } else {
+                $attendance->has_movement = false;
+                $attendance->multiple_movements = false;
+            }
+
+            $this->generateRemarks($attendance);
+            return $attendance;
+        });
+
+        // Rest of your existing code...
+
+        $formattedAttendances = [
+            'data' => $attendances->items(),
+            'meta' => [
+                'current_page' => $attendances->currentPage(),
+                'from' => $attendances->firstItem(),
+                'last_page' => $attendances->lastPage(),
+                'links' => $attendances->linkCollection()->toArray(),
+                'path' => $attendances->path(),
+                'per_page' => $attendances->perPage(),
+                'to' => $attendances->lastItem(),
+                'total' => $attendances->total(),
+            ],
+            'links' => [
+                'first' => $attendances->url(1),
+                'last' => $attendances->url($attendances->lastPage()),
+                'prev' => $attendances->previousPageUrl(),
+                'next' => $attendances->nextPageUrl(),
+            ],
+        ];
+
+        return Inertia::render('attendance/index', [
+            'attendances' => $formattedAttendances,
+            'branches' => $this->getAccessibleBranches($user),
+            'departments' => $this->getAccessibleDepartments($user),
+            'filters' => $request->only(['date', 'branch_id', 'department_id', 'status', 'search']),
+            'date' => $date->format('Y-m-d'),
+            'readableDate' => $date->format('l, F j, Y'),
+            'userPermissions' => [
+                'canCreate' => $user->hasPermission('attendance.create'),
+                'canEdit' => $user->hasPermission('attendance.edit'),
+                'canDelete' => $user->hasPermission('attendance.delete'),
+                'canSyncDevices' => $user->hasPermission('attendance.sync'),
+                'isEmployee' => $user->employee_id ? true : false,
+                'isBranchManager' => $user->hasPermission('branch_manager'),
+                'isDepartmentHead' => $user->hasPermission('department_head'),
+            ],
+        ]);
+    }
 
 
     /**
@@ -734,11 +734,20 @@ public function index(Request $request)
                     });
                 }
 
-                // Apply department filter if requested
-                if ($request->department_id) {
+                // Apply department filter if requested (NEW LOGIC FOR EXCLUSIONS)
+                if ($request->department_id && $request->department_id !== 'all') {
+                    // Specific department selected
                     $query->whereHas('employee', function ($q) use ($request) {
                         $q->where('department_id', $request->department_id);
                     });
+                } elseif ($request->has('excluded_departments') && is_array($request->excluded_departments)) {
+                    // All departments selected but some are excluded
+                    $excludedDepartments = $request->excluded_departments;
+                    if (!empty($excludedDepartments)) {
+                        $query->whereHas('employee', function ($q) use ($excludedDepartments) {
+                            $q->whereNotIn('department_id', $excludedDepartments);
+                        });
+                    }
                 }
 
                 $attendances = $query->get();
@@ -866,15 +875,22 @@ public function index(Request $request)
             // Get branch and department names for summary
             $branchName = null;
             $departmentName = null;
+            $excludedDepartmentNames = [];
 
             if ($request->branch_id) {
                 $branch = Branch::find($request->branch_id);
                 $branchName = $branch ? $branch->name : null;
             }
 
-            if ($request->department_id) {
+            if ($request->department_id && $request->department_id !== 'all') {
                 $department = Department::find($request->department_id);
                 $departmentName = $department ? $department->name : null;
+            }
+
+            // Get excluded department names for summary
+            if ($request->has('excluded_departments') && is_array($request->excluded_departments)) {
+                $excludedDepartments = Department::whereIn('id', $request->excluded_departments)->get();
+                $excludedDepartmentNames = $excludedDepartments->pluck('name')->toArray();
             }
 
             // Return comprehensive data
@@ -895,12 +911,15 @@ public function index(Request $request)
                     'attendance_percentage' => $attendancePercentage,
                     'branch_name' => $branchName,
                     'department_name' => $departmentName,
+                    'excluded_departments' => $excludedDepartmentNames,
+                    'filter_type' => $request->department_id === 'all' || !$request->department_id ? 'all_with_exclusions' : 'specific_department',
                     'date_range_formatted' => $startDate->format('d M, Y') . ' to ' . $endDate->format('d M, Y'),
                     'generated_at' => Carbon::now(),
                     'generated_by' => $user->name,
                     'filter_applied' => [
                         'branch_filter' => $request->branch_id ? true : false,
                         'department_filter' => $request->department_id ? true : false,
+                        'department_exclusion_filter' => !empty($excludedDepartmentNames),
                         'date_range_days' => $daysDifference + 1
                     ]
                 ],
@@ -921,7 +940,7 @@ public function index(Request $request)
                 'performance_metrics' => [
                     'data_processing_time' => microtime(true),
                     'memory_usage' => memory_get_usage(true),
-                    'query_optimization' => 'Optimized with eager loading and chunked processing'
+                    'query_optimization' => 'Optimized with eager loading and department exclusion support'
                 ]
             ];
 
@@ -931,7 +950,7 @@ public function index(Request $request)
                 'user_id' => $user->id,
                 'start_date' => $startDate->format('Y-m-d'),
                 'end_date' => $endDate->format('Y-m-d'),
-                'filters' => $request->only(['branch_id', 'department_id']),
+                'filters' => $request->only(['branch_id', 'department_id', 'excluded_departments']),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -957,6 +976,7 @@ public function index(Request $request)
     }
 
 
+
     public function generatePdf(Request $request)
     {
         $user = Auth::user();
@@ -975,15 +995,22 @@ public function index(Request $request)
         // Get branch and department names
         $branchName = null;
         $departmentName = null;
+        $excludedDepartmentNames = [];
 
         if ($request->branch_id) {
             $branch = Branch::find($request->branch_id);
             $branchName = $branch ? $branch->name : null;
         }
 
-        if ($request->department_id) {
+        if ($request->department_id && $request->department_id !== 'all') {
             $department = Department::find($request->department_id);
             $departmentName = $department ? $department->name : null;
+        }
+
+        // Get excluded department names
+        if ($request->has('excluded_departments') && is_array($request->excluded_departments)) {
+            $excludedDepartments = Department::whereIn('id', $request->excluded_departments)->get();
+            $excludedDepartmentNames = $excludedDepartments->pluck('name')->toArray();
         }
 
         // Create the PDF with enhanced data
@@ -995,6 +1022,8 @@ public function index(Request $request)
             'endDate' => $endDate->format('Y-m-d'),
             'branchName' => $branchName,
             'departmentName' => $departmentName,
+            'excludedDepartments' => $excludedDepartmentNames,
+            'filterType' => $request->department_id === 'all' || !$request->department_id ? 'all_with_exclusions' : 'specific_department',
             'generatedBy' => $user->name,
             'generatedAt' => now(),
         ]);
@@ -1005,11 +1034,17 @@ public function index(Request $request)
             'isHtml5ParserEnabled' => true,
         ]);
 
-        $fileName = 'attendance_report_' . $startDate->format('Y-m-d') . '_to_' . $endDate->format('Y-m-d') . '.pdf';
+        // Create filename with excluded departments info
+        $fileName = 'attendance_report_' . $startDate->format('Y-m-d') . '_to_' . $endDate->format('Y-m-d');
+
+        if (!empty($excludedDepartmentNames)) {
+            $fileName .= '_excluding_' . count($excludedDepartmentNames) . '_depts';
+        }
+
+        $fileName .= '.pdf';
 
         return $pdf->download($fileName);
     }
-
     /**
      * Delete the specified attendance record.
      */

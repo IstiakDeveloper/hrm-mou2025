@@ -57,15 +57,18 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+
+    /* Custom success, info, warning colors */
+    --color-success: oklch(0.55 0.20 142);
+    --color-success-foreground: oklch(0.98 0.01 142);
+    --color-info: oklch(0.55 0.20 220);
+    --color-info-foreground: oklch(0.98 0.01 220);
+    --color-warning: oklch(0.70 0.15 70);
+    --color-warning-foreground: oklch(0.15 0.05 70);
 }
 
 /*
-  The default border color has changed to `currentColor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
+  Border compatibility for Tailwind CSS v4
 */
 @layer base {
     *,
@@ -77,91 +80,121 @@
     }
 }
 
+/* Light Theme - Blue & Green Color Scheme */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    /* Base colors */
+    --background: oklch(0.99 0.01 180); /* Very light blue-white */
+    --foreground: oklch(0.15 0.02 220); /* Dark blue-gray */
+
+    /* Card colors */
+    --card: oklch(1 0 0); /* Pure white for cards */
+    --card-foreground: oklch(0.15 0.02 220);
+
+    /* Popover colors */
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.15 0.02 220);
+
+    /* Primary - Green */
+    --primary: oklch(0.55 0.20 142); /* Green-600 equivalent */
+    --primary-foreground: oklch(0.98 0.01 142);
+
+    /* Secondary - Light Blue */
+    --secondary: oklch(0.94 0.05 220); /* Light blue */
+    --secondary-foreground: oklch(0.25 0.08 220); /* Dark blue */
+
+    /* Muted - Subtle blue-gray */
+    --muted: oklch(0.96 0.02 220);
+    --muted-foreground: oklch(0.55 0.05 220);
+
+    /* Accent - Bright Blue */
+    --accent: oklch(0.92 0.08 220); /* Light blue accent */
+    --accent-foreground: oklch(0.25 0.12 220); /* Dark blue */
+
+    /* Destructive - Red (unchanged) */
     --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
+    --destructive-foreground: oklch(0.98 0.01 27.325);
+
+    /* Border and input - Subtle blue-gray */
+    --border: oklch(0.90 0.03 220);
+    --input: oklch(0.90 0.03 220);
+    --ring: oklch(0.55 0.20 142); /* Green ring for focus */
+
+    /* Chart colors - Blue & Green spectrum */
+    --chart-1: oklch(0.55 0.20 142); /* Green */
+    --chart-2: oklch(0.55 0.20 220); /* Blue */
+    --chart-3: oklch(0.60 0.18 180); /* Cyan */
+    --chart-4: oklch(0.50 0.22 160); /* Teal */
+    --chart-5: oklch(0.65 0.15 200); /* Light Blue */
+
+    /* Radius */
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+
+    /* Sidebar - Blue theme */
+    --sidebar: oklch(0.97 0.02 220); /* Very light blue */
+    --sidebar-foreground: oklch(0.20 0.05 220); /* Dark blue */
+    --sidebar-primary: oklch(0.55 0.20 142); /* Green primary */
+    --sidebar-primary-foreground: oklch(0.98 0.01 142);
+    --sidebar-accent: oklch(0.92 0.08 220); /* Light blue accent */
+    --sidebar-accent-foreground: oklch(0.25 0.12 220);
+    --sidebar-border: oklch(0.88 0.04 220);
+    --sidebar-ring: oklch(0.55 0.20 142);
 }
 
+/* Dark Theme - Blue & Green Color Scheme */
 .dark {
-    /* Lime dark theme colors */
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    
-    /* Lime primary color */
-    --primary: oklch(0.85 0.21 130); 
-    --primary-foreground: oklch(0.145 0 0);
-    
-    /* Slightly darker lime for secondary */
-    --secondary: oklch(0.269 0.18 120);
-    --secondary-foreground: oklch(0.985 0 0);
-    
-    /* Muted lime */
-    --muted: oklch(0.32 0.12 125);
-    --muted-foreground: oklch(0.75 0.08 125);
-    
-    /* Accent lime */
-    --accent: oklch(0.65 0.28 110);
-    --accent-foreground: oklch(0.145 0 0);
-    
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    
-    /* Border and UI elements with lime tint */
-    --border: oklch(0.28 0.05 120);
-    --input: oklch(0.28 0.05 120);
-    --ring: oklch(0.75 0.20 130);
-    
-    /* Chart colors that complement lime */
-    --chart-1: oklch(0.75 0.20 130); /* Bright lime */
-    --chart-2: oklch(0.65 0.18 162.48); /* Lime-green */
-    --chart-3: oklch(0.55 0.20 100); /* Yellow-lime */
-    --chart-4: oklch(0.627 0.265 303.9); /* Purple contrast */
-    --chart-5: oklch(0.645 0.246 16.439); /* Red contrast */
-    
-    /* Sidebar with lime accents */
-    --sidebar: oklch(0.18 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.75 0.20 130);
-    --sidebar-primary-foreground: oklch(0.145 0 0);
-    --sidebar-accent: oklch(0.32 0.12 125);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.28 0.05 120);
-    --sidebar-ring: oklch(0.75 0.20 130);
+    /* Base colors - Dark blue background */
+    --background: oklch(0.12 0.05 220); /* Dark blue background */
+    --foreground: oklch(0.95 0.02 180); /* Light blue-white text */
+
+    /* Card colors */
+    --card: oklch(0.15 0.06 220); /* Dark blue cards */
+    --card-foreground: oklch(0.95 0.02 180);
+
+    /* Popover colors */
+    --popover: oklch(0.15 0.06 220);
+    --popover-foreground: oklch(0.95 0.02 180);
+
+    /* Primary - Bright Green */
+    --primary: oklch(0.70 0.25 142); /* Bright green for dark mode */
+    --primary-foreground: oklch(0.12 0.05 142); /* Dark green text */
+
+    /* Secondary - Medium Blue */
+    --secondary: oklch(0.25 0.10 220); /* Medium blue */
+    --secondary-foreground: oklch(0.90 0.05 220); /* Light blue */
+
+    /* Muted - Dark blue-gray */
+    --muted: oklch(0.22 0.08 220);
+    --muted-foreground: oklch(0.70 0.05 220);
+
+    /* Accent - Bright Blue */
+    --accent: oklch(0.35 0.15 220); /* Bright blue accent */
+    --accent-foreground: oklch(0.90 0.05 220);
+
+    /* Destructive - Bright Red */
+    --destructive: oklch(0.65 0.25 27.325);
+    --destructive-foreground: oklch(0.12 0.05 27.325);
+
+    /* Border and input - Medium blue */
+    --border: oklch(0.30 0.08 220);
+    --input: oklch(0.30 0.08 220);
+    --ring: oklch(0.70 0.25 142); /* Bright green ring */
+
+    /* Chart colors - Bright Blue & Green spectrum for dark mode */
+    --chart-1: oklch(0.70 0.25 142); /* Bright Green */
+    --chart-2: oklch(0.70 0.25 220); /* Bright Blue */
+    --chart-3: oklch(0.75 0.22 180); /* Bright Cyan */
+    --chart-4: oklch(0.65 0.28 160); /* Bright Teal */
+    --chart-5: oklch(0.80 0.18 200); /* Bright Light Blue */
+
+    /* Sidebar - Dark blue theme */
+    --sidebar: oklch(0.10 0.06 220); /* Very dark blue */
+    --sidebar-foreground: oklch(0.90 0.03 180);
+    --sidebar-primary: oklch(0.70 0.25 142); /* Bright green */
+    --sidebar-primary-foreground: oklch(0.12 0.05 142);
+    --sidebar-accent: oklch(0.25 0.12 220); /* Medium blue accent */
+    --sidebar-accent-foreground: oklch(0.90 0.05 220);
+    --sidebar-border: oklch(0.25 0.08 220);
+    --sidebar-ring: oklch(0.70 0.25 142);
 }
 
 @layer base {
@@ -171,5 +204,6 @@
 
     body {
         @apply bg-background text-foreground;
+        font-feature-settings: "rlig" 1, "calt" 1;
     }
 }

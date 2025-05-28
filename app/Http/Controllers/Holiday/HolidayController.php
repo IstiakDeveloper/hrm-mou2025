@@ -150,54 +150,89 @@ class HolidayController extends Controller
      */
     public function calendar(Request $request)
     {
-        $year = $request->year ?? Carbon::now()->year;
-        $month = $request->month ?? Carbon::now()->month;
+        // Validate and get year/month
+        $year = $request->input('year', Carbon::now()->year);
+        $month = $request->input('month', Carbon::now()->month);
 
+        // Ensure valid year and month
+        $year = max(2020, min(2030, (int) $year));
+        $month = max(1, min(12, (int) $month));
+
+        // Create date range for the month
         $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
         $endDate = $startDate->copy()->endOfMonth();
 
-        $holidays = Holiday::whereBetween('date', [$startDate, $endDate])
-            ->orWhere(function ($query) use ($month) {
-                $query->where('is_recurring', true)
-                    ->whereMonth('date', $month);
-            })
+        // Get holidays for the month
+        $holidays = Holiday::where(function ($query) use ($startDate, $endDate, $month) {
+            // Get holidays that fall within this month
+            $query->whereBetween('date', [$startDate, $endDate])
+                // OR get recurring holidays for this month (any year)
+                ->orWhere(function ($subQuery) use ($month) {
+                    $subQuery->where('is_recurring', true)
+                        ->whereMonth('date', $month);
+                });
+        })
+            ->orderBy('date')
             ->get();
 
+        // Build calendar data
         $calendarData = [];
         $currentDate = $startDate->copy();
 
         while ($currentDate <= $endDate) {
-            $day = $currentDate->day;
+            // Filter holidays for this specific date
             $dayHolidays = $holidays->filter(function ($holiday) use ($currentDate) {
+                $holidayDate = Carbon::parse($holiday->date);
+
                 if ($holiday->is_recurring) {
-                    return $holiday->date->month == $currentDate->month &&
-                        $holiday->date->day == $currentDate->day;
+                    // For recurring holidays, match month and day
+                    return $holidayDate->month == $currentDate->month &&
+                        $holidayDate->day == $currentDate->day;
                 } else {
-                    return $holiday->date->format('Y-m-d') == $currentDate->format('Y-m-d');
+                    // For one-time holidays, match exact date
+                    return $holidayDate->isSameDay($currentDate);
                 }
             });
 
             $calendarData[] = [
                 'date' => $currentDate->format('Y-m-d'),
-                'day' => $day,
-                'isWeekend' => in_array($currentDate->dayOfWeek, [0, 6]), // 0 = Sunday, 6 = Saturday
-                'holidays' => $dayHolidays->values()->all(),
+                'day' => $currentDate->day,
+                'isWeekend' => $currentDate->isWeekend(),
+                'holidays' => $dayHolidays->values()->map(function ($holiday) {
+                    return [
+                        'id' => $holiday->id,
+                        'title' => $holiday->title,
+                        'date' => $holiday->date->format('Y-m-d'),
+                        'description' => $holiday->description,
+                        'is_recurring' => $holiday->is_recurring,
+                        'applicable_branches' => $holiday->applicable_branches,
+                    ];
+                })->toArray(),
             ];
 
             $currentDate->addDay();
         }
 
+        // Generate year range
+        $currentYear = Carbon::now()->year;
+        $years = range($currentYear - 2, $currentYear + 3);
+
+        // Generate months
+        $months = collect(range(1, 12))->map(function ($monthNum) {
+            return [
+                'value' => $monthNum,
+                'label' => Carbon::create(null, $monthNum)->format('F'),
+            ];
+        })->toArray();
+
         return Inertia::render('holiday/calendar', [
             'calendarData' => $calendarData,
-            'year' => $year,
-            'month' => $month,
-            'years' => range(Carbon::now()->year - 1, Carbon::now()->year + 2),
-            'months' => array_map(function ($m) {
-                return [
-                    'value' => $m,
-                    'label' => Carbon::create(null, $m)->format('F'),
-                ];
-            }, range(1, 12)),
+            'year' => (int) $year,
+            'month' => (int) $month,
+            'years' => $years,
+            'months' => $months,
+            'totalHolidays' => $holidays->count(),
+            'currentDate' => Carbon::now()->format('Y-m-d'),
         ]);
     }
 }

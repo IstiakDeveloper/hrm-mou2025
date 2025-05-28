@@ -1080,20 +1080,27 @@ class EmployeeDashboardController extends Controller
             'employee_id' => 'required|exists:employees,id',
             'from_date' => 'required|date',
             'to_date' => 'required|date|after_or_equal:from_date',
+            'filter_mode' => 'in:all,specific,exclude',
+            'include_leave_types' => 'nullable|array',
+            'include_leave_types.*' => 'string',
+            'exclude_leave_types' => 'nullable|array',
+            'exclude_leave_types.*' => 'string'
         ]);
 
         $employeeId = $request->employee_id;
         $fromDate = $request->from_date;
         $toDate = $request->to_date;
-        $filterType = $request->input('filter_type', 'custom');
+        $filterMode = $request->input('filter_mode', 'all');
+        $includeLeaveTypes = $request->input('include_leave_types', []);
+        $excludeLeaveTypes = $request->input('exclude_leave_types', []);
 
         // Get employee details
         $employee = Employee::with(['department', 'designation'])
             ->findOrFail($employeeId);
 
-        // Get leave data for the report
-        $leaveData = $this->getLeaveData($employeeId, $fromDate, $toDate);
-        $leaveSummary = $this->generateLeaveSummary($employeeId, $fromDate, $toDate);
+        // Get leave data for the report with filtering
+        $leaveData = $this->getFilteredLeaveData($employeeId, $fromDate, $toDate, $filterMode, $includeLeaveTypes, $excludeLeaveTypes);
+        $leaveSummary = $this->generateFilteredLeaveSummary($employeeId, $fromDate, $toDate, $filterMode, $includeLeaveTypes, $excludeLeaveTypes);
 
         try {
             // Configure mPDF
@@ -1113,6 +1120,9 @@ class EmployeeDashboardController extends Controller
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
+            // Build filter description for the PDF
+            $filterDescription = $this->buildFilterDescription($filterMode, $includeLeaveTypes, $excludeLeaveTypes);
+
             // Start building the HTML content for the PDF
             $html = view('reports.employee_leave_pdf', [
                 'employee' => $employee,
@@ -1120,15 +1130,26 @@ class EmployeeDashboardController extends Controller
                 'leaveSummary' => $leaveSummary,
                 'fromDate' => $fromDate,
                 'toDate' => $toDate,
-                'filterType' => $filterType,
+                'filterMode' => $filterMode,
+                'filterDescription' => $filterDescription,
+                'includeLeaveTypes' => $includeLeaveTypes,
+                'excludeLeaveTypes' => $excludeLeaveTypes,
                 'generatedAt' => Carbon::now()->format('M d, Y H:i')
             ])->render();
 
             // Write HTML to the PDF document
             $mpdf->WriteHTML($html);
 
-            // Set the download filename
-            $filename = 'Leave_Report_' . str_replace(' ', '_', $employee->first_name) . '_' . date('Y-m-d') . '.pdf';
+            // Set the download filename with filter info
+            $filename = 'Leave_Report_' . str_replace(' ', '_', $employee->first_name);
+
+            if ($filterMode === 'specific' && !empty($includeLeaveTypes)) {
+                $filename .= '_' . count($includeLeaveTypes) . '_types';
+            } elseif ($filterMode === 'exclude' && !empty($excludeLeaveTypes)) {
+                $filename .= '_excluding_' . count($excludeLeaveTypes) . '_types';
+            }
+
+            $filename .= '_' . date('Y-m-d') . '.pdf';
 
             // Output the PDF
             return response()->make(
@@ -1147,6 +1168,145 @@ class EmployeeDashboardController extends Controller
 
             // Return with error message
             return back()->with('error', 'Failed to generate leave PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get filtered leave data based on leave type filters
+     */
+    private function getFilteredLeaveData($employeeId, $fromDate, $toDate, $filterMode, $includeLeaveTypes, $excludeLeaveTypes)
+    {
+        // Base query
+        $query = LeaveApplication::where('employee_id', $employeeId)
+            ->where(function ($query) use ($fromDate, $toDate) {
+                $query->whereBetween('start_date', [$fromDate, $toDate])
+                    ->orWhereBetween('end_date', [$fromDate, $toDate])
+                    ->orWhere(function ($q) use ($fromDate, $toDate) {
+                        $q->where('start_date', '<=', $fromDate)
+                            ->where('end_date', '>=', $toDate);
+                    });
+            })
+            ->with('leaveType');
+
+        // Apply leave type filtering
+        if ($filterMode === 'specific' && !empty($includeLeaveTypes)) {
+            $query->whereHas('leaveType', function ($q) use ($includeLeaveTypes) {
+                $q->whereIn('name', $includeLeaveTypes);
+            });
+        } elseif ($filterMode === 'exclude' && !empty($excludeLeaveTypes)) {
+            $query->whereHas('leaveType', function ($q) use ($excludeLeaveTypes) {
+                $q->whereNotIn('name', $excludeLeaveTypes);
+            });
+        }
+
+        return $query->orderBy('start_date', 'desc')
+            ->get()
+            ->map(function ($leave) {
+                // Calculate days in the specific period
+                $startDate = Carbon::parse($leave->start_date);
+                $endDate = Carbon::parse($leave->end_date);
+
+                return [
+                    'id' => $leave->id,
+                    'type' => $leave->leaveType->name,
+                    'start_date' => $leave->start_date,
+                    'end_date' => $leave->end_date,
+                    'days' => $leave->days,
+                    'status' => $leave->status,
+                    'reason' => $leave->reason,
+                    'date_range' => $startDate->format('M d') . ' - ' . $endDate->format('M d, Y'),
+                    'is_paid' => $leave->leaveType->is_paid
+                ];
+            });
+    }
+
+    /**
+     * Generate filtered leave summary data
+     */
+    private function generateFilteredLeaveSummary($employeeId, $fromDate, $toDate, $filterMode, $includeLeaveTypes, $excludeLeaveTypes)
+    {
+        // Get current year
+        $year = Carbon::parse($fromDate)->year;
+
+        // Base query for leave balances
+        $query = LeaveBalance::where('employee_id', $employeeId)
+            ->where('year', $year)
+            ->with('leaveType');
+
+        // Apply leave type filtering for balances
+        if ($filterMode === 'specific' && !empty($includeLeaveTypes)) {
+            $query->whereHas('leaveType', function ($q) use ($includeLeaveTypes) {
+                $q->whereIn('name', $includeLeaveTypes);
+            });
+        } elseif ($filterMode === 'exclude' && !empty($excludeLeaveTypes)) {
+            $query->whereHas('leaveType', function ($q) use ($excludeLeaveTypes) {
+                $q->whereNotIn('name', $excludeLeaveTypes);
+            });
+        }
+
+        $leaveBalances = $query->get()
+            ->map(function ($balance) {
+                return [
+                    'id' => $balance->id,
+                    'type' => $balance->leaveType->name,
+                    'allocated_days' => $balance->allocated_days,
+                    'used_days' => $balance->used_days,
+                    'remaining_days' => $balance->remaining_days,
+                    'is_paid' => $balance->leaveType->is_paid
+                ];
+            });
+
+        // Get filtered leave types with zero balance if not in leave balances
+        $leaveTypesQuery = LeaveType::query();
+
+        if ($filterMode === 'specific' && !empty($includeLeaveTypes)) {
+            $leaveTypesQuery->whereIn('name', $includeLeaveTypes);
+        } elseif ($filterMode === 'exclude' && !empty($excludeLeaveTypes)) {
+            $leaveTypesQuery->whereNotIn('name', $excludeLeaveTypes);
+        }
+
+        $allLeaveTypes = $leaveTypesQuery->get();
+
+        foreach ($allLeaveTypes as $leaveType) {
+            $exists = $leaveBalances->where('type', $leaveType->name)->count() > 0;
+            if (!$exists) {
+                $leaveBalances->push([
+                    'id' => null,
+                    'type' => $leaveType->name,
+                    'allocated_days' => 0,
+                    'used_days' => 0,
+                    'remaining_days' => 0,
+                    'is_paid' => $leaveType->is_paid
+                ]);
+            }
+        }
+
+        return [
+            'year' => $year,
+            'balances' => $leaveBalances->toArray() // ✅ Convert to array to avoid collection issues
+        ];
+    }
+
+    /**
+     * Build filter description for PDF
+     */
+    private function buildFilterDescription($filterMode, $includeLeaveTypes, $excludeLeaveTypes)
+    {
+        switch ($filterMode) {
+            case 'specific':
+                if (empty($includeLeaveTypes)) {
+                    return 'No leave types selected';
+                }
+                return 'Including only: ' . implode(', ', $includeLeaveTypes);
+
+            case 'exclude':
+                if (empty($excludeLeaveTypes)) {
+                    return 'All leave types included';
+                }
+                return 'Excluding: ' . implode(', ', $excludeLeaveTypes);
+
+            default:
+                return 'All leave types included';
         }
     }
 

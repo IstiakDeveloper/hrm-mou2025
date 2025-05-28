@@ -225,7 +225,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             permission: 'reports.view',
             submenu: [
                 { title: 'Attendance Report', path: '/attendance/sheet-report', permission: 'reports.view' },
-                { title: 'Leave Report', path: '/reports/leave', permission: 'reports.view' },
+                { title: 'Leave Report', path: '/leave/applications/report', permission: 'reports.view' },
                 { title: 'Movement Report', path: '/reports/movement', permission: 'reports.view' },
                 { title: 'Transfer Report', path: '/reports/transfer', permission: 'reports.view' },
                 { title: 'Employee Report', path: '/reports/employee', permission: 'reports.view' },
@@ -275,7 +275,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     <div
                         className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 group ${
                             isActive(item.path)
-                                ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                ? 'bg-green-50 text-green-700 font-medium shadow-sm'
                                 : 'hover:bg-gray-50 text-gray-700'
                         }`}
                     >
@@ -285,7 +285,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
                                         <div className={`${
                                             isActive(item.path)
-                                                ? 'text-blue-700'
+                                                ? 'text-green-700'
                                                 : 'text-gray-600 group-hover:text-gray-900'
                                         }`}>
                                             {item.icon}
@@ -304,7 +304,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </TooltipProvider>
                         {!collapsed && (
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
-                                isActive(item.path) ? 'text-blue-700' : 'text-gray-500'
+                                isActive(item.path) ? 'text-green-700' : 'text-gray-500'
                             } ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />
                         )}
                     </div>
@@ -317,7 +317,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 href={subItem.path}
                                 className={`block p-2.5 rounded-md text-sm transition-all duration-200 ${
                                     currentPath === subItem.path
-                                        ? 'bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-500'
+                                        ? 'bg-green-50 text-green-700 font-medium border-l-2 border-green-500'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                 }`}
                             >
@@ -335,12 +335,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             href={item.path}
                             className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-lg transition-all duration-200 ${
                                 isActive(item.path)
-                                    ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                    ? 'bg-green-50 text-green-700 font-medium shadow-sm'
                                     : 'hover:bg-gray-50 text-gray-700'
                             }`}
                         >
                             <div className={`${
-                                isActive(item.path) ? 'text-blue-700' : 'text-gray-600'
+                                isActive(item.path) ? 'text-green-700' : 'text-gray-600'
                             }`}>
                                 {item.icon}
                             </div>
@@ -379,13 +379,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     <div
                         className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 ${
                             isActive(item.path)
-                                ? 'bg-blue-50 text-blue-700 font-medium'
+                                ? 'bg-green-50 text-green-700 font-medium'
                                 : 'hover:bg-gray-50 text-gray-700'
                         }`}
                     >
                         <div className="flex items-center gap-3">
                             <div className={`${
-                                isActive(item.path) ? 'text-blue-700' : 'text-gray-600'
+                                isActive(item.path) ? 'text-green-700' : 'text-gray-600'
                             }`}>
                                 {item.icon}
                             </div>
@@ -393,7 +393,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </div>
                         <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
                             activeMenu === item.title ? 'transform rotate-180' : ''
-                        } ${isActive(item.path) ? 'text-blue-700' : 'text-gray-500'}`} />
+                        } ${isActive(item.path) ? 'text-green-700' : 'text-gray-500'}`} />
                     </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pl-8 space-y-1 mt-2">
@@ -403,7 +403,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             href={subItem.path}
                             className={`block p-3 rounded-md text-sm transition-all duration-200 ${
                                 currentPath === subItem.path
-                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                    ? 'bg-green-50 text-green-700 font-medium'
                                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                             onClick={toggleMobileNav}
@@ -418,13 +418,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 href={item.path}
                 className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${
                     isActive(item.path)
-                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        ? 'bg-green-50 text-green-700 font-medium'
                         : 'hover:bg-gray-50 text-gray-700'
                 }`}
                 onClick={toggleMobileNav}
             >
                 <div className={`${
-                    isActive(item.path) ? 'text-blue-700' : 'text-gray-600'
+                    isActive(item.path) ? 'text-green-700' : 'text-gray-600'
                 }`}>
                     {item.icon}
                 </div>
@@ -504,7 +504,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 {/* Header */}
                 <div className={`py-4 px-4 border-b flex ${
                     collapsed ? 'justify-center' : 'justify-between'
-                } items-center bg-gradient-to-r from-blue-600 to-blue-700 text-white`}>
+                } items-center bg-gradient-to-r from-green-600 to-green-700 text-white`}>
                     {!collapsed && (
                         <Link href="/dashboard" className="flex items-center gap-2">
                             <img src='/logo.png' className="w-7 h-7" alt="Logo" />
@@ -520,7 +520,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         variant="ghost"
                         size="sm"
                         onClick={toggleSidebar}
-                        className={`${collapsed ? 'hidden' : ''} hover:bg-blue-600 text-white`}
+                        className={`${collapsed ? 'hidden' : ''} hover:bg-green-600 text-white`}
                     >
                         <Menu className="w-5 h-5" />
                     </Button>
@@ -541,9 +541,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <TooltipProvider delayDuration={200}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Avatar className="w-10 h-10 cursor-pointer border-2 border-blue-500">
+                                    <Avatar className="w-10 h-10 cursor-pointer border-2 border-green-500">
                                         <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                        <AvatarFallback className="bg-blue-700 text-white text-sm">
+                                        <AvatarFallback className="bg-green-700 text-white text-sm">
                                             {getInitials(auth.user.name)}
                                         </AvatarFallback>
                                     </Avatar>
@@ -559,9 +559,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             href="/profile"
                             className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                         >
-                            <Avatar className="w-10 h-10 border-2 border-blue-500">
+                            <Avatar className="w-10 h-10 border-2 border-green-500">
                                 <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                <AvatarFallback className="bg-blue-700 text-white text-sm">
+                                <AvatarFallback className="bg-green-700 text-white text-sm">
                                     {getInitials(auth.user.name)}
                                 </AvatarFallback>
                             </Avatar>
@@ -578,7 +578,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
                 <SheetContent side="left" className="w-[300px] sm:w-[350px] p-0 border-r-0">
                     {/* Mobile Header */}
-                    <div className="p-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                    <div className="p-4 border-b bg-gradient-to-r from-green-600 to-green-700 text-white">
                         <div className="flex items-center justify-between">
                             <Link href="/dashboard" className="flex items-center gap-2">
                                 <img src='/logo.png' className="w-6 h-6" alt="Logo" />
@@ -588,7 +588,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 variant="ghost"
                                 size="icon"
                                 onClick={toggleMobileNav}
-                                className="text-white hover:bg-blue-600"
+                                className="text-white hover:bg-green-600"
                             >
                                 <X className="w-5 h-5" />
                             </Button>
@@ -611,9 +611,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                             onClick={toggleMobileNav}
                         >
-                            <Avatar className="w-10 h-10 border-2 border-blue-500">
+                            <Avatar className="w-10 h-10 border-2 border-green-500">
                                 <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                <AvatarFallback className="bg-blue-700 text-white text-sm">
+                                <AvatarFallback className="bg-green-700 text-white text-sm">
                                     {getInitials(auth.user.name)}
                                 </AvatarFallback>
                             </Avatar>
@@ -669,9 +669,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="sm" className="flex items-center gap-2 hover:bg-gray-100">
-                                        <Avatar className="w-8 h-8 border-2 border-blue-500">
+                                        <Avatar className="w-8 h-8 border-2 border-green-500">
                                             <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                            <AvatarFallback className="bg-blue-700 text-white text-xs">
+                                            <AvatarFallback className="bg-green-700 text-white text-xs">
                                                 {getInitials(auth.user.name)}
                                             </AvatarFallback>
                                         </Avatar>
@@ -749,13 +749,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </Alert>
                     )}
                     {showInfo && (
-                        <Alert variant="info" className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-5">
+                        <Alert variant="info" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5">
                             <Info className="h-4 w-4" />
                             <AlertDescription>{flash.info}</AlertDescription>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="absolute right-1 top-1 text-blue-800 hover:bg-blue-100 h-6 w-6"
+                                className="absolute right-1 top-1 text-green-800 hover:bg-green-100 h-6 w-6"
                                 onClick={() => setShowInfo(false)}
                             >
                                 <X className="h-4 w-4" />
@@ -765,7 +765,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 </div>
 
                 {/* Main Content Area */}
-                <main className="flex-1 overflow-auto bg-gray-50">
+                <main className="flex-1 overflow-auto bg-gray-50 px-4">
                     {children}
                 </main>
 

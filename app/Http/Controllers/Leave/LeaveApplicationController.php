@@ -34,8 +34,8 @@ class LeaveApplicationController extends Controller
             'user_name' => $user->name,
             'employee_id' => $user->employee_id,
             'permissions' => [
-                'leaves.view' => $user->hasPermission('leaves.view'),
-                'leaves.approve' => $user->hasPermission('leaves.approve'),
+                'leave-applications.view' => $user->hasPermission('leave-applications.view'),
+                'leave-applications.approve' => $user->hasPermission('leave-applications.approve'),
                 'branch_manager' => $user->hasPermission('branch_manager'),
                 'employees.view' => $user->hasPermission('employees.view'),
             ],
@@ -48,8 +48,8 @@ class LeaveApplicationController extends Controller
         $userEmployeeId = $user->employee_id;
 
         // Check for special permissions
-        $hasViewPermission = $user->hasPermission('leaves.view');
-        $hasApprovePermission = $user->hasPermission('leaves.approve');
+        $hasViewPermission = $user->hasPermission('leave-applications.view');
+        $hasApprovePermission = $user->hasPermission('leave-applications.approve');
         $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
         $hasEmployeeViewPermission = $user->hasPermission('employees.view');
 
@@ -141,10 +141,10 @@ class LeaveApplicationController extends Controller
                 \Log::info('Approver without department - showing only pending applications');
             }
         } elseif ($hasViewPermission && $hasEmployeeViewPermission) {
-            // Full admin with both leaves.view and employees.view - see all applications
+            // Full admin with both leave-applications.view and employees.view - see all applications
             \Log::info('Full admin - showing all applications');
         } elseif ($hasViewPermission && !$hasEmployeeViewPermission) {
-            // User with leaves.view but not employees.view - apply restrictions
+            // User with leave-applications.view but not employees.view - apply restrictions
             if ($isBranchHead || ($isBranchManager && $userBranchId)) {
                 $query->whereHas('employee', function ($q) use ($userBranchId) {
                     $q->where('current_branch_id', $userBranchId);
@@ -232,8 +232,8 @@ class LeaveApplicationController extends Controller
             'isDepartmentHead' => $isDepartmentHead,
             'userPermissions' => [
                 'canView' => $hasViewPermission,
-                'canCreate' => $user->hasPermission('leaves.create'),
-                'canEdit' => $user->hasPermission('leaves.edit'),
+                'canCreate' => $user->hasPermission('leave-applications.create'),
+                'canEdit' => $user->hasPermission('leave-applications.edit'),
                 'canApprove' => $hasApprovePermission,
                 'isBranchManager' => $isBranchManager,
                 'isBranchHead' => $isBranchHead,
@@ -246,7 +246,6 @@ class LeaveApplicationController extends Controller
             'currentUserId' => $user->id,
         ]);
     }
-
     /**
      * Get departments accessible to the user based on permissions
      */
@@ -361,7 +360,7 @@ class LeaveApplicationController extends Controller
         }
 
         // Super admins and users with leave.view permission can view all applications
-        if ($user->hasPermission('leaves.view')) {
+        if ($user->hasPermission('leave-applications.view')) {
             // But branch managers are restricted to their branch
             if (($user->hasPermission('branch_manager') || $isBranchHead) && $user->branch_id) {
                 $employee = Employee::find($application->employee_id);
@@ -394,7 +393,7 @@ class LeaveApplicationController extends Controller
         }
 
         // Users with approval permission can view applications they need to approve
-        if ($user->hasPermission('leaves.approve')) {
+        if ($user->hasPermission('leave-applications.approve')) {
             // Department heads
             if ($user->employee && $user->employee->department_id) {
                 $employee = Employee::find($application->employee_id);
@@ -434,7 +433,7 @@ class LeaveApplicationController extends Controller
             'user_employee_id' => $userEmployeeId,
             'application_employee_id' => $employeeId,
             'application_id' => $application->id,
-            'has_approve_permission' => $user->hasPermission('leaves.approve'),
+            'has_approve_permission' => $user->hasPermission('leave-applications.approve'),
         ]);
 
         // Can't approve own application
@@ -478,8 +477,8 @@ class LeaveApplicationController extends Controller
             }
         }
 
-        // Check if the user has both leaves.approve and employees.view permissions (admin)
-        $isFullAdmin = $user->hasPermission('leaves.approve') && $user->hasPermission('employees.view');
+        // Check if the user has both leave-applications.approve and employees.view permissions (admin)
+        $isFullAdmin = $user->hasPermission('leave-applications.approve') && $user->hasPermission('employees.view');
         if ($isFullAdmin) {
             \Log::info('User is full admin, approval granted');
             return true;
@@ -528,7 +527,7 @@ class LeaveApplicationController extends Controller
         }
 
         // Check if user has approval permission and additional conditions
-        if ($user->hasPermission('leaves.approve')) {
+        if ($user->hasPermission('leave-applications.approve')) {
             if ($userEmployeeId) {
                 $employee = Employee::find($employeeId);
 
@@ -567,7 +566,7 @@ class LeaveApplicationController extends Controller
         }
 
         // Admins can cancel all applications
-        if ($user->hasPermission('leaves.edit')) {
+        if ($user->hasPermission('leave-applications.edit')) {
             return true;
         }
 
@@ -583,7 +582,7 @@ class LeaveApplicationController extends Controller
         }
 
         // Department heads and branch managers with appropriate permissions
-        if ($user->hasPermission('leaves.approve')) {
+        if ($user->hasPermission('leave-applications.approve')) {
             // Only pending applications can be cancelled
             if ($application->status != 'pending') {
                 return false;
@@ -636,9 +635,9 @@ class LeaveApplicationController extends Controller
             'leaveTypes' => $leaveTypes,
             'balances' => $balances,
             'userPermissions' => [
-                'canCreate' => $user->hasPermission('leaves.create'),
-                'canEdit' => $user->hasPermission('leaves.edit'),
-                'canApprove' => $user->hasPermission('leaves.approve'),
+                'canCreate' => $user->hasPermission('leave-applications.create'),
+                'canEdit' => $user->hasPermission('leave-applications.edit'),
+                'canApprove' => $user->hasPermission('leave-applications.approve'),
                 'isEmployee' => true,
             ],
         ]);
@@ -653,7 +652,7 @@ class LeaveApplicationController extends Controller
         $employee = null;
 
         // Check if user is admin creating for someone else
-        if ($request->has('employee_id') && $user->hasPermission('leaves.create') && $user->hasPermission('employees.view')) {
+        if ($request->has('employee_id') && $user->hasPermission('leave-applications.create') && $user->hasPermission('employees.view')) {
             $employee = Employee::findOrFail($request->employee_id);
         } else {
             $employee = $user->employee;
@@ -688,7 +687,7 @@ class LeaveApplicationController extends Controller
         }
 
         // Check leave balance for regular employees (not for admins creating on behalf)
-        if (!$user->hasPermission('leaves.edit')) {
+        if (!$user->hasPermission('leave-applications.edit')) {
             $currentYear = Carbon::now()->year;
             $balance = LeaveBalance::where('employee_id', $employee->id)
                 ->where('leave_type_id', $request->leave_type_id)
@@ -726,7 +725,7 @@ class LeaveApplicationController extends Controller
         $approvedBy = null;
 
         // Auto-approve if admin is creating the application
-        if ($user->hasPermission('leaves.approve') && $request->has('auto_approve') && $request->auto_approve) {
+        if ($user->hasPermission('leave-applications.approve') && $request->has('auto_approve') && $request->auto_approve) {
             $status = 'approved';
             $approvedBy = $user->id;
         }
@@ -953,10 +952,10 @@ class LeaveApplicationController extends Controller
             'canCancel' => $canCancel,
             'canEdit' => $canEdit,
             'userPermissions' => [
-                'canView' => $user->hasPermission('leaves.view'),
-                'canCreate' => $user->hasPermission('leaves.create'),
-                'canEdit' => $user->hasPermission('leaves.edit'),
-                'canApprove' => $user->hasPermission('leaves.approve'),
+                'canView' => $user->hasPermission('leave-applications.view'),
+                'canCreate' => $user->hasPermission('leave-applications.create'),
+                'canEdit' => $user->hasPermission('leave-applications.edit'),
+                'canApprove' => $user->hasPermission('leave-applications.approve'),
                 'isEmployee' => $user->employee_id ? true : false,
                 'employeeId' => $user->employee_id,
             ],
@@ -1237,7 +1236,7 @@ class LeaveApplicationController extends Controller
         ]);
 
         // Check if user has permission to access reports
-        $hasViewPermission = $user->hasPermission('leaves.view');
+        $hasViewPermission = $user->hasPermission('leave-applications.view');
         $hasReportPermission = $user->hasPermission('reports.view');
         $hasEmployeeViewPermission = $user->hasPermission('employees.view');
         $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
@@ -1386,7 +1385,7 @@ class LeaveApplicationController extends Controller
         }
 
         // Admins can edit all applications
-        if ($user->hasPermission('leaves.edit')) {
+        if ($user->hasPermission('leave-applications.edit')) {
             return true;
         }
 
