@@ -130,9 +130,19 @@ export default function EmployeeCreate({
         });
     };
 
-    const filteredDesignations = designations.filter(
-        designation => !data.department_id || designation.department_id === parseInt(data.department_id)
-    );
+    const filteredDesignations = designations.filter(designation => {
+        if (!data.department_id) return false;
+
+        // String comparison এর জন্য দুটোই string এ convert করুন
+        const selectedDeptId = String(data.department_id);
+        const designationDeptId = String(designation.department_id);
+
+        console.log('Selected Dept ID:', selectedDeptId);
+        console.log('Designation Dept ID:', designationDeptId);
+        console.log('Match:', selectedDeptId === designationDeptId);
+
+        return selectedDeptId === designationDeptId;
+    });
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
