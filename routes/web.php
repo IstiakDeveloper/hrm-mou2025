@@ -169,6 +169,8 @@ Route::middleware(['auth'])->group(function () {
     // ====================
     Route::prefix('admin')->name('admin.')->middleware(['permission:admin.access'])->group(function () {
 
+        Route::get('users/bulk-email/form', [UserController::class, 'bulkEmailForm'])->name('users.bulk-email.form');
+        Route::post('users/bulk-email/send', [UserController::class, 'sendBulkEmails'])->name('users.bulk-email.send');
         // User Management
         Route::middleware(['permission:users.view'])->group(function () {
             Route::resource('users', UserController::class)->parameters(['users' => 'user']);

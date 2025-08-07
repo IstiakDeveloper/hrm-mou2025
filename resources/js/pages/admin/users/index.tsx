@@ -44,6 +44,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import BulkEmailButton from '@/components/BulkEmailButton';
 
 interface Role {
   id: number;
@@ -197,6 +198,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
               <span>Add User</span>
             </Button>
           </Link>
+          <BulkEmailButton />
         </div>
 
         {success && (
