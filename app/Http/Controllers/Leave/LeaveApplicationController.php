@@ -621,7 +621,6 @@ class LeaveApplicationController extends Controller
 
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You must be associated with an employee record to apply for leave.');
-
         }
 
         $leaveTypes = LeaveType::all();
@@ -1413,5 +1412,65 @@ class LeaveApplicationController extends Controller
             $balance->remaining_days = $balance->allocated_days - $balance->used_days;
             $balance->save();
         }
+    }
+
+
+
+    /**
+     * Generate PDF view for leave application
+     */
+    public function generatePdf(LeaveApplication $application)
+    {
+        $user = Auth::user();
+
+        // Check if user has permission to view this application
+        if (!$this->canViewApplication($user, $application)) {
+            return redirect()->route('leave.applications.index')
+                ->with('error', 'You do not have permission to view this leave application.');
+        }
+
+        // Load all necessary relationships with error handling
+        try {
+            $application->load([
+                'employee.department',
+                'employee.designation',
+                'leaveType',
+                'approver',
+                'approvals.approver'
+            ]);
+
+            // Load leave balance for current year and leave type
+            $currentYear = now()->year;
+            $leaveBalance = \App\Models\LeaveBalance::where('employee_id', $application->employee_id)
+                ->where('leave_type_id', $application->leave_type_id)
+                ->where('year', $currentYear)
+                ->first();
+
+            // Add leave balance to application object
+            $application->leaveBalance = $leaveBalance;
+        } catch (\Exception $e) {
+            \Log::error('Error loading leave application relationships: ' . $e->getMessage());
+            return redirect()->route('leave.applications.index')
+                ->with('error', 'Error loading leave application data.');
+        }
+
+        // Decode documents if they exist
+        if ($application->documents) {
+            try {
+                $application->documents = json_decode($application->documents, true);
+            } catch (\Exception $e) {
+                $application->documents = null;
+            }
+        }
+
+        return Inertia::render('leave/applications/pdf', [
+            'application' => $application,
+            'currentDate' => now()->format('d/m/Y'),
+            'userPermissions' => [
+                'canView' => $user->hasPermission('leave-applications.view'),
+                'isEmployee' => $user->employee_id ? true : false,
+                'employeeId' => $user->employee_id,
+            ],
+        ]);
     }
 }

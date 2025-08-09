@@ -44,6 +44,7 @@ use Inertia\Inertia;
 | Permission Structure: module.action (e.g., users.view, employees.create)
 |
 */
+
 Route::get('/error/403', function (Request $request) {
     return Inertia::render('Errors/Unauthorized', [
         'permission' => $request->get('permission'),
@@ -451,6 +452,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/', [LeaveApplicationController::class, 'index'])
                 ->name('index')
                 ->middleware('permission:leave-applications.view');
+
+
+            Route::get('/{application}/pdf', [LeaveApplicationController::class, 'generatePdf'])
+                ->name('pdf');
 
             // Create leave application (employees can apply for themselves)
             Route::middleware(['permission:leave-applications.create'])->group(function () {

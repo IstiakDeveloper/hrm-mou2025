@@ -33,11 +33,14 @@ class AttendanceExportController extends Controller
             $daysInMonth = $month->daysInMonth;
             $monthLabel = $month->format('F Y');
 
-            // Base query for employees
+            // Base query for employees with designation ordering
             $employeesQuery = Employee::with(['department', 'designation', 'branch']);
 
             // Apply filters based on user permissions and role
             $this->applyEmployeeFilters($employeesQuery, $user, $request);
+
+            // Order by designation hierarchy and then by name
+            $employeesQuery = $this->orderByDesignationHierarchy($employeesQuery);
 
             // Limit to a reasonable number of employees for PDF generation
             $employees = $employeesQuery->take(50)->get();
@@ -217,6 +220,52 @@ class AttendanceExportController extends Controller
     }
 
     /**
+     * Order employees by designation hierarchy
+     */
+    protected function orderByDesignationHierarchy($query)
+    {
+        // Define designation hierarchy order based on your list (correct order)
+        $designationOrder = [
+            'Executive Director' => 1,
+            'Deputy Executive Director' => 2,
+            'Director' => 3,
+            'Assistant Director' => 4,
+            'Deputy Assistant Director (Program)' => 5,
+            'Senior Manager' => 6,
+            'Manager' => 7,
+            'Assistant Manager' => 8,
+            'Co-Ordinator' => 9,
+            'Technical Officer' => 10,
+            'Environment & RECP' => 11,
+            'MIS & Documentation' => 12,
+            'Training Officer' => 13,
+            'M & E Officer' => 14,
+            'Case Management Officer' => 15,
+            'Officer LSED' => 16,
+            'Accounts Officer' => 17,
+            'Accountant III' => 18,
+            'VCF' => 19,
+            'Resident Physician' => 20,
+            'Office Assistant' => 21,
+            'Driver' => 22
+        ];
+
+        // Create a CASE WHEN statement for ordering
+        $orderCase = "CASE ";
+        foreach ($designationOrder as $designation => $order) {
+            $orderCase .= "WHEN designations.name = '$designation' THEN $order ";
+        }
+        $orderCase .= "ELSE 999 END";
+
+        return $query->leftJoin('designations', 'employees.designation_id', '=', 'designations.id')
+                    ->select('employees.*')
+                    ->orderByRaw($orderCase)
+                    ->orderBy('employees.created_at', 'asc')
+                    ->orderBy('employees.first_name')
+                    ->orderBy('employees.last_name');
+    }
+
+    /**
      * Apply employee filters based on user permissions and request params.
      * Copied from AttendanceController to maintain consistency.
      */
@@ -224,36 +273,36 @@ class AttendanceExportController extends Controller
     {
         // If user is an employee, show only their data unless they have manager permissions
         if ($user->employee_id && !$user->hasPermission('branch_manager') && !$user->hasPermission('department_head')) {
-            $query->where('id', $user->employee_id);
+            $query->where('employees.id', $user->employee_id);
         }
         // If user is a branch manager, show only employees from their branch
         else if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            $query->where('current_branch_id', $user->branch_id);
+            $query->where('employees.current_branch_id', $user->branch_id);
         }
         // If user is a department head, show only employees from their department
         else if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            $query->where('department_id', $user->employee->department_id);
+            $query->where('employees.department_id', $user->employee->department_id);
         }
 
         // Apply search filter if provided
         if ($request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('employee_id', 'like', "%{$search}%");
+                $q->where('employees.first_name', 'like', "%{$search}%")
+                  ->orWhere('employees.last_name', 'like', "%{$search}%")
+                  ->orWhere('employees.employee_id', 'like', "%{$search}%");
             });
         }
 
         // Apply branch filter if provided and user has permission
         if ($request->branch_id && ($user->hasPermission('admin') || $user->hasPermission('branch_manager'))) {
-            $query->where('current_branch_id', $request->branch_id);
+            $query->where('employees.current_branch_id', $request->branch_id);
         }
 
         // Apply department filter if provided and user has permission
         if ($request->department_id &&
             ($user->hasPermission('admin') || $user->hasPermission('branch_manager') || $user->hasPermission('department_head'))) {
-            $query->where('department_id', $request->department_id);
+            $query->where('employees.department_id', $request->department_id);
         }
 
         return $query;
