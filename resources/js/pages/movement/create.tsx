@@ -56,14 +56,217 @@ interface CreateMovementProps {
     movementTypes: string[];
 }
 
-// Custom Calendar wrapper to avoid passing disabled prop to SVG elements
+// Enhanced Time Picker Component
+const TimePicker = ({ value, onChange, label, error }: {
+    value: string;
+    onChange: (time: string) => void;
+    label: string;
+    error?: string;
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [selectedHour, setSelectedHour] = useState(9);
+    const [selectedMinute, setSelectedMinute] = useState(0);
+    const [selectedPeriod, setSelectedPeriod] = useState('AM');
+
+    // Initialize from value
+    useEffect(() => {
+        if (value) {
+            const [hours, minutes] = value.split(':').map(Number);
+            const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+            const period = hours >= 12 ? 'PM' : 'AM';
+
+            setSelectedHour(hour12);
+            setSelectedMinute(minutes);
+            setSelectedPeriod(period);
+        }
+    }, [value]);
+
+    const updateTime = (hour: number, minute: number, period: string) => {
+        let hour24 = hour;
+        if (period === 'PM' && hour !== 12) hour24 += 12;
+        if (period === 'AM' && hour === 12) hour24 = 0;
+
+        const timeString = `${hour24.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        onChange(timeString);
+    };
+
+    const formatDisplayTime = () => {
+        if (!value) return 'Select time';
+        const [hours, minutes] = value.split(':').map(Number);
+        const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+        const period = hours >= 12 ? 'PM' : 'AM';
+        return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+    };
+
+    const hours = Array.from({ length: 12 }, (_, i) => i + 1);
+    const minutes = Array.from({ length: 4 }, (_, i) => i * 15);
+
+    return (
+        <div className="space-y-2">
+            <Label>{label}</Label>
+            <Popover open={isOpen} onOpenChange={setIsOpen}>
+                <PopoverTrigger asChild>
+                    <Button
+                        variant="outline"
+                        className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !value && "text-muted-foreground"
+                        )}
+                    >
+                        <Clock className="mr-2 h-4 w-4" />
+                        {formatDisplayTime()}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                    <div className="p-4 space-y-4">
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                            {/* Hour Selection */}
+                            <div>
+                                <Label className="text-xs text-gray-500">Hour</Label>
+                                <Select
+                                    value={selectedHour.toString()}
+                                    onValueChange={(val) => {
+                                        const hour = parseInt(val);
+                                        setSelectedHour(hour);
+                                        updateTime(hour, selectedMinute, selectedPeriod);
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {hours.map((hour) => (
+                                            <SelectItem key={hour} value={hour.toString()}>
+                                                {hour}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Minute Selection */}
+                            <div>
+                                <Label className="text-xs text-gray-500">Min</Label>
+                                <Select
+                                    value={selectedMinute.toString()}
+                                    onValueChange={(val) => {
+                                        const minute = parseInt(val);
+                                        setSelectedMinute(minute);
+                                        updateTime(selectedHour, minute, selectedPeriod);
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {minutes.map((minute) => (
+                                            <SelectItem key={minute} value={minute.toString()}>
+                                                {minute.toString().padStart(2, '0')}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* AM/PM Selection */}
+                            <div>
+                                <Label className="text-xs text-gray-500">Period</Label>
+                                <Select
+                                    value={selectedPeriod}
+                                    onValueChange={(period) => {
+                                        setSelectedPeriod(period);
+                                        updateTime(selectedHour, selectedMinute, period);
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="AM">AM</SelectItem>
+                                        <SelectItem value="PM">PM</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Quick Time Buttons */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    setSelectedHour(9);
+                                    setSelectedMinute(0);
+                                    setSelectedPeriod('AM');
+                                    updateTime(9, 0, 'AM');
+                                }}
+                                className="text-xs"
+                            >
+                                9:00 AM
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    setSelectedHour(5);
+                                    setSelectedMinute(0);
+                                    setSelectedPeriod('PM');
+                                    updateTime(5, 0, 'PM');
+                                }}
+                                className="text-xs"
+                            >
+                                5:00 PM
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    setSelectedHour(10);
+                                    setSelectedMinute(0);
+                                    setSelectedPeriod('AM');
+                                    updateTime(10, 0, 'AM');
+                                }}
+                                className="text-xs"
+                            >
+                                10:00 AM
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    setSelectedHour(6);
+                                    setSelectedMinute(0);
+                                    setSelectedPeriod('PM');
+                                    updateTime(6, 0, 'PM');
+                                }}
+                                className="text-xs"
+                            >
+                                6:00 PM
+                            </Button>
+                        </div>
+
+                        <Button
+                            size="sm"
+                            onClick={() => setIsOpen(false)}
+                            className="w-full"
+                        >
+                            Done
+                        </Button>
+                    </div>
+                </PopoverContent>
+            </Popover>
+            {error && (
+                <p className="text-sm font-medium text-red-500">{error}</p>
+            )}
+        </div>
+    );
+};
+
+// Custom Calendar wrapper
 const SafeCalendar = ({ disabledDates, ...props }: any) => {
-    // We rename the disabled prop to disabledDates to avoid passing it down to DOM elements
     return (
         <Calendar
             {...props}
-            // Handle the date disabling in the component implementation
-            // but don't pass a prop named 'disabled' that would go to DOM elements
             modifiers={{
                 disabled: disabledDates ? (date: Date) => disabledDates(date) : undefined,
             }}
@@ -72,12 +275,24 @@ const SafeCalendar = ({ disabledDates, ...props }: any) => {
 };
 
 export default function CreateMovement({ employees, currentEmployee, isAdmin, movementTypes }: CreateMovementProps) {
+    // Get current time and set defaults
+    const getCurrentTime = () => {
+        const now = new Date();
+        return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    };
+
+    const getDefaultEndTime = () => {
+        const now = new Date();
+        const endTime = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+        return `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`;
+    };
+
     const [employeeId, setEmployeeId] = useState(currentEmployee ? currentEmployee.id.toString() : '');
-    const [movementType, setMovementType] = useState('');
+    const [movementType, setMovementType] = useState('official'); // Default to 'official'
     const [fromDate, setFromDate] = useState<Date | undefined>(new Date());
-    const [fromTime, setFromTime] = useState<string>('09:00');
+    const [fromTime, setFromTime] = useState<string>(getCurrentTime());
     const [toDate, setToDate] = useState<Date | undefined>(new Date());
-    const [toTime, setToTime] = useState<string>('17:00');
+    const [toTime, setToTime] = useState<string>(getDefaultEndTime());
     const [purpose, setPurpose] = useState('');
     const [destination, setDestination] = useState('');
     const [remarks, setRemarks] = useState('');
@@ -175,13 +390,6 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         return dateTime;
     };
 
-    // Default time options
-    const times = Array.from({ length: 24 * 4 }, (_, i) => {
-        const hour = Math.floor(i / 4);
-        const minute = (i % 4) * 15;
-        return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-    });
-
     const validateForm = () => {
         const newErrors: Record<string, string> = {};
 
@@ -206,12 +414,10 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         return Object.keys(newErrors).length === 0;
     };
 
-
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
 
         if (!validateForm()) {
-            // যদি validation fail হয় তাহলে details tab এ switch করুন
             setActiveTab('details');
             return;
         }
@@ -232,7 +438,6 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         }, {
             onError: (errors) => {
                 setErrors(errors);
-                // Server error এর ক্ষেত্রেও details tab এ switch করুন
                 setActiveTab('details');
                 setSubmitting(false);
             },
@@ -257,7 +462,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         ? employees.find(emp => emp.id.toString() === employeeId)
         : currentEmployee;
 
-    // Calculate hours difference (if both datetimes are valid)
+    // Calculate hours difference
     const fromDateTime = getFromDateTime();
     const toDateTime = getToDateTime();
     let hoursDiff = 0;
@@ -270,7 +475,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         <Layout>
             <Head title="Create Movement Request" />
 
-            <div className="container mx-auto py-8">
+            <div className="container mx-auto py-4 px-4 sm:py-8">
                 <div className="mb-6">
                     <Link href={route('movements.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
                         <ArrowLeft className="mr-1 h-4 w-4" />
@@ -279,7 +484,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                 </div>
 
                 <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Create Movement Request</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Create Movement Request</h1>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -291,7 +496,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                             </CardHeader>
                             <CardContent>
                                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                                    <TabsList className="mb-4">
+                                    <TabsList className="mb-4 grid w-full grid-cols-2">
                                         <TabsTrigger value="details">Details</TabsTrigger>
                                         <TabsTrigger value="templates">Quick Templates</TabsTrigger>
                                     </TabsList>
@@ -304,7 +509,6 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <Select
                                                         value={employeeId}
                                                         onValueChange={setEmployeeId}
-                                                        disabled
                                                     >
                                                         <SelectTrigger id="employee">
                                                             <SelectValue placeholder="Select Employee" />
@@ -335,7 +539,14 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <SelectContent>
                                                         {movementTypes.map((type) => (
                                                             <SelectItem key={type} value={type}>
-                                                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                                                                <div className="flex items-center space-x-2">
+                                                                    {type === 'official' ? (
+                                                                        <BriefcaseBusiness className="h-4 w-4 text-indigo-600" />
+                                                                    ) : (
+                                                                        <User className="h-4 w-4 text-purple-600" />
+                                                                    )}
+                                                                    <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                                                                </div>
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
@@ -345,120 +556,94 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                 )}
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div className="space-y-2">
-                                                    <Label>From Date</Label>
-                                                    <Popover open={fromDateOpen} onOpenChange={setFromDateOpen}>
-                                                        <PopoverTrigger asChild>
-                                                            <Button
-                                                                variant="outline"
-                                                                className={cn(
-                                                                    "w-full justify-start text-left font-normal",
-                                                                    !fromDate && "text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                                {fromDate ? format(fromDate, 'PPP') : <span>Select date</span>}
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-auto p-0">
-                                                            <SafeCalendar
-                                                                mode="single"
-                                                                selected={fromDate}
-                                                                onSelect={(date: Date | undefined) => {
-                                                                    setFromDate(date);
-                                                                    if (date && (!toDate || isAfter(date, toDate))) {
-                                                                        setToDate(date);
-                                                                    }
-                                                                    setFromDateOpen(false);
-                                                                }}
-                                                                disabledDates={(date: Date) => {
-                                                                    const today = new Date();
-                                                                    today.setHours(0, 0, 0, 0);
-                                                                    return date < subDays(today, 1);
-                                                                }}
-                                                            />
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                    {errors.from_date && (
-                                                        <p className="text-sm font-medium text-red-500">{errors.from_date}</p>
-                                                    )}
-
-                                                    <div className="mt-2">
-                                                        <Label>From Time</Label>
-                                                        <Select
-                                                            value={fromTime}
-                                                            onValueChange={setFromTime}
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Select time" />
-                                                            </SelectTrigger>
-                                                            <SelectContent className="max-h-[200px]">
-                                                                {times.map((time) => (
-                                                                    <SelectItem key={time} value={time}>
-                                                                        {time}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                        {errors.from_time && (
-                                                            <p className="text-sm font-medium text-red-500">{errors.from_time}</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                                <div className="space-y-4">
+                                                    <div className="space-y-2">
+                                                        <Label>From Date</Label>
+                                                        <Popover open={fromDateOpen} onOpenChange={setFromDateOpen}>
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        "w-full justify-start text-left font-normal",
+                                                                        !fromDate && "text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                                    {fromDate ? format(fromDate, 'PPP') : <span>Select date</span>}
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0" align="start">
+                                                                <SafeCalendar
+                                                                    mode="single"
+                                                                    selected={fromDate}
+                                                                    onSelect={(date: Date | undefined) => {
+                                                                        setFromDate(date);
+                                                                        if (date && (!toDate || isAfter(date, toDate))) {
+                                                                            setToDate(date);
+                                                                        }
+                                                                        setFromDateOpen(false);
+                                                                    }}
+                                                                    disabledDates={(date: Date) => {
+                                                                        const today = new Date();
+                                                                        today.setHours(0, 0, 0, 0);
+                                                                        return date < subDays(today, 1);
+                                                                    }}
+                                                                />
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                        {errors.from_date && (
+                                                            <p className="text-sm font-medium text-red-500">{errors.from_date}</p>
                                                         )}
                                                     </div>
+
+                                                    <TimePicker
+                                                        value={fromTime}
+                                                        onChange={setFromTime}
+                                                        label="From Time"
+                                                        error={errors.from_time}
+                                                    />
                                                 </div>
 
-                                                <div className="space-y-2">
-                                                    <Label>To Date</Label>
-                                                    <Popover open={toDateOpen} onOpenChange={setToDateOpen}>
-                                                        <PopoverTrigger asChild>
-                                                            <Button
-                                                                variant="outline"
-                                                                className={cn(
-                                                                    "w-full justify-start text-left font-normal",
-                                                                    !toDate && "text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                                {toDate ? format(toDate, 'PPP') : <span>Select date</span>}
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-auto p-0">
-                                                            <SafeCalendar
-                                                                mode="single"
-                                                                selected={toDate}
-                                                                onSelect={(date: Date | undefined) => {
-                                                                    setToDate(date);
-                                                                    setToDateOpen(false);
-                                                                }}
-                                                                disabledDates={(date: Date) => fromDate ? date < fromDate : date < new Date()}
-                                                            />
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                    {errors.to_date && (
-                                                        <p className="text-sm font-medium text-red-500">{errors.to_date}</p>
-                                                    )}
-
-                                                    <div className="mt-2">
-                                                        <Label>To Time</Label>
-                                                        <Select
-                                                            value={toTime}
-                                                            onValueChange={setToTime}
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Select time" />
-                                                            </SelectTrigger>
-                                                            <SelectContent className="max-h-[200px]">
-                                                                {times.map((time) => (
-                                                                    <SelectItem key={time} value={time}>
-                                                                        {time}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                        {errors.to_time && (
-                                                            <p className="text-sm font-medium text-red-500">{errors.to_time}</p>
+                                                <div className="space-y-4">
+                                                    <div className="space-y-2">
+                                                        <Label>To Date</Label>
+                                                        <Popover open={toDateOpen} onOpenChange={setToDateOpen}>
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        "w-full justify-start text-left font-normal",
+                                                                        !toDate && "text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                                    {toDate ? format(toDate, 'PPP') : <span>Select date</span>}
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0" align="start">
+                                                                <SafeCalendar
+                                                                    mode="single"
+                                                                    selected={toDate}
+                                                                    onSelect={(date: Date | undefined) => {
+                                                                        setToDate(date);
+                                                                        setToDateOpen(false);
+                                                                    }}
+                                                                    disabledDates={(date: Date) => fromDate ? date < fromDate : date < new Date()}
+                                                                />
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                        {errors.to_date && (
+                                                            <p className="text-sm font-medium text-red-500">{errors.to_date}</p>
                                                         )}
                                                     </div>
+
+                                                    <TimePicker
+                                                        value={toTime}
+                                                        onChange={setToTime}
+                                                        label="To Time"
+                                                        error={errors.to_time}
+                                                    />
                                                 </div>
                                             </div>
 
@@ -500,9 +685,8 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <p className="text-sm font-medium text-red-500">{errors.destination}</p>
                                                 )}
 
-                                                {/* Dropdown */}
                                                 {showDropdown && filteredBranches.length > 0 && (
-                                                    <ul className="absolute z-10 w-full bg-white border border-gray-200 shadow-md rounded-md max-h-48 overflow-y-auto">
+                                                    <ul className="absolute z-10 w-full bg-white border border-gray-200 shadow-lg rounded-md max-h-48 overflow-y-auto">
                                                         {filteredBranches.map((branch, index) => (
                                                             <li
                                                                 key={index}
@@ -510,7 +694,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                                     setDestination(branch);
                                                                     setShowDropdown(false);
                                                                 }}
-                                                                className="px-4 py-2 hover:bg-blue-100 cursor-pointer text-sm"
+                                                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100 last:border-b-0"
                                                             >
                                                                 {branch}
                                                             </li>
@@ -532,20 +716,19 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <p className="text-sm font-medium text-red-500">{errors.purpose}</p>
                                                 )}
 
-                                                {/* Demo options */}
-                                                <div className="text-sm text-gray-500 space-x-2 pt-2">
-                                                    <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Branch Audit")}>
-                                                        Branch Audit
-                                                    </span>
-                                                    <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Branch Monitor")}>
-                                                        Branch Monitor
-                                                    </span>
-                                                    <span className="cursor-pointer px-4 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200" onClick={() => setPurpose("Officer Monitor")}>
-                                                        Officer Monitor
-                                                    </span>
+                                                <div className="flex flex-wrap gap-2 pt-2">
+                                                    {['Branch Audit', 'Branch Monitor', 'Officer Monitor', 'Client Meeting'].map((template) => (
+                                                        <button
+                                                            key={template}
+                                                            type="button"
+                                                            onClick={() => setPurpose(template)}
+                                                            className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors duration-200"
+                                                        >
+                                                            {template}
+                                                        </button>
+                                                    ))}
                                                 </div>
                                             </div>
-
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="remarks">Remarks (Optional)</Label>
@@ -561,13 +744,13 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                 )}
                                             </div>
 
-                                            <div className="flex justify-end space-x-2">
+                                            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
                                                 <Link href={route('movements.index')}>
-                                                    <Button variant="outline" type="button">
+                                                    <Button variant="outline" type="button" className="w-full sm:w-auto">
                                                         Cancel
                                                     </Button>
                                                 </Link>
-                                                <Button type="submit" disabled={submitting}>
+                                                <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
                                                     {submitting ? 'Submitting...' : 'Create Movement'}
                                                 </Button>
                                             </div>
@@ -581,20 +764,20 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <BriefcaseBusiness className="h-5 w-5 mr-2 text-indigo-600" />
                                                     Official Movement Templates
                                                 </h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="grid grid-cols-1 gap-3">
                                                     {officialTemplates.map((template, index) => (
-                                                        <Card key={`official-${index}`} className="cursor-pointer hover:border-indigo-300 transition-colors" onClick={() => {
+                                                        <Card key={`official-${index}`} className="cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all duration-200" onClick={() => {
                                                             setMovementType('official');
                                                             applyTemplate(template);
                                                             setActiveTab('details');
                                                         }}>
                                                             <CardContent className="p-4">
                                                                 <div className="flex justify-between items-start">
-                                                                    <div>
+                                                                    <div className="flex-1">
                                                                         <h4 className="font-medium">{template.title}</h4>
-                                                                        <p className="text-sm text-gray-500 mt-1 line-clamp-2">{template.purpose}</p>
+                                                                        <p className="text-sm text-gray-500 mt-1">{template.purpose}</p>
                                                                     </div>
-                                                                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 ml-2">
                                                                         {template.hours}h
                                                                     </Badge>
                                                                 </div>
@@ -611,20 +794,20 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <User className="h-5 w-5 mr-2 text-purple-600" />
                                                     Personal Movement Templates
                                                 </h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="grid grid-cols-1 gap-3">
                                                     {personalTemplates.map((template, index) => (
-                                                        <Card key={`personal-${index}`} className="cursor-pointer hover:border-purple-300 transition-colors" onClick={() => {
+                                                        <Card key={`personal-${index}`} className="cursor-pointer hover:border-purple-300 hover:shadow-md transition-all duration-200" onClick={() => {
                                                             setMovementType('personal');
                                                             applyTemplate(template);
                                                             setActiveTab('details');
                                                         }}>
                                                             <CardContent className="p-4">
                                                                 <div className="flex justify-between items-start">
-                                                                    <div>
+                                                                    <div className="flex-1">
                                                                         <h4 className="font-medium">{template.title}</h4>
-                                                                        <p className="text-sm text-gray-500 mt-1 line-clamp-2">{template.purpose}</p>
+                                                                        <p className="text-sm text-gray-500 mt-1">{template.purpose}</p>
                                                                     </div>
-                                                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                                                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 ml-2">
                                                                         {template.hours}h
                                                                     </Badge>
                                                                 </div>
@@ -634,10 +817,16 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                 </div>
                                             </div>
 
-                                            <div className="bg-gray-50 p-4 rounded-lg">
-                                                <p className="text-sm text-gray-600">
-                                                    Click on any template to pre-fill the movement request form. You can still edit the details before submitting.
-                                                </p>
+                                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                                                <div className="flex items-start space-x-3">
+                                                    <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                                                    <div>
+                                                        <p className="text-sm text-blue-800 font-medium">Quick Template Usage</p>
+                                                        <p className="text-sm text-blue-700 mt-1">
+                                                            Click on any template to pre-fill the movement request form with common details. You can still edit everything before submitting.
+                                                        </p>
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             <div className="flex justify-end">
@@ -654,30 +843,35 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
 
                     <div className="lg:col-span-1">
                         {selectedEmployee ? (
-                            <Card>
+                            <Card className="sticky top-4">
                                 <CardHeader>
-                                    <CardTitle>Employee Information</CardTitle>
+                                    <CardTitle className="flex items-center">
+                                        <User className="h-5 w-5 mr-2 text-blue-600" />
+                                        Employee Information
+                                    </CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="space-y-4">
-                                        <div>
+                                        <div className="bg-gray-50 p-3 rounded-lg">
                                             <p className="text-sm font-medium text-gray-500">Name</p>
-                                            <p className="font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+                                            <p className="font-medium text-lg">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
                                         </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-500">Employee ID</p>
-                                            <p>{selectedEmployee.employee_id}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-500">Department</p>
-                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                <Building2 className="h-3.5 w-3.5 mr-1" />
-                                                {selectedEmployee.department?.name || 'No Department'}
-                                            </Badge>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">Employee ID</p>
+                                                <p className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">{selectedEmployee.employee_id}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">Department</p>
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                                                    <Building2 className="h-3 w-3 mr-1" />
+                                                    {selectedEmployee.department?.name || 'N/A'}
+                                                </Badge>
+                                            </div>
                                         </div>
                                         <div>
                                             <p className="text-sm font-medium text-gray-500">Designation</p>
-                                            <p>{selectedEmployee.designation?.name || 'No Designation'}</p>
+                                            <p className="text-sm">{selectedEmployee.designation?.name || 'No Designation'}</p>
                                         </div>
                                     </div>
 
@@ -690,64 +884,90 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                         </div>
 
                                         {fromDate && toDate && fromTime && toTime ? (
-                                            <div className="space-y-2 text-sm">
-                                                <div className="flex justify-between">
-                                                    <span className="text-gray-500">From:</span>
-                                                    <span className="font-medium">
-                                                        {format(fromDate, 'MMM dd, yyyy')} at {fromTime}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-gray-500">To:</span>
-                                                    <span className="font-medium">
-                                                        {format(toDate, 'MMM dd, yyyy')} at {toTime}
-                                                    </span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-gray-500">Type:</span>
-                                                    <span className="font-medium capitalize">
-                                                        {movementType || 'Not selected'}
-                                                    </span>
-                                                </div>
-                                                {destination && (
-                                                    <div className="flex justify-between">
-                                                        <span className="text-gray-500">Destination:</span>
-                                                        <span className="font-medium">{destination}</span>
+                                            <div className="space-y-3">
+                                                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border border-blue-200">
+                                                    <div className="space-y-2 text-sm">
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-600">From:</span>
+                                                            <span className="font-medium text-gray-900">
+                                                                {format(fromDate, 'MMM dd')} at {format(new Date(`2000-01-01T${fromTime}:00`), 'h:mm a')}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-600">To:</span>
+                                                            <span className="font-medium text-gray-900">
+                                                                {format(toDate, 'MMM dd')} at {format(new Date(`2000-01-01T${toTime}:00`), 'h:mm a')}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-600">Type:</span>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    "text-xs",
+                                                                    movementType === 'official'
+                                                                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                                                        : "bg-purple-50 text-purple-700 border-purple-200"
+                                                                )}
+                                                            >
+                                                                {movementType === 'official' ? (
+                                                                    <BriefcaseBusiness className="h-3 w-3 mr-1" />
+                                                                ) : (
+                                                                    <User className="h-3 w-3 mr-1" />
+                                                                )}
+                                                                {movementType.charAt(0).toUpperCase() + movementType.slice(1)}
+                                                            </Badge>
+                                                        </div>
+                                                        {destination && (
+                                                            <div className="flex justify-between">
+                                                                <span className="text-gray-600">Destination:</span>
+                                                                <span className="font-medium text-gray-900 text-right max-w-[60%]">{destination}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
+                                                </div>
 
                                                 {hoursDiff > 0 && (
-                                                    <div className="bg-blue-50 p-2 rounded mt-2 text-center">
-                                                        <span className="text-blue-700 font-medium">
-                                                            Duration: {hoursDiff} {hoursDiff === 1 ? 'hour' : 'hours'}
-                                                        </span>
+                                                    <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
+                                                        <div className="flex items-center justify-center space-x-2">
+                                                            <Clock className="h-4 w-4 text-green-600" />
+                                                            <span className="text-green-800 font-medium">
+                                                                Duration: {hoursDiff} {hoursDiff === 1 ? 'hour' : 'hours'}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
                                         ) : (
-                                            <p className="text-sm text-gray-500">
-                                                Fill out the form to see your movement details here.
-                                            </p>
+                                            <div className="text-center py-4">
+                                                <Clock className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                                                <p className="text-sm text-gray-500">
+                                                    Fill out the form to see your movement details here.
+                                                </p>
+                                            </div>
                                         )}
                                     </div>
 
                                     <div className="mt-6 pt-4 border-t">
-                                        <h3 className="font-medium mb-3">Movement Guidelines</h3>
+                                        <h3 className="font-medium mb-3 flex items-center">
+                                            <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                                            Movement Guidelines
+                                        </h3>
                                         <div className="space-y-2 text-sm text-gray-600">
                                             <div className="flex items-start">
-                                                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                                                <div className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
                                                 <p>Create a movement before leaving the office</p>
                                             </div>
                                             <div className="flex items-start">
-                                                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                                                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
                                                 <p>Include accurate destination and purpose details</p>
                                             </div>
                                             <div className="flex items-start">
-                                                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                                                <p>Don't forget to close the movement when you return</p>
+                                                <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                                                <p>Close the movement when you return to office</p>
                                             </div>
                                             <div className="flex items-start">
-                                                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                                                <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
                                                 <p>Your actual return time will be tracked automatically</p>
                                             </div>
                                         </div>
@@ -760,13 +980,20 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                     <CardTitle>Movement Information</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="flex flex-col items-center justify-center text-center p-4">
-                                        <div className="text-gray-400 mb-2">
-                                            <CalendarClock className="h-12 w-12 mx-auto mb-2" />
-                                            {isAdmin ?
-                                                <p>Select an employee to view their information</p> :
-                                                <p>No employee information found</p>
-                                            }
+                                    <div className="flex flex-col items-center justify-center text-center p-8">
+                                        <div className="text-gray-400 mb-4">
+                                            <CalendarClock className="h-16 w-16 mx-auto mb-4" />
+                                            {isAdmin ? (
+                                                <div>
+                                                    <p className="text-lg font-medium mb-2">Select an Employee</p>
+                                                    <p className="text-sm">Choose an employee to view their information and create a movement request</p>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <p className="text-lg font-medium mb-2">No Employee Information</p>
+                                                    <p className="text-sm">Employee information could not be found</p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </CardContent>
@@ -775,57 +1002,55 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
 
                         <TooltipProvider>
                             <Card className="mt-4">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base">Quick Help</CardTitle>
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-base flex items-center">
+                                        <AlertCircle className="h-4 w-4 mr-2 text-blue-600" />
+                                        Quick Help
+                                    </CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="space-y-3 text-sm">
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <div className="flex justify-between items-center cursor-help p-2 rounded hover:bg-gray-50">
-                                                    <span className="font-medium">Official vs Personal</span>
+                                                <div className="flex justify-between items-center cursor-help p-3 rounded-lg hover:bg-gray-50 border border-gray-100">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                                                        <span className="font-medium">Official vs Personal</span>
+                                                    </div>
                                                     <AlertCircle className="h-4 w-4 text-blue-500" />
                                                 </div>
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p className="max-w-xs">
-                                                    Official movements are work-related. Personal movements are for non-work errands or appointments.
+                                                    Official movements are work-related and count as "on duty". Personal movements are for non-work errands.
                                                 </p>
                                             </TooltipContent>
                                         </Tooltip>
 
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <div className="flex justify-between items-center cursor-help p-2 rounded hover:bg-gray-50">
-                                                    <span className="font-medium">Closing Movements</span>
+                                                <div className="flex justify-between items-center cursor-help p-3 rounded-lg hover:bg-gray-50 border border-gray-100">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                                        <span className="font-medium">Closing Movements</span>
+                                                    </div>
                                                     <AlertCircle className="h-4 w-4 text-blue-500" />
                                                 </div>
                                             </TooltipTrigger>
                                             <TooltipContent>
                                                 <p className="max-w-xs">
-                                                    When you return to the office, remember to close your movement so your actual return time can be recorded.
+                                                    Always close your movement when returning to record your actual return time.
                                                 </p>
                                             </TooltipContent>
                                         </Tooltip>
 
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <div className="flex justify-between items-center cursor-help p-2 rounded hover:bg-gray-50">
-                                                    <span className="font-medium">Attendance Tracking</span>
-                                                    <AlertCircle className="h-4 w-4 text-blue-500" />
-                                                </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p className="max-w-xs">
-                                                    Official movements will be counted as "on duty" in your attendance records.
-                                                </p>
-                                            </TooltipContent>
-                                        </Tooltip>
-
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <div className="flex justify-between items-center cursor-help p-2 rounded hover:bg-gray-50">
-                                                    <span className="font-medium">Use Templates</span>
+                                                <div className="flex justify-between items-center cursor-help p-3 rounded-lg hover:bg-gray-50 border border-gray-100">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                                                        <span className="font-medium">Templates</span>
+                                                    </div>
                                                     <AlertCircle className="h-4 w-4 text-blue-500" />
                                                 </div>
                                             </TooltipTrigger>
