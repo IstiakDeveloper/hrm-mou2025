@@ -455,8 +455,9 @@ class ZKTecoAPIController extends Controller
         }
     }
 
-
-    // Update saveAttendanceRecord method in ZKTecoAPIController.php
+    /**
+     * Save attendance record to database
+     */
     private function saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn)
     {
         // Use database transaction for data integrity
@@ -480,22 +481,97 @@ class ZKTecoAPIController extends Controller
                     ->first();
             }
 
+            // Get employee department for special logic
+            $departmentId = $employee->department_id;
+            $isCustomerService = ($departmentId == 13);
+
             if ($attendance) {
                 // Update existing attendance
-                if ($isCheckIn && (!$attendance->check_in || Carbon::parse($time)->format('H:i') < Carbon::parse($attendance->check_in)->format('H:i'))) {
-                    $attendance->check_in = $time;
-                    $attendance->device_id = $device->id;
-                } elseif (!$isCheckIn && (!$attendance->check_out || Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_out)->format('H:i'))) {
-                    $attendance->check_out = $time;
+                $updated = false;
+
+                if ($isCustomerService) {
+                    // Customer Service Department Logic: First record is check-in, last is check-out
+                    if ($isCheckIn && (!$attendance->check_in || Carbon::parse($time)->format('H:i') < Carbon::parse($attendance->check_in)->format('H:i'))) {
+                        $attendance->check_in = $time;
+                        $attendance->device_id = $device->id;
+                        $updated = true;
+
+                        Log::info('ZKTeco sync: Updated Customer Service check-in (first/earliest)', [
+                            'employee_id' => $employee->id,
+                            'date' => $date,
+                            'time' => $time,
+                            'previous_check_in' => $attendance->getOriginal('check_in')
+                        ]);
+                    } elseif (!$isCheckIn && (!$attendance->check_out || Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_out)->format('H:i'))) {
+                        $attendance->check_out = $time;
+                        $updated = true;
+
+                        Log::info('ZKTeco sync: Updated Customer Service check-out (last/latest)', [
+                            'employee_id' => $employee->id,
+                            'date' => $date,
+                            'time' => $time,
+                            'previous_check_out' => $attendance->getOriginal('check_out')
+                        ]);
+                    }
+
+                    // For Customer Service, also consider any punch within working hours
+                    $hour = (int) Carbon::parse($time)->format('H');
+
+                    // If punch is between 2 PM (14) and 7:30 PM (19), determine based on existing records
+                    if ($hour >= 14 && $hour <= 19) {
+                        if (!$attendance->check_in) {
+                            // No check-in yet, make this check-in
+                            $attendance->check_in = $time;
+                            $attendance->device_id = $device->id;
+                            $updated = true;
+
+                            Log::info('ZKTeco sync: Set Customer Service check-in (no previous check-in)', [
+                                'employee_id' => $employee->id,
+                                'time' => $time
+                            ]);
+                        } elseif (!$attendance->check_out && Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_in)->format('H:i')) {
+                            // Has check-in, no check-out, and this time is later - make it check-out
+                            $attendance->check_out = $time;
+                            $updated = true;
+
+                            Log::info('ZKTeco sync: Set Customer Service check-out (after check-in)', [
+                                'employee_id' => $employee->id,
+                                'time' => $time,
+                                'check_in_time' => $attendance->check_in
+                            ]);
+                        }
+                    }
+                } else {
+                    // Regular Department Logic: Time-based determination
+                    if ($isCheckIn && (!$attendance->check_in || Carbon::parse($time)->format('H:i') < Carbon::parse($attendance->check_in)->format('H:i'))) {
+                        $attendance->check_in = $time;
+                        $attendance->device_id = $device->id;
+                        $updated = true;
+                    } elseif (!$isCheckIn && (!$attendance->check_out || Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_out)->format('H:i'))) {
+                        $attendance->check_out = $time;
+                        $updated = true;
+                    }
                 }
 
                 // Link to movement if exists and not already linked
                 if ($movement && !$attendance->movement_id) {
                     $attendance->movement_id = $movement->id;
+                    $updated = true;
                 }
 
-                $this->updateAttendanceStatus($attendance);
-                $attendance->save();
+                if ($updated) {
+                    $this->updateAttendanceStatus($attendance);
+                    $attendance->save();
+
+                    Log::info('ZKTeco sync: Updated existing attendance record', [
+                        'employee_id' => $employee->id,
+                        'department_id' => $departmentId,
+                        'is_customer_service' => $isCustomerService,
+                        'check_in' => $attendance->check_in,
+                        'check_out' => $attendance->check_out,
+                        'status' => $attendance->status
+                    ]);
+                }
             } else {
                 // Create new attendance record
                 $attendance = new Attendance();
@@ -503,10 +579,41 @@ class ZKTecoAPIController extends Controller
                 $attendance->date = $date;
                 $attendance->device_id = $device->id;
 
-                if ($isCheckIn) {
-                    $attendance->check_in = $time;
+                if ($isCustomerService) {
+                    // Customer Service: Determine based on time and context
+                    $hour = (int) Carbon::parse($time)->format('H');
+
+                    // If it's within working hours (2 PM to 7:30 PM), start with check-in
+                    if ($hour >= 14 && $hour <= 19) {
+                        $attendance->check_in = $time;
+
+                        Log::info('ZKTeco sync: Created Customer Service attendance with check-in', [
+                            'employee_id' => $employee->id,
+                            'time' => $time,
+                            'hour' => $hour
+                        ]);
+                    } else {
+                        // Outside working hours - still record but determine type based on time
+                        if ($isCheckIn) {
+                            $attendance->check_in = $time;
+                        } else {
+                            $attendance->check_out = $time;
+                        }
+
+                        Log::info('ZKTeco sync: Created Customer Service attendance outside working hours', [
+                            'employee_id' => $employee->id,
+                            'time' => $time,
+                            'hour' => $hour,
+                            'is_check_in' => $isCheckIn
+                        ]);
+                    }
                 } else {
-                    $attendance->check_out = $time;
+                    // Regular departments: Use time-based logic
+                    if ($isCheckIn) {
+                        $attendance->check_in = $time;
+                    } else {
+                        $attendance->check_out = $time;
+                    }
                 }
 
                 // Link to movement if exists
@@ -516,6 +623,15 @@ class ZKTecoAPIController extends Controller
 
                 $this->updateAttendanceStatus($attendance);
                 $attendance->save();
+
+                Log::info('ZKTeco sync: Created new attendance record', [
+                    'employee_id' => $employee->id,
+                    'department_id' => $departmentId,
+                    'is_customer_service' => $isCustomerService,
+                    'check_in' => $attendance->check_in,
+                    'check_out' => $attendance->check_out,
+                    'status' => $attendance->status
+                ]);
             }
 
             return true;
@@ -523,7 +639,8 @@ class ZKTecoAPIController extends Controller
     }
 
     /**
-     * Update attendance status based on check-in and check-out times, leave status, andovement status
+     * Update attendance status based on check-in and check-out times, leave status, and movement status
+     * With special handling for Customer Service department (ID: 13) and Employee ID 1 (ED)
      */
     private function updateAttendanceStatus($attendance)
     {
@@ -543,8 +660,222 @@ class ZKTecoAPIController extends Controller
             return;
         }
 
-        // Get branch work settings
-        $branchId = $attendance->employee->current_branch_id;
+        // Get employee with department information
+        $employee = $attendance->employee;
+        $departmentId = $employee->department_id;
+
+        // Check if this is Customer Service department (ID: 13)
+        if ($departmentId == 13) {
+            $this->updateCustomerServiceAttendanceStatus($attendance, $employee);
+            return;
+        }
+
+        // For all other departments, use regular logic
+        $this->updateRegularAttendanceStatus($attendance, $employee);
+    }
+
+    /**
+     * Update attendance status for Customer Service department
+     * Working hours: 2:00 PM - 7:30 PM
+     */
+    private function updateCustomerServiceAttendanceStatus($attendance, $employee)
+    {
+        // Customer Service department working hours
+        $workStartTime = '14:00:00'; // 2:00 PM
+        $workEndTime = '19:30:00';   // 7:30 PM
+        $lateThresholdMinutes = 15;  // 15 minutes late threshold
+
+        Log::info('ZKTeco sync: Processing Customer Service department attendance', [
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'date' => $attendance->date,
+            'check_in' => $attendance->check_in,
+            'check_out' => $attendance->check_out
+        ]);
+
+        try {
+            // Ensure we get the date in proper format
+            $dateStr = Carbon::parse($attendance->date)->format('Y-m-d');
+
+            Log::info('ZKTeco sync: Date conversion for Customer Service', [
+                'original_date' => $attendance->date,
+                'formatted_date' => $dateStr,
+                'check_in' => $attendance->check_in,
+                'check_out' => $attendance->check_out
+            ]);
+
+            // Create work time objects
+            $workStart = Carbon::parse("{$dateStr} {$workStartTime}");
+            $workEnd = Carbon::parse("{$dateStr} {$workEndTime}");
+            $lateThreshold = $workStart->copy()->addMinutes($lateThresholdMinutes); // 2:15 PM
+
+            // Initialize status
+            $attendance->status = 'absent'; // Default to absent
+
+            // Process check-in logic
+            if ($attendance->check_in) {
+                $checkInTime = Carbon::parse("{$dateStr} {$attendance->check_in}");
+
+                Log::info('ZKTeco sync: Customer Service check-in analysis', [
+                    'employee_id' => $employee->id,
+                    'check_in_time' => $checkInTime->format('H:i:s'),
+                    'work_start_time' => $workStart->format('H:i:s'),
+                    'late_threshold' => $lateThreshold->format('H:i:s')
+                ]);
+
+                // Check if came too early (before 2:00 PM)
+                if ($checkInTime->lt($workStart)) {
+                    // Early arrival - still mark as present but log it
+                    $attendance->status = 'present';
+                    Log::info('ZKTeco sync: Customer Service employee arrived early', [
+                        'employee_id' => $employee->id,
+                        'check_in_time' => $checkInTime->format('H:i:s'),
+                        'work_start_time' => $workStartTime
+                    ]);
+                }
+                // Check if came after late threshold (after 2:15 PM)
+                elseif ($checkInTime->gt($lateThreshold)) {
+                    $attendance->status = 'late';
+                    Log::info('ZKTeco sync: Customer Service employee marked as late', [
+                        'employee_id' => $employee->id,
+                        'check_in_time' => $checkInTime->format('H:i:s'),
+                        'late_threshold' => $lateThreshold->format('H:i:s')
+                    ]);
+                }
+                // Normal check-in (between 2:00 PM - 2:15 PM)
+                else {
+                    $attendance->status = 'present';
+                    Log::info('ZKTeco sync: Customer Service employee on time', [
+                        'employee_id' => $employee->id,
+                        'check_in_time' => $checkInTime->format('H:i:s')
+                    ]);
+                }
+            }
+
+            // Process check-out logic and early leave detection
+            if ($attendance->check_in && $attendance->check_out) {
+                $checkInTime = Carbon::parse("{$dateStr} {$attendance->check_in}");
+                $checkOutTime = Carbon::parse("{$dateStr} {$attendance->check_out}");
+
+                Log::info('ZKTeco sync: Customer Service check-out analysis', [
+                    'employee_id' => $employee->id,
+                    'check_in_time' => $checkInTime->format('H:i:s'),
+                    'check_out_time' => $checkOutTime->format('H:i:s'),
+                    'work_end_time' => $workEnd->format('H:i:s')
+                ]);
+
+                // Handle case where check-out is next day (though unlikely for CS department)
+                if ($checkOutTime->lt($checkInTime)) {
+                    $checkOutTime->addDay();
+                    Log::info('ZKTeco sync: Adjusted check-out time to next day', [
+                        'employee_id' => $employee->id,
+                        'adjusted_check_out' => $checkOutTime->format('Y-m-d H:i:s')
+                    ]);
+                }
+
+                // Calculate total working hours
+                $totalHoursWorked = $checkInTime->diffInMinutes($checkOutTime) / 60;
+
+                Log::info('ZKTeco sync: Customer Service working hours calculation', [
+                    'employee_id' => $employee->id,
+                    'total_hours_worked' => $totalHoursWorked,
+                    'check_out_before_end' => $checkOutTime->lt($workEnd)
+                ]);
+
+                // Check if left early (before 7:30 PM)
+                if ($checkOutTime->lt($workEnd)) {
+                    $requiredHours = 5.5; // 2 PM to 7:30 PM = 5.5 hours
+                    $minimumHours = 3.0;  // Minimum 3 hours to avoid half_day
+
+                    if ($totalHoursWorked < $minimumHours) {
+                        // Very short working hours - mark as half_day regardless of current status
+                        $attendance->status = 'half_day';
+                        Log::info('ZKTeco sync: Customer Service employee worked very short hours', [
+                            'employee_id' => $employee->id,
+                            'hours_worked' => $totalHoursWorked,
+                            'minimum_hours' => $minimumHours,
+                            'status_set_to' => 'half_day'
+                        ]);
+                    } elseif ($totalHoursWorked < $requiredHours) {
+                        // Left early but worked reasonable hours
+                        // If already marked as late, keep it as late
+                        // Otherwise, mark as half_day for early leave
+                        if ($attendance->status !== 'late') {
+                            $attendance->status = 'half_day';
+                            Log::info('ZKTeco sync: Customer Service employee left early', [
+                                'employee_id' => $employee->id,
+                                'check_out_time' => $checkOutTime->format('H:i:s'),
+                                'expected_end_time' => $workEndTime,
+                                'hours_worked' => $totalHoursWorked,
+                                'required_hours' => $requiredHours,
+                                'status_set_to' => 'half_day'
+                            ]);
+                        } else {
+                            Log::info('ZKTeco sync: Customer Service employee left early but already marked as late', [
+                                'employee_id' => $employee->id,
+                                'hours_worked' => $totalHoursWorked,
+                                'status_kept_as' => 'late'
+                            ]);
+                        }
+                    }
+                } else {
+                    // Check-out is on time or later
+                    Log::info('ZKTeco sync: Customer Service employee check-out on time or later', [
+                        'employee_id' => $employee->id,
+                        'check_out_time' => $checkOutTime->format('H:i:s'),
+                        'hours_worked' => $totalHoursWorked
+                    ]);
+                }
+            }
+            // Handle case where there's only check-out (no check-in)
+            elseif (!$attendance->check_in && $attendance->check_out) {
+                // No check-in but has check-out - mark as half_day
+                $attendance->status = 'half_day';
+                Log::info('ZKTeco sync: Customer Service employee has check-out but no check-in', [
+                    'employee_id' => $employee->id,
+                    'check_out_time' => $attendance->check_out,
+                    'status_set_to' => 'half_day'
+                ]);
+            }
+
+            Log::info('ZKTeco sync: Final Customer Service attendance status', [
+                'employee_id' => $employee->id,
+                'final_status' => $attendance->status,
+                'check_in' => $attendance->check_in,
+                'check_out' => $attendance->check_out
+            ]);
+        } catch (\Exception $e) {
+            Log::error('ZKTeco sync: Error calculating Customer Service attendance status', [
+                'employee_id' => $employee->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'attendance_date' => $attendance->date,
+                'attendance_check_in' => $attendance->check_in,
+                'attendance_check_out' => $attendance->check_out
+            ]);
+
+            // Set a default status based on available data
+            if ($attendance->check_in || $attendance->check_out) {
+                $attendance->status = 'present';
+            } else {
+                $attendance->status = 'absent';
+            }
+
+            Log::info('ZKTeco sync: Set default status due to error', [
+                'employee_id' => $employee->id,
+                'default_status' => $attendance->status
+            ]);
+        }
+    }
+
+    /**
+     * Update attendance status for regular departments (non-Customer Service)
+     * Regular working hours: 9:00 AM - 5:00 PM
+     */
+    private function updateRegularAttendanceStatus($attendance, $employee)
+    {
+        // Get branch work settings for regular departments
+        $branchId = $employee->current_branch_id;
         $settings = \App\Models\AttendanceSetting::where('branch_id', $branchId)->first();
 
         if (!$settings) {
@@ -553,37 +884,39 @@ class ZKTecoAPIController extends Controller
             return;
         }
 
-        // Debug the date and time being used
-        Log::info('ZKTeco sync: Update attendance status', [
+        Log::info('ZKTeco sync: Processing regular department attendance', [
+            'employee_id' => $employee->id,
+            'department_id' => $employee->department_id,
             'attendance_date' => $attendance->date,
             'attendance_check_in' => $attendance->check_in,
-            'work_start_time' => $settings->work_start_time
+            'attendance_check_out' => $attendance->check_out,
+            'work_start_time' => $settings->work_start_time,
+            'work_end_time' => $settings->work_end_time ?? '17:00:00'
         ]);
 
         try {
             // Carefully construct date-time strings
             $dateStr = $attendance->date;
             $startTimeStr = $settings->work_start_time;
+            $endTimeStr = $settings->work_end_time ?? '17:00:00'; // Default 5:00 PM
 
-            // Create work start time correctly
-            $workStartTimeString = "{$dateStr} {$startTimeStr}";
-            Log::info('ZKTeco sync: Parsing work start time', ['datetime' => $workStartTimeString]);
+            // Create work time objects
+            $workStartTime = Carbon::parse("{$dateStr} {$startTimeStr}");
+            $workEndTime = Carbon::parse("{$dateStr} {$endTimeStr}");
+            $lateThreshold = $workStartTime->copy()->addMinutes($settings->late_threshold_minutes ?? 15);
 
-            $workStartTime = Carbon::parse($workStartTimeString);
-            $lateThreshold = $workStartTime->copy()->addMinutes($settings->late_threshold_minutes);
-
-            // Calculate status
+            // Calculate status based on check-in time
             if ($attendance->check_in) {
-                // Construct check-in datetime string carefully
-                $checkInTimeStr = $attendance->check_in;
-                $checkInDateTimeString = "{$dateStr} {$checkInTimeStr}";
-
-                Log::info('ZKTeco sync: Parsing check-in time', ['datetime' => $checkInDateTimeString]);
-                $checkInTime = Carbon::parse($checkInDateTimeString);
+                $checkInTime = Carbon::parse("{$dateStr} {$attendance->check_in}");
 
                 // Mark as late if check-in time is after late threshold
                 if ($checkInTime->gt($lateThreshold)) {
                     $attendance->status = 'late';
+                    Log::info('ZKTeco sync: Regular employee marked as late', [
+                        'employee_id' => $employee->id,
+                        'check_in_time' => $checkInTime->format('H:i:s'),
+                        'late_threshold' => $lateThreshold->format('H:i:s')
+                    ]);
                 } else {
                     $attendance->status = 'present';
                 }
@@ -592,37 +925,56 @@ class ZKTecoAPIController extends Controller
                 $attendance->status = 'absent';
             }
 
-            // Check for half-day based on working hours
+            // Check for early leave and working hours
             if ($attendance->check_in && $attendance->check_out) {
-                // Construct datetime strings carefully
-                $checkInTimeStr = $attendance->check_in;
-                $checkOutTimeStr = $attendance->check_out;
-
-                $checkInDateTimeString = "{$dateStr} {$checkInTimeStr}";
-                $checkOutDateTimeString = "{$dateStr} {$checkOutTimeStr}";
-
-                Log::info('ZKTeco sync: Parsing check-in/out times for hours calculation', [
-                    'check_in' => $checkInDateTimeString,
-                    'check_out' => $checkOutDateTimeString
-                ]);
-
-                $checkInTime = Carbon::parse($checkInDateTimeString);
-                $checkOutTime = Carbon::parse($checkOutDateTimeString);
+                $checkInTime = Carbon::parse("{$dateStr} {$attendance->check_in}");
+                $checkOutTime = Carbon::parse("{$dateStr} {$attendance->check_out}");
 
                 // Handle case where check-out is next day
                 if ($checkOutTime->lt($checkInTime)) {
                     $checkOutTime->addDay();
                 }
 
-                $hoursWorked = $checkInTime->diffInHours($checkOutTime);
+                // Check if left early (before work end time)
+                $actualWorkEndTime = Carbon::parse("{$dateStr} {$endTimeStr}");
+                if ($checkOutTime->lt($actualWorkEndTime)) {
+                    $hoursWorked = $checkInTime->diffInHours($checkOutTime);
+                    $requiredHours = $settings->required_work_hours ?? 8; // Default 8 hours
 
-                if ($hoursWorked < $settings->half_day_hours && $attendance->status != 'absent') {
+                    if ($hoursWorked < $requiredHours) {
+                        // If already marked as late, keep it as late
+                        // Otherwise, mark as half_day for early leave
+                        if ($attendance->status !== 'late') {
+                            $attendance->status = 'half_day';
+                        }
+
+                        Log::info('ZKTeco sync: Regular employee left early', [
+                            'employee_id' => $employee->id,
+                            'check_out_time' => $checkOutTime->format('H:i:s'),
+                            'expected_end_time' => $endTimeStr,
+                            'hours_worked' => $hoursWorked,
+                            'required_hours' => $requiredHours
+                        ]);
+                    }
+                }
+
+                // Additional check based on total working hours
+                $totalHoursWorked = $checkInTime->diffInHours($checkOutTime);
+                $halfDayHours = $settings->half_day_hours ?? 4; // Default 4 hours for half day
+
+                if ($totalHoursWorked < $halfDayHours && $attendance->status != 'absent') {
                     $attendance->status = 'half_day';
+                    Log::info('ZKTeco sync: Regular employee worked insufficient hours', [
+                        'employee_id' => $employee->id,
+                        'hours_worked' => $totalHoursWorked,
+                        'half_day_threshold' => $halfDayHours
+                    ]);
                 }
             }
         } catch (\Exception $e) {
             // Log the error and set a default status
-            Log::error('ZKTeco sync: Error calculating attendance status', [
+            Log::error('ZKTeco sync: Error calculating regular attendance status', [
+                'employee_id' => $employee->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -653,6 +1005,7 @@ class ZKTecoAPIController extends Controller
     /**
      * Process absent employees for today
      * This creates attendance records for employees who didn't clock in
+     * Also handles auto attendance for Employee ID 1 (ED)
      */
     private function processAbsentEmployees($device)
     {
@@ -663,6 +1016,9 @@ class ZKTecoAPIController extends Controller
             Log::warning('ZKTeco sync: Device not associated with a branch, skipping absent processing');
             return;
         }
+
+        // First, handle auto attendance for Employee ID 1 (ED)
+        $this->processAutoAttendanceForED($today, $device);
 
         // Get all active employees in this branch
         $employees = Employee::where('status', 'active')
@@ -729,6 +1085,119 @@ class ZKTecoAPIController extends Controller
             'processed' => $processed,
             'total_employees' => $employees->count()
         ]);
+    }
+
+    /**
+     * Process auto attendance for Employee ID 1 (ED)
+     * Auto check-in at 09:00 AM and auto check-out at 07:30 PM
+     */
+    private function processAutoAttendanceForED($date, $device)
+    {
+        // Find Employee with ID 1 (ED)
+        $edEmployee = Employee::find(1);
+
+        if (!$edEmployee) {
+            Log::warning('ZKTeco sync: Employee ID 1 (ED) not found for auto attendance');
+            return;
+        }
+
+        // Check if employee is active
+        if ($edEmployee->status !== 'active') {
+            Log::info('ZKTeco sync: Employee ID 1 (ED) is not active, skipping auto attendance');
+            return;
+        }
+
+        // Check if attendance record already exists for today
+        $attendance = Attendance::where('employee_id', 1)
+            ->where('date', $date)
+            ->first();
+
+        // Auto attendance times
+        $autoCheckIn = '09:00:00';    // 9:00 AM
+        $autoCheckOut = '19:30:00';   // 7:30 PM
+
+        if ($attendance) {
+            // Update existing attendance record
+            $updated = false;
+
+            // Set auto check-in if not already set
+            if (!$attendance->check_in) {
+                $attendance->check_in = $autoCheckIn;
+                $attendance->device_id = $device->id;
+                $updated = true;
+                Log::info('ZKTeco sync: Auto check-in set for Employee ID 1 (ED)', [
+                    'date' => $date,
+                    'check_in' => $autoCheckIn
+                ]);
+            }
+
+            // Set auto check-out if not already set
+            if (!$attendance->check_out) {
+                $attendance->check_out = $autoCheckOut;
+                $updated = true;
+                Log::info('ZKTeco sync: Auto check-out set for Employee ID 1 (ED)', [
+                    'date' => $date,
+                    'check_out' => $autoCheckOut
+                ]);
+            }
+
+            if ($updated) {
+                // Check if employee is on leave first
+                if ($this->isEmployeeOnLeave(1, $date)) {
+                    $attendance->status = 'leave';
+                }
+                // Check if employee is on movement
+                else if ($this->isEmployeeOnMovement(1, $date)) {
+                    $attendance->status = 'on_duty';
+                } else {
+                    // Update status normally
+                    $this->updateAttendanceStatus($attendance);
+                }
+
+                $attendance->save();
+            }
+        } else {
+            // Create new attendance record with auto times
+            $attendance = new Attendance();
+            $attendance->employee_id = 1;
+            $attendance->date = $date;
+            $attendance->check_in = $autoCheckIn;
+            $attendance->check_out = $autoCheckOut;
+            $attendance->device_id = $device->id;
+
+            // Check if employee is on leave
+            if ($this->isEmployeeOnLeave(1, $date)) {
+                $attendance->status = 'leave';
+            }
+            // Check if employee is on movement
+            else if ($this->isEmployeeOnMovement(1, $date)) {
+                $attendance->status = 'on_duty';
+
+                // Find the relevant movement
+                $movement = \App\Models\Movement::where('employee_id', 1)
+                    ->whereIn('status', ['approved', 'completed'])
+                    ->where('movement_type', 'official')
+                    ->where('from_datetime', '<=', Carbon::parse($date)->endOfDay())
+                    ->where('to_datetime', '>=', Carbon::parse($date)->startOfDay())
+                    ->first();
+
+                if ($movement) {
+                    $attendance->movement_id = $movement->id;
+                }
+            } else {
+                // Set status normally (will be 'present' since both check-in and check-out are set)
+                $this->updateAttendanceStatus($attendance);
+            }
+
+            $attendance->save();
+
+            Log::info('ZKTeco sync: Auto attendance created for Employee ID 1 (ED)', [
+                'date' => $date,
+                'check_in' => $autoCheckIn,
+                'check_out' => $autoCheckOut,
+                'status' => $attendance->status
+            ]);
+        }
     }
 
     /**
