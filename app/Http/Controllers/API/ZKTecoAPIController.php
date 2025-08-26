@@ -275,15 +275,32 @@ class ZKTecoAPIController extends Controller
                 'full_datetime' => $timestamp->format('Y-m-d H:i:s')
             ]);
 
-            // Determine check-in or check-out based on time of day
-            // Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
-            $isCheckIn = ($hour < 12);
+            // Get employee department for check-in/check-out logic
+            $departmentId = $employee->department_id;
+            $isCustomerService = ($departmentId == 13);
 
-            // Log the automatic time-based determination
-            Log::info('ZKTeco sync: Auto-determined punch type', [
-                'hour' => $hour,
-                'isCheckIn' => $isCheckIn
-            ]);
+            // Determine check-in or check-out based on department and time
+            if ($isCustomerService) {
+                // Customer Service Department: 2:00 PM - 7:30 PM working hours
+                // Check-in: 1:00 PM - 4:00 PM (13:00 - 16:00)
+                // Check-out: 4:01 PM - 11:59 PM (16:01 - 23:59)
+                $isCheckIn = ($hour >= 13 && $hour <= 16);
+
+                Log::info('ZKTeco sync: Customer Service time-based determination', [
+                    'employee_id' => $employee->id,
+                    'hour' => $hour,
+                    'isCheckIn' => $isCheckIn
+                ]);
+            } else {
+                // Regular departments: Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
+                $isCheckIn = ($hour < 12);
+
+                Log::info('ZKTeco sync: Regular department time-based determination', [
+                    'employee_id' => $employee->id,
+                    'hour' => $hour,
+                    'isCheckIn' => $isCheckIn
+                ]);
+            }
 
             return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
         } catch (\Exception $e) {
@@ -292,6 +309,87 @@ class ZKTecoAPIController extends Controller
                 'error' => $e->getMessage()
             ]);
             return false;
+        }
+    }
+
+    /**
+     * Process a record from agent push
+     */
+    private function processAgentRecord($record, $device)
+    {
+        // Find employee by employee_id
+        $employee = Employee::where('employee_id', (string) $record['id'])->first();
+
+        // Log the employee lookup details for debugging
+        Log::info('ZKTeco sync: Employee lookup details', [
+            'record_id' => $record['id'],
+            'record_id_type' => gettype($record['id']),
+            'employee_found' => ($employee !== null)
+        ]);
+
+        if (!$employee) {
+            Log::warning('ZKTeco sync: Unknown employee_id from agent', [
+                'employee_id' => $record['id'],
+                'device_id' => $device->id
+            ]);
+            return false;
+        }
+
+        try {
+            // Log the timestamp we're trying to parse
+            Log::info('ZKTeco sync: Parsing timestamp', [
+                'raw_timestamp' => $record['timestamp']
+            ]);
+
+            // Parse timestamp
+            $timestamp = Carbon::parse($record['timestamp']);
+
+            $date = $timestamp->format('Y-m-d');
+            $time = $timestamp->format('H:i:s');
+            $hour = (int) $timestamp->format('H');
+
+            // Log the parsed components
+            Log::info('ZKTeco sync: Parsed timestamp components', [
+                'date' => $date,
+                'time' => $time,
+                'hour' => $hour,
+                'full_datetime' => $timestamp->format('Y-m-d H:i:s')
+            ]);
+
+            // Get employee department for check-in/check-out logic
+            $departmentId = $employee->department_id;
+            $isCustomerService = ($departmentId == 13);
+
+            // Determine check-in or check-out based on department and time
+            if ($isCustomerService) {
+                // Customer Service Department: 2:00 PM - 7:30 PM working hours
+                // Check-in: 1:00 PM - 4:00 PM (13:00 - 16:00)
+                // Check-out: 4:01 PM - 11:59 PM (16:01 - 23:59)
+                $isCheckIn = ($hour >= 13 && $hour <= 16);
+
+                Log::info('ZKTeco sync: Customer Service time-based determination', [
+                    'employee_id' => $employee->id,
+                    'hour' => $hour,
+                    'isCheckIn' => $isCheckIn
+                ]);
+            } else {
+                // Regular departments: Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
+                $isCheckIn = ($hour < 12);
+
+                Log::info('ZKTeco sync: Regular department time-based determination', [
+                    'employee_id' => $employee->id,
+                    'hour' => $hour,
+                    'isCheckIn' => $isCheckIn
+                ]);
+            }
+
+            return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
+        } catch (\Exception $e) {
+            Log::error('ZKTeco sync: Error parsing timestamp', [
+                'timestamp' => $record['timestamp'],
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
         }
     }
 
@@ -389,70 +487,6 @@ class ZKTecoAPIController extends Controller
                 'total' => count($request->attendance_data)
             ]
         ]);
-    }
-
-    /**
-     * Process a record from agent push
-     */
-    private function processAgentRecord($record, $device)
-    {
-        // Find employee by employee_id
-        $employee = Employee::where('employee_id', (string) $record['id'])->first();
-
-        // Log the employee lookup details for debugging
-        Log::info('ZKTeco sync: Employee lookup details', [
-            'record_id' => $record['id'],
-            'record_id_type' => gettype($record['id']),
-            'employee_found' => ($employee !== null)
-        ]);
-
-        if (!$employee) {
-            Log::warning('ZKTeco sync: Unknown employee_id from agent', [
-                'employee_id' => $record['id'],
-                'device_id' => $device->id
-            ]);
-            return false;
-        }
-
-        try {
-            // Log the timestamp we're trying to parse
-            Log::info('ZKTeco sync: Parsing timestamp', [
-                'raw_timestamp' => $record['timestamp']
-            ]);
-
-            // Parse timestamp
-            $timestamp = Carbon::parse($record['timestamp']);
-
-            $date = $timestamp->format('Y-m-d');
-            $time = $timestamp->format('H:i:s');
-            $hour = (int) $timestamp->format('H');
-
-            // Log the parsed components
-            Log::info('ZKTeco sync: Parsed timestamp components', [
-                'date' => $date,
-                'time' => $time,
-                'hour' => $hour,
-                'full_datetime' => $timestamp->format('Y-m-d H:i:s')
-            ]);
-
-            // Determine check-in or check-out based on time of day
-            // Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
-            $isCheckIn = ($hour < 12);
-
-            // Log the automatic time-based determination
-            Log::info('ZKTeco sync: Auto-determined punch type', [
-                'hour' => $hour,
-                'isCheckIn' => $isCheckIn
-            ]);
-
-            return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
-        } catch (\Exception $e) {
-            Log::error('ZKTeco sync: Error parsing timestamp', [
-                'timestamp' => $record['timestamp'],
-                'error' => $e->getMessage()
-            ]);
-            throw $e;
-        }
     }
 
     /**
@@ -637,6 +671,7 @@ class ZKTecoAPIController extends Controller
             return true;
         });
     }
+
 
     /**
      * Update attendance status based on check-in and check-out times, leave status, and movement status
