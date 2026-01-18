@@ -26,11 +26,11 @@ import {
     Building2
 } from 'lucide-react';
 
-import { Button } from '@/Components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/Components/ui/avatar';
-import { Toast, ToastAction } from '@/Components/ui/toast';
-import { useToast } from '@/Components/ui/use-toast';
-import { Alert, AlertDescription } from '@/Components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Toast, ToastAction } from '@/components/ui/toast';
+import { useToast } from '@/components/ui/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 import {
@@ -40,21 +40,22 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger
-} from '@/Components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import {
     Sheet,
     SheetContent,
     SheetTrigger,
-} from "@/Components/ui/sheet";
+} from "@/components/ui/sheet";
 import {
     Collapsible,
     CollapsibleContent,
     CollapsibleTrigger,
-} from "@/Components/ui/collapsible";
-import { ScrollArea } from "@/Components/ui/scroll-area";
-import { Badge } from "@/Components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/Components/ui/tooltip";
+} from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import NotificationDropdown from '@/components/notification-dropdown';
+import PWAManager from '@/components/PWAManager';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -92,7 +93,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     // Check if a menu item is active
     const isActive = (path: string) => {
         return currentPath === path ||
-               (path !== '/' && (currentPath.startsWith(path + '/') || currentPath === path));
+            (path !== '/' && (currentPath.startsWith(path + '/') || currentPath === path));
     };
 
     // Get initials from name for Avatar fallback
@@ -273,21 +274,19 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             >
                 <CollapsibleTrigger asChild>
                     <div
-                        className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 group ${
-                            isActive(item.path)
+                        className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 group ${isActive(item.path)
                                 ? 'bg-green-50 text-green-700 font-medium shadow-sm'
                                 : 'hover:bg-gray-50 text-gray-700'
-                        }`}
+                            }`}
                     >
                         <TooltipProvider delayDuration={200}>
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
-                                        <div className={`${
-                                            isActive(item.path)
+                                        <div className={`${isActive(item.path)
                                                 ? 'text-green-700'
                                                 : 'text-gray-600 group-hover:text-gray-900'
-                                        }`}>
+                                            }`}>
                                             {item.icon}
                                         </div>
                                         {!collapsed && (
@@ -303,9 +302,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </Tooltip>
                         </TooltipProvider>
                         {!collapsed && (
-                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
-                                isActive(item.path) ? 'text-green-700' : 'text-gray-500'
-                            } ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isActive(item.path) ? 'text-green-700' : 'text-gray-500'
+                                } ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />
                         )}
                     </div>
                 </CollapsibleTrigger>
@@ -315,11 +313,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             <Link
                                 key={idx}
                                 href={subItem.path}
-                                className={`block p-2.5 rounded-md text-sm transition-all duration-200 ${
-                                    currentPath === subItem.path
+                                className={`block p-2.5 rounded-md text-sm transition-all duration-200 ${currentPath === subItem.path
                                         ? 'bg-green-50 text-green-700 font-medium border-l-2 border-green-500'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
+                                    }`}
                             >
                                 {subItem.title}
                             </Link>
@@ -333,15 +330,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     <TooltipTrigger asChild>
                         <Link
                             href={item.path}
-                            className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-lg transition-all duration-200 ${
-                                isActive(item.path)
+                            className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-lg transition-all duration-200 ${isActive(item.path)
                                     ? 'bg-green-50 text-green-700 font-medium shadow-sm'
                                     : 'hover:bg-gray-50 text-gray-700'
-                            }`}
+                                }`}
                         >
-                            <div className={`${
-                                isActive(item.path) ? 'text-green-700' : 'text-gray-600'
-                            }`}>
+                            <div className={`${isActive(item.path) ? 'text-green-700' : 'text-gray-600'
+                                }`}>
                                 {item.icon}
                             </div>
                             {!collapsed && (
@@ -377,23 +372,20 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             >
                 <CollapsibleTrigger asChild>
                     <div
-                        className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-                            isActive(item.path)
+                        className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 ${isActive(item.path)
                                 ? 'bg-green-50 text-green-700 font-medium'
                                 : 'hover:bg-gray-50 text-gray-700'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center gap-3">
-                            <div className={`${
-                                isActive(item.path) ? 'text-green-700' : 'text-gray-600'
-                            }`}>
+                            <div className={`${isActive(item.path) ? 'text-green-700' : 'text-gray-600'
+                                }`}>
                                 {item.icon}
                             </div>
                             <span className="text-sm font-medium">{item.title}</span>
                         </div>
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
-                            activeMenu === item.title ? 'transform rotate-180' : ''
-                        } ${isActive(item.path) ? 'text-green-700' : 'text-gray-500'}`} />
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${activeMenu === item.title ? 'transform rotate-180' : ''
+                            } ${isActive(item.path) ? 'text-green-700' : 'text-gray-500'}`} />
                     </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pl-8 space-y-1 mt-2">
@@ -401,11 +393,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <Link
                             key={idx}
                             href={subItem.path}
-                            className={`block p-3 rounded-md text-sm transition-all duration-200 ${
-                                currentPath === subItem.path
+                            className={`block p-3 rounded-md text-sm transition-all duration-200 ${currentPath === subItem.path
                                     ? 'bg-green-50 text-green-700 font-medium'
                                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                            }`}
+                                }`}
                             onClick={toggleMobileNav}
                         >
                             {subItem.title}
@@ -416,16 +407,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         ) : (
             <Link
                 href={item.path}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${
-                    isActive(item.path)
+                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${isActive(item.path)
                         ? 'bg-green-50 text-green-700 font-medium'
                         : 'hover:bg-gray-50 text-gray-700'
-                }`}
+                    }`}
                 onClick={toggleMobileNav}
             >
-                <div className={`${
-                    isActive(item.path) ? 'text-green-700' : 'text-gray-600'
-                }`}>
+                <div className={`${isActive(item.path) ? 'text-green-700' : 'text-gray-600'
+                    }`}>
                     {item.icon}
                 </div>
                 <span className="text-sm font-medium">{item.title}</span>
@@ -497,14 +486,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     return (
         <div className="flex h-screen bg-gray-50">
+            {/* PWA Manager - Global PWA functionality */}
+            <PWAManager title="HRM System" showInstallBanner={true} />
+
             {/* Desktop Sidebar */}
-            <aside className={`hidden md:flex flex-col border-r bg-white shadow-sm transition-all duration-300 ${
-                collapsed ? 'w-16' : 'w-64'
-            }`}>
+            <aside className={`hidden md:flex flex-col border-r bg-white shadow-sm transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'
+                }`}>
                 {/* Header */}
-                <div className={`py-4 px-4 border-b flex ${
-                    collapsed ? 'justify-center' : 'justify-between'
-                } items-center bg-gradient-to-r from-green-600 to-green-700 text-white`}>
+                <div className={`py-4 px-4 border-b flex ${collapsed ? 'justify-center' : 'justify-between'
+                    } items-center bg-gradient-to-r from-green-600 to-green-700 text-white`}>
                     {!collapsed && (
                         <Link href="/dashboard" className="flex items-center gap-2">
                             <img src='/logo.png' className="w-7 h-7" alt="Logo" />
@@ -749,13 +739,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </Alert>
                     )}
                     {showInfo && (
-                        <Alert variant="info" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5">
+                        <Alert variant="info" className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-5">
                             <Info className="h-4 w-4" />
                             <AlertDescription>{flash.info}</AlertDescription>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="absolute right-1 top-1 text-green-800 hover:bg-green-100 h-6 w-6"
+                                className="absolute right-1 top-1 text-blue-800 hover:bg-blue-100 h-6 w-6"
                                 onClick={() => setShowInfo(false)}
                             >
                                 <X className="h-4 w-4" />

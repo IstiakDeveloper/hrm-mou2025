@@ -339,6 +339,9 @@ class EmployeeDashboardController extends Controller
                 return $date >= $leave->start_date && $date <= $leave->end_date;
             })->count() > 0;
 
+            // Check if attendance record has valid check-in (not just record exists)
+            $hasValidAttendance = !is_null($existingAttendance) && !is_null($existingAttendance->check_in);
+
             // Determine status with proper priority order
             $status = $this->determineDateStatusEnhanced(
                 $date,
@@ -346,7 +349,7 @@ class EmployeeDashboardController extends Controller
                 $weekendDays,
                 $isOnLeave,
                 $movementsOnDate->count() > 0,
-                !is_null($existingAttendance)
+                $hasValidAttendance
             );
 
             // If there are movements on this date, add movement information
