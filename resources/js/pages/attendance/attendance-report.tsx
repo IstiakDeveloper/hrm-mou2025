@@ -10,7 +10,7 @@ import {
     CardFooter,
     CardHeader,
     CardTitle
-} from '@/Components/ui/card';
+} from '@/components/ui/card';
 import {
     Table,
     TableBody,
@@ -19,9 +19,9 @@ import {
     TableHead,
     TableHeader,
     TableRow
-} from '@/Components/ui/table';
-import { Label } from '@/Components/ui/label';
-import { Input } from '@/Components/ui/input';
+} from '@/components/ui/table';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import {
     Select,
     SelectContent,
@@ -30,8 +30,8 @@ import {
     SelectLabel,
     SelectTrigger,
     SelectValue
-} from '@/Components/ui/select';
-import { Button } from '@/Components/ui/button';
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import {
     Form,
     FormControl,
@@ -39,14 +39,14 @@ import {
     FormItem,
     FormLabel,
     FormMessage
-} from '@/Components/ui/form';
+} from '@/components/ui/form';
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger
-} from '@/Components/ui/tooltip';
-import { Badge } from '@/Components/ui/badge';
+} from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import {
     AlertCircle,
     AlertTriangle,
@@ -66,8 +66,8 @@ import {
     Popover,
     PopoverContent,
     PopoverTrigger
-} from '@/Components/ui/popover';
-import { Calendar } from '@/Components/ui/calendar';
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 
 interface Employee {

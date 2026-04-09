@@ -4,12 +4,15 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>Monthly Attendance</title>
     <style>
+        @page {
+            margin: 10px;
+        }
         body {
             font-family: DejaVu Sans, sans-serif;
-            font-size: 8pt;
-            line-height: 1.3;
+            font-size: 6.5pt;
+            line-height: 1.25;
             margin: 0;
-            padding: 10px;
+            padding: 0;
         }
 
         .header {
@@ -50,7 +53,7 @@
 
         .legend {
             margin-bottom: 10px;
-            font-size: 7pt;
+            font-size: 6.5pt;
         }
 
         .legend-item {
@@ -61,11 +64,11 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 7pt;
+            font-size: 6pt;
         }
 
         th, td {
-            border: 0.5px solid #ddd;
+            border: 0.5px solid #cfcfcf;
             padding: 2px;
             text-align: center;
         }
@@ -89,15 +92,56 @@
             color: #777;
         }
 
-        /* Simple status colors without complex styling */
-        .status-p { background-color: #d1fae5; }
-        .status-a { background-color: #fee2e2; }
-        .status-l { background-color: #ffedd5; }
-        .status-h { background-color: #fef3c7; }
-        .status-lv { background-color: #dbeafe; }
-        .status-od { background-color: #e0e7ff; }
-        .status-hl { background-color: #d8b4fe; }
-        .status-w { background-color: #cbd5e1; }
+        /* Light, print-friendly colors (less harsh than full B/W) */
+        .status-p { border: 0.75px solid #2f855a; color: #1f513b; background: #eaf7f0; }
+        .status-a { border: 0.75px solid #c53030; color: #7b1c1c; background: #fdecec; }
+        .status-l { border: 0.75px solid #b7791f; color: #6b4a12; background: #fff6e5; }
+        .status-h { border: 0.75px solid #b7791f; color: #6b4a12; background: #fff6e5; }
+        .status-lv { border: 0.75px solid #2b6cb0; color: #1e3a5f; background: #eaf2ff; }
+        .status-od { border: 0.75px solid #5a67d8; color: #2c2f6b; background: #eef0ff; }
+        .status-hl { border: 0.75px solid #805ad5; color: #3a1f6b; background: #f3edff; }
+        .status-w { border: 0.75px solid #4a5568; color: #1a202c; background: #f1f5f9; }
+
+        .status-cell {
+            padding: 2px;
+            height: 22px;
+            width: 22px;
+            vertical-align: middle;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 9999px;
+            font-weight: bold;
+            font-size: 6pt;
+            text-align: center;
+            box-sizing: border-box;
+            margin: 0 auto; /* visual gap */
+        }
+
+        .badge.empty {
+            border: 0.75px solid #9ca3af;
+            color: #6b7280;
+            background: #f3f4f6;
+            font-weight: normal;
+        }
+
+        .badge.missing {
+            box-shadow: 0 0 0 1px #c53030 inset;
+        }
+
+        .badge.missing:after {
+            content: "!";
+            display: inline-block;
+            margin-left: 1px;
+            color: #c53030;
+            font-weight: bold;
+        }
+        .missing-checkout { /* legacy - kept if referenced elsewhere */ }
 
         .footer {
             margin-top: 15px;
@@ -135,6 +179,7 @@
         <div class="legend-item">OD = On Duty</div>
         <div class="legend-item">HL = Holiday</div>
         <div class="legend-item">W = Weekend</div>
+        <div class="legend-item">! = Missing check-out</div>
         <div class="legend-item">- = No Record</div>
     </div>
 
@@ -173,6 +218,7 @@
                     @for ($day = 1; $day <= $daysInMonth; $day++)
                         @php
                             $status = isset($dailyStatus[$day]['status']) ? $dailyStatus[$day]['status'] : null;
+                            $missingCheckout = !empty($dailyStatus[$day]['missing_checkout']);
                             $statusClass = '';
                             $statusCode = '-';
 
@@ -185,7 +231,15 @@
                             elseif ($status === 'holiday') { $statusClass = 'status-hl'; $statusCode = 'HL'; }
                             elseif ($status === 'weekend') { $statusClass = 'status-w'; $statusCode = 'W'; }
                         @endphp
-                        <td class="{{ $statusClass }}">{{ $statusCode }}</td>
+                        <td class="status-cell">
+                            @php
+                                $badgeClass = $status ? $statusClass : 'empty';
+                                if ($missingCheckout) { $badgeClass .= ' missing'; }
+                            @endphp
+                            <span class="badge {{ $badgeClass }}">
+                                {{ $status ? $statusCode : '-' }}
+                            </span>
+                        </td>
                     @endfor
 
                     <td class="status-p">{{ $summary['present'] }}</td>

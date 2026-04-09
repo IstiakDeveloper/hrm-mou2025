@@ -385,6 +385,7 @@ class RoleController extends Controller
             'movements.view' => 'View Movements',
             'movements.create' => 'Create Movements',
             'movements.edit' => 'Edit Movements',
+            'movements.delete' => 'Delete Movements',
             'movements.cancel' => 'Cancel Movements',
             'movements.complete' => 'Complete Movements',
             'movements.approve' => 'Approve/Reject Movements',
@@ -430,7 +431,7 @@ class RoleController extends Controller
                 'leave-applications.view', 'leave-applications.create', 'leave-applications.edit', 'leave-applications.cancel', 'leave-applications.approve'
             ],
             'movement' => [
-                'movements.view', 'movements.create', 'movements.edit', 'movements.cancel', 'movements.complete', 'movements.approve',
+                'movements.view', 'movements.create', 'movements.edit', 'movements.delete', 'movements.cancel', 'movements.complete', 'movements.approve',
                 'transfers.view', 'transfers.create', 'transfers.edit', 'transfers.approve'
             ],
             'holidays' => ['holidays.view', 'holidays.create', 'holidays.edit', 'holidays.delete'],

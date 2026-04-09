@@ -7,9 +7,11 @@ use App\Models\Attendance;
 use App\Models\AttendanceDevice;
 use App\Models\Branch;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,9 @@ class ZKTecoAPIController extends Controller
      */
     public function syncAttendance(Request $request)
     {
+        // Ensure holiday-based attendance is updated from stored holidays table
+        $this->ensureHolidayAttendanceBackfilled();
+
         Log::info('ZKTeco sync: Received data', [
             'ip' => $request->ip(),
             'method' => $request->method(),
@@ -45,6 +50,70 @@ class ZKTecoAPIController extends Controller
 
         // Handle data pushed from ZKTeco agent
         return $this->handleAgentPush($request);
+    }
+
+    /**
+     * Backfill attendance statuses based on stored holidays.
+     *
+     * Runs at most once per day to avoid overhead on every punch.
+     */
+    private function ensureHolidayAttendanceBackfilled(): void
+    {
+        Cache::remember('attendance:holiday-backfill:from-2026', now()->addDay(), function () {
+            $start = Carbon::create(2026, 1, 1)->startOfDay();
+            $end = Carbon::now()->startOfDay();
+
+            if ($end->lt($start)) {
+                return true;
+            }
+
+            $holidays = Holiday::query()
+                ->select(['date', 'is_recurring', 'applicable_branches'])
+                ->get();
+
+            $startYear = (int) $start->year;
+            $endYear = (int) $end->year;
+
+            foreach ($holidays as $holiday) {
+                $base = Carbon::parse($holiday->date);
+                $branches = is_array($holiday->applicable_branches) ? $holiday->applicable_branches : [];
+
+                $dates = [];
+
+                if ($holiday->is_recurring) {
+                    for ($y = $startYear; $y <= $endYear; $y++) {
+                        $occurrence = Carbon::create($y, $base->month, $base->day)->startOfDay();
+                        if ($occurrence->betweenIncluded($start, $end)) {
+                            $dates[] = $occurrence->toDateString();
+                        }
+                    }
+                } else {
+                    $d = $base->startOfDay();
+                    if ($d->betweenIncluded($start, $end)) {
+                        $dates[] = $d->toDateString();
+                    }
+                }
+
+                foreach ($dates as $dateStr) {
+                    $q = DB::table('attendances')
+                        ->join('employees', 'attendances.employee_id', '=', 'employees.id')
+                        ->whereDate('attendances.date', $dateStr)
+                        ->where('attendances.status', 'absent')
+                        ->whereNull('attendances.check_in')
+                        ->whereNull('attendances.check_out')
+                        ->where('employees.status', 'active');
+
+                    if (!empty($branches)) {
+                        $q->whereIn('employees.current_branch_id', $branches);
+                    }
+
+                    $q->update(['attendances.status' => 'holiday']);
+                }
+            }
+
+            Log::info('Holiday backfill: updated absent attendances to holiday from stored holidays.');
+            return true;
+        });
     }
 
     /**
@@ -1075,6 +1144,11 @@ class ZKTecoAPIController extends Controller
                 $attendance->date = $today;
                 $attendance->status = 'absent'; // ডিফল্ট স্ট্যাটাস
 
+                // If today is a holiday for this employee's branch, mark as holiday (not absent)
+                if ($this->isHolidayForEmployeeOnDate($employee, $today)) {
+                    $attendance->status = 'holiday';
+                }
+
                 // Check if employee is on leave
                 if ($this->isEmployeeOnLeave($employee->id, $today)) {
                     $attendance->status = 'leave';
@@ -1120,6 +1194,36 @@ class ZKTecoAPIController extends Controller
             'processed' => $processed,
             'total_employees' => $employees->count()
         ]);
+    }
+
+    /**
+     * Determine if a date is a holiday for a given employee (supports recurring holidays).
+     */
+    private function isHolidayForEmployeeOnDate(Employee $employee, string $date): bool
+    {
+        $d = Carbon::parse($date);
+        $branchId = $employee->current_branch_id;
+
+        return Holiday::query()
+            ->where(function ($q) use ($date, $d) {
+                $q->whereDate('date', $date)
+                    ->orWhere(function ($sq) use ($d) {
+                        $sq->where('is_recurring', true)
+                            ->whereMonth('date', $d->month)
+                            ->whereDay('date', $d->day);
+                    });
+            })
+            ->where(function ($q) use ($branchId) {
+                if ($branchId) {
+                    $q->whereJsonContains('applicable_branches', (string) $branchId)
+                        ->orWhereNull('applicable_branches')
+                        ->orWhereJsonLength('applicable_branches', 0);
+                } else {
+                    $q->whereNull('applicable_branches')
+                        ->orWhereJsonLength('applicable_branches', 0);
+                }
+            })
+            ->exists();
     }
 
     /**

@@ -343,7 +343,7 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
                                             onChange={e => setData('email', e.target.value)}
                                             placeholder="user@example.com"
                                             readOnly={!!data.employee_id} // Make it read-only if an employee is selected
-                                            className={!!data.employee_id ? "bg-gray-50" : ""}
+                                            className={data.employee_id ? "bg-gray-50" : ""}
                                         />
                                         {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
                                         {!!data.employee_id && (

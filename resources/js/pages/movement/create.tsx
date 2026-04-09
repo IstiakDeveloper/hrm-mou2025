@@ -24,7 +24,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
-import { format, addDays, isAfter, addHours, subDays } from 'date-fns';
+import { format, formatISO, parse, isAfter, addHours, startOfDay, isBefore } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Calendar as CalendarIcon, CalendarClock, Clock, MapPin, CheckCircle, AlertCircle, Building2, User, BriefcaseBusiness } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -56,6 +56,22 @@ interface CreateMovementProps {
     movementTypes: string[];
 }
 
+/** Parse "HH:mm" or "HH:mm:ss" from time picker / clock (24h). */
+function parseHourMinute24(value: string): { hours: number; minutes: number } | null {
+    if (!value?.trim()) return null;
+    const [h, m] = value.trim().split(':').map((p) => Number(p));
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return { hours: h, minutes: m };
+}
+
+function formatTime12hFromHm(value: string): string {
+    const parsed = parseHourMinute24(value);
+    if (!parsed) return 'Select time';
+    const d = parse(`${parsed.hours.toString().padStart(2, '0')}:${parsed.minutes.toString().padStart(2, '0')}`, 'HH:mm', new Date(2000, 0, 1));
+    return format(d, 'h:mm a');
+}
+
 // Enhanced Time Picker Component
 const TimePicker = ({ value, onChange, label, error }: {
     value: string;
@@ -68,17 +84,16 @@ const TimePicker = ({ value, onChange, label, error }: {
     const [selectedMinute, setSelectedMinute] = useState(0);
     const [selectedPeriod, setSelectedPeriod] = useState('AM');
 
-    // Initialize from value
+    // Initialize from value (must support any minute 0–59 — defaults from getCurrentTime() are not only :00/:15/:30/:45)
     useEffect(() => {
-        if (value) {
-            const [hours, minutes] = value.split(':').map(Number);
-            const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-            const period = hours >= 12 ? 'PM' : 'AM';
-
-            setSelectedHour(hour12);
-            setSelectedMinute(minutes);
-            setSelectedPeriod(period);
-        }
+        const parsed = parseHourMinute24(value);
+        if (!parsed) return;
+        const { hours, minutes } = parsed;
+        const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+        const period = hours >= 12 ? 'PM' : 'AM';
+        setSelectedHour(hour12);
+        setSelectedMinute(minutes);
+        setSelectedPeriod(period);
     }, [value]);
 
     const updateTime = (hour: number, minute: number, period: string) => {
@@ -90,16 +105,10 @@ const TimePicker = ({ value, onChange, label, error }: {
         onChange(timeString);
     };
 
-    const formatDisplayTime = () => {
-        if (!value) return 'Select time';
-        const [hours, minutes] = value.split(':').map(Number);
-        const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-        const period = hours >= 12 ? 'PM' : 'AM';
-        return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-    };
+    const formatDisplayTime = () => formatTime12hFromHm(value);
 
     const hours = Array.from({ length: 12 }, (_, i) => i + 1);
-    const minutes = Array.from({ length: 4 }, (_, i) => i * 15);
+    const minutes = Array.from({ length: 60 }, (_, i) => i);
 
     return (
         <div className="space-y-2">
@@ -158,7 +167,7 @@ const TimePicker = ({ value, onChange, label, error }: {
                                     <SelectTrigger className="h-8">
                                         <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="max-h-[min(240px,50vh)]">
                                         {minutes.map((minute) => (
                                             <SelectItem key={minute} value={minute.toString()}>
                                                 {minute.toString().padStart(2, '0')}
@@ -356,7 +365,9 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         "37 Akkelpur",
         "38 Khetlal",
         "39 Chanpara",
-        "40 Kichok"
+        "40 Kichok",
+        "41 Rajabirat",
+        "42 Kahaloo"
     ];
 
     const filteredBranches = destination
@@ -376,17 +387,19 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
     // Get combined datetime objects
     const getFromDateTime = () => {
         if (!fromDate || !fromTime) return null;
-        const [hours, minutes] = fromTime.split(':').map(Number);
+        const hm = parseHourMinute24(fromTime);
+        if (!hm) return null;
         const dateTime = new Date(fromDate);
-        dateTime.setHours(hours, minutes, 0, 0);
+        dateTime.setHours(hm.hours, hm.minutes, 0, 0);
         return dateTime;
     };
 
     const getToDateTime = () => {
         if (!toDate || !toTime) return null;
-        const [hours, minutes] = toTime.split(':').map(Number);
+        const hm = parseHourMinute24(toTime);
+        if (!hm) return null;
         const dateTime = new Date(toDate);
-        dateTime.setHours(hours, minutes, 0, 0);
+        dateTime.setHours(hm.hours, hm.minutes, 0, 0);
         return dateTime;
     };
 
@@ -410,6 +423,9 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
             newErrors.to_datetime = 'To datetime must be after From datetime';
         }
 
+        // NOTE: "start must be now/future" is enforced on the server in app timezone.
+        // Avoid client-side blocking due to device clock/timezone mismatches (common on mobile).
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -430,8 +446,9 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         router.post(route('movements.store'), {
             employee_id: isAdmin ? employeeId : undefined,
             movement_type: movementType,
-            from_datetime: fromDateTime ? format(fromDateTime, 'yyyy-MM-dd HH:mm:ss') : '',
-            to_datetime: toDateTime ? format(toDateTime, 'yyyy-MM-dd HH:mm:ss') : '',
+            // ISO with offset so server/mobile never misread naive "Y-m-d H:i:ss"
+            from_datetime: fromDateTime ? formatISO(fromDateTime) : '',
+            to_datetime: toDateTime ? formatISO(toDateTime) : '',
             purpose,
             destination,
             remarks,
@@ -584,11 +601,9 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                                         }
                                                                         setFromDateOpen(false);
                                                                     }}
-                                                                    disabledDates={(date: Date) => {
-                                                                        const today = new Date();
-                                                                        today.setHours(0, 0, 0, 0);
-                                                                        return date < subDays(today, 1);
-                                                                    }}
+                                                                    disabledDates={(date: Date) =>
+                                                                        isBefore(startOfDay(date), startOfDay(new Date()))
+                                                                    }
                                                                 />
                                                             </PopoverContent>
                                                         </Popover>
@@ -629,7 +644,11 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                                         setToDate(date);
                                                                         setToDateOpen(false);
                                                                     }}
-                                                                    disabledDates={(date: Date) => fromDate ? date < fromDate : date < new Date()}
+                                                                    disabledDates={(date: Date) =>
+                                                                        fromDate
+                                                                            ? isBefore(startOfDay(date), startOfDay(fromDate))
+                                                                            : false
+                                                                    }
                                                                 />
                                                             </PopoverContent>
                                                         </Popover>
@@ -652,6 +671,15 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     <AlertCircle className="h-4 w-4" />
                                                     <AlertDescription>
                                                         {errors.to_datetime}
+                                                    </AlertDescription>
+                                                </Alert>
+                                            )}
+
+                                            {errors.from_datetime && (
+                                                <Alert variant="destructive">
+                                                    <AlertCircle className="h-4 w-4" />
+                                                    <AlertDescription>
+                                                        {errors.from_datetime}
                                                     </AlertDescription>
                                                 </Alert>
                                             )}
@@ -890,13 +918,13 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                         <div className="flex justify-between">
                                                             <span className="text-gray-600">From:</span>
                                                             <span className="font-medium text-gray-900">
-                                                                {format(fromDate, 'MMM dd')} at {format(new Date(`2000-01-01T${fromTime}:00`), 'h:mm a')}
+                                                                {format(fromDate, 'MMM dd')} at {formatTime12hFromHm(fromTime)}
                                                             </span>
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span className="text-gray-600">To:</span>
                                                             <span className="font-medium text-gray-900">
-                                                                {format(toDate, 'MMM dd')} at {format(new Date(`2000-01-01T${toTime}:00`), 'h:mm a')}
+                                                                {format(toDate, 'MMM dd')} at {formatTime12hFromHm(toTime)}
                                                             </span>
                                                         </div>
                                                         <div className="flex justify-between">

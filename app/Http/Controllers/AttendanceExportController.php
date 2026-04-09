@@ -9,6 +9,8 @@ use App\Models\Holiday;
 use App\Models\Employee;
 use App\Models\Department;
 use App\Models\Attendance;
+use App\Models\LeaveApplication;
+use App\Support\MonthlyAttendanceCalculator;
 use Illuminate\Http\Request;
 use App\Models\AttendanceSetting;
 use Illuminate\Support\Facades\Auth;
@@ -32,9 +34,17 @@ class AttendanceExportController extends Controller
             $endDate = $month->copy()->endOfMonth();
             $daysInMonth = $month->daysInMonth;
             $monthLabel = $month->format('F Y');
+            $today = Carbon::today()->startOfDay();
+            $maxDate = null;
+            if ($startDate->gt($today)) {
+                $maxDate = $today->copy()->subDay();
+            } elseif ($month->isSameMonth($today)) {
+                $maxDate = $today->copy();
+            }
 
             // Base query for employees with designation ordering
-            $employeesQuery = Employee::with(['department', 'designation', 'branch']);
+            $employeesQuery = Employee::with(['department', 'designation', 'branch'])
+                ->where('status', 'active');
 
             // Apply filters based on user permissions and role
             $this->applyEmployeeFilters($employeesQuery, $user, $request);
@@ -69,86 +79,103 @@ class AttendanceExportController extends Controller
                 ->get()
                 ->groupBy('employee_id');
 
+            // Approved leave applications that overlap this month
+            $leaveApps = LeaveApplication::with('leaveType')
+                ->whereIn('employee_id', $employeeIds)
+                ->where('status', 'approved')
+                ->whereDate('start_date', '<=', $endDate)
+                ->whereDate('end_date', '>=', $startDate)
+                ->get();
+
+            $leaveDays = [];
+            foreach ($leaveApps as $app) {
+                $empId = (int) $app->employee_id;
+                $typeName = $app->leaveType?->name ?? 'Leave';
+                $cur = Carbon::parse($app->start_date)->startOfDay()->max($startDate->copy()->startOfDay());
+                $end = $app->inclusiveEndDate()->min($endDate->copy()->startOfDay());
+                while ($cur->lte($end)) {
+                    $leaveDays[$empId][$cur->format('Y-m-d')] = $typeName;
+                    $cur->addDay();
+                }
+            }
+
+            // Holiday applicability lookup per branch and date (same as show page)
+            $holidayApplicable = [];
+            foreach ($holidays as $dateKey => $holidayGroup) {
+                foreach ($holidayGroup as $holiday) {
+                    $applicableBranches = json_decode($holiday->applicable_branches ?? '[]', true) ?? [];
+                    if (empty($applicableBranches)) {
+                        $holidayApplicable['*'][$dateKey] = true;
+                        continue;
+                    }
+                    foreach ($applicableBranches as $bid) {
+                        $holidayApplicable[(string) $bid][$dateKey] = true;
+                    }
+                }
+            }
+
+            // Normalize attendance settings (already array-safe)
+            $attendanceSettings = $weekendSettings
+                ->mapWithKeys(function ($setting) {
+                    $raw = $setting->weekend_days ?? [];
+                    $weekendDays = is_array($raw) ? $raw : (json_decode($raw ?? '[]', true) ?: []);
+                    return [
+                        (int) $setting->branch_id => [
+                            'weekend_days' => array_values(array_map('intval', $weekendDays)),
+                        ]
+                    ];
+                })->toArray();
+
+            // Index attendances by employee/date with check_in presence (for "valid attendance" rule)
+            $attendanceByEmployeeDate = [];
+            foreach ($attendances as $empId => $rows) {
+                foreach ($rows as $row) {
+                    $attendanceByEmployeeDate[(int) $empId][Carbon::parse($row->date)->format('Y-m-d')] = [
+                        'status' => $row->status,
+                        'check_in' => $row->check_in,
+                        'check_out' => $row->check_out,
+                    ];
+                }
+            }
+
+            // Movements overlapping month (same as show page priority)
+            $movementsByEmployee = \App\Models\Movement::whereIn('employee_id', $employeeIds)
+                ->whereIn('status', ['active', 'completed'])
+                ->where('movement_type', 'official')
+                ->where(function ($q) use ($startDate, $endDate) {
+                    $q->whereBetween(\DB::raw('DATE(from_datetime)'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                        ->orWhereBetween(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                        ->orWhere(function ($qq) use ($startDate, $endDate) {
+                            $qq->where(\DB::raw('DATE(from_datetime)'), '<=', $startDate->format('Y-m-d'))
+                                ->where(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $endDate->format('Y-m-d'));
+                        });
+                })
+                ->get()
+                ->groupBy('employee_id')
+                ->map(fn ($ms) => $ms->values()->all())
+                ->toArray();
+
             // Calculate status codes and summary for each employee
             $employeesWithSummary = collect();
 
             foreach ($employees as $employee) {
-                $summary = [
-                    'present' => 0,
-                    'absent' => 0,
-                    'late' => 0,
-                    'half_day' => 0,
-                    'leave' => 0,
-                    'on_duty' => 0,
-                    'holiday' => 0,
-                    'weekend' => 0
+                $calc = MonthlyAttendanceCalculator::compute(
+                    [$employee],
+                    $month,
+                    $daysInMonth,
+                    $maxDate,
+                    $attendanceSettings,
+                    $movementsByEmployee,
+                    $leaveDays,
+                    $holidayApplicable,
+                    $attendanceByEmployeeDate
+                );
+
+                $summary = $calc['summaryByEmployee'][(int) $employee->id] ?? [
+                    'present' => 0, 'absent' => 0, 'late' => 0, 'half_day' => 0, 'leave' => 0, 'on_duty' => 0, 'weekend' => 0, 'holiday' => 0,
                 ];
 
-                $dailyStatus = [];
-
-                // Get weekend days for this employee's branch
-                $weekendDays = [];
-                if ($employee->current_branch_id && isset($weekendSettings[$employee->current_branch_id])) {
-                    $weekendDays = json_decode($weekendSettings[$employee->current_branch_id]->weekend_days, true) ?? [];
-                }
-
-                // Generate daily status for each day
-                for ($day = 1; $day <= $daysInMonth; $day++) {
-                    $currentDate = Carbon::parse($month->format('Y-m') . '-' . str_pad($day, 2, '0', STR_PAD_LEFT));
-                    $dateToFind = $currentDate->format('Y-m-d');
-                    $status = null;
-                    $isHoliday = false;
-                    $isWeekend = false;
-
-                    // Check if it's a holiday
-                    $holiday = isset($holidays[$dateToFind]) ? $holidays[$dateToFind]->first() : null;
-                    if ($holiday) {
-                        // Check if holiday applies to this employee's branch
-                        $applicableBranches = json_decode($holiday->applicable_branches, true) ?? [];
-                        if (empty($applicableBranches) || in_array($employee->current_branch_id, $applicableBranches)) {
-                            $status = 'holiday';
-                            $isHoliday = true;
-                            $summary['holiday']++;
-                        }
-                    }
-
-                    // Check if it's a weekend
-                    if (!$isHoliday && in_array($currentDate->dayOfWeek, $weekendDays)) {
-                        $status = 'weekend';
-                        $isWeekend = true;
-                        $summary['weekend']++;
-                    }
-
-                    // If not a holiday or weekend, check attendance records
-                    if (!$isHoliday && !$isWeekend) {
-                        if (isset($attendances[$employee->id])) {
-                            foreach ($attendances[$employee->id] as $attendance) {
-                                $attendanceDate = Carbon::parse($attendance->date)->format('Y-m-d');
-                                if ($attendanceDate === $dateToFind) {
-                                    $status = $attendance->status;
-
-                                    // Update summary counts
-                                    if (isset($summary[$status])) {
-                                        $summary[$status]++;
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-
-                        // If no attendance record and it's not a holiday or weekend, leave as null (no record)
-                        if ($status === null) {
-                            // Keep status as null to indicate no record
-                            // Don't increment any summary counters
-                        }
-                    }
-
-                    $dailyStatus[$day] = [
-                        'status' => $status,
-                        'is_holiday' => $isHoliday,
-                        'is_weekend' => $isWeekend
-                    ];
-                }
+                $dailyStatus = $calc['dailyStatusByEmployee'][(int) $employee->id] ?? [];
 
                 $employeesWithSummary->push([
                     'employee' => $employee,
@@ -226,28 +253,29 @@ class AttendanceExportController extends Controller
     {
         // Define designation hierarchy order based on your list (correct order)
         $designationOrder = [
-            'Executive Director' => 1,
-            'Deputy Executive Director' => 2,
-            'Director' => 3,
-            'Assistant Director' => 4,
-            'Deputy Assistant Director (Program)' => 5,
-            'Senior Manager' => 6,
-            'Manager' => 7,
-            'Assistant Manager' => 8,
-            'Co-Ordinator' => 9,
-            'Technical Officer' => 10,
-            'Environment & RECP' => 11,
-            'MIS & Documentation' => 12,
-            'Training Officer' => 13,
-            'M & E Officer' => 14,
-            'Case Management Officer' => 15,
-            'Officer LSED' => 16,
-            'Accounts Officer' => 17,
-            'Accountant III' => 18,
-            'VCF' => 19,
-            'Resident Physician' => 20,
-            'Office Assistant' => 21,
-            'Driver' => 22
+            'Advisor' => 1,
+            'Executive Director' => 2,
+            'Deputy Executive Director' => 3,
+            'Director' => 4,
+            'Assistant Director' => 5,
+            'Deputy Assistant Director (Program)' => 6,
+            'Senior Manager' => 7,
+            'Manager' => 8,
+            'Assistant Manager' => 9,
+            'Co-Ordinator' => 10,
+            'Technical Officer' => 11,
+            'Environment & RECP' => 12,
+            'MIS & Documentation' => 13,
+            'Training Officer' => 14,
+            'M & E Officer' => 15,
+            'Case Management Officer' => 16,
+            'Officer LSED' => 17,
+            'Accounts Officer' => 18,
+            'Accountant III' => 19,
+            'VCF' => 20,
+            'Resident Physician' => 21,
+            'Office Assistant' => 22,
+            'Driver' => 23
         ];
 
         // Create a CASE WHEN statement for ordering

@@ -11,6 +11,66 @@ use Inertia\Inertia;
 class AttendanceSettingController extends Controller
 {
     /**
+     * HTML time inputs send "HH:mm"; DB stores "HH:mm:ss". Validation uses H:i:s.
+     */
+    private function normalizeTimeToHis(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (preg_match('/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/', $value)) {
+            return $value;
+        }
+
+        if (preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value)) {
+            return $value . ':00';
+        }
+
+        return $value;
+    }
+
+    /**
+     * DB time → "HH:mm" for <input type="time" />
+     */
+    private function formatTimeForInput(mixed $value): string
+    {
+        if (!is_string($value) || $value === '') {
+            return '09:00';
+        }
+
+        $parts = explode(':', $value);
+        if (count($parts) < 2) {
+            return '09:00';
+        }
+
+        $h = str_pad((string) (int) $parts[0], 2, '0', STR_PAD_LEFT);
+        $m = str_pad((string) (int) $parts[1], 2, '0', STR_PAD_LEFT);
+
+        return "{$h}:{$m}";
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function normalizeWeekendDays(mixed $raw): array
+    {
+        if (is_array($raw)) {
+            return array_values(array_unique(array_map('intval', $raw)));
+        }
+
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+
+            return is_array($decoded)
+                ? array_values(array_unique(array_map('intval', $decoded)))
+                : [];
+        }
+
+        return [];
+    }
+
+    /**
      * Display a listing of attendance settings.
      */
     public function index()
@@ -44,18 +104,22 @@ class AttendanceSettingController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'branch_id' => 'required|exists:branches,id|unique:attendance_settings',
-            'work_start_time' => 'required|date_format:H:i',
-            'work_end_time' => 'required|date_format:H:i',
+        $request->merge([
+            'work_start_time' => $this->normalizeTimeToHis($request->input('work_start_time')) ?? '',
+            'work_end_time' => $this->normalizeTimeToHis($request->input('work_end_time')) ?? '',
+        ]);
+
+        $data = $request->validate([
+            'branch_id' => 'required|exists:branches,id|unique:attendance_settings,branch_id',
+            'work_start_time' => 'required|date_format:H:i:s',
+            'work_end_time' => 'required|date_format:H:i:s',
             'late_threshold_minutes' => 'required|integer|min:0',
             'half_day_hours' => 'required|integer|min:1',
-            'weekend_days' => 'required|array',
+            'weekend_days' => 'required|array|min:1',
             'weekend_days.*' => 'integer|min:0|max:6',
         ]);
 
-        $data = $request->all();
-        $data['weekend_days'] = json_encode($data['weekend_days']);
+        $data['weekend_days'] = array_values(array_unique(array_map('intval', $data['weekend_days'])));
 
         AttendanceSetting::create($data);
 
@@ -68,11 +132,15 @@ class AttendanceSettingController extends Controller
      */
     public function edit(AttendanceSetting $setting)
     {
-        $setting->weekend_days = json_decode($setting->weekend_days);
         $branches = Branch::all();
 
+        $payload = $setting->toArray();
+        $payload['work_start_time'] = $this->formatTimeForInput($setting->work_start_time);
+        $payload['work_end_time'] = $this->formatTimeForInput($setting->work_end_time);
+        $payload['weekend_days'] = $this->normalizeWeekendDays($setting->weekend_days);
+
         return Inertia::render('attendance/settings/edit', [
-            'setting' => $setting,
+            'setting' => $payload,
             'branches' => $branches,
         ]);
     }
@@ -82,18 +150,22 @@ class AttendanceSettingController extends Controller
      */
     public function update(Request $request, AttendanceSetting $setting)
     {
-        $request->validate([
-            'branch_id' => 'required|exists:branches,id|unique:attendance_settings,branch_id,' . $setting->id,
-            'work_start_time' => 'required|date_format:H:i',
-            'work_end_time' => 'required|date_format:H:i',
+        $request->merge([
+            'work_start_time' => $this->normalizeTimeToHis($request->input('work_start_time')) ?? '',
+            'work_end_time' => $this->normalizeTimeToHis($request->input('work_end_time')) ?? '',
+        ]);
+
+        $data = $request->validate([
+            'branch_id' => 'required|exists:branches,id|unique:attendance_settings,branch_id,' . $setting->getKey(),
+            'work_start_time' => 'required|date_format:H:i:s',
+            'work_end_time' => 'required|date_format:H:i:s',
             'late_threshold_minutes' => 'required|integer|min:0',
             'half_day_hours' => 'required|integer|min:1',
-            'weekend_days' => 'required|array',
+            'weekend_days' => 'required|array|min:1',
             'weekend_days.*' => 'integer|min:0|max:6',
         ]);
 
-        $data = $request->all();
-        $data['weekend_days'] = json_encode($data['weekend_days']);
+        $data['weekend_days'] = array_values(array_unique(array_map('intval', $data['weekend_days'])));
 
         $setting->update($data);
 

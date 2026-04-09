@@ -7,6 +7,7 @@ use App\Mail\LeaveApplicationNotification;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\Attendance;
 use App\Models\LeaveApplication;
 use App\Models\LeaveApproval;
 use App\Models\LeaveBalance;
@@ -756,6 +757,9 @@ class LeaveApplicationController extends Controller
 
             // Update leave balance
             $this->updateLeaveBalance($employee->id, $request->leave_type_id, $days);
+
+            // Ensure attendance is marked as leave for the approved date range
+            $this->syncAttendanceForApprovedLeave($leaveApplication);
         }
         // Send notification emails to department head and branch head if not auto-approved
         else if ($status === 'pending') {
@@ -783,19 +787,44 @@ class LeaveApplicationController extends Controller
     private function sendLeaveNotifications($leaveApplication, $employee, $leaveType)
     {
         try {
-            // Get department head
-            $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+            $days = (int) ($leaveApplication->days ?? 0);
 
-            // Get branch head
-            $branchHeads = $this->getBranchHeads($employee->current_branch_id);
+            // Business rule:
+            // - <= 3 days: Department Head + Executive Director + Super Admin
+            // - > 3 days: Executive Director + Super Admin
+            //
+            // Exception:
+            // - If applicant is a Department Head, notify Executive Director + Super Admin (no Department Head)
+            $isShortLeave = $days <= 3;
+
+            $departmentHeads = collect([]);
+            if ($isShortLeave) {
+                $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+            }
+
+            $executiveDirectors = $this->getExecutiveDirectors();
 
             // Find Super Admin users
             $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
                 $query->where('name', 'Super Admin');
             })->get();
 
-            // Combine unique recipients
-            $recipients = $departmentHeads->merge($branchHeads)->merge($superAdmins)->unique('id');
+            // If applicant is the department head, don't notify department head (escalate to Executive Director)
+            $isApplicantDepartmentHead = false;
+            if (!empty($employee->department_id)) {
+                $department = Department::find($employee->department_id);
+                $isApplicantDepartmentHead = $department && (int) $department->head_employee_id === (int) $employee->id;
+            }
+
+            if ($isApplicantDepartmentHead) {
+                $departmentHeads = collect([]);
+            }
+
+            // Combine unique recipients (User models)
+            $recipients = $superAdmins
+                ->merge($executiveDirectors)
+                ->merge($departmentHeads)
+                ->unique('id');
 
             if ($recipients->isEmpty()) {
                 return;
@@ -926,6 +955,22 @@ class LeaveApplicationController extends Controller
     }
 
     /**
+     * Get users who are Executive Directors (by designation).
+     */
+    private function getExecutiveDirectors()
+    {
+        $executiveDirectorEmployeeIds = Employee::whereHas('designation', function ($q) {
+            $q->where('name', 'Executive Director');
+        })->pluck('id');
+
+        if ($executiveDirectorEmployeeIds->isEmpty()) {
+            return collect([]);
+        }
+
+        return User::whereIn('employee_id', $executiveDirectorEmployeeIds)->get();
+    }
+
+    /**
      * Display the specified leave application.
      */
     public function show(LeaveApplication $application)
@@ -1047,6 +1092,9 @@ class LeaveApplicationController extends Controller
             // Update leave balance
             $this->updateLeaveBalance($application->employee_id, $application->leave_type_id, $application->days);
 
+            // Ensure attendance is marked as leave for the approved date range
+            $this->syncAttendanceForApprovedLeave($application);
+
             // Get employee and leave type for notification - ensure they exist
             $employee = Employee::find($application->employee_id);
             $leaveType = LeaveType::find($application->leave_type_id);
@@ -1139,6 +1187,58 @@ class LeaveApplicationController extends Controller
 
             return redirect()->route('leave.applications.index')
                 ->with('error', 'An error occurred while approving the leave application.');
+        }
+    }
+
+    /**
+     * When a leave application is approved, make sure attendance is updated for all days in range.
+     *
+     * - Creates attendance rows if missing.
+     * - Converts "absent/holiday" without punches into "leave".
+     * - Does NOT override days where there is a punch (check_in/check_out), or already present/late/half_day/on_duty.
+     */
+    private function syncAttendanceForApprovedLeave(LeaveApplication $application): void
+    {
+        $start = Carbon::parse($application->start_date)->startOfDay();
+        $end = $application->inclusiveEndDate();
+
+        if ($end->lt($start)) {
+            return;
+        }
+
+        $employeeId = (int) $application->employee_id;
+        $cursor = $start->copy();
+
+        while ($cursor->lte($end)) {
+            $dateStr = $cursor->toDateString();
+
+            $attendance = Attendance::where('employee_id', $employeeId)
+                ->where('date', $dateStr)
+                ->first();
+
+            if (!$attendance) {
+                Attendance::create([
+                    'employee_id' => $employeeId,
+                    'date' => $dateStr,
+                    'check_in' => null,
+                    'check_out' => null,
+                    'status' => 'leave',
+                ]);
+            } else {
+                // If there is any punch, don't override (employee might have worked)
+                if (!empty($attendance->check_in) || !empty($attendance->check_out)) {
+                    $cursor->addDay();
+                    continue;
+                }
+
+                // Only override safe statuses
+                if (in_array($attendance->status, ['absent', 'holiday'], true)) {
+                    $attendance->status = 'leave';
+                    $attendance->save();
+                }
+            }
+
+            $cursor->addDay();
         }
     }
 
@@ -1439,15 +1539,16 @@ class LeaveApplicationController extends Controller
                 'approvals.approver'
             ]);
 
-            // Load leave balance for current year and leave type
+            // Load leave balances for current year (all types)
             $currentYear = now()->year;
-            $leaveBalance = \App\Models\LeaveBalance::where('employee_id', $application->employee_id)
-                ->where('leave_type_id', $application->leave_type_id)
+            $leaveBalances = \App\Models\LeaveBalance::where('employee_id', $application->employee_id)
                 ->where('year', $currentYear)
-                ->first();
+                ->with('leaveType')
+                ->get();
 
-            // Add leave balance to application object
-            $application->leaveBalance = $leaveBalance;
+            // Keep single selected leave balance for convenience
+            $application->leaveBalance = $leaveBalances->firstWhere('leave_type_id', (int) $application->leave_type_id);
+            $application->leaveBalances = $leaveBalances;
         } catch (\Exception $e) {
             \Log::error('Error loading leave application relationships: ' . $e->getMessage());
             return redirect()->route('leave.applications.index')
@@ -1463,9 +1564,53 @@ class LeaveApplicationController extends Controller
             }
         }
 
+        // Determine addressee based on business rules (same as notifications)
+        $days = (int) ($application->days ?? 0);
+        $isShortLeave = $days <= 3;
+
+        $department = $application->employee?->department_id
+            ? Department::find($application->employee->department_id)
+            : null;
+
+        $isApplicantDepartmentHead = $department
+            && (int) $department->head_employee_id === (int) $application->employee_id;
+
+        $addressee = [
+            'type' => null, // 'department_head' | 'executive_director'
+            'title' => null,
+            'name' => null,
+        ];
+
+        if ($isShortLeave && !$isApplicantDepartmentHead) {
+            $deptHeads = $this->getDepartmentHeads($application->employee?->department_id);
+            $deptHead = $deptHeads->first();
+            $deptHeadEmployee = null;
+            if ($deptHead?->employee_id) {
+                $deptHeadEmployee = Employee::with('designation')->find($deptHead->employee_id);
+            }
+            $addressee = [
+                'type' => 'department_head',
+                'title' => $deptHeadEmployee?->designation?->name ?? 'Department Head',
+                'name' => null,
+            ];
+        } else {
+            $eds = $this->getExecutiveDirectors();
+            $ed = $eds->first();
+            $edEmployee = null;
+            if ($ed?->employee_id) {
+                $edEmployee = Employee::with('designation')->find($ed->employee_id);
+            }
+            $addressee = [
+                'type' => 'executive_director',
+                'title' => $edEmployee?->designation?->name ?? 'Executive Director',
+                'name' => null,
+            ];
+        }
+
         return Inertia::render('leave/applications/pdf', [
             'application' => $application,
             'currentDate' => now()->format('d/m/Y'),
+            'addressee' => $addressee,
             'userPermissions' => [
                 'canView' => $user->hasPermission('leave-applications.view'),
                 'isEmployee' => $user->employee_id ? true : false,

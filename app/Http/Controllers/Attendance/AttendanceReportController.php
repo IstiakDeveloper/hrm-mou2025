@@ -147,7 +147,8 @@ class AttendanceReportController extends Controller
                 ->setSecond($workEndTime->second);
 
             // Check if it's a weekend
-            $weekendDays = json_decode($settings->weekend_days ?? '[]', true);
+            // AttendanceSetting casts weekend_days to array; avoid json_decode(array)
+            $weekendDays = is_array($settings->weekend_days ?? null) ? ($settings->weekend_days ?? []) : (json_decode($settings->weekend_days ?? '[]', true) ?: []);
             $dayOfWeek = $attendanceDate->dayOfWeek;
             $isWeekend = in_array($dayOfWeek, $weekendDays);
 
@@ -279,9 +280,19 @@ class AttendanceReportController extends Controller
      */
     private function generateAttendanceReport($employeeId, $fromDate, $toDate)
     {
-        // Create date range
-        $startDate = Carbon::parse($fromDate);
-        $endDate = Carbon::parse($toDate);
+        // Create date range (block future data: clamp to today)
+        $startDate = Carbon::parse($fromDate)->startOfDay();
+        $endDate = Carbon::parse($toDate)->startOfDay();
+        $today = Carbon::today();
+        if ($startDate->gt($today)) {
+            $startDate = $today->copy();
+            $endDate = $today->copy();
+        } elseif ($endDate->gt($today)) {
+            $endDate = $today->copy();
+        }
+
+        $fromDate = $startDate->format('Y-m-d');
+        $toDate = $endDate->format('Y-m-d');
         $dateRange = [];
 
         // Generate all dates in the range
@@ -348,11 +359,24 @@ class AttendanceReportController extends Controller
                     ];
                 }
 
-                // Generate remarks
-                $this->generateRemarks($attendanceRecord);
-
                 // Set the status
                 $attendanceRecord->status = $status;
+
+                // Remarks: for calendar statuses (leave/holiday/weekend/on_duty) don't let
+                // "missing check-in/out" override to Absent.
+                if (in_array($status, ['leave', 'holiday', 'weekend', 'on_duty'], true) && empty($existingAttendance->check_in)) {
+                    $attendanceRecord->auto_remarks = match ($status) {
+                        'leave' => 'On approved leave',
+                        'on_duty' => 'On official movement',
+                        'holiday' => 'Holiday',
+                        'weekend' => 'Weekend',
+                        default => $attendanceRecord->auto_remarks ?? null,
+                    };
+                } else {
+                    // Normal working day: compute late/early/halfday etc
+                    $this->generateRemarks($attendanceRecord);
+                }
+
                 $reportData['attendance'] = $attendanceRecord;
             } else {
                 // Create a default attendance record with the determined status
@@ -385,9 +409,26 @@ class AttendanceReportController extends Controller
                         $defaultAttendance->auto_remarks = 'On official movement';
                         // Fetch movement details
                         $movement = Movement::where('employee_id', $employeeId)
-                            ->where('status', 'approved')
+                            ->where('movement_type', 'official')
+                            ->whereIn('status', ['active', 'completed'])
                             ->whereDate('from_datetime', '<=', $date)
-                            ->whereDate('to_datetime', '>=', $date)
+                            ->where(function ($query) use ($date) {
+                                $query->where(function ($q) use ($date) {
+                                    $q->where('status', 'active')
+                                        ->whereDate('to_datetime', '>=', $date);
+                                })->orWhere(function ($q) use ($date) {
+                                    $q->where('status', 'completed')
+                                        ->where(function ($subQ) use ($date) {
+                                            $subQ->where(function ($x) use ($date) {
+                                                $x->whereNotNull('actual_return_datetime')
+                                                    ->whereDate('actual_return_datetime', '>=', $date);
+                                            })->orWhere(function ($fallbackQ) use ($date) {
+                                                $fallbackQ->whereNull('actual_return_datetime')
+                                                    ->whereDate('to_datetime', '>=', $date);
+                                            });
+                                        });
+                                });
+                            })
                             ->first();
 
                         if ($movement) {

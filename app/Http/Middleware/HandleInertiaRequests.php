@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Movement;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -37,9 +38,25 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        $user = Auth::user();
+        $user = Auth::user()?->loadMissing(['role', 'roles']);
 
         $employee = $user?->employee()?->with(['department', 'branch'])?->first();
+        $activeMovement = null;
+        if ($employee) {
+            $activeMovement = Movement::query()
+                ->where('employee_id', $employee->id)
+                ->where('status', 'active')
+                ->orderByDesc('id')
+                ->first([
+                    'id',
+                    'employee_id',
+                    'movement_type',
+                    'from_datetime',
+                    'to_datetime',
+                    'destination',
+                    'status',
+                ]);
+        }
 
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
@@ -54,6 +71,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user,
                 'employee' => $employee,
             ],
+            'activeMovement' => $activeMovement,
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),

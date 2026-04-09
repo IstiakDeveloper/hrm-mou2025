@@ -24,11 +24,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { format, addHours, addDays, isAfter, parseISO } from 'date-fns';
+import { Calendar } from '@/components/ui/calendar';
+import { format, formatISO, isAfter } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Calendar, CalendarClock, Clock, MapPin } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, CalendarClock, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Employee {
   id: number;
@@ -51,10 +52,11 @@ interface Movement {
   movement_type: 'official' | 'personal';
   from_datetime: string;
   to_datetime: string;
+  actual_return_datetime?: string | null;
   purpose: string;
   destination: string;
   remarks: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed' | 'active';
 }
 
 interface EditMovementProps {
@@ -72,6 +74,13 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   };
 
+  const initialActualReturnLocal = () => {
+    const src = movement.actual_return_datetime
+      ? new Date(movement.actual_return_datetime)
+      : toDateTime;
+    return format(src, "yyyy-MM-dd'T'HH:mm");
+  };
+
   const [employeeId, setEmployeeId] = useState(movement.employee_id.toString());
   const [movementType, setMovementType] = useState(movement.movement_type);
   const [fromDate, setFromDate] = useState<Date>(fromDateTime);
@@ -85,6 +94,8 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
   const [submitting, setSubmitting] = useState(false);
   const [fromDateOpen, setFromDateOpen] = useState(false);
   const [toDateOpen, setToDateOpen] = useState(false);
+  const [actualReturnLocal, setActualReturnLocal] = useState(initialActualReturnLocal);
+  const showReturnEditor = movement.status === 'completed' && isAdmin;
 
   // Get combined datetime objects
   const getFromDateTime = () => {
@@ -130,6 +141,18 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
       newErrors.to_datetime = 'To datetime must be after From datetime';
     }
 
+    if (showReturnEditor) {
+      if (!actualReturnLocal?.trim()) {
+        newErrors.actual_return_datetime = 'Actual return date and time is required for completed movements.';
+      } else {
+        const ret = new Date(actualReturnLocal);
+        const start = getFromDateTime();
+        if (start && !isNaN(ret.getTime()) && ret.getTime() < start.getTime()) {
+          newErrors.actual_return_datetime = 'Return time cannot be before the movement start time.';
+        }
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -144,15 +167,22 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
     const fromDateTime = getFromDateTime();
     const toDateTime = getToDateTime();
 
-    router.put(route('movements.update', movement.id), {
+    const payload: Record<string, string | undefined> = {
       employee_id: isAdmin ? employeeId : undefined,
       movement_type: movementType,
-      from_datetime: fromDateTime ? format(fromDateTime, 'yyyy-MM-dd HH:mm:ss') : '',
-      to_datetime: toDateTime ? format(toDateTime, 'yyyy-MM-dd HH:mm:ss') : '',
+      from_datetime: fromDateTime ? formatISO(fromDateTime) : '',
+      to_datetime: toDateTime ? formatISO(toDateTime) : '',
       purpose,
       destination,
       remarks,
-    }, {
+    };
+
+    if (showReturnEditor && actualReturnLocal) {
+      const ret = new Date(actualReturnLocal);
+      payload.actual_return_datetime = formatISO(ret);
+    }
+
+    router.put(route('movements.update', movement.id), payload, {
       onError: (errors) => {
         setErrors(errors);
         setSubmitting(false);
@@ -247,7 +277,7 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
                               !fromDate && "text-muted-foreground"
                             )}
                           >
-                            <Calendar className="mr-2 h-4 w-4" />
+                            <CalendarIcon className="mr-2 h-4 w-4" />
                             {fromDate ? format(fromDate, 'PPP') : <span>Select date</span>}
                           </Button>
                         </PopoverTrigger>
@@ -304,7 +334,7 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
                               !toDate && "text-muted-foreground"
                             )}
                           >
-                            <Calendar className="mr-2 h-4 w-4" />
+                            <CalendarIcon className="mr-2 h-4 w-4" />
                             {toDate ? format(toDate, 'PPP') : <span>Select date</span>}
                           </Button>
                         </PopoverTrigger>
@@ -355,6 +385,25 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
                         {errors.to_datetime}
                       </AlertDescription>
                     </Alert>
+                  )}
+
+                  {showReturnEditor && (
+                    <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+                      <Label htmlFor="actual_return_datetime">Actual return (when they came back)</Label>
+                      <p className="text-sm text-muted-foreground">
+                        For completed movements you can correct the real return time if it was closed wrong.
+                      </p>
+                      <Input
+                        id="actual_return_datetime"
+                        type="datetime-local"
+                        value={actualReturnLocal}
+                        onChange={(e) => setActualReturnLocal(e.target.value)}
+                        className="max-w-md"
+                      />
+                      {errors.actual_return_datetime && (
+                        <p className="text-sm font-medium text-red-500">{errors.actual_return_datetime}</p>
+                      )}
+                    </div>
                   )}
 
                   <div className="space-y-2">

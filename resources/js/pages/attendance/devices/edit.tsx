@@ -18,7 +18,25 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { ArrowLeft, Building, Network } from 'lucide-react';
+import { ArrowLeft, Network } from 'lucide-react';
+
+/** Laravel validation uses snake_case; form state uses camelCase for some fields */
+function mapServerErrorsToFormErrors(
+  raw: Record<string, string | string[]>
+): Record<string, string> {
+  const snakeToCamel: Record<string, string> = {
+    device_id: 'deviceId',
+    ip_address: 'ipAddress',
+    branch_id: 'branchId',
+  };
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    const msg = Array.isArray(val) ? val[0] : String(val);
+    const targetKey = snakeToCamel[key] ?? key;
+    out[targetKey] = msg;
+  }
+  return out;
+}
 
 interface Branch {
   id: number;
@@ -45,7 +63,9 @@ export default function Edit({ device, branches, statuses }: EditProps) {
   const [deviceId, setDeviceId] = useState(device.device_id);
   const [name, setName] = useState(device.name);
   const [ipAddress, setIpAddress] = useState(device.ip_address);
-  const [port, setPort] = useState(device.port.toString());
+  const [port, setPort] = useState(
+    String(device.port != null ? device.port : 4370)
+  );
   const [branchId, setBranchId] = useState(device.branch_id.toString());
   const [status, setStatus] = useState(device.status);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -87,8 +107,8 @@ export default function Edit({ device, branches, statuses }: EditProps) {
       branch_id: parseInt(branchId),
       status
     }, {
-      onError: (errors) => {
-        setErrors(errors);
+      onError: (errs) => {
+        setErrors(mapServerErrorsToFormErrors(errs as Record<string, string | string[]>));
         setSubmitting(false);
       },
       onFinish: () => setSubmitting(false)

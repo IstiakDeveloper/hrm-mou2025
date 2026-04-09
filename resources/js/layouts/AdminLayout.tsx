@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import {
     User,
     Home,
@@ -56,6 +56,19 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import NotificationDropdown from '@/components/notification-dropdown';
 import PWAManager from '@/components/PWAManager';
+import { hasAppPermission } from '@/lib/permissions';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { format } from 'date-fns';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -75,10 +88,16 @@ interface MenuItemType {
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
-    const { auth, notifications } = usePage().props as any;
+    const { auth, notifications, activeMovement } = usePage().props as any;
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const [collapsed, setCollapsed] = useState(false);
+    const [showCloseMovementDialog, setShowCloseMovementDialog] = useState(false);
+    const [closeMovementId, setCloseMovementId] = useState<number | null>(null);
+    const [forgotReturnTime, setForgotReturnTime] = useState(false);
+    const [customReturnTime, setCustomReturnTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+    const [closeError, setCloseError] = useState<string | null>(null);
+    const [closing, setClosing] = useState(false);
 
     // Get current path for highlighting active menu
     const currentPath = window.location.pathname;
@@ -105,33 +124,51 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             .toUpperCase();
     };
 
-    // Updated permission check function
-    const hasPermission = (permission?: string): boolean => {
-        if (!permission) return true;
+    const hasPermission = (permission?: string): boolean => hasAppPermission(auth, permission);
 
-        if (!auth?.user?.roles || auth.user.roles.length === 0) {
-            return false;
-        }
+    const canCloseOwnMovement = Boolean(activeMovement?.id && auth?.employee?.id && activeMovement.employee_id === auth.employee.id);
 
-        for (const role of auth.user.roles) {
-            let rolePermissions = role.permissions;
-
-            if (typeof rolePermissions === 'string') {
-                try {
-                    rolePermissions = JSON.parse(rolePermissions);
-                } catch (e) {
-                    console.error('Error parsing permissions for role:', role.name, e);
-                    continue;
-                }
-            }
-
-            if (rolePermissions && rolePermissions.includes(permission)) {
-                return true;
-            }
-        }
-
-        return false;
+    const openCloseMovementDialog = (movementId?: number) => {
+        setCloseError(null);
+        setForgotReturnTime(false);
+        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setCloseMovementId(typeof movementId === 'number' ? movementId : (activeMovement?.id ?? null));
+        setShowCloseMovementDialog(true);
     };
+
+    const handleCloseMovement = () => {
+        setCloseError(null);
+        const movementId = closeMovementId ?? activeMovement?.id;
+        if (!movementId) return;
+
+        if (forgotReturnTime && !customReturnTime?.trim()) {
+            setCloseError('Please select the actual date and time you returned.');
+            return;
+        }
+
+        setClosing(true);
+        router.post(route('movements.complete', movementId), {
+            forgot_return_time: forgotReturnTime ? '1' : '0',
+            actual_return_datetime: forgotReturnTime ? customReturnTime : null,
+        }, {
+            preserveScroll: true,
+            onFinish: () => {
+                setClosing(false);
+                setShowCloseMovementDialog(false);
+            }
+        });
+    };
+
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const ce = e as CustomEvent<{ movementId?: number }>;
+            const movementId = ce?.detail?.movementId;
+            openCloseMovementDialog(typeof movementId === 'number' ? movementId : undefined);
+        };
+        window.addEventListener('hrm:movement-close', handler as EventListener);
+        return () => window.removeEventListener('hrm:movement-close', handler as EventListener);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeMovement?.id]);
 
     // Organized Menu Structure with EXACT permission names matching web.php
     const menuItems: MenuItemType[] = [
@@ -652,6 +689,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                         {/* Right Side Items */}
                         <div className="flex items-center ml-auto gap-3">
+                            {/* Active Movement Quick Close */}
+                            {canCloseOwnMovement && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-green-600 text-green-700 hover:bg-green-50"
+                                    onClick={() => openCloseMovementDialog()}
+                                >
+                                    <MapPin className="w-4 h-4 mr-2" />
+                                    Close Movement
+                                </Button>
+                            )}
                             {/* Notifications */}
                             <NotificationDropdown />
 
@@ -766,6 +815,92 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </div>
                 </footer>
             </div>
+
+            {/* Global Close Movement Dialog */}
+            <Dialog
+                open={showCloseMovementDialog}
+                onOpenChange={(open) => {
+                    setShowCloseMovementDialog(open);
+                    if (open) {
+                        setCloseError(null);
+                        setForgotReturnTime(false);
+                        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Close Movement</DialogTitle>
+                        <DialogDescription>
+                            You are confirming that you have returned from your movement. Your actual return time will be recorded.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <p className="text-sm text-muted-foreground">
+                            By default, your return is recorded at <strong>the current time</strong> when you confirm.
+                        </p>
+
+                        <div className="flex items-start space-x-3 rounded-md border p-3">
+                            <Checkbox
+                                id="forgotReturnTimeGlobal"
+                                checked={forgotReturnTime}
+                                onCheckedChange={(checked) => {
+                                    setForgotReturnTime(checked === true);
+                                    setCloseError(null);
+                                    if (checked === true) {
+                                        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+                                    }
+                                }}
+                            />
+                            <div className="grid gap-1.5 leading-none">
+                                <Label htmlFor="forgotReturnTimeGlobal" className="cursor-pointer font-medium">
+                                    I forgot to close earlier — set actual return date &amp; time
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Check this if you already returned but did not close the movement. Then pick when you actually came back.
+                                </p>
+                            </div>
+                        </div>
+
+                        {forgotReturnTime && (
+                            <div className="space-y-2">
+                                <Label htmlFor="customTimeGlobal">Actual return date &amp; time</Label>
+                                <Input
+                                    id="customTimeGlobal"
+                                    type="datetime-local"
+                                    value={customReturnTime}
+                                    onChange={(e) => setCustomReturnTime(e.target.value)}
+                                />
+                            </div>
+                        )}
+
+                        {closeError && (
+                            <p className="text-sm font-medium text-red-600">{closeError}</p>
+                        )}
+
+                        <div className="bg-blue-50 p-3 rounded-md">
+                            <p className="text-sm text-blue-700">
+                                <AlertCircle className="h-4 w-4 inline mr-1" />
+                                This will mark your movement as completed and update your attendance records.
+                            </p>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowCloseMovementDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleCloseMovement}
+                            className="bg-green-600 hover:bg-green-700"
+                            disabled={closing}
+                        >
+                            {closing ? 'Processing...' : 'Confirm Return'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

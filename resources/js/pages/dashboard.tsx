@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Head, usePage } from '@inertiajs/react';
+import { hasAppPermission } from '@/lib/permissions';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -105,35 +106,7 @@ export default function Dashboard({
 }: DashboardProps) {
   const { auth } = usePage().props as any;
 
-  // Check if user has permission
-  const hasPermission = (permission?: string): boolean => {
-    if (!permission) return true;
-
-    // Get permissions from user's role
-    const rolePermissions = auth?.user?.role?.permissions;
-
-    // Handle case where permissions are stored as a JSON string
-    let parsedPermissions = rolePermissions;
-    if (typeof rolePermissions === 'string') {
-      try {
-        parsedPermissions = JSON.parse(rolePermissions);
-      } catch (e) {
-        console.error('Error parsing permissions:', e);
-        return false;
-      }
-    }
-
-    return parsedPermissions?.includes(permission) || false;
-  };
-
-  // Log permissions for debugging
-  useEffect(() => {
-    console.log('Auth user:', auth?.user);
-    console.log('User role:', auth?.user?.role);
-
-    const rolePermissions = auth?.user?.role?.permissions;
-    console.log('Role permissions (raw):', rolePermissions);
-  }, []);
+  const hasPermission = (permission?: string): boolean => hasAppPermission(auth, permission);
 
   return (
     <Layout>

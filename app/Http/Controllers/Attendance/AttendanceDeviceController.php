@@ -52,9 +52,6 @@ class AttendanceDeviceController extends Controller
     {
         $branches = Branch::all();
 
-        // Debug to see what's being passed
-        \Log::info('Branches for device create:', ['count' => $branches->count()]);
-
         return Inertia::render('attendance/devices/create', [
             'branches' => $branches,
             'statuses' => ['active', 'inactive', 'maintenance'],
@@ -66,8 +63,8 @@ class AttendanceDeviceController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'device_id' => 'required|string|max:50|unique:attendance_devices',
+        $data = $request->validate([
+            'device_id' => 'required|string|max:50|unique:attendance_devices,device_id',
             'name' => 'required|string|max:255',
             'ip_address' => 'required|ip',
             'port' => 'required|integer|min:1|max:65535',
@@ -75,7 +72,7 @@ class AttendanceDeviceController extends Controller
             'status' => 'required|in:active,inactive,maintenance',
         ]);
 
-        AttendanceDevice::create($request->all());
+        AttendanceDevice::create($data);
 
         return redirect()->route('attendance.devices.index')
             ->with('success', 'Attendance device created successfully.');
@@ -100,8 +97,8 @@ class AttendanceDeviceController extends Controller
      */
     public function update(Request $request, AttendanceDevice $device)
     {
-        $request->validate([
-            'device_id' => 'required|string|max:50|unique:attendance_devices,device_id,' . $device->id,
+        $data = $request->validate([
+            'device_id' => 'required|string|max:50|unique:attendance_devices,device_id,' . $device->getKey(),
             'name' => 'required|string|max:255',
             'ip_address' => 'required|ip',
             'port' => 'required|integer|min:1|max:65535',
@@ -109,7 +106,7 @@ class AttendanceDeviceController extends Controller
             'status' => 'required|in:active,inactive,maintenance',
         ]);
 
-        $device->update($request->all());
+        $device->update($data);
 
         return redirect()->route('attendance.devices.index')
             ->with('success', 'Attendance device updated successfully.');

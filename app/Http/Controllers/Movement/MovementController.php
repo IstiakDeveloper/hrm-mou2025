@@ -21,6 +21,87 @@ use Inertia\Inertia;
 class MovementController extends Controller
 {
     /**
+     * Parse datetime from the client (ISO 8601 with offset or naive) into app timezone for DB storage.
+     */
+    private function parseMovementDateTimeToApp(string $value): Carbon
+    {
+        return Carbon::parse($value)->timezone(config('app.timezone'));
+    }
+
+    /**
+     * Get branch work start/end times for an employee (fallback 09:00-18:00).
+     */
+    private function getBranchWorkTimesForEmployee(int $employeeId): array
+    {
+        $employee = \App\Models\Employee::find($employeeId);
+        $branchId = $employee?->current_branch_id ?? $employee?->branch_id ?? null;
+
+        $default = ['work_start_time' => '09:00:00', 'work_end_time' => '18:00:00'];
+        if (!$branchId) {
+            return $default;
+        }
+
+        $settings = \App\Models\AttendanceSetting::where('branch_id', $branchId)->first();
+        if (!$settings) {
+            return $default;
+        }
+
+        return [
+            'work_start_time' => $settings->work_start_time ?: $default['work_start_time'],
+            'work_end_time' => $settings->work_end_time ?: $default['work_end_time'],
+        ];
+    }
+
+    /**
+     * Merge a time into attendance check_in/check_out using min/max rule.
+     * Times are stored as "H:i:s" strings.
+     */
+    private function mergeAttendanceTimes(Attendance $attendance, ?string $inCandidate, ?string $outCandidate): void
+    {
+        $toSeconds = function ($value): ?int {
+            if ($value === null || $value === '') {
+                return null;
+            }
+            if ($value instanceof Carbon) {
+                return ($value->hour * 3600) + ($value->minute * 60) + $value->second;
+            }
+            if (is_string($value)) {
+                try {
+                    $dt = Carbon::parse($value);
+                    return ($dt->hour * 3600) + ($dt->minute * 60) + $dt->second;
+                } catch (\Throwable $e) {
+                    return null;
+                }
+            }
+            return null;
+        };
+
+        if ($inCandidate) {
+            if (!$attendance->check_in) {
+                $attendance->check_in = $inCandidate;
+            } else {
+                $existingSec = $toSeconds($attendance->check_in);
+                $candidateSec = $toSeconds($inCandidate);
+                if ($existingSec === null || ($candidateSec !== null && $candidateSec < $existingSec)) {
+                    $attendance->check_in = $inCandidate;
+                }
+            }
+        }
+
+        if ($outCandidate) {
+            if (!$attendance->check_out) {
+                $attendance->check_out = $outCandidate;
+            } else {
+                $existingSec = $toSeconds($attendance->check_out);
+                $candidateSec = $toSeconds($outCandidate);
+                if ($existingSec === null || ($candidateSec !== null && $candidateSec > $existingSec)) {
+                    $attendance->check_out = $outCandidate;
+                }
+            }
+        }
+    }
+
+    /**
      * Display a listing of movements.
      */
     public function index(Request $request)
@@ -159,6 +240,7 @@ class MovementController extends Controller
                 'canView' => $hasViewPermission,
                 'canCreate' => $user->hasPermission('movements.create'),
                 'canEdit' => $user->hasPermission('movements.edit'),
+                'canDelete' => $user->hasPermission('movements.delete'),
                 'isBranchManager' => $isBranchManager,
                 'isBranchHead' => $isBranchHead,
                 'isDepartmentHead' => $isDepartmentHead,
@@ -316,6 +398,16 @@ class MovementController extends Controller
             'remarks' => ['nullable', 'string', 'english_only'], // Using custom rule
         ]);
 
+        // Movement start must be current time or future (no creating movements that already started in the past)
+        $from = $this->parseMovementDateTimeToApp($request->from_datetime);
+        $to = $this->parseMovementDateTimeToApp($request->to_datetime);
+        $now = Carbon::now(config('app.timezone'));
+        if ($from->lt($now->copy()->subMinute())) {
+            return redirect()->back()
+                ->withErrors(['from_datetime' => 'Movement start (from date & time) must be now or in the future. You cannot create a movement for a past time.'])
+                ->withInput();
+        }
+
         // Determine which employee ID to use
         $employeeId = $user->hasPermission('movements.create') ? $request->employee_id : $employee->id;
 
@@ -326,8 +418,8 @@ class MovementController extends Controller
         $movement = Movement::create([
             'employee_id' => $employeeId,
             'movement_type' => $request->movement_type,
-            'from_datetime' => $request->from_datetime,
-            'to_datetime' => $request->to_datetime,
+            'from_datetime' => $from->format('Y-m-d H:i:s'),
+            'to_datetime' => $to->format('Y-m-d H:i:s'),
             'purpose' => $request->purpose,
             'destination' => $request->destination,
             'remarks' => $request->remarks,
@@ -358,6 +450,9 @@ class MovementController extends Controller
         $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
         $endDate = Carbon::parse($movement->to_datetime)->startOfDay();
         $currentDate = $startDate->copy();
+        $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
+        $movementStart = Carbon::parse($movement->from_datetime);
+        $movementPlannedEnd = Carbon::parse($movement->to_datetime);
 
         // Loop through each day
         while ($currentDate->lte($endDate)) {
@@ -373,34 +468,40 @@ class MovementController extends Controller
                 $attendance = new Attendance();
                 $attendance->employee_id = $movement->employee_id;
                 $attendance->date = $dateStr;
-                $attendance->status = 'present'; // Set as present for official movement
-
-                // Set check-in and check-out times based on movement times
-                if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
-                    $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
-                }
-
-                if ($currentDate->isSameDay(Carbon::parse($movement->to_datetime))) {
-                    $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
-                }
+                // Prefer on_duty for official movement days
+                $attendance->status = 'on_duty';
             } else {
-                // Important: Do NOT overwrite existing times
-
-                // Only set check-in if it doesn't exist
-                if (!$attendance->check_in && $currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
-                    $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
-                }
-
-                // Only set check-out if it doesn't exist
-                if (!$attendance->check_out && $currentDate->isSameDay(Carbon::parse($movement->to_datetime))) {
-                    $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
-                }
-
-                // Update status to present if it was absent
+                // Update status to on_duty if it was absent (do not downgrade other statuses like leave/late)
                 if ($attendance->status == 'absent') {
-                    $attendance->status = 'present';
+                    $attendance->status = 'on_duty';
                 }
             }
+
+            // Decide in/out candidates for this specific date.
+            // Rule: In = earliest of (device punch in OR movement creates/starts time OR office start for full-day on duty),
+            // Out = latest of (device punch out OR movement close/planned end time OR office end for full-day on duty).
+            $isStartDay = $movementStart->format('Y-m-d') === $dateStr;
+            $isEndDay = $movementPlannedEnd->format('Y-m-d') === $dateStr;
+
+            $inCandidate = null;
+            $outCandidate = null;
+
+            if ($isStartDay) {
+                $inCandidate = $movementStart->format('H:i:s');
+            } else {
+                // For intermediate days (and end day if movement started earlier), use office start time
+                $inCandidate = $workTimes['work_start_time'];
+            }
+
+            if ($isEndDay) {
+                $outCandidate = $movementPlannedEnd->format('H:i:s');
+            } else {
+                // For intermediate days (and start day if movement ends later), use office end time
+                $outCandidate = $workTimes['work_end_time'];
+            }
+
+            // Merge (min/max) against any existing punch times
+            $this->mergeAttendanceTimes($attendance, $inCandidate, $outCandidate);
 
             // Link to movement
             $attendance->movement_id = $movement->id;
@@ -599,6 +700,8 @@ class MovementController extends Controller
         return Inertia::render('movement/show', [
             'movement' => $movement,
             'canClose' => $canClose,
+            'canEdit' => $user->hasPermission('movements.edit'),
+            'canDelete' => $user->hasPermission('movements.delete'),
         ]);
     }
 
@@ -622,9 +725,11 @@ class MovementController extends Controller
                 ->with('error', 'This movement has already been closed.');
         }
 
-        // Validate the request
+        $forgotReturn = $request->boolean('forgot_return_time');
+
         $request->validate([
-            'actual_return_datetime' => 'nullable|date',
+            'forgot_return_time' => 'sometimes|boolean',
+            'actual_return_datetime' => $forgotReturn ? 'required|date' : 'nullable|date',
         ]);
 
         // Start a database transaction
@@ -635,10 +740,25 @@ class MovementController extends Controller
             $movement->status = 'completed';
             $movement->is_returned = true;
 
-            // Use provided return time or current time
-            $returnDateTime = $request->filled('actual_return_datetime')
+            // Default: close at current time. If user forgot to close, they check the box and set actual return time.
+            $returnDateTime = $forgotReturn
                 ? Carbon::parse($request->actual_return_datetime)
                 : now();
+
+            $from = Carbon::parse($movement->from_datetime);
+            if ($returnDateTime->lt($from)) {
+                DB::rollBack();
+
+                return redirect()->route('movements.show', $movement->id)
+                    ->with('error', 'Return time cannot be before the movement start time.');
+            }
+
+            if ($returnDateTime->gt(Carbon::now()->addMinutes(2))) {
+                DB::rollBack();
+
+                return redirect()->route('movements.show', $movement->id)
+                    ->with('error', 'Return time cannot be in the future.');
+            }
 
             $movement->actual_return_datetime = $returnDateTime;
             $movement->save();
@@ -681,13 +801,21 @@ class MovementController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
-        // Check if user can edit this movement
+        $isAdminEditor = $user->hasPermission('movements.edit');
+
+        // Admin/HR with movements.edit: can edit active or completed records
+        // Employee: only own pending requests (legacy flow)
         if (
-            !$user->hasPermission('movements.edit') &&
-            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
+            !$isAdminEditor &&
+            (!$employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
         ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to edit this movement request.');
+        }
+
+        if ($isAdminEditor && !in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
+            return redirect()->route('movements.index')
+                ->with('error', 'This movement cannot be edited.');
         }
 
         $employees = $user->hasPermission('movements.edit') ?
@@ -710,17 +838,24 @@ class MovementController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
-        // Check if user can update this movement
+        $isAdminEditor = $user->hasPermission('movements.edit');
+
         if (
-            !$user->hasPermission('movements.edit') &&
-            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
+            !$isAdminEditor &&
+            (!$employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
         ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to update this movement request.');
         }
 
-        // Validate request
-        $request->validate([
+        if ($isAdminEditor && !in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
+            return redirect()->route('movements.index')
+                ->with('error', 'This movement cannot be updated.');
+        }
+
+        $isCompleted = $movement->status === 'completed';
+
+        $validationRules = [
             'employee_id' => $user->hasPermission('movements.edit') ? 'required|exists:employees,id' : 'nullable',
             'movement_type' => 'required|in:official,personal',
             'from_datetime' => 'required|date',
@@ -728,12 +863,25 @@ class MovementController extends Controller
             'purpose' => 'required|string',
             'destination' => 'required|string',
             'remarks' => 'nullable|string',
-        ]);
+        ];
+
+        if ($isCompleted && $isAdminEditor) {
+            $validationRules['actual_return_datetime'] = 'required|date';
+        }
+
+        $request->validate($validationRules);
+
+        $previousReturn = $movement->actual_return_datetime
+            ? Carbon::parse($movement->actual_return_datetime)
+            : null;
+
+        $fromParsed = $this->parseMovementDateTimeToApp($request->from_datetime);
+        $toParsed = $this->parseMovementDateTimeToApp($request->to_datetime);
 
         // Update fields except for employee_id if not admin
         $movement->movement_type = $request->movement_type;
-        $movement->from_datetime = $request->from_datetime;
-        $movement->to_datetime = $request->to_datetime;
+        $movement->from_datetime = $fromParsed->format('Y-m-d H:i:s');
+        $movement->to_datetime = $toParsed->format('Y-m-d H:i:s');
         $movement->purpose = $request->purpose;
         $movement->destination = $request->destination;
         $movement->remarks = $request->remarks;
@@ -743,12 +891,76 @@ class MovementController extends Controller
             $movement->employee_id = $request->employee_id;
         }
 
+        if ($isCompleted && $isAdminEditor) {
+            $newReturn = $this->parseMovementDateTimeToApp($request->actual_return_datetime);
+
+            if ($newReturn->lt($fromParsed)) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['actual_return_datetime' => 'Return time cannot be before the movement start time.']);
+            }
+
+            $nowApp = Carbon::now(config('app.timezone'));
+            if ($newReturn->gt($nowApp->copy()->addMinutes(2))) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['actual_return_datetime' => 'Return time cannot be more than a few minutes in the future.']);
+            }
+
+            $movement->actual_return_datetime = $newReturn->format('Y-m-d H:i:s');
+        }
+
         $movement->save();
+
+        $newReturnFinal = $movement->actual_return_datetime
+            ? Carbon::parse($movement->actual_return_datetime)
+            : null;
+
+        if (
+            $isCompleted
+            && $isAdminEditor
+            && $movement->movement_type === 'official'
+            && $newReturnFinal
+            && (!$previousReturn || !$previousReturn->equalTo($newReturnFinal))
+        ) {
+            $this->updateAttendanceForCompletion($movement->fresh(), $newReturnFinal);
+        }
 
         return redirect()->route('movements.index')
             ->with('success', 'Movement request updated successfully.');
     }
 
+    /**
+     * Remove the specified movement (admin only).
+     */
+    public function destroy(Movement $movement)
+    {
+        $user = Auth::user();
+
+        if (!$user->hasPermission('movements.delete')) {
+            return redirect()->route('movements.index')
+                ->with('error', 'You do not have permission to delete movements.');
+        }
+
+        DB::beginTransaction();
+
+        try {
+            Attendance::where('movement_id', $movement->id)->update(['movement_id' => null]);
+            $movement->delete();
+            DB::commit();
+
+            return redirect()->route('movements.index')
+                ->with('success', 'Movement deleted successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error deleting movement: ' . $e->getMessage(), [
+                'movement_id' => $movement->id,
+            ]);
+
+            return redirect()->route('movements.index')
+                ->with('error', 'Could not delete this movement.');
+        }
+    }
 
     /**
      * Approve the specified movement and update attendance records.
@@ -1129,6 +1341,9 @@ class MovementController extends Controller
     {
         // Get all dates covered by this movement
         $movementDates = $movement->getDatesAttribute();
+        $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
+        $movementStart = Carbon::parse($movement->from_datetime);
+        $return = $returnDateTime instanceof Carbon ? $returnDateTime : Carbon::parse($returnDateTime);
 
         foreach ($movementDates as $date) {
             // Find attendance record for this date
@@ -1141,38 +1356,25 @@ class MovementController extends Controller
                 $attendance = new Attendance();
                 $attendance->employee_id = $movement->employee_id;
                 $attendance->date = $date;
-                $attendance->status = 'present'; // Mark as present since they were on duty
-
-                // Set check-in and check-out times from movement if this is the only record
-                if ($movement->from_datetime->format('Y-m-d') == $date) {
-                    $attendance->check_in = $movement->from_datetime->format('H:i:s');
-                }
-
-                if ($returnDateTime->format('Y-m-d') == $date) {
-                    $attendance->check_out = $returnDateTime->format('H:i:s');
-                }
+                $attendance->status = 'on_duty';
             } else {
-                // CRITICAL PART: DO NOT OVERWRITE EXISTING CHECK-IN/CHECK-OUT TIMES!
-                // Only update status and link to movement
-
-                // If attendance has no check-in and this is the movement start date, set it
-                if (!$attendance->check_in && $movement->from_datetime->format('Y-m-d') == $date) {
-                    $attendance->check_in = $movement->from_datetime->format('H:i:s');
-                }
-
-                // If attendance has no check-out and this is the return date, set it
-                if (!$attendance->check_out && $returnDateTime->format('Y-m-d') == $date) {
-                    $attendance->check_out = $returnDateTime->format('H:i:s');
+                // Only bump absent -> on_duty
+                if ($attendance->status == 'absent') {
+                    $attendance->status = 'on_duty';
                 }
             }
+
+            // Merge times with min/max rule using actual return time on return day.
+            $isStartDay = $movementStart->format('Y-m-d') === $date;
+            $isReturnDay = $return->format('Y-m-d') === $date;
+
+            $inCandidate = $isStartDay ? $movementStart->format('H:i:s') : $workTimes['work_start_time'];
+            $outCandidate = $isReturnDay ? $return->format('H:i:s') : $workTimes['work_end_time'];
+
+            $this->mergeAttendanceTimes($attendance, $inCandidate, $outCandidate);
 
             // Link attendance to movement (this is the key part)
             $attendance->movement_id = $movement->id;
-
-            // Ensure status is 'present' if it was 'absent'
-            if ($attendance->status == 'absent') {
-                $attendance->status = 'present';
-            }
 
             // Add remarks about movement completion
             $returnInfo = "Movement completed: " . $returnDateTime->format('Y-m-d H:i:s');

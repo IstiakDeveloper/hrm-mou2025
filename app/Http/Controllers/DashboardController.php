@@ -156,7 +156,9 @@ class DashboardController extends Controller
         if ($employee->branch_id) {
             $attendanceSettings = AttendanceSetting::where('branch_id', $employee->branch_id)->first();
             if ($attendanceSettings) {
-                $weekendDays = json_decode($attendanceSettings->weekend_days, true) ?: [];
+                // AttendanceSetting casts weekend_days to array; avoid json_decode(array)
+                $rawWeekend = $attendanceSettings->weekend_days ?? [];
+                $weekendDays = is_array($rawWeekend) ? $rawWeekend : (json_decode($rawWeekend ?? '[]', true) ?: []);
             }
         }
 

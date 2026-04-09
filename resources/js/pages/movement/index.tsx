@@ -47,7 +47,9 @@ import {
     Search,
     X,
     Clock,
-    AlertCircle
+    AlertCircle,
+    Pencil,
+    Trash2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
@@ -95,7 +97,7 @@ interface Movement {
     purpose: string;
     destination: string;
     remarks: string | null;
-    status: 'active' | 'completed';
+    status: 'active' | 'completed' | 'pending' | 'approved' | 'rejected' | 'cancelled';
     is_returned: boolean;
     actual_return_datetime: string | null;
     employee: Employee;
@@ -149,6 +151,7 @@ interface MovementIndexProps {
         canView: boolean;
         canCreate: boolean;
         canEdit: boolean;
+        canDelete: boolean;
         canApprove: boolean;
         isBranchManager: boolean;
         isBranchHead: boolean;
@@ -532,17 +535,33 @@ export default function MovementIndex({
                                                             <span>View Details</span>
                                                         </DropdownMenuItem>
 
-                                                        {/* Edit option - only show for user's own active movements or admins */}
-                                                        {movement.status === 'active' &&
-                                                            (movement.employee_id === userPermissions.employeeId ||
-                                                                userPermissions.canEdit) && (
-                                                                <DropdownMenuItem
-                                                                    onClick={() => router.get(route('movements.edit', movement.id))}
-                                                                    className="cursor-pointer"
-                                                                >
-                                                                    <span>Edit</span>
-                                                                </DropdownMenuItem>
-                                                            )}
+                                                        {/* Edit: admins (movements.edit) can edit active/completed; employees only pending (rare) */}
+                                                        {(userPermissions.canEdit &&
+                                                            ['active', 'completed', 'pending', 'approved'].includes(movement.status)) ||
+                                                            (movement.status === 'pending' &&
+                                                                movement.employee_id === userPermissions.employeeId) ? (
+                                                            <DropdownMenuItem
+                                                                onClick={() => router.get(route('movements.edit', movement.id))}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Pencil className="mr-2 h-4 w-4" />
+                                                                <span>Edit</span>
+                                                            </DropdownMenuItem>
+                                                        ) : null}
+
+                                                        {userPermissions.canDelete && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => {
+                                                                    if (confirm('Delete this movement? Attendance links to this movement will be cleared.')) {
+                                                                        router.delete(route('movements.destroy', movement.id));
+                                                                    }
+                                                                }}
+                                                                className="cursor-pointer text-red-600 focus:text-red-600"
+                                                            >
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                <span>Delete</span>
+                                                            </DropdownMenuItem>
+                                                        )}
 
                                                         {/* Close Movement - show for user's own active movements */}
                                                         {movement.status === 'active' &&

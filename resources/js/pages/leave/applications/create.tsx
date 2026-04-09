@@ -88,14 +88,7 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
         if (!endDate) newErrors.endDate = 'End date is required';
         if (!reason.trim()) newErrors.reason = 'Reason is required';
 
-        // Check dates - only for non-admins
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (startDate && !userPermissions.canEdit && startDate < today) {
-            newErrors.startDate = 'Start date must be in the future';
-        }
-
+        // Check date order
         if (endDate && startDate && endDate < startDate) {
             newErrors.endDate = 'End date cannot be before start date';
         }
@@ -239,12 +232,8 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
                                                         }}
                                                         initialFocus
                                                         disabled={(date) => {
-                                                            // Admin users with edit permission can select past dates
-                                                            if (userPermissions.canEdit) return false;
-
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            return date < today;
+                                                            // Allow selecting past dates (backdated leave)
+                                                            return false;
                                                         }}
                                                     />
                                                 </PopoverContent>
@@ -283,14 +272,8 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
                                                         }}
                                                         initialFocus
                                                         disabled={(date) => {
-                                                            // Admin users with edit permission have more flexibility
-                                                            if (userPermissions.canEdit) {
-                                                                return startDate ? date < startDate : false;
-                                                            }
-
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            return startDate ? date < startDate : date < today;
+                                                            // End date can't be before start date
+                                                            return startDate ? date < startDate : false;
                                                         }}
                                                     />
                                                 </PopoverContent>

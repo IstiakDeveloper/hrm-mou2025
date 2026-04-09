@@ -264,7 +264,9 @@ class ZKDeviceController extends Controller
             foreach ($dates as $date => $record) {
                 // Skip weekend days if configured
                 $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-                $weekendDays = json_decode($settings->weekend_days);
+                // AttendanceSetting casts weekend_days to array; avoid json_decode(array)
+                $rawWeekend = $settings->weekend_days ?? [];
+                $weekendDays = is_array($rawWeekend) ? $rawWeekend : (json_decode($rawWeekend ?? '[]', true) ?: []);
                 if (in_array($dayOfWeek, $weekendDays)) {
                     continue;
                 }

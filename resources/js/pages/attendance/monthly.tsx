@@ -137,6 +137,9 @@ interface AttendanceSetting {
 interface AttendanceMonthlyProps {
     employees: EmployeesResponse;
     attendances: Record<string, Attendance[]>;
+    leaveDays: Record<string, Record<string, string>>;
+    dailyStatusByEmployee: Record<string, Record<string, { status: string; missing_checkout?: boolean; leave_type?: string | null }>>;
+    summaryByEmployee: Record<string, Record<string, number>>;
     branches: Branch[];
     departments: Department[];
     filters: {
@@ -162,7 +165,10 @@ export default function AttendanceMonthly({
     daysInMonth,
     userPermissions,
     holidays = [],
-    attendanceSettings = {}
+    attendanceSettings = {},
+    leaveDays = {},
+    dailyStatusByEmployee = {},
+    summaryByEmployee = {}
 }: AttendanceMonthlyProps) {
     const [search, setSearch] = useState(filters.search || '');
     const [branchId, setBranchId] = useState(filters.branch_id || null);
@@ -183,32 +189,22 @@ export default function AttendanceMonthly({
     const prevMonthString = format(prevMonth, 'yyyy-MM');
     const nextMonthString = format(nextMonth, 'yyyy-MM');
 
+    const toYmd = (day: number) => `${month}-${day.toString().padStart(2, '0')}`;
+
     // Check if a date is a holiday
     const isHoliday = (day: number): boolean => {
         if (!holidays || !Array.isArray(holidays)) {
             return false;
         }
 
-        // Add one day to fix the holiday display issue
-        const adjustedDay = day - 1;
-        const dateToCheck = `${month}-${adjustedDay.toString().padStart(2, '0')}`;
-
-        return holidays.some(holiday => {
-            const holidayDate = holiday.date.split('T')[0];
-            return holidayDate.endsWith(dateToCheck) || holidayDate === dateToCheck;
-        });
+        const dateToCheck = toYmd(day);
+        return holidays.some((holiday) => holiday.date === dateToCheck);
     };
 
     // Get holiday details for a specific day
     const getHolidayDetails = (day: number) => {
-        // Add one day to fix the holiday display issue
-        const adjustedDay = day - 1;
-        const dateToCheck = `${month}-${adjustedDay.toString().padStart(2, '0')}`;
-
-        return holidays.find(holiday => {
-            const holidayDate = holiday.date.split('T')[0];
-            return holidayDate.endsWith(dateToCheck) || holidayDate === dateToCheck;
-        });
+        const dateToCheck = toYmd(day);
+        return holidays.find((holiday) => holiday.date === dateToCheck);
     };
 
     // Check if a date is a weekend for an employee
@@ -217,11 +213,9 @@ export default function AttendanceMonthly({
             return false;
         }
 
-        // Use the actual day for weekend check (without the -1 adjustment)
-        const dateToFind = `${month}-${day.toString().padStart(2, '0')}`;
-
-        // Parse the date to get the day of week
-        const date = new Date(`${month}-${day.toString().padStart(2, '0')}`);
+        const dateToFind = toYmd(day);
+        // Use date-fns parse to avoid UTC parsing shifts of "YYYY-MM-DD"
+        const date = parse(dateToFind, 'yyyy-MM-dd', new Date());
         const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
 
         return attendanceSettings[branchId].weekend_days.includes(dayOfWeek);
@@ -318,6 +312,9 @@ export default function AttendanceMonthly({
 
 
     const getAttendanceStatus = (employeeId: number, day: number, branchId: number) => {
+        const serverStatus = dailyStatusByEmployee?.[employeeId]?.[day]?.status;
+        if (typeof serverStatus === 'string') return serverStatus;
+        if (serverStatus === null) return null; // future blank days
         // First check if it's a holiday - using actual day number
         if (isHoliday(day)) {
             return 'holiday';
@@ -328,33 +325,39 @@ export default function AttendanceMonthly({
             return 'weekend';
         }
 
-        // Continue with existing logic for attendance (using day-1)
-        if (!attendances[employeeId]) return null;
+        // Attendance record lookup (exact date match)
+        if (!attendances[employeeId]) {
+            return null;
+        }
 
-        // Format date for the previous day as that's what our data seems to contain
-        const lookupDay = day - 1; // Add one day to align with actual date
-        const dateToFind = `${month}-${lookupDay.toString().padStart(2, '0')}`;
+        const dateToFind = toYmd(day);
 
-        // Find the attendance record for the adjusted date
+        // Find the attendance record for this date
         const attendance = attendances[employeeId]?.find(a => {
-            // Extract just the date part for comparison
-            const attendanceDate = a.date.split('T')[0];
-            return attendanceDate.endsWith(dateToFind) || attendanceDate === dateToFind;
+            return a.date === dateToFind;
         });
 
-        return attendance ? attendance.status : null;
+        if (attendance) return attendance.status;
+        return null;
+    };
+
+    const hasMissingCheckout = (employeeId: number, day: number): boolean => {
+        const serverMissing = dailyStatusByEmployee?.[employeeId]?.[day]?.missing_checkout;
+        if (typeof serverMissing === 'boolean') return serverMissing;
+        if (!attendances[employeeId]) return false;
+        const dateToFind = toYmd(day);
+        const attendance = attendances[employeeId]?.find((a) => a.date === dateToFind);
+        return !!attendance && !!attendance.check_in && !attendance.check_out;
     };
 
     // Fix the tooltip function to properly display times
     const getAttendanceTooltip = (employeeId: number, day: number, branchId: number) => {
+        const serverStatus = dailyStatusByEmployee?.[employeeId]?.[day]?.status;
+        if (serverStatus === null) return null; // future blank days
         // Holiday tooltip - using actual day number
         if (isHoliday(day)) {
-            const dateToFind = `${month}-${day.toString().padStart(2, '0')}`;
-
-            const holiday = holidays.find(h => {
-                const holidayDate = h.date.split('T')[0];
-                return holidayDate.endsWith(dateToFind) || holidayDate === dateToFind;
-            });
+            const dateToFind = toYmd(day);
+            const holiday = holidays.find((h) => h.date === dateToFind);
 
             return holiday ? `Holiday: ${holiday.title}${holiday.description ? '\n' + holiday.description : ''}` : 'Holiday';
         }
@@ -364,17 +367,16 @@ export default function AttendanceMonthly({
             return 'Weekend';
         }
 
-        // Continue with existing logic for attendance (using day-1)
-        if (!attendances[employeeId]) return null;
+        const leaveType = dailyStatusByEmployee?.[employeeId]?.[day]?.leave_type;
+        if (leaveType) return `Leave: ${leaveType}`;
 
-        // Use the same +1 day offset as in getAttendanceStatus
-        const lookupDay = day - 1;
-        const dateToFind = `${month}-${lookupDay.toString().padStart(2, '0')}`;
+        // Attendance tooltip lookup
+        if (!attendances[employeeId]) {
+            return null;
+        }
 
-        const attendance = attendances[employeeId]?.find(a => {
-            const attendanceDate = a.date.split('T')[0];
-            return attendanceDate.endsWith(dateToFind) || attendanceDate === dateToFind;
-        });
+        const dateToFind = toYmd(day);
+        const attendance = attendances[employeeId]?.find((a) => a.date === dateToFind);
 
         if (!attendance) return null;
 
@@ -385,9 +387,7 @@ export default function AttendanceMonthly({
         // Format check-in time safely
         if (attendance.check_in) {
             try {
-                // Handle time formats correctly
-                const timeStr = attendance.check_in.split('T').pop()?.split('.')[0];
-                const timeParts = timeStr?.split(':') || [];
+                const timeParts = attendance.check_in.split(':') || [];
 
                 if (timeParts.length >= 2) {
                     const hour = parseInt(timeParts[0]);
@@ -406,8 +406,7 @@ export default function AttendanceMonthly({
         // Format check-out time safely
         if (attendance.check_out) {
             try {
-                const timeStr = attendance.check_out.split('T').pop()?.split('.')[0];
-                const timeParts = timeStr?.split(':') || [];
+                const timeParts = attendance.check_out.split(':') || [];
 
                 if (timeParts.length >= 2) {
                     const hour = parseInt(timeParts[0]);
@@ -421,6 +420,8 @@ export default function AttendanceMonthly({
             } catch (e) {
                 tooltipContent += `\nOut: ${attendance.check_out}`;
             }
+        } else if (attendance.check_in) {
+            tooltipContent += `\nMissing check-out`;
         }
 
         // Add remarks if available
@@ -435,6 +436,19 @@ export default function AttendanceMonthly({
 
     // Calculate summary for each employee
     const getEmployeeSummary = (employeeId: number, branchId: number) => {
+        const serverSummary = summaryByEmployee?.[employeeId];
+        if (serverSummary) {
+            return {
+                present: serverSummary.present ?? 0,
+                absent: serverSummary.absent ?? 0,
+                late: serverSummary.late ?? 0,
+                half_day: serverSummary.half_day ?? 0,
+                leave: serverSummary.leave ?? 0,
+                on_duty: serverSummary.on_duty ?? 0,
+                weekend: serverSummary.weekend ?? 0,
+                holiday: serverSummary.holiday ?? 0,
+            };
+        }
         // Initialize summary object with all status types including weekend and holiday
         const summary = {
             present: 0,
@@ -447,27 +461,39 @@ export default function AttendanceMonthly({
             holiday: 0
         };
 
-        // First count existing attendance records
+        // Build quick lookup by date for this employee
+        const attendanceByDate = new Map<string, Attendance>();
         if (attendances[employeeId]) {
-            attendances[employeeId]?.forEach(attendance => {
-                if (Object.prototype.hasOwnProperty.call(summary, attendance.status)) {
-                    summary[attendance.status as keyof typeof summary]++;
-                }
+            attendances[employeeId]?.forEach((a) => {
+                attendanceByDate.set(a.date, a);
             });
         }
 
-        // Then count holidays and weekends for this month
+        // Count day-by-day with correct precedence:
+        // Holiday > Leave > Weekend > Attendance status > No record
         for (let day = 1; day <= daysInMonth; day++) {
+            const ymd = toYmd(day);
             // Check if it's a holiday
             if (isHoliday(day)) {
                 summary.holiday++;
                 continue; // Skip to next day if it's a holiday
             }
 
+            // Approved leave overrides attendance display/count
+            if (leaveDays?.[employeeId]?.[ymd]) {
+                summary.leave++;
+                continue;
+            }
+
             // Check if it's a weekend
             if (isWeekend(day, branchId)) {
                 summary.weekend++;
                 continue; // Skip to next day if it's a weekend
+            }
+
+            const a = attendanceByDate.get(ymd);
+            if (a && Object.prototype.hasOwnProperty.call(summary, a.status)) {
+                summary[a.status as keyof typeof summary]++;
             }
         }
 
@@ -735,10 +761,18 @@ export default function AttendanceMonthly({
                                                         <TableCell key={day} className="p-1 text-center">
                                                             {status ? (
                                                                 <div
-                                                                    className={`w-8 h-8 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-xs font-medium cursor-help`}
+                                                                    className={cn(
+                                                                        `w-8 h-8 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-xs font-medium cursor-help relative`,
+                                                                        hasMissingCheckout(employee.id, day) && 'ring-2 ring-red-400'
+                                                                    )}
                                                                     title={tooltip || status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
                                                                 >
                                                                     {getStatusCode(status)}
+                                                                    {hasMissingCheckout(employee.id, day) && (
+                                                                        <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center">
+                                                                            !
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             ) : (
                                                                 <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto text-xs text-gray-500">

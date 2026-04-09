@@ -5,6 +5,11 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\AttendanceSetting;
+use App\Models\Employee;
+use App\Models\Holiday;
+use App\Models\LeaveApplication;
+use App\Models\Movement;
 
 class Attendance extends Model
 {
@@ -61,99 +66,113 @@ class Attendance extends Model
 
 
     /**
-     * Determine the attendance status for a specific date
-     */
-    /**
-     * Determine the status of an employee for a specific date
+     * Determine the status of an employee for a specific calendar date.
+     *
+     * Priority (same as EmployeeDashboardController):
+     * 1) Real punch (check_in) -> present
+     * 2) Approved leave (no punch) -> leave
+     * 3) Official movement span -> on_duty
+     * 4) Trust DB row status on_duty/leave/holiday when no punch
+     * 5) Calendar holiday/weekend
+     * 6) Absent
      */
     public function determineDateStatus($employeeId, $date)
     {
-        $carbonDate = Carbon::parse($date);
+        $carbonDate = Carbon::parse($date)->startOfDay();
 
-        // Check for approved leave first
-        $isOnLeave = LeaveApplication::where('employee_id', $employeeId)
+        $attendance = self::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('date', $carbonDate->format('Y-m-d'))
+            ->first();
+
+        $hasValidAttendance = (bool) ($attendance && !empty($attendance->check_in));
+        $attendanceRowStatus = $attendance?->status;
+
+        $isOnLeave = LeaveApplication::query()
+            ->where('employee_id', $employeeId)
             ->where('status', 'approved')
-            ->where('start_date', '<=', $date)
-            ->where('end_date', '>=', $date)
+            ->whereDate('start_date', '<=', $carbonDate->format('Y-m-d'))
+            ->whereDate('end_date', '>=', $carbonDate->format('Y-m-d'))
             ->exists();
 
-        if ($isOnLeave) {
-            return 'leave';
-        }
-
-        // Check for movement (using actual_return_datetime if completed)
-        $isOnMovement = Movement::where('employee_id', $employeeId)
-            ->whereIn('status', ['active', 'completed'])
+        $hasMovement = Movement::query()
+            ->where('employee_id', $employeeId)
             ->where('movement_type', 'official')
-            ->where(function ($query) use ($date) {
+            ->whereIn('status', ['active', 'completed'])
+            ->where(function ($query) use ($carbonDate) {
+                $date = $carbonDate->format('Y-m-d');
                 $query->where(function ($q) use ($date) {
-                    // For active movements, use to_datetime
                     $q->where('status', 'active')
                         ->whereDate('from_datetime', '<=', $date)
                         ->whereDate('to_datetime', '>=', $date);
                 })->orWhere(function ($q) use ($date) {
-                    // For completed movements, use actual_return_datetime if available
                     $q->where('status', 'completed')
                         ->whereDate('from_datetime', '<=', $date)
                         ->where(function ($subQ) use ($date) {
-                        $subQ->whereNotNull('actual_return_datetime')
-                            ->whereDate('actual_return_datetime', '>=', $date)
-                            ->orWhere(function ($fallbackQ) use ($date) {
+                            $subQ->where(function ($x) use ($date) {
+                                $x->whereNotNull('actual_return_datetime')
+                                    ->whereDate('actual_return_datetime', '>=', $date);
+                            })->orWhere(function ($fallbackQ) use ($date) {
                                 $fallbackQ->whereNull('actual_return_datetime')
                                     ->whereDate('to_datetime', '>=', $date);
                             });
-                    });
+                        });
                 });
             })
             ->exists();
 
-        if ($isOnMovement) {
-            return 'on_duty';
-        }
-
-        // Check for holiday
-        $isHoliday = Holiday::where('date', $date)
-            ->where(function ($query) use ($employeeId) {
-                // Get employee's branch for holiday filtering
-                $employee = Employee::find($employeeId);
-                if ($employee && $employee->current_branch_id) {
-                    $query->whereJsonContains('applicable_branches', (string) $employee->current_branch_id)
-                        ->orWhereNull('applicable_branches');
-                } else {
-                    $query->whereNull('applicable_branches');
-                }
-            })
-            ->exists();
-
-        if ($isHoliday) {
-            return 'holiday';
-        }
-
-        // Check for weekend
         $employee = Employee::find($employeeId);
-        if ($employee && $employee->current_branch_id) {
-            $attendanceSettings = AttendanceSetting::where('branch_id', $employee->current_branch_id)->first();
-            if ($attendanceSettings) {
-                $weekendDays = json_decode($attendanceSettings->weekend_days ?? '[]', true);
-                if (in_array($carbonDate->dayOfWeek, $weekendDays)) {
-                    return 'weekend';
-                }
+        $branchId = $employee?->current_branch_id ?: ($employee?->branch_id ?: null);
+
+        $weekendDays = [];
+        if ($branchId) {
+            $settings = AttendanceSetting::query()->where('branch_id', $branchId)->first();
+            $raw = $settings?->weekend_days;
+            if (is_array($raw)) {
+                $weekendDays = array_values(array_map('intval', $raw));
+            } elseif (is_string($raw)) {
+                $decoded = json_decode($raw, true);
+                $weekendDays = is_array($decoded) ? array_values(array_map('intval', $decoded)) : [];
             }
         }
 
-        // Check if there's an actual attendance record
-        $hasAttendance = self::where('employee_id', $employeeId)
-            ->where('date', $date)
+        $isHoliday = Holiday::query()
+            ->whereDate('date', $carbonDate->format('Y-m-d'))
+            ->when(
+                $branchId,
+                fn ($q) => $q->forBranch((string) $branchId),
+                fn ($q) => $q->where(function ($x) {
+                    $x->orWhereNull('applicable_branches')
+                        ->orWhereJsonLength('applicable_branches', 0);
+                })
+            )
             ->exists();
 
-        if ($hasAttendance) {
-            $attendance = self::where('employee_id', $employeeId)
-                ->where('date', $date)
-                ->first();
-            return $attendance->status;
+        if ($hasValidAttendance) {
+            return 'present';
+        }
+        if ($isOnLeave) {
+            return 'leave';
+        }
+        if ($hasMovement) {
+            return 'on_duty';
+        }
+        if ($attendanceRowStatus === 'on_duty') {
+            return 'on_duty';
+        }
+        if ($attendanceRowStatus === 'leave') {
+            return 'leave';
+        }
+        if ($attendanceRowStatus === 'holiday') {
+            return 'holiday';
+        }
+        if ($isHoliday) {
+            return 'holiday';
+        }
+        if (in_array($carbonDate->dayOfWeek, $weekendDays, true)) {
+            return 'weekend';
         }
 
-        // Default to absent if no other status applies
         return 'absent';
     }
 

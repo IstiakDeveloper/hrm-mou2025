@@ -105,6 +105,7 @@ interface HolidayIndexProps {
 export default function HolidayIndex({ holidays, years, year, filters }: HolidayIndexProps) {
   const [search, setSearch] = useState(filters.search || '');
   const [selectedYear, setSelectedYear] = useState(filters.year || year.toString());
+  const serialBase = (holidays.meta?.from ?? 1) - 1;
 
   const handleSearch = () => {
     router.get(route('holidays.index'), {
@@ -225,6 +226,7 @@ export default function HolidayIndex({ holidays, years, year, filters }: Holiday
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-16">SL</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Type</TableHead>
@@ -234,8 +236,11 @@ export default function HolidayIndex({ holidays, years, year, filters }: Holiday
               </TableHeader>
               <TableBody>
                 {holidays.data.length > 0 ? (
-                  holidays.data.map((holiday) => (
+                  holidays.data.map((holiday, idx) => (
                     <TableRow key={holiday.id}>
+                      <TableCell className="text-gray-600">
+                        {serialBase + idx + 1}
+                      </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center">
                           <CalendarIcon className="mr-2 h-4 w-4 text-gray-500" />
@@ -287,7 +292,7 @@ export default function HolidayIndex({ holidays, years, year, filters }: Holiday
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <CalendarIcon className="h-12 w-12 text-gray-400 mb-2" />
                         <p>No holidays found for the selected criteria.</p>

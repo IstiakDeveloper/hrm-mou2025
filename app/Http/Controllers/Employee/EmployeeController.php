@@ -322,4 +322,20 @@ class EmployeeController extends Controller
             'departments' => $departments,
         ]);
     }
+
+    /**
+     * Display blank employee form for printing.
+     */
+    public function blankForm()
+    {
+        $departments = Department::orderBy('name')->get();
+        $designations = Designation::orderBy('name')->get();
+        $branches = Branch::orderBy('name')->get();
+
+        return view('pdf.employee-blank-form', [
+            'departments' => $departments,
+            'designations' => $designations,
+            'branches' => $branches,
+        ]);
+    }
 }

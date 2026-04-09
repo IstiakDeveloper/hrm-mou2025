@@ -16,17 +16,48 @@ class HolidayController extends Controller
      */
     public function index(Request $request)
     {
-        $year = $request->year ?? Carbon::now()->year;
+        $year = (int) $request->input('year', Carbon::now()->year);
+        $perPage = (int) $request->input('per_page', 500);
+        $perPage = max(10, min(2000, $perPage));
 
-        $holidays = Holiday::when($request->year, function ($query, $year) {
-            $query->whereYear('date', $year);
-        })
+        // Show selected year's one-time holidays + all recurring holidays (recurring applies every year)
+        $holidays = Holiday::query()
+            ->where(function ($query) use ($year) {
+                $query->whereYear('date', $year)
+                    ->orWhere('is_recurring', true);
+            })
             ->when($request->search, function ($query, $search) {
                 $query->where('title', 'like', "%{$search}%");
             })
-            ->orderBy('date')
-            ->paginate(10)
+            // Sort by month/day so recurring holidays appear in the right order for any year
+            ->orderByRaw('MONTH(`date`), DAY(`date`)')
+            ->paginate($perPage)
             ->withQueryString();
+
+        // For recurring holidays, present the date as the selected year (keeps UI consistent)
+        $holidays->getCollection()->transform(function ($holiday) use ($year) {
+            if ($holiday->is_recurring) {
+                $base = Carbon::parse($holiday->date);
+                $holiday->date = Carbon::create($year, $base->month, $base->day);
+            }
+
+            return $holiday;
+        });
+
+        // Build a useful year list from existing non-recurring holidays, plus a buffer around current year
+        $storedYears = Holiday::where('is_recurring', false)
+            ->selectRaw('YEAR(date) as y')
+            ->distinct()
+            ->pluck('y')
+            ->map(fn ($y) => (int) $y)
+            ->filter();
+
+        $currentYear = Carbon::now()->year;
+        $minYear = $storedYears->min() ?? ($currentYear - 1);
+        $maxYear = $storedYears->max() ?? ($currentYear + 2);
+        $minYear = min($minYear, $currentYear - 1);
+        $maxYear = max($maxYear, $currentYear + 2);
+        $years = range($minYear, $maxYear);
 
         return Inertia::render('holiday/index', [
             'holidays' => [
@@ -50,7 +81,7 @@ class HolidayController extends Controller
             ],
             'filters' => $request->only(['year', 'search']),
             'year' => $year,
-            'years' => range(Carbon::now()->year - 1, Carbon::now()->year + 2),
+            'years' => $years,
         ]);
     }
 

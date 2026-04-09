@@ -205,6 +205,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('organization-chart', [EmployeeController::class, 'organizationChart'])
             ->name('organization.chart');
 
+        // Blank Employee Form (Printable)
+        Route::get('employees-blank-form', [EmployeeController::class, 'blankForm'])
+            ->name('employees.blank-form');
+
         // Employee Dashboard (for viewing individual employee data)
         Route::get('employee/dashboard', [EmployeeDashboardController::class, 'index'])
             ->name('employee.dashboard');
@@ -354,12 +358,13 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/', [AttendanceDeviceController::class, 'index'])->name('index');
             Route::get('/create', [AttendanceDeviceController::class, 'create'])->name('create');
             Route::post('/', [AttendanceDeviceController::class, 'store'])->name('store');
+            // Static paths before {device} so they are never captured as a device id
+            Route::get('/biometric-ids', [AttendanceDeviceController::class, 'biometricIds'])->name('biometric-ids');
+            Route::get('/sync-report', [AttendanceDeviceController::class, 'syncReport'])->name('sync-report');
             Route::get('/{device}/edit', [AttendanceDeviceController::class, 'edit'])->name('edit');
             Route::put('/{device}', [AttendanceDeviceController::class, 'update'])->name('update');
             Route::delete('/{device}', [AttendanceDeviceController::class, 'destroy'])->name('destroy');
             Route::post('/{device}/test-connection', [AttendanceDeviceController::class, 'testConnection'])->name('test-connection');
-            Route::get('/biometric-ids', [AttendanceDeviceController::class, 'biometricIds'])->name('biometric-ids');
-            Route::get('/sync-report', [AttendanceDeviceController::class, 'syncReport'])->name('sync-report');
         });
 
         // Attendance Settings
@@ -509,11 +514,15 @@ Route::middleware(['auth'])->group(function () {
             ->name('show')
             ->middleware('permission:movements.view');
 
-        // Edit movement
+        // Edit / delete movement (admin / HR with permission)
         Route::middleware(['permission:movements.edit'])->group(function () {
             Route::get('/{movement}/edit', [MovementController::class, 'edit'])->name('edit');
             Route::put('/{movement}', [MovementController::class, 'update'])->name('update');
         });
+
+        Route::delete('/{movement}', [MovementController::class, 'destroy'])
+            ->name('destroy')
+            ->middleware('permission:movements.delete');
 
         // Employee actions
         Route::post('/{movement}/cancel', [MovementController::class, 'cancel'])
@@ -521,8 +530,7 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('permission:movements.cancel');
 
         Route::post('/{movement}/complete', [MovementController::class, 'complete'])
-            ->name('complete')
-            ->middleware('permission:movements.complete');
+            ->name('complete');
 
         // Manager/HR approval actions
         Route::middleware(['permission:movements.approve'])->group(function () {

@@ -27,7 +27,6 @@ import {
 import { format, parseISO, differenceInMinutes, differenceInHours } from "date-fns";
 import AdminLayout from "@/layouts/AdminLayout";
 import { Link, router } from "@inertiajs/react";
-import axios from 'axios';
 
 // Types for better code organization
 interface Employee {
@@ -196,10 +195,6 @@ export default function EmployeeDashboard({
                 }
             }
 
-            if (timeString instanceof Date) {
-                return format(timeString, "h:mm a");
-            }
-
             return "Invalid format";
         } catch (e) {
             console.error("Error formatting time:", e, timeString);
@@ -233,36 +228,9 @@ export default function EmployeeDashboard({
         return attendance.status || "Present";
     };
 
-    // Movement completion handler
-    const handleCloseMovement = async (movementId: string) => {
-        if (isSubmitting) return;
-
-        try {
-            setIsSubmitting(true);
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-            const response = await axios.post(
-                route('movements.complete', movementId),
-                { actual_return_datetime: null },
-                {
-                    headers: {
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                    }
-                }
-            );
-
-            if ([200, 201, 204].includes(response.status)) {
-                setCompletedMovementIds(prev => [...prev, movementId]);
-                alert('Movement completed successfully!');
-            }
-        } catch (error) {
-            console.error('Error closing movement:', error);
-            alert('Error closing movement. Please try again.');
-        } finally {
-            setIsSubmitting(false);
-        }
+    const openGlobalCloseMovement = (movementId: string) => {
+        if (!movementId) return;
+        window.dispatchEvent(new CustomEvent('hrm:movement-close', { detail: { movementId: Number(movementId) } }));
     };
 
     // Navigation handlers
@@ -321,7 +289,7 @@ export default function EmployeeDashboard({
                                     </div>
                                     <Button
                                         className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
-                                        onClick={() => router.get(route('movements.show', movement.id))}
+                                        onClick={() => openGlobalCloseMovement(movement.id)}
                                         disabled={isSubmitting}
                                     >
                                         {isSubmitting ? (
@@ -343,7 +311,7 @@ export default function EmployeeDashboard({
                 <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Avatar className="h-16 w-16">
-                            <AvatarImage src={photoUrl} alt={fullName} />
+                            <AvatarImage src={photoUrl || undefined} alt={fullName} />
                             <AvatarFallback className="text-lg font-semibold">
                                 {getInitials(employee?.first_name)}
                             </AvatarFallback>
@@ -464,7 +432,9 @@ export default function EmployeeDashboard({
                                 <Calendar
                                     mode="single"
                                     selected={currentDate}
-                                    onSelect={setCurrentDate}
+                                    onSelect={(day) => {
+                                        if (day) setCurrentDate(day);
+                                    }}
                                     className="rounded-md border"
                                 />
                             </CardContent>
@@ -702,7 +672,7 @@ export default function EmployeeDashboard({
                                                                     <Button
                                                                         size="sm"
                                                                         className="bg-green-600 hover:bg-green-700 text-white"
-                                                                        onClick={() => handleCloseMovement(movement.id)}
+                                                                        onClick={() => openGlobalCloseMovement(movement.id)}
                                                                         disabled={isSubmitting}
                                                                     >
                                                                         {isSubmitting ? "Processing..." : (

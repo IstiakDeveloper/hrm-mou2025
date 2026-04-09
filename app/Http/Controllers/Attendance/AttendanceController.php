@@ -10,6 +10,9 @@ use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Holiday;
+use App\Models\LeaveApplication;
+use App\Models\Movement;
+use App\Support\MonthlyAttendanceCalculator;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -18,6 +21,72 @@ use Inertia\Inertia;
 
 class AttendanceController extends Controller
 {
+    /**
+     * Normalize a JSON array field that may already be cast to array.
+     *
+     * Some models (e.g., AttendanceSetting::$casts) cast JSON columns to arrays.
+     * In those cases, calling json_decode() will throw: "array given".
+     */
+    private function normalizeJsonArray($value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return [];
+    }
+
+    /**
+     * Same day-status priority as EmployeeDashboardController attendance report.
+     */
+    private function determineDateStatusEnhanced(
+        string $date,
+        array $weekendDays,
+        bool $isHoliday,
+        bool $isOnLeave,
+        bool $hasMovement,
+        bool $hasValidAttendance,
+        ?string $attendanceRowStatus
+    ): string {
+        if ($hasValidAttendance) {
+            return 'present';
+        }
+
+        if ($isOnLeave) {
+            return 'leave';
+        }
+
+        if ($hasMovement) {
+            return 'on_duty';
+        }
+
+        if ($attendanceRowStatus === 'on_duty') {
+            return 'on_duty';
+        }
+
+        if ($attendanceRowStatus === 'leave') {
+            return 'leave';
+        }
+
+        if ($attendanceRowStatus === 'holiday') {
+            return 'holiday';
+        }
+
+        if ($isHoliday) {
+            return 'holiday';
+        }
+
+        $dayOfWeek = Carbon::parse($date)->dayOfWeek;
+        if (in_array($dayOfWeek, $weekendDays, true)) {
+            return 'weekend';
+        }
+
+        return 'absent';
+    }
+
     /**
      * Display a listing of attendances.
      */
@@ -61,7 +130,24 @@ class AttendanceController extends Controller
                 ->where(function ($query) use ($date) {
                     $dateStr = $date->format('Y-m-d');
                     $query->whereDate('from_datetime', '<=', $dateStr)
-                        ->whereDate('actual_return_datetime', '>=', $dateStr);
+                        ->where(function ($q) use ($dateStr) {
+                            // Active movements have no actual_return_datetime yet; use planned to_datetime
+                            $q->where(function ($qq) use ($dateStr) {
+                                $qq->where('status', 'active')
+                                    ->whereDate('to_datetime', '>=', $dateStr);
+                            })->orWhere(function ($qq) use ($dateStr) {
+                                // Completed movements: prefer actual_return_datetime, fallback to to_datetime
+                                $qq->where('status', 'completed')
+                                    ->where(function ($retQ) use ($dateStr) {
+                                        $retQ->whereNotNull('actual_return_datetime')
+                                            ->whereDate('actual_return_datetime', '>=', $dateStr)
+                                            ->orWhere(function ($fallbackQ) use ($dateStr) {
+                                                $fallbackQ->whereNull('actual_return_datetime')
+                                                    ->whereDate('to_datetime', '>=', $dateStr);
+                                            });
+                                    });
+                            });
+                        });
                 })
                 ->whereIn('status', ['active', 'completed'])
                 ->orderBy('from_datetime')
@@ -93,7 +179,8 @@ class AttendanceController extends Controller
                     $attendance->movement_destination = $firstMovement->destination;
                     $attendance->movement_status = $firstMovement->status;
                     $attendance->movement_from = Carbon::parse($firstMovement->from_datetime)->format('h:i A');
-                    $attendance->movement_to = Carbon::parse($firstMovement->actual_return_datetime)->format('h:i A');
+                    $movementTo = $firstMovement->actual_return_datetime ?: $firstMovement->to_datetime;
+                    $attendance->movement_to = $movementTo ? Carbon::parse($movementTo)->format('h:i A') : null;
                     $attendance->movement_id = $firstMovement->id;
                 } else {
                     // Single movement
@@ -104,7 +191,8 @@ class AttendanceController extends Controller
                     $attendance->movement_destination = $movement->destination;
                     $attendance->movement_status = $movement->status;
                     $attendance->movement_from = Carbon::parse($movement->from_datetime)->format('h:i A');
-                    $attendance->movement_to = Carbon::parse($movement->actual_return_datetime)->format('h:i A');
+                    $movementTo = $movement->actual_return_datetime ?: $movement->to_datetime;
+                    $attendance->movement_to = $movementTo ? Carbon::parse($movementTo)->format('h:i A') : null;
                     $attendance->movement_id = $movement->id;
                 }
             } else {
@@ -223,7 +311,7 @@ class AttendanceController extends Controller
                 ->setSecond($workEndTime->second);
 
             // Check if it's a weekend
-            $weekendDays = json_decode($settings->weekend_days, true);
+            $weekendDays = $this->normalizeJsonArray($settings->weekend_days);
             $dayOfWeek = $attendanceDate->dayOfWeek;
             $isWeekend = in_array($dayOfWeek, $weekendDays);
 
@@ -335,9 +423,20 @@ class AttendanceController extends Controller
         $startDate = $month->copy()->startOfMonth();
         $endDate = $month->copy()->endOfMonth();
         $daysInMonth = $month->daysInMonth;
+        // Future dates should be blank (not removed). We compute maxDate and let the calculator blank future days.
+        $today = Carbon::today()->startOfDay();
+        $maxDate = null;
+        if ($startDate->gt($today)) {
+            // Entire month is in the future → everything blank
+            $maxDate = $today->copy()->subDay(); // ensures all month days are > maxDate
+        } elseif ($month->isSameMonth($today)) {
+            // Current month: show days, but blank after today
+            $maxDate = $today->copy();
+        }
 
-        // Base query for employees
-        $employeesQuery = Employee::with(['department', 'designation', 'branch']);
+        // Base query for employees (exclude terminated/inactive)
+        $employeesQuery = Employee::with(['department', 'designation', 'branch'])
+            ->where('status', 'active');
 
         // Apply filters based on user permissions and role
         $this->applyEmployeeFilters($employeesQuery, $user, $request);
@@ -348,11 +447,90 @@ class AttendanceController extends Controller
         $attendances = Attendance::whereIn('employee_id', $employeeIds)
             ->whereBetween('date', [$startDate, $endDate])
             ->get()
+            ->groupBy('employee_id')
+            ->map(function ($items) {
+                // Normalize to frontend-friendly primitives to avoid timezone shifting (date-only fields)
+                return $items->map(function (Attendance $a) {
+                    return [
+                        'id' => $a->id,
+                        'employee_id' => $a->employee_id,
+                        'date' => Carbon::parse($a->date)->format('Y-m-d'),
+                        // These may be stored as time or datetime depending on source; normalize to string or null
+                        'check_in' => $a->check_in ? Carbon::parse($a->check_in)->format('H:i:s') : null,
+                        'check_out' => $a->check_out ? Carbon::parse($a->check_out)->format('H:i:s') : null,
+                        'status' => $a->status,
+                        'remarks' => $a->remarks,
+                        'auto_remarks' => $a->auto_remarks ?? null,
+                    ];
+                })->values();
+            });
+
+        // Approved leave days for the month (so monthly view shows leave even when no attendance row exists)
+        $leaveDays = [];
+        $leaveApps = LeaveApplication::with('leaveType')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $endDate)
+            ->whereDate('end_date', '>=', $startDate)
+            ->get();
+
+        foreach ($leaveApps as $app) {
+            $empId = (int) $app->employee_id;
+            $typeName = $app->leaveType?->name ?? 'Leave';
+            $cur = Carbon::parse($app->start_date)->startOfDay()->max($startDate->copy()->startOfDay());
+            $end = $app->inclusiveEndDate()->min($endDate->copy()->startOfDay());
+            while ($cur->lte($end)) {
+                $leaveDays[$empId][$cur->format('Y-m-d')] = $typeName;
+                $cur->addDay();
+            }
+        }
+
+        // Movements overlapping this month (official movements only affect on_duty)
+        $movements = Movement::whereIn('employee_id', $employeeIds)
+            ->whereIn('status', ['active', 'completed'])
+            ->where('movement_type', 'official')
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween(\DB::raw('DATE(from_datetime)'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                    ->orWhereBetween(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                    ->orWhere(function ($qq) use ($startDate, $endDate) {
+                        $qq->where(\DB::raw('DATE(from_datetime)'), '<=', $startDate->format('Y-m-d'))
+                            ->where(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $endDate->format('Y-m-d'));
+                    });
+            })
+            ->get()
             ->groupBy('employee_id');
 
         // Get branches and departments that user has access to
         $branches = $this->getAccessibleBranches($user);
         $departments = $this->getAccessibleDepartments($user);
+
+        // Fetch attendance settings for all relevant branches (for weekend logic)
+        // Align with EmployeeDashboardController: use employee current_branch_id as primary branch id.
+        $branchIds = $employees
+            ->getCollection()
+            ->pluck('current_branch_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+
+        if (empty($branchIds)) {
+            $branchIds = $employees->pluck('branch.id')->filter()->unique()->values()->toArray();
+        }
+
+        $attendanceSettings = AttendanceSetting::whereIn('branch_id', $branchIds)
+            ->get()
+            ->mapWithKeys(function ($setting) {
+                return [
+                    $setting->branch_id => [
+                        'weekend_days' => $this->normalizeJsonArray($setting->weekend_days),
+                        'work_start_time' => $setting->work_start_time,
+                        'work_end_time' => $setting->work_end_time,
+                        'late_threshold_minutes' => $setting->late_threshold_minutes,
+                        'half_day_hours' => $setting->half_day_hours,
+                    ]
+                ];
+            })->toArray();
 
         // Fetch holidays for the month - returning as array compatible with frontend
         $holidays = Holiday::where(function ($query) use ($startDate, $endDate) {
@@ -368,28 +546,49 @@ class AttendanceController extends Controller
             return [
                 'id' => $holiday->id,
                 'title' => $holiday->title,
-                'date' => $holiday->date,
+                'date' => Carbon::parse($holiday->date)->format('Y-m-d'),
                 'description' => $holiday->description,
                 'is_recurring' => $holiday->is_recurring,
                 'applicable_branches' => $holiday->applicable_branches,
             ];
         })->toArray();
 
-        // Fetch attendance settings for all relevant branches
-        $branchIds = $employees->pluck('branch.id')->unique()->toArray();
-        $attendanceSettings = AttendanceSetting::whereIn('branch_id', $branchIds)
-            ->get()
-            ->mapWithKeys(function ($setting) {
-                return [
-                    $setting->branch_id => [
-                        'weekend_days' => json_decode($setting->weekend_days),
-                        'work_start_time' => $setting->work_start_time,
-                        'work_end_time' => $setting->work_end_time,
-                        'late_threshold_minutes' => $setting->late_threshold_minutes,
-                        'half_day_hours' => $setting->half_day_hours,
-                    ]
-                ];
-            })->toArray();
+        // Holiday applicability lookup per branch and date
+        $holidayApplicable = [];
+        foreach ($holidays as $h) {
+            $date = $h['date'];
+            $branchesRaw = $h['applicable_branches'];
+            $applicable = is_array($branchesRaw) ? $branchesRaw : (is_string($branchesRaw) ? (json_decode($branchesRaw, true) ?: []) : []);
+            if (empty($applicable)) {
+                $holidayApplicable['*'][$date] = true;
+                continue;
+            }
+            foreach ($applicable as $bid) {
+                $holidayApplicable[(string) $bid][$date] = true;
+            }
+        }
+
+        // Pre-index attendances by employee_id + date for fast lookup
+        $attendanceByEmployeeDate = [];
+        foreach ($attendances as $empId => $rows) {
+            foreach ($rows as $row) {
+                $attendanceByEmployeeDate[(string) $empId][$row['date']] = $row;
+            }
+        }
+
+        $calc = MonthlyAttendanceCalculator::compute(
+            $employees,
+            $month,
+            $daysInMonth,
+            $maxDate,
+            $attendanceSettings,
+            $movements->toArray(),
+            $leaveDays,
+            $holidayApplicable,
+            array_map(fn ($rows) => $rows, $attendanceByEmployeeDate)
+        );
+        $dailyStatusByEmployee = $calc['dailyStatusByEmployee'];
+        $summaryByEmployee = $calc['summaryByEmployee'];
 
         // Generate calendar dates for the month
         $calendarDates = [];
@@ -404,6 +603,9 @@ class AttendanceController extends Controller
         return Inertia::render('attendance/monthly', [
             'employees' => $employees,
             'attendances' => $attendances,
+            'leaveDays' => $leaveDays,
+            'dailyStatusByEmployee' => $dailyStatusByEmployee,
+            'summaryByEmployee' => $summaryByEmployee,
             'branches' => $branches,
             'departments' => $departments,
             'filters' => $request->only(['month', 'branch_id', 'department_id', 'search']),
@@ -660,7 +862,7 @@ class AttendanceController extends Controller
             if ($branchId) {
                 $attendanceSettings = AttendanceSetting::where('branch_id', $branchId)->first();
                 if ($attendanceSettings) {
-                    $weekendDays = json_decode($attendanceSettings->weekend_days, true) ?: [];
+                    $weekendDays = $this->normalizeJsonArray($attendanceSettings->weekend_days);
                 }
             }
 
@@ -773,7 +975,24 @@ class AttendanceController extends Controller
                     $movements = \App\Models\Movement::where('employee_id', $attendance->employee_id)
                         ->where(function ($query) use ($date) {
                             $query->whereDate('from_datetime', '<=', $date)
-                                ->whereDate('actual_return_datetime', '>=', $date);
+                                ->where(function ($q) use ($date) {
+                                    // Active movements have no actual_return_datetime yet; use planned to_datetime
+                                    $q->where(function ($qq) use ($date) {
+                                        $qq->where('status', 'active')
+                                            ->whereDate('to_datetime', '>=', $date);
+                                    })->orWhere(function ($qq) use ($date) {
+                                        // Completed movements: prefer actual_return_datetime, fallback to to_datetime
+                                        $qq->where('status', 'completed')
+                                            ->where(function ($retQ) use ($date) {
+                                                $retQ->whereNotNull('actual_return_datetime')
+                                                    ->whereDate('actual_return_datetime', '>=', $date)
+                                                    ->orWhere(function ($fallbackQ) use ($date) {
+                                                        $fallbackQ->whereNull('actual_return_datetime')
+                                                            ->whereDate('to_datetime', '>=', $date);
+                                                    });
+                                            });
+                                    });
+                                });
                         })
                         ->whereIn('status', ['active', 'completed'])
                         ->orderBy('from_datetime')
@@ -796,7 +1015,8 @@ class AttendanceController extends Controller
                             $attendance->movement_destination = $firstMovement->destination;
                             $attendance->movement_status = $firstMovement->status;
                             $attendance->movement_from = Carbon::parse($firstMovement->from_datetime)->format('h:i A');
-                            $attendance->movement_to = Carbon::parse($firstMovement->actual_return_datetime)->format('h:i A');
+                            $movementTo = $firstMovement->actual_return_datetime ?: $firstMovement->to_datetime;
+                            $attendance->movement_to = $movementTo ? Carbon::parse($movementTo)->format('h:i A') : null;
                         } else {
                             // Single movement
                             $movement = $movements->first();
@@ -806,7 +1026,8 @@ class AttendanceController extends Controller
                             $attendance->movement_destination = $movement->destination;
                             $attendance->movement_status = $movement->status;
                             $attendance->movement_from = Carbon::parse($movement->from_datetime)->format('h:i A');
-                            $attendance->movement_to = Carbon::parse($movement->actual_return_datetime)->format('h:i A');
+                            $movementTo = $movement->actual_return_datetime ?: $movement->to_datetime;
+                            $attendance->movement_to = $movementTo ? Carbon::parse($movementTo)->format('h:i A') : null;
                             $totalMovements += 1;
                         }
                     } else {

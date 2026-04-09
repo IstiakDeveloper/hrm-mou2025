@@ -98,6 +98,16 @@ class EmployeeDashboardController extends Controller
                     break;
             }
 
+            // Block future data: clamp end date to today (server-side enforcement)
+            $today = Carbon::today()->format('Y-m-d');
+            if (Carbon::parse($fromDate)->gt(Carbon::parse($today))) {
+                // If range starts in future, return empty view range ending today
+                $fromDate = $today;
+                $toDate = $today;
+            } elseif (Carbon::parse($toDate)->gt(Carbon::parse($today))) {
+                $toDate = $today;
+            }
+
             $dateRange = [
                 'from' => $fromDate,
                 'to' => $toDate
@@ -166,58 +176,140 @@ class EmployeeDashboardController extends Controller
         return min($dates);
     }
 
+    /**
+     * AttendanceSetting casts weekend_days to array; older rows may still be JSON strings.
+     *
+     * @return list<int>
+     */
+    private function decodeWeekendDays(mixed $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+
+        if (is_array($raw)) {
+            return array_values(array_map('intval', $raw));
+        }
+
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+
+            return is_array($decoded) ? array_values(array_map('intval', $decoded)) : [];
+        }
+
+        return [];
+    }
 
     /**
-     * Enhanced method to determine date status with proper priority
+     * Determine calendar-day status for the employee report.
+     *
+     * Priority (typical HR view):
+     * 1. Real punch (check-in) → present (supports half-day work + leave later).
+     * 2. Approved leave (no punch) → leave (avoids “Absent” on leave days with a stub row).
+     * 3. Official movement span → on_duty.
+     * 4. Row already marked on_duty / leave / holiday in DB → trust when no punch.
+     * 5. Calendar holiday / weekend → holiday / weekend.
+     * 6. Otherwise absent.
      */
-    private function determineDateStatusEnhanced($date, $holidays, $weekendDays, $isOnLeave, $hasMovement, $hasAttendance)
-    {
+    private function determineDateStatusEnhanced(
+        string $date,
+        array $holidays,
+        array $weekendDays,
+        bool $isOnLeave,
+        bool $hasMovement,
+        bool $hasValidAttendance,
+        ?string $attendanceRowStatus = null
+    ): string {
         $currentDate = Carbon::parse($date);
         $dayOfWeek = $currentDate->dayOfWeek;
 
-        // Enhanced debug logging
-        Log::info('Status determination for date', [
-            'date' => $date,
-            'holidays_array' => $holidays,
-            'is_holiday' => in_array($date, $holidays),
-            'has_attendance' => $hasAttendance,
-            'is_on_leave' => $isOnLeave,
-            'has_movement' => $hasMovement,
-            'day_of_week' => $dayOfWeek,
-            'weekend_days' => $weekendDays
-        ]);
-
-        // Priority order:
-        // 1. If there's attendance record -> 'present'
-        if ($hasAttendance) {
-            Log::info("Status: present (has attendance)");
+        if ($hasValidAttendance) {
             return 'present';
         }
 
-        // 2. If on approved leave -> 'leave'
         if ($isOnLeave) {
-            Log::info("Status: leave (on approved leave)");
             return 'leave';
         }
 
-        // 3. If has movement -> 'on_duty'
         if ($hasMovement) {
-            Log::info("Status: on_duty (has movement)");
             return 'on_duty';
         }
 
-        // 4. If it's a holiday -> 'holiday'
-        if (in_array($date, $holidays)) {
+        if ($attendanceRowStatus === 'on_duty') {
+            return 'on_duty';
+        }
+
+        if ($attendanceRowStatus === 'leave') {
+            return 'leave';
+        }
+
+        if ($attendanceRowStatus === 'holiday') {
             return 'holiday';
         }
 
-        // 5. If it's weekend -> 'weekend'
-        if (in_array($dayOfWeek, $weekendDays)) {
+        if (in_array($date, $holidays, true)) {
+            return 'holiday';
+        }
+
+        if (in_array($dayOfWeek, $weekendDays, true)) {
             return 'weekend';
         }
 
-
         return 'absent';
+    }
+
+    /**
+     * Human-readable remark for approved leave day (optionally append real clock remarks).
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\LeaveApplication>  $leavesOnDate
+     */
+    private function formatLeaveDayRemarks($leavesOnDate, ?string $clockRemarks): string
+    {
+        $typeNames = $leavesOnDate
+            ->map(fn ($leave) => $leave->leaveType?->name)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $base = empty($typeNames)
+            ? 'On approved leave'
+            : 'On approved leave (' . implode(', ', $typeNames) . ')';
+
+        if ($clockRemarks !== null && $clockRemarks !== '') {
+            return $base . ' — ' . $clockRemarks;
+        }
+
+        return $base;
+    }
+
+    /**
+     * Human-readable remark for on-duty / movement days.
+     */
+    private function formatOnDutyDayRemarks(array $reportData, ?string $clockRemarks): string
+    {
+        if (empty($reportData['has_movement'])) {
+            $base = 'On duty';
+        } elseif (!empty($reportData['multiple_movements'])) {
+            $base = 'On duty — ' . (int) $reportData['total_movements'] . ' movements';
+        } else {
+            $type = ucfirst((string) ($reportData['movement_type'] ?? 'official'));
+            $purpose = (string) ($reportData['movement_purpose'] ?? '');
+            $dest = (string) ($reportData['movement_destination'] ?? '');
+            $base = 'On duty — ' . $type . ' movement';
+            if ($purpose !== '') {
+                $base .= ': ' . $purpose;
+            }
+            if ($dest !== '') {
+                $base .= ' → ' . $dest;
+            }
+        }
+
+        if ($clockRemarks !== null && $clockRemarks !== '') {
+            return $base . ' — ' . $clockRemarks;
+        }
+
+        return $base;
     }
     /**
      * Enhanced getAttendanceData method with proper movement integration
@@ -281,11 +373,14 @@ class EmployeeDashboardController extends Controller
                             ->where('end_date', '>=', $toDate);
                     });
             })
+            ->with('leaveType')
             ->get();
 
         // Get attendance settings for weekend determination
         $attendanceSettings = AttendanceSetting::where('branch_id', $branchId)->first();
-        $weekendDays = $attendanceSettings ? json_decode($attendanceSettings->weekend_days ?? '[]', true) : [];
+        $weekendDays = $attendanceSettings
+            ? $this->decodeWeekendDays($attendanceSettings->weekend_days)
+            : [];
 
         // Instantiate Attendance model for method access
         $attendanceModel = new Attendance();
@@ -297,8 +392,10 @@ class EmployeeDashboardController extends Controller
             $dayName = $currentDate->format('l');
             $dayOfWeek = $currentDate->dayOfWeek;
 
-            // Find existing attendance record
-            $existingAttendance = $attendances->firstWhere('date', $date);
+            // Match attendance row by calendar date (DB may return date in varying formats)
+            $existingAttendance = $attendances->first(function ($row) use ($date) {
+                return Carbon::parse($row->date)->format('Y-m-d') === $date;
+            });
 
             // Initialize report data
             $reportData = [
@@ -334,13 +431,15 @@ class EmployeeDashboardController extends Controller
                 return $date >= $fromDate && $date <= $toDate;
             });
 
-            // Check for leave on this date
-            $isOnLeave = $leaves->filter(function ($leave) use ($date) {
-                return $date >= $leave->start_date && $date <= $leave->end_date;
-            })->count() > 0;
+            // Check for leave on this date (Carbon-safe + respect `days` vs end_date)
+            $leavesOnDate = $leaves->filter(fn (LeaveApplication $leave) => $leave->coversCalendarDate($date));
+            $isOnLeave = $leavesOnDate->isNotEmpty();
 
             // Check if attendance record has valid check-in (not just record exists)
             $hasValidAttendance = !is_null($existingAttendance) && !is_null($existingAttendance->check_in);
+            $attendanceRowStatus = $existingAttendance
+                ? ($existingAttendance->status ?? null)
+                : null;
 
             // Determine status with proper priority order
             $status = $this->determineDateStatusEnhanced(
@@ -349,7 +448,8 @@ class EmployeeDashboardController extends Controller
                 $weekendDays,
                 $isOnLeave,
                 $movementsOnDate->count() > 0,
-                $hasValidAttendance
+                $hasValidAttendance,
+                is_string($attendanceRowStatus) ? $attendanceRowStatus : null
             );
 
             // If there are movements on this date, add movement information
@@ -402,89 +502,80 @@ class EmployeeDashboardController extends Controller
                 }
             }
 
-            // If attendance record exists, format it
+            $checkIn = null;
+            $checkOut = null;
+            $device = null;
             if ($existingAttendance) {
-                // Format check-in and check-out times
-                $checkIn = $existingAttendance->check_in ?
-                    date('h:i A', strtotime($existingAttendance->check_in)) : null;
-
-                $checkOut = $existingAttendance->check_out ?
-                    date('h:i A', strtotime($existingAttendance->check_out)) : null;
-
-                // Add device info
-                $device = null;
+                $checkIn = $existingAttendance->check_in
+                    ? date('h:i A', strtotime($existingAttendance->check_in))
+                    : null;
+                $checkOut = $existingAttendance->check_out
+                    ? date('h:i A', strtotime($existingAttendance->check_out))
+                    : null;
                 if ($existingAttendance->device_id) {
                     $device = [
                         'id' => $existingAttendance->device_id,
-                        'name' => $existingAttendance->device_name
+                        'name' => $existingAttendance->device_name,
                     ];
                 }
+            }
 
-                // Create attendance record with formatted data
+            $clockRemarks = null;
+            if ($existingAttendance) {
                 $attendanceRecord = new Attendance((array) $existingAttendance);
                 $this->generateRemarks($attendanceRecord);
+                $clockRemarks = $attendanceRecord->auto_remarks;
 
-                $reportData['status'] = $status;
-                $reportData['check_in'] = $checkIn;
-                $reportData['check_out'] = $checkOut;
-                $reportData['device'] = $device;
-
-                // Enhanced remarks with movement information
-                $remarks = $attendanceRecord->auto_remarks;
-                if ($reportData['has_movement']) {
-                    $movementInfo = [];
-                    if ($reportData['multiple_movements']) {
-                        $movementInfo[] = $reportData['total_movements'] . ' movements';
-                    } else {
-                        $movementInfo[] = ucfirst($reportData['movement_type']) . ' movement: ' . $reportData['movement_purpose'];
-                    }
-                    $remarks = implode(' | ', $movementInfo) . ($remarks ? ' | ' . $remarks : '');
-                }
-                $reportData['remarks'] = $remarks;
-                $reportData['auto_remarks'] = $remarks;
-            } else {
-                // Set appropriate data based on status
-                switch ($status) {
-                    case 'leave':
-                        $reportData['status'] = 'leave';
-                        $reportData['remarks'] = 'On approved leave';
-                        $reportData['auto_remarks'] = 'On approved leave';
-                        break;
-
-                    case 'on_duty':
-                        $reportData['status'] = 'on_duty';
-                        $movementRemarks = 'On official movement';
-                        if ($reportData['has_movement']) {
-                            if ($reportData['multiple_movements']) {
-                                $movementRemarks = $reportData['total_movements'] . ' movements';
-                            } else {
-                                $movementRemarks = 'Movement: ' . $reportData['movement_purpose'];
-                            }
-                        }
-                        $reportData['remarks'] = $movementRemarks;
-                        $reportData['auto_remarks'] = $movementRemarks;
-                        break;
-
-                    case 'holiday':
-                        $reportData['status'] = 'holiday';
-                        $reportData['remarks'] = 'Public Holiday';
-                        $reportData['auto_remarks'] = 'Public Holiday';
-                        break;
-
-                    case 'weekend':
-                        $reportData['status'] = 'weekend';
-                        $reportData['remarks'] = 'Weekend';
-                        $reportData['auto_remarks'] = 'Weekend';
-                        break;
-
-                    case 'absent':
-                    default:
-                        $reportData['status'] = 'absent';
-                        $reportData['remarks'] = 'Absent';
-                        $reportData['auto_remarks'] = 'Absent';
-                        break;
+                $misleadingForContext = ['Absent', 'Missing check-in', 'Missing check-out'];
+                if (in_array($status, ['leave', 'on_duty'], true)
+                    && in_array($clockRemarks, $misleadingForContext, true)) {
+                    $clockRemarks = null;
                 }
             }
+
+            $reportData['status'] = $status;
+            $reportData['check_in'] = $checkIn;
+            $reportData['check_out'] = $checkOut;
+            $reportData['device'] = $device;
+
+            switch ($status) {
+                case 'leave':
+                    $reportData['remarks'] = $this->formatLeaveDayRemarks($leavesOnDate, $clockRemarks);
+                    break;
+
+                case 'on_duty':
+                    $reportData['remarks'] = $this->formatOnDutyDayRemarks($reportData, $clockRemarks);
+                    break;
+
+                case 'holiday':
+                    $reportData['remarks'] = 'Public Holiday';
+                    break;
+
+                case 'weekend':
+                    $reportData['remarks'] = 'Weekend';
+                    break;
+
+                case 'present':
+                    $remarks = $clockRemarks ?? 'Regular';
+                    if ($reportData['has_movement']) {
+                        $movementInfo = [];
+                        if ($reportData['multiple_movements']) {
+                            $movementInfo[] = $reportData['total_movements'] . ' movements';
+                        } else {
+                            $movementInfo[] = ucfirst((string) $reportData['movement_type']) . ' movement: ' . ($reportData['movement_purpose'] ?? '');
+                        }
+                        $remarks = implode(' | ', $movementInfo) . ($remarks ? ' | ' . $remarks : '');
+                    }
+                    $reportData['remarks'] = $remarks;
+                    break;
+
+                case 'absent':
+                default:
+                    $reportData['remarks'] = $clockRemarks ?: 'Absent';
+                    break;
+            }
+
+            $reportData['auto_remarks'] = $reportData['remarks'];
 
             $reports[] = $reportData;
         }
@@ -553,7 +644,7 @@ class EmployeeDashboardController extends Controller
                 ->setSecond($workEndTime->second);
 
             // Check if it's a weekend
-            $weekendDays = json_decode($settings->weekend_days ?? '[]', true);
+            $weekendDays = $this->decodeWeekendDays($settings->weekend_days ?? null);
             $dayOfWeek = $attendanceDate->dayOfWeek;
             $isWeekend = in_array($dayOfWeek, $weekendDays);
 

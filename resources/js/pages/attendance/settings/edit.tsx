@@ -19,7 +19,41 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, Clock, Building } from 'lucide-react';
+import { ArrowLeft, Clock } from 'lucide-react';
+
+function mapServerErrorsToFormErrors(
+  raw: Record<string, string | string[]>
+): Record<string, string> {
+  const snakeToCamel: Record<string, string> = {
+    branch_id: 'branchId',
+    work_start_time: 'workStartTime',
+    work_end_time: 'workEndTime',
+    late_threshold_minutes: 'lateThresholdMinutes',
+    half_day_hours: 'halfDayHours',
+    weekend_days: 'weekendDays',
+  };
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    if (key.startsWith('weekend_days.')) {
+      out.weekendDays = Array.isArray(val) ? val[0] : String(val);
+      continue;
+    }
+    const msg = Array.isArray(val) ? val[0] : String(val);
+    const targetKey = snakeToCamel[key] ?? key;
+    out[targetKey] = msg;
+  }
+  return out;
+}
+
+function coerceWeekendDays(raw: unknown): number[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map((d) => Number(d)).filter((n) => n >= 0 && n <= 6))].sort(
+      (a, b) => a - b
+    );
+  }
+  return [];
+}
 
 interface Branch {
   id: number;
@@ -57,7 +91,7 @@ export default function Edit({ setting, branches }: EditProps) {
   const [workEndTime, setWorkEndTime] = useState(setting.work_end_time);
   const [lateThresholdMinutes, setLateThresholdMinutes] = useState(setting.late_threshold_minutes.toString());
   const [halfDayHours, setHalfDayHours] = useState(setting.half_day_hours.toString());
-  const [weekendDays, setWeekendDays] = useState<number[]>(setting.weekend_days);
+  const [weekendDays, setWeekendDays] = useState<number[]>(() => coerceWeekendDays(setting.weekend_days));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -91,15 +125,15 @@ export default function Edit({ setting, branches }: EditProps) {
     setSubmitting(true);
 
     router.put(route('attendance.settings.update', setting.id), {
-      branch_id: parseInt(branchId),
+      branch_id: parseInt(branchId, 10),
       work_start_time: workStartTime,
       work_end_time: workEndTime,
-      late_threshold_minutes: parseInt(lateThresholdMinutes),
-      half_day_hours: parseInt(halfDayHours),
-      weekend_days: weekendDays
+      late_threshold_minutes: parseInt(lateThresholdMinutes, 10),
+      half_day_hours: parseInt(halfDayHours, 10),
+      weekend_days: [...weekendDays].sort((a, b) => a - b)
     }, {
-      onError: (errors) => {
-        setErrors(errors);
+      onError: (errs) => {
+        setErrors(mapServerErrorsToFormErrors(errs as Record<string, string | string[]>));
         setSubmitting(false);
       },
       onFinish: () => setSubmitting(false)
@@ -107,11 +141,12 @@ export default function Edit({ setting, branches }: EditProps) {
   };
 
   const handleWeekendDayChange = (id: number, checked: boolean) => {
-    if (checked) {
-      setWeekendDays([...weekendDays, id]);
-    } else {
-      setWeekendDays(weekendDays.filter(day => day !== id));
-    }
+    setWeekendDays((prev) => {
+      if (checked) {
+        return [...new Set([...prev, id])].sort((a, b) => a - b);
+      }
+      return prev.filter((day) => day !== id);
+    });
   };
 
   return (

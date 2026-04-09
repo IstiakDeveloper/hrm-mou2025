@@ -37,6 +37,8 @@ interface LeaveBalance {
   allocated_days: number;
   used_days: number;
   remaining_days: number;
+  leaveType?: LeaveType;
+  leave_type?: LeaveType;
 }
 
 interface LeaveApproval {
@@ -66,15 +68,21 @@ interface LeaveApplication {
   leaveType: LeaveType;
   approver: User | null;
   leaveBalance?: LeaveBalance;
+  leaveBalances?: LeaveBalance[];
   approvals?: LeaveApproval[];
 }
 
 interface PdfProps {
   application: LeaveApplication;
   currentDate: string;
+  addressee?: {
+    type?: 'department_head' | 'executive_director' | null;
+    title?: string | null;
+    name?: string | null;
+  };
 }
 
-export default function Pdf({ application, currentDate }: PdfProps) {
+export default function Pdf({ application, currentDate, addressee }: PdfProps) {
   useEffect(() => {
     // Auto-trigger print dialog when component loads
     setTimeout(() => {
@@ -111,9 +119,7 @@ export default function Pdf({ application, currentDate }: PdfProps) {
     });
   };
 
-  // Get leave balance for current year and leave type
-  const currentYear = new Date().getFullYear();
-  const leaveBalance = application.leaveBalance;
+  const balances = application.leaveBalances || (application.leaveBalance ? [application.leaveBalance] : []);
 
   return (
     <>
@@ -160,8 +166,10 @@ export default function Pdf({ application, currentDate }: PdfProps) {
           {/* Addressee */}
           <div className="addressee-section">
             <p className="addressee-line">To,</p>
-            <p className="addressee-title">Deputy Executive Director</p>
-            <p className="addressee-company">Mousumi.</p>
+            <p className="addressee-title">
+              {(addressee?.title || 'Executive Director')}
+              {application.employee?.department?.name ? ` (${application.employee.department.name})` : ''}
+            </p>
           </div>
 
           {/* Subject */}
@@ -193,14 +201,35 @@ export default function Pdf({ application, currentDate }: PdfProps) {
             </p>
           </div>
 
-          {/* Leave Information with Balance Data */}
+          {/* Leave Information */}
           <div className="leave-info-section">
             <h3 className="info-title">Leave Information:</h3>
             <p className="leave-balance">
-              Total leave taken in current year: {leaveBalance?.used_days || 0} days |
-              Applied leave: {application.days} day{application.days > 1 ? 's' : ''} |
-              Remaining balance: {leaveBalance?.remaining_days || 0} days
+              Total leave taken in current year: {application.leaveBalance?.used_days || 0} days | Applied leave: {application.days}{' '}
+              day{application.days > 1 ? 's' : ''} | Remaining balance: {application.leaveBalance?.remaining_days || 0} days
             </p>
+          </div>
+
+          {/* Leave Balance (All Types) */}
+          <div className="leave-info-section">
+            <h3 className="info-title">Leave Balance:</h3>
+            <div className="leave-balance-lines leave-balance-columns">
+              {balances.length > 0 ? (
+                balances.map((b) => {
+                  const typeName = b.leaveType?.name || b.leave_type?.name || 'Leave';
+                  return (
+                    <div key={b.id} className="lb-line">
+                      <span className="lb-type">{typeName}</span>
+                      <span className="lb-split">{b.allocated_days}/{b.used_days}</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="lb-line">
+                  <span className="lb-type">No leave balance found for current year.</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Employee Information */}
@@ -210,7 +239,10 @@ export default function Pdf({ application, currentDate }: PdfProps) {
               <div className="employee-details">
                 <div className="detail-item">
                   <span className="detail-label">Name:</span>
-                  <span className="detail-value">{application.employee?.first_name || ''} {application.employee?.last_name || ''}</span>
+                  <span className="detail-value">
+                    {application.employee?.first_name || ''} {application.employee?.last_name || ''}
+                    {application.employee?.department?.name ? ` (${application.employee.department.name})` : ''}
+                  </span>
                 </div>
                 <div className="detail-item">
                   <span className="detail-label">Designation:</span>
@@ -230,22 +262,6 @@ export default function Pdf({ application, currentDate }: PdfProps) {
 
           {/* Digital Approval Section */}
           <div className="approval-section">
-            <div className="approval-box">
-              <h4 className="approval-title">Supervisor Review</h4>
-              <div className="approval-content">
-                <div className="digital-approval-info">
-                  <div className="detail-item">
-                    <span className="detail-label">Status:</span>
-                    <span className="detail-value">Pending Review</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">Review Level:</span>
-                    <span className="detail-value">Department Level</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className={`approval-box ${
               (application.status === 'approved' && 'approved-shadow') ||
               (application.status === 'rejected' && 'rejected-shadow') ||
@@ -380,9 +396,9 @@ export default function Pdf({ application, currentDate }: PdfProps) {
         .page-content {
           max-width: 210mm;
           margin: 0 auto;
-          padding: 12mm;
+          padding: 8mm;
           background: white;
-          min-height: calc(297mm - 24mm);
+          min-height: calc(297mm - 16mm);
           position: relative;
         }
 
@@ -562,6 +578,47 @@ export default function Pdf({ application, currentDate }: PdfProps) {
           border-radius: 3px;
         }
 
+        .leave-balance-lines {
+          width: 100%;
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          border-radius: 4px;
+          overflow: hidden;
+          font-size: 11px;
+        }
+
+        .leave-balance-columns {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 8px;
+          padding: 4px 6px;
+        }
+
+        .lb-line {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding: 6px 8px;
+          border: 1px solid #cbd5e1;
+          border-radius: 4px;
+          background: #ffffff;
+          text-align: center;
+        }
+
+        .lb-type {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-weight: 600;
+        }
+
+        .lb-split {
+          text-align: center;
+          white-space: nowrap;
+          font-weight: bold;
+          font-size: 12px;
+        }
+
         .employee-section {
           margin: 20px 0;
           max-width: 100%;
@@ -613,10 +670,10 @@ export default function Pdf({ application, currentDate }: PdfProps) {
         }
 
         .approval-section {
-          margin: 25px 0;
+          margin: 12px 0;
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
+          grid-template-columns: 1fr;
+          gap: 0;
         }
 
         .approval-box {
@@ -645,7 +702,7 @@ export default function Pdf({ application, currentDate }: PdfProps) {
 
         .approval-title {
           background: #f0f0f0;
-          padding: 6px 8px;
+          padding: 4px 8px;
           margin: 0;
           font-size: 11px;
           font-weight: bold;
@@ -669,11 +726,11 @@ export default function Pdf({ application, currentDate }: PdfProps) {
         }
 
         .approval-content {
-          padding: 10px 8px;
+          padding: 6px 8px;
         }
 
         .digital-approval-info {
-          min-height: 60px;
+          min-height: 0;
         }
 
         .rejection-notice {
@@ -696,13 +753,13 @@ export default function Pdf({ application, currentDate }: PdfProps) {
         }
 
         .digital-footer {
-          margin-top: 20px;
+          margin-top: 10px;
           text-align: center;
           font-size: 10px;
           border-top: 1px solid #ccc;
-          padding-top: 10px;
+          padding-top: 6px;
           background: #f8fafc;
-          padding: 10px;
+          padding: 6px;
           border-radius: 4px;
         }
 
@@ -868,14 +925,14 @@ export default function Pdf({ application, currentDate }: PdfProps) {
           .page-content {
             max-width: none;
             margin: 0;
-            padding: 10mm;
+            padding: 6mm;
             min-height: auto;
             position: relative;
           }
 
           @page {
             size: A4;
-            margin: 10mm;
+            margin: 6mm;
           }
 
           .header-section, .employee-section, .approval-section {

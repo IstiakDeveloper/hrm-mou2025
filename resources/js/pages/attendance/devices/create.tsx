@@ -18,7 +18,24 @@ import {
     SelectTrigger,
     SelectValue
 } from '@/components/ui/select';
-import { ArrowLeft, Building, Network } from 'lucide-react';
+import { ArrowLeft, Network } from 'lucide-react';
+
+function mapServerErrorsToFormErrors(
+  raw: Record<string, string | string[]>
+): Record<string, string> {
+  const snakeToCamel: Record<string, string> = {
+    device_id: 'deviceId',
+    ip_address: 'ipAddress',
+    branch_id: 'branchId',
+  };
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    const msg = Array.isArray(val) ? val[0] : String(val);
+    const targetKey = snakeToCamel[key] ?? key;
+    out[targetKey] = msg;
+  }
+  return out;
+}
 
 interface Branch {
     id: number;
@@ -76,8 +93,8 @@ export default function Create({ branches, statuses }: CreateProps) {
             branch_id: parseInt(branchId),
             status
         }, {
-            onError: (errors) => {
-                setErrors(errors);
+            onError: (errs) => {
+                setErrors(mapServerErrorsToFormErrors(errs as Record<string, string | string[]>));
                 setSubmitting(false);
             },
             onFinish: () => setSubmitting(false)

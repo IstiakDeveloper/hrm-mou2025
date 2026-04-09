@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
-import AdminLayout from '@/Layouts/AdminLayout';
-import { Button } from '@/Components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
+import AdminLayout from '@/layouts/AdminLayout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import axios from 'axios';
-import { toast } from '@/Components/ui/use-toast';
+import { toast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
 
 export default function Index({ notifications }) {

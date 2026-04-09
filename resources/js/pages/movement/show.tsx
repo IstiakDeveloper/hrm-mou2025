@@ -19,11 +19,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { ArrowLeft, Calendar, CalendarClock, MapPin, ClipboardList, Clock, User, Building2, ArrowRightLeft, X, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, CalendarClock, MapPin, ClipboardList, Clock, User, Building2, ArrowRightLeft, Check, AlertCircle, Pencil, Trash2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Employee {
     id: number;
@@ -60,27 +61,44 @@ interface Movement {
 interface ShowMovementProps {
     movement: Movement;
     canClose: boolean;
+    canEdit?: boolean;
+    canDelete?: boolean;
 }
 
-export default function ShowMovement({ movement, canClose }: ShowMovementProps) {
+export default function ShowMovement({ movement, canClose, canEdit = false, canDelete = false }: ShowMovementProps) {
     const [showCloseDialog, setShowCloseDialog] = useState(false);
-    const [useCurrentTime, setUseCurrentTime] = useState(true);
+    const [forgotReturnTime, setForgotReturnTime] = useState(false);
     const [customReturnTime, setCustomReturnTime] = useState(
         format(new Date(), "yyyy-MM-dd'T'HH:mm")
     );
+    const [closeError, setCloseError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
     const handleClose = () => {
+        setCloseError(null);
+        if (forgotReturnTime && !customReturnTime?.trim()) {
+            setCloseError('Please select the actual date and time you returned.');
+            return;
+        }
+
         setSubmitting(true);
 
         router.post(route('movements.complete', movement.id), {
-            actual_return_datetime: useCurrentTime ? null : customReturnTime
+            forgot_return_time: forgotReturnTime ? '1' : '0',
+            actual_return_datetime: forgotReturnTime ? customReturnTime : null,
         }, {
             onFinish: () => {
                 setSubmitting(false);
                 setShowCloseDialog(false);
             }
         });
+    };
+
+    const handleDelete = () => {
+        if (!confirm('Delete this movement permanently? Linked attendance will be unlinked from this movement.')) {
+            return;
+        }
+        router.delete(route('movements.destroy', movement.id));
     };
 
     // Format dates for display
@@ -117,7 +135,21 @@ export default function ShowMovement({ movement, canClose }: ShowMovementProps) 
                 <div className="flex flex-col md:flex-row justify-between mb-6">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2 md:mb-0">Movement Details</h1>
 
-                    <div className="flex space-x-2">
+                    <div className="flex flex-wrap gap-2">
+                        {canEdit && (
+                            <Link href={route('movements.edit', movement.id)}>
+                                <Button variant="outline" type="button">
+                                    <Pencil className="mr-1 h-4 w-4" />
+                                    Edit
+                                </Button>
+                            </Link>
+                        )}
+                        {canDelete && (
+                            <Button variant="destructive" type="button" onClick={handleDelete}>
+                                <Trash2 className="mr-1 h-4 w-4" />
+                                Delete
+                            </Button>
+                        )}
                         {canClose && (
                             <Button
                                 variant="default"
@@ -322,7 +354,17 @@ export default function ShowMovement({ movement, canClose }: ShowMovementProps) 
             </div>
 
             {/* Close Movement Dialog */}
-            <Dialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
+            <Dialog
+                open={showCloseDialog}
+                onOpenChange={(open) => {
+                    setShowCloseDialog(open);
+                    if (open) {
+                        setForgotReturnTime(false);
+                        setCloseError(null);
+                        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+                    }
+                }}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Close Movement</DialogTitle>
@@ -332,20 +374,35 @@ export default function ShowMovement({ movement, canClose }: ShowMovementProps) 
                     </DialogHeader>
 
                     <div className="space-y-4 py-2">
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="checkbox"
-                                id="useCurrentTime"
-                                checked={useCurrentTime}
-                                onChange={(e) => setUseCurrentTime(e.target.checked)}
-                                className="rounded"
+                        <p className="text-sm text-muted-foreground">
+                            By default, your return is recorded at <strong>the current time</strong> when you confirm.
+                        </p>
+
+                        <div className="flex items-start space-x-3 rounded-md border p-3">
+                            <Checkbox
+                                id="forgotReturnTime"
+                                checked={forgotReturnTime}
+                                onCheckedChange={(checked) => {
+                                    setForgotReturnTime(checked === true);
+                                    setCloseError(null);
+                                    if (checked === true) {
+                                        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+                                    }
+                                }}
                             />
-                            <Label htmlFor="useCurrentTime">Use current time as return time</Label>
+                            <div className="grid gap-1.5 leading-none">
+                                <Label htmlFor="forgotReturnTime" className="cursor-pointer font-medium">
+                                    I forgot to close earlier — set actual return date &amp; time
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Check this if you already returned but did not close the movement. Then pick when you actually came back.
+                                </p>
+                            </div>
                         </div>
 
-                        {!useCurrentTime && (
+                        {forgotReturnTime && (
                             <div className="space-y-2">
-                                <Label htmlFor="customTime">Enter custom return time</Label>
+                                <Label htmlFor="customTime">Actual return date &amp; time</Label>
                                 <Input
                                     id="customTime"
                                     type="datetime-local"
@@ -353,6 +410,10 @@ export default function ShowMovement({ movement, canClose }: ShowMovementProps) 
                                     onChange={(e) => setCustomReturnTime(e.target.value)}
                                 />
                             </div>
+                        )}
+
+                        {closeError && (
+                            <p className="text-sm font-medium text-red-600">{closeError}</p>
                         )}
 
                         <div className="bg-blue-50 p-3 rounded-md">
