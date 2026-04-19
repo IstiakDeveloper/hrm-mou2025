@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\WebPushService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -12,6 +13,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
         'role_id',
@@ -46,6 +48,17 @@ class User extends Authenticatable
         return $this->belongsTo(Branch::class);
     }
 
+    public function pushSubscriptions()
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
+    public function setUsernameAttribute(?string $value): void
+    {
+        $this->attributes['username'] = $value !== null && $value !== ''
+            ? trim($value)
+            : null;
+    }
 
     // In User.php model
     public function roles()
@@ -117,7 +130,7 @@ class User extends Authenticatable
         $this->loadMissing(['role', 'roles']);
 
         $merge = function ($role) use (&$set) {
-            if (!$role) {
+            if (! $role) {
                 return;
             }
             foreach (self::coercePermissionList($role->permissions) as $p) {
@@ -136,7 +149,7 @@ class User extends Authenticatable
     // Helper method to check permissions
     public function hasPermission($permission)
     {
-        if (!is_string($permission) || $permission === '') {
+        if (! is_string($permission) || $permission === '') {
             return false;
         }
 
@@ -151,7 +164,7 @@ class User extends Authenticatable
         }
 
         foreach (self::permissionAliasGroups() as $group) {
-            if (!in_array($permission, $group, true)) {
+            if (! in_array($permission, $group, true)) {
                 continue;
             }
             foreach ($group as $alias) {
@@ -164,5 +177,11 @@ class User extends Authenticatable
         return false;
     }
 
-
+    /**
+     * Send a Web Push notification to all of this user's subscribed devices.
+     */
+    public function sendWebPush(string $title, string $body, ?string $url = null): void
+    {
+        app(WebPushService::class)->sendToUser($this, $title, $body, $url);
+    }
 }

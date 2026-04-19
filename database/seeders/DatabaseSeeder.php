@@ -6,6 +6,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -208,11 +209,21 @@ class DatabaseSeeder extends Seeder
      */
     private function seedUser(string $email, string $name, int $primaryRoleId, array $roleIds): void
     {
+        $local = strtolower(Str::before($email, '@'));
+        $local = preg_replace('/[^a-z0-9_]/', '', $local) ?: 'user';
+        $username = $local;
+        $n = 0;
+        while (User::where('username', $username)->where('email', '!=', $email)->exists()) {
+            $n++;
+            $username = $local.$n;
+        }
+
         $user = User::firstOrNew(['email' => $email]);
-        if (!$user->exists) {
+        if (! $user->exists) {
             $user->password = Hash::make('password');
         }
         $user->name = $name;
+        $user->username = $username;
         $user->role_id = $primaryRoleId;
         $user->active_status = true;
         $user->save();

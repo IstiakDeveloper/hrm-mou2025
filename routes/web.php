@@ -53,8 +53,8 @@ Route::get('/error/403', function (Request $request) {
             'type' => session('error_type'),
             'required_permission' => session('required_permission'),
             'user_permissions' => session('user_permissions'),
-            'attempted_url' => session('attempted_url')
-        ] : null
+            'attempted_url' => session('attempted_url'),
+        ] : null,
     ]);
 })->name('error.403');
 
@@ -67,7 +67,7 @@ Route::get('/error/{type}', function ($type, Request $request) {
     $pages = [
         '403' => 'Errors/Unauthorized',
         '404' => 'Errors/NotFound',
-        '500' => 'Errors/ServerError'
+        '500' => 'Errors/ServerError',
     ];
 
     $component = $pages[$type] ?? 'Errors/NotFound';
@@ -75,7 +75,7 @@ Route::get('/error/{type}', function ($type, Request $request) {
     return Inertia::render($component, [
         'errorType' => $type,
         'permission' => $request->get('permission'),
-        'reason' => $request->get('reason')
+        'reason' => $request->get('reason'),
     ]);
 })->name('error.show');
 
@@ -83,16 +83,15 @@ Route::get('/error/{type}', function ($type) {
     $pages = [
         '403' => 'Errors/Unauthorized',
         '404' => 'Errors/NotFound',
-        '500' => 'Errors/ServerError'
+        '500' => 'Errors/ServerError',
     ];
 
     $component = $pages[$type] ?? 'Errors/NotFound';
 
     return Inertia::render($component, [
-        'errorType' => $type
+        'errorType' => $type,
     ]);
 })->name('error.show');
-
 
 // ====================
 // PUBLIC ROUTES
@@ -100,7 +99,6 @@ Route::get('/error/{type}', function ($type) {
 Route::get('/', function () {
     return Auth::check() ? redirect()->route('dashboard') : redirect()->route('login');
 });
-
 
 Route::get('/admin/roles/fix-permissions', [RoleController::class, 'fixAllRolePermissions'])
     ->name('admin.roles.fix-permissions')
@@ -113,21 +111,24 @@ Route::get('/admin/roles/permissions-api', [RoleController::class, 'permissions'
 // Debug route (remove in production)
 Route::get('/debug/role/{role}', function (Role $role) {
     $permissions = json_decode($role->permissions, true) ?? [];
+
     return response()->json([
         'role_id' => $role->id,
         'role_name' => $role->name,
         'current_permissions' => $permissions,
-        'permission_count' => count($permissions)
+        'permission_count' => count($permissions),
     ]);
 })->name('debug.role');
 // Utility Routes
 Route::get('/storage-link', function () {
     Artisan::call('storage:link');
+
     return response()->json(['message' => 'Storage link created successfully.']);
 })->name('storage.link');
 
 Route::get('/migrate', function () {
     Artisan::call('migrate');
+
     return response()->json(['message' => 'Migrations run successfully.']);
 })->name('migrate');
 
@@ -145,6 +146,8 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middl
 // PROTECTED ROUTES
 // ====================
 Route::middleware(['auth'])->group(function () {
+
+    require __DIR__.'/settings.php';
 
     // Dashboard - Available to all authenticated users
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -180,9 +183,6 @@ Route::middleware(['auth'])->group(function () {
                 ->middleware('permission:users.edit');
         });
 
-
-
-
         // Role & Permission Management
         Route::middleware(['permission:roles.view'])->group(function () {
             Route::resource('roles', RoleController::class)->parameters(['roles' => 'role']);
@@ -191,9 +191,6 @@ Route::middleware(['auth'])->group(function () {
                 ->middleware('permission:roles.view');
         });
     });
-
-
-
 
     // ====================
     // EMPLOYEE MANAGEMENT
@@ -453,11 +450,9 @@ Route::middleware(['auth'])->group(function () {
                 ->name('report')
                 ->middleware('permission:reports.view');
 
-
             Route::get('/', [LeaveApplicationController::class, 'index'])
                 ->name('index')
                 ->middleware('permission:leave-applications.view');
-
 
             Route::get('/{application}/pdf', [LeaveApplicationController::class, 'generatePdf'])
                 ->name('pdf');

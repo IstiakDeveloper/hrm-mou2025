@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
 
-import AppearanceTabs from '@/components/appearance-tabs';
+import AppearanceLightOnly from '@/components/appearance-light-only';
 import HeadingSmall from '@/components/heading-small';
 import { type BreadcrumbItem } from '@/types';
 
@@ -21,8 +21,11 @@ export default function Appearance() {
 
             <SettingsLayout>
                 <div className="space-y-6">
-                    <HeadingSmall title="Appearance settings" description="Update your account's appearance settings" />
-                    <AppearanceTabs />
+                    <HeadingSmall
+                        title="Appearance settings"
+                        description="The interface uses a single light theme for everyone."
+                    />
+                    <AppearanceLightOnly />
                 </div>
             </SettingsLayout>
         </AppLayout>

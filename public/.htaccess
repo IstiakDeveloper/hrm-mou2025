@@ -1,3 +1,12 @@
+# PWA: allow service worker under /build/ to use scope "/" (Apache + mod_setenvif + mod_headers).
+<IfModule mod_setenvif.c>
+    SetEnvIf Request_URI "^/build/sw\.js$" HRM_PWA_SW=1
+    SetEnvIf Request_URI "^/build/registerSW\.js$" HRM_PWA_SW=1
+</IfModule>
+<IfModule mod_headers.c>
+    Header set Service-Worker-Allowed "/" env=HRM_PWA_SW
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

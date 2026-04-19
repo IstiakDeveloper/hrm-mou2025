@@ -118,6 +118,10 @@
                     <span class="detail-value">{{ $user->name }}</span>
                 </div>
                 <div class="detail-row">
+                    <span class="detail-label">🔤 Username (login): </span>
+                    <span class="detail-value">{{ $user->username }}</span>
+                </div>
+                <div class="detail-row">
                     <span class="detail-label">✉️ Email Address: </span>
                     <span class="detail-value">{{ $user->email }}</span>
                 </div>

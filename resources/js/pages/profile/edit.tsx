@@ -6,7 +6,7 @@ import ProfileForm from '@/components/profile/profile-form';
 import PasswordForm from '@/components/profile/password-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle } from 'lucide-react';
-import AppearanceToggleTab from '@/components/appearance-tabs';
+import AppearanceLightOnly from '@/components/appearance-light-only';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface User {
@@ -75,20 +75,10 @@ export default function ProfileEdit({ user, success, errors }: ProfileEditProps)
             <Card>
               <CardHeader>
                 <CardTitle>Appearance</CardTitle>
-                <CardDescription>
-                  Customize how the application looks for you
-                </CardDescription>
+                <CardDescription>The application uses one light theme for all users.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-medium">Theme Preference</h3>
-                    <p className="text-sm text-gray-500 mb-4">
-                      Select your preferred theme mode
-                    </p>
-                    <AppearanceToggleTab />
-                  </div>
-                </div>
+                <AppearanceLightOnly />
               </CardContent>
             </Card>
           </TabsContent>

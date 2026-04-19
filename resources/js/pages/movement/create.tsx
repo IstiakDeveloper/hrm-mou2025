@@ -423,7 +423,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
             newErrors.to_datetime = 'To datetime must be after From datetime';
         }
 
-        // NOTE: "start must be now/future" is enforced on the server in app timezone.
+        // NOTE: start time must be within ~5 minutes of "now" or future (enforced on the server in app timezone).
         // Avoid client-side blocking due to device clock/timezone mismatches (common on mobile).
 
         setErrors(newErrors);

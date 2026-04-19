@@ -25,6 +25,16 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    push?: {
+        vapidPublicKey: string | null;
+        configured: boolean;
+    };
+    flash?: {
+        success?: string | null;
+        error?: string | null;
+        warning?: string | null;
+        info?: string | null;
+    };
     [key: string]: unknown;
 }
 

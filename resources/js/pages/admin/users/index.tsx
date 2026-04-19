@@ -54,6 +54,7 @@ interface Role {
 interface UserData {
   id: number;
   name: string;
+  username?: string;
   email: string;
   active_status: boolean;
   roles: Role[]; // Changed from single role to array of roles
@@ -243,6 +244,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
                 <TableHeader>
                   <TableRow className="bg-gray-50">
                     <TableHead>Name</TableHead>
+                    <TableHead>Username</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Roles</TableHead> {/* Changed from Role to Roles */}
                     <TableHead>Branch</TableHead>
@@ -253,7 +255,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
                 <TableBody>
                   {users.data.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-32 text-center">
+                      <TableCell colSpan={7} className="h-32 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <User className="h-8 w-8 text-gray-400" />
                           <h3 className="mt-2 text-lg font-medium text-gray-900">No Users Found</h3>
@@ -276,6 +278,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
                             )}
                           </div>
                         </TableCell>
+                        <TableCell className="font-mono text-sm">{user.username ?? '—'}</TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
                           {renderUserRoles(user.roles)}

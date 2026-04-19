@@ -80,6 +80,10 @@
                     <td>{{ $user->name }}</td>
                 </tr>
                 <tr>
+                    <td>Username (login):</td>
+                    <td>{{ $user->username }}</td>
+                </tr>
+                <tr>
                     <td>Email Address:</td>
                     <td>{{ $user->email }}</td>
                 </tr>
@@ -98,7 +102,7 @@
         <p>Please follow these steps to access your account:</p>
         <ol>
             <li>Visit our site: <a href="{{ $siteUrl }}">{{ $siteUrl }}</a></li>
-            <li>Enter your email address: {{ $user->email }}</li>
+            <li>Enter your username: {{ $user->username }}</li>
             <li>Enter the temporary password provided above</li>
             <li>After logging in, please change your password immediately</li>
         </ol>

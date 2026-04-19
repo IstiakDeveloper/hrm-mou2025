@@ -4,6 +4,7 @@
     "scripts": {
         "build": "vite build",
         "build:ssr": "vite build && vite build --ssr",
+        "icons:pwa": "node scripts/generate-pwa-icons.mjs",
         "dev": "vite",
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",
@@ -19,7 +20,11 @@
         "prettier": "^3.4.2",
         "prettier-plugin-organize-imports": "^4.1.0",
         "prettier-plugin-tailwindcss": "^0.6.11",
-        "typescript-eslint": "^8.23.0"
+        "sharp": "^0.34.5",
+        "typescript-eslint": "^8.23.0",
+        "vite-plugin-pwa": "^1.2.0",
+        "workbox-core": "^7.4.0",
+        "workbox-precaching": "^7.4.0"
     },
     "dependencies": {
         "@headlessui/react": "^2.2.0",

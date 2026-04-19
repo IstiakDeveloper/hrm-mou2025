@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Movement;
+use App\Services\WebPushService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -60,18 +61,25 @@ class HandleInertiaRequests extends Middleware
 
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
+        $vapidPublic = (string) config('webpush.public_key', '');
+        $pushConfigured = WebPushService::isConfigured();
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => [
                 'message' => trim($message),
-                'author' => trim($author)
+                'author' => trim($author),
             ],
             'auth' => [
                 'user' => $user,
                 'employee' => $employee,
             ],
             'activeMovement' => $activeMovement,
+            'push' => [
+                'vapidPublicKey' => $pushConfigured ? $vapidPublic : null,
+                'configured' => $pushConfigured,
+            ],
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
@@ -80,5 +88,4 @@ class HandleInertiaRequests extends Middleware
             ],
         ];
     }
-
 }

@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
+use App\Models\Employee;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\Employee;
-use App\Models\Branch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -22,8 +23,11 @@ class UserController extends Controller
     {
         $users = User::with('roles', 'employee', 'branch')
             ->when($request->search, function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%");
+                });
             })
             ->orderBy('id', 'desc')
             ->paginate(10)
@@ -40,7 +44,7 @@ class UserController extends Controller
      */
     public function create()
     {
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name', 'email')->get();
+        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'first_name', 'last_name', 'email')->get();
         $roles = Role::all();
         $branches = Branch::all();
 
@@ -69,19 +73,25 @@ class UserController extends Controller
 
         $primaryRoleId = $request->primary_role_id ?? ($request->role_ids[0] ?? null);
 
-        if (!$primaryRoleId) {
+        if (! $primaryRoleId) {
             return back()->withErrors(['role_ids' => 'At least one role must be selected'])->withInput();
         }
 
-        $employee = Employee::find($request->employee_id);
-        if ($employee && $employee->email !== $request->email) {
+        $employee = Employee::findOrFail($request->employee_id);
+        if ($employee->email !== $request->email) {
             return back()->withErrors(['email' => 'The email must match the selected employee\'s email'])->withInput();
         }
 
         $plainPassword = $request->password;
 
+        $resolvedUsername = $this->ensureUniqueUsername(
+            $this->usernameFromEmployee($employee),
+            null,
+        );
+
         $user = User::create([
             'name' => $request->name,
+            'username' => $resolvedUsername,
             'email' => $request->email,
             'password' => Hash::make($plainPassword),
             'role_id' => $primaryRoleId,
@@ -117,7 +127,7 @@ class UserController extends Controller
             ],
             function ($message) use ($user) {
                 $message->to($user->email, $user->name)
-                    ->subject('Welcome to ' . config('app.name') . ' - Your Account Information');
+                    ->subject('Welcome to '.config('app.name').' - Your Account Information');
             }
         );
     }
@@ -128,7 +138,7 @@ class UserController extends Controller
     public function edit(User $user)
     {
         $roles = Role::all();
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name', 'email')->get();
+        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'first_name', 'last_name', 'email')->get();
         $branches = Branch::all();
 
         $user->load('roles');
@@ -173,6 +183,7 @@ class UserController extends Controller
             $user->active_status = $request->active_status;
             $user->save();
         } else {
+            $employee = null;
             if ($request->employee_id) {
                 $employee = Employee::find($request->employee_id);
                 if ($employee && $employee->email !== $request->email) {
@@ -188,6 +199,13 @@ class UserController extends Controller
 
             if ($request->filled('password')) {
                 $user->password = Hash::make($request->password);
+            }
+
+            if ($employee) {
+                $user->username = $this->ensureUniqueUsername(
+                    $this->usernameFromEmployee($employee),
+                    $user->id,
+                );
             }
 
             $user->save();
@@ -272,13 +290,13 @@ class UserController extends Controller
                 $emailsSent++;
             } catch (\Exception $e) {
                 $failedEmails[] = $user->email;
-                \Log::error("Failed to send email to user {$user->id}: " . $e->getMessage());
+                \Log::error("Failed to send email to user {$user->id}: ".$e->getMessage());
             }
         }
 
         $message = "Successfully sent {$emailsSent} emails out of {$users->count()} users.";
         if (count($failedEmails) > 0) {
-            $message .= " Failed to send to: " . implode(', ', $failedEmails);
+            $message .= ' Failed to send to: '.implode(', ', $failedEmails);
         }
 
         return redirect()->back()->with('success', $message);
@@ -303,7 +321,7 @@ class UserController extends Controller
             ],
             function ($message) use ($user) {
                 $message->to($user->email, $user->name)
-                    ->subject('Welcome to ' . config('app.name'));
+                    ->subject('Welcome to '.config('app.name'));
             }
         );
     }
@@ -327,7 +345,7 @@ class UserController extends Controller
             ],
             function ($message) use ($user) {
                 $message->to($user->email, $user->name)
-                    ->subject('Your Account Information - ' . config('app.name'));
+                    ->subject('Your Account Information - '.config('app.name'));
             }
         );
     }
@@ -353,6 +371,44 @@ class UserController extends Controller
                     ->subject($subject);
             }
         );
+    }
+
+    /**
+     * Login username = employee's company employee_id string as stored (e.g. "5" stays "5").
+     * If empty, falls back to biometric_id, then emp_{id}.
+     */
+    private function usernameFromEmployee(Employee $employee): string
+    {
+        $primary = $employee->employee_id;
+        if ($primary !== null && trim((string) $primary) !== '') {
+            return Str::limit(trim((string) $primary), 191, '');
+        }
+
+        $bio = $employee->biometric_id;
+        if ($bio !== null && trim((string) $bio) !== '') {
+            return Str::limit(trim((string) $bio), 191, '');
+        }
+
+        return 'emp_'.$employee->id;
+    }
+
+    /**
+     * Ensure username is unique (append _1, _2, … if needed).
+     */
+    private function ensureUniqueUsername(string $base, ?int $ignoreUserId): string
+    {
+        $candidate = Str::limit($base, 191, '');
+        $i = 0;
+        while (User::query()
+            ->where('username', $candidate)
+            ->when($ignoreUserId !== null, fn ($q) => $q->where('id', '!=', $ignoreUserId))
+            ->exists()) {
+            $i++;
+            $suffix = '_'.$i;
+            $candidate = Str::limit($base, max(0, 191 - strlen($suffix)), '').$suffix;
+        }
+
+        return $candidate;
     }
 
     /**

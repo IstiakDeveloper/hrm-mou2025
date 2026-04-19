@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,8 +15,24 @@ import { Checkbox } from '@/components/ui/checkbox';
 interface Employee {
   id: number;
   employee_id: string;
+  biometric_id?: string | null;
   first_name: string;
   last_name: string;
+}
+
+function previewLoginUsername(emp: Employee | undefined): string {
+  if (!emp) {
+    return '';
+  }
+  const id = (emp.employee_id ?? '').trim();
+  if (id !== '') {
+    return id.slice(0, 191);
+  }
+  const pin = (emp.biometric_id != null ? String(emp.biometric_id) : '').trim();
+  if (pin !== '') {
+    return pin.slice(0, 191);
+  }
+  return `emp_${emp.id}`;
 }
 
 interface Branch {
@@ -33,6 +49,7 @@ interface Role {
 interface User {
   id: number;
   name: string;
+  username?: string;
   email: string;
   employee_id: number | null;
   branch_id: number | null;
@@ -71,6 +88,15 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [passwordStrength, setPasswordStrength] = useState<number>(0);
+
+  const selectedEmployeeForLogin = useMemo(
+    () => employees.find(emp => emp.id.toString() === data.employee_id),
+    [employees, data.employee_id],
+  );
+  const loginUsernamePreview = useMemo(
+    () => previewLoginUsername(selectedEmployeeForLogin),
+    [selectedEmployeeForLogin],
+  );
 
   const checkPasswordStrength = (password: string) => {
     if (!password) {
@@ -190,6 +216,23 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                       placeholder="Enter full name"
                     />
                     {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="login-username-preview">Login username</Label>
+                    <Input
+                      id="login-username-preview"
+                      type="text"
+                      readOnly
+                      value={loginUsernamePreview}
+                      placeholder="Select an employee"
+                      className="bg-gray-50 font-mono text-sm"
+                      spellCheck={false}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Same as the employee&apos;s ID (as stored). Current login name:{' '}
+                      <span className="font-mono">{user.username ?? '—'}</span>
+                    </p>
                   </div>
 
                   <div className="space-y-2">

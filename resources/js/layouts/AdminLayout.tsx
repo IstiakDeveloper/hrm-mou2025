@@ -55,7 +55,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import NotificationDropdown from '@/components/notification-dropdown';
-import PWAManager from '@/components/PWAManager';
 import { hasAppPermission } from '@/lib/permissions';
 import {
     Dialog,
@@ -523,9 +522,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     return (
         <div className="flex h-screen bg-gray-50">
-            {/* PWA Manager - Global PWA functionality */}
-            <PWAManager title="HRM System" showInstallBanner={true} />
-
             {/* Desktop Sidebar */}
             <aside className={`hidden md:flex flex-col border-r bg-white shadow-sm transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'
                 }`}>

@@ -37,12 +37,12 @@ class MovementController extends Controller
         $branchId = $employee?->current_branch_id ?? $employee?->branch_id ?? null;
 
         $default = ['work_start_time' => '09:00:00', 'work_end_time' => '18:00:00'];
-        if (!$branchId) {
+        if (! $branchId) {
             return $default;
         }
 
         $settings = \App\Models\AttendanceSetting::where('branch_id', $branchId)->first();
-        if (!$settings) {
+        if (! $settings) {
             return $default;
         }
 
@@ -68,16 +68,18 @@ class MovementController extends Controller
             if (is_string($value)) {
                 try {
                     $dt = Carbon::parse($value);
+
                     return ($dt->hour * 3600) + ($dt->minute * 60) + $dt->second;
                 } catch (\Throwable $e) {
                     return null;
                 }
             }
+
             return null;
         };
 
         if ($inCandidate) {
-            if (!$attendance->check_in) {
+            if (! $attendance->check_in) {
                 $attendance->check_in = $inCandidate;
             } else {
                 $existingSec = $toSeconds($attendance->check_in);
@@ -89,7 +91,7 @@ class MovementController extends Controller
         }
 
         if ($outCandidate) {
-            if (!$attendance->check_out) {
+            if (! $attendance->check_out) {
                 $attendance->check_out = $outCandidate;
             } else {
                 $existingSec = $toSeconds($attendance->check_out);
@@ -145,13 +147,13 @@ class MovementController extends Controller
 
         // Special handling for regular employees with view permission
         $isRegularEmployeeWithViewPermission = $userEmployeeId && $hasViewPermission &&
-            !$isBranchManager && !$isBranchHead && !$isDepartmentHead &&
-            !$hasEmployeeViewPermission;
+            ! $isBranchManager && ! $isBranchHead && ! $isDepartmentHead &&
+            ! $hasEmployeeViewPermission;
 
         // Apply filters based on user's role and permissions
         if (
-            ($userEmployeeId && !$hasViewPermission && !$isBranchManager &&
-                !$isBranchHead && !$isDepartmentHead) || $isRegularEmployeeWithViewPermission
+            ($userEmployeeId && ! $hasViewPermission && ! $isBranchManager &&
+                ! $isBranchHead && ! $isDepartmentHead) || $isRegularEmployeeWithViewPermission
         ) {
             // Regular employee - ONLY see their own movements
             $query->where('employee_id', $userEmployeeId);
@@ -173,7 +175,7 @@ class MovementController extends Controller
         } elseif ($hasViewPermission && $hasEmployeeViewPermission) {
             // Full admin with both movements.view and employees.view - see all movements
             // No additional filtering needed
-        } elseif ($hasViewPermission && !$hasEmployeeViewPermission) {
+        } elseif ($hasViewPermission && ! $hasEmployeeViewPermission) {
             // User with movements.view but not employees.view - apply restrictions
             if ($isBranchHead || ($isBranchManager && $userBranchId)) {
                 $query->whereHas('employee', function ($q) use ($userBranchId) {
@@ -361,7 +363,7 @@ class MovementController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
-        if (!$employee && !$user->hasPermission('movements.create')) {
+        if (! $employee && ! $user->hasPermission('movements.create')) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to create movement requests.');
         }
@@ -377,7 +379,6 @@ class MovementController extends Controller
             'movementTypes' => ['official', 'personal'],
         ]);
     }
-
 
     /**
      * Store a newly created movement.
@@ -398,13 +399,13 @@ class MovementController extends Controller
             'remarks' => ['nullable', 'string', 'english_only'], // Using custom rule
         ]);
 
-        // Movement start must be current time or future (no creating movements that already started in the past)
+        // Movement start must be within the last 5 minutes or in the future (small clock / form delay tolerance)
         $from = $this->parseMovementDateTimeToApp($request->from_datetime);
         $to = $this->parseMovementDateTimeToApp($request->to_datetime);
         $now = Carbon::now(config('app.timezone'));
-        if ($from->lt($now->copy()->subMinute())) {
+        if ($from->lt($now->copy()->subMinutes(5))) {
             return redirect()->back()
-                ->withErrors(['from_datetime' => 'Movement start (from date & time) must be now or in the future. You cannot create a movement for a past time.'])
+                ->withErrors(['from_datetime' => 'Movement start (from date & time) cannot be more than 5 minutes in the past.'])
                 ->withInput();
         }
 
@@ -463,9 +464,9 @@ class MovementController extends Controller
                 ->where('date', $dateStr)
                 ->first();
 
-            if (!$attendance) {
+            if (! $attendance) {
                 // If no attendance record exists, create a new one
-                $attendance = new Attendance();
+                $attendance = new Attendance;
                 $attendance->employee_id = $movement->employee_id;
                 $attendance->date = $dateStr;
                 // Prefer on_duty for official movement days
@@ -507,11 +508,11 @@ class MovementController extends Controller
             $attendance->movement_id = $movement->id;
 
             // Add remarks about movement
-            $remarks = "On official movement: " . $movement->purpose;
+            $remarks = 'On official movement: '.$movement->purpose;
             if ($attendance->remarks) {
                 // Don't duplicate remarks if they already exist
                 if (strpos($attendance->remarks, $remarks) === false) {
-                    $attendance->remarks = $attendance->remarks . ' | ' . $remarks;
+                    $attendance->remarks = $attendance->remarks.' | '.$remarks;
                 }
             } else {
                 $attendance->remarks = $remarks;
@@ -532,7 +533,7 @@ class MovementController extends Controller
         \Log::info('Starting sendNotificationsToManagers', [
             'movement_id' => $movement->id,
             'employee_id' => $employee->id,
-            'employee_name' => $employee->first_name . ' ' . $employee->last_name
+            'employee_name' => $employee->first_name.' '.$employee->last_name,
         ]);
 
         try {
@@ -558,6 +559,7 @@ class MovementController extends Controller
 
             if ($recipients->isEmpty()) {
                 \Log::warning('No recipients found for movement notification');
+
                 return;
             }
 
@@ -566,7 +568,7 @@ class MovementController extends Controller
             $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
 
             // Construct full employee name
-            $employeeName = $employee->first_name . ' ' . $employee->last_name;
+            $employeeName = $employee->first_name.' '.$employee->last_name;
 
             // Notification details
             $title = 'New Movement Created';
@@ -607,12 +609,13 @@ class MovementController extends Controller
                         Mail::to($recipient->email)->send(new NewMovementNotification($movement, $employee, $recipient));
                     }
                 } catch (\Exception $e) {
-                    \Log::error('Failed to process recipient: ' . $e->getMessage());
+                    \Log::error('Failed to process recipient: '.$e->getMessage());
+
                     continue;
                 }
             }
         } catch (\Exception $e) {
-            \Log::error('Critical error in sendNotificationsToManagers: ' . $e->getMessage());
+            \Log::error('Critical error in sendNotificationsToManagers: '.$e->getMessage());
         }
     }
 
@@ -621,8 +624,9 @@ class MovementController extends Controller
      */
     private function getDepartmentHeads($departmentId)
     {
-        if (!$departmentId) {
+        if (! $departmentId) {
             \Log::info('No department ID provided');
+
             return collect([]);
         }
 
@@ -638,9 +642,9 @@ class MovementController extends Controller
             })
             ->get(['id', 'name', 'email']);
 
-        \Log::info('Department heads found: ' . $heads->count(), [
+        \Log::info('Department heads found: '.$heads->count(), [
             'department_id' => $departmentId,
-            'heads' => $heads->pluck('email')->toArray()
+            'heads' => $heads->pluck('email')->toArray(),
         ]);
 
         return $heads;
@@ -648,8 +652,9 @@ class MovementController extends Controller
 
     private function getBranchHeads($branchId)
     {
-        if (!$branchId) {
+        if (! $branchId) {
             \Log::info('No branch ID provided');
+
             return collect([]);
         }
 
@@ -665,9 +670,9 @@ class MovementController extends Controller
             })
             ->get(['id', 'name', 'email']);
 
-        \Log::info('Branch heads found: ' . $heads->count(), [
+        \Log::info('Branch heads found: '.$heads->count(), [
             'branch_id' => $branchId,
-            'heads' => $heads->pluck('email')->toArray()
+            'heads' => $heads->pluck('email')->toArray(),
         ]);
 
         return $heads;
@@ -715,7 +720,7 @@ class MovementController extends Controller
         $userEmployee = $user->employee;
 
         // Check if user can close this movement - with proper type casting
-        if (!$userEmployee || (int) $userEmployee->id !== (int) $movement->employee_id) {
+        if (! $userEmployee || (int) $userEmployee->id !== (int) $movement->employee_id) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to close this movement.');
         }
@@ -778,20 +783,19 @@ class MovementController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            \Log::error('Error closing movement: ' . $e->getMessage(), [
+            \Log::error('Error closing movement: '.$e->getMessage(), [
                 'movement_id' => $movement->id,
                 'user_id' => $user->id,
                 'employee_id' => $userEmployee ? $userEmployee->id : null,
                 'movement_employee_id' => $movement->employee_id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return redirect()->route('movements.index')
                 ->with('error', 'An error occurred while closing the movement. Please try again.');
         }
     }
-
 
     /**
      * Show form to edit a movement.
@@ -806,14 +810,14 @@ class MovementController extends Controller
         // Admin/HR with movements.edit: can edit active or completed records
         // Employee: only own pending requests (legacy flow)
         if (
-            !$isAdminEditor &&
-            (!$employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
+            ! $isAdminEditor &&
+            (! $employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
         ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to edit this movement request.');
         }
 
-        if ($isAdminEditor && !in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
+        if ($isAdminEditor && ! in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
             return redirect()->route('movements.index')
                 ->with('error', 'This movement cannot be edited.');
         }
@@ -841,14 +845,14 @@ class MovementController extends Controller
         $isAdminEditor = $user->hasPermission('movements.edit');
 
         if (
-            !$isAdminEditor &&
-            (!$employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
+            ! $isAdminEditor &&
+            (! $employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
         ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to update this movement request.');
         }
 
-        if ($isAdminEditor && !in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
+        if ($isAdminEditor && ! in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
             return redirect()->route('movements.index')
                 ->with('error', 'This movement cannot be updated.');
         }
@@ -921,7 +925,7 @@ class MovementController extends Controller
             && $isAdminEditor
             && $movement->movement_type === 'official'
             && $newReturnFinal
-            && (!$previousReturn || !$previousReturn->equalTo($newReturnFinal))
+            && (! $previousReturn || ! $previousReturn->equalTo($newReturnFinal))
         ) {
             $this->updateAttendanceForCompletion($movement->fresh(), $newReturnFinal);
         }
@@ -937,7 +941,7 @@ class MovementController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('movements.delete')) {
+        if (! $user->hasPermission('movements.delete')) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to delete movements.');
         }
@@ -953,7 +957,7 @@ class MovementController extends Controller
                 ->with('success', 'Movement deleted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Error deleting movement: ' . $e->getMessage(), [
+            \Log::error('Error deleting movement: '.$e->getMessage(), [
                 'movement_id' => $movement->id,
             ]);
 
@@ -979,7 +983,7 @@ class MovementController extends Controller
         }
 
         // Condition 2: User is a branch manager for the employee's branch
-        else if (
+        elseif (
             $employee &&
             $movement->employee->branch_id &&
             $employee->branch_id === $movement->employee->branch_id &&
@@ -989,7 +993,7 @@ class MovementController extends Controller
         }
 
         // Condition 3: User is a department head for the employee's department
-        else if (
+        elseif (
             $employee &&
             $movement->employee->department_id &&
             $employee->department_id === $movement->employee->department_id &&
@@ -998,7 +1002,7 @@ class MovementController extends Controller
             $canApprove = true;
         }
 
-        if (!$canApprove) {
+        if (! $canApprove) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to approve movement requests.');
         }
@@ -1043,7 +1047,7 @@ class MovementController extends Controller
                 'movement_id' => $movement->id,
                 'save_result' => $saveResult,
                 'new_status' => $movement->status,
-                'approved_by' => $movement->approved_by
+                'approved_by' => $movement->approved_by,
             ]);
 
             // For official movements, create/update attendance records
@@ -1076,12 +1080,12 @@ class MovementController extends Controller
                     }
 
                     // Create a simple prefix for the remarks to avoid encoding issues
-                    $remarks = "On official movement";
+                    $remarks = 'On official movement';
 
                     if ($attendance->remarks) {
                         // Only add the prefix if it's not already there
                         if (strpos($attendance->remarks, $remarks) === false) {
-                            $attendance->remarks = $attendance->remarks . ' | ' . $remarks;
+                            $attendance->remarks = $attendance->remarks.' | '.$remarks;
                         }
                     } else {
                         $attendance->remarks = $remarks;
@@ -1105,7 +1109,7 @@ class MovementController extends Controller
             // Handle notifications in a separate try-catch to avoid affecting the main process
             try {
                 // Only load employee if not already loaded
-                if (!$movement->relationLoaded('employee')) {
+                if (! $movement->relationLoaded('employee')) {
                     $movement->load('employee');
                 }
 
@@ -1141,11 +1145,11 @@ class MovementController extends Controller
 
                             \Log::info('In-app notification sent successfully', [
                                 'movement_id' => $movement->id,
-                                'user_id' => $employeeUser->id
+                                'user_id' => $employeeUser->id,
                             ]);
                         } catch (\Exception $notificationError) {
-                            \Log::error('Error sending in-app notification: ' . $notificationError->getMessage(), [
-                                'movement_id' => $movement->id
+                            \Log::error('Error sending in-app notification: '.$notificationError->getMessage(), [
+                                'movement_id' => $movement->id,
                             ]);
                             // Continue with the process even if notification fails
                         }
@@ -1157,12 +1161,12 @@ class MovementController extends Controller
 
                                 \Log::info('Email notification sent successfully', [
                                     'movement_id' => $movement->id,
-                                    'email' => $employeeUser->email
+                                    'email' => $employeeUser->email,
                                 ]);
                             } catch (\Exception $mailException) {
-                                \Log::error('Error sending email notification: ' . $mailException->getMessage(), [
+                                \Log::error('Error sending email notification: '.$mailException->getMessage(), [
                                     'movement_id' => $movement->id,
-                                    'email' => $employeeUser->email
+                                    'email' => $employeeUser->email,
                                 ]);
                                 // Continue with the process even if email fails
                             }
@@ -1171,9 +1175,9 @@ class MovementController extends Controller
                 }
             } catch (\Exception $notificationException) {
                 // Log notification errors but don't fail the approval process
-                \Log::error('Error in notification process: ' . $notificationException->getMessage(), [
+                \Log::error('Error in notification process: '.$notificationException->getMessage(), [
                     'movement_id' => $movement->id,
-                    'error' => $notificationException->getMessage()
+                    'error' => $notificationException->getMessage(),
                 ]);
                 // Do not throw - approval should succeed even if notifications fail
             }
@@ -1184,19 +1188,18 @@ class MovementController extends Controller
             DB::rollBack();
 
             // Detailed error logging
-            \Log::error('Error approving movement: ' . $e->getMessage(), [
+            \Log::error('Error approving movement: '.$e->getMessage(), [
                 'movement_id' => $movement->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'line' => $e->getLine(),
-                'file' => $e->getFile()
+                'file' => $e->getFile(),
             ]);
 
             return redirect()->route('movements.index')
-                ->with('error', 'An error occurred while approving the movement: ' . $e->getMessage());
+                ->with('error', 'An error occurred while approving the movement: '.$e->getMessage());
         }
     }
-
 
     /**
      * Reject the specified movement and clean up any attendance records.
@@ -1215,7 +1218,7 @@ class MovementController extends Controller
         }
 
         // Condition 2: User is a branch manager for the employee's branch
-        else if (
+        elseif (
             $employee &&
             $movement->employee->branch_id &&
             $employee->branch_id === $movement->employee->branch_id &&
@@ -1225,7 +1228,7 @@ class MovementController extends Controller
         }
 
         // Condition 3: User is a department head for the employee's department
-        else if (
+        elseif (
             $employee &&
             $movement->employee->department_id &&
             $employee->department_id === $movement->employee->department_id &&
@@ -1234,7 +1237,7 @@ class MovementController extends Controller
             $canReject = true;
         }
 
-        if (!$canReject) {
+        if (! $canReject) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to reject movement requests.');
         }
@@ -1262,7 +1265,7 @@ class MovementController extends Controller
             // This is to clean up if this movement was pre-approved and then rejected
             Attendance::where('movement_id', $movement->id)->update([
                 'movement_id' => null,
-                'remarks' => DB::raw("CONCAT(IFNULL(remarks, ''), ' | Movement rejected: " . addslashes($request->remarks) . "')"),
+                'remarks' => DB::raw("CONCAT(IFNULL(remarks, ''), ' | Movement rejected: ".addslashes($request->remarks)."')"),
                 // Do not automatically change status, let the attendance system handle it based on check-in/out
             ]);
 
@@ -1273,10 +1276,10 @@ class MovementController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            \Log::error('Error rejecting movement: ' . $e->getMessage(), [
+            \Log::error('Error rejecting movement: '.$e->getMessage(), [
                 'movement_id' => $movement->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return redirect()->route('movements.index')
@@ -1294,8 +1297,8 @@ class MovementController extends Controller
 
         // Check if user can cancel this movement
         if (
-            !$user->hasPermission('movements.edit') &&
-            (!$employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
+            ! $user->hasPermission('movements.edit') &&
+            (! $employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
         ) {
             return redirect()->route('movements.index')
                 ->with('error', 'You do not have permission to cancel this movement request.');
@@ -1323,10 +1326,10 @@ class MovementController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            \Log::error('Error cancelling movement: ' . $e->getMessage(), [
+            \Log::error('Error cancelling movement: '.$e->getMessage(), [
                 'movement_id' => $movement->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return redirect()->route('movements.index')
@@ -1351,9 +1354,9 @@ class MovementController extends Controller
                 ->where('date', $date)
                 ->first();
 
-            if (!$attendance) {
+            if (! $attendance) {
                 // Create new attendance record if none exists
-                $attendance = new Attendance();
+                $attendance = new Attendance;
                 $attendance->employee_id = $movement->employee_id;
                 $attendance->date = $date;
                 $attendance->status = 'on_duty';
@@ -1377,13 +1380,13 @@ class MovementController extends Controller
             $attendance->movement_id = $movement->id;
 
             // Add remarks about movement completion
-            $returnInfo = "Movement completed: " . $returnDateTime->format('Y-m-d H:i:s');
+            $returnInfo = 'Movement completed: '.$returnDateTime->format('Y-m-d H:i:s');
             if ($attendance->remarks) {
-                if (strpos($attendance->remarks, "Movement completed:") === false) {
-                    $attendance->remarks .= " | " . $returnInfo;
+                if (strpos($attendance->remarks, 'Movement completed:') === false) {
+                    $attendance->remarks .= ' | '.$returnInfo;
                 }
             } else {
-                $attendance->remarks = "On official movement: " . $movement->purpose . " | " . $returnInfo;
+                $attendance->remarks = 'On official movement: '.$movement->purpose.' | '.$returnInfo;
             }
 
             $attendance->save();
@@ -1397,7 +1400,7 @@ class MovementController extends Controller
     {
         try {
             // Load employee if not already loaded
-            if (!$movement->relationLoaded('employee')) {
+            if (! $movement->relationLoaded('employee')) {
                 $movement->load('employee');
             }
 
@@ -1428,7 +1431,7 @@ class MovementController extends Controller
             $returnDate = $returnDateTime->format('M d, Y h:i A');
 
             // Prepare employee name
-            $employeeName = $movement->employee->first_name . ' ' . $movement->employee->last_name;
+            $employeeName = $movement->employee->first_name.' '.$movement->employee->last_name;
 
             // Create notification content
             $title = 'Movement Completed';
@@ -1455,7 +1458,7 @@ class MovementController extends Controller
             }
         } catch (\Exception $e) {
             // Log error but don't stop the process
-            \Log::error('Error sending completion notifications: ' . $e->getMessage());
+            \Log::error('Error sending completion notifications: '.$e->getMessage());
         }
     }
 
@@ -1583,8 +1586,6 @@ class MovementController extends Controller
             ],
         ]);
 
-        return $pdf->download('movement-report-' . now()->format('Y-m-d') . '.pdf');
+        return $pdf->download('movement-report-'.now()->format('Y-m-d').'.pdf');
     }
-
-
 }

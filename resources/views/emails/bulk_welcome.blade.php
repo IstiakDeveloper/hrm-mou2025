@@ -176,6 +176,10 @@
                     <span class="info-value">{{ $user->name }}</span>
                 </div>
                 <div class="info-row">
+                    <span class="info-label">Username (login): </span>
+                    <span class="info-value">{{ $user->username }}</span>
+                </div>
+                <div class="info-row">
                     <span class="info-label">Email Address: </span>
                     <span class="info-value">{{ $user->email }}</span>
                 </div>

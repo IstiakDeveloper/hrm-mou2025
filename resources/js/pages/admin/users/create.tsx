@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,9 +14,25 @@ import { Checkbox } from '@/components/ui/checkbox';
 interface Employee {
     id: number;
     employee_id: string;
+    biometric_id?: string | null;
     first_name: string;
     last_name: string;
-    email?: string; // Add email property to Employee interface
+    email?: string;
+}
+
+function previewLoginUsername(emp: Employee | undefined): string {
+    if (!emp) {
+        return '';
+    }
+    const id = (emp.employee_id ?? '').trim();
+    if (id !== '') {
+        return id.slice(0, 191);
+    }
+    const pin = (emp.biometric_id != null ? String(emp.biometric_id) : '').trim();
+    if (pin !== '') {
+        return pin.slice(0, 191);
+    }
+    return `emp_${emp.id}`;
 }
 
 interface Branch {
@@ -55,6 +71,15 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState<number>(0);
+
+    const selectedEmployeeForLogin = useMemo(
+        () => employees.find(emp => emp.id.toString() === data.employee_id),
+        [employees, data.employee_id],
+    );
+    const loginUsernamePreview = useMemo(
+        () => previewLoginUsername(selectedEmployeeForLogin),
+        [selectedEmployeeForLogin],
+    );
 
     // Handle employee selection and auto-populate email
     const handleEmployeeChange = (value: string) => {
@@ -330,6 +355,22 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
                                             placeholder="Enter full name"
                                         />
                                         {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="login-username-preview">Login username</Label>
+                                        <Input
+                                            id="login-username-preview"
+                                            type="text"
+                                            readOnly
+                                            value={loginUsernamePreview}
+                                            placeholder="Select an employee first"
+                                            className="bg-gray-50 font-mono text-sm"
+                                            spellCheck={false}
+                                        />
+                                        <p className="text-xs text-gray-500">
+                                            Same as the employee&apos;s ID in the system (e.g. 5 → username 5). If ID is empty, biometric PIN is used.
+                                        </p>
                                     </div>
 
                                     <div className="space-y-2">

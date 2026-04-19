@@ -26,18 +26,23 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
+            'username' => 'required|string|max:191',
             'password' => 'required',
         ]);
 
-        if (Auth::attempt($request->only('email', 'password'))) {
+        $username = trim((string) $request->input('username'));
+
+        if (Auth::attempt([
+            'username' => $username,
+            'password' => $request->input('password'),
+        ], $request->boolean('remember'))) {
             $request->session()->regenerate();
 
             return redirect()->intended(route('dashboard'));
         }
 
         throw ValidationException::withMessages([
-            'email' => __('auth.failed'),
+            'username' => __('auth.failed'),
         ]);
     }
 
@@ -73,14 +78,14 @@ class AuthController extends Controller
 
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email,' . $user->id,
+            'email' => 'required|email|max:255|unique:users,email,'.$user->id,
             'current_password' => 'nullable|required_with:password',
             'password' => 'nullable|min:8|confirmed',
         ]);
 
         // Check current password if attempting to change password
         if ($request->filled('current_password')) {
-            if (!Hash::check($request->current_password, $user->password)) {
+            if (! Hash::check($request->current_password, $user->password)) {
                 return back()->withErrors([
                     'current_password' => 'The current password is incorrect.',
                 ]);

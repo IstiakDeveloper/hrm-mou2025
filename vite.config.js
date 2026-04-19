@@ -1,9 +1,8 @@
 import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
-import {
-    defineConfig
-} from 'vite';
-import tailwindcss from "@tailwindcss/vite";
+import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
     plugins: [
@@ -14,6 +13,25 @@ export default defineConfig({
         }),
         react(),
         tailwindcss(),
+        VitePWA({
+            strategies: 'injectManifest',
+            srcDir: 'resources/js',
+            filename: 'sw.ts',
+            registerType: 'prompt',
+            injectRegister: false,
+            manifest: false,
+            buildBase: '/build/',
+            includeAssets: ['icons/**/*.png', 'manifest.json', 'fav.png'],
+            includeManifestIcons: false,
+            injectManifest: {
+                rollupFormat: 'iife',
+                globPatterns: ['**/*.{js,css,wasm,woff2}'],
+                maximumFileSizeToCacheInBytes: 6000000,
+            },
+            devOptions: {
+                enabled: false,
+            },
+        }),
     ],
     esbuild: {
         jsx: 'automatic',
