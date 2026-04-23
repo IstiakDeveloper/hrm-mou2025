@@ -7,6 +7,13 @@
     Header set Service-Worker-Allowed "/" env=HRM_PWA_SW
 </IfModule>
 
+# Shorter cache for images so logo / PWA icons update after replace (browser revalidates often).
+<IfModule mod_headers.c>
+    <FilesMatch "\.(png|jpg|jpeg|gif|webp|ico|svg)$">
+        Header set Cache-Control "public, max-age=300, must-revalidate"
+    </FilesMatch>
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

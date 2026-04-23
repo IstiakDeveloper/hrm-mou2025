@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,7 +37,14 @@ interface Employee {
     employee_id: string;
     photo?: string;
     department?: { name: string };
-    branch?: { name: string };
+    branch?: {
+        name: string;
+        geofence_enabled?: boolean;
+        geofence_latitude?: number | null;
+        geofence_longitude?: number | null;
+        geofence_radius_meters?: number | null;
+        geofence_max_accuracy_meters?: number | null;
+    };
 }
 
 interface Attendance {
@@ -79,6 +87,18 @@ interface DashboardProps {
     recentMovements: Movement[];
 }
 
+type GeoSample = {
+    lat: number;
+    lng: number;
+    accuracy: number | null;
+    at: string;
+};
+
+type LocationPreview = {
+    bestAccuracy: number | null;
+    sampleCount: number;
+};
+
 export default function EmployeeDashboard({
     employee,
     todayAttendance,
@@ -95,6 +115,13 @@ export default function EmployeeDashboard({
     const [elapsedTimes, setElapsedTimes] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [completedMovementIds, setCompletedMovementIds] = useState<string[]>([]);
+    const [attendanceError, setAttendanceError] = useState<string | null>(null);
+    const [locationStatus, setLocationStatus] = useState<string | null>(null);
+    const [locationProgress, setLocationProgress] = useState<number>(0);
+    const [locationPreview, setLocationPreview] = useState<LocationPreview>({
+        bestAccuracy: null,
+        sampleCount: 0,
+    });
 
     // Initialize active movements
     useEffect(() => {
@@ -233,6 +260,218 @@ export default function EmployeeDashboard({
         window.dispatchEvent(new CustomEvent('hrm:movement-close', { detail: { movementId: Number(movementId) } }));
     };
 
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    const getCurrentPositionOnce = (opts?: Partial<PositionOptions>) =>
+        new Promise<GeolocationPosition>((resolve, reject) => {
+            if (!navigator.geolocation) {
+                reject(new Error("Geolocation not supported"));
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 30000,
+                maximumAge: 5000,
+                ...opts,
+            });
+        });
+
+    const getBestLocation = async (sampleCount = 3) => {
+        const samples: GeoSample[] = [];
+        let lastError: any = null;
+        setLocationProgress(5);
+        setLocationPreview({
+            bestAccuracy: null,
+            sampleCount: 0,
+        });
+
+        for (let i = 0; i < sampleCount; i++) {
+            setLocationStatus(`Getting location... (${i + 1}/${sampleCount})`);
+            setLocationProgress(10 + Math.round((i / sampleCount) * 60));
+
+            try {
+                const pos = await getCurrentPositionOnce({
+                    enableHighAccuracy: true,
+                    timeout: 30000,
+                    maximumAge: 0,
+                });
+
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const accuracy = typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
+
+                samples.push({
+                    lat,
+                    lng,
+                    accuracy,
+                    at: new Date(pos.timestamp).toISOString(),
+                });
+                setLocationPreview((prev) => {
+                    const currentBest =
+                        prev.bestAccuracy === null ? Number.POSITIVE_INFINITY : prev.bestAccuracy;
+                    const nextBest =
+                        accuracy === null ? Number.POSITIVE_INFINITY : accuracy;
+                    const isBetter = nextBest < currentBest;
+
+                    return {
+                        bestAccuracy: isBetter ? accuracy : prev.bestAccuracy,
+                        sampleCount: prev.sampleCount + 1,
+                    };
+                });
+            } catch (e: any) {
+                // If high-accuracy times out (common indoors), retry with relaxed settings once.
+                lastError = e;
+                if (e?.code === 3) {
+                    try {
+                        const pos = await getCurrentPositionOnce({
+                            enableHighAccuracy: false,
+                            timeout: 15000,
+                            maximumAge: 15000,
+                        });
+
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        const accuracy = typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
+
+                        samples.push({
+                            lat,
+                            lng,
+                            accuracy,
+                            at: new Date(pos.timestamp).toISOString(),
+                        });
+                        setLocationPreview((prev) => {
+                            const currentBest =
+                                prev.bestAccuracy === null ? Number.POSITIVE_INFINITY : prev.bestAccuracy;
+                            const nextBest =
+                                accuracy === null ? Number.POSITIVE_INFINITY : accuracy;
+                            const isBetter = nextBest < currentBest;
+
+                            return {
+                                bestAccuracy: isBetter ? accuracy : prev.bestAccuracy,
+                                sampleCount: prev.sampleCount + 1,
+                            };
+                        });
+                    } catch (e2: any) {
+                        lastError = e2;
+                    }
+                }
+            }
+
+            // Small delay improves GPS lock stability across samples.
+            if (i < sampleCount - 1) {
+                await sleep(800);
+            }
+        }
+
+        if (samples.length === 0) {
+            throw lastError || new Error("Unable to get location.");
+        }
+
+        setLocationProgress(75);
+        const best = samples
+            .slice()
+            .sort((a, b) => (a.accuracy ?? Number.POSITIVE_INFINITY) - (b.accuracy ?? Number.POSITIVE_INFINITY))[0];
+
+        return { best, samples };
+    };
+
+    const handleCheckIn = async () => {
+        setAttendanceError(null);
+        setIsSubmitting(true);
+        setLocationProgress(0);
+
+        try {
+            const { best, samples } = await getBestLocation(3);
+            setLocationStatus("Submitting check-in...");
+            setLocationProgress(90);
+
+            router.post(
+                route("employee.attendance.check-in"),
+                { lat: best.lat, lng: best.lng, accuracy: best.accuracy, samples },
+                {
+                    preserveScroll: true,
+                    onError: (errors) => {
+                        const msg =
+                            (errors as any)?.attendance ||
+                            (errors as any)?.lat ||
+                            (errors as any)?.lng ||
+                            "Check-in failed.";
+                        setAttendanceError(String(msg));
+                    },
+                    onFinish: () => {
+                        setIsSubmitting(false);
+                        setLocationStatus(null);
+                        setLocationProgress(100);
+                        window.setTimeout(() => setLocationProgress(0), 800);
+                    },
+                }
+            );
+        } catch (e: any) {
+            setIsSubmitting(false);
+            setLocationStatus(null);
+            setLocationProgress(0);
+
+            if (e?.code === 1) {
+                setAttendanceError("Location permission denied. Please allow location access.");
+            } else if (e?.code === 2) {
+                setAttendanceError("Location unavailable. Please turn on GPS and try again.");
+            } else if (e?.code === 3) {
+                setAttendanceError("Location request timed out. Please try again in an open area.");
+            } else {
+                setAttendanceError(e?.message ? String(e.message) : "Unable to get location.");
+            }
+        }
+    };
+
+    const handleCheckOut = async () => {
+        setAttendanceError(null);
+        setIsSubmitting(true);
+        setLocationProgress(0);
+
+        try {
+            const { best, samples } = await getBestLocation(3);
+            setLocationStatus("Submitting check-out...");
+            setLocationProgress(90);
+
+            router.post(
+                route("employee.attendance.check-out"),
+                { lat: best.lat, lng: best.lng, accuracy: best.accuracy, samples },
+                {
+                    preserveScroll: true,
+                    onError: (errors) => {
+                        const msg =
+                            (errors as any)?.attendance ||
+                            (errors as any)?.lat ||
+                            (errors as any)?.lng ||
+                            "Check-out failed.";
+                        setAttendanceError(String(msg));
+                    },
+                    onFinish: () => {
+                        setIsSubmitting(false);
+                        setLocationStatus(null);
+                        setLocationProgress(100);
+                        window.setTimeout(() => setLocationProgress(0), 800);
+                    },
+                }
+            );
+        } catch (e: any) {
+            setIsSubmitting(false);
+            setLocationStatus(null);
+            setLocationProgress(0);
+
+            if (e?.code === 1) {
+                setAttendanceError("Location permission denied. Please allow location access.");
+            } else if (e?.code === 2) {
+                setAttendanceError("Location unavailable. Please turn on GPS and try again.");
+            } else if (e?.code === 3) {
+                setAttendanceError("Location request timed out. Please try again in an open area.");
+            } else {
+                setAttendanceError(e?.message ? String(e.message) : "Unable to get location.");
+            }
+        }
+    };
+
     // Navigation handlers
     const goToCreateLeave = () => {
         router.visit(route('leave.applications.create'));
@@ -245,10 +484,21 @@ export default function EmployeeDashboard({
     // Data preparation
     const fullName = employee ? `${employee.first_name} ${employee.last_name}`.trim() : "Employee";
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
-
     return (
         <AdminLayout>
             <div className="flex flex-col gap-6 p-4 md:p-6">
+                {(attendanceError || locationStatus) && (
+                    <Alert className={attendanceError ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50"}>
+                        {(attendanceError ? <XCircle className="h-4 w-4 text-red-600" /> : <AlertCircle className="h-4 w-4 text-blue-600" />)}
+                        <AlertTitle className={attendanceError ? "text-red-800" : "text-blue-800"}>
+                            {attendanceError ? "Attendance action blocked" : "Working"}
+                        </AlertTitle>
+                        <AlertDescription className={attendanceError ? "text-red-700" : "text-blue-700"}>
+                            {attendanceError || locationStatus}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {/* Active Movements Alert Section */}
                 {activeMovements.length > 0 && (
                     <div className="space-y-3">
@@ -376,6 +626,70 @@ export default function EmployeeDashboard({
                         <CardDescription>Your attendance record for today</CardDescription>
                     </CardHeader>
                     <CardContent>
+                        {(isSubmitting || locationProgress > 0) && (
+                            <div className="mb-4 rounded-xl border bg-gradient-to-b from-white to-gray-50 p-4 shadow-sm">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-medium text-gray-700 truncate">
+                                            {locationStatus || "Checking location…"}
+                                        </div>
+                                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-500">
+                                            <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 ring-1 ring-blue-200">
+                                                GPS
+                                            </span>
+                                            {locationPreview.sampleCount > 0 && (
+                                                <span className="truncate">
+                                                    Best accuracy:{" "}
+                                                    <span className="font-semibold text-gray-700">
+                                                        {locationPreview.bestAccuracy !== null
+                                                            ? `${Math.round(locationPreview.bestAccuracy)}m`
+                                                            : "N/A"}
+                                                    </span>
+                                                    {" • "}Samples:{" "}
+                                                    <span className="font-semibold text-gray-700">
+                                                        {locationPreview.sampleCount}
+                                                    </span>
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="shrink-0 text-xs font-semibold tabular-nums text-gray-700">
+                                        {Math.min(100, Math.max(0, locationProgress))}%
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-gray-600">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`inline-flex items-center gap-1 ${locationProgress < 70 ? "text-gray-900" : "text-gray-500"}`}>
+                                            <span className={`h-2 w-2 rounded-full ${locationProgress < 70 ? "bg-blue-600" : "bg-gray-300"}`} />
+                                            Locating
+                                        </span>
+                                        <span className="text-gray-300">•</span>
+                                        <span className={`inline-flex items-center gap-1 ${locationProgress >= 70 && locationProgress < 90 ? "text-gray-900" : "text-gray-500"}`}>
+                                            <span className={`h-2 w-2 rounded-full ${locationProgress >= 70 && locationProgress < 90 ? "bg-indigo-600" : "bg-gray-300"}`} />
+                                            Verifying
+                                        </span>
+                                        <span className="text-gray-300">•</span>
+                                        <span className={`inline-flex items-center gap-1 ${locationProgress >= 90 ? "text-gray-900" : "text-gray-500"}`}>
+                                            <span className={`h-2 w-2 rounded-full ${locationProgress >= 90 ? "bg-emerald-600" : "bg-gray-300"}`} />
+                                            Submitting
+                                        </span>
+                                    </div>
+                                    <div className="hidden sm:block text-gray-400">
+                                        Keep GPS on for best accuracy
+                                    </div>
+                                </div>
+
+                                <div className="mt-2">
+                                    <Progress
+                                        value={locationProgress}
+                                        className="h-3.5"
+                                        indicatorClassName="animate-pulse"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                                 <Badge
@@ -400,16 +714,24 @@ export default function EmployeeDashboard({
                                 )}
                             </div>
                             <div className="flex gap-2">
-                                {!todayAttendance && (
-                                    <Button className="bg-green-600 hover:bg-green-700">
+                                {(!todayAttendance || !todayAttendance.check_in) && (
+                                    <Button
+                                        className="bg-green-600 hover:bg-green-700"
+                                        onClick={handleCheckIn}
+                                        disabled={isSubmitting}
+                                    >
                                         <LogIn className="h-4 w-4 mr-2" />
-                                        Check In
+                                        {isSubmitting ? "Processing..." : "Check In"}
                                     </Button>
                                 )}
-                                {todayAttendance && !todayAttendance.check_out && (
-                                    <Button className="bg-red-600 hover:bg-red-700">
+                                {todayAttendance?.check_in && !todayAttendance.check_out && (
+                                    <Button
+                                        className="bg-red-600 hover:bg-red-700"
+                                        onClick={handleCheckOut}
+                                        disabled={isSubmitting}
+                                    >
                                         <LogOut className="h-4 w-4 mr-2" />
-                                        Check Out
+                                        {isSubmitting ? "Processing..." : "Check Out"}
                                     </Button>
                                 )}
                             </div>

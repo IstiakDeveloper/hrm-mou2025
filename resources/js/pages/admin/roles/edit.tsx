@@ -33,7 +33,7 @@ interface Role {
   id: number;
   name: string;
   description: string;
-  permissions: string[];
+  permissions: unknown;
   created_at: string;
   updated_at: string;
 }
@@ -48,10 +48,37 @@ interface RoleEditProps {
 }
 
 export default function RoleEdit({ role, permissions, permission_categories, errors }: RoleEditProps) {
+  const normalizePermissions = (raw: unknown): string[] => {
+    if (Array.isArray(raw)) {
+      return raw.filter((p): p is string => typeof p === 'string' && p.trim() !== '');
+    }
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed === '') return [];
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        return normalizePermissions(parsed);
+      } catch {
+        // Fallback: comma-separated string
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter((p) => p !== '');
+      }
+    }
+    if (raw && typeof raw === 'object') {
+      // In case it arrives as an object (e.g., from legacy serialization)
+      return Object.values(raw as Record<string, unknown>).filter((p): p is string => typeof p === 'string' && p.trim() !== '');
+    }
+    return [];
+  };
+
+  const originalPermissions = React.useMemo(() => normalizePermissions(role.permissions), [role.permissions]);
+
   const { data, setData, put, processing } = useForm({
     name: role.name,
     description: role.description || '',
-    permissions: role.permissions || [],
+    permissions: normalizePermissions(role.permissions),
   });
 
   const [activeTab, setActiveTab] = useState<string>(Object.keys(permission_categories)[0] || 'admin');
@@ -66,13 +93,13 @@ export default function RoleEdit({ role, permissions, permission_categories, err
     const originalData = {
       name: role.name,
       description: role.description || '',
-      permissions: role.permissions || [],
+      permissions: normalizePermissions(role.permissions),
     };
 
     const hasDataChanged =
       data.name !== originalData.name ||
       data.description !== originalData.description ||
-      JSON.stringify(data.permissions.sort()) !== JSON.stringify(originalData.permissions.sort());
+      JSON.stringify([...data.permissions].sort()) !== JSON.stringify([...originalData.permissions].sort());
 
     setHasChanges(hasDataChanged);
   }, [data, role]);
@@ -495,7 +522,7 @@ export default function RoleEdit({ role, permissions, permission_categories, err
                               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                 {Object.entries(categoryPermissions).map(([key, label]) => {
                                   const isSelected = data.permissions.includes(key);
-                                  const wasOriginallySelected = role.permissions?.includes(key);
+                                  const wasOriginallySelected = originalPermissions.includes(key);
                                   const hasChanged = isSelected !== wasOriginallySelected;
 
                                   return (

@@ -1,238 +1,128 @@
 import * as React from "react"
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
-import { DayPicker } from "react-day-picker"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { DayPicker, type Matcher } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
-  showYearNavigation?: boolean;
+  /** Show year/month dropdowns in the caption. */
+  showYearNavigation?: boolean
+  /** Unused legacy prop kept for backward compatibility with existing usages. */
+  showManualInput?: boolean
+  /** Legacy alias: adds a `before` matcher to `disabled`. */
+  minDate?: Date
+  /** Legacy alias: adds an `after` matcher to `disabled`. */
+  maxDate?: Date
 }
 
+/**
+ * Calendar component built on top of react-day-picker v9.
+ *
+ * Notes:
+ * - react-day-picker v9 uses a new classNames API (months, month, month_caption,
+ *   caption_label, nav, button_previous, button_next, month_grid, weekdays,
+ *   weekday, week, day, day_button, selected, today, outside, disabled, hidden,
+ *   range_start, range_middle, range_end).
+ * - Legacy props (`minDate`, `maxDate`, `showYearNavigation`, `showManualInput`,
+ *   `initialFocus`) are supported for backward compatibility.
+ */
 function Calendar({
   className,
   classNames,
   showOutsideDays = true,
   showYearNavigation = false,
-  selected,
-  onSelect,
-  defaultMonth,
+  showManualInput: _showManualInput,
+  minDate,
+  maxDate,
+  disabled,
+  captionLayout,
+  startMonth,
+  endMonth,
+  initialFocus,
+  autoFocus,
+  components,
   ...props
 }: CalendarProps) {
+  const disabledWithRange = React.useMemo<Matcher | Matcher[] | undefined>(() => {
+    const extra: Matcher[] = []
+    if (minDate) extra.push({ before: minDate })
+    if (maxDate) extra.push({ after: maxDate })
+    if (extra.length === 0) return disabled
+    if (disabled == null) return extra.length === 1 ? extra[0] : extra
+    const base = Array.isArray(disabled) ? disabled : [disabled]
+    return [...base, ...extra]
+  }, [minDate, maxDate, disabled])
+
+  const effectiveCaptionLayout = captionLayout ?? (showYearNavigation ? "dropdown" : "label")
+
   const today = new Date()
-  const [currentMonth, setCurrentMonth] = React.useState<Date>(defaultMonth || today)
-
-  // Generate year options (120 years back from current year)
-  const currentYear = today.getFullYear()
-  const years = React.useMemo(() =>
-    Array.from({ length: 120 }, (_, i) => currentYear - i),
-    [currentYear]
-  )
-
-  // Generate month options
-  const months = React.useMemo(() => [
-    { value: "1", label: "January" },
-    { value: "2", label: "February" },
-    { value: "3", label: "March" },
-    { value: "4", label: "April" },
-    { value: "5", label: "May" },
-    { value: "6", label: "June" },
-    { value: "7", label: "July" },
-    { value: "8", label: "August" },
-    { value: "9", label: "September" },
-    { value: "10", label: "October" },
-    { value: "11", label: "November" },
-    { value: "12", label: "December" }
-  ], [])
-
-  // Update current month when selected date changes
-  React.useEffect(() => {
-    if (selected && !Array.isArray(selected)) {
-      setCurrentMonth(selected)
-    }
-  }, [selected])
-
-  // Update current month when month changes
-  React.useEffect(() => {
-    if (props.onMonthChange) {
-      props.onMonthChange(currentMonth)
-    }
-  }, [currentMonth, props])
-
-  // Custom components for navigation
-  const CustomCaption = React.useCallback(({ displayMonth }: { displayMonth: Date }) => {
-    return (
-      <div className="flex justify-center pt-1 relative items-center w-full">
-        <div className="flex flex-col items-center w-full">
-          {/* Navigation buttons row */}
-          <div className="flex justify-between w-full px-1 mb-2">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  const newDate = new Date(displayMonth)
-                  newDate.setFullYear(displayMonth.getFullYear() - 10)
-                  setCurrentMonth(newDate)
-                }}
-                className={cn(
-                  buttonVariants({ variant: "outline" }),
-                  "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-                )}
-                title="Go back 10 years"
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => {
-                  const newDate = new Date(displayMonth)
-                  newDate.setMonth(displayMonth.getMonth() - 1)
-                  setCurrentMonth(newDate)
-                }}
-                className={cn(
-                  buttonVariants({ variant: "outline" }),
-                  "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-                )}
-                title="Previous month"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  const newDate = new Date(displayMonth)
-                  newDate.setMonth(displayMonth.getMonth() + 1)
-                  setCurrentMonth(newDate)
-                }}
-                className={cn(
-                  buttonVariants({ variant: "outline" }),
-                  "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-                )}
-                title="Next month"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => {
-                  const newDate = new Date(displayMonth)
-                  newDate.setFullYear(displayMonth.getFullYear() + 10)
-                  setCurrentMonth(newDate)
-                }}
-                className={cn(
-                  buttonVariants({ variant: "outline" }),
-                  "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-                )}
-                title="Go forward 10 years"
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Year/Month selectors row */}
-          <div className="flex gap-1 justify-center">
-            <Select
-              value={displayMonth.getFullYear().toString()}
-              onValueChange={(value) => {
-                const newDate = new Date(displayMonth)
-                newDate.setFullYear(parseInt(value))
-                setCurrentMonth(newDate)
-              }}
-            >
-              <SelectTrigger className="h-7 w-20 text-xs px-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {years.slice(0, 30).map((year) => (
-                  <SelectItem key={year} value={year.toString()}>
-                    {year}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={(displayMonth.getMonth() + 1).toString()}
-              onValueChange={(value) => {
-                const newDate = new Date(displayMonth)
-                newDate.setMonth(parseInt(value) - 1)
-                setCurrentMonth(newDate)
-              }}
-            >
-              <SelectTrigger className="h-7 w-28 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {months.map((month) => (
-                  <SelectItem key={month.value} value={month.value}>
-                    {month.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
-    )
-  }, [buttonVariants, months, years])
-
-  const defaultNav = {
-    IconLeft: (props: any) => <ChevronLeft className="h-4 w-4" {...props} />,
-    IconRight: (props: any) => <ChevronRight className="h-4 w-4" {...props} />,
-  }
+  const effectiveStartMonth =
+    startMonth ?? (showYearNavigation ? new Date(today.getFullYear() - 120, 0, 1) : undefined)
+  const effectiveEndMonth =
+    endMonth ?? (showYearNavigation ? new Date(today.getFullYear() + 10, 11, 31) : undefined)
 
   return (
     <DayPicker
-      month={currentMonth}
-      onMonthChange={setCurrentMonth}
       showOutsideDays={showOutsideDays}
-      className={cn("p-3 mx-auto", className)}
+      className={cn("p-2 sm:p-3 w-full max-w-full", className)}
+      captionLayout={effectiveCaptionLayout}
+      startMonth={effectiveStartMonth}
+      endMonth={effectiveEndMonth}
+      autoFocus={autoFocus ?? initialFocus}
+      disabled={disabledWithRange}
       classNames={{
-        months: "flex justify-center",
-        month: "space-y-4",
-        caption: "flex justify-center pt-1 relative items-center",
-        caption_label: showYearNavigation ? "hidden" : "text-sm font-medium",
-        nav: showYearNavigation ? "hidden" : "space-x-1 flex items-center",
-        nav_button: cn(
+        months: "flex flex-col sm:flex-row gap-4 w-full",
+        month: "flex flex-col gap-3 w-full min-w-0",
+        month_caption: "flex justify-center pt-1 relative items-center h-9 px-10",
+        caption_label: "text-sm font-medium",
+        dropdowns: "flex items-center gap-2 text-sm font-medium flex-wrap justify-center",
+        dropdown:
+          "appearance-none bg-transparent rounded-md border px-2 py-1 text-sm font-medium hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring",
+        dropdown_root: "relative inline-flex items-center",
+        nav: "flex items-center absolute inset-x-1 top-1 justify-between z-10 pointer-events-none",
+        button_previous: cn(
           buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+          "h-7 w-7 bg-transparent p-0 opacity-75 hover:opacity-100 pointer-events-auto"
         ),
-        nav_button_previous: "absolute left-1",
-        nav_button_next: "absolute right-1",
-        table: "w-full border-collapse space-y-1",
-        head_row: "flex",
-        head_cell:
-          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2 justify-center",
-        cell: cn(
-          "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-          props.mode === "range"
-            ? "[&:has(>.day-range-end)]:rounded-r-md [&:has(>.day-range-start)]:rounded-l-md"
-            : "[&:has([aria-selected])]:rounded-md"
+        button_next: cn(
+          buttonVariants({ variant: "outline" }),
+          "h-7 w-7 bg-transparent p-0 opacity-75 hover:opacity-100 pointer-events-auto"
         ),
+        month_grid: "w-full border-collapse",
+        weekdays: "grid grid-cols-[repeat(7,minmax(2rem,1fr))] w-full",
+        weekday:
+          "text-muted-foreground font-normal text-[0.7rem] sm:text-[0.8rem] flex items-center justify-center py-1 min-w-0",
+        week: "grid grid-cols-[repeat(7,minmax(2rem,1fr))] w-full mt-1 sm:mt-2",
         day: cn(
-          buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
+          "aspect-square text-center text-xs sm:text-sm p-0 relative min-w-0",
+          "[&:has([aria-selected])]:bg-accent",
+          "first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+          "focus-within:relative focus-within:z-20"
         ),
-        day_range_start: "day-range-start",
-        day_range_end: "day-range-end",
-        day_selected:
+        day_button: cn(
+          buttonVariants({ variant: "ghost" }),
+          "w-full h-full p-0 font-normal aria-selected:opacity-100 rounded-md"
+        ),
+        range_start: "day-range-start rounded-l-md",
+        range_end: "day-range-end rounded-r-md",
+        range_middle:
+          "aria-selected:bg-accent aria-selected:text-accent-foreground rounded-none",
+        selected:
           "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-        day_today: "bg-accent text-accent-foreground",
-        day_outside:
-          "day-outside text-muted-foreground opacity-50",
-        day_disabled: "text-muted-foreground opacity-50",
-        day_range_middle:
-          "aria-selected:bg-accent aria-selected:text-accent-foreground",
-        day_hidden: "invisible",
+        today: "bg-accent text-accent-foreground",
+        outside: "text-muted-foreground opacity-50",
+        disabled: "text-muted-foreground opacity-50",
+        hidden: "invisible",
         ...classNames,
       }}
       components={{
-        ...(showYearNavigation ? { Caption: CustomCaption } : defaultNav),
-        ...props.components
+        Chevron: ({ orientation, className: chevronClassName, ...chevronProps }) => {
+          const Icon = orientation === "left" ? ChevronLeft : ChevronRight
+          return <Icon className={cn("h-4 w-4", chevronClassName)} {...chevronProps} />
+        },
+        ...(components ?? {}),
       }}
-      selected={selected}
-      onSelect={onSelect}
       {...props}
     />
   )

@@ -17,12 +17,21 @@ class Branch extends Model
         'branch_code',
         'head_employee_id',
         'is_head_office',
+        'geofence_latitude',
+        'geofence_longitude',
+        'geofence_radius_meters',
+        'geofence_max_accuracy_meters',
+        'geofence_enabled',
     ];
 
     protected $casts = [
         'is_head_office' => 'boolean',
+        'geofence_latitude' => 'float',
+        'geofence_longitude' => 'float',
+        'geofence_radius_meters' => 'integer',
+        'geofence_max_accuracy_meters' => 'integer',
+        'geofence_enabled' => 'boolean',
     ];
-
 
     public function headEmployee(): BelongsTo
     {

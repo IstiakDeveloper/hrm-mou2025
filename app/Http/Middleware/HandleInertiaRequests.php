@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Movement;
+use App\Models\User;
 use App\Services\WebPushService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -39,7 +40,9 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        $user = Auth::user()?->loadMissing(['role', 'roles']);
+        /** @var User|null $user */
+        $user = Auth::user();
+        $user?->loadMissing(['role', 'roles']);
 
         $employee = $user?->employee()?->with(['department', 'branch'])?->first();
         $activeMovement = null;
@@ -63,6 +66,7 @@ class HandleInertiaRequests extends Middleware
 
         $vapidPublic = (string) config('webpush.public_key', '');
         $pushConfigured = WebPushService::isConfigured();
+        $subscriptionCount = $user ? $user->pushSubscriptions()->count() : 0;
 
         return [
             ...parent::share($request),
@@ -79,6 +83,7 @@ class HandleInertiaRequests extends Middleware
             'push' => [
                 'vapidPublicKey' => $pushConfigured ? $vapidPublic : null,
                 'configured' => $pushConfigured,
+                'subscriptionCount' => $subscriptionCount,
             ],
             'flash' => [
                 'success' => $request->session()->get('success'),

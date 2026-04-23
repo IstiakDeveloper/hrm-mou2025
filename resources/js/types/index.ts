@@ -28,6 +28,7 @@ export interface SharedData {
     push?: {
         vapidPublicKey: string | null;
         configured: boolean;
+        subscriptionCount?: number;
     };
     flash?: {
         success?: string | null;

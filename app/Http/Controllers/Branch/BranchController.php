@@ -30,7 +30,7 @@ class BranchController extends Controller
 
         // Get all the head employees in a single query
         $headEmployees = [];
-        if (!empty($headEmployeeIds)) {
+        if (! empty($headEmployeeIds)) {
             $employees = \App\Models\Employee::whereIn('id', $headEmployeeIds)
                 ->select('id', 'employee_id', 'first_name', 'last_name')
                 ->get()
@@ -43,7 +43,7 @@ class BranchController extends Controller
         // Convert branches collection to array and manually add head employee data
         $branchesData = $branches->toArray();
         foreach ($branchesData['data'] as &$branch) {
-            if (!empty($branch['head_employee_id']) && isset($headEmployees[$branch['head_employee_id']])) {
+            if (! empty($branch['head_employee_id']) && isset($headEmployees[$branch['head_employee_id']])) {
                 $branch['headEmployee'] = $headEmployees[$branch['head_employee_id']];
             } else {
                 $branch['headEmployee'] = null;
@@ -80,6 +80,11 @@ class BranchController extends Controller
             'branch_code' => 'required|string|max:20|unique:branches',
             'head_employee_id' => 'nullable|exists:employees,id',
             'is_head_office' => 'boolean',
+            'geofence_enabled' => 'nullable|boolean',
+            'geofence_latitude' => 'nullable|numeric|between:-90,90',
+            'geofence_longitude' => 'nullable|numeric|between:-180,180',
+            'geofence_radius_meters' => 'nullable|integer|min:1|max:5000',
+            'geofence_max_accuracy_meters' => 'nullable|integer|min:1|max:500',
         ]);
 
         Branch::create($request->all());
@@ -110,9 +115,14 @@ class BranchController extends Controller
             'name' => 'required|string|max:255',
             'address' => 'nullable|string',
             'contact_number' => 'nullable|string|max:20',
-            'branch_code' => 'required|string|max:20|unique:branches,branch_code,' . $branch->id,
+            'branch_code' => 'required|string|max:20|unique:branches,branch_code,'.$branch->id,
             'head_employee_id' => 'nullable|exists:employees,id',
             'is_head_office' => 'boolean',
+            'geofence_enabled' => 'nullable|boolean',
+            'geofence_latitude' => 'nullable|numeric|between:-90,90',
+            'geofence_longitude' => 'nullable|numeric|between:-180,180',
+            'geofence_radius_meters' => 'nullable|integer|min:1|max:5000',
+            'geofence_max_accuracy_meters' => 'nullable|integer|min:1|max:500',
         ]);
 
         $branch->update($request->all());

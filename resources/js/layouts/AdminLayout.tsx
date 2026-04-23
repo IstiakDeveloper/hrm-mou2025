@@ -178,6 +178,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             hasSubmenu: false,
         },
         {
+            title: 'My Notices',
+            icon: <Bell className="w-5 h-5" />,
+            path: '/my-notices',
+            hasSubmenu: false,
+        },
+        {
             title: 'Employee Management',
             icon: <Users className="w-5 h-5" />,
             path: '/employees',
@@ -278,16 +284,19 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 { title: 'All Users', path: '/admin/users', permission: 'users.view' },
                 { title: 'Add User', path: '/admin/users/create', permission: 'users.create' },
                 { title: 'Roles & Permissions', path: '/admin/roles', permission: 'roles.view' },
+                { title: 'Notices', path: '/admin/notices', permission: 'admin.access' },
+                { title: 'Send notice', path: '/admin/notices/create', permission: 'admin.access' },
             ]
         },
         {
             title: 'Settings',
             icon: <Settings className="w-5 h-5" />,
-            path: '/profile',
+            path: '/settings',
             hasSubmenu: true,
             submenu: [
-                { title: 'Profile', path: '/profile' },
-                { title: 'Change Password', path: '/profile' },
+                { title: 'Profile', path: '/settings/profile' },
+                { title: 'Password', path: '/settings/password' },
+                { title: 'Notifications', path: '/settings/notifications' },
             ]
         },
     ];
@@ -579,7 +588,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </TooltipProvider>
                     ) : (
                         <Link
-                            href="/profile"
+                            href="/settings/notifications"
                             className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                         >
                             <Avatar className="w-10 h-10 border-2 border-green-500">
@@ -630,7 +639,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     {/* Mobile User Profile */}
                     <div className="p-4 border-t bg-gray-50">
                         <Link
-                            href="/profile"
+                            href="/settings/notifications"
                             className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                             onClick={toggleMobileNav}
                         >
@@ -721,9 +730,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     <DropdownMenuLabel>My Account</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem asChild>
-                                        <Link href="/profile" className="cursor-pointer">
-                                            <User className="w-4 h-4 mr-2" />
-                                            Profile
+                                        <Link href="/settings" className="cursor-pointer">
+                                            <Settings className="w-4 h-4 mr-2" />
+                                            Settings
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/settings/notifications" className="cursor-pointer">
+                                            <Bell className="w-4 h-4 mr-2" />
+                                            Push notifications
                                         </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />

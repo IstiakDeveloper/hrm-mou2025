@@ -1,6 +1,7 @@
 import HeadingSmall from '@/components/heading-small';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { createOrGetPushSubscription, postPushSubscriptionToServer } from '@/lib/push-subscription';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
@@ -13,17 +14,6 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/settings/notifications',
     },
 ];
-
-function urlBase64ToUint8Array(base64String: string): BufferSource {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-}
 
 export default function NotificationsSettings({ subscriptionCount }: { subscriptionCount: number }) {
     const { push, flash } = usePage<SharedData>().props;
@@ -60,38 +50,12 @@ export default function NotificationsSettings({ subscriptionCount }: { subscript
                 return;
             }
 
-            const registration = await navigator.serviceWorker.ready;
-            let subscription = await registration.pushManager.getSubscription();
-            if (!subscription) {
-                subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-                });
-            }
-
-            const payload = subscription.toJSON();
-            if (!payload.endpoint || !payload.keys?.auth || !payload.keys?.p256dh) {
-                setError('Could not read push subscription from the browser.');
-                return;
-            }
-
-            router.post(
-                route('settings.notifications.store'),
-                {
-                    endpoint: payload.endpoint,
-                    keys: {
-                        auth: payload.keys.auth,
-                        p256dh: payload.keys.p256dh,
-                    },
-                },
-                {
-                    preserveScroll: true,
-                    onFinish: () => setBusy(false),
-                },
-            );
+            const subscription = await createOrGetPushSubscription(vapidPublicKey);
+            await postPushSubscriptionToServer(subscription);
         } catch (e) {
-            setBusy(false);
             setError(e instanceof Error ? e.message : 'Something went wrong while enabling push.');
+        } finally {
+            setBusy(false);
         }
     }, [vapidPublicKey]);
 
@@ -165,8 +129,12 @@ export default function NotificationsSettings({ subscriptionCount }: { subscript
                     )}
 
                     <div className="flex flex-wrap gap-3">
-                        <Button type="button" disabled={busy || !serverConfigured || !vapidPublicKey} onClick={() => void subscribe()}>
-                            Enable on this device
+                        <Button
+                            type="button"
+                            disabled={busy || !serverConfigured || !vapidPublicKey || subscriptionCount > 0}
+                            onClick={() => void subscribe()}
+                        >
+                            {subscriptionCount > 0 ? 'Enabled' : 'Enable on this device'}
                         </Button>
                         <Button type="button" variant="outline" disabled={busy || subscriptionCount === 0} onClick={unsubscribe}>
                             Remove all my devices

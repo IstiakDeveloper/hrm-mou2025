@@ -22,10 +22,17 @@ self.addEventListener('push', (event: PushEvent) => {
     let title = 'Notification';
     let body = '';
     let url = '/';
+    let imageFromPayload: string | undefined;
 
     try {
         if (event.data) {
-            const parsed = event.data.json() as { title?: string; body?: string; url?: string };
+            const parsed = event.data.json() as {
+                title?: string;
+                body?: string;
+                url?: string;
+                /** Optional absolute HTTPS URL, or site path starting with / */
+                image?: string;
+            };
             if (typeof parsed.title === 'string') {
                 title = parsed.title;
             }
@@ -35,6 +42,9 @@ self.addEventListener('push', (event: PushEvent) => {
             if (typeof parsed.url === 'string' && parsed.url !== '') {
                 url = parsed.url;
             }
+            if (typeof parsed.image === 'string' && parsed.image !== '') {
+                imageFromPayload = parsed.image;
+            }
         }
     } catch {
         const text = event.data?.text();
@@ -43,11 +53,38 @@ self.addEventListener('push', (event: PushEvent) => {
         }
     }
 
+    // Floating “heads-up” / banner on Android is NOT controllable from JS: the OS + per-app
+    // notification settings (e.g. Samsung “Show as pop-up”, Chrome “Pop on screen”) decide that.
+    // Absolute URLs + image + vibrate help visibility in the shade and on some devices.
+    const origin = self.location.origin;
+    const iconUrl = `${origin}/icons/icon-192x192.png`;
+    const badgeUrl = `${origin}/icons/icon-72x72.png`;
+    const defaultImageUrl = `${origin}/icons/icon-384x384.png`;
+    let imageUrl = defaultImageUrl;
+    if (imageFromPayload) {
+        if (imageFromPayload.startsWith('https://') || imageFromPayload.startsWith('http://')) {
+            imageUrl = imageFromPayload;
+        } else if (imageFromPayload.startsWith('/')) {
+            imageUrl = `${origin}${imageFromPayload}`;
+        }
+    }
+
+    const notificationId =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
     event.waitUntil(
         self.registration.showNotification(title, {
             body,
-            icon: '/icons/icon-192x192.png',
-            badge: '/icons/icon-72x72.png',
+            icon: iconUrl,
+            badge: badgeUrl,
+            image: imageUrl,
+            tag: `hrm-${notificationId}`,
+            silent: false,
+            timestamp: Date.now(),
+            vibrate: [280, 120, 280, 120, 280],
+            requireInteraction: false,
             data: { url },
         }),
     );

@@ -6,11 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Services\WebPushService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class PushNotificationController extends Controller
 {
+    private function pushLog()
+    {
+        return Log::build([
+            'driver' => 'single',
+            'path' => storage_path('logs/push.log'),
+        ]);
+    }
+
     public function edit(Request $request): Response
     {
         return Inertia::render('settings/notifications', [
@@ -20,6 +29,12 @@ class PushNotificationController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->pushLog()->info('Push subscription store: request received', [
+            'user_id' => $request->user()?->id,
+            'ip' => $request->ip(),
+            'ua' => $request->userAgent(),
+        ]);
+
         $data = $request->validate([
             'endpoint' => ['required', 'string', 'max:512'],
             'keys.auth' => ['required', 'string'],
@@ -36,6 +51,12 @@ class PushNotificationController extends Controller
                 'user_agent' => $request->userAgent(),
             ]
         );
+
+        $this->pushLog()->info('Push subscription store: saved', [
+            'user_id' => $request->user()?->id,
+            'endpoint_host' => parse_url($data['endpoint'], PHP_URL_HOST),
+            'content_encoding' => $data['contentEncoding'] ?? 'aesgcm',
+        ]);
 
         return back()->with('success', 'Push notifications enabled for this device.');
     }
@@ -57,12 +78,21 @@ class PushNotificationController extends Controller
             return back()->with('warning', 'Enable notifications on at least one device first.');
         }
 
+        $this->pushLog()->info('Push test: sending', [
+            'user_id' => $request->user()?->id,
+            'subscription_count' => $request->user()->pushSubscriptions()->count(),
+        ]);
+
         $webPush->sendToUser(
             $request->user(),
             (string) config('app.name'),
             'Test notification — push is working.',
             url('/dashboard')
         );
+
+        $this->pushLog()->info('Push test: sent', [
+            'user_id' => $request->user()?->id,
+        ]);
 
         return back()->with('success', 'Test notification sent.');
     }

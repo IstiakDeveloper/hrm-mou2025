@@ -10,15 +10,15 @@ import { EyeIcon, EyeOffIcon, UserIcon, LockIcon } from 'lucide-react';
 
 interface LoginProps {
   errors: {
-    username?: string;
+    login?: string;
     password?: string;
     [key: string]: string | undefined;
   };
 }
 
 export default function Login({ errors }: LoginProps) {
-  const { data, setData, post, processing, reset } = useForm({
-    username: '',
+  const { data, setData, post, processing } = useForm({
+    login: '',
     password: '',
     remember: false,
   });
@@ -36,8 +36,8 @@ export default function Login({ errors }: LoginProps) {
 
     post(route('login.attempt'), {
       onError: (errors) => {
-        if (errors.username) {
-          setLoginError(errors.username);
+        if (errors.login) {
+          setLoginError(errors.login);
         }
       }
     });
@@ -89,25 +89,25 @@ export default function Login({ errors }: LoginProps) {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="login">Username or email</Label>
                   <div className="relative">
                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                       <UserIcon className="h-5 w-5 text-gray-400" />
                     </div>
                     <Input
-                      id="username"
+                      id="login"
                       type="text"
-                      placeholder="your_username"
-                      value={data.username}
-                      onChange={(e) => setData('username', e.target.value)}
+                      placeholder="username or name@company.com"
+                      value={data.login}
+                      onChange={(e) => setData('login', e.target.value)}
                       className="pl-10"
                       required
                       autoComplete="username"
                       spellCheck={false}
                     />
                   </div>
-                  {errors.username && (
-                    <span className="text-sm text-destructive">{errors.username}</span>
+                  {errors.login && (
+                    <span className="text-sm text-destructive">{errors.login}</span>
                   )}
                 </div>
 

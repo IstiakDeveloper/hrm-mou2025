@@ -25,6 +25,11 @@ interface Branch {
   branch_code: string;
   head_employee_id: number | null;
   is_head_office: boolean;
+  geofence_enabled?: boolean;
+  geofence_latitude?: number | null;
+  geofence_longitude?: number | null;
+  geofence_radius_meters?: number | null;
+  geofence_max_accuracy_meters?: number | null;
 }
 
 interface BranchEditProps {
@@ -40,6 +45,11 @@ export default function BranchEdit({ branch, employees }: BranchEditProps) {
     branch_code: branch.branch_code || '',
     head_employee_id: branch.head_employee_id ? branch.head_employee_id.toString() : null,
     is_head_office: Boolean(branch.is_head_office),
+    geofence_enabled: Boolean(branch.geofence_enabled),
+    geofence_latitude: branch.geofence_latitude ?? '',
+    geofence_longitude: branch.geofence_longitude ?? '',
+    geofence_radius_meters: branch.geofence_radius_meters ?? '',
+    geofence_max_accuracy_meters: branch.geofence_max_accuracy_meters ?? 50,
   });
 
   const submit = (e: React.FormEvent) => {
@@ -196,6 +206,80 @@ export default function BranchEdit({ branch, employees }: BranchEditProps) {
               <p className="text-xs text-gray-500 ml-6">
                 Designate this location as the organization's head office
               </p>
+
+              <div className="border-t pt-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Checkbox
+                    id="geofence_enabled"
+                    checked={Boolean(data.geofence_enabled)}
+                    onCheckedChange={(checked) => setData('geofence_enabled', checked as boolean)}
+                  />
+                  <Label htmlFor="geofence_enabled" className="text-sm font-medium leading-none cursor-pointer">
+                    Enable Geo-fence Attendance (PWA)
+                  </Label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="geofence_latitude">Latitude</Label>
+                    <Input
+                      id="geofence_latitude"
+                      value={data.geofence_latitude as any}
+                      onChange={(e) => setData('geofence_latitude', e.target.value)}
+                      placeholder="e.g., 23.7808875"
+                      inputMode="decimal"
+                    />
+                    {(errors as any).geofence_latitude && (
+                      <p className="mt-1 text-sm text-red-500">{(errors as any).geofence_latitude}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="geofence_longitude">Longitude</Label>
+                    <Input
+                      id="geofence_longitude"
+                      value={data.geofence_longitude as any}
+                      onChange={(e) => setData('geofence_longitude', e.target.value)}
+                      placeholder="e.g., 90.2792371"
+                      inputMode="decimal"
+                    />
+                    {(errors as any).geofence_longitude && (
+                      <p className="mt-1 text-sm text-red-500">{(errors as any).geofence_longitude}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="geofence_radius_meters">Allowed Radius (meters)</Label>
+                    <Input
+                      id="geofence_radius_meters"
+                      value={data.geofence_radius_meters as any}
+                      onChange={(e) => setData('geofence_radius_meters', e.target.value)}
+                      placeholder="e.g., 100"
+                      inputMode="numeric"
+                    />
+                    {(errors as any).geofence_radius_meters && (
+                      <p className="mt-1 text-sm text-red-500">{(errors as any).geofence_radius_meters}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="geofence_max_accuracy_meters">Max Accuracy Required (meters)</Label>
+                    <Input
+                      id="geofence_max_accuracy_meters"
+                      value={data.geofence_max_accuracy_meters as any}
+                      onChange={(e) => setData('geofence_max_accuracy_meters', e.target.value)}
+                      placeholder="e.g., 50"
+                      inputMode="numeric"
+                    />
+                    {(errors as any).geofence_max_accuracy_meters && (
+                      <p className="mt-1 text-sm text-red-500">{(errors as any).geofence_max_accuracy_meters}</p>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      Smaller value = stricter GPS quality (recommended 30–50m).
+                    </p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
             <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-end">
               <div className="flex space-x-2">

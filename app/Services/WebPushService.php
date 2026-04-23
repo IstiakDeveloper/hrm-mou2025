@@ -11,6 +11,14 @@ use Minishlink\WebPush\WebPush;
 
 class WebPushService
 {
+    private function pushLog()
+    {
+        return Log::build([
+            'driver' => 'single',
+            'path' => storage_path('logs/push.log'),
+        ]);
+    }
+
     public static function isConfigured(): bool
     {
         $subject = (string) config('webpush.subject', '');
@@ -28,6 +36,14 @@ class WebPushService
         if (! self::isConfigured()) {
             return [];
         }
+
+        $user->loadMissing('pushSubscriptions');
+        $this->pushLog()->info('Web push: queued', [
+            'user_id' => $user->id,
+            'subscription_count' => $user->pushSubscriptions->count(),
+            'title' => $title,
+            'url' => $clickUrl,
+        ]);
 
         $auth = [
             'VAPID' => [
@@ -63,10 +79,21 @@ class WebPushService
             $reports[] = $report;
             if ($report->isSubscriptionExpired()) {
                 PushSubscription::query()->where('endpoint', $report->getEndpoint())->delete();
+                $this->pushLog()->warning('Web push: subscription expired (deleted)', [
+                    'endpoint' => $report->getEndpoint(),
+                ]);
             } elseif (! $report->isSuccess()) {
                 Log::warning('Web push delivery failed', [
                     'endpoint' => $report->getEndpoint(),
                     'reason' => $report->getReason(),
+                ]);
+                $this->pushLog()->warning('Web push: delivery failed', [
+                    'endpoint' => $report->getEndpoint(),
+                    'reason' => $report->getReason(),
+                ]);
+            } else {
+                $this->pushLog()->info('Web push: delivered', [
+                    'endpoint' => $report->getEndpoint(),
                 ]);
             }
         }

@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -26,24 +27,29 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'username' => 'required|string|max:191',
+            'login' => 'required|string|max:255',
             'password' => 'required',
         ]);
 
-        $username = trim((string) $request->input('username'));
+        $login = trim((string) $request->input('login'));
 
-        if (Auth::attempt([
-            'username' => $username,
-            'password' => $request->input('password'),
-        ], $request->boolean('remember'))) {
-            $request->session()->regenerate();
-
-            return redirect()->intended(route('dashboard'));
+        $user = User::query()->where('username', $login)->first();
+        if (! $user) {
+            $user = User::query()
+                ->whereRaw('LOWER(email) = ?', [Str::lower($login)])
+                ->first();
         }
 
-        throw ValidationException::withMessages([
-            'username' => __('auth.failed'),
-        ]);
+        if (! $user || ! Hash::check($request->input('password'), $user->password)) {
+            throw ValidationException::withMessages([
+                'login' => __('auth.failed'),
+            ]);
+        }
+
+        Auth::login($user, $request->boolean('remember'));
+        $request->session()->regenerate();
+
+        return redirect()->intended(route('dashboard'));
     }
 
     /**

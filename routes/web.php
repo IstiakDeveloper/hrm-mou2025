@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminNoticeController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Attendance\AttendanceController;
 use App\Http\Controllers\Attendance\AttendanceDeviceController;
 use App\Http\Controllers\Attendance\AttendanceReportController;
 use App\Http\Controllers\Attendance\AttendanceSettingController;
+use App\Http\Controllers\Attendance\SelfAttendanceController;
 use App\Http\Controllers\AttendanceExportController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Branch\BranchController;
@@ -22,6 +24,7 @@ use App\Http\Controllers\Leave\LeaveApplicationController;
 use App\Http\Controllers\Leave\LeaveBalanceController;
 use App\Http\Controllers\Leave\LeaveTypeController;
 use App\Http\Controllers\Movement\MovementController;
+use App\Http\Controllers\MyNoticeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Report\ReportController;
@@ -110,7 +113,14 @@ Route::get('/admin/roles/permissions-api', [RoleController::class, 'permissions'
 
 // Debug route (remove in production)
 Route::get('/debug/role/{role}', function (Role $role) {
-    $permissions = json_decode($role->permissions, true) ?? [];
+    $raw = $role->permissions;
+    if (is_array($raw)) {
+        $permissions = $raw;
+    } elseif (is_string($raw)) {
+        $permissions = json_decode($raw, true) ?? [];
+    } else {
+        $permissions = [];
+    }
 
     return response()->json([
         'role_id' => $role->id,
@@ -152,6 +162,19 @@ Route::middleware(['auth'])->group(function () {
     // Dashboard - Available to all authenticated users
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    // ====================
+    // EMPLOYEE SELF ATTENDANCE (PWA GEO-FENCE)
+    // ====================
+    Route::prefix('employee/attendance')->name('employee.attendance.')->group(function () {
+        Route::post('/check-in', [SelfAttendanceController::class, 'checkIn'])
+            ->name('check-in')
+            ->middleware('throttle:10,1');
+
+        Route::post('/check-out', [SelfAttendanceController::class, 'checkOut'])
+            ->name('check-out')
+            ->middleware('throttle:10,1');
+    });
+
     // Profile - Available to all authenticated users
     Route::prefix('profile')->name('profile.')->group(function () {
         Route::get('/', [ProfileController::class, 'edit'])->name('edit');
@@ -166,6 +189,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/latest', [NotificationController::class, 'getLatestNotifications'])->name('latest');
         Route::post('/{id}/mark-as-read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
         Route::post('/mark-all-as-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-as-read');
+    });
+
+    // My Notices - Admin-sent notices that this user has received
+    Route::prefix('my-notices')->name('my-notices.')->group(function () {
+        Route::get('/', [MyNoticeController::class, 'index'])->name('index');
+        Route::post('/mark-all-read', [MyNoticeController::class, 'markAllRead'])->name('mark-all-read');
+        Route::get('/{id}', [MyNoticeController::class, 'show'])->name('show');
     });
 
     // ====================
@@ -190,6 +220,12 @@ Route::middleware(['auth'])->group(function () {
                 ->name('permissions.index')
                 ->middleware('permission:roles.view');
         });
+
+        Route::get('notices', [AdminNoticeController::class, 'index'])->name('notices.index');
+        Route::get('notices/create', [AdminNoticeController::class, 'create'])->name('notices.create');
+        Route::post('notices', [AdminNoticeController::class, 'store'])->name('notices.store');
+        Route::get('notices/{notice}', [AdminNoticeController::class, 'show'])->name('notices.show');
+        Route::delete('notices/{notice}', [AdminNoticeController::class, 'destroy'])->name('notices.destroy');
     });
 
     // ====================

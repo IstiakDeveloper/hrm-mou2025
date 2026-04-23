@@ -47,30 +47,25 @@ export default function NotificationDropdown() {
         const interval = setInterval(() => {
             fetchNotifications(); // Also fetch the notifications, not just the count
             fetchUnreadCount();
-        }, 30000); // Reduced to 30 seconds for more responsive updates
+        }, 12000); // Poll every 12s so admin notices show without a long wait
 
         return () => clearInterval(interval);
     }, []);
 
     const handleNotificationClick = async (notification) => {
-        if (!notification.read) {
-            try {
+        try {
+            if (!notification.read) {
                 await axios.post(`/notifications/${notification.id}/mark-as-read`);
                 setNotifications(notifications.map(n =>
                     n.id === notification.id ? { ...n, read: true } : n
                 ));
                 setUnreadCount(prev => Math.max(0, prev - 1));
-
-                // Redirect if there's a link
-                if (notification.link) {
-                    window.location.href = notification.link;
-                }
-            } catch (error) {
-                console.error('Failed to mark notification as read', error);
             }
-        } else if (notification.link) {
-            window.location.href = notification.link;
+        } catch (error) {
+            console.error('Failed to mark notification as read', error);
         }
+
+        window.location.href = `/my-notices/${notification.id}`;
     };
 
     const markAllAsRead = async () => {
@@ -149,8 +144,8 @@ export default function NotificationDropdown() {
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild className="p-2 text-center cursor-pointer">
-                    <Link href="/notifications" className="w-full text-blue-600 font-medium">
-                        View all notifications
+                    <Link href="/my-notices" className="w-full text-blue-600 font-medium">
+                        View all notices
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuContent>
