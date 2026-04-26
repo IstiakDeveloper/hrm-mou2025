@@ -8,6 +8,8 @@ use App\Models\Employee;
 use App\Models\LeaveApplication;
 use App\Models\Movement;
 use App\Models\AttendanceSetting;
+use App\Models\User;
+use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,21 +25,10 @@ class AttendanceReportController extends Controller
      */
     public function index(Request $request)
     {
+        /** @var User $user */
         $user = Auth::user();
 
-        // Get all employees for the dropdown
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name')
-            ->orderBy('first_name')
-            ->orderBy('last_name')
-            ->get()
-            ->map(function ($employee) {
-                // Combine first_name and last_name for display
-                $fullName = $employee->first_name . ($employee->last_name ? ' ' . $employee->last_name : '');
-                return [
-                    'id' => $employee->id,
-                    'name' => $fullName . ' (' . $employee->employee_id . ')'
-                ];
-            });
+        $employees = $this->employeesForReportDropdown($user);
 
         // Initialize empty reports array
         $reports = [];
@@ -54,9 +45,15 @@ class AttendanceReportController extends Controller
                 'to_date' => 'required|date|after_or_equal:from_date',
             ]);
 
-            $employeeId = $request->employee_id;
+            $employeeId = (int) $request->employee_id;
             $fromDate = $request->from_date;
             $toDate = $request->to_date;
+
+            if (! $this->userMayViewEmployeeAttendanceReport($user, $employeeId)) {
+                return redirect()->back()->withErrors([
+                    'employee_id' => 'You do not have access to this employee’s attendance report.',
+                ])->withInput();
+            }
 
             // Get employee full name
             $employee = Employee::findOrFail($employeeId);
@@ -83,6 +80,39 @@ class AttendanceReportController extends Controller
                 'isDepartmentHead' => $user->hasPermission('department_head'),
             ],
         ]);
+    }
+
+    /**
+     * Active employees visible to this user (organogram + HR rules), for the report dropdown.
+     *
+     * @return \Illuminate\Support\Collection<int, array{id: int, name: string}>
+     */
+    private function employeesForReportDropdown(User $user)
+    {
+        $q = Employee::query()
+            ->select('id', 'employee_id', 'first_name', 'last_name')
+            ->where('status', 'active')
+            ->orderBy('first_name')
+            ->orderBy('last_name');
+
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        return $q->get()->map(function ($employee) {
+            $fullName = $employee->first_name . ($employee->last_name ? ' ' . $employee->last_name : '');
+
+            return [
+                'id' => $employee->id,
+                'name' => $fullName . ' (' . $employee->employee_id . ')',
+            ];
+        });
+    }
+
+    private function userMayViewEmployeeAttendanceReport(User $user, int $employeeId): bool
+    {
+        $q = Employee::query()->whereKey($employeeId);
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        return $q->exists();
     }
 
 
@@ -492,6 +522,9 @@ class AttendanceReportController extends Controller
      */
     public function downloadPdf(Request $request)
     {
+        /** @var User $user */
+        $user = Auth::user();
+
         // Validate the request
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
@@ -499,9 +532,13 @@ class AttendanceReportController extends Controller
             'to_date' => 'required|date|after_or_equal:from_date',
         ]);
 
-        $employeeId = $request->employee_id;
-        $fromDate = $request->from_date;
-        $toDate = $request->to_date;
+        $employeeId = (int) $validated['employee_id'];
+        $fromDate = $validated['from_date'];
+        $toDate = $validated['to_date'];
+
+        if (! $this->userMayViewEmployeeAttendanceReport($user, $employeeId)) {
+            abort(403, 'You do not have access to this employee’s attendance report.');
+        }
 
         // Get employee full name
         $employee = Employee::findOrFail($employeeId);

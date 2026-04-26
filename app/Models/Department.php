@@ -13,18 +13,12 @@ class Department extends Model
         'name',
         'description',
         'head_employee_id',
-        'branch_id',
         'parent_department_id',
     ];
 
     public function headEmployee()
     {
         return $this->belongsTo(Employee::class, 'head_employee_id');
-    }
-
-    public function branch()
-    {
-        return $this->belongsTo(Branch::class);
     }
 
     public function parentDepartment()
@@ -40,10 +34,5 @@ class Department extends Model
     public function employees()
     {
         return $this->hasMany(Employee::class);
-    }
-
-    public function designations()
-    {
-        return $this->hasMany(Designation::class);
     }
 }

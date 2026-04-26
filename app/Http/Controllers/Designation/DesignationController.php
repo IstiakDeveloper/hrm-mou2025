@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Designation;
 
 use App\Http\Controllers\Controller;
-use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
 use Illuminate\Http\Request;
@@ -16,18 +15,13 @@ class DesignationController extends Controller
      */
     public function index(Request $request)
     {
-        $designationsQuery = Designation::with('department')
+        $designationsQuery = Designation::query()
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%");
-            })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->where('department_id', $departmentId);
             })
             ->orderBy('rank');
 
         $designations = $designationsQuery->paginate(10)->withQueryString();
-
-        $departments = Department::all();
 
         return Inertia::render('designation/index', [
             'designations' => [
@@ -49,8 +43,7 @@ class DesignationController extends Controller
                     'next' => $designations->nextPageUrl(),
                 ],
             ],
-            'departments' => $departments,
-            'filters' => $request->only(['search', 'department_id']),
+            'filters' => $request->only(['search']),
         ]);
     }
 
@@ -60,10 +53,8 @@ class DesignationController extends Controller
      */
     public function create()
     {
-        $departments = Department::all();
-
         return Inertia::render('designation/create', [
-            'departments' => $departments,
+            //
         ]);
     }
 
@@ -72,14 +63,13 @@ class DesignationController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'department_id' => 'required|exists:departments,id',
-            'rank' => 'required|integer|min:1',
+            'rank' => 'required|integer|min:0',
         ]);
 
-        Designation::create($request->all());
+        Designation::create($validated);
 
         return redirect()->route('designations.index')
             ->with('success', 'Designation created successfully.');
@@ -90,11 +80,9 @@ class DesignationController extends Controller
      */
     public function edit(Designation $designation)
     {
-        $departments = Department::all();
-
         return Inertia::render('designation/edit', [
             'designation' => $designation,
-            'departments' => $departments,
+            //
         ]);
     }
 
@@ -103,14 +91,13 @@ class DesignationController extends Controller
      */
     public function update(Request $request, Designation $designation)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'department_id' => 'required|exists:departments,id',
-            'rank' => 'required|integer|min:1',
+            'rank' => 'required|integer|min:0',
         ]);
 
-        $designation->update($request->all());
+        $designation->update($validated);
 
         return redirect()->route('designations.index')
             ->with('success', 'Designation updated successfully.');

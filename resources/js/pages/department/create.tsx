@@ -9,11 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Building, Users } from 'lucide-react';
 
-interface Branch {
-  id: number;
-  name: string;
-}
-
 interface Employee {
   id: number;
   first_name: string;
@@ -27,17 +22,15 @@ interface Department {
 }
 
 interface DepartmentCreateProps {
-  branches: Branch[];
   employees: Employee[];
   departments: Department[];
 }
 
-export default function DepartmentCreate({ branches, employees, departments }: DepartmentCreateProps) {
+export default function DepartmentCreate({ employees, departments }: DepartmentCreateProps) {
   const { data, setData, post, processing, errors } = useForm({
     name: '',
     description: '',
     head_employee_id: null as string | null,
-    branch_id: null as string | null,
     parent_department_id: null as string | null,
   });
 
@@ -108,28 +101,6 @@ export default function DepartmentCreate({ branches, employees, departments }: D
                   rows={3}
                 />
                 {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="branch_id">
-                  Branch <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={data.branch_id || undefined}
-                  onValueChange={(value) => setData('branch_id', value === "null" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.branch_id && <p className="mt-1 text-sm text-red-500">{errors.branch_id}</p>}
               </div>
 
               <div className="space-y-2">

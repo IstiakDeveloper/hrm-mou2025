@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
     Table,
@@ -24,6 +24,7 @@ import {
     ChevronRight,
     Search,
     UserPlus,
+    Upload,
     MoreHorizontal,
     Edit,
     Trash,
@@ -52,10 +53,24 @@ import {
     SelectValue
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import InputError from '@/components/input-error';
+import { Label } from '@/components/ui/label';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface Employee {
     id: number;
+    pin?: string;
     employee_id: string;
+    full_name_en?: string;
+    name_en?: string;
     first_name: string;
     last_name: string;
     email: string;
@@ -77,6 +92,11 @@ interface Employee {
 }
 
 interface Department {
+    id: number;
+    name: string;
+}
+
+interface Designation {
     id: number;
     name: string;
 }
@@ -128,16 +148,44 @@ export default function EmployeeIndex({
     });
 
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+    const [importOpen, setImportOpen] = useState(false);
+
+    const importForm = useForm<{
+        file: File | null;
+    }>({
+        file: null,
+    });
+
+    const page = usePage() as any;
+    const importSummary = page?.props?.flash?.import_summary as
+        | { created: number; skipped: number; branches?: { branch_id: number; branch_name: string; created: number }[] }
+        | undefined;
+    const importRowErrors = (page?.props?.flash?.import_row_errors as { row: number; errors: string[] }[] | undefined) ?? [];
 
     const [showFilters, setShowFilters] = useState(
         !!(filters.department_id || filters.branch_id || filters.status)
     );
 
+    const applyFilters = (next: Partial<typeof data>) => {
+        const merged = {
+            ...data,
+            ...next,
+        };
+
+        setData(merged);
+
+        const params: Record<string, string> = {};
+        if (merged.search) params.search = merged.search;
+        if (merged.department_id) params.department_id = merged.department_id;
+        if (merged.branch_id) params.branch_id = merged.branch_id;
+        if (merged.status) params.status = merged.status;
+
+        router.get(route('employees.index'), params, { preserveState: true, replace: true });
+    };
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        get(route('employees.index'), {
-            preserveState: true,
-        });
+        applyFilters({});
     };
 
     const handleDeleteEmployee = () => {
@@ -157,15 +205,11 @@ export default function EmployeeIndex({
     };
 
     const handleClearFilters = () => {
-        setData({
+        applyFilters({
             search: '',
             department_id: '',
             branch_id: '',
             status: '',
-        });
-
-        get(route('employees.index'), {
-            preserveState: true,
         });
     };
 
@@ -184,8 +228,11 @@ export default function EmployeeIndex({
         }
     };
 
-    const getEmployeeInitials = (firstName: string, lastName: string) => {
-        return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+    const getEmployeeInitials = (name: string) => {
+        const parts = name.trim().split(/\s+/).filter(Boolean);
+        const first = parts[0]?.[0] || '';
+        const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+        return `${first}${last}`.toUpperCase() || 'E';
     };
 
     return (
@@ -200,18 +247,134 @@ export default function EmployeeIndex({
                             Manage all employees across branches and departments
                         </p>
                     </div>
-                    <Link href={route('employees.create')}>
-                        <Button className="flex items-center gap-1">
-                            <UserPlus className="h-4 w-4" />
-                            <span>Add Employee</span>
-                        </Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        <Dialog open={importOpen} onOpenChange={setImportOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" className="flex items-center gap-2">
+                                    <Upload className="h-4 w-4" />
+                                    <span>Import Employees</span>
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Import Employees</DialogTitle>
+                                    <DialogDescription>
+                                        Upload a CSV file and assign all imported employees to a Branch.
+                                    </DialogDescription>
+                                </DialogHeader>
+
+                                <form
+                                    className="space-y-4"
+                                    onSubmit={(e) => {
+                                        e.preventDefault();
+                                        importForm.post(route('employees.import.preview'), {
+                                            forceFormData: true,
+                                            preserveScroll: true,
+                                            onSuccess: () => {
+                                                // On success, the server redirects to the review page via Inertia render
+                                            },
+                                        });
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between rounded-md border bg-muted/20 p-3">
+                                        <div className="text-sm text-muted-foreground">
+                                            Need a template? Download the sample CSV.
+                                        </div>
+                                        <a
+                                            href={route('employees.import.example')}
+                                            className="text-sm font-medium text-primary hover:underline"
+                                        >
+                                            Download sample CSV
+                                        </a>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="importFile">CSV file</Label>
+                                        <Input
+                                            id="importFile"
+                                            type="file"
+                                            accept=".csv,text/csv"
+                                            onChange={(e) => {
+                                                const f = e.target.files?.[0] ?? null;
+                                                importForm.setData('file', f);
+                                            }}
+                                        />
+                                        <InputError message={importForm.errors.file as any} />
+                                    </div>
+
+                                    <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                                        File upload will only create a preview. On the next page you will select Branch/Department/Designations per employee and confirm.
+                                    </div>
+
+                                    <DialogFooter>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setImportOpen(false)}
+                                            disabled={importForm.processing}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button type="submit" disabled={importForm.processing}>
+                                            {importForm.processing ? 'Importing...' : 'Import'}
+                                        </Button>
+                                    </DialogFooter>
+                                </form>
+                            </DialogContent>
+                        </Dialog>
+
+                        <Link href={route('employees.create')}>
+                            <Button className="flex items-center gap-1">
+                                <UserPlus className="h-4 w-4" />
+                                <span>Add Employee</span>
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
 
                 {success && (
                     <Alert className="mb-6 bg-green-50 border-green-200">
                         <Check className="h-4 w-4 text-green-600" />
                         <AlertDescription className="text-green-700">{success}</AlertDescription>
+                    </Alert>
+                )}
+
+                {importSummary && (
+                    <Alert className="mb-6 bg-blue-50 border-blue-200">
+                        <AlertDescription className="text-blue-800">
+                            <div className="font-medium">
+                                Import summary: Created {importSummary.created}, skipped {importSummary.skipped}.
+                            </div>
+                            {importSummary.branches && importSummary.branches.length > 0 && (
+                                <div className="mt-2 text-sm">
+                                    <div className="font-medium">Branch-wise created</div>
+                                    <ul className="mt-1 list-disc pl-5">
+                                        {importSummary.branches.slice(0, 10).map((b) => (
+                                            <li key={b.branch_id}>
+                                                {b.branch_name}: {b.created}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                            {importRowErrors.length > 0 && (
+                                <div className="mt-2 text-sm">
+                                    <div className="font-medium">Row errors</div>
+                                    <ul className="mt-1 list-disc pl-5">
+                                        {importRowErrors.slice(0, 10).map((re) => (
+                                            <li key={re.row}>
+                                                Row {re.row}: {re.errors.join(', ')}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    {importRowErrors.length > 10 && (
+                                        <div className="mt-1 text-xs text-blue-700">
+                                            Showing 10 of {importRowErrors.length} errors.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </AlertDescription>
                     </Alert>
                 )}
 
@@ -258,17 +421,16 @@ export default function EmployeeIndex({
                             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
                                 <div>
                                     <Select
-                                        value={data.department_id}
+                                        value={data.department_id || 'all'}
                                         onValueChange={value => {
-                                            setData('department_id', value);
-                                            get(route('employees.index'), { preserveState: true });
+                                            applyFilters({ department_id: value === 'all' ? '' : value });
                                         }}
                                     >
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Filter by Department" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">All Departments</SelectItem>
+                                            <SelectItem value="all">All Departments</SelectItem>
                                             {departments.map(department => (
                                                 <SelectItem key={department.id} value={department.id.toString()}>
                                                     {department.name}
@@ -280,17 +442,16 @@ export default function EmployeeIndex({
 
                                 <div>
                                     <Select
-                                        value={data.branch_id}
+                                        value={data.branch_id || 'all'}
                                         onValueChange={value => {
-                                            setData('branch_id', value);
-                                            get(route('employees.index'), { preserveState: true });
+                                            applyFilters({ branch_id: value === 'all' ? '' : value });
                                         }}
                                     >
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Filter by Branch" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">All Branches</SelectItem>
+                                            <SelectItem value="all">All Branches</SelectItem>
                                             {branches.map(branch => (
                                                 <SelectItem key={branch.id} value={branch.id.toString()}>
                                                     {branch.name}
@@ -302,17 +463,16 @@ export default function EmployeeIndex({
 
                                 <div>
                                     <Select
-                                        value={data.status}
+                                        value={data.status || 'all'}
                                         onValueChange={value => {
-                                            setData('status', value);
-                                            get(route('employees.index'), { preserveState: true });
+                                            applyFilters({ status: value === 'all' ? '' : value });
                                         }}
                                     >
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Filter by Status" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">All Statuses</SelectItem>
+                                            <SelectItem value="all">All Statuses</SelectItem>
                                             <SelectItem value="active">Active</SelectItem>
                                             <SelectItem value="inactive">Inactive</SelectItem>
                                             <SelectItem value="on_leave">On Leave</SelectItem>
@@ -371,16 +531,16 @@ export default function EmployeeIndex({
                                                     <div className="flex items-center space-x-3">
                                                         <Avatar className="h-9 w-9">
                                                             {employee.photo ? (
-                                                                <AvatarImage src={`/storage/${employee.photo}`} alt={`${employee.first_name} ${employee.last_name}`} />
+                                                                <AvatarImage src={`/storage/${employee.photo}`} alt={`${employee.full_name_en || employee.name_en || `${employee.first_name} ${employee.last_name}`}`} />
                                                             ) : (
                                                                 <AvatarFallback className="bg-primary/10 text-primary">
-                                                                    {getEmployeeInitials(employee.first_name, employee.last_name)}
+                                                                    {getEmployeeInitials(employee.full_name_en || employee.name_en || `${employee.first_name} ${employee.last_name}`)}
                                                                 </AvatarFallback>
                                                             )}
                                                         </Avatar>
                                                         <div>
                                                             <div className="font-medium">
-                                                                {employee.first_name} {employee.last_name}
+                                                                {employee.full_name_en || employee.name_en || `${employee.first_name} ${employee.last_name}`}
                                                             </div>
                                                             <div className="text-sm text-gray-500">
                                                                 {employee.designation.name}
@@ -388,7 +548,7 @@ export default function EmployeeIndex({
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{employee.employee_id}</TableCell>
+                                                <TableCell>{employee.pin || employee.employee_id}</TableCell>
                                                 <TableCell>{employee.department.name}</TableCell>
                                                 <TableCell>{employee.branch.name}</TableCell>
                                                 <TableCell>
@@ -474,7 +634,7 @@ export default function EmployeeIndex({
                                                         ...filters,
                                                     })}
                                                     className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${link.active
-                                                        ? 'z-10 bg-primary text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary'
+                                                        ? 'z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary'
                                                         : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
                                                         }`}
                                                 >

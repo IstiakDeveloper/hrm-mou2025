@@ -8,14 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, Building, MapPin, Phone, Hash, User } from 'lucide-react';
-
-interface Employee {
-  id: number;
-  first_name: string;
-  last_name: string;
-  employee_id: string;
-}
+import { ArrowLeft, Building, MapPin, Phone, Hash } from 'lucide-react';
 
 interface Branch {
   id: number;
@@ -23,7 +16,6 @@ interface Branch {
   address: string | null;
   contact_number: string | null;
   branch_code: string;
-  head_employee_id: number | null;
   is_head_office: boolean;
   geofence_enabled?: boolean;
   geofence_latitude?: number | null;
@@ -34,23 +26,39 @@ interface Branch {
 
 interface BranchEditProps {
   branch: Branch;
-  employees: Employee[];
+  zones: { id: number; name: string; code: string }[];
+  regionalOffices: { id: number; zone_id: number; name: string; code: string }[];
+  designations: { id: number; name: string }[];
 }
 
-export default function BranchEdit({ branch, employees }: BranchEditProps) {
+export default function BranchEdit({ branch, zones, regionalOffices, designations }: BranchEditProps) {
   const { data, setData, put, processing, errors } = useForm({
+    zone_id: null as string | null,
+    regional_office_id: (branch as any).regional_office_id ? String((branch as any).regional_office_id) : null,
+    branch_head_designation_id: (branch as any).branch_head_designation_id ? String((branch as any).branch_head_designation_id) : null,
     name: branch.name || '',
     address: branch.address || '',
     contact_number: branch.contact_number || '',
+    email: (branch as any).email || '',
     branch_code: branch.branch_code || '',
-    head_employee_id: branch.head_employee_id ? branch.head_employee_id.toString() : null,
     is_head_office: Boolean(branch.is_head_office),
+    is_active: (branch as any).is_active !== undefined ? Boolean((branch as any).is_active) : true,
     geofence_enabled: Boolean(branch.geofence_enabled),
     geofence_latitude: branch.geofence_latitude ?? '',
     geofence_longitude: branch.geofence_longitude ?? '',
     geofence_radius_meters: branch.geofence_radius_meters ?? '',
     geofence_max_accuracy_meters: branch.geofence_max_accuracy_meters ?? 50,
   });
+
+  React.useEffect(() => {
+    if (data.zone_id) return;
+    const roId = data.regional_office_id;
+    if (!roId) return;
+    const ro = regionalOffices.find((x) => String(x.id) === String(roId));
+    if (ro) {
+      setData('zone_id', String(ro.zone_id));
+    }
+  }, [data.zone_id, data.regional_office_id, regionalOffices]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +101,58 @@ export default function BranchEdit({ branch, employees }: BranchEditProps) {
               </div>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="zone_id">Zone</Label>
+                  <Select
+                    value={data.zone_id || undefined}
+                    onValueChange={(value) => {
+                      const zoneId = value === 'null' ? null : value;
+                      setData('zone_id', zoneId);
+                      setData('regional_office_id', null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select zone (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="null">None</SelectItem>
+                      {zones.map((zone) => (
+                        <SelectItem key={zone.id} value={zone.id.toString()}>
+                          {zone.name} ({zone.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(errors as any).zone_id && <p className="mt-1 text-sm text-red-500">{(errors as any).zone_id}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="regional_office_id">Regional Office</Label>
+                  <Select
+                    value={data.regional_office_id || undefined}
+                    onValueChange={(value) => setData('regional_office_id', value === 'null' ? null : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select regional office (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="null">None</SelectItem>
+                      {regionalOffices
+                        .filter((ro) => !data.zone_id || String(ro.zone_id) === String(data.zone_id))
+                        .map((ro) => (
+                          <SelectItem key={ro.id} value={ro.id.toString()}>
+                            {ro.name} ({ro.code})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.regional_office_id && (
+                    <p className="mt-1 text-sm text-red-500">{errors.regional_office_id as any}</p>
+                  )}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="name">
                   Branch Name <span className="text-red-500">*</span>
@@ -164,28 +224,44 @@ export default function BranchEdit({ branch, employees }: BranchEditProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="head_employee_id">
-                  Branch Head
+                <Label htmlFor="email">
+                  Branch Email
+                </Label>
+                <Input
+                  id="email"
+                  value={data.email as any}
+                  onChange={e => setData('email', e.target.value)}
+                  placeholder="Enter branch email (optional)"
+                  inputMode="email"
+                />
+                {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="branch_head_designation_id">
+                  Branch Head Designation
                 </Label>
                 <Select
-                  value={data.head_employee_id || undefined}
-                  onValueChange={(value) => setData('head_employee_id', value === "null" ? null : value)}
+                  value={data.branch_head_designation_id || undefined}
+                  onValueChange={(value) => setData('branch_head_designation_id', value === 'null' ? null : value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select branch head (optional)" />
+                    <SelectValue placeholder="Select head designation (optional)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="null">None</SelectItem>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employee.first_name} {employee.last_name} ({employee.employee_id})
+                    {designations.map((d) => (
+                      <SelectItem key={d.id} value={d.id.toString()}>
+                        {d.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.head_employee_id && <p className="mt-1 text-sm text-red-500">{errors.head_employee_id}</p>}
+                {(errors as any).branch_head_designation_id && (
+                  <p className="mt-1 text-sm text-red-500">{(errors as any).branch_head_designation_id}</p>
+                )}
                 <p className="text-xs text-gray-500">
-                  The employee who manages this branch
+                  Branch Head is determined by designation (transfer safe)
                 </p>
               </div>
 
@@ -206,6 +282,18 @@ export default function BranchEdit({ branch, employees }: BranchEditProps) {
               <p className="text-xs text-gray-500 ml-6">
                 Designate this location as the organization's head office
               </p>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_active"
+                  checked={Boolean(data.is_active)}
+                  onCheckedChange={(checked) => setData('is_active', checked as boolean)}
+                />
+                <Label htmlFor="is_active" className="text-sm font-medium leading-none cursor-pointer">
+                  Active
+                </Label>
+              </div>
+              {errors.is_active && <p className="mt-1 text-sm text-red-500">{errors.is_active}</p>}
 
               <div className="border-t pt-6">
                 <div className="flex items-center space-x-2 mb-4">

@@ -79,10 +79,14 @@ interface MenuItemType {
     path: string;
     hasSubmenu: boolean;
     permission?: string;
+    hrOnly?: boolean;
     submenu?: {
         title: string;
         path: string;
         permission?: string;
+        hrOnly?: boolean;
+        /** Show if user has ANY of these permissions (omit to ignore). */
+        anyPermissions?: string[];
     }[];
 }
 
@@ -124,6 +128,25 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     };
 
     const hasPermission = (permission?: string): boolean => hasAppPermission(auth, permission);
+
+    // "HR users" = users allowed to manage employees / org setup / system configuration.
+    // Organogram approvers may have approval permissions but should not see setup menus.
+    const isHRUser = [
+        'employees.create',
+        'employees.edit',
+        'employees.admin',
+        'branches.create',
+        'branches.edit',
+        'departments.create',
+        'departments.edit',
+        'designations.create',
+        'designations.edit',
+        'leave-types.create',
+        'leave-types.edit',
+        'leave-balances.admin',
+        'attendance.admin',
+        'admin.access',
+    ].some((p) => hasPermission(p));
 
     const canCloseOwnMovement = Boolean(activeMovement?.id && auth?.employee?.id && activeMovement.employee_id === auth.employee.id);
 
@@ -188,11 +211,20 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             icon: <Users className="w-5 h-5" />,
             path: '/employees',
             hasSubmenu: true,
-            permission: 'employees.view',
             submenu: [
-                { title: 'All Employees', path: '/employees', permission: 'employees.view' },
-                { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view' },
-                { title: 'Employee Dashboard', path: '/employee/dashboard', permission: 'employees.view' },
+                { title: 'All Employees', path: '/employees', permission: 'employees.view', hrOnly: true },
+                { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view', hrOnly: true },
+                {
+                    title: 'Employee Dashboard',
+                    path: '/employee/dashboard',
+                    anyPermissions: [
+                        'employees.view',
+                        'leave-applications.view',
+                        'movements.view',
+                        'transfers.view',
+                        'attendance.view',
+                    ],
+                },
             ]
         },
         {
@@ -201,8 +233,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             path: '/branches',
             hasSubmenu: true,
             permission: 'branches.view',
+            hrOnly: true,
             submenu: [
                 { title: 'Branches', path: '/branches', permission: 'branches.view' },
+                { title: 'Zones', path: '/zones', permission: 'zones.view' },
+                { title: 'Regional Offices', path: '/regional-offices', permission: 'regional-offices.view' },
                 { title: 'Departments', path: '/departments', permission: 'departments.view' },
                 { title: 'Designations', path: '/designations', permission: 'designations.view' },
             ]
@@ -230,9 +265,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             permission: 'leave-applications.view',
             submenu: [
                 { title: 'Leave Applications', path: '/leave/applications', permission: 'leave-applications.view' },
-                { title: 'Leave Types', path: '/leave/types', permission: 'leave-types.view' },
-                { title: 'Leave Balances', path: '/leave/balances', permission: 'leave-balances.view' },
-                { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk', permission: 'leave-balances.admin' },
+                { title: 'Leave Settings', path: '/leave/settings', permission: 'leave-types.view', hrOnly: true },
+                { title: 'Leave Types', path: '/leave/types', permission: 'leave-types.view', hrOnly: true },
+                { title: 'Leave Balances', path: '/leave/balances', permission: 'leave-balances.view', hrOnly: true },
+                { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk', permission: 'leave-balances.admin', hrOnly: true },
                 { title: 'Leave Report', path: '/leave/applications/report', permission: 'reports.view' },
             ]
         },
@@ -280,6 +316,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             path: '/admin/users',
             hasSubmenu: true,
             permission: 'admin.access',
+            hrOnly: true,
             submenu: [
                 { title: 'All Users', path: '/admin/users', permission: 'users.view' },
                 { title: 'Add User', path: '/admin/users/create', permission: 'users.create' },
@@ -303,10 +340,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     // Desktop sidebar menu item component
     const DesktopMenuItem = ({ item }: { item: MenuItemType }) => {
+        if (item.hrOnly && !isHRUser) return null;
         if (item.permission && !hasPermission(item.permission)) return null;
 
         const permittedSubmenu = item.submenu?.filter(subItem =>
-            !subItem.permission || hasPermission(subItem.permission)
+            (!subItem.hrOnly || isHRUser)
+            && (!subItem.permission || hasPermission(subItem.permission))
+            && (!subItem.anyPermissions?.length
+                || subItem.anyPermissions.some((p) => hasPermission(p)))
         );
 
         if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
@@ -401,10 +442,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     // Mobile sidebar menu item component
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
+        if (item.hrOnly && !isHRUser) return null;
         if (item.permission && !hasPermission(item.permission)) return null;
 
         const permittedSubmenu = item.submenu?.filter(subItem =>
-            !subItem.permission || hasPermission(subItem.permission)
+            (!subItem.hrOnly || isHRUser)
+            && (!subItem.permission || hasPermission(subItem.permission))
+            && (!subItem.anyPermissions?.length
+                || subItem.anyPermissions.some((p) => hasPermission(p)))
         );
 
         if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
@@ -757,7 +802,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 {/* Flash Messages */}
                 <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80">
                     {showSuccess && (
-                        <Alert variant="success" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5">
+                        <Alert variant="default" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5">
                             <CheckCircle className="h-4 w-4" />
                             <AlertDescription>{flash.success}</AlertDescription>
                             <Button
@@ -785,7 +830,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </Alert>
                     )}
                     {showWarning && (
-                        <Alert variant="warning" className="bg-yellow-50 border-yellow-200 text-yellow-800 animate-in fade-in slide-in-from-top-5">
+                        <Alert variant="default" className="bg-yellow-50 border-yellow-200 text-yellow-800 animate-in fade-in slide-in-from-top-5">
                             <AlertTriangle className="h-4 w-4" />
                             <AlertDescription>{flash.warning}</AlertDescription>
                             <Button
@@ -799,7 +844,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </Alert>
                     )}
                     {showInfo && (
-                        <Alert variant="info" className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-5">
+                        <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-5">
                             <Info className="h-4 w-4" />
                             <AlertDescription>{flash.info}</AlertDescription>
                             <Button

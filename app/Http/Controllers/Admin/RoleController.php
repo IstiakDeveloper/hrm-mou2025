@@ -116,10 +116,11 @@ class RoleController extends Controller
             'leaves_type.create' => 'leave-types.create',
             'leaves_type.edit' => 'leave-types.edit',
             'leaves_type.delete' => 'leave-types.delete',
-            'profile.view' => null, // Remove this as it's not in new structure
-            'profile.edit' => null, // Remove this as it's not in new structure
-            'branch_manager' => null, // Remove special permissions
-            'department_head' => null, // Remove special permissions
+            'profile.view' => 'profile.view',
+            'profile.edit' => 'profile.edit',
+            // Keep line-authority flags used by approval / scope logic (MovementController, etc.)
+            'branch_manager' => 'branch_manager',
+            'department_head' => 'department_head',
         ];
 
         $mappedPermissions = [];
@@ -312,7 +313,17 @@ class RoleController extends Controller
                 'label' => 'Reports & Analytics',
                 'description' => 'Report generation and data export',
                 'color' => 'teal'
-            ]
+            ],
+            'organogram' => [
+                'label' => 'Organogram & line authority',
+                'description' => 'Scope markers for hierarchy (approval chains, reporting lines); combine with resource permissions',
+                'color' => 'slate'
+            ],
+            'profile' => [
+                'label' => 'Own profile',
+                'description' => 'Self-service profile pages',
+                'color' => 'cyan'
+            ],
         ];
     }
 
@@ -348,6 +359,14 @@ class RoleController extends Controller
             'branches.create' => 'Create Branches',
             'branches.edit' => 'Edit Branches',
             'branches.delete' => 'Delete Branches',
+            'zones.view' => 'View Zones',
+            'zones.create' => 'Create Zones',
+            'zones.edit' => 'Edit Zones',
+            'zones.delete' => 'Delete Zones',
+            'regional-offices.view' => 'View Regional Offices',
+            'regional-offices.create' => 'Create Regional Offices',
+            'regional-offices.edit' => 'Edit Regional Offices',
+            'regional-offices.delete' => 'Delete Regional Offices',
             'departments.view' => 'View Departments',
             'departments.create' => 'Create Departments',
             'departments.edit' => 'Edit Departments',
@@ -380,6 +399,7 @@ class RoleController extends Controller
             'leave-applications.edit' => 'Edit Leave Applications',
             'leave-applications.cancel' => 'Cancel Leave Applications',
             'leave-applications.approve' => 'Approve/Reject Leave Applications',
+            'leave-applications.delete' => 'Delete Leave Applications (admin)',
 
             // Movement & Transfer Management
             'movements.view' => 'View Movements',
@@ -392,7 +412,21 @@ class RoleController extends Controller
             'transfers.view' => 'View Transfers',
             'transfers.create' => 'Create Transfers',
             'transfers.edit' => 'Edit Transfers',
+            'transfers.delete' => 'Delete Transfers (admin)',
             'transfers.approve' => 'Approve/Reject Transfers',
+
+            // Profile (self-service; optional on roles for clarity)
+            'profile.view' => 'View Own Profile',
+            'profile.edit' => 'Edit Own Profile',
+
+            // Organogram scope markers (use with employees.* / approval permissions)
+            'department_head' => 'Line authority: Department Head',
+            'branch_manager' => 'Line authority: Branch Manager',
+            'organogram.executive_director' => 'Organogram: Executive Director (head office oversight)',
+            'organogram.microfinance_director' => 'Organogram: Director — Microfinance (all branches)',
+            'organogram.microfinance_assistant_director' => 'Organogram: Assistant Director — Microfinance',
+            'organogram.zonal_manager' => 'Organogram: Zonal Manager',
+            'organogram.regional_manager' => 'Organogram: Regional Manager',
 
             // Holiday Management
             'holidays.view' => 'View Holidays',
@@ -418,8 +452,15 @@ class RoleController extends Controller
             'employees' => ['employees.view', 'employees.create', 'employees.edit', 'employees.delete'],
             'organization' => [
                 'branches.view', 'branches.create', 'branches.edit', 'branches.delete',
+                'zones.view', 'zones.create', 'zones.edit', 'zones.delete',
+                'regional-offices.view', 'regional-offices.create', 'regional-offices.edit', 'regional-offices.delete',
                 'departments.view', 'departments.create', 'departments.edit', 'departments.delete',
                 'designations.view', 'designations.create', 'designations.edit', 'designations.delete'
+            ],
+            'organogram' => [
+                'department_head', 'branch_manager',
+                'organogram.executive_director', 'organogram.microfinance_director',
+                'organogram.microfinance_assistant_director', 'organogram.zonal_manager', 'organogram.regional_manager',
             ],
             'attendance' => [
                 'attendance.view', 'attendance.create', 'attendance.edit', 'attendance.delete',
@@ -428,14 +469,15 @@ class RoleController extends Controller
             'leave' => [
                 'leave-types.view', 'leave-types.create', 'leave-types.edit', 'leave-types.delete',
                 'leave-balances.view', 'leave-balances.create', 'leave-balances.edit', 'leave-balances.delete', 'leave-balances.admin',
-                'leave-applications.view', 'leave-applications.create', 'leave-applications.edit', 'leave-applications.cancel', 'leave-applications.approve'
+                'leave-applications.view', 'leave-applications.create', 'leave-applications.edit', 'leave-applications.delete', 'leave-applications.cancel', 'leave-applications.approve'
             ],
             'movement' => [
                 'movements.view', 'movements.create', 'movements.edit', 'movements.delete', 'movements.cancel', 'movements.complete', 'movements.approve',
-                'transfers.view', 'transfers.create', 'transfers.edit', 'transfers.approve'
+                'transfers.view', 'transfers.create', 'transfers.edit', 'transfers.delete', 'transfers.approve'
             ],
             'holidays' => ['holidays.view', 'holidays.create', 'holidays.edit', 'holidays.delete'],
-            'reports' => ['reports.view', 'reports.export']
+            'reports' => ['reports.view', 'reports.export'],
+            'profile' => ['profile.view', 'profile.edit'],
         ];
 
         foreach ($categoryMap as $category => $permissions) {

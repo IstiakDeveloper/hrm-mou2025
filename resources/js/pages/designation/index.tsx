@@ -19,13 +19,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
-import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -36,7 +29,6 @@ import {
 } from '@/components/ui/pagination';
 import {
   Briefcase,
-  Building,
   ChevronDown,
   Edit,
   MoreHorizontal,
@@ -44,18 +36,12 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-
-interface Department {
-  id: number;
-  name: string;
-}
+ 
 
 interface Designation {
   id: number;
   name: string;
   description: string | null;
-  department: Department;
   rank: number;
 }
 
@@ -89,19 +75,16 @@ interface DesignationsResponse {
 
 interface DesignationIndexProps {
   designations: DesignationsResponse;
-  departments: Department[];
   filters: {
     search: string;
-    department_id: string;
   };
 }
 
-export default function DesignationIndex({ designations, departments, filters }: DesignationIndexProps) {
+export default function DesignationIndex({ designations, filters }: DesignationIndexProps) {
   const [search, setSearch] = useState(filters.search || '');
-  const [departmentId, setDepartmentId] = useState(filters.department_id || null);
 
   const handleSearch = () => {
-    router.get(route('designations.index'), { search, department_id: departmentId || '' }, { preserveState: true });
+    router.get(route('designations.index'), { search }, { preserveState: true });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -112,7 +95,6 @@ export default function DesignationIndex({ designations, departments, filters }:
 
   const resetFilters = () => {
     setSearch('');
-    setDepartmentId(null);
     router.get(route('designations.index'), {}, { preserveState: true });
   };
 
@@ -166,25 +148,6 @@ export default function DesignationIndex({ designations, departments, filters }:
                 </div>
               </div>
 
-              <div className="w-full md:w-64">
-                <Select
-                  value={departmentId || undefined}
-                  onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((department) => (
-                      <SelectItem key={department.id} value={department.id.toString()}>
-                        {department.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="flex space-x-2">
                 <Button variant="outline" onClick={resetFilters}>
                   Reset
@@ -204,7 +167,6 @@ export default function DesignationIndex({ designations, departments, filters }:
               <TableHeader>
                 <TableRow>
                   <TableHead>Designation</TableHead>
-                  <TableHead>Department</TableHead>
                   <TableHead>Rank</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -219,11 +181,6 @@ export default function DesignationIndex({ designations, departments, filters }:
                           <Briefcase className="mr-2 h-4 w-4 text-gray-500" />
                           {designation.name}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                          {designation.department.name}
-                        </Badge>
                       </TableCell>
                       <TableCell>{designation.rank}</TableCell>
                       <TableCell className="max-w-xs truncate">
@@ -259,9 +216,9 @@ export default function DesignationIndex({ designations, departments, filters }:
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={4} className="h-24 text-center">
                       No designations found.
-                      {(search || departmentId) && (
+                      {search && (
                         <Button
                           variant="link"
                           onClick={resetFilters}
@@ -289,7 +246,7 @@ export default function DesignationIndex({ designations, departments, filters }:
                       href={designations.links.prev || '#'}
                       onClick={(e) => {
                         e.preventDefault();
-                        router.get(designations.links.prev || '', { search, department_id: departmentId || '' }, { preserveState: true });
+                        router.get(designations.links.prev || '', { search }, { preserveState: true });
                       }}
                     />
                   </PaginationItem>
@@ -314,7 +271,7 @@ export default function DesignationIndex({ designations, departments, filters }:
                         onClick={(e) => {
                           e.preventDefault();
                           if (link.url) {
-                            router.get(link.url, { search, department_id: departmentId || '' }, { preserveState: true });
+                            router.get(link.url, { search }, { preserveState: true });
                           }
                         }}
                       >
@@ -330,7 +287,7 @@ export default function DesignationIndex({ designations, departments, filters }:
                       href={designations.links.next || '#'}
                       onClick={(e) => {
                         e.preventDefault();
-                        router.get(designations.links.next || '', { search, department_id: departmentId || '' }, { preserveState: true });
+                        router.get(designations.links.next || '', { search }, { preserveState: true });
                       }}
                     />
                   </PaginationItem>

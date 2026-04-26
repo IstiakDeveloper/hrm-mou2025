@@ -19,13 +19,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
-import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -55,16 +48,10 @@ interface Employee {
   employee_id: string;
 }
 
-interface Branch {
-  id: number;
-  name: string;
-}
-
 interface Department {
   id: number;
   name: string;
   description: string | null;
-  branch: Branch;
   parentDepartment: Department | null;
   headEmployee: Employee | null;
 }
@@ -99,19 +86,16 @@ interface DepartmentsResponse {
 
 interface DepartmentIndexProps {
   departments: DepartmentsResponse;
-  branches: Branch[];
   filters: {
     search: string;
-    branch_id: string;
   };
 }
 
-export default function DepartmentIndex({ departments, branches, filters }: DepartmentIndexProps) {
+export default function DepartmentIndex({ departments, filters }: DepartmentIndexProps) {
   const [search, setSearch] = useState(filters.search || '');
-  const [branchId, setBranchId] = useState(filters.branch_id || '');
 
   const handleSearch = () => {
-    router.get(route('departments.index'), { search, branch_id: branchId }, { preserveState: true });
+    router.get(route('departments.index'), { search }, { preserveState: true });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -122,7 +106,6 @@ export default function DepartmentIndex({ departments, branches, filters }: Depa
 
   const resetFilters = () => {
     setSearch('');
-    setBranchId('');
     router.get(route('departments.index'), {}, { preserveState: true });
   };
 
@@ -158,7 +141,7 @@ const hasPagination = departments.meta && departments.links;
         <Card className="mb-6">
           <CardHeader className="pb-3">
             <CardTitle>Filters</CardTitle>
-            <CardDescription>Filter departments by name or branch</CardDescription>
+            <CardDescription>Filter departments by name</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
@@ -173,21 +156,6 @@ const hasPagination = departments.meta && departments.links;
                     className="pl-10"
                   />
                 </div>
-              </div>
-
-              <div className="w-full md:w-64">
-                <Select value={branchId} onValueChange={setBranchId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="flex space-x-2">
@@ -209,7 +177,6 @@ const hasPagination = departments.meta && departments.links;
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Branch</TableHead>
                   <TableHead>Parent Department</TableHead>
                   <TableHead>Department Head</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -226,9 +193,6 @@ const hasPagination = departments.meta && departments.links;
                         >
                           {department.name}
                         </Link>
-                      </TableCell>
-                      <TableCell>
-                        {department.branch?.name || 'N/A'}
                       </TableCell>
                       <TableCell>
                         {department.parentDepartment?.name || 'None'}
@@ -284,9 +248,9 @@ const hasPagination = departments.meta && departments.links;
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={4} className="h-24 text-center">
                       No departments found.
-                      {(search || branchId) && (
+                      {search && (
                         <Button
                           variant="link"
                           onClick={resetFilters}
@@ -314,7 +278,7 @@ const hasPagination = departments.meta && departments.links;
                       href={departments.links.prev || '#'}
                       onClick={(e) => {
                         e.preventDefault();
-                        router.get(departments.links.prev || '', { search, branch_id: branchId }, { preserveState: true });
+                        router.get(departments.links.prev || '', { search }, { preserveState: true });
                       }}
                     />
                   </PaginationItem>
@@ -339,7 +303,7 @@ const hasPagination = departments.meta && departments.links;
                         onClick={(e) => {
                           e.preventDefault();
                           if (link.url) {
-                            router.get(link.url, { search, branch_id: branchId }, { preserveState: true });
+                            router.get(link.url, { search }, { preserveState: true });
                           }
                         }}
                       >
@@ -355,7 +319,7 @@ const hasPagination = departments.meta && departments.links;
                       href={departments.links.next || '#'}
                       onClick={(e) => {
                         e.preventDefault();
-                        router.get(departments.links.next || '', { search, branch_id: branchId }, { preserveState: true });
+                        router.get(departments.links.next || '', { search }, { preserveState: true });
                       }}
                     />
                   </PaginationItem>

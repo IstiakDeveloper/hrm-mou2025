@@ -90,6 +90,8 @@ class HandleInertiaRequests extends Middleware
                 'error' => $request->session()->get('error'),
                 'warning' => $request->session()->get('warning'),
                 'info' => $request->session()->get('info'),
+                'import_summary' => $request->session()->get('import_summary'),
+                'import_row_errors' => $request->session()->get('import_row_errors'),
             ],
         ];
     }

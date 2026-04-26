@@ -60,6 +60,11 @@ interface HeadEmployee {
     photo: string | null;
 }
 
+interface DesignationLite {
+    id: number;
+    name: string;
+}
+
 interface Branch {
     id: number;
     name: string;
@@ -67,8 +72,8 @@ interface Branch {
     contact_number: string | null;
     branch_code: string;
     is_head_office: boolean;
-    head_employee_id: number | null; // Add this field
-    headEmployee: HeadEmployee | null;
+    branch_head_designation_id?: number | null;
+    branchHeadDesignation?: DesignationLite | null;
 }
 
 interface PaginationLinks {
@@ -114,10 +119,6 @@ export default function BranchShow({ branch, headEmployee, employees }: BranchSh
     // Check if pagination data exists
     const hasPagination = employees.meta && employees.links;
     const totalEmployees = employees.meta?.total || employees.data.length;
-
-    // Debug - log the branch data to console
-    console.log("Branch data:", branch);
-    console.log("Head employee:", branch.headEmployee);
 
     return (
         <Layout>
@@ -208,43 +209,45 @@ export default function BranchShow({ branch, headEmployee, employees }: BranchSh
                             </div>
                         </CardHeader>
                         <CardContent>
-                            {/* Use either headEmployee prop or branch.headEmployee, whichever is available */}
-                            {(headEmployee || branch.headEmployee) ? (
+                            {headEmployee ? (
                                 <div className="flex items-center">
                                     <Avatar className="h-12 w-12 border border-gray-200">
-                                        {(headEmployee?.photo || branch.headEmployee?.photo) ? (
+                                        {headEmployee.photo ? (
                                             <AvatarImage
-                                                src={`/storage/${headEmployee?.photo || branch.headEmployee?.photo}`}
-                                                alt={`${headEmployee?.first_name || branch.headEmployee?.first_name} ${headEmployee?.last_name || branch.headEmployee?.last_name}`}
+                                                src={`/storage/${headEmployee.photo}`}
+                                                alt={`${headEmployee.first_name} ${headEmployee.last_name}`}
                                             />
                                         ) : (
                                             <AvatarFallback className="bg-purple-100 text-purple-600">
                                                 {getInitials(
-                                                    headEmployee?.first_name || branch.headEmployee?.first_name || '',
-                                                    headEmployee?.last_name || branch.headEmployee?.last_name || ''
+                                                    headEmployee.first_name || '',
+                                                    headEmployee.last_name || ''
                                                 )}
                                             </AvatarFallback>
                                         )}
                                     </Avatar>
                                     <div className="ml-4">
                                         <Link
-                                            href={route('employees.show', headEmployee?.id || branch.headEmployee?.id)}
+                                            href={route('employees.show', headEmployee.id)}
                                             className="text-base font-medium text-gray-900 hover:text-blue-600"
                                         >
-                                            {headEmployee?.first_name || branch.headEmployee?.first_name} {headEmployee?.last_name || branch.headEmployee?.last_name}
+                                            {headEmployee.first_name} {headEmployee.last_name}
                                         </Link>
-                                        <p className="text-sm text-gray-500">ID: {headEmployee?.employee_id || branch.headEmployee?.employee_id}</p>
+                                        <p className="text-sm text-gray-500">ID: {headEmployee.employee_id}</p>
+                                        {branch.branchHeadDesignation?.name && (
+                                            <p className="text-sm text-gray-500">
+                                                Designation: {branch.branchHeadDesignation.name}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             ) : (
                                 <div className="text-gray-500 flex flex-col items-center justify-center py-4">
                                     <User className="h-10 w-10 text-gray-300 mb-2" />
-                                    <p>No branch head assigned</p>
-                                    {branch.head_employee_id && (
-                                        <p className="text-sm text-red-500 mt-2">
-                                            Error: Head employee ID exists but employee data not loaded
-                                        </p>
-                                    )}
+                                    <p>No branch head found</p>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Set “Branch Head Designation” in branch settings.
+                                    </p>
                                 </div>
                             )}
                         </CardContent>

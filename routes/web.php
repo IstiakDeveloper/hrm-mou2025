@@ -22,13 +22,16 @@ use App\Http\Controllers\Employee\EmployeeMovementController;
 use App\Http\Controllers\Holiday\HolidayController;
 use App\Http\Controllers\Leave\LeaveApplicationController;
 use App\Http\Controllers\Leave\LeaveBalanceController;
+use App\Http\Controllers\Leave\LeaveSettingController;
 use App\Http\Controllers\Leave\LeaveTypeController;
 use App\Http\Controllers\Movement\MovementController;
 use App\Http\Controllers\MyNoticeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RegionalOffice\RegionalOfficeController;
 use App\Http\Controllers\Report\ReportController;
 use App\Http\Controllers\Transfer\TransferController;
+use App\Http\Controllers\Zone\ZoneController;
 use App\Http\Controllers\ZKTeco\ZKDeviceController;
 use App\Models\Role;
 use Illuminate\Foundation\Application;
@@ -234,6 +237,20 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['permission:employees.view'])->group(function () {
         Route::resource('employees', EmployeeController::class)->parameters(['employees' => 'employee']);
 
+        // Import Wizard
+        Route::post('employees/import/preview', [EmployeeController::class, 'importPreview'])
+            ->name('employees.import.preview')
+            ->middleware('permission:employees.create');
+        Route::get('employees/import/review/{importId}', [EmployeeController::class, 'importReview'])
+            ->name('employees.import.review')
+            ->middleware('permission:employees.create');
+        Route::get('employees/import/example.csv', [EmployeeController::class, 'downloadImportExample'])
+            ->name('employees.import.example')
+            ->middleware('permission:employees.view');
+        Route::post('employees/import/commit', [EmployeeController::class, 'importCommit'])
+            ->name('employees.import.commit')
+            ->middleware('permission:employees.create');
+
         // Organization Chart
         Route::get('organization-chart', [EmployeeController::class, 'organizationChart'])
             ->name('organization.chart');
@@ -241,12 +258,6 @@ Route::middleware(['auth'])->group(function () {
         // Blank Employee Form (Printable)
         Route::get('employees-blank-form', [EmployeeController::class, 'blankForm'])
             ->name('employees.blank-form');
-
-        // Employee Dashboard (for viewing individual employee data)
-        Route::get('employee/dashboard', [EmployeeDashboardController::class, 'index'])
-            ->name('employee.dashboard');
-
-        Route::get('employee/leave/pdf', [EmployeeDashboardController::class, 'downloadLeavePdf'])->name('employee.leave.pdf');
 
         // Employee Documents Management
         Route::prefix('employees/{employee}/documents')->name('employees.documents.')->group(function () {
@@ -277,14 +288,17 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leaves/download', [EmployeeLeaveController::class, 'downloadPdf'])->name('leaves.download');
             Route::get('/movements/download', [EmployeeMovementController::class, 'downloadPdf'])->name('movements.download');
         });
+    });
 
-        // Employee Dashboard Reports
-        Route::prefix('employee/dashboard')->name('employee.dashboard.')->group(function () {
-            Route::get('/pdf', [EmployeeDashboardController::class, 'downloadPdf'])->name('pdf');
-            Route::get('/leave/pdf', [EmployeeDashboardController::class, 'downloadLeavePdf'])->name('leave.pdf');
-            Route::get('/attendance/pdf', [EmployeeDashboardController::class, 'downloadAttendancePdf'])->name('attendance.pdf');
-            Route::get('/movement/pdf', [EmployeeDashboardController::class, 'downloadMovementPdf'])->name('movement.pdf');
-        });
+    // Employee Dashboard (HR + organogram line roles): access is enforced in the controller; dropdown is organogram-scoped.
+    Route::get('employee/dashboard', [EmployeeDashboardController::class, 'index'])
+        ->name('employee.dashboard');
+    Route::get('employee/leave/pdf', [EmployeeDashboardController::class, 'downloadLeavePdf'])->name('employee.leave.pdf');
+    Route::prefix('employee/dashboard')->name('employee.dashboard.')->group(function () {
+        Route::get('/pdf', [EmployeeDashboardController::class, 'downloadPdf'])->name('pdf');
+        Route::get('/leave/pdf', [EmployeeDashboardController::class, 'downloadLeavePdf'])->name('leave.pdf');
+        Route::get('/attendance/pdf', [EmployeeDashboardController::class, 'downloadAttendancePdf'])->name('attendance.pdf');
+        Route::get('/movement/pdf', [EmployeeDashboardController::class, 'downloadMovementPdf'])->name('movement.pdf');
     });
 
     // ====================
@@ -310,6 +324,46 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{branch}', [BranchController::class, 'destroy'])
             ->name('destroy')
             ->middleware('permission:branches.delete');
+    });
+
+    // Zone Management
+    Route::middleware(['permission:zones.view'])->prefix('zones')->name('zones.')->group(function () {
+        Route::get('/', [ZoneController::class, 'index'])->name('index');
+        Route::get('/create', [ZoneController::class, 'create'])
+            ->name('create')
+            ->middleware('permission:zones.create');
+        Route::post('/', [ZoneController::class, 'store'])
+            ->name('store')
+            ->middleware('permission:zones.create');
+        Route::get('/{zone}/edit', [ZoneController::class, 'edit'])
+            ->name('edit')
+            ->middleware('permission:zones.edit');
+        Route::put('/{zone}', [ZoneController::class, 'update'])
+            ->name('update')
+            ->middleware('permission:zones.edit');
+        Route::delete('/{zone}', [ZoneController::class, 'destroy'])
+            ->name('destroy')
+            ->middleware('permission:zones.delete');
+    });
+
+    // Regional Office Management
+    Route::middleware(['permission:regional-offices.view'])->prefix('regional-offices')->name('regional-offices.')->group(function () {
+        Route::get('/', [RegionalOfficeController::class, 'index'])->name('index');
+        Route::get('/create', [RegionalOfficeController::class, 'create'])
+            ->name('create')
+            ->middleware('permission:regional-offices.create');
+        Route::post('/', [RegionalOfficeController::class, 'store'])
+            ->name('store')
+            ->middleware('permission:regional-offices.create');
+        Route::get('/{regionalOffice}/edit', [RegionalOfficeController::class, 'edit'])
+            ->name('edit')
+            ->middleware('permission:regional-offices.edit');
+        Route::put('/{regionalOffice}', [RegionalOfficeController::class, 'update'])
+            ->name('update')
+            ->middleware('permission:regional-offices.edit');
+        Route::delete('/{regionalOffice}', [RegionalOfficeController::class, 'destroy'])
+            ->name('destroy')
+            ->middleware('permission:regional-offices.delete');
     });
 
     // Department Management
@@ -455,6 +509,28 @@ Route::middleware(['auth'])->group(function () {
                 ->middleware('permission:leave-types.delete');
         });
 
+        // Leave settings (approval rules)
+        Route::prefix('settings')->name('settings.')->group(function () {
+            Route::get('/', [LeaveSettingController::class, 'index'])
+                ->name('index')
+                ->middleware('permission:leave-types.view');
+            Route::get('/create', [LeaveSettingController::class, 'create'])
+                ->name('create')
+                ->middleware('permission:leave-types.edit');
+            Route::post('/', [LeaveSettingController::class, 'store'])
+                ->name('store')
+                ->middleware('permission:leave-types.edit');
+            Route::get('/{leaveApprovalTier}/edit', [LeaveSettingController::class, 'edit'])
+                ->name('edit')
+                ->middleware('permission:leave-types.edit');
+            Route::put('/{leaveApprovalTier}', [LeaveSettingController::class, 'update'])
+                ->name('update')
+                ->middleware('permission:leave-types.edit');
+            Route::delete('/{leaveApprovalTier}', [LeaveSettingController::class, 'destroy'])
+                ->name('destroy')
+                ->middleware('permission:leave-types.edit');
+        });
+
         // Leave Balances Management
         Route::middleware(['permission:leave-balances.view'])->prefix('balances')->name('balances.')->group(function () {
             Route::get('/', [LeaveBalanceController::class, 'index'])->name('index');
@@ -495,6 +571,9 @@ Route::middleware(['auth'])->group(function () {
 
             // Create leave application (employees can apply for themselves)
             Route::middleware(['permission:leave-applications.create'])->group(function () {
+                Route::get('/auto-approve-eligibility', [LeaveApplicationController::class, 'autoApproveEligibility'])
+                    ->name('auto-approve-eligibility')
+                    ->middleware('permission:leave-applications.approve');
                 Route::get('/create', [LeaveApplicationController::class, 'create'])->name('create');
                 Route::post('/', [LeaveApplicationController::class, 'store'])->name('store');
             });

@@ -45,6 +45,7 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
     const [startDateOpen, setStartDateOpen] = useState(false);
     const [endDateOpen, setEndDateOpen] = useState(false);
     const [autoApprove, setAutoApprove] = useState(false);
+    const [autoApproveEligible, setAutoApproveEligible] = useState(false);
     const fileInputRef = useRef(null);
 
     // Calculate leave days - FIXED DATE CALCULATION
@@ -59,13 +60,40 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
 
     // Update calculation whenever dates change
     useEffect(() => {
-        // Add debugging to see dates and calculation
-        if (startDate && endDate) {
-            console.log("Start date:", format(startDate, 'yyyy-MM-dd'));
-            console.log("End date:", format(endDate, 'yyyy-MM-dd'));
-            console.log("Days calculated:", leaveDays);
+        if (!userPermissions.canApprove || leaveDays < 1) {
+            setAutoApproveEligible(false);
+            setAutoApprove(false);
+            return;
         }
-    }, [startDate, endDate, leaveDays]);
+
+        let cancelled = false;
+        const url = route('leave.applications.auto-approve-eligibility', { days: leaveDays });
+
+        fetch(url, {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then((r) => r.json())
+            .then((data: { eligible?: boolean }) => {
+                if (cancelled) return;
+                const ok = !!data.eligible;
+                setAutoApproveEligible(ok);
+                if (!ok) setAutoApprove(false);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setAutoApproveEligible(false);
+                    setAutoApprove(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [leaveDays, userPermissions.canApprove]);
 
     // Find selected leave type balance
     const selectedLeaveBalance = leaveTypeId
@@ -160,7 +188,8 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
                     <Alert className="mb-6">
                         <InfoIcon className="h-4 w-4" />
                         <AlertDescription>
-                            You are creating a leave application as an administrator. You can optionally auto-approve this application.
+                            If your role matches the leave approval tier for the number of days you selected, you can auto-approve.
+                            For longer leaves a higher approver is required — auto-approve will not be offered.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -325,22 +354,27 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
                                     {/* File upload section */}
                                     {/* Rest of the form remains the same */}
 
-                                    {/* Auto-approve option for admins */}
-                                    {userPermissions.canApprove && (
-                                        <div className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id="auto-approve"
-                                                checked={autoApprove}
-                                                onCheckedChange={(checked) => {
-                                                    setAutoApprove(checked);
-                                                }}
-                                            />
-                                            <label
-                                                htmlFor="auto-approve"
-                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                            >
-                                                Auto-approve this leave application
-                                            </label>
+                                    {/* Auto-approve only when tier rules allow this user for this duration */}
+                                    {userPermissions.canApprove && autoApproveEligible && leaveDays >= 1 && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id="auto-approve"
+                                                    checked={autoApprove}
+                                                    onCheckedChange={(checked) => {
+                                                        setAutoApprove(!!checked);
+                                                    }}
+                                                />
+                                                <label
+                                                    htmlFor="auto-approve"
+                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                                >
+                                                    Auto-approve this leave application
+                                                </label>
+                                            </div>
+                                            {errors.auto_approve && (
+                                                <p className="text-sm font-medium text-red-500">{String(errors.auto_approve)}</p>
+                                            )}
                                         </div>
                                     )}
 

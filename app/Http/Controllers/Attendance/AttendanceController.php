@@ -12,6 +12,7 @@ use App\Models\Employee;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\Movement;
+use App\Services\OrganogramAccessService;
 use App\Support\MonthlyAttendanceCalculator;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -1378,16 +1379,12 @@ class AttendanceController extends Controller
      */
     private function applyUserFilters($query, $user, $request)
     {
-        // If user is an admin or has full permissions, apply only requested filters
-        if ($user->hasPermission('attendance.admin')) {
-            // Apply branch filter if requested
+        if (OrganogramAccessService::hasUnrestrictedAttendanceScope($user)) {
             if ($request->branch_id) {
                 $query->whereHas('employee', function ($q) use ($request) {
                     $q->where('current_branch_id', $request->branch_id);
                 });
             }
-
-            // Apply department filter if requested
             if ($request->department_id) {
                 $query->whereHas('employee', function ($q) use ($request) {
                     $q->where('department_id', $request->department_id);
@@ -1397,41 +1394,20 @@ class AttendanceController extends Controller
             return;
         }
 
-        // If user is a branch manager, restrict to their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('current_branch_id', $user->branch_id);
+        $query->whereHas('employee', function ($q) use ($user) {
+            OrganogramAccessService::constrainVisibleEmployees($q, $user);
+        });
+
+        if ($request->branch_id) {
+            $query->whereHas('employee', function ($q) use ($request) {
+                $q->where('current_branch_id', $request->branch_id);
             });
-
-            // Apply department filter if requested and user is a branch manager
-            if ($request->department_id) {
-                $query->whereHas('employee', function ($q) use ($request) {
-                    $q->where('department_id', $request->department_id);
-                });
-            }
-
-            return;
         }
-
-        // If user is a department head, restrict to their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('department_id', $user->employee->department_id);
+        if ($request->department_id) {
+            $query->whereHas('employee', function ($q) use ($request) {
+                $q->where('department_id', $request->department_id);
             });
-
-            return;
         }
-
-        // If user is a regular employee, only show their own attendance
-        if ($user->employee_id) {
-            $query->where('employee_id', $user->employee_id);
-
-            return;
-        }
-
-        // If no specific role or permission, default to showing nothing or a limited view
-        // This is a fallback and should be adjusted based on your business rules
-        $query->where('id', -1); // This ensures no records are returned
     }
 
     /**
@@ -1448,14 +1424,10 @@ class AttendanceController extends Controller
             });
         });
 
-        // If user is an admin or has full permissions, apply only requested filters
-        if ($user->hasPermission('attendance.admin')) {
-            // Apply branch filter if requested
+        if (OrganogramAccessService::hasUnrestrictedAttendanceScope($user)) {
             if ($request->branch_id) {
                 $query->where('current_branch_id', $request->branch_id);
             }
-
-            // Apply department filter if requested
             if ($request->department_id) {
                 $query->where('department_id', $request->department_id);
             }
@@ -1463,34 +1435,14 @@ class AttendanceController extends Controller
             return;
         }
 
-        // If user is a branch manager, restrict to their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            $query->where('current_branch_id', $user->branch_id);
+        OrganogramAccessService::constrainVisibleEmployees($query, $user);
 
-            // Apply department filter if requested and user is a branch manager
-            if ($request->department_id) {
-                $query->where('department_id', $request->department_id);
-            }
-
-            return;
+        if ($request->branch_id) {
+            $query->where('current_branch_id', $request->branch_id);
         }
-
-        // If user is a department head, restrict to their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            $query->where('department_id', $user->employee->department_id);
-
-            return;
+        if ($request->department_id) {
+            $query->where('department_id', $request->department_id);
         }
-
-        // If user is a regular employee, only show themselves
-        if ($user->employee_id) {
-            $query->where('id', $user->employee_id);
-
-            return;
-        }
-
-        // If no specific role or permission, default to showing nothing or a limited view
-        $query->where('id', -1);
     }
 
     /**
@@ -1498,23 +1450,12 @@ class AttendanceController extends Controller
      */
     private function getAccessibleBranches($user)
     {
-        // If admin, return all branches
-        if ($user->hasPermission('attendance.admin')) {
-            return Branch::all();
+        $ids = OrganogramAccessService::accessibleBranchIdList($user);
+        if ($ids === null) {
+            return Branch::query()->orderBy('name')->get();
         }
 
-        // If branch manager, return only their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return Branch::where('id', $user->branch_id)->get();
-        }
-
-        // If department head or employee, return their branch
-        if ($user->employee && $user->employee->current_branch_id) {
-            return Branch::where('id', $user->employee->current_branch_id)->get();
-        }
-
-        // Default to empty collection if no access
-        return collect([]);
+        return Branch::query()->whereIn('id', $ids)->orderBy('name')->get();
     }
 
     /**
@@ -1522,30 +1463,15 @@ class AttendanceController extends Controller
      */
     private function getAccessibleDepartments($user)
     {
-        // If admin, return all departments
-        if ($user->hasPermission('attendance.admin')) {
-            return Department::all();
+        $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
+        if ($ids === null) {
+            return Department::query()->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
         }
 
-        // If branch manager, return departments in their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return Department::whereHas('employees', function ($q) use ($user) {
-                $q->where('current_branch_id', $user->branch_id);
-            })->distinct()->get();
-        }
-
-        // If department head, return only their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            return Department::where('id', $user->employee->department_id)->get();
-        }
-
-        // If employee, return their department
-        if ($user->employee && $user->employee->department_id) {
-            return Department::where('id', $user->employee->department_id)->get();
-        }
-
-        // Default to empty collection if no access
-        return collect([]);
+        return Department::query()->whereIn('id', $ids)->orderBy('name')->get();
     }
 
     /**
@@ -1553,32 +1479,10 @@ class AttendanceController extends Controller
      */
     private function getAccessibleEmployees($user)
     {
-        // If admin, return all active employees
-        if ($user->hasPermission('attendance.admin')) {
-            return Employee::where('status', 'active')->get();
-        }
+        $q = Employee::query()->where('status', 'active')->orderBy('name_en');
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
-        // If branch manager, return employees in their branch
-        if ($user->hasPermission('branch_manager') && $user->branch_id) {
-            return Employee::where('status', 'active')
-                ->where('current_branch_id', $user->branch_id)
-                ->get();
-        }
-
-        // If department head, return employees in their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            return Employee::where('status', 'active')
-                ->where('department_id', $user->employee->department_id)
-                ->get();
-        }
-
-        // If employee, return only themselves
-        if ($user->employee_id) {
-            return Employee::where('id', $user->employee_id)->get();
-        }
-
-        // Default to empty collection if no access
-        return collect([]);
+        return $q->get();
     }
 
     /**

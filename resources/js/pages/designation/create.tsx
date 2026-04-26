@@ -6,23 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Briefcase } from 'lucide-react';
 
-interface Department {
-  id: number;
-  name: string;
-}
-
-interface DesignationCreateProps {
-  departments: Department[];
-}
-
-export default function DesignationCreate({ departments }: DesignationCreateProps) {
+export default function DesignationCreate() {
   const { data, setData, post, processing, errors } = useForm({
     name: '',
     description: '',
-    department_id: '',
     rank: '',
   });
 
@@ -96,35 +85,13 @@ export default function DesignationCreate({ departments }: DesignationCreateProp
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="department_id">
-                  Department <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={data.department_id}
-                  onValueChange={(value) => setData('department_id', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((department) => (
-                      <SelectItem key={department.id} value={department.id.toString()}>
-                        {department.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.department_id && <p className="mt-1 text-sm text-red-500">{errors.department_id}</p>}
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="rank">
                   Rank <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="rank"
                   type="number"
-                  min="1"
+                  min="0"
                   value={data.rank}
                   onChange={e => setData('rank', e.target.value)}
                   placeholder="Enter rank number (e.g., 1, 2, 3)"

@@ -106,6 +106,8 @@ interface LeaveApplication {
     employee: Employee;
     leaveType: LeaveType;
     approver: User | null;
+    /** Set by server: current user may approve/reject this row (tier + legacy rules). */
+    can_approve_action?: boolean;
 }
 
 interface PaginationLinks {
@@ -149,8 +151,6 @@ interface ApplicationsIndexProps {
         search: string;
     };
     canApprove: boolean;
-    canApproveOwn: boolean;
-    isDepartmentHead: boolean;
     userPermissions: {
         canView: boolean;
         canCreate: boolean;
@@ -171,8 +171,6 @@ export default function ApplicationsIndex({
     employees,
     filters,
     canApprove,
-    canApproveOwn,
-    isDepartmentHead,
     userPermissions,
     currentUserId
   }: ApplicationsIndexProps) {
@@ -509,10 +507,7 @@ export default function ApplicationsIndex({
                                                             </DropdownMenuItem>
                                                         )}
 
-                                                        {application.status === 'pending' &&
-                                                            (userPermissions.canApprove ||
-                                                                (canApproveOwn && application.employee.department_id === userPermissions.userDepartmentId) ||
-                                                                isDepartmentHead) && (
+                                                        {application.status === 'pending' && application.can_approve_action && (
                                                                 <>
                                                                     <DropdownMenuItem
                                                                         onClick={() => router.post(route('leave.applications.approve', application.id))}

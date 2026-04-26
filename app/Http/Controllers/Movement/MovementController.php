@@ -11,6 +11,7 @@ use App\Models\Employee;
 use App\Models\Movement;
 use App\Models\User;
 use App\Notifications\HrmNotification;
+use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -109,31 +110,21 @@ class MovementController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        \Log::info('User accessing movements:', [
-            'user_id' => $user->id,
-            'user_name' => $user->name,
-            'employee_id' => $user->employee_id,
-        ]);
 
         $query = Movement::with(['employee.department', 'employee.designation']);
 
-        // Get the current user's employee_id (if they have one)
         $userEmployeeId = $user->employee_id;
-
-        // Check for special permissions
         $hasViewPermission = $user->hasPermission('movements.view');
-        $hasEmployeeViewPermission = $user->hasPermission('employees.view');
         $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
-
-        // Determine if user is a branch head
-        $isBranchHead = false;
         $userBranchId = $user->branch_id;
+
+        $isBranchHead = false;
         if ($userEmployeeId && $userBranchId) {
             $branch = Branch::find($userBranchId);
-            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
+            $employee = Employee::find($userEmployeeId);
+            $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
         }
 
-        // Determine if user is a department head
         $isDepartmentHead = false;
         $userDepartmentId = null;
         if ($userEmployeeId) {
@@ -145,55 +136,14 @@ class MovementController extends Controller
             }
         }
 
-        // Special handling for regular employees with view permission
-        $isRegularEmployeeWithViewPermission = $userEmployeeId && $hasViewPermission &&
-            ! $isBranchManager && ! $isBranchHead && ! $isDepartmentHead &&
-            ! $hasEmployeeViewPermission;
-
-        // Apply filters based on user's role and permissions
-        if (
-            ($userEmployeeId && ! $hasViewPermission && ! $isBranchManager &&
-                ! $isBranchHead && ! $isDepartmentHead) || $isRegularEmployeeWithViewPermission
-        ) {
-            // Regular employee - ONLY see their own movements
-            $query->where('employee_id', $userEmployeeId);
-        } elseif ($isBranchHead || ($isBranchManager && $userBranchId)) {
-            // Branch head or manager - see movements from their branch
-            $query->whereHas('employee', function ($q) use ($userBranchId) {
-                $q->where('current_branch_id', $userBranchId);
-            });
-        } elseif ($isDepartmentHead) {
-            // Department head - see movements from their department
-            if ($userDepartmentId) {
-                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
-                    $q->where('department_id', $userDepartmentId);
-                });
-            } else {
-                // Fallback to own movements if no department association
-                $query->where('employee_id', $userEmployeeId);
-            }
-        } elseif ($hasViewPermission && $hasEmployeeViewPermission) {
-            // Full admin with both movements.view and employees.view - see all movements
-            // No additional filtering needed
-        } elseif ($hasViewPermission && ! $hasEmployeeViewPermission) {
-            // User with movements.view but not employees.view - apply restrictions
-            if ($isBranchHead || ($isBranchManager && $userBranchId)) {
-                $query->whereHas('employee', function ($q) use ($userBranchId) {
-                    $q->where('current_branch_id', $userBranchId);
-                });
-            } elseif ($userEmployeeId && $userDepartmentId) {
-                // Admin with department restrictions
-                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
-                    $q->where('department_id', $userDepartmentId);
-                });
-            }
-        } else {
-            // Edge case - no permissions to view any movements
+        if (! $hasViewPermission) {
             if ($userEmployeeId) {
                 $query->where('employee_id', $userEmployeeId);
             } else {
-                $query->where('id', 0); // No results
+                $query->whereRaw('1 = 0');
             }
+        } else {
+            OrganogramAccessService::constrainViaEmployeeRelation($query, $user, 'employee');
         }
 
         // Apply user-selected filters
@@ -259,44 +209,15 @@ class MovementController extends Controller
      */
     private function getAccessibleDepartments($user)
     {
-        // If user has full employee view permission, show all departments
-        if ($user->hasPermission('employees.view')) {
-            return Department::all();
+        $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
+        if ($ids === null) {
+            return Department::query()->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
         }
 
-        $userEmployeeId = $user->employee_id;
-        $userBranchId = $user->branch_id;
-
-        // Check if user is branch head
-        $isBranchHead = false;
-        if ($userEmployeeId && $userBranchId) {
-            $branch = Branch::find($userBranchId);
-            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
-        }
-
-        // Branch managers and branch heads see departments in their branch
-        if (($user->hasPermission('branch_manager') || $isBranchHead) && $userBranchId) {
-            return Department::whereHas('employees', function ($q) use ($userBranchId) {
-                $q->where('current_branch_id', $userBranchId);
-            })->get();
-        }
-
-        // Department heads see only their department
-        if ($userEmployeeId) {
-            $employee = Employee::find($userEmployeeId);
-            if ($employee && $employee->department_id) {
-                $department = Department::find($employee->department_id);
-                if ($department && $department->head_employee_id == $userEmployeeId) {
-                    return Department::where('id', $employee->department_id)->get();
-                }
-
-                // Regular employees see their own department only
-                return Department::where('id', $employee->department_id)->get();
-            }
-        }
-
-        // Default - show no departments
-        return collect([]);
+        return Department::query()->whereIn('id', $ids)->orderBy('name')->get();
     }
 
     /**
@@ -304,55 +225,10 @@ class MovementController extends Controller
      */
     private function getAccessibleEmployees($user)
     {
-        // If user has full employee view permission, show all active employees
-        if ($user->hasPermission('employees.view')) {
-            return Employee::where('status', 'active')->get();
-        }
+        $q = Employee::query()->where('status', 'active')->orderBy('name_en');
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
-        $userEmployeeId = $user->employee_id;
-        $userBranchId = $user->branch_id;
-
-        // Check if user is branch head
-        $isBranchHead = false;
-        if ($userEmployeeId && $userBranchId) {
-            $branch = Branch::find($userBranchId);
-            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
-        }
-
-        // Branch managers and branch heads see employees in their branch
-        if (($user->hasPermission('branch_manager') || $isBranchHead) && $userBranchId) {
-            return Employee::where('status', 'active')
-                ->where('current_branch_id', $userBranchId)
-                ->get();
-        }
-
-        // Department heads see employees in their department
-        if ($userEmployeeId) {
-            $employee = Employee::find($userEmployeeId);
-            if ($employee && $employee->department_id) {
-                $department = Department::find($employee->department_id);
-                if ($department && $department->head_employee_id == $userEmployeeId) {
-                    return Employee::where('status', 'active')
-                        ->where('department_id', $employee->department_id)
-                        ->get();
-                }
-
-                // Team leaders see their direct reports
-                $directReports = Employee::where('status', 'active')
-                    ->where('reporting_to', $userEmployeeId)
-                    ->get();
-
-                if ($directReports->count() > 0) {
-                    return $directReports;
-                }
-
-                // Regular employees just see themselves
-                return Employee::where('id', $userEmployeeId)->get();
-            }
-        }
-
-        // Default - show no employees
-        return collect([]);
+        return $q->get();
     }
 
     /**

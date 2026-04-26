@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Employee;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\User;
 use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
 use App\Models\Movement;
 use App\Models\AttendanceSetting;
 use App\Models\Holiday;
 use App\Models\LeaveType;
+use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -27,24 +29,11 @@ class EmployeeDashboardController extends Controller
      */
     public function index(Request $request)
     {
+        /** @var User $user */
         $user = Auth::user();
+        $this->authorizeEmployeeDashboardModule($user);
 
-        // Get all employees for the dropdown
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name')
-            ->with(['department', 'designation'])
-            ->orderBy('first_name')
-            ->orderBy('last_name')
-            ->get()
-            ->map(function ($employee) {
-                // Combine first_name and last_name for display
-                $fullName = $employee->first_name . ($employee->last_name ? ' ' . $employee->last_name : '');
-                return [
-                    'id' => $employee->id,
-                    'name' => $fullName . ' (' . $employee->employee_id . ')',
-                    'department' => $employee->department?->name ?? '',
-                    'designation' => $employee->designation?->name ?? ''
-                ];
-            });
+        $employees = $this->employeesForDashboardDropdown($user);
 
         // Initialize empty data arrays
         $attendanceData = [];
@@ -62,8 +51,14 @@ class EmployeeDashboardController extends Controller
 
         // Process the dashboard if form is submitted
         if ($request->filled('employee_id')) {
-            $employeeId = $request->input('employee_id');
+            $employeeId = (int) $request->input('employee_id');
             $filterType = $request->input('filter_type', 'custom');
+
+            if (! $this->userMayViewEmployeeOnDashboard($user, $employeeId)) {
+                return redirect()->back()->withErrors([
+                    'employee_id' => 'You do not have access to this employee’s dashboard.',
+                ])->withInput();
+            }
 
             // Get selected employee details
             $selectedEmployee = Employee::with(['department', 'designation'])
@@ -993,6 +988,10 @@ class EmployeeDashboardController extends Controller
      */
     public function downloadPdf(Request $request)
     {
+        /** @var User $user */
+        $user = Auth::user();
+        $this->authorizeEmployeeDashboardModule($user);
+
         // Validate the request
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
@@ -1000,9 +999,13 @@ class EmployeeDashboardController extends Controller
             'to_date' => 'required|date|after_or_equal:from_date',
         ]);
 
-        $employeeId = $request->employee_id;
-        $fromDate = $request->from_date;
-        $toDate = $request->to_date;
+        $employeeId = (int) $validated['employee_id'];
+        if (! $this->userMayViewEmployeeOnDashboard($user, $employeeId)) {
+            abort(403, 'You do not have access to this employee’s dashboard.');
+        }
+
+        $fromDate = $validated['from_date'];
+        $toDate = $validated['to_date'];
         $filterType = $request->input('filter_type', 'custom');
 
         // Get employee details
@@ -1089,6 +1092,10 @@ class EmployeeDashboardController extends Controller
      */
     public function downloadAttendancePdf(Request $request)
     {
+        /** @var User $user */
+        $user = Auth::user();
+        $this->authorizeEmployeeDashboardModule($user);
+
         // Validate the request
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
@@ -1096,9 +1103,13 @@ class EmployeeDashboardController extends Controller
             'to_date' => 'required|date|after_or_equal:from_date',
         ]);
 
-        $employeeId = $request->employee_id;
-        $fromDate = $request->from_date;
-        $toDate = $request->to_date;
+        $employeeId = (int) $validated['employee_id'];
+        if (! $this->userMayViewEmployeeOnDashboard($user, $employeeId)) {
+            abort(403, 'You do not have access to this employee’s dashboard.');
+        }
+
+        $fromDate = $validated['from_date'];
+        $toDate = $validated['to_date'];
         $filterType = $request->input('filter_type', 'custom');
 
         // Get employee details
@@ -1169,6 +1180,10 @@ class EmployeeDashboardController extends Controller
      */
     public function downloadLeavePdf(Request $request)
     {
+        /** @var User $user */
+        $user = Auth::user();
+        $this->authorizeEmployeeDashboardModule($user);
+
         // Validate the request
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
@@ -1181,9 +1196,13 @@ class EmployeeDashboardController extends Controller
             'exclude_leave_types.*' => 'string'
         ]);
 
-        $employeeId = $request->employee_id;
-        $fromDate = $request->from_date;
-        $toDate = $request->to_date;
+        $employeeId = (int) $validated['employee_id'];
+        if (! $this->userMayViewEmployeeOnDashboard($user, $employeeId)) {
+            abort(403, 'You do not have access to this employee’s dashboard.');
+        }
+
+        $fromDate = $validated['from_date'];
+        $toDate = $validated['to_date'];
         $filterMode = $request->input('filter_mode', 'all');
         $includeLeaveTypes = $request->input('include_leave_types', []);
         $excludeLeaveTypes = $request->input('exclude_leave_types', []);
@@ -1409,6 +1428,10 @@ class EmployeeDashboardController extends Controller
      */
     public function downloadMovementPdf(Request $request)
     {
+        /** @var User $user */
+        $user = Auth::user();
+        $this->authorizeEmployeeDashboardModule($user);
+
         // Validate the request
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
@@ -1416,9 +1439,13 @@ class EmployeeDashboardController extends Controller
             'to_date' => 'required|date|after_or_equal:from_date',
         ]);
 
-        $employeeId = $request->employee_id;
-        $fromDate = $request->from_date;
-        $toDate = $request->to_date;
+        $employeeId = (int) $validated['employee_id'];
+        if (! $this->userMayViewEmployeeOnDashboard($user, $employeeId)) {
+            abort(403, 'You do not have access to this employee’s dashboard.');
+        }
+
+        $fromDate = $validated['from_date'];
+        $toDate = $validated['to_date'];
         $filterType = $request->input('filter_type', 'custom');
 
         // Get employee details
@@ -1485,6 +1512,56 @@ class EmployeeDashboardController extends Controller
             // Return with error message
             return back()->with('error', 'Failed to generate movement PDF: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Who may open the Employee Dashboard module (nav + routes), broader than full employee directory.
+     */
+    private function authorizeEmployeeDashboardModule(User $user): void
+    {
+        $allowed = $user->hasPermission('employees.view')
+            || $user->hasPermission('leave-applications.view')
+            || $user->hasPermission('movements.view')
+            || $user->hasPermission('transfers.view')
+            || $user->hasPermission('attendance.view');
+
+        if (! $allowed) {
+            abort(403, 'You do not have permission to view the employee dashboard.');
+        }
+    }
+
+    private function userMayViewEmployeeOnDashboard(User $user, int $employeeId): bool
+    {
+        $q = Employee::query()->whereKey($employeeId);
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        return $q->exists();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array{id: int, name: string, department: string, designation: string}>
+     */
+    private function employeesForDashboardDropdown(User $user)
+    {
+        $q = Employee::query()
+            ->select('id', 'employee_id', 'first_name', 'last_name')
+            ->with(['department', 'designation'])
+            ->where('status', 'active')
+            ->orderBy('first_name')
+            ->orderBy('last_name');
+
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        return $q->get()->map(function ($employee) {
+            $fullName = $employee->first_name . ($employee->last_name ? ' ' . $employee->last_name : '');
+
+            return [
+                'id' => $employee->id,
+                'name' => $fullName . ' (' . $employee->employee_id . ')',
+                'department' => $employee->department?->name ?? '',
+                'designation' => $employee->designation?->name ?? '',
+            ];
+        });
     }
 }
 

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Department;
 
 use App\Http\Controllers\Controller;
-use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use Illuminate\Http\Request;
@@ -18,12 +17,9 @@ class DepartmentController extends Controller
     {
         // Query departments
         $departments = Department::query()
-            ->with(['branch', 'parentDepartment'])
+            ->with(['parentDepartment'])
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%");
-            })
-            ->when($request->branch_id, function ($query, $branchId) {
-                $query->where('branch_id', $branchId);
             })
             ->orderBy('name')
             ->paginate(10)
@@ -54,8 +50,6 @@ class DepartmentController extends Controller
             }
         }
 
-        $branches = Branch::all();
-
         // Structure the data to match what the frontend expects for pagination
         return Inertia::render('department/index', [
             'departments' => [
@@ -77,8 +71,7 @@ class DepartmentController extends Controller
                     'next' => $departments->nextPageUrl(),
                 ],
             ],
-            'branches' => $branches,
-            'filters' => $request->only(['search', 'branch_id']),
+            'filters' => $request->only(['search']),
         ]);
     }
 
@@ -87,12 +80,10 @@ class DepartmentController extends Controller
      */
     public function create()
     {
-        $branches = Branch::all();
         $employees = Employee::where('status', 'active')->get();
         $departments = Department::all();
 
         return Inertia::render('department/create', [
-            'branches' => $branches,
             'employees' => $employees,
             'departments' => $departments,
         ]);
@@ -103,15 +94,14 @@ class DepartmentController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'head_employee_id' => 'nullable|exists:employees,id',
-            'branch_id' => 'required|exists:branches,id',
             'parent_department_id' => 'nullable|exists:departments,id',
         ]);
 
-        Department::create($request->all());
+        Department::create($validated);
 
         return redirect()->route('departments.index')
             ->with('success', 'Department created successfully.');
@@ -122,13 +112,11 @@ class DepartmentController extends Controller
      */
     public function edit(Department $department)
     {
-        $branches = Branch::all();
         $employees = Employee::where('status', 'active')->get();
         $departments = Department::where('id', '!=', $department->id)->get();
 
         return Inertia::render('department/edit', [
             'department' => $department,
-            'branches' => $branches,
             'employees' => $employees,
             'departments' => $departments,
         ]);
@@ -139,11 +127,10 @@ class DepartmentController extends Controller
      */
     public function update(Request $request, Department $department)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'head_employee_id' => 'nullable|exists:employees,id',
-            'branch_id' => 'required|exists:branches,id',
             'parent_department_id' => 'nullable|exists:departments,id',
         ]);
 
@@ -154,7 +141,7 @@ class DepartmentController extends Controller
             ]);
         }
 
-        $department->update($request->all());
+        $department->update($validated);
 
         return redirect()->route('departments.index')
             ->with('success', 'Department updated successfully.');
@@ -191,7 +178,7 @@ class DepartmentController extends Controller
     public function show(Department $department)
     {
         // Load basic relationships without headEmployee
-        $department->load(['branch', 'parentDepartment']);
+        $department->load(['parentDepartment']);
 
         // Fetch employees for this department
         $employees = Employee::where('department_id', $department->id)

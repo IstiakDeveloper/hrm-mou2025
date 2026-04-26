@@ -41,11 +41,9 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-interface Employee {
+interface DesignationLite {
     id: number;
-    first_name: string;
-    last_name: string;
-    employee_id: string;
+    name: string;
 }
 
 interface Branch {
@@ -55,7 +53,7 @@ interface Branch {
     contact_number: string | null;
     branch_code: string;
     is_head_office: boolean;
-    headEmployee: Employee | null;  // This is already properly defined
+    headDesignation?: DesignationLite | null;
 }
 
 interface PaginationLinks {
@@ -229,12 +227,10 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                {branch.headEmployee ? (
+                                                {branch.headDesignation ? (
                                                     <div className="flex items-center">
                                                         <User className="mr-1 h-4 w-4 text-gray-400" />
-                                                        <span>
-                                                            {branch.headEmployee.first_name} {branch.headEmployee.last_name}
-                                                        </span>
+                                                        <span>{branch.headDesignation.name}</span>
                                                     </div>
                                                 ) : (
                                                     <span className="text-gray-500">Not assigned</span>

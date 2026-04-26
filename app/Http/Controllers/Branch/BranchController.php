@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Branch;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\RegionalOffice;
+use App\Models\Zone;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -21,37 +24,43 @@ class BranchController extends Controller
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('branch_code', 'like', "%{$search}%");
             })
+            ->with('branchHeadDesignation:id,name')
             ->orderBy('name')
             ->paginate(10)
             ->withQueryString();
 
-        // Get all head employee IDs from the branches
-        $headEmployeeIds = $branches->pluck('head_employee_id')->filter()->unique()->values()->toArray();
-
-        // Get all the head employees in a single query
-        $headEmployees = [];
-        if (! empty($headEmployeeIds)) {
-            $employees = \App\Models\Employee::whereIn('id', $headEmployeeIds)
-                ->select('id', 'employee_id', 'first_name', 'last_name')
-                ->get()
-                ->keyBy('id')
-                ->toArray();
-
-            $headEmployees = $employees;
-        }
-
-        // Convert branches collection to array and manually add head employee data
-        $branchesData = $branches->toArray();
-        foreach ($branchesData['data'] as &$branch) {
-            if (! empty($branch['head_employee_id']) && isset($headEmployees[$branch['head_employee_id']])) {
-                $branch['headEmployee'] = $headEmployees[$branch['head_employee_id']];
-            } else {
-                $branch['headEmployee'] = null;
-            }
-        }
-
         return Inertia::render('branch/index', [
-            'branches' => $branchesData,
+            'branches' => [
+                'data' => $branches->getCollection()->map(function (Branch $branch) {
+                    return [
+                        'id' => $branch->id,
+                        'name' => $branch->name,
+                        'address' => $branch->address,
+                        'contact_number' => $branch->contact_number,
+                        'branch_code' => $branch->branch_code,
+                        'is_head_office' => (bool) $branch->is_head_office,
+                        'headDesignation' => $branch->branchHeadDesignation
+                            ? ['id' => $branch->branchHeadDesignation->id, 'name' => $branch->branchHeadDesignation->name]
+                            : null,
+                    ];
+                })->values()->all(),
+                'meta' => [
+                    'current_page' => $branches->currentPage(),
+                    'from' => $branches->firstItem(),
+                    'last_page' => $branches->lastPage(),
+                    'links' => $branches->linkCollection()->toArray(),
+                    'path' => $branches->path(),
+                    'per_page' => $branches->perPage(),
+                    'to' => $branches->lastItem(),
+                    'total' => $branches->total(),
+                ],
+                'links' => [
+                    'first' => $branches->url(1),
+                    'last' => $branches->url($branches->lastPage()),
+                    'prev' => $branches->previousPageUrl(),
+                    'next' => $branches->nextPageUrl(),
+                ],
+            ],
             'filters' => $request->only(['search']),
         ]);
     }
@@ -62,9 +71,19 @@ class BranchController extends Controller
     public function create()
     {
         $employees = Employee::where('status', 'active')->get();
+        $zones = Zone::query()->where('is_active', true)->orderBy('name')->get();
+        $regionalOffices = RegionalOffice::query()
+            ->with('zone:id,name')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+        $designations = Designation::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('branch/create', [
             'employees' => $employees,
+            'zones' => $zones,
+            'regionalOffices' => $regionalOffices,
+            'designations' => $designations,
         ]);
     }
 
@@ -73,13 +92,16 @@ class BranchController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
+            'regional_office_id' => 'nullable|exists:regional_offices,id',
             'name' => 'required|string|max:255',
             'address' => 'nullable|string',
             'contact_number' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
             'branch_code' => 'required|string|max:20|unique:branches',
-            'head_employee_id' => 'nullable|exists:employees,id',
+            'branch_head_designation_id' => 'nullable|exists:designations,id',
             'is_head_office' => 'boolean',
+            'is_active' => 'nullable|boolean',
             'geofence_enabled' => 'nullable|boolean',
             'geofence_latitude' => 'nullable|numeric|between:-90,90',
             'geofence_longitude' => 'nullable|numeric|between:-180,180',
@@ -87,7 +109,7 @@ class BranchController extends Controller
             'geofence_max_accuracy_meters' => 'nullable|integer|min:1|max:500',
         ]);
 
-        Branch::create($request->all());
+        Branch::create($validated);
 
         return redirect()->route('branches.index')
             ->with('success', 'Branch created successfully.');
@@ -99,10 +121,20 @@ class BranchController extends Controller
     public function edit(Branch $branch)
     {
         $employees = Employee::where('status', 'active')->get();
+        $zones = Zone::query()->where('is_active', true)->orderBy('name')->get();
+        $regionalOffices = RegionalOffice::query()
+            ->with('zone:id,name')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+        $designations = Designation::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('branch/edit', [
             'branch' => $branch,
             'employees' => $employees,
+            'zones' => $zones,
+            'regionalOffices' => $regionalOffices,
+            'designations' => $designations,
         ]);
     }
 
@@ -111,13 +143,16 @@ class BranchController extends Controller
      */
     public function update(Request $request, Branch $branch)
     {
-        $request->validate([
+        $validated = $request->validate([
+            'regional_office_id' => 'nullable|exists:regional_offices,id',
             'name' => 'required|string|max:255',
             'address' => 'nullable|string',
             'contact_number' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
             'branch_code' => 'required|string|max:20|unique:branches,branch_code,'.$branch->id,
-            'head_employee_id' => 'nullable|exists:employees,id',
+            'branch_head_designation_id' => 'nullable|exists:designations,id',
             'is_head_office' => 'boolean',
+            'is_active' => 'nullable|boolean',
             'geofence_enabled' => 'nullable|boolean',
             'geofence_latitude' => 'nullable|numeric|between:-90,90',
             'geofence_longitude' => 'nullable|numeric|between:-180,180',
@@ -125,7 +160,7 @@ class BranchController extends Controller
             'geofence_max_accuracy_meters' => 'nullable|integer|min:1|max:500',
         ]);
 
-        $branch->update($request->all());
+        $branch->update($validated);
 
         return redirect()->route('branches.index')
             ->with('success', 'Branch updated successfully.');
@@ -155,13 +190,10 @@ class BranchController extends Controller
     public function show(Branch $branch)
     {
         // Load the branch relationships
-        $branch->load('headEmployee');
+        $branch->load(['branchHeadDesignation', 'headEmployee']);
 
         // Create a separate variable for the head employee
-        $headEmployee = null;
-        if ($branch->head_employee_id) {
-            $headEmployee = Employee::find($branch->head_employee_id);
-        }
+        $headEmployee = $branch->resolveBranchHeadEmployee();
 
         $employees = Employee::where('current_branch_id', $branch->id)
             ->with(['department', 'designation'])

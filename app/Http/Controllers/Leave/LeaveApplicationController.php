@@ -12,7 +12,9 @@ use App\Models\LeaveApplication;
 use App\Models\LeaveApproval;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
+use App\Models\LeaveApprovalTier;
 use App\Models\User;
+use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +25,271 @@ use Inertia\Inertia;
 
 class LeaveApplicationController extends Controller
 {
+    /**
+     * Head office vs branch for leave tier matching.
+     * Staff with no branch are treated as head office (common for HO desk employees).
+     * Branches not linked to a regional office are treated as central (head office) for tier routing
+     * when `is_head_office` was not set in data.
+     */
+    private function leaveTierContext(Employee $employee): string
+    {
+        if (! $employee->current_branch_id) {
+            return 'head_office';
+        }
+
+        $branch = $employee->currentBranch ?: $employee->branch;
+
+        if ($branch && $branch->is_head_office) {
+            return 'head_office';
+        }
+
+        if ($branch && $branch->regional_office_id === null) {
+            return 'head_office';
+        }
+
+        return 'branch';
+    }
+
+    /**
+     * Resolve approver users from leave_approval_tiers (Head office vs Branch only).
+     *
+     * Picks the active tier with the smallest max_leave_days that is still >= requested days.
+     * If the request exceeds every tier's max for that context, approvers default to Executive Director users.
+     *
+     * @return array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array{type: ?string, title: ?string, name: ?string}}
+     */
+    private function resolveTierApprovers(Employee $employee, int $leaveDays): array
+    {
+        $branch = $employee->currentBranch ?: $employee->branch;
+        $context = $this->leaveTierContext($employee);
+        $isHeadOffice = $context === 'head_office';
+
+        /** @var ?LeaveApprovalTier $tier */
+        $tier = LeaveApprovalTier::query()
+            ->with('designation')
+            ->where('context', $context)
+            ->where('is_active', true)
+            ->where('max_leave_days', '>=', $leaveDays)
+            ->orderBy('max_leave_days', 'asc')
+            ->first();
+
+        $recipients = collect([]);
+        $addressee = [
+            'type' => null,
+            'title' => null,
+            'name' => null,
+        ];
+
+        if (! $tier) {
+            $hasAnyTierForContext = LeaveApprovalTier::query()
+                ->where('context', $context)
+                ->where('is_active', true)
+                ->exists();
+
+            if ($hasAnyTierForContext) {
+                $recipients = $this->getExecutiveDirectors();
+                $ed = $recipients->first();
+                $edEmployee = $ed?->employee_id ? Employee::with('designation')->find($ed->employee_id) : null;
+                $addressee = [
+                    'type' => 'executive_director',
+                    'title' => $edEmployee?->designation?->name ?? 'Executive Director',
+                    'name' => $edEmployee?->full_name_en ?? $edEmployee?->full_name ?? null,
+                ];
+            }
+
+            $recipients = $recipients->filter(function ($u) use ($employee) {
+                return (int) ($u->employee_id ?? 0) !== (int) $employee->id;
+            })->values();
+
+            return ['recipients' => $recipients, 'tier' => null, 'addressee' => $addressee];
+        }
+
+        $approverType = (string) $tier->approver_type;
+
+        if ($approverType === 'department_head') {
+            $department = $employee->department_id ? Department::find($employee->department_id) : null;
+            $headEmployee = $department?->head_employee_id ? Employee::find($department->head_employee_id) : null;
+            if ($headEmployee) {
+                $recipients = User::where('employee_id', $headEmployee->id)->get();
+                $addressee = [
+                    'type' => 'department_head',
+                    'title' => $headEmployee->designation?->name ?? 'Department Head',
+                    'name' => $headEmployee->full_name_en ?? $headEmployee->full_name ?? null,
+                ];
+            }
+        } elseif ($approverType === 'executive_director') {
+            $recipients = $this->getExecutiveDirectors();
+            $ed = $recipients->first();
+            $edEmployee = $ed?->employee_id ? Employee::with('designation')->find($ed->employee_id) : null;
+            $addressee = [
+                'type' => 'executive_director',
+                'title' => $edEmployee?->designation?->name ?? 'Executive Director',
+                'name' => $edEmployee?->full_name_en ?? $edEmployee?->full_name ?? null,
+            ];
+        } elseif ($approverType === 'branch_manager') {
+            $branchId = (int) ($employee->current_branch_id ?? 0);
+            if ($branchId > 0) {
+                $recipients = User::query()
+                    ->where('branch_id', $branchId)
+                    ->get()
+                    ->filter(fn (User $u) => $u->hasPermission('branch_manager'))
+                    ->values();
+            }
+            $addressee = [
+                'type' => 'branch_manager',
+                'title' => 'Branch Manager',
+                'name' => null,
+            ];
+        } elseif ($approverType === 'branch_head') {
+            $headEmployee = $branch?->resolveBranchHeadEmployee();
+            if ($headEmployee) {
+                $recipients = User::where('employee_id', $headEmployee->id)->get();
+                $addressee = [
+                    'type' => 'branch_head',
+                    'title' => $headEmployee->designation?->name ?? 'Branch Head',
+                    'name' => $headEmployee->full_name_en ?? $headEmployee->full_name ?? null,
+                ];
+            }
+        } elseif ($approverType === 'designation' && $tier->designation_id) {
+            $q = Employee::query()
+                ->where('status', 'active')
+                ->where('designation_id', $tier->designation_id);
+
+            if (! $isHeadOffice) {
+                $q->where('current_branch_id', $employee->current_branch_id);
+            }
+
+            $employeeIds = $q->pluck('id');
+            if ($employeeIds->isNotEmpty()) {
+                $recipients = User::whereIn('employee_id', $employeeIds)->get();
+                $addressee = [
+                    'type' => 'designation',
+                    'title' => $tier->designation?->name ?? 'Approver',
+                    'name' => null,
+                ];
+            }
+        }
+
+        $recipients = $recipients->filter(function ($u) use ($employee) {
+            return (int) ($u->employee_id ?? 0) !== (int) $employee->id;
+        })->values();
+
+        return ['recipients' => $recipients, 'tier' => $tier, 'addressee' => $addressee];
+    }
+
+    /**
+     * Whether this user may auto-approve for this applicant and duration under active leave tiers.
+     * Mirrors tier resolution used for notifications / approvals.
+     */
+    private function userMayAutoApproveLeaveForApplicant(User $user, Employee $applicant, int $days): bool
+    {
+        if (! $user->hasPermission('leave-applications.approve')) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! LeaveApprovalTier::query()->where('is_active', true)->exists()) {
+            return true;
+        }
+
+        if ($days < 1) {
+            return false;
+        }
+
+        $context = $this->leaveTierContext($applicant);
+
+        // Important: auto-approve should be monotonic.
+        // If a user can approve up to N days, they can also approve any shorter request,
+        // even if there are smaller tiers configured for those shorter durations.
+        $tiers = LeaveApprovalTier::query()
+            ->where('context', $context)
+            ->where('is_active', true)
+            ->where('max_leave_days', '>=', $days)
+            ->orderBy('max_leave_days', 'asc')
+            ->get();
+
+        foreach ($tiers as $tier) {
+            $type = (string) $tier->approver_type;
+
+            if ($type === 'department_head' && $user->employee_id) {
+                $dept = $applicant->department_id ? Department::find($applicant->department_id) : null;
+                if ($dept && (int) $dept->head_employee_id === (int) $user->employee_id) {
+                    return true;
+                }
+            } elseif ($type === 'branch_head' && $user->employee_id) {
+                $branch = $applicant->current_branch_id ? Branch::find($applicant->current_branch_id) : null;
+                $emp = Employee::find($user->employee_id);
+                if ($branch && $emp && $branch->isEmployeeBranchHead($emp)) {
+                    return true;
+                }
+            } elseif ($type === 'branch_manager') {
+                if (! $user->hasPermission('branch_manager')) {
+                    continue;
+                }
+                $bid = OrganogramAccessService::branchOnlyScopeBranchId($user);
+                if ($bid !== null && $bid === (int) $applicant->current_branch_id) {
+                    return true;
+                }
+            } elseif ($type === 'executive_director') {
+                if (in_array('Executive Director', OrganogramAccessService::mergedRoleNames($user), true)
+                    || $user->hasPermission('organogram.executive_director')) {
+                    return true;
+                }
+            } elseif ($type === 'designation' && $tier->designation_id && $user->employee_id) {
+                $eu = Employee::find($user->employee_id);
+                if (! $eu || (int) $eu->designation_id !== (int) $tier->designation_id) {
+                    continue;
+                }
+                if ($context === 'head_office') {
+                    return true;
+                }
+                if ((int) $eu->current_branch_id === (int) $applicant->current_branch_id) {
+                    return true;
+                }
+            }
+        }
+
+        // If tiers exist but none cover this duration (or no matching tier), fall back to ED only.
+        $hasAnyTierForContext = LeaveApprovalTier::query()
+            ->where('context', $context)
+            ->where('is_active', true)
+            ->exists();
+
+        if ($hasAnyTierForContext && $tiers->isEmpty()) {
+            return in_array('Executive Director', OrganogramAccessService::mergedRoleNames($user), true)
+                || $user->hasPermission('organogram.executive_director');
+        }
+
+        return false;
+    }
+
+    /**
+     * JSON: can the current user auto-approve for their own application with this many days?
+     */
+    public function autoApproveEligibility(Request $request)
+    {
+        $user = Auth::user();
+        if (! $user->hasPermission('leave-applications.approve')) {
+            return response()->json(['eligible' => false]);
+        }
+
+        $employee = $user->employee;
+        if (! $employee) {
+            return response()->json(['eligible' => false]);
+        }
+
+        $days = max(0, (int) $request->query('days', 0));
+        if ($days < 1) {
+            return response()->json(['eligible' => false]);
+        }
+
+        return response()->json([
+            'eligible' => $this->userMayAutoApproveLeaveForApplicant($user, $employee, $days),
+        ]);
+    }
 
     /**
      * Display a listing of leave applications.
@@ -30,45 +297,29 @@ class LeaveApplicationController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        \Log::info('User accessing leave applications:', [
-            'user_id' => $user->id,
-            'user_name' => $user->name,
-            'employee_id' => $user->employee_id,
-            'permissions' => [
-                'leave-applications.view' => $user->hasPermission('leave-applications.view'),
-                'leave-applications.approve' => $user->hasPermission('leave-applications.approve'),
-                'branch_manager' => $user->hasPermission('branch_manager'),
-                'employees.view' => $user->hasPermission('employees.view'),
-            ],
-            'branch_id' => $user->branch_id,
+
+        $query = LeaveApplication::with([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch',
+            'employee.branch',
+            'leaveType',
+            'approver',
         ]);
 
-        $query = LeaveApplication::with(['employee.department', 'employee.designation', 'leaveType', 'approver']);
-
-        // Get the current user's employee_id (if they have one)
         $userEmployeeId = $user->employee_id;
-
-        // Check for special permissions
         $hasViewPermission = $user->hasPermission('leave-applications.view');
         $hasApprovePermission = $user->hasPermission('leave-applications.approve');
         $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
-        $hasEmployeeViewPermission = $user->hasPermission('employees.view');
-
-        // Determine if user is a branch head
-        $isBranchHead = false;
         $userBranchId = $user->branch_id;
+
+        $isBranchHead = false;
         if ($userEmployeeId && $userBranchId) {
             $branch = Branch::find($userBranchId);
-            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
-
-            \Log::info('Branch head check:', [
-                'employee_id' => $userEmployeeId,
-                'is_branch_head' => $isBranchHead,
-                'branch_id' => $userBranchId,
-            ]);
+            $employee = Employee::find($userEmployeeId);
+            $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
         }
 
-        // Determine if user is a department head
         $isDepartmentHead = false;
         $userDepartmentId = null;
         if ($userEmployeeId) {
@@ -78,105 +329,18 @@ class LeaveApplicationController extends Controller
                 $department = Department::find($employee->department_id);
                 $isDepartmentHead = $department && $department->head_employee_id == $userEmployeeId;
             }
-
-            \Log::info('Department head check:', [
-                'employee_id' => $userEmployeeId,
-                'is_department_head' => $isDepartmentHead,
-                'department_id' => $userDepartmentId,
-            ]);
         }
 
-        // Special handling for regular employees with view permission
-        $isRegularEmployeeWithViewPermission = $userEmployeeId && $hasViewPermission &&
-            !$hasApprovePermission && !$isBranchManager && !$isBranchHead &&
-            !$isDepartmentHead && !$hasEmployeeViewPermission;
-
-        // Apply filters based on user's role and permissions
-        if (
-            ($userEmployeeId && !$hasViewPermission && !$hasApprovePermission &&
-                !$isBranchManager && !$isBranchHead && !$isDepartmentHead) ||
-            $isRegularEmployeeWithViewPermission
-        ) {
-            // Regular employee - ONLY see their own applications
-            $query->where('employee_id', $userEmployeeId);
-            \Log::info('Regular employee - filtering to show only their own applications', [
-                'employee_id' => $userEmployeeId,
-                'has_view_permission' => $hasViewPermission
-            ]);
-        } elseif ($isBranchHead || ($isBranchManager && $userBranchId)) {
-            // Branch head or manager - see applications from their branch
-            $query->whereHas('employee', function ($q) use ($userBranchId) {
-                $q->where('current_branch_id', $userBranchId);
-            });
-            \Log::info('Branch head/manager - filtering by branch', [
-                'branch_id' => $userBranchId
-            ]);
-        } elseif ($isDepartmentHead) {
-            // Department head - see applications from their department
-            if ($userDepartmentId) {
-                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
-                    $q->where('department_id', $userDepartmentId);
-                });
-                \Log::info('Department head - filtering by department', [
-                    'department_id' => $userDepartmentId
-                ]);
-            } else {
-                // Fallback to own applications if no department association
-                $query->where('employee_id', $userEmployeeId);
-                \Log::info('Department head without department - showing only their applications', [
-                    'employee_id' => $userEmployeeId
-                ]);
-            }
-        } elseif ($hasApprovePermission && $userEmployeeId && !$hasEmployeeViewPermission) {
-            // User with approve permission but not full employee view permission
-            if ($userDepartmentId) {
-                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
-                    $q->where('department_id', $userDepartmentId);
-                });
-                \Log::info('Approver - filtering by department', [
-                    'department_id' => $userDepartmentId
-                ]);
-            } else {
-                // Fallback to pending applications if no department association
-                $query->where('status', 'pending');
-                \Log::info('Approver without department - showing only pending applications');
-            }
-        } elseif ($hasViewPermission && $hasEmployeeViewPermission) {
-            // Full admin with both leave-applications.view and employees.view - see all applications
-            \Log::info('Full admin - showing all applications');
-        } elseif ($hasViewPermission && !$hasEmployeeViewPermission) {
-            // User with leave-applications.view but not employees.view - apply restrictions
-            if ($isBranchHead || ($isBranchManager && $userBranchId)) {
-                $query->whereHas('employee', function ($q) use ($userBranchId) {
-                    $q->where('current_branch_id', $userBranchId);
-                });
-                \Log::info('Admin with branch restriction - filtering by branch', [
-                    'branch_id' => $userBranchId
-                ]);
-            } elseif ($userEmployeeId && $userDepartmentId) {
-                // Admin with department restrictions
-                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
-                    $q->where('department_id', $userDepartmentId);
-                });
-                \Log::info('Admin with department restriction - filtering by department', [
-                    'department_id' => $userDepartmentId
-                ]);
-            } else {
-                // Admin with view permission but no specific department/branch
-                \Log::info('Admin with view permission - showing all applications');
-            }
-        } else {
-            // Edge case - if no other conditions match, default to showing only their applications if they have an employee ID
+        if (! $hasViewPermission) {
             if ($userEmployeeId) {
                 $query->where('employee_id', $userEmployeeId);
-                \Log::info('Edge case - showing only user\'s applications', [
-                    'employee_id' => $userEmployeeId
-                ]);
             } else {
-                $query->where('id', 0); // No results
-                \Log::info('Edge case - no matching condition - showing no applications');
+                $query->whereRaw('1 = 0');
             }
+        } else {
+            OrganogramAccessService::constrainViaEmployeeRelation($query, $user, 'employee');
         }
+
         // Apply user-selected filters
         $query->when($request->status, function ($query, $status) {
             $query->where('status', $status);
@@ -213,6 +377,12 @@ class LeaveApplicationController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+        $applications->getCollection()->transform(function (LeaveApplication $app) use ($user) {
+            $app->setAttribute('can_approve_action', $this->canApproveApplication($user, $app));
+
+            return $app;
+        });
+
         // Get departments based on user's permissions
         $departments = $this->getAccessibleDepartments($user);
 
@@ -221,7 +391,6 @@ class LeaveApplicationController extends Controller
 
         // Check different approval scenarios
         $canApproveAny = $hasApprovePermission;
-        $canApproveOwn = $userEmployeeId && $hasApprovePermission;
 
         return Inertia::render('leave/applications/index', [
             'applications' => $applications,
@@ -229,8 +398,6 @@ class LeaveApplicationController extends Controller
             'employees' => $employees,
             'filters' => $request->only(['status', 'department_id', 'employee_id', 'from_date', 'to_date', 'search']),
             'canApprove' => $canApproveAny,
-            'canApproveOwn' => $canApproveOwn,
-            'isDepartmentHead' => $isDepartmentHead,
             'userPermissions' => [
                 'canView' => $hasViewPermission,
                 'canCreate' => $user->hasPermission('leave-applications.create'),
@@ -252,44 +419,15 @@ class LeaveApplicationController extends Controller
      */
     private function getAccessibleDepartments($user)
     {
-        // If user has full employee view permission, show all departments
-        if ($user->hasPermission('employees.view')) {
-            return Department::all();
+        $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
+        if ($ids === null) {
+            return Department::query()->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
         }
 
-        $userEmployeeId = $user->employee_id;
-        $userBranchId = $user->branch_id;
-
-        // Check if user is branch head
-        $isBranchHead = false;
-        if ($userEmployeeId && $userBranchId) {
-            $branch = Branch::find($userBranchId);
-            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
-        }
-
-        // Branch managers and branch heads see departments in their branch
-        if (($user->hasPermission('branch_manager') || $isBranchHead) && $userBranchId) {
-            return Department::whereHas('employees', function ($q) use ($userBranchId) {
-                $q->where('current_branch_id', $userBranchId);
-            })->get();
-        }
-
-        // Department heads see only their department
-        if ($userEmployeeId) {
-            $employee = Employee::find($userEmployeeId);
-            if ($employee && $employee->department_id) {
-                $department = Department::find($employee->department_id);
-                if ($department && $department->head_employee_id == $userEmployeeId) {
-                    return Department::where('id', $employee->department_id)->get();
-                }
-
-                // Regular employees see their own department only
-                return Department::where('id', $employee->department_id)->get();
-            }
-        }
-
-        // Default - show no departments
-        return collect([]);
+        return Department::query()->whereIn('id', $ids)->orderBy('name')->get();
     }
 
     /**
@@ -297,55 +435,10 @@ class LeaveApplicationController extends Controller
      */
     private function getAccessibleEmployees($user)
     {
-        // If user has full employee view permission, show all active employees
-        if ($user->hasPermission('employees.view')) {
-            return Employee::where('status', 'active')->get();
-        }
+        $q = Employee::query()->where('status', 'active')->orderBy('name_en');
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
-        $userEmployeeId = $user->employee_id;
-        $userBranchId = $user->branch_id;
-
-        // Check if user is branch head
-        $isBranchHead = false;
-        if ($userEmployeeId && $userBranchId) {
-            $branch = Branch::find($userBranchId);
-            $isBranchHead = $branch && $branch->head_employee_id == $userEmployeeId;
-        }
-
-        // Branch managers and branch heads see employees in their branch
-        if (($user->hasPermission('branch_manager') || $isBranchHead) && $userBranchId) {
-            return Employee::where('status', 'active')
-                ->where('current_branch_id', $userBranchId)
-                ->get();
-        }
-
-        // Department heads see employees in their department
-        if ($userEmployeeId) {
-            $employee = Employee::find($userEmployeeId);
-            if ($employee && $employee->department_id) {
-                $department = Department::find($employee->department_id);
-                if ($department && $department->head_employee_id == $userEmployeeId) {
-                    return Employee::where('status', 'active')
-                        ->where('department_id', $employee->department_id)
-                        ->get();
-                }
-
-                // Team leaders see their direct reports
-                $directReports = Employee::where('status', 'active')
-                    ->where('reporting_to', $userEmployeeId)
-                    ->get();
-
-                if ($directReports->count() > 0) {
-                    return $directReports;
-                }
-
-                // Regular employees just see themselves
-                return Employee::where('id', $userEmployeeId)->get();
-            }
-        }
-
-        // Default - show no employees
-        return collect([]);
+        return $q->get();
     }
 
     /**
@@ -353,19 +446,44 @@ class LeaveApplicationController extends Controller
      */
     private function canViewApplication($user, $application)
     {
-        // Check if user is branch head
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if (in_array('Executive Director', OrganogramAccessService::mergedRoleNames($user), true)) {
+            return true;
+        }
+
+        if ($user->hasPermission('organogram.executive_director')) {
+            return true;
+        }
+
+        // Check if user is branch head (designation-based)
         $isBranchHead = false;
         if ($user->employee_id && $user->branch_id) {
             $branch = Branch::find($user->branch_id);
-            $isBranchHead = $branch && $branch->head_employee_id == $user->employee_id;
+            $employee = Employee::find($user->employee_id);
+            $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
         }
 
-        // Super admins and users with leave.view permission can view all applications
+        // Users with leave-applications.view (organogram line roles use branch/dept rules below)
         if ($user->hasPermission('leave-applications.view')) {
-            // But branch managers are restricted to their branch
-            if (($user->hasPermission('branch_manager') || $isBranchHead) && $user->branch_id) {
+            // Branch managers / branch heads: only their branch (use same branch id resolution as employee index)
+            if (OrganogramAccessService::shouldApplyBranchOnlyEmployeeScope($user)) {
+                $branchScopeId = OrganogramAccessService::branchOnlyScopeBranchId($user);
+                if ($branchScopeId !== null) {
+                    $employee = Employee::find($application->employee_id);
+
+                    return $employee && (int) $employee->current_branch_id === $branchScopeId;
+                }
+
+                return false;
+            }
+
+            if ($isBranchHead && $user->branch_id) {
                 $employee = Employee::find($application->employee_id);
-                return $employee && $employee->current_branch_id == $user->branch_id;
+
+                return $employee && (int) $employee->current_branch_id === (int) $user->branch_id;
             }
 
             // And department heads to their department
@@ -419,46 +537,74 @@ class LeaveApplicationController extends Controller
     }
 
     /**
-     * Check if user can approve a specific leave application
+     * Check if user can approve/reject a specific leave application.
+     *
+     * When any active leave approval tier exists in the system, only users resolved for the applicant's context
+     * (head office vs branch) and leave length may approve — plus super admin. Users with both
+     * leave-applications.approve and employees.view are not exempt (that pair used to bypass tiers and wrongly
+     * allowed department heads with employee directory access to approve any leave).
+     * Legacy role-based rules apply only when no leave approval tiers are configured at all.
      */
     private function canApproveApplication($user, $application)
     {
-        // First, collect all necessary info for proper logging
         $userEmployeeId = $user->employee_id;
-        $userBranchId = $user->branch_id;
         $employeeId = $application->employee_id;
 
-        // Log detailed information for debugging
-        \Log::info('Checking approval permission for:', [
-            'user_id' => $user->id,
-            'user_employee_id' => $userEmployeeId,
-            'application_employee_id' => $employeeId,
-            'application_id' => $application->id,
-            'has_approve_permission' => $user->hasPermission('leave-applications.approve'),
-        ]);
-
-        // Can't approve own application
-        if ($userEmployeeId && $employeeId == $userEmployeeId) {
-            \Log::info('User trying to approve their own application - denied');
+        if ($userEmployeeId && (int) $employeeId === (int) $userEmployeeId) {
             return false;
         }
 
-        // Check if user is branch head
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($application->status !== 'pending') {
+            return false;
+        }
+
+        $applicant = ($application->relationLoaded('employee') && $application->employee)
+            ? $application->employee
+            : Employee::query()->with(['currentBranch', 'branch'])->find($employeeId);
+
+        if ($applicant && ! $applicant->relationLoaded('currentBranch')) {
+            $applicant->load(['currentBranch', 'branch']);
+        }
+
+        $globalTiersExist = LeaveApprovalTier::query()->where('is_active', true)->exists();
+
+        if ($applicant) {
+            $context = $this->leaveTierContext($applicant);
+            $hasTiersForContext = LeaveApprovalTier::query()
+                ->where('context', $context)
+                ->where('is_active', true)
+                ->exists();
+
+            if ($hasTiersForContext) {
+                $resolved = $this->resolveTierApprovers($applicant, (int) $application->days);
+                $recipientIds = $resolved['recipients']->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+                return $recipientIds !== [] && in_array((int) $user->id, $recipientIds, true);
+            }
+
+            if ($globalTiersExist) {
+                return false;
+            }
+        } elseif ($globalTiersExist) {
+            return false;
+        }
+
+        // Legacy role-based approval (only when no leave approval tiers exist in the system)
+        $userBranchId = $user->branch_id;
+
         $isBranchHead = false;
         if ($userEmployeeId && $userBranchId) {
             $branch = Branch::find($userBranchId);
             if ($branch) {
-                $isBranchHead = $branch->head_employee_id == $userEmployeeId;
-                \Log::info('Branch head check:', [
-                    'branch_id' => $userBranchId,
-                    'branch_head_id' => $branch->head_employee_id,
-                    'user_employee_id' => $userEmployeeId,
-                    'is_branch_head' => $isBranchHead
-                ]);
+                $employee = Employee::find($userEmployeeId);
+                $isBranchHead = $employee ? $branch->isEmployeeBranchHead($employee) : false;
             }
         }
 
-        // Check if user is department head
         $isDepartmentHead = false;
         $userDeptId = null;
         if ($userEmployeeId) {
@@ -467,90 +613,46 @@ class LeaveApplicationController extends Controller
                 $userDeptId = $userEmployee->department_id;
                 $department = Department::find($userDeptId);
                 if ($department) {
-                    $isDepartmentHead = $department->head_employee_id == $userEmployeeId;
-                    \Log::info('Department head check:', [
-                        'department_id' => $userDeptId,
-                        'department_head_id' => $department->head_employee_id,
-                        'user_employee_id' => $userEmployeeId,
-                        'is_department_head' => $isDepartmentHead
-                    ]);
+                    $isDepartmentHead = (int) $department->head_employee_id === (int) $userEmployeeId;
                 }
             }
         }
 
-        // Check if the user has both leave-applications.approve and employees.view permissions (admin)
-        $isFullAdmin = $user->hasPermission('leave-applications.approve') && $user->hasPermission('employees.view');
-        if ($isFullAdmin) {
-            \Log::info('User is full admin, approval granted');
-            return true;
-        }
-
-        // Check if user is branch head and application is from someone in their branch
         if ($isBranchHead) {
             $employee = Employee::find($employeeId);
-            $canApprove = $employee && $employee->current_branch_id == $userBranchId;
-            \Log::info('User is branch head:', [
-                'can_approve' => $canApprove,
-                'employee_branch_id' => $employee ? $employee->current_branch_id : null,
-                'user_branch_id' => $userBranchId
-            ]);
-            if ($canApprove) {
+            if ($employee && (int) $employee->current_branch_id === (int) $userBranchId) {
                 return true;
             }
         }
 
-        // Check if user is department head and application is from someone in their department
         if ($isDepartmentHead) {
             $employee = Employee::find($employeeId);
-            $canApprove = $employee && $employee->department_id == $userDeptId;
-            \Log::info('User is department head:', [
-                'can_approve' => $canApprove,
-                'employee_dept_id' => $employee ? $employee->department_id : null,
-                'user_dept_id' => $userDeptId
-            ]);
-            if ($canApprove) {
-                return true;
+            if ($employee && $userDeptId && (int) $employee->department_id === (int) $userDeptId) {
+                return (int) $application->days <= 3;
             }
         }
 
-        // Check if user is branch manager and application is from someone in their branch
         if ($user->hasPermission('branch_manager') && $userBranchId) {
             $employee = Employee::find($employeeId);
-            $canApprove = $employee && $employee->current_branch_id == $userBranchId;
-            \Log::info('User is branch manager:', [
-                'can_approve' => $canApprove,
-                'employee_branch_id' => $employee ? $employee->current_branch_id : null,
-                'user_branch_id' => $userBranchId
-            ]);
-            if ($canApprove) {
+            if ($employee && (int) $employee->current_branch_id === (int) $userBranchId) {
                 return true;
             }
         }
 
-        // Check if user has approval permission and additional conditions
         if ($user->hasPermission('leave-applications.approve')) {
             if ($userEmployeeId) {
                 $employee = Employee::find($employeeId);
-
-                // Check if employee reports directly to this user
-                if ($employee && $employee->reporting_to == $userEmployeeId) {
-                    \Log::info('User can approve as direct manager');
+                if ($employee && (int) $employee->reporting_to === (int) $userEmployeeId) {
                     return true;
                 }
-
-                // Check if employee is in the same department as user
-                if ($userDeptId && $employee && $employee->department_id == $userDeptId) {
-                    \Log::info('User can approve as in same department');
+                if ($userDeptId && $employee && (int) $employee->department_id === (int) $userDeptId) {
                     return true;
                 }
             }
 
-            // User has general approval permission with no specific restrictions
-            \Log::info('User has general approval permission');
             return true;
         }
 
-        \Log::info('No approval permission found - denied');
         return false;
     }
 
@@ -559,11 +661,12 @@ class LeaveApplicationController extends Controller
      */
     private function canCancelApplication($user, $application)
     {
-        // Check if user is branch head
+        // Check if user is branch head (designation-based)
         $isBranchHead = false;
         if ($user->employee_id && $user->branch_id) {
             $branch = Branch::find($user->branch_id);
-            $isBranchHead = $branch && $branch->head_employee_id == $user->employee_id;
+            $employee = Employee::find($user->employee_id);
+            $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
         }
 
         // Admins can cancel all applications
@@ -724,8 +827,15 @@ class LeaveApplicationController extends Controller
         $status = 'pending';
         $approvedBy = null;
 
-        // Auto-approve if admin is creating the application
-        if ($user->hasPermission('leave-applications.approve') && $request->has('auto_approve') && $request->auto_approve) {
+        // Auto-approve only when tier rules allow this user to be the approver for this duration
+        if ($user->hasPermission('leave-applications.approve') && $request->boolean('auto_approve')) {
+            if (! $this->userMayAutoApproveLeaveForApplicant($user, $employee, $days)) {
+                return redirect()->back()
+                    ->withErrors([
+                        'auto_approve' => 'Auto-approve is not allowed for this many days under the current leave approval tiers.',
+                    ])
+                    ->withInput();
+            }
             $status = 'approved';
             $approvedBy = $user->id;
         }
@@ -789,41 +899,33 @@ class LeaveApplicationController extends Controller
         try {
             $days = (int) ($leaveApplication->days ?? 0);
 
-            // Business rule:
-            // - <= 3 days: Department Head + Executive Director + Super Admin
-            // - > 3 days: Executive Director + Super Admin
-            //
-            // Exception:
-            // - If applicant is a Department Head, notify Executive Director + Super Admin (no Department Head)
-            $isShortLeave = $days <= 3;
+            // Tier-based recipients (Leave settings)
+            $dynamic = $this->resolveTierApprovers($employee, $days);
+            $dynamicRecipients = $dynamic['recipients'] ?? collect([]);
 
-            $departmentHeads = collect([]);
-            if ($isShortLeave) {
-                $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+            // Fallback to legacy behavior if no rules are configured
+            $legacyRecipients = collect([]);
+            if ($dynamicRecipients->isEmpty()) {
+                $isShortLeave = $days <= 3;
+
+                $departmentHeads = collect([]);
+                if ($isShortLeave) {
+                    $departmentHeads = $this->getDepartmentHeads($employee->department_id);
+                }
+
+                $executiveDirectors = $this->getExecutiveDirectors();
+                $legacyRecipients = $executiveDirectors->merge($departmentHeads);
             }
-
-            $executiveDirectors = $this->getExecutiveDirectors();
 
             // Find Super Admin users
             $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
                 $query->where('name', 'Super Admin');
             })->get();
 
-            // If applicant is the department head, don't notify department head (escalate to Executive Director)
-            $isApplicantDepartmentHead = false;
-            if (!empty($employee->department_id)) {
-                $department = Department::find($employee->department_id);
-                $isApplicantDepartmentHead = $department && (int) $department->head_employee_id === (int) $employee->id;
-            }
-
-            if ($isApplicantDepartmentHead) {
-                $departmentHeads = collect([]);
-            }
-
             // Combine unique recipients (User models)
             $recipients = $superAdmins
-                ->merge($executiveDirectors)
-                ->merge($departmentHeads)
+                ->merge($dynamicRecipients)
+                ->merge($legacyRecipients)
                 ->unique('id');
 
             if ($recipients->isEmpty()) {
@@ -983,7 +1085,15 @@ class LeaveApplicationController extends Controller
                 ->with('error', 'You do not have permission to view this leave application.');
         }
 
-        $application->load(['employee.department', 'employee.designation', 'leaveType', 'approver', 'approvals.approver']);
+        $application->load([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch',
+            'employee.branch',
+            'leaveType',
+            'approver',
+            'approvals.approver',
+        ]);
         $application->documents = json_decode($application->documents, true);
 
         $canApprove = $this->canApproveApplication($user, $application);
@@ -1037,25 +1147,8 @@ class LeaveApplicationController extends Controller
     public function approve(Request $request, LeaveApplication $application)
     {
         $user = Auth::user();
+        $application->loadMissing(['employee.currentBranch', 'employee.branch']);
 
-        // Check if user is branch head
-        $isBranchHead = false;
-        if ($user->employee_id && $user->branch_id) {
-            $branch = Branch::find($user->branch_id);
-            $isBranchHead = $branch && $branch->head_employee_id == $user->employee_id;
-        }
-
-        // Check if user is department head
-        $isDepartmentHead = false;
-        if ($user->employee_id) {
-            $employee = Employee::find($user->employee_id);
-            if ($employee && $employee->department_id) {
-                $department = Department::find($employee->department_id);
-                $isDepartmentHead = $department && $department->head_employee_id == $user->employee_id;
-            }
-        }
-
-        // First check permission from canApproveApplication helper method
         if (!$this->canApproveApplication($user, $application)) {
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to approve this leave application.');
@@ -1248,25 +1341,8 @@ class LeaveApplicationController extends Controller
     public function reject(Request $request, LeaveApplication $application)
     {
         $user = Auth::user();
+        $application->loadMissing(['employee.currentBranch', 'employee.branch']);
 
-        // Check if user is branch head
-        $isBranchHead = false;
-        if ($user->employee_id && $user->branch_id) {
-            $branch = Branch::find($user->branch_id);
-            $isBranchHead = $branch && $branch->head_employee_id == $user->employee_id;
-        }
-
-        // Check if user is department head
-        $isDepartmentHead = false;
-        if ($user->employee_id) {
-            $employee = Employee::find($user->employee_id);
-            if ($employee && $employee->department_id) {
-                $department = Department::find($employee->department_id);
-                $isDepartmentHead = $department && $department->head_employee_id == $user->employee_id;
-            }
-        }
-
-        // First check permission from canApproveApplication helper method
         if (!$this->canApproveApplication($user, $application)) {
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to reject leave applications.');
@@ -1564,47 +1640,53 @@ class LeaveApplicationController extends Controller
             }
         }
 
-        // Determine addressee based on business rules (same as notifications)
+        // Determine addressee (dynamic first, fallback to legacy)
         $days = (int) ($application->days ?? 0);
-        $isShortLeave = $days <= 3;
-
-        $department = $application->employee?->department_id
-            ? Department::find($application->employee->department_id)
-            : null;
-
-        $isApplicantDepartmentHead = $department
-            && (int) $department->head_employee_id === (int) $application->employee_id;
-
         $addressee = [
-            'type' => null, // 'department_head' | 'executive_director'
+            'type' => null,
             'title' => null,
             'name' => null,
         ];
 
-        if ($isShortLeave && !$isApplicantDepartmentHead) {
-            $deptHeads = $this->getDepartmentHeads($application->employee?->department_id);
-            $deptHead = $deptHeads->first();
-            $deptHeadEmployee = null;
-            if ($deptHead?->employee_id) {
-                $deptHeadEmployee = Employee::with('designation')->find($deptHead->employee_id);
+        if ($application->employee) {
+            $dynamic = $this->resolveTierApprovers($application->employee, $days);
+            $addressee = $dynamic['addressee'] ?: $addressee;
+        }
+
+        if (! $addressee['title']) {
+            $isShortLeave = $days <= 3;
+            $department = $application->employee?->department_id
+                ? Department::find($application->employee->department_id)
+                : null;
+
+            $isApplicantDepartmentHead = $department
+                && (int) $department->head_employee_id === (int) $application->employee_id;
+
+            if ($isShortLeave && ! $isApplicantDepartmentHead) {
+                $deptHeads = $this->getDepartmentHeads($application->employee?->department_id);
+                $deptHead = $deptHeads->first();
+                $deptHeadEmployee = null;
+                if ($deptHead?->employee_id) {
+                    $deptHeadEmployee = Employee::with('designation')->find($deptHead->employee_id);
+                }
+                $addressee = [
+                    'type' => 'department_head',
+                    'title' => $deptHeadEmployee?->designation?->name ?? 'Department Head',
+                    'name' => null,
+                ];
+            } else {
+                $eds = $this->getExecutiveDirectors();
+                $ed = $eds->first();
+                $edEmployee = null;
+                if ($ed?->employee_id) {
+                    $edEmployee = Employee::with('designation')->find($ed->employee_id);
+                }
+                $addressee = [
+                    'type' => 'executive_director',
+                    'title' => $edEmployee?->designation?->name ?? 'Executive Director',
+                    'name' => null,
+                ];
             }
-            $addressee = [
-                'type' => 'department_head',
-                'title' => $deptHeadEmployee?->designation?->name ?? 'Department Head',
-                'name' => null,
-            ];
-        } else {
-            $eds = $this->getExecutiveDirectors();
-            $ed = $eds->first();
-            $edEmployee = null;
-            if ($ed?->employee_id) {
-                $edEmployee = Employee::with('designation')->find($ed->employee_id);
-            }
-            $addressee = [
-                'type' => 'executive_director',
-                'title' => $edEmployee?->designation?->name ?? 'Executive Director',
-                'name' => null,
-            ];
         }
 
         return Inertia::render('leave/applications/pdf', [

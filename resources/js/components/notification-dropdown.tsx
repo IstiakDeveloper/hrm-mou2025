@@ -12,7 +12,41 @@ import {
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
+
+/** Where to send the user after opening an in-app notification (admin notice optional deep link). */
+function resolveNotificationTarget(
+    link: string | null | undefined,
+    notificationId: string
+): string {
+    const fallback = `/my-notices/${notificationId}`;
+    const raw = typeof link === 'string' ? link.trim() : '';
+    if (!raw) return fallback;
+
+    const lower = raw.toLowerCase();
+    if (lower.startsWith('javascript:') || lower.startsWith('data:')) return fallback;
+
+    if (raw.startsWith('/')) return raw;
+
+    try {
+        const u = new URL(raw);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return fallback;
+        if (u.origin === window.location.origin) {
+            return `${u.pathname}${u.search}${u.hash}`;
+        }
+        return raw;
+    } catch {
+        return fallback;
+    }
+}
+
+function goToNotificationTarget(target: string) {
+    if (/^https?:\/\//i.test(target)) {
+        window.location.assign(target);
+        return;
+    }
+    router.visit(target);
+}
 
 export default function NotificationDropdown() {
     const [notifications, setNotifications] = useState([]);
@@ -65,7 +99,8 @@ export default function NotificationDropdown() {
             console.error('Failed to mark notification as read', error);
         }
 
-        window.location.href = `/my-notices/${notification.id}`;
+        const target = resolveNotificationTarget(notification.link, notification.id);
+        goToNotificationTarget(target);
     };
 
     const markAllAsRead = async () => {

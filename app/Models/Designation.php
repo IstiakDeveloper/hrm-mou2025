@@ -12,14 +12,8 @@ class Designation extends Model
     protected $fillable = [
         'name',
         'description',
-        'department_id',
         'rank',
     ];
-
-    public function department()
-    {
-        return $this->belongsTo(Department::class);
-    }
 
     public function employees()
     {

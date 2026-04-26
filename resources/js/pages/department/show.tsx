@@ -25,7 +25,6 @@ import {
     Briefcase,
     Users,
     User,
-    Building2
 } from 'lucide-react';
 import {
     Pagination,
@@ -49,11 +48,6 @@ interface Employee {
     };
 }
 
-interface Branch {
-    id: number;
-    name: string;
-}
-
 interface ParentDepartment {
     id: number;
     name: string;
@@ -71,7 +65,6 @@ interface Department {
     id: number;
     name: string;
     description: string | null;
-    branch: Branch;
     parentDepartment: ParentDepartment | null;
     headEmployee: HeadEmployee | null;
 }
@@ -138,9 +131,6 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">{department.name}</h1>
                         <div className="mt-2 flex items-center flex-wrap gap-2">
-                            <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-                                {department.branch.name}
-                            </Badge>
                             {department.parentDepartment && (
                                 <Badge variant="outline" className="border-gray-300">
                                     Sub-department of {department.parentDepartment.name}
@@ -179,14 +169,6 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                             )}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <div>
-                                    <h3 className="text-sm font-medium text-gray-500 mb-1">Branch</h3>
-                                    <div className="flex items-center">
-                                        <Building2 className="h-4 w-4 text-gray-400 mr-1" />
-                                        <span className="text-gray-900">{department.branch.name}</span>
-                                    </div>
-                                </div>
-
                                 <div>
                                     <h3 className="text-sm font-medium text-gray-500 mb-1">Parent Department</h3>
                                     <div className="flex items-center">
@@ -258,7 +240,7 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                 <div className="mb-6">
                     <h2 className="text-xl font-semibold text-gray-900 flex items-center mb-4">
                         <Users className="h-5 w-5 mr-2 text-gray-500" />
-                        Employees at this Branch ({totalEmployees})
+                        Employees in this Department ({totalEmployees})
                     </h2>
 
                     <Card>
