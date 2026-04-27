@@ -38,6 +38,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -132,18 +133,10 @@ Route::get('/debug/role/{role}', function (Role $role) {
         'permission_count' => count($permissions),
     ]);
 })->name('debug.role');
-// Utility Routes
-Route::get('/storage-link', function () {
-    Artisan::call('storage:link');
-
-    return response()->json(['message' => 'Storage link created successfully.']);
-})->name('storage.link');
-
-Route::get('/migrate', function () {
-    Artisan::call('migrate');
-
-    return response()->json(['message' => 'Migrations run successfully.']);
-})->name('migrate');
+// NOTE:
+// Do NOT expose Artisan command endpoints via HTTP.
+// On shared hosting, commands like `storage:link` may fail (exec/symlink disabled),
+// and exposing `migrate` publicly is a critical security risk.
 
 // ====================
 // AUTHENTICATION ROUTES
@@ -205,6 +198,63 @@ Route::middleware(['auth'])->group(function () {
     // ADMIN MANAGEMENT (Super Admin Only)
     // ====================
     Route::prefix('admin')->name('admin.')->middleware(['permission:admin.access'])->group(function () {
+
+        // One-time (token-protected) storage linker for shared hosting.
+        // Usage (set STORAGE_LINK_TOKEN in .env first):
+        //   /admin/utils/storage-link?token=YOUR_TOKEN
+        Route::get('utils/storage-link', function (Request $request) {
+            $token = env('STORAGE_LINK_TOKEN');
+            if (!is_string($token) || $token === '' || !hash_equals($token, (string) $request->query('token', ''))) {
+                abort(404);
+            }
+
+            $link = public_path('storage');
+            $target = storage_path('app/public');
+
+            // Already linked / exists
+            if (is_link($link) || File::exists($link)) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'public/storage already exists.',
+                    'path' => $link,
+                ]);
+            }
+
+            // Try symlink first (may be blocked on shared hosting)
+            try {
+                if (@symlink($target, $link)) {
+                    return response()->json([
+                        'ok' => true,
+                        'mode' => 'symlink',
+                        'message' => 'Storage symlink created.',
+                        'link' => $link,
+                        'target' => $target,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // fall through to copy mode
+            }
+
+            // Fallback: copy files instead of symlink
+            try {
+                File::ensureDirectoryExists($link);
+                File::copyDirectory($target, $link);
+
+                return response()->json([
+                    'ok' => true,
+                    'mode' => 'copy',
+                    'message' => 'Symlink not available; copied storage files to public/storage.',
+                    'from' => $target,
+                    'to' => $link,
+                ]);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Failed to create storage link/copy.',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+        })->middleware(['auth'])->name('utils.storage-link');
 
         Route::get('users/bulk-email/form', [UserController::class, 'bulkEmailForm'])->name('users.bulk-email.form');
         Route::post('users/bulk-email/send', [UserController::class, 'sendBulkEmails'])->name('users.bulk-email.send');
@@ -551,6 +601,7 @@ Route::middleware(['auth'])->group(function () {
             Route::middleware(['permission:leave-balances.admin'])->group(function () {
                 Route::get('/allocate-bulk', [LeaveBalanceController::class, 'allocateBulk'])->name('allocate-bulk');
                 Route::post('/store-bulk', [LeaveBalanceController::class, 'storeBulk'])->name('store-bulk');
+                Route::post('/apply-defaults', [LeaveBalanceController::class, 'applyDefaults'])->name('apply-defaults');
                 Route::post('/reset-for-new-year', [LeaveBalanceController::class, 'resetForNewYear'])->name('reset-for-new-year');
             });
         });

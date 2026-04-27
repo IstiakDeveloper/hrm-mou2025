@@ -19,11 +19,11 @@ interface Employee {
   first_name: string;
   last_name: string;
   employee_id: string;
-  department: {
+  department?: {
     id: number;
     name: string;
   };
-  designation: {
+  designation?: {
     id: number;
     name: string;
   };
@@ -42,8 +42,8 @@ interface LeaveBalance {
   allocated_days: number;
   used_days: number;
   remaining_days: number;
-  employee: Employee;
-  leaveType: LeaveType;
+  employee?: Employee;
+  leaveType?: LeaveType;
 }
 
 interface EditProps {
@@ -66,6 +66,7 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
     else if (parseInt(allocatedDays) < 0) newErrors.allocatedDays = 'Allocated days must be a positive number';
     if (!usedDays.trim()) newErrors.usedDays = 'Used days is required';
     else if (parseInt(usedDays) < 0) newErrors.usedDays = 'Used days must be a positive number';
+    else if (parseInt(usedDays) > parseInt(allocatedDays || '0')) newErrors.usedDays = 'Used days cannot exceed allocated days';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -112,6 +113,10 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
     );
   }
 
+  const allocNum = parseInt(allocatedDays || '0');
+  const usedNum = parseInt(usedDays || '0');
+  const remainingNum = Math.max(0, allocNum - usedNum);
+
   return (
     <Layout>
       <Head title="Edit Leave Balance" />
@@ -145,7 +150,7 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Employee ID: {leaveBalance.employee && leaveBalance.employee.employee_id}
+                    Employee ID: {leaveBalance.employee?.employee_id || '—'}
                   </p>
                 </div>
 
@@ -154,7 +159,7 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                   <div className="flex items-center p-2 border rounded-md bg-gray-50">
                     <FileText className="mr-2 h-4 w-4 text-gray-500" />
                     <span className="font-medium">
-                      {leaveBalance.leaveType && leaveBalance.leaveType.name}
+                      {leaveBalance.leaveType?.name || '—'}
                     </span>
                   </div>
                 </div>
@@ -174,10 +179,12 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                 <div className="space-y-2">
                   <Label>Department</Label>
                   <div className="p-2 border rounded-md bg-gray-50">
-                    {leaveBalance.employee && leaveBalance.employee.department && (
+                    {leaveBalance.employee?.department?.name ? (
                       <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                         {leaveBalance.employee.department.name}
                       </Badge>
+                    ) : (
+                      <span className="text-xs text-gray-500">—</span>
                     )}
                   </div>
                 </div>
@@ -229,7 +236,7 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                 <Label>Remaining Days</Label>
                 <div className="p-2 border rounded-md bg-gray-50">
                   <p className="text-lg font-medium">
-                    {Math.max(0, parseInt(allocatedDays || '0') - parseInt(usedDays || '0'))} days
+                    {remainingNum} days
                   </p>
                 </div>
                 <p className="text-sm text-muted-foreground">

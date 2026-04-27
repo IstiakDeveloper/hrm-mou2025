@@ -74,6 +74,8 @@ export default function AllocateBulk({
   const [search, setSearch] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [applyDefaultsUpdating, setApplyDefaultsUpdating] = useState(false);
+  const [updateExistingDefaults, setUpdateExistingDefaults] = useState(false);
 
   // Safely filter employees based on department and search with null checks
   const filteredEmployees = employees?.filter(employee => {
@@ -154,6 +156,25 @@ export default function AllocateBulk({
       },
       onFinish: () => setSubmitting(false)
     });
+  };
+
+  const handleApplyDefaults = () => {
+    if (!year) return;
+    setApplyDefaultsUpdating(true);
+    router.post(
+      route('leave.balances.apply-defaults'),
+      {
+        year: parseInt(year),
+        update_existing: updateExistingDefaults,
+      },
+      {
+        onError: (errors) => {
+          setErrors(errors as Record<string, string>);
+          setApplyDefaultsUpdating(false);
+        },
+        onFinish: () => setApplyDefaultsUpdating(false),
+      },
+    );
   };
 
   // Check if we have the required data
@@ -249,6 +270,39 @@ export default function AllocateBulk({
                     {errors.year && (
                       <p className="text-sm font-medium text-red-500">{errors.year}</p>
                     )}
+                  </div>
+
+                  <div className="rounded-md border p-3 bg-slate-50">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="updateExistingDefaults"
+                        checked={updateExistingDefaults}
+                        onCheckedChange={(v) => setUpdateExistingDefaults(v === true)}
+                      />
+                      <div className="space-y-1">
+                        <Label htmlFor="updateExistingDefaults" className="cursor-pointer font-medium">
+                          Update existing balances too
+                        </Label>
+                        <p className="text-xs text-gray-600">
+                          Uses the leave type&apos;s default days and recalculates remaining days, keeping used days unchanged.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        disabled={applyDefaultsUpdating || !year}
+                        onClick={handleApplyDefaults}
+                      >
+                        {applyDefaultsUpdating ? 'Applying defaults…' : 'Apply default leave types for all employees'}
+                      </Button>
+                      <p className="mt-2 text-xs text-gray-600">
+                        Applies: Annual, Casual, Medical (all), Maternity (female), Paternity (male).
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-2">

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import React, { useMemo, useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
   Table,
@@ -43,6 +43,8 @@ import {
 } from '@/components/ui/pagination';
 import {
   CalendarDays,
+  ChevronDown,
+  ChevronRight,
   Edit,
   MoreHorizontal,
   Plus,
@@ -51,6 +53,7 @@ import {
   Users
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { isSuperAdmin } from '@/lib/permissions';
 import {
   Dialog,
   DialogContent,
@@ -66,21 +69,29 @@ interface Department {
   name: string;
 }
 
-interface Employee {
+interface Branch {
   id: number;
-  first_name: string;
-  last_name: string;
-  employee_id: string;
-  department: Department;
-  designation: {
-    id: number;
-    name: string;
-  };
+  name: string;
 }
 
 interface LeaveType {
   id: number;
   name: string;
+  days_allowed?: number;
+}
+
+interface Employee {
+  id: number;
+  first_name: string;
+  last_name: string;
+  employee_id: string;
+  gender?: string | null;
+  department: Department | null;
+  designation: { id: number; name: string } | null;
+  currentBranch?: Branch | null;
+  /** Inertia/Laravel may serialize relations as snake_case. Support both. */
+  leaveBalances?: LeaveBalance[];
+  leave_balances?: LeaveBalance[];
 }
 
 interface LeaveBalance {
@@ -91,7 +102,6 @@ interface LeaveBalance {
   allocated_days: number;
   used_days: number;
   remaining_days: number;
-  employee: Employee;
   leaveType: LeaveType;
 }
 
@@ -112,8 +122,8 @@ interface PaginationMeta {
   total: number;
 }
 
-interface LeaveBalancesResponse {
-  data: LeaveBalance[];
+interface EmployeesResponse {
+  data: Employee[];
   links: {
     first: string;
     last: string;
@@ -124,13 +134,12 @@ interface LeaveBalancesResponse {
 }
 
 interface LeaveBalancesIndexProps {
-  leaveBalances: LeaveBalancesResponse;
-  departments: Department[];
+  employees: EmployeesResponse;
+  branches: Branch[];
   leaveTypes: LeaveType[];
   filters: {
     year: string;
-    department_id: string;
-    leave_type_id: string;
+    branch_id: string;
     search: string;
   };
   year: number;
@@ -138,28 +147,33 @@ interface LeaveBalancesIndexProps {
 }
 
 export default function LeaveBalancesIndex({
-  leaveBalances,
-  departments,
+  employees,
+  branches,
   leaveTypes,
   filters,
   year,
   years
 }: LeaveBalancesIndexProps) {
+  const { auth } = usePage().props as { auth?: unknown };
+  const canEditBalances = isSuperAdmin(auth as any);
   const [search, setSearch] = useState(filters.search || '');
   const [selectedYear, setSelectedYear] = useState(filters.year || year.toString());
-  const [departmentId, setDepartmentId] = useState(filters.department_id || 'all');
-  const [leaveTypeId, setLeaveTypeId] = useState(filters.leave_type_id || 'all');
+  const [branchId, setBranchId] = useState(filters.branch_id || 'all');
+  const [expandedEmployeeIds, setExpandedEmployeeIds] = useState<Record<number, boolean>>({});
 
   const [resetYearDialogOpen, setResetYearDialogOpen] = useState(false);
   const [fromYear, setFromYear] = useState((year - 1).toString());
   const [toYear, setToYear] = useState(year.toString());
 
+  const yearNumber = Number(selectedYear) || year;
+
+  const leaveTypesForDetails = useMemo(() => leaveTypes || [], [leaveTypes]);
+
   const handleSearch = () => {
     router.get(route('leave.balances.index'), {
       search,
       year: selectedYear,
-      department_id: departmentId === 'all' ? '' : departmentId,
-      leave_type_id: leaveTypeId === 'all' ? '' : leaveTypeId
+      branch_id: branchId === 'all' ? '' : branchId,
     }, { preserveState: true });
   };
 
@@ -171,8 +185,7 @@ export default function LeaveBalancesIndex({
 
   const resetFilters = () => {
     setSearch('');
-    setDepartmentId('all');
-    setLeaveTypeId('all');
+    setBranchId('all');
     router.get(route('leave.balances.index'), { year: selectedYear }, { preserveState: true });
   };
 
@@ -180,8 +193,7 @@ export default function LeaveBalancesIndex({
     setSelectedYear(year);
     router.get(route('leave.balances.index'), {
       year,
-      department_id: departmentId === 'all' ? '' : departmentId,
-      leave_type_id: leaveTypeId === 'all' ? '' : leaveTypeId,
+      branch_id: branchId === 'all' ? '' : branchId,
       search
     }, { preserveState: true });
   };
@@ -200,6 +212,51 @@ export default function LeaveBalancesIndex({
     setResetYearDialogOpen(false);
   };
 
+  const toggleExpanded = (employeeId: number) => {
+    setExpandedEmployeeIds((prev) => ({
+      ...prev,
+      [employeeId]: !prev[employeeId],
+    }));
+  };
+
+  const normalizedGender = (g: string | null | undefined) => (g ?? '').toString().trim().toLowerCase();
+  const isMale = (g: string | null | undefined) => {
+    const ng = normalizedGender(g);
+    return ng === 'male' || ng === 'm';
+  };
+  const isFemale = (g: string | null | undefined) => {
+    const ng = normalizedGender(g);
+    return ng === 'female' || ng === 'f';
+  };
+  const isApplicableLeaveTypeForEmployee = (leaveTypeName: string, employeeGender: string | null | undefined) => {
+    const n = leaveTypeName.trim().toLowerCase();
+    if (n.includes('maternity')) {
+      return isFemale(employeeGender);
+    }
+    if (n.includes('paternity')) {
+      return isMale(employeeGender);
+    }
+    return true;
+  };
+
+  const computeEmployeeLeaveTotals = (employee: Employee) => {
+    const balances = employee.leaveBalances || employee.leave_balances || [];
+    let totalRemaining = 0;
+    let totalUsed = 0;
+
+    for (const lt of leaveTypesForDetails) {
+      if (!isApplicableLeaveTypeForEmployee(lt.name, employee.gender)) continue;
+      const bal = balances.find((b) => b.leave_type_id === lt.id);
+      const allocated = bal?.allocated_days ?? lt.days_allowed ?? 0;
+      const used = bal?.used_days ?? 0;
+      const remaining = bal?.remaining_days ?? Math.max(0, allocated - used);
+      totalUsed += used;
+      totalRemaining += remaining;
+    }
+
+    return { totalRemaining, totalUsed };
+  };
+
   return (
     <Layout>
       <Head title="Leave Balances" />
@@ -207,7 +264,12 @@ export default function LeaveBalancesIndex({
       <div className="container mx-auto py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Leave Balances</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-bold text-gray-900">Leave Balances</h1>
+              <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                {employees?.meta?.total ?? 0} employee{(employees?.meta?.total ?? 0) === 1 ? '' : 's'}
+              </Badge>
+            </div>
             <p className="mt-1 text-gray-500">
               Manage employee leave balances and allocations
             </p>
@@ -302,7 +364,7 @@ export default function LeaveBalancesIndex({
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Filters</CardTitle>
-                <CardDescription>Filter leave balances by year, department or leave type</CardDescription>
+                <CardDescription>Filter employees by year and branch</CardDescription>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -331,7 +393,7 @@ export default function LeaveBalancesIndex({
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
                   <Input
-                    placeholder="Search by employee name or ID..."
+                    placeholder="Search by employee name, ID or PIN..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -342,36 +404,17 @@ export default function LeaveBalancesIndex({
 
               <div className="w-full md:w-64">
                 <Select
-                  value={departmentId}
-                  onValueChange={setDepartmentId}
+                  value={branchId}
+                  onValueChange={setBranchId}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
+                    <SelectValue placeholder="Select branch" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments && departments.map((department) => (
-                      <SelectItem key={department.id} value={department.id.toString()}>
-                        {department.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="w-full md:w-64">
-                <Select
-                  value={leaveTypeId}
-                  onValueChange={setLeaveTypeId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select leave type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Leave Types</SelectItem>
-                    {leaveTypes && leaveTypes.map((leaveType) => (
-                      <SelectItem key={leaveType.id} value={leaveType.id.toString()}>
-                        {leaveType.name}
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {branches && branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id.toString()}>
+                        {b.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -390,68 +433,89 @@ export default function LeaveBalancesIndex({
           </CardContent>
         </Card>
 
-        {/* Leave Balances Table */}
+        {/* Employees Table */}
         <Card>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10" />
                   <TableHead>Employee</TableHead>
+                  <TableHead>Branch</TableHead>
                   <TableHead>Department</TableHead>
-                  <TableHead>Leave Type</TableHead>
-                  <TableHead>Allocated Days</TableHead>
-                  <TableHead>Used Days</TableHead>
-                  <TableHead>Remaining Days</TableHead>
-                  <TableHead>Year</TableHead>
+                  <TableHead>Designation</TableHead>
+                  <TableHead>Total Used</TableHead>
+                  <TableHead>Total Remaining</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leaveBalances.data && leaveBalances.data.length > 0 ? (
-                  leaveBalances.data.map((balance) => (
-                    <TableRow key={balance.id}>
+                {employees.data && employees.data.length > 0 ? (
+                  employees.data.map((employee) => {
+                    const balances = employee.leaveBalances || employee.leave_balances || [];
+                    const { totalRemaining, totalUsed } = computeEmployeeLeaveTotals(employee);
+                    const expanded = expandedEmployeeIds[employee.id] === true;
+
+                    return (
+                      <React.Fragment key={employee.id}>
+                        <TableRow>
+                          <TableCell className="align-top">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => toggleExpanded(employee.id)}
+                              aria-label={expanded ? 'Collapse' : 'Expand'}
+                            >
+                              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </Button>
+                          </TableCell>
                       <TableCell>
                         <div className="font-medium">
-                          {balance.employee && `${balance.employee.first_name} ${balance.employee.last_name}`}
+                          {`${employee.first_name || ''} ${employee.last_name || ''}`.trim()}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {balance.employee && balance.employee.employee_id}
+                          {employee.employee_id}
                         </div>
                       </TableCell>
                       <TableCell>
-                        {balance.employee && balance.employee.department && (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                            {balance.employee.department.name}
+                        {employee.currentBranch?.name ? (
+                          <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                            {employee.currentBranch.name}
                           </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-500">—</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{balance.leaveType && balance.leaveType.name}</div>
+                        {employee.department?.name ? (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            {employee.department.name}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-500">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          {balance.allocated_days} days
-                        </Badge>
+                        {employee.designation?.name ? (
+                          <span className="font-medium">{employee.designation.name}</span>
+                        ) : (
+                          <span className="text-xs text-gray-500">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                          {balance.used_days} days
+                          {totalUsed} day{totalUsed === 1 ? '' : 's'}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={
-                          balance.remaining_days > 0
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : "bg-red-50 text-red-700 border-red-200"
-                        }>
-                          {balance.remaining_days} days
+                        <Badge
+                          variant="outline"
+                          className={totalRemaining > 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}
+                        >
+                          {totalRemaining} day{totalRemaining === 1 ? '' : 's'}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <CalendarDays className="mr-1 h-4 w-4 text-gray-400" />
-                          <span>{balance.year}</span>
-                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -463,22 +527,97 @@ export default function LeaveBalancesIndex({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => router.get(route('leave.balances.edit', balance.id))}
+                              onClick={() => router.get(route('leave.balances.allocate-bulk'))}
                               className="cursor-pointer"
                             >
                               <Edit className="mr-2 h-4 w-4" />
-                              <span>Edit</span>
+                              <span>Manage</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))
+                        {expanded ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="bg-slate-50/50">
+                              <div className="p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    Leave balances ({yearNumber})
+                                  </div>
+                                  <div className="text-xs text-gray-600 flex items-center">
+                                    <CalendarDays className="mr-1 h-4 w-4 text-gray-400" />
+                                    Year: {yearNumber}
+                                  </div>
+                                </div>
+
+                                <div className="overflow-x-auto rounded-md border bg-white">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Leave type</TableHead>
+                                        <TableHead className="text-right">Allocated</TableHead>
+                                        <TableHead className="text-right">Used</TableHead>
+                                        <TableHead className="text-right">Remaining</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {leaveTypesForDetails
+                                        .filter((lt) => isApplicableLeaveTypeForEmployee(lt.name, employee.gender))
+                                        .map((lt) => {
+                                        const bal = balances.find((b) => b.leave_type_id === lt.id);
+                                        const allocated = bal?.allocated_days ?? lt.days_allowed ?? 0;
+                                        const used = bal?.used_days ?? 0;
+                                        const remaining = bal?.remaining_days ?? Math.max(0, allocated - used);
+                                        return (
+                                          <TableRow key={lt.id}>
+                                            <TableCell className="font-medium">{lt.name}</TableCell>
+                                            <TableCell className="text-right">{allocated}</TableCell>
+                                            <TableCell className="text-right">{used}</TableCell>
+                                            <TableCell className="text-right">
+                                              <div className="flex items-center justify-end gap-2">
+                                                <Badge
+                                                  variant="outline"
+                                                  className={
+                                                    remaining > 0
+                                                      ? 'bg-green-50 text-green-700 border-green-200'
+                                                      : 'bg-red-50 text-red-700 border-red-200'
+                                                  }
+                                                >
+                                                  {remaining}
+                                                </Badge>
+                                                {canEditBalances && bal?.id ? (
+                                                  <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-7 w-7 p-0"
+                                                    onClick={() => router.get(route('leave.balances.edit', bal.id))}
+                                                    aria-label="Edit leave balance"
+                                                  >
+                                                    <Edit className="h-4 w-4" />
+                                                  </Button>
+                                                ) : null}
+                                              </div>
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </React.Fragment>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={8} className="h-24 text-center">
-                      No leave balances found for {selectedYear}.
-                      {(search || departmentId !== 'all' || leaveTypeId !== 'all') && (
+                      No employees found for {selectedYear}.
+                      {(search || branchId !== 'all') && (
                         <Button
                           variant="link"
                           onClick={resetFilters}
@@ -496,28 +635,27 @@ export default function LeaveBalancesIndex({
         </Card>
 
         {/* Pagination */}
-        {leaveBalances.meta && leaveBalances.meta.last_page > 1 && (
+        {employees.meta && employees.meta.last_page > 1 && (
           <div className="mt-6">
             <Pagination>
               <PaginationContent>
-                {leaveBalances.meta.current_page > 1 && leaveBalances.links.prev && (
+                {employees.meta.current_page > 1 && employees.links.prev && (
                   <PaginationItem>
                     <PaginationPrevious
-                      href={leaveBalances.links.prev || '#'}
+                      href={employees.links.prev || '#'}
                       onClick={(e) => {
                         e.preventDefault();
-                        router.get(leaveBalances.links.prev || '', {
+                        router.get(employees.links.prev || '', {
                           search,
                           year: selectedYear,
-                          department_id: departmentId === 'all' ? '' : departmentId,
-                          leave_type_id: leaveTypeId === 'all' ? '' : leaveTypeId
+                          branch_id: branchId === 'all' ? '' : branchId,
                         }, { preserveState: true });
                       }}
                     />
                   </PaginationItem>
                 )}
 
-                {leaveBalances.meta.links.filter(link => !link.label.includes('&laquo;') && !link.label.includes('&raquo;')).map((link, i) => {
+                {employees.meta.links.filter(link => !link.label.includes('&laquo;') && !link.label.includes('&raquo;')).map((link, i) => {
                   const isPageNumber = !isNaN(Number(link.label));
 
                   if (!isPageNumber && link.label === '...') {
@@ -539,8 +677,7 @@ export default function LeaveBalancesIndex({
                             router.get(link.url, {
                               search,
                               year: selectedYear,
-                              department_id: departmentId === 'all' ? '' : departmentId,
-                              leave_type_id: leaveTypeId === 'all' ? '' : leaveTypeId
+                              branch_id: branchId === 'all' ? '' : branchId,
                             }, { preserveState: true });
                           }
                         }}
@@ -551,17 +688,16 @@ export default function LeaveBalancesIndex({
                   );
                 })}
 
-                {leaveBalances.meta.current_page < leaveBalances.meta.last_page && leaveBalances.links.next && (
+                {employees.meta.current_page < employees.meta.last_page && employees.links.next && (
                   <PaginationItem>
                     <PaginationNext
-                      href={leaveBalances.links.next || '#'}
+                      href={employees.links.next || '#'}
                       onClick={(e) => {
                         e.preventDefault();
-                        router.get(leaveBalances.links.next || '', {
+                        router.get(employees.links.next || '', {
                           search,
                           year: selectedYear,
-                          department_id: departmentId === 'all' ? '' : departmentId,
-                          leave_type_id: leaveTypeId === 'all' ? '' : leaveTypeId
+                          branch_id: branchId === 'all' ? '' : branchId,
                         }, { preserveState: true });
                       }}
                     />

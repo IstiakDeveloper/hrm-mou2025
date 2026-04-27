@@ -3,53 +3,312 @@
 namespace App\Http\Controllers\Leave;
 
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class LeaveBalanceController extends Controller
 {
+    private function abortUnlessSuperAdmin(): void
+    {
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+        if (! $user || ! $user->isSuperAdmin()) {
+            abort(403);
+        }
+    }
+
+    /**
+     * Apply default leave balances for all active employees for a year.
+     *
+     * Defaults are based on leave type names:
+     * - Annual Leave, Casual Leave, Medical Leave: all employees
+     * - Maternity Leave: female only
+     * - Paternity Leave: male only
+     *
+     * If update_existing is true, allocated_days will be set to leaveType.days_allowed
+     * while preserving used_days; remaining_days will be recalculated.
+     */
+    public function applyDefaults(Request $request)
+    {
+        $validated = $request->validate([
+            'year' => 'required|integer|min:2000|max:2100',
+            'update_existing' => 'sometimes|boolean',
+        ]);
+
+        $year = (int) $validated['year'];
+        $updateExisting = (bool) ($validated['update_existing'] ?? false);
+
+        // Find required leave types by name:
+        // 1) exact match on lower(trim(name)) for common canonical names
+        // 2) fallback: keyword match (e.g. "paternity" anywhere in the name)
+        $wanted = [
+            'annual' => ['annual leave', 'annual'],
+            'casual' => ['casual leave', 'casual'],
+            'maternity' => ['maternity leave', 'maternity'],
+            'paternity' => ['paternity leave', 'paternity'],
+            'medical' => ['medical leave', 'medical'],
+        ];
+
+        $allTypes = LeaveType::query()->get(['id', 'name', 'days_allowed']);
+
+        // For gender clean-up, consider ANY leave type whose name contains these keywords
+        // (handles variants like double spaces, "(Paid)", etc).
+        $maternityTypeIds = $allTypes
+            ->filter(function (LeaveType $lt) {
+                $n = strtolower(trim((string) $lt->name));
+                return $n !== '' && str_contains($n, 'maternity');
+            })
+            ->pluck('id')
+            ->values();
+
+        $paternityTypeIds = $allTypes
+            ->filter(function (LeaveType $lt) {
+                $n = strtolower(trim((string) $lt->name));
+                return $n !== '' && str_contains($n, 'paternity');
+            })
+            ->pluck('id')
+            ->values();
+        $byNormalizedName = $allTypes->mapWithKeys(function (LeaveType $lt) {
+            $key = strtolower(trim((string) $lt->name));
+            return [$key => $lt];
+        });
+
+        /** @var array<string, LeaveType> $resolvedTypes */
+        $resolvedTypes = [];
+
+        foreach ($wanted as $key => [$canonical, $keyword]) {
+            $exact = $byNormalizedName->get($canonical);
+            if ($exact) {
+                $resolvedTypes[$canonical] = $exact;
+                continue;
+            }
+
+            $match = $allTypes->first(function (LeaveType $lt) use ($keyword) {
+                $n = strtolower(trim((string) $lt->name));
+                return $n !== '' && str_contains($n, $keyword);
+            });
+
+            if ($match) {
+                $resolvedTypes[$canonical] = $match;
+            }
+        }
+
+        $leaveTypes = collect($resolvedTypes);
+
+        $missing = collect($wanted)
+            ->map(fn (array $v) => $v[0])
+            ->reject(fn (string $canonical) => $leaveTypes->has($canonical))
+            ->values()
+            ->all();
+
+        if (count($missing) > 0) {
+            return redirect()->back()->with('error', 'Missing leave types: ' . implode(', ', $missing) . '. Please create them first.');
+        }
+
+        $employees = Employee::query()
+            ->where('status', 'active')
+            ->get(['id', 'gender']);
+
+        $created = 0;
+        $updated = 0;
+        $skippedExisting = 0;
+        $deletedWrongGender = 0;
+        $keptWrongGenderWithUsage = 0;
+
+        foreach ($employees as $employee) {
+            $gender = strtolower(trim((string) ($employee->gender ?? '')));
+            $isMale = $gender === 'male' || $gender === 'm';
+            $isFemale = $gender === 'female' || $gender === 'f';
+
+            // Always clean up gender-inapplicable balances even if the defaults list doesn't match exactly.
+            // Rule:
+            // - Maternity: ONLY female may have it → if NOT female, remove
+            // - Paternity: ONLY male may have it → if NOT male, remove
+            // (when used_days == 0; keep otherwise to avoid destroying history)
+            if (! $isFemale && $maternityTypeIds->isNotEmpty()) {
+                $wrong = LeaveBalance::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('year', $year)
+                    ->whereIn('leave_type_id', $maternityTypeIds)
+                    ->get();
+                foreach ($wrong as $existing) {
+                    if ((int) $existing->used_days <= 0) {
+                        $existing->delete();
+                        $deletedWrongGender++;
+                    } else {
+                        $keptWrongGenderWithUsage++;
+                    }
+                }
+            }
+            if (! $isMale && $paternityTypeIds->isNotEmpty()) {
+                $wrong = LeaveBalance::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('year', $year)
+                    ->whereIn('leave_type_id', $paternityTypeIds)
+                    ->get();
+                foreach ($wrong as $existing) {
+                    if ((int) $existing->used_days <= 0) {
+                        $existing->delete();
+                        $deletedWrongGender++;
+                    } else {
+                        $keptWrongGenderWithUsage++;
+                    }
+                }
+            }
+
+            foreach ($wanted as $key => [$typeName, $_keyword]) {
+                /** @var LeaveType|null $leaveType */
+                $leaveType = $leaveTypes->get($typeName);
+                if (! $key) {
+                    continue;
+                }
+                if (! $leaveType) {
+                    // Shouldn't happen because of the $missing check, but keep it safe.
+                    continue;
+                }
+
+                $applicable = match ($key) {
+                    'maternity' => $isFemale,
+                    'paternity' => $isMale,
+                    default => true,
+                };
+
+                $existing = LeaveBalance::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('leave_type_id', $leaveType->id)
+                    ->where('year', $year)
+                    ->first();
+
+                if (! $applicable) {
+                    if ($existing) {
+                        if ((int) $existing->used_days <= 0) {
+                            $existing->delete();
+                            $deletedWrongGender++;
+                        } else {
+                            // Don't destroy historical usage.
+                            $keptWrongGenderWithUsage++;
+                        }
+                    }
+                    continue;
+                }
+
+                if ($existing) {
+                    if (! $updateExisting) {
+                        $skippedExisting++;
+                        continue;
+                    }
+
+                    $existing->allocated_days = (int) $leaveType->days_allowed;
+                    $existing->remaining_days = max(0, (int) $existing->allocated_days - (int) $existing->used_days);
+                    $existing->save();
+                    $updated++;
+                    continue;
+                }
+
+                $allocated = (int) $leaveType->days_allowed;
+                LeaveBalance::create([
+                    'employee_id' => $employee->id,
+                    'leave_type_id' => $leaveType->id,
+                    'year' => $year,
+                    'allocated_days' => $allocated,
+                    'used_days' => 0,
+                    'remaining_days' => $allocated,
+                ]);
+                $created++;
+            }
+        }
+
+        $msg = "Defaults applied for year {$year}. Created {$created}.";
+        if ($updateExisting) {
+            $msg .= " Updated {$updated}.";
+        } else {
+            $msg .= " Skipped existing {$skippedExisting}.";
+        }
+        if ($deletedWrongGender > 0) {
+            $msg .= " Removed {$deletedWrongGender} wrong-gender balances with zero usage.";
+        }
+        if ($keptWrongGenderWithUsage > 0) {
+            $msg .= " Kept {$keptWrongGenderWithUsage} wrong-gender balances because they have used days.";
+        }
+
+        return redirect()->route('leave.balances.index', ['year' => $year])
+            ->with('success', $msg);
+    }
+
     /**
      * Display a listing of leave balances.
      */
     public function index(Request $request)
     {
-        $year = $request->year ?? Carbon::now()->year;
+        $year = (int) ($request->year ?? Carbon::now()->year);
+        $branchId = $request->input('branch_id');
+        $search = trim((string) $request->input('search', ''));
 
-        $query = LeaveBalance::with(['employee.department', 'employee.designation', 'leaveType'])
-            ->where('year', $year)
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                });
+        $query = Employee::query()
+            ->select([
+                'id',
+                'employee_id',
+                'first_name',
+                'last_name',
+                'pin',
+                'name_en',
+                'gender',
+                'department_id',
+                'designation_id',
+                'current_branch_id',
+                'status',
+            ])
+            ->with([
+                'department',
+                'designation',
+                'currentBranch',
+                'leaveBalances' => function ($q) use ($year) {
+                    $q->where('year', $year)->with('leaveType');
+                },
+            ])
+            ->where('status', 'active')
+            ->when($branchId, function ($q, $branchId) {
+                $q->where('current_branch_id', $branchId);
             })
-            ->when($request->leave_type_id, function ($query, $leaveTypeId) {
-                $query->where('leave_type_id', $leaveTypeId);
-            })
-            ->when($request->search, function ($query, $search) {
-                $query->whereHas('employee', function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere('employee_id', 'like', "%{$search}%");
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($qq) use ($search) {
+                    $qq->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhere('pin', 'like', "%{$search}%")
+                        ->orWhere('name_en', 'like', "%{$search}%");
                 });
             });
 
-        $leaveBalances = $query->orderBy('id', 'desc')
+        $employees = $query
+            ->orderBy('id', 'desc')
             ->paginate(15)
             ->withQueryString();
 
-        $departments = Department::all();
-        $leaveTypes = LeaveType::all();
+        $branches = Branch::query()
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $leaveTypes = LeaveType::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'days_allowed']);
 
         return Inertia::render('leave/balances/index', [
-            'leaveBalances' => $leaveBalances,
-            'departments' => $departments,
+            'employees' => $employees,
+            'branches' => $branches,
             'leaveTypes' => $leaveTypes,
-            'filters' => $request->only(['year', 'department_id', 'leave_type_id', 'search']),
+            'filters' => [
+                'year' => (string) $year,
+                'branch_id' => $branchId ? (string) $branchId : '',
+                'search' => $search,
+            ],
             'year' => $year,
             'years' => range(Carbon::now()->year - 2, Carbon::now()->year + 1),
         ]);
@@ -111,7 +370,17 @@ class LeaveBalanceController extends Controller
      */
     public function edit(LeaveBalance $leaveBalance)
     {
-        $employees = Employee::where('status', 'active')->get();
+        $this->abortUnlessSuperAdmin();
+
+        $leaveBalance->load([
+            'employee.department',
+            'employee.designation',
+            'leaveType',
+        ]);
+
+        $employees = Employee::with(['department', 'designation'])
+            ->where('status', 'active')
+            ->get();
         $leaveTypes = LeaveType::all();
         $currentYear = Carbon::now()->year;
 
@@ -128,6 +397,8 @@ class LeaveBalanceController extends Controller
      */
     public function update(Request $request, LeaveBalance $leaveBalance)
     {
+        $this->abortUnlessSuperAdmin();
+
         $request->validate([
             'allocated_days' => 'required|integer|min:0',
             'used_days' => 'required|integer|min:0',

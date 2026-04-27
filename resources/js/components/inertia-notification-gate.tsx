@@ -1,4 +1,5 @@
 import NotificationPermissionGate from '@/components/notification-permission-gate';
+import { shouldHideGlobalChromeForInertiaPage } from '@/lib/print-only-inertia-pages';
 import { usePage } from '@inertiajs/react';
 import { type PropsWithChildren } from 'react';
 
@@ -13,7 +14,12 @@ type GatePageProps = {
 
 /** Logged-in Android PWA users: gate until permission + push subscription are done. */
 export default function InertiaNotificationGate({ children }: PropsWithChildren) {
-    const { auth, push } = usePage().props as GatePageProps;
+    const page = usePage();
+    const { auth, push } = page.props as GatePageProps;
+
+    if (shouldHideGlobalChromeForInertiaPage(page.component)) {
+        return <>{children}</>;
+    }
 
     if (!auth?.user) {
         return <>{children}</>;

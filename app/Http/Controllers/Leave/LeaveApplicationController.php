@@ -51,12 +51,71 @@ class LeaveApplicationController extends Controller
     }
 
     /**
+     * How the PDF / letter should qualify the addressee line (branch name, regional office, zone, department).
+     * Used for designation-based tiers (e.g. Regional Manager, Zonal Manager) by designation title keywords.
+     */
+    private function routingScopeForDesignationTierName(?string $designationName): string
+    {
+        $name = strtolower(trim((string) $designationName));
+        if ($name === '') {
+            return 'branch';
+        }
+        if (str_contains($name, 'regional')) {
+            return 'regional_office';
+        }
+        if (str_contains($name, 'zonal') || str_contains($name, 'zone manager') || (str_contains($name, 'zone') && str_contains($name, 'manager'))) {
+            return 'zone';
+        }
+        if (str_contains($name, 'branch') && str_contains($name, 'manager')) {
+            return 'branch';
+        }
+
+        return 'branch';
+    }
+
+    /**
+     * Branch / regional / zone / department labels for the applicant (leave PDF addressee line).
+     *
+     * @param  array{type?: ?string, title?: ?string, name?: ?string, routing_scope?: string}  $addressee
+     * @return array<string, mixed>
+     */
+    private function enrichLeaveAddresseeForPdf(?Employee $employee, array $addressee): array
+    {
+        if ($employee) {
+            $employee->loadMissing(['department', 'currentBranch.regionalOffice.zone']);
+        }
+
+        $branch = $employee?->currentBranch;
+        $ro = $branch?->regionalOffice;
+        $zone = $ro?->zone;
+
+        $addressee['routing_context'] = [
+            'branch_name' => $branch?->name,
+            'regional_office_name' => $ro?->name,
+            'zone_name' => $zone?->name,
+            'department_name' => $employee?->department?->name,
+        ];
+
+        if (! isset($addressee['routing_scope'])) {
+            $type = $addressee['type'] ?? null;
+            $addressee['routing_scope'] = match ($type) {
+                'department_head' => 'department',
+                'branch_manager', 'branch_head' => 'branch',
+                'designation' => 'branch',
+                default => 'none',
+            };
+        }
+
+        return $addressee;
+    }
+
+    /**
      * Resolve approver users from leave_approval_tiers (Head office vs Branch only).
      *
      * Picks the active tier with the smallest max_leave_days that is still >= requested days.
      * If the request exceeds every tier's max for that context, approvers default to Executive Director users.
      *
-     * @return array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array{type: ?string, title: ?string, name: ?string}}
+     * @return array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array{type: ?string, title: ?string, name: ?string, routing_scope?: string}}
      */
     private function resolveTierApprovers(Employee $employee, int $leaveDays): array
     {
@@ -78,6 +137,7 @@ class LeaveApplicationController extends Controller
             'type' => null,
             'title' => null,
             'name' => null,
+            'routing_scope' => 'none',
         ];
 
         if (! $tier) {
@@ -94,6 +154,7 @@ class LeaveApplicationController extends Controller
                     'type' => 'executive_director',
                     'title' => $edEmployee?->designation?->name ?? 'Executive Director',
                     'name' => $edEmployee?->full_name_en ?? $edEmployee?->full_name ?? null,
+                    'routing_scope' => 'none',
                 ];
             }
 
@@ -115,6 +176,7 @@ class LeaveApplicationController extends Controller
                     'type' => 'department_head',
                     'title' => $headEmployee->designation?->name ?? 'Department Head',
                     'name' => $headEmployee->full_name_en ?? $headEmployee->full_name ?? null,
+                    'routing_scope' => 'department',
                 ];
             }
         } elseif ($approverType === 'executive_director') {
@@ -125,6 +187,7 @@ class LeaveApplicationController extends Controller
                 'type' => 'executive_director',
                 'title' => $edEmployee?->designation?->name ?? 'Executive Director',
                 'name' => $edEmployee?->full_name_en ?? $edEmployee?->full_name ?? null,
+                'routing_scope' => 'none',
             ];
         } elseif ($approverType === 'branch_manager') {
             $branchId = (int) ($employee->current_branch_id ?? 0);
@@ -139,6 +202,7 @@ class LeaveApplicationController extends Controller
                 'type' => 'branch_manager',
                 'title' => 'Branch Manager',
                 'name' => null,
+                'routing_scope' => 'branch',
             ];
         } elseif ($approverType === 'branch_head') {
             $headEmployee = $branch?->resolveBranchHeadEmployee();
@@ -148,6 +212,7 @@ class LeaveApplicationController extends Controller
                     'type' => 'branch_head',
                     'title' => $headEmployee->designation?->name ?? 'Branch Head',
                     'name' => $headEmployee->full_name_en ?? $headEmployee->full_name ?? null,
+                    'routing_scope' => 'branch',
                 ];
             }
         } elseif ($approverType === 'designation' && $tier->designation_id) {
@@ -166,6 +231,7 @@ class LeaveApplicationController extends Controller
                     'type' => 'designation',
                     'title' => $tier->designation?->name ?? 'Approver',
                     'name' => null,
+                    'routing_scope' => $this->routingScopeForDesignationTierName($tier->designation?->name),
                 ];
             }
         }
@@ -1673,6 +1739,7 @@ class LeaveApplicationController extends Controller
                     'type' => 'department_head',
                     'title' => $deptHeadEmployee?->designation?->name ?? 'Department Head',
                     'name' => null,
+                    'routing_scope' => 'department',
                 ];
             } else {
                 $eds = $this->getExecutiveDirectors();
@@ -1685,9 +1752,12 @@ class LeaveApplicationController extends Controller
                     'type' => 'executive_director',
                     'title' => $edEmployee?->designation?->name ?? 'Executive Director',
                     'name' => null,
+                    'routing_scope' => 'none',
                 ];
             }
         }
+
+        $addressee = $this->enrichLeaveAddresseeForPdf($application->employee, $addressee);
 
         return Inertia::render('leave/applications/pdf', [
             'application' => $application,

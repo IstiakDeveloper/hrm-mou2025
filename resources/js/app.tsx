@@ -3,11 +3,12 @@ import '../css/app.css';
 import InertiaNotificationGate from '@/components/inertia-notification-gate';
 import PWAManager from '@/components/PWAManager';
 import PwaRoot from '@/components/pwa-root';
-import { createInertiaApp } from '@inertiajs/react';
+import { shouldHideGlobalChromeForInertiaPage } from '@/lib/print-only-inertia-pages';
+import { createInertiaApp, usePage } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { route as routeFn } from 'ziggy-js';
-import { Fragment, type ComponentType } from 'react';
+import { type ComponentType } from 'react';
 import { initializeTheme } from './hooks/use-appearance';
 
 declare global {
@@ -15,6 +16,19 @@ declare global {
 }
 
 const appName = import.meta.env.VITE_APP_NAME || 'HRM Admin';
+
+function AppGlobalChrome() {
+    const { component } = usePage();
+    if (shouldHideGlobalChromeForInertiaPage(component)) {
+        return null;
+    }
+    return (
+        <>
+            <PwaRoot />
+            <PWAManager showInstallBanner={true} />
+        </>
+    );
+}
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
@@ -28,6 +42,7 @@ createInertiaApp({
             default: function PageWithNotificationGate(pageProps: Record<string, unknown>) {
                 return (
                     <InertiaNotificationGate>
+                        <AppGlobalChrome />
                         <Page {...pageProps} />
                     </InertiaNotificationGate>
                 );
@@ -37,13 +52,7 @@ createInertiaApp({
     setup({ el, App, props }) {
         const root = createRoot(el);
 
-        root.render(
-            <Fragment>
-                <PwaRoot />
-                <PWAManager showInstallBanner={true} />
-                <App {...props} />
-            </Fragment>,
-        );
+        root.render(<App {...props} />);
     },
     progress: {
         color: '#4B5563',

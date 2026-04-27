@@ -35,10 +35,8 @@ import {
 } from '@/components/ui/pagination';
 import {
   CalendarIcon,
-  Download,
   Eye,
   FilePieChart,
-  Printer
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -241,40 +239,7 @@ export default function Report({
     );
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const downloadCSV = () => {
-    // Generate CSV content
-    const headers = ['Employee', 'Employee ID', 'Department', 'Leave Type', 'From', 'To', 'Days', 'Status'];
-    const dataRows = applications.data.map(app => [
-      `${app.employee.first_name} ${app.employee.last_name}`,
-      app.employee.employee_id,
-      app.employee.department.name,
-      app.leaveType.name,
-      app.start_date,
-      app.end_date,
-      app.days,
-      app.status
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...dataRows.map(row => row.join(','))
-    ].join('\n');
-
-    // Create and download the file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `leave_report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  // Print / CSV export intentionally removed (per request).
 
   // Calculate total for percentages
   const totalApplications = statusData.reduce((sum, item) => sum + item.value, 0);
@@ -293,16 +258,6 @@ export default function Report({
           </div>
 
           <div className="mt-4 md:mt-0 flex space-x-2">
-            <Button variant="outline" onClick={handlePrint} className="flex items-center">
-              <Printer className="mr-1 h-4 w-4" />
-              Print Report
-            </Button>
-
-            <Button variant="outline" onClick={downloadCSV} className="flex items-center">
-              <Download className="mr-1 h-4 w-4" />
-              Export CSV
-            </Button>
-
             <Link href={route('leave.applications.index')}>
               <Button variant="outline" className="flex items-center">
                 <Eye className="mr-1 h-4 w-4" />
