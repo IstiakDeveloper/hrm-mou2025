@@ -54,6 +54,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { PageSurface } from '@/components/page-surface';
 
 interface Branch {
   id: number;
@@ -199,7 +200,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
     <Layout>
       <Head title="Attendance Devices" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Attendance Devices</h1>
@@ -478,7 +479,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
             </Pagination>
           </div>
         )}
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

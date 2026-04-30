@@ -1,4 +1,4 @@
-import React, { useMemo, useState, ChangeEvent, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import {
-    EMPLOYEE_CREATE_DRAFT_KEY,
+    EMPLOYEE_V2_CREATE_DRAFT_KEY,
     asInputPatch,
     clearEmployeeDraft,
     hasPatchKeys,
@@ -18,55 +18,14 @@ import {
     mergeSerializableIntoForm,
     saveEmployeeDraft,
     toSerializableEmployeeForm,
-} from '@/lib/employee-form-persist';
+} from '@/lib/employee-v2-form-persist';
 import {
     ArrowLeft,
-    User,
-    Briefcase,
-    Building,
-    Phone,
-    Mail,
-    Calendar,
-    MapPin,
+    Plus,
+    Trash2,
     Upload,
-    Image as ImageIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
-
-const calculateYmd = (startDate: string | null | undefined, endDate: string | null | undefined): string | null => {
-    if (!startDate || !endDate) return null;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
-
-    let s = start;
-    let e = end;
-    if (s.getTime() > e.getTime()) {
-        const tmp = s;
-        s = e;
-        e = tmp;
-    }
-
-    let years = e.getFullYear() - s.getFullYear();
-    let months = e.getMonth() - s.getMonth();
-    let days = e.getDate() - s.getDate();
-
-    if (days < 0) {
-        const prevMonthLastDay = new Date(e.getFullYear(), e.getMonth(), 0);
-        days += prevMonthLastDay.getDate();
-        months -= 1;
-    }
-    if (months < 0) {
-        months += 12;
-        years -= 1;
-    }
-
-    years = Math.max(0, years);
-    months = Math.max(0, months);
-    days = Math.max(0, days);
-
-    return `${years}Y - ${months}M - ${days}D`;
-};
 
 interface Department {
     id: number;
@@ -90,99 +49,170 @@ interface Employee {
     employee_id?: string;
 }
 
+type Address = {
+    type: 'present' | 'permanent';
+    division: string;
+    district: string;
+    upazila: string;
+    union: string;
+    village: string;
+    address_details: string;
+};
+
+type Education = {
+    degree: string;
+    institute: string;
+    group_name: string;
+    board: string;
+    subject: string;
+    result_type: '' | 'gpa' | 'cgpa' | 'other';
+    result_value: string;
+};
+
+type Nominee = { name: string; relation: string; date_of_birth: string; share: string; contact: string };
+type Guarantor = { name: string; age: string; occupation: string; relation: string; phone: string; email: string };
+type Cheque = { bank_name: string; branch_name: string; cheque_no: string; notes?: string };
+type Asset = { serial: string; asset_no: string; name: string; details: string; provided_quality: string; asset_price: string };
+type Experience = { organization: string; from_date: string; to_date: string; designation: string; department: string; address: string };
+type Training = { training_title: string; institute: string; address: string; duration: string; remarks: string };
+type LocationUnion = { name: string; type: string; villages: string[] };
+
 type EmployeeCreateFormData = {
+    current_branch_id: string;
+    employee_type_id: string;
     pin: string;
     name_en: string;
     name_bn: string;
-    email: string;
-    email_id: string;
-    phone: string;
     gender: string;
-    blood_group: string;
+    religion: string;
+    marital_status: string;
+    spouse_name: string;
+    spouse_mobile: string;
+    birth_date_certificate: string;
+    birth_date_original: string;
     date_of_birth: string;
+    blood_group: string;
     joining_date: string;
     confirmation_date: string;
-    address: string;
-    village: string;
-    post_office: string;
-    union_pouroshova: string;
-    ward_no: string;
-    upazila: string;
-    district: string;
-    educational_qualification: string;
-    photo: File | null;
-    nid: string;
-    nid_number: string;
-    smart_card_number: string;
-    birth_registration_number: string;
-    emergency_contact: string;
     fathers_name: string;
     fathers_mobile: string;
     mothers_name: string;
     mothers_mobile: string;
-    marital_status: string;
-    spouse_name: string;
-    spouse_mobile: string;
     department_id: string;
     joining_designation_id: string;
     last_designation_id: string;
-    current_branch_id: string;
-    last_branch_id: string;
-    reporting_to: string;
-    status: string;
-    is_dropout: boolean;
-    dropout_date: string;
-    dropout_reason: string;
-    final_payment_date: string;
-    last_promotion_date: string;
+    program_id: string;
+    project_id: string;
+    nid: string;
+    nid_number: string;
+    smart_card_number: string;
+    birth_registration_number: string;
+    tin_certificate_no: string;
+    driving_license_no: string;
+    passport_no: string;
+    is_project_employee: boolean;
+    is_custodian: boolean;
+    identification_mark: string;
+    email: string;
+    email_id: string;
+    phone: string;
+    mobile_personal: string;
+    mobile_official: string;
+    photo: File | null;
+    signature: File | null;
+
+    addresses: Address[];
+    educations: Education[];
+    bank: {
+        bank_name: string;
+        branch_name: string;
+        account_no: string;
+        account_type: '' | 'current' | 'savings';
+        bank_address: string;
+        remark: string;
+    };
+    nominees: Nominee[];
+    guarantors: Guarantor[];
+    guarantor_cheques: Cheque[];
+    collateral: {
+        has_certificate: boolean;
+        certificate_levels: string[];
+        security_amount: string;
+        collateral_interest: string;
+        collateral_date: string;
+        notes: string;
+    };
+    collateral_receive_cheques: Cheque[];
+    assets: Asset[];
+    experiences: Experience[];
+    trainings: Training[];
 };
 
 function getCreateFormDefaults(): EmployeeCreateFormData {
     return {
+        current_branch_id: '',
+        employee_type_id: '',
         pin: '',
         name_en: '',
         name_bn: '',
+        gender: '',
+        religion: '',
+        marital_status: '',
+        spouse_name: '',
+        spouse_mobile: '',
+        birth_date_certificate: '',
+        birth_date_original: '',
+        date_of_birth: '',
+        blood_group: '',
         email: '',
         email_id: '',
         phone: '',
-        gender: '',
-        blood_group: '',
-        date_of_birth: '',
         joining_date: format(new Date(), 'yyyy-MM-dd'),
         confirmation_date: '',
-        address: '',
-        village: '',
-        post_office: '',
-        union_pouroshova: '',
-        ward_no: '',
-        upazila: '',
-        district: '',
-        educational_qualification: '',
         photo: null,
+        signature: null,
         nid: '',
         nid_number: '',
         smart_card_number: '',
         birth_registration_number: '',
-        emergency_contact: '',
+        tin_certificate_no: '',
+        driving_license_no: '',
+        passport_no: '',
+        is_project_employee: false,
+        is_custodian: false,
+        identification_mark: '',
         fathers_name: '',
         fathers_mobile: '',
         mothers_name: '',
         mothers_mobile: '',
-        marital_status: '',
-        spouse_name: '',
-        spouse_mobile: '',
         department_id: '',
         joining_designation_id: '',
         last_designation_id: '',
-        current_branch_id: '',
-        last_branch_id: '',
-        reporting_to: '',
-        status: 'active',
-        is_dropout: false,
-        dropout_date: '',
-        dropout_reason: '',
-        final_payment_date: '',
-        last_promotion_date: '',
+        program_id: '',
+        project_id: '',
+        mobile_personal: '',
+        mobile_official: '',
+        addresses: [
+            { type: 'present', division: '', district: '', upazila: '', union: '', village: '', address_details: '' },
+            { type: 'permanent', division: '', district: '', upazila: '', union: '', village: '', address_details: '' },
+        ],
+        educations: [],
+        bank: { bank_name: '', branch_name: '', account_no: '', account_type: '', bank_address: '', remark: '' },
+        nominees: [],
+        guarantors: [],
+        guarantor_cheques: [],
+        collateral: {
+            has_certificate: false,
+            certificate_levels: [],
+            security_amount: '',
+            collateral_interest: '',
+            collateral_date: '',
+            notes: '',
+        },
+        collateral_receive_cheques: [],
+        assets: [],
+        experiences: [],
+        trainings: [],
     };
 }
 
@@ -194,7 +224,7 @@ function buildInitialCreateForm(oldInput: unknown): EmployeeCreateFormData {
         return mergeSerializableIntoForm(defaults, fromServer) as EmployeeCreateFormData;
     }
 
-    const fromDraft = loadEmployeeDraft(EMPLOYEE_CREATE_DRAFT_KEY);
+    const fromDraft = loadEmployeeDraft(EMPLOYEE_V2_CREATE_DRAFT_KEY);
     if (fromDraft) {
         return mergeSerializableIntoForm(defaults, fromDraft as Record<string, unknown>) as EmployeeCreateFormData;
     }
@@ -208,6 +238,14 @@ interface EmployeeCreateProps {
     branches: Branch[];
     managers: Employee[];
     statuses: string[];
+    employeeTypes: { id: number; name: string; probation_months: number }[];
+    programs: { id: number; name: string; type: 'core' | 'project' }[];
+    projects: { id: number; name: string }[];
+    banks: string[];
+    relations: string[];
+    educationBoards: string[];
+    locations: any;
+    defaultBankName: string;
     oldInput?: Record<string, unknown>;
     errors?: {
         [key: string]: string;
@@ -218,8 +256,14 @@ export default function EmployeeCreate({
     departments,
     designations,
     branches,
-    managers,
-    statuses,
+    employeeTypes,
+    programs,
+    projects,
+    banks,
+    relations,
+    educationBoards,
+    locations,
+    defaultBankName,
     oldInput,
     errors: errorsProp = {},
 }: EmployeeCreateProps) {
@@ -229,6 +273,11 @@ export default function EmployeeCreate({
 
     const errors = { ...errorsProp, ...formErrors } as Record<string, string | undefined>;
     const submitError = errors['submit'];
+
+    const csrfToken = useMemo(() => {
+        const el = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
+        return el?.content ?? '';
+    }, []);
 
     const lastServerOldJson = useRef<string | null>(null);
     useEffect(() => {
@@ -248,46 +297,193 @@ export default function EmployeeCreate({
 
     useEffect(() => {
         const handle = window.setTimeout(() => {
-            saveEmployeeDraft(
-                EMPLOYEE_CREATE_DRAFT_KEY,
-                toSerializableEmployeeForm(data as unknown as Record<string, unknown>)
-            );
+            saveEmployeeDraft(EMPLOYEE_V2_CREATE_DRAFT_KEY, toSerializableEmployeeForm(data as any));
         }, 450);
         return () => window.clearTimeout(handle);
     }, [data]);
 
+    const [activeTab, setActiveTab] = useState('general');
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState('personal');
+    const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
 
-    const isMarried = (data.marital_status || '').toLowerCase() === 'married';
-    const probationYmd = useMemo(
-        () => calculateYmd(data.joining_date, data.confirmation_date),
-        [data.joining_date, data.confirmation_date]
+    useEffect(() => {
+        // Default bank
+        if (!data.bank.bank_name) {
+            setData('bank', { ...data.bank, bank_name: defaultBankName });
+        }
+        // PIN suggestion
+        fetch(route('employees.pin-suggestion'))
+            .then((r) => r.json())
+            .then((j) => {
+                if (!data.pin) setData('pin', j?.next_normal_pin ?? '');
+            })
+            .catch(() => {});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const branchItems: ComboSelectItem<string>[] = branches.map((b) => ({ value: String(b.id), label: b.name }));
+    const deptItems: ComboSelectItem<string>[] = departments.map((d) => ({ value: String(d.id), label: d.name }));
+    const desigItems: ComboSelectItem<string>[] = designations.map((d) => ({ value: String(d.id), label: d.name }));
+    const employeeTypeItems: ComboSelectItem<string>[] = employeeTypes.map((t) => ({ value: String(t.id), label: t.name, keywords: `probation ${t.probation_months}` }));
+    const programItems: ComboSelectItem<string>[] = programs.map((p) => ({ value: String(p.id), label: p.name, keywords: p.type }));
+    const projectItems: ComboSelectItem<string>[] = projects.map((p) => ({ value: String(p.id), label: p.name }));
+
+    const divisionItems: ComboSelectItem<string>[] = (locations?.divisions ?? []).map((d: string) => ({ value: d, label: d }));
+    const districtItems: ComboSelectItem<string>[] = ((locations?.districts?.[data.addresses[0]?.division] ?? []) as string[]).map((d) => ({ value: d, label: d }));
+    const upazilaItems: ComboSelectItem<string>[] = ((locations?.upazilas?.[data.addresses[0]?.district] ?? []) as string[]).map((u) => ({ value: u, label: u }));
+
+    const [extraVillages, setExtraVillages] = useState<Record<string, string[]>>({});
+
+    const presentUnions = useMemo(() => {
+        return ((locations?.unions?.[data.addresses[0]?.upazila] ?? []) as LocationUnion[]) || [];
+    }, [locations, data.addresses]);
+    const presentUnionItems: ComboSelectItem<string>[] = useMemo(
+        () => presentUnions.map((u) => ({ value: u.name, label: u.name, keywords: u.type })),
+        [presentUnions]
     );
+    const presentSelectedUnion = useMemo(() => {
+        const name = data.addresses[0]?.union || '';
+        return presentUnions.find((u) => u.name === name) ?? null;
+    }, [data.addresses, presentUnions]);
+    const presentVillageItems: ComboSelectItem<string>[] = useMemo(() => {
+        const base = presentSelectedUnion?.villages ?? [];
+        const key = `p:${data.addresses[0]?.upazila || ''}:${data.addresses[0]?.union || ''}`;
+        const extra = extraVillages[key] ?? [];
+        const merged = Array.from(new Set([...base, ...extra]));
+        return merged.map((v) => ({ value: v, label: v }));
+    }, [presentSelectedUnion, extraVillages, data.addresses]);
 
-    const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            setData('photo', file);
+    const permDistrictItems: ComboSelectItem<string>[] = ((locations?.districts?.[data.addresses[1]?.division] ?? []) as string[]).map((d) => ({ value: d, label: d }));
+    const permUpazilaItems: ComboSelectItem<string>[] = ((locations?.upazilas?.[data.addresses[1]?.district] ?? []) as string[]).map((u) => ({ value: u, label: u }));
+    const permUnions = useMemo(() => {
+        return ((locations?.unions?.[data.addresses[1]?.upazila] ?? []) as LocationUnion[]) || [];
+    }, [locations, data.addresses]);
+    const permUnionItems: ComboSelectItem<string>[] = useMemo(
+        () => permUnions.map((u) => ({ value: u.name, label: u.name, keywords: u.type })),
+        [permUnions]
+    );
+    const permSelectedUnion = useMemo(() => {
+        const name = data.addresses[1]?.union || '';
+        return permUnions.find((u) => u.name === name) ?? null;
+    }, [data.addresses, permUnions]);
+    const permVillageItems: ComboSelectItem<string>[] = useMemo(() => {
+        const base = permSelectedUnion?.villages ?? [];
+        const key = `r:${data.addresses[1]?.upazila || ''}:${data.addresses[1]?.union || ''}`;
+        const extra = extraVillages[key] ?? [];
+        const merged = Array.from(new Set([...base, ...extra]));
+        return merged.map((v) => ({ value: v, label: v }));
+    }, [permSelectedUnion, extraVillages, data.addresses]);
 
-            // Create a file reader and properly handle the load event
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                if (event.target && event.target.result) {
-                    setPhotoPreview(event.target.result as string);
-                }
-            };
-            reader.readAsDataURL(file);
+    const buildAddressDetails = (a: Address) => {
+        const parts = [a.village, a.union, a.upazila, a.district, a.division].filter(Boolean);
+        return parts.join(', ');
+    };
+
+    const setPresentAddress = (patch: Partial<Address>) => {
+        const next = [...data.addresses];
+        next[0] = { ...next[0], ...patch };
+        next[0] = { ...next[0], address_details: buildAddressDetails(next[0]) };
+        setData('addresses', next);
+    };
+
+    const setPermanentAddress = (patch: Partial<Address>) => {
+        const next = [...data.addresses];
+        next[1] = { ...next[1], ...patch };
+        next[1] = { ...next[1], address_details: buildAddressDetails(next[1]) };
+        setData('addresses', next);
+    };
+
+    const isSpouseRequired = ['Married', 'Widowed', 'Separated'].includes(data.marital_status);
+
+    const selectedEmployeeType = useMemo(() => {
+        const id = Number(data.employee_type_id || 0);
+        return employeeTypes.find((t) => t.id === id) ?? null;
+    }, [data.employee_type_id, employeeTypes]);
+
+    const derivedProbationMonths = selectedEmployeeType?.probation_months ?? 0;
+
+    const derivedAge = useMemo(() => {
+        const raw = data.birth_date_original || data.birth_date_certificate;
+        if (!raw) return '';
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) return '';
+        const today = new Date();
+        let years = today.getFullYear() - d.getFullYear();
+        const m = today.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) years -= 1;
+        return years >= 0 ? String(years) : '';
+    }, [data.birth_date_certificate, data.birth_date_original]);
+
+    const [sameAsPresent, setSameAsPresent] = useState(false);
+
+    const addVillage = async () => {
+        const division = data.addresses[0]?.division || '';
+        const district = data.addresses[0]?.district || '';
+        const upazila = data.addresses[0]?.upazila || '';
+        const union = data.addresses[0]?.union || '';
+        if (!division || !district || !upazila || !union) return;
+        const name = window.prompt('New village name');
+        if (!name) return;
+        try {
+            const res = await fetch(route('employees.villages.store'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                },
+                body: JSON.stringify({ division, district, upazila, union, name }),
+            });
+            if (!res.ok) return;
+            const j = await res.json();
+            const createdName = (j?.village?.name ?? j?.name ?? name) as string;
+            const key = `p:${upazila}:${union}`;
+            setExtraVillages((prev) => {
+                const arr = prev[key] ?? [];
+                return { ...prev, [key]: Array.from(new Set([...arr, createdName])) };
+            });
+            setPresentAddress({ village: createdName });
+        } catch {
+            // ignore
         }
     };
 
-    const filteredDesignations = designations;
+    const addVillagePermanent = async () => {
+        const division = data.addresses[1]?.division || '';
+        const district = data.addresses[1]?.district || '';
+        const upazila = data.addresses[1]?.upazila || '';
+        const union = data.addresses[1]?.union || '';
+        if (!division || !district || !upazila || !union) return;
+        const name = window.prompt('New village name');
+        if (!name) return;
+        try {
+            const res = await fetch(route('employees.villages.store'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                },
+                body: JSON.stringify({ division, district, upazila, union, name }),
+            });
+            if (!res.ok) return;
+            const j = await res.json();
+            const createdName = (j?.village?.name ?? j?.name ?? name) as string;
+            const key = `r:${upazila}:${union}`;
+            setExtraVillages((prev) => {
+                const arr = prev[key] ?? [];
+                return { ...prev, [key]: Array.from(new Set([...arr, createdName])) };
+            });
+            setPermanentAddress({ village: createdName });
+        } catch {
+            // ignore
+        }
+    };
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
         post(route('employees.store'), {
             preserveScroll: true,
-            onSuccess: () => clearEmployeeDraft(EMPLOYEE_CREATE_DRAFT_KEY),
+            forceFormData: true,
+            onSuccess: () => clearEmployeeDraft(EMPLOYEE_V2_CREATE_DRAFT_KEY),
         });
     };
 
@@ -322,845 +518,981 @@ export default function EmployeeCreate({
 
                 <form onSubmit={submit}>
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="grid w-full grid-cols-5 mb-8">
-                            <TabsTrigger value="personal">Personal</TabsTrigger>
-                            <TabsTrigger value="family">Family</TabsTrigger>
-                            <TabsTrigger value="employment">Employment</TabsTrigger>
-                            <TabsTrigger value="service">Service</TabsTrigger>
-                            <TabsTrigger value="contact">Contact</TabsTrigger>
+                        <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10 mb-6">
+                            <TabsTrigger value="general">General Setup</TabsTrigger>
+                            <TabsTrigger value="education">Educational</TabsTrigger>
+                            <TabsTrigger value="salary">Salary</TabsTrigger>
+                            <TabsTrigger value="bank">Bank</TabsTrigger>
+                            <TabsTrigger value="nominee">Nominee</TabsTrigger>
+                            <TabsTrigger value="guarantor">Guarantor</TabsTrigger>
+                            <TabsTrigger value="collateral">Collateral</TabsTrigger>
+                            <TabsTrigger value="asset">Org. Asset</TabsTrigger>
+                            <TabsTrigger value="experience">Experience</TabsTrigger>
+                            <TabsTrigger value="training">Training</TabsTrigger>
                         </TabsList>
 
-                        {/* Personal Information Tab */}
-                        <TabsContent value="personal">
+                        <TabsContent value="general">
                             <Card className="shadow-sm">
                                 <CardHeader className="border-b bg-gray-50">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="rounded-full bg-blue-100 p-1.5">
-                                            <User className="h-5 w-5 text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <CardTitle>Personal Information</CardTitle>
-                                            <CardDescription>Employee's basic personal details</CardDescription>
-                                        </div>
-                                    </div>
+                                    <CardTitle className="text-base">General Setup</CardTitle>
+                                    <CardDescription className="text-xs">Basic identity, org, contact, address, and uploads</CardDescription>
                                 </CardHeader>
-                                <CardContent className="space-y-6 pt-6">
-                                    {/* Photo Upload */}
-                                    <div className="flex flex-col items-center sm:flex-row sm:items-start gap-6">
-                                        <div className="w-40 h-40 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden">
-                                            {photoPreview ? (
+                                <CardContent className="pt-6 text-sm">
+                                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                                        {/* Left column: Serial org + basic info (like screenshot) */}
+                                        <div className="space-y-2">
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Branch Name *</Label>
+                                                <div className="space-y-1">
+                                                    <ComboSelect value={data.current_branch_id || null} onChange={(v) => setData('current_branch_id', v ?? '')} items={branchItems} placeholder="Select branch" />
+                                                    {errors.current_branch_id && <p className="text-xs text-red-500">{errors.current_branch_id}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Employment Type</Label>
+                                                <ComboSelect value={data.employee_type_id || null} onChange={(v) => setData('employee_type_id', v ?? '')} items={employeeTypeItems} placeholder="Select employment type" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Employee Pin *</Label>
+                                                <div className="space-y-1">
+                                                    <Input value={data.pin} onChange={(e) => setData('pin', e.target.value)} placeholder="01107" />
+                                                    {errors.pin && <p className="text-xs text-red-500">{errors.pin}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Employee Name *</Label>
+                                                <div className="space-y-1">
+                                                    <Input value={data.name_en} onChange={(e) => setData('name_en', e.target.value)} placeholder="Employee Name" />
+                                                    {errors.name_en && <p className="text-xs text-red-500">{errors.name_en}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Bengali Name</Label>
+                                                <Input value={data.name_bn} onChange={(e) => setData('name_bn', e.target.value)} placeholder="বাংলা নাম" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Gender</Label>
+                                                <ComboSelect value={data.gender || null} onChange={(v) => setData('gender', v ?? '')} items={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }, { value: 'other', label: 'Other' }]} placeholder="Select gender" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Religion</Label>
+                                                <Input value={data.religion} onChange={(e) => setData('religion', e.target.value)} placeholder="Select Religion" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Marital Status</Label>
+                                                <ComboSelect
+                                                    value={data.marital_status || null}
+                                                    onChange={(v) => setData('marital_status', v ?? '')}
+                                                    items={[
+                                                        { value: 'Single', label: 'Single' },
+                                                        { value: 'Never Married', label: 'Never Married' },
+                                                        { value: 'Unmarried', label: 'Unmarried' },
+                                                        { value: 'Separated', label: 'Separated' },
+                                                        { value: 'Divorced', label: 'Divorced' },
+                                                        { value: 'Widowed', label: 'Widowed' },
+                                                        { value: 'Married', label: 'Married' },
+                                                    ]}
+                                                    placeholder="Select Status"
+                                                />
+                                            </div>
+
+                                            {isSpouseRequired && (
                                                 <>
-                                                    <img
-                                                        src={photoPreview}
-                                                        alt="Employee preview"
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <div className="text-center p-4 space-y-2">
-                                                        <ImageIcon className="mx-auto h-8 w-8 text-gray-400" />
-                                                        <div className="text-xs text-gray-500">No photo uploaded</div>
+                                                    <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                        <Label className="pt-2 text-xs">Spouse Name *</Label>
+                                                        <Input value={data.spouse_name} onChange={(e) => setData('spouse_name', e.target.value)} />
                                                     </div>
-                                                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 transition-all flex items-center justify-center">
-                                                        <label htmlFor="photo-upload" className="cursor-pointer w-full h-full flex items-center justify-center">
-                                                            <Upload className="h-6 w-6 text-gray-600 opacity-0 hover:opacity-100" />
-                                                        </label>
+                                                    <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                        <Label className="pt-2 text-xs">Spouse Contact *</Label>
+                                                        <Input value={data.spouse_mobile} onChange={(e) => setData('spouse_mobile', e.target.value)} />
                                                     </div>
                                                 </>
                                             )}
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Birth Date (Certificate)</Label>
+                                                <Input type="date" value={data.birth_date_certificate} onChange={(e) => setData('birth_date_certificate', e.target.value)} />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Birth Date (Original)</Label>
+                                                <Input type="date" value={data.birth_date_original} onChange={(e) => setData('birth_date_original', e.target.value)} />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Age</Label>
+                                                <Input value={derivedAge} readOnly className="bg-gray-100" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Blood Group</Label>
+                                                <ComboSelect value={data.blood_group || null} onChange={(v) => setData('blood_group', v ?? '')} items={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((b) => ({ value: b, label: b }))} placeholder="Select blood group" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Joining Date *</Label>
+                                                <div className="space-y-1">
+                                                    <Input type="date" value={data.joining_date} onChange={(e) => setData('joining_date', e.target.value)} />
+                                                    {errors.joining_date && <p className="text-xs text-red-500">{errors.joining_date}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Probation Period</Label>
+                                                <Input value={derivedProbationMonths ? `${derivedProbationMonths} months` : ''} readOnly className="bg-gray-100" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Confirmation Date</Label>
+                                                <Input type="date" value={data.confirmation_date} onChange={(e) => setData('confirmation_date', e.target.value)} />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Department *</Label>
+                                                <div className="space-y-1">
+                                                    <ComboSelect value={data.department_id || null} onChange={(v) => setData('department_id', v ?? '')} items={deptItems} placeholder="Select department" />
+                                                    {errors.department_id && <p className="text-xs text-red-500">{errors.department_id}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Designation *</Label>
+                                                <div className="space-y-1">
+                                                    <ComboSelect value={data.joining_designation_id || null} onChange={(v) => setData('joining_designation_id', v ?? '')} items={desigItems} placeholder="Select designation" />
+                                                    {errors.joining_designation_id && <p className="text-xs text-red-500">{errors.joining_designation_id}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Program</Label>
+                                                <ComboSelect value={data.program_id || null} onChange={(v) => setData('program_id', v ?? '')} items={programItems} placeholder="Core" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Project</Label>
+                                                <ComboSelect value={data.project_id || null} onChange={(v) => setData('project_id', v ?? '')} items={projectItems} placeholder="Project" />
+                                            </div>
                                         </div>
-                                        <div className="flex-1 space-y-4">
-                                            <div>
-                                                <Label htmlFor="photo-upload">
-                                                    Employee Photo <span className="text-gray-500 text-sm">(Optional)</span>
-                                                </Label>
-                                                <Input
-                                                    id="photo-upload"
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={handlePhotoChange}
-                                                    className="mt-1"
+
+                                        {/* Middle column: IDs + contact + location + address */}
+                                        <div className="space-y-2">
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">National Id</Label>
+                                                <div className="space-y-1">
+                                                    <Input value={data.nid} onChange={(e) => setData('nid', e.target.value)} placeholder="National ID" />
+                                                    {errors.nid && <p className="text-xs text-red-500">{errors.nid}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Smart Card</Label>
+                                                <Input value={data.smart_card_number} onChange={(e) => setData('smart_card_number', e.target.value)} placeholder="Smart Card" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Birth Registration No</Label>
+                                                <Input value={data.birth_registration_number} onChange={(e) => setData('birth_registration_number', e.target.value)} placeholder="Birth Registration No" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">TIN No</Label>
+                                                <Input value={data.tin_certificate_no} onChange={(e) => setData('tin_certificate_no', e.target.value)} placeholder="TIN Certificate No" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Driving License</Label>
+                                                <Input value={data.driving_license_no} onChange={(e) => setData('driving_license_no', e.target.value)} placeholder="Driving License" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Passport No</Label>
+                                                <Input value={data.passport_no} onChange={(e) => setData('passport_no', e.target.value)} placeholder="Passport No" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-center gap-2">
+                                                <Label className="text-xs">Is Project Employee</Label>
+                                                <input type="checkbox" className="h-4 w-4" checked={data.is_project_employee} onChange={(e) => setData('is_project_employee', e.target.checked)} />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-center gap-2">
+                                                <Label className="text-xs">Is Custodian</Label>
+                                                <input type="checkbox" className="h-4 w-4" checked={data.is_custodian} onChange={(e) => setData('is_custodian', e.target.checked)} />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Identification Mark</Label>
+                                                <Input value={data.identification_mark} onChange={(e) => setData('identification_mark', e.target.value)} placeholder="Identification Mark" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Email Address</Label>
+                                                <Input type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} placeholder="Email Address" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Mobile No(Personal) *</Label>
+                                                <div className="space-y-1">
+                                                    <Input value={data.mobile_personal} onChange={(e) => setData('mobile_personal', e.target.value)} placeholder="Mobile No(Personal)" />
+                                                    {errors.mobile_personal && <p className="text-xs text-red-500">{errors.mobile_personal}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Mobile No(Official)</Label>
+                                                <Input value={data.mobile_official} onChange={(e) => setData('mobile_official', e.target.value)} placeholder="Mobile No(Official)" />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Division</Label>
+                                                <ComboSelect
+                                                    value={data.addresses[0]?.division || null}
+                                                    onChange={(v) => {
+                                                        setPresentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' });
+                                                    }}
+                                                    items={divisionItems}
+                                                    placeholder="Division"
                                                 />
-                                                {errors.photo && <p className="mt-1 text-sm text-red-500">{errors.photo}</p>}
-                                                <p className="mt-1 text-xs text-gray-500">
-                                                    Upload a professional photo. Max size 2MB. Formats: JPEG, PNG.
-                                                </p>
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="name_en">
-                                                        Name (English) <span className="text-red-500">*</span>
-                                                    </Label>
-                                                    <Input
-                                                        id="name_en"
-                                                        value={data.name_en}
-                                                        onChange={e => setData('name_en', e.target.value)}
-                                                        placeholder="Enter full name in English"
-                                                        required
-                                                    />
-                                                    {errors.name_en && <p className="mt-1 text-sm text-red-500">{errors.name_en}</p>}
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">District</Label>
+                                                <ComboSelect
+                                                    value={data.addresses[0]?.district || null}
+                                                    onChange={(v) => {
+                                                        setPresentAddress({ district: v ?? '', upazila: '', union: '', village: '' });
+                                                    }}
+                                                    items={districtItems}
+                                                    placeholder="District"
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Thana/Upazilla</Label>
+                                                <ComboSelect
+                                                    value={data.addresses[0]?.upazila || null}
+                                                    onChange={(v) => {
+                                                        setPresentAddress({ upazila: v ?? '', union: '', village: '' });
+                                                    }}
+                                                    items={upazilaItems}
+                                                    placeholder="Upazila"
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Union</Label>
+                                                <ComboSelect
+                                                    value={data.addresses[0]?.union || null}
+                                                    onChange={(v) => {
+                                                        setPresentAddress({ union: v ?? '', village: '' });
+                                                    }}
+                                                    items={presentUnionItems}
+                                                    placeholder="Union"
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Village</Label>
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1">
+                                                        <ComboSelect
+                                                            value={data.addresses[0]?.village || null}
+                                                            onChange={(v) => {
+                                                                setPresentAddress({ village: v ?? '' });
+                                                            }}
+                                                            items={presentVillageItems}
+                                                            placeholder="Select Village"
+                                                        />
+                                                    </div>
+                                                    <Button type="button" variant="outline" size="icon" onClick={addVillage} title="Add village">
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="name_bn">
-                                                        Name (Bangla)
-                                                    </Label>
-                                                    <Input
-                                                        id="name_bn"
-                                                        value={data.name_bn}
-                                                        onChange={e => setData('name_bn', e.target.value)}
-                                                        placeholder="বাংলায় পূর্ণ নাম লিখুন"
-                                                    />
-                                                    {errors.name_bn && <p className="mt-1 text-sm text-red-500">{errors.name_bn}</p>}
+                                            </div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-center gap-2">
+                                                <Label className="text-xs">Same as Present Address</Label>
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4"
+                                                    checked={sameAsPresent}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setSameAsPresent(checked);
+                                                        if (!checked) return;
+                                                        const next = [...data.addresses];
+                                                        next[1] = { ...next[1], ...next[0], type: 'permanent' };
+                                                        next[1] = { ...next[1], address_details: buildAddressDetails(next[1]) };
+                                                        setData('addresses', next);
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div className="pt-2 text-xs font-medium text-muted-foreground">Permanent Address (Selected Item)</div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Division</Label>
+                                                <ComboSelect
+                                                    value={data.addresses[1]?.division || null}
+                                                    onChange={(v) => setPermanentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' })}
+                                                    items={divisionItems}
+                                                    placeholder="Division"
+                                                    disabled={sameAsPresent}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">District</Label>
+                                                <ComboSelect
+                                                    value={data.addresses[1]?.district || null}
+                                                    onChange={(v) => setPermanentAddress({ district: v ?? '', upazila: '', union: '', village: '' })}
+                                                    items={permDistrictItems}
+                                                    placeholder="District"
+                                                    disabled={sameAsPresent}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Thana/Upazilla</Label>
+                                                <ComboSelect
+                                                    value={data.addresses[1]?.upazila || null}
+                                                    onChange={(v) => setPermanentAddress({ upazila: v ?? '', union: '', village: '' })}
+                                                    items={permUpazilaItems}
+                                                    placeholder="Upazila"
+                                                    disabled={sameAsPresent}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Union</Label>
+                                                <ComboSelect
+                                                    value={data.addresses[1]?.union || null}
+                                                    onChange={(v) => setPermanentAddress({ union: v ?? '', village: '' })}
+                                                    items={permUnionItems}
+                                                    placeholder="Union"
+                                                    disabled={sameAsPresent}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Village</Label>
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1">
+                                                        <ComboSelect
+                                                            value={data.addresses[1]?.village || null}
+                                                            onChange={(v) => setPermanentAddress({ village: v ?? '' })}
+                                                            items={permVillageItems}
+                                                            placeholder="Select Village"
+                                                            disabled={sameAsPresent}
+                                                        />
+                                                    </div>
+                                                    <Button type="button" variant="outline" size="icon" onClick={addVillagePermanent} title="Add village" disabled={sameAsPresent}>
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="pin">
-                                                Employee Pin <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Input
-                                                id="pin"
-                                                value={data.pin}
-                                                onChange={e => setData('pin', e.target.value)}
-                                                placeholder="e.g., 1"
-                                                required
-                                            />
-                                            {errors.pin && <p className="mt-1 text-sm text-red-500">{errors.pin}</p>}
-                                        </div>
+                                        {/* Right column: uploads */}
+                                        <div className="space-y-4">
+                                            <div className="rounded-md border p-3">
+                                                <div className="mb-2 text-xs font-medium">Picture</div>
+                                                {photoPreview ? (
+                                                    <img src={photoPreview} className="h-36 w-36 rounded object-cover" alt="Preview" />
+                                                ) : (
+                                                    <div className="flex h-36 w-36 items-center justify-center rounded bg-gray-100 text-xs text-muted-foreground">
+                                                        No photo
+                                                    </div>
+                                                )}
+                                                <div className="mt-3 space-y-2">
+                                                    <Label className="text-xs">Photo Upload</Label>
+                                                    <Input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={(e) => {
+                                                            const file = e.target.files?.[0] ?? null;
+                                                            setData('photo', file);
+                                                            if (!file) return setPhotoPreview(null);
+                                                            const reader = new FileReader();
+                                                            reader.onload = (ev) => setPhotoPreview((ev.target?.result as string) ?? null);
+                                                            reader.readAsDataURL(file);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
 
-                                        <div className="space-y-2">
-                                            <Label htmlFor="nid">
-                                                National ID <span className="text-gray-500 text-sm">(Optional)</span>
-                                            </Label>
-                                            <Input
-                                                id="nid"
-                                                value={data.nid}
-                                                onChange={e => setData('nid', e.target.value)}
-                                                placeholder="Enter national ID number"
-                                            />
-                                            {errors.nid && <p className="mt-1 text-sm text-red-500">{errors.nid}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="nid_number">NID Number</Label>
-                                            <Input
-                                                id="nid_number"
-                                                value={data.nid_number}
-                                                onChange={e => setData('nid_number', e.target.value)}
-                                                placeholder="NID number (if different)"
-                                            />
-                                            {errors.nid_number && <p className="mt-1 text-sm text-red-500">{errors.nid_number}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="smart_card_number">Smart Card Number</Label>
-                                            <Input
-                                                id="smart_card_number"
-                                                value={data.smart_card_number}
-                                                onChange={e => setData('smart_card_number', e.target.value)}
-                                                placeholder="Smart card number"
-                                            />
-                                            {errors.smart_card_number && <p className="mt-1 text-sm text-red-500">{errors.smart_card_number}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="birth_registration_number">Birth Registration Number</Label>
-                                            <Input
-                                                id="birth_registration_number"
-                                                value={data.birth_registration_number}
-                                                onChange={e => setData('birth_registration_number', e.target.value)}
-                                                placeholder="Birth registration number"
-                                            />
-                                            {errors.birth_registration_number && <p className="mt-1 text-sm text-red-500">{errors.birth_registration_number}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="gender">Gender</Label>
-                                            <Select
-                                                value={data.gender}
-                                                onValueChange={(value) => setData('gender', value)}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select gender" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="male">Male</SelectItem>
-                                                    <SelectItem value="female">Female</SelectItem>
-                                                    <SelectItem value="other">Other</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.gender && <p className="mt-1 text-sm text-red-500">{errors.gender}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="blood_group">Blood Group</Label>
-                                            <Select
-                                                value={data.blood_group}
-                                                onValueChange={(value) => setData('blood_group', value)}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select blood group" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="A+">A+</SelectItem>
-                                                    <SelectItem value="A-">A-</SelectItem>
-                                                    <SelectItem value="B+">B+</SelectItem>
-                                                    <SelectItem value="B-">B-</SelectItem>
-                                                    <SelectItem value="AB+">AB+</SelectItem>
-                                                    <SelectItem value="AB-">AB-</SelectItem>
-                                                    <SelectItem value="O+">O+</SelectItem>
-                                                    <SelectItem value="O-">O-</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.blood_group && <p className="mt-1 text-sm text-red-500">{errors.blood_group}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="date_of_birth">Date of Birth</Label>
-                                            <Input
-                                                id="date_of_birth"
-                                                type="date"
-                                                value={data.date_of_birth}
-                                                onChange={(e) => setData('date_of_birth', e.target.value)}
-                                            />
-                                            {errors.date_of_birth && <p className="mt-1 text-sm text-red-500">{errors.date_of_birth}</p>}
+                                            <div className="rounded-md border p-3">
+                                                <div className="mb-2 text-xs font-medium">Signature</div>
+                                                {signaturePreview ? (
+                                                    <img src={signaturePreview} className="h-20 w-full rounded object-cover" alt="Signature preview" />
+                                                ) : (
+                                                    <div className="flex h-20 w-full items-center justify-center rounded bg-gray-100 text-xs text-muted-foreground">
+                                                        No signature
+                                                    </div>
+                                                )}
+                                                <div className="mt-3 space-y-2">
+                                                    <Label className="text-xs">Employee Signature</Label>
+                                                    <Input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={(e) => {
+                                                            const file = e.target.files?.[0] ?? null;
+                                                            setData('signature', file);
+                                                            if (!file) return setSignaturePreview(null);
+                                                            const reader = new FileReader();
+                                                            reader.onload = (ev) => setSignaturePreview((ev.target?.result as string) ?? null);
+                                                            reader.readAsDataURL(file);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </CardContent>
                                 <CardFooter className="border-t bg-gray-50 px-6 py-4">
-                                    <Button
-                                        type="button"
-                                        onClick={() => setActiveTab('family')}
-                                        className="ml-auto"
-                                    >
-                                        Next: Family Details
+                                    <Button type="button" className="ml-auto" onClick={() => setActiveTab('education')}>
+                                        Next: Educational Setup
                                     </Button>
                                 </CardFooter>
                             </Card>
                         </TabsContent>
 
-                        {/* Family Tab */}
-                        <TabsContent value="family">
+                        <TabsContent value="education">
                             <Card className="shadow-sm">
                                 <CardHeader className="border-b bg-gray-50">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="rounded-full bg-indigo-100 p-1.5">
-                                            <User className="h-5 w-5 text-indigo-600" />
+                                    <CardTitle className="text-base">Educational Setup</CardTitle>
+                                    <CardDescription className="text-xs">Add multiple education items</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-6">
+                                    <div className="flex justify-end">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                                setData('educations', [
+                                                    ...data.educations,
+                                                    { degree: '', institute: '', group_name: '', board: '', subject: '', result_type: '', result_value: '' },
+                                                ])
+                                            }
+                                        >
+                                            <Plus className="mr-2 h-4 w-4" /> Add Education
+                                        </Button>
+                                    </div>
+                                    {data.educations.map((ed, idx) => (
+                                        <div key={idx} className="rounded-md border p-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <div className="text-sm font-medium">Item {idx + 1}</div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setData('educations', data.educations.filter((_, i) => i !== idx))}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <div className="space-y-1">
+                                                    <Label className="text-xs">Degree</Label>
+                                                    <Input
+                                                        value={ed.degree}
+                                                        onChange={(e) => {
+                                                            const next = [...data.educations];
+                                                            next[idx] = { ...next[idx], degree: e.target.value };
+                                                            setData('educations', next);
+                                                        }}
+                                                        placeholder="e.g. SSC"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-xs">Institute</Label>
+                                                    <Input
+                                                        value={ed.institute}
+                                                        onChange={(e) => {
+                                                            const next = [...data.educations];
+                                                            next[idx] = { ...next[idx], institute: e.target.value };
+                                                            setData('educations', next);
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-xs">Board</Label>
+                                                    <ComboSelect
+                                                        value={ed.board || null}
+                                                        onChange={(v) => {
+                                                            const next = [...data.educations];
+                                                            next[idx] = { ...next[idx], board: v ?? '' };
+                                                            setData('educations', next);
+                                                        }}
+                                                        items={educationBoards.map((b) => ({ value: b, label: b }))}
+                                                        placeholder="Select board"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <div className="space-y-1">
+                                                    <Label className="text-xs">Group</Label>
+                                                    <Input
+                                                        value={ed.group_name}
+                                                        onChange={(e) => {
+                                                            const next = [...data.educations];
+                                                            next[idx] = { ...next[idx], group_name: e.target.value };
+                                                            setData('educations', next);
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-xs">Subject</Label>
+                                                    <Input
+                                                        value={ed.subject}
+                                                        onChange={(e) => {
+                                                            const next = [...data.educations];
+                                                            next[idx] = { ...next[idx], subject: e.target.value };
+                                                            setData('educations', next);
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-xs">Result</Label>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <ComboSelect
+                                                            value={ed.result_type || null}
+                                                            onChange={(v) => {
+                                                                const next = [...data.educations];
+                                                                next[idx] = { ...next[idx], result_type: (v ?? '') as any };
+                                                                setData('educations', next);
+                                                            }}
+                                                            items={[
+                                                                { value: 'gpa', label: 'GPA' },
+                                                                { value: 'cgpa', label: 'CGPA' },
+                                                                { value: 'other', label: 'Other' },
+                                                            ]}
+                                                            placeholder="Type"
+                                                        />
+                                                        <Input
+                                                            value={ed.result_value}
+                                                            onChange={(e) => {
+                                                                const next = [...data.educations];
+                                                                next[idx] = { ...next[idx], result_value: e.target.value };
+                                                                setData('educations', next);
+                                                            }}
+                                                            placeholder="Value"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <CardTitle>Family Information</CardTitle>
-                                            <CardDescription>Parents, marital status and spouse details</CardDescription>
+                                    ))}
+                                </CardContent>
+                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('general')}>
+                                        Back
+                                    </Button>
+                                    <Button type="button" onClick={() => setActiveTab('salary')}>
+                                        Next: Salary
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="salary">
+                            <Card className="shadow-sm">
+                                <CardHeader className="border-b bg-gray-50">
+                                    <CardTitle className="text-base">Salary</CardTitle>
+                                    <CardDescription className="text-xs">Grade/Step (skippable for now)</CardDescription>
+                                </CardHeader>
+                                <CardContent className="pt-6 text-sm text-muted-foreground">This section is skippable now.</CardContent>
+                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('education')}>
+                                        Back
+                                    </Button>
+                                    <Button type="button" onClick={() => setActiveTab('bank')}>
+                                        Skip / Next: Bank
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="bank">
+                            <Card className="shadow-sm">
+                                <CardHeader className="border-b bg-gray-50">
+                                    <CardTitle className="text-base">Bank Setup</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-6">
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs">Bank Name</Label>
+                                            <ComboSelect
+                                                value={data.bank.bank_name || null}
+                                                onChange={(v) => setData('bank', { ...data.bank, bank_name: v ?? '' })}
+                                                items={banks.map((b) => ({ value: b, label: b }))}
+                                                placeholder="Select bank"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs">Branch Name</Label>
+                                            <Input value={data.bank.branch_name} onChange={(e) => setData('bank', { ...data.bank, branch_name: e.target.value })} />
                                         </div>
                                     </div>
-                                </CardHeader>
-                                <CardContent className="space-y-6 pt-6">
-                                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                         <div className="space-y-2">
-                                            <Label htmlFor="fathers_name">Father's Name</Label>
-                                            <Input
-                                                id="fathers_name"
-                                                value={data.fathers_name}
-                                                onChange={e => setData('fathers_name', e.target.value)}
-                                                placeholder="Enter father's name"
+                                            <Label className="text-xs">Account No</Label>
+                                            <Input value={data.bank.account_no} onChange={(e) => setData('bank', { ...data.bank, account_no: e.target.value })} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs">Account Type</Label>
+                                            <ComboSelect
+                                                value={data.bank.account_type || null}
+                                                onChange={(v) => setData('bank', { ...data.bank, account_type: (v ?? '') as any })}
+                                                items={[
+                                                    { value: 'current', label: 'Current' },
+                                                    { value: 'savings', label: 'Savings' },
+                                                ]}
+                                                placeholder="Select type"
                                             />
-                                            {errors.fathers_name && <p className="mt-1 text-sm text-red-500">{errors.fathers_name}</p>}
                                         </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="fathers_mobile">Father's Mobile</Label>
-                                            <Input
-                                                id="fathers_mobile"
-                                                value={data.fathers_mobile}
-                                                onChange={e => setData('fathers_mobile', e.target.value)}
-                                                placeholder="Enter father's mobile"
-                                            />
-                                            {errors.fathers_mobile && <p className="mt-1 text-sm text-red-500">{errors.fathers_mobile}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="mothers_name">Mother's Name</Label>
-                                            <Input
-                                                id="mothers_name"
-                                                value={data.mothers_name}
-                                                onChange={e => setData('mothers_name', e.target.value)}
-                                                placeholder="Enter mother's name"
-                                            />
-                                            {errors.mothers_name && <p className="mt-1 text-sm text-red-500">{errors.mothers_name}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="mothers_mobile">Mother's Mobile</Label>
-                                            <Input
-                                                id="mothers_mobile"
-                                                value={data.mothers_mobile}
-                                                onChange={e => setData('mothers_mobile', e.target.value)}
-                                                placeholder="Enter mother's mobile"
-                                            />
-                                            {errors.mothers_mobile && <p className="mt-1 text-sm text-red-500">{errors.mothers_mobile}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="marital_status">Marital Status</Label>
-                                            <Select
-                                                value={data.marital_status}
-                                                onValueChange={(value) => {
-                                                    setData('marital_status', value);
-                                                    if ((value || '').toLowerCase() !== 'married') {
-                                                        setData('spouse_name', '');
-                                                        setData('spouse_mobile', '');
-                                                    }
-                                                }}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select marital status" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="single">Single</SelectItem>
-                                                    <SelectItem value="married">Married</SelectItem>
-                                                    <SelectItem value="divorced">Divorced</SelectItem>
-                                                    <SelectItem value="widowed">Widowed</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.marital_status && <p className="mt-1 text-sm text-red-500">{errors.marital_status}</p>}
-                                        </div>
-
-                                        {isMarried && (
-                                            <>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="spouse_name">Spouse Name</Label>
-                                                    <Input
-                                                        id="spouse_name"
-                                                        value={data.spouse_name}
-                                                        onChange={e => setData('spouse_name', e.target.value)}
-                                                        placeholder="Enter spouse name"
-                                                    />
-                                                    {errors.spouse_name && <p className="mt-1 text-sm text-red-500">{errors.spouse_name}</p>}
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="spouse_mobile">Spouse Mobile</Label>
-                                                    <Input
-                                                        id="spouse_mobile"
-                                                        value={data.spouse_mobile}
-                                                        onChange={e => setData('spouse_mobile', e.target.value)}
-                                                        placeholder="Enter spouse mobile"
-                                                    />
-                                                    {errors.spouse_mobile && <p className="mt-1 text-sm text-red-500">{errors.spouse_mobile}</p>}
-                                                </div>
-                                            </>
-                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs">Bank Address</Label>
+                                        <Textarea rows={2} value={data.bank.bank_address} onChange={(e) => setData('bank', { ...data.bank, bank_address: e.target.value })} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs">Remark</Label>
+                                        <Textarea rows={2} value={data.bank.remark} onChange={(e) => setData('bank', { ...data.bank, remark: e.target.value })} />
                                     </div>
                                 </CardContent>
                                 <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('personal')}>
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('salary')}>
                                         Back
                                     </Button>
-                                    <Button type="button" onClick={() => setActiveTab('employment')}>
-                                        Next: Employment Details
+                                    <Button type="button" onClick={() => setActiveTab('nominee')}>
+                                        Next: Nominee
                                     </Button>
                                 </CardFooter>
                             </Card>
                         </TabsContent>
 
-                        {/* Service Tab */}
-                        <TabsContent value="service">
+                        <TabsContent value="nominee">
                             <Card className="shadow-sm">
                                 <CardHeader className="border-b bg-gray-50">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="rounded-full bg-sky-100 p-1.5">
-                                            <Calendar className="h-5 w-5 text-sky-600" />
-                                        </div>
-                                        <div>
-                                            <CardTitle>Service & Lifecycle</CardTitle>
-                                            <CardDescription>Confirmation, promotion, probation and exit details</CardDescription>
-                                        </div>
-                                    </div>
+                                    <CardTitle className="text-base">Nominee</CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-6 pt-6">
-                                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="probation_period_days">Probation Period (Auto)</Label>
-                                            <Input
-                                                id="probation_period_days"
-                                                value={probationYmd ? probationYmd : '—'}
-                                                readOnly
-                                                disabled
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="last_promotion_date">Last Promotion/Grade Change Date</Label>
-                                            <Input
-                                                id="last_promotion_date"
-                                                type="date"
-                                                value={data.last_promotion_date}
-                                                onChange={(e) => setData('last_promotion_date', e.target.value)}
-                                            />
-                                            {errors.last_promotion_date && <p className="mt-1 text-sm text-red-500">{errors.last_promotion_date}</p>}
-                                        </div>
-
-                                        <div className="space-y-2 md:col-span-2">
-                                            <label className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                                                <input
-                                                    type="checkbox"
-                                                    className="h-4 w-4"
-                                                    checked={data.is_dropout}
-                                                    onChange={(e) => {
-                                                        const checked = e.target.checked;
-                                                        setData('is_dropout', checked);
-                                                        if (!checked) {
-                                                            setData('dropout_date', '');
-                                                            setData('dropout_reason', '');
-                                                        }
-                                                    }}
+                                <CardContent className="space-y-4 pt-6">
+                                    <div className="flex justify-end">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('nominees', [...data.nominees, { name: '', relation: '', date_of_birth: '', share: '', contact: '' }])}>
+                                            <Plus className="mr-2 h-4 w-4" /> Add Nominee
+                                        </Button>
+                                    </div>
+                                    {data.nominees.map((n, idx) => (
+                                        <div key={idx} className="rounded-md border p-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <div className="text-sm font-medium">Nominee {idx + 1}</div>
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('nominees', data.nominees.filter((_, i) => i !== idx))}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <Input value={n.name} onChange={(e) => setData('nominees', data.nominees.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
+                                                <ComboSelect
+                                                    value={n.relation || null}
+                                                    onChange={(v) => setData('nominees', data.nominees.map((x, i) => (i === idx ? { ...x, relation: v ?? '' } : x)))}
+                                                    items={relations.map((r) => ({ value: r, label: r }))}
+                                                    placeholder="Relation"
                                                 />
-                                                Dropout
-                                            </label>
-                                            <p className="text-xs text-gray-500">If checked, dropout date and reason will be required.</p>
+                                                <Input value={n.contact} onChange={(e) => setData('nominees', data.nominees.map((x, i) => (i === idx ? { ...x, contact: e.target.value } : x)))} placeholder="Contact" />
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <Input type="date" value={n.date_of_birth} onChange={(e) => setData('nominees', data.nominees.map((x, i) => (i === idx ? { ...x, date_of_birth: e.target.value } : x)))} />
+                                                <Input value={n.share} onChange={(e) => setData('nominees', data.nominees.map((x, i) => (i === idx ? { ...x, share: e.target.value } : x)))} placeholder="Share" />
+                                            </div>
                                         </div>
-
-                                        {data.is_dropout && (
-                                            <>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="dropout_date">Dropout Date</Label>
-                                            <Input
-                                                id="dropout_date"
-                                                type="date"
-                                                value={data.dropout_date}
-                                                onChange={(e) => setData('dropout_date', e.target.value)}
-                                                required
-                                            />
-                                            {errors.dropout_date && <p className="mt-1 text-sm text-red-500">{errors.dropout_date}</p>}
-                                        </div>
-
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="dropout_reason">Dropout Reason</Label>
-                                            <Textarea
-                                                id="dropout_reason"
-                                                value={data.dropout_reason}
-                                                onChange={(e) => setData('dropout_reason', e.target.value)}
-                                                placeholder="Reason for dropout"
-                                                rows={3}
-                                                required
-                                            />
-                                            {errors.dropout_reason && <p className="mt-1 text-sm text-red-500">{errors.dropout_reason}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="final_payment_date">Final Payment Date</Label>
-                                            <Input
-                                                id="final_payment_date"
-                                                type="date"
-                                                value={data.final_payment_date}
-                                                onChange={(e) => setData('final_payment_date', e.target.value)}
-                                                required
-                                            />
-                                            {errors.final_payment_date && <p className="mt-1 text-sm text-red-500">{errors.final_payment_date}</p>}
-                                        </div>
-                                            </>
-                                        )}
-                                    </div>
+                                    ))}
                                 </CardContent>
                                 <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('employment')}>
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('bank')}>
                                         Back
                                     </Button>
-                                    <Button type="button" onClick={() => setActiveTab('contact')}>
-                                        Next: Contact Information
+                                    <Button type="button" onClick={() => setActiveTab('guarantor')}>
+                                        Next: Guarantor
                                     </Button>
                                 </CardFooter>
                             </Card>
                         </TabsContent>
 
-                        {/* Employment Details Tab */}
-                        <TabsContent value="employment">
+                        <TabsContent value="guarantor">
                             <Card className="shadow-sm">
                                 <CardHeader className="border-b bg-gray-50">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="rounded-full bg-purple-100 p-1.5">
-                                            <Briefcase className="h-5 w-5 text-purple-600" />
-                                        </div>
-                                        <div>
-                                            <CardTitle>Employment Details</CardTitle>
-                                            <CardDescription>Job role and organizational information</CardDescription>
-                                        </div>
-                                    </div>
+                                    <CardTitle className="text-base">Guarantor & Cheque Info</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-6 pt-6">
-                                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="department_id">
-                                                Department <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Select
-                                                value={data.department_id}
-                                                onValueChange={(value) => {
-                                                    setData('department_id', value);
-                                                    setData('joining_designation_id', '');
-                                                    setData('last_designation_id', '');
-                                                }}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select department" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {departments.map((department) => (
-                                                        <SelectItem key={department.id} value={department.id.toString()}>
-                                                            {department.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.department_id && <p className="mt-1 text-sm text-red-500">{errors.department_id}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="joining_designation_id">
-                                                Joining Designation <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Select
-                                                value={data.joining_designation_id}
-                                                onValueChange={(value) => {
-                                                    const syncLast =
-                                                        !data.last_designation_id ||
-                                                        data.last_designation_id === data.joining_designation_id;
-                                                    setData({
-                                                        ...data,
-                                                        joining_designation_id: value,
-                                                        last_designation_id: syncLast ? value : data.last_designation_id,
-                                                    });
-                                                }}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select joining designation" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {filteredDesignations.map((designation) => (
-                                                        <SelectItem key={designation.id} value={designation.id.toString()}>
-                                                            {designation.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.joining_designation_id && <p className="mt-1 text-sm text-red-500">{errors.joining_designation_id}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="last_designation_id">
-                                                Last Designation{' '}
-                                                <span className="text-gray-500 text-sm font-normal">(optional — defaults to joining)</span>
-                                            </Label>
-                                            <Select
-                                                value={data.last_designation_id}
-                                                onValueChange={(value) => setData('last_designation_id', value)}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select last designation" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {filteredDesignations.map((designation) => (
-                                                        <SelectItem key={designation.id} value={designation.id.toString()}>
-                                                            {designation.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.last_designation_id && <p className="mt-1 text-sm text-red-500">{errors.last_designation_id}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="current_branch_id">
-                                                Branch <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Select
-                                                value={data.current_branch_id}
-                                                onValueChange={(value) => setData('current_branch_id', value)}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select branch" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {branches.map((branch) => (
-                                                        <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                            {branch.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.current_branch_id && <p className="mt-1 text-sm text-red-500">{errors.current_branch_id}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="reporting_to">Reports To</Label>
-                                            <Select
-                                                value={data.reporting_to}
-                                                onValueChange={(value) => setData('reporting_to', value)}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select manager" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {managers.map((manager) => (
-                                                        <SelectItem key={manager.id} value={manager.id.toString()}>
-                                                            {manager.name_en || ''} ({manager.pin || manager.employee_id})
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.reporting_to && <p className="mt-1 text-sm text-red-500">{errors.reporting_to}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="joining_date">
-                                                Joining Date <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Input
-                                                id="joining_date"
-                                                type="date"
-                                                value={data.joining_date}
-                                                onChange={(e) => setData('joining_date', e.target.value)}
-                                                required
-                                            />
-                                            {errors.joining_date && <p className="mt-1 text-sm text-red-500">{errors.joining_date}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="confirmation_date">Confirmation Date</Label>
-                                            <Input
-                                                id="confirmation_date"
-                                                type="date"
-                                                value={data.confirmation_date}
-                                                onChange={(e) => setData('confirmation_date', e.target.value)}
-                                            />
-                                            {errors.confirmation_date && <p className="mt-1 text-sm text-red-500">{errors.confirmation_date}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="status">
-                                                Status <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Select
-                                                value={data.status}
-                                                onValueChange={(value) => setData('status', value)}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select status" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {statuses.map((status) => (
-                                                        <SelectItem key={status} value={status}>
-                                                            {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.status && <p className="mt-1 text-sm text-red-500">{errors.status}</p>}
-                                        </div>
+                                    <div className="flex justify-end">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('guarantors', [...data.guarantors, { name: '', age: '', occupation: '', relation: '', phone: '', email: '' }])}>
+                                            <Plus className="mr-2 h-4 w-4" /> Add Guarantor
+                                        </Button>
                                     </div>
+                                    {data.guarantors.map((g, idx) => (
+                                        <div key={idx} className="rounded-md border p-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <div className="text-sm font-medium">Guarantor {idx + 1}</div>
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('guarantors', data.guarantors.filter((_, i) => i !== idx))}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <Input value={g.name} onChange={(e) => setData('guarantors', data.guarantors.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
+                                                <Input value={g.age} onChange={(e) => setData('guarantors', data.guarantors.map((x, i) => (i === idx ? { ...x, age: e.target.value } : x)))} placeholder="Age" />
+                                                <Input value={g.occupation} onChange={(e) => setData('guarantors', data.guarantors.map((x, i) => (i === idx ? { ...x, occupation: e.target.value } : x)))} placeholder="Occupation" />
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <ComboSelect
+                                                    value={g.relation || null}
+                                                    onChange={(v) => setData('guarantors', data.guarantors.map((x, i) => (i === idx ? { ...x, relation: v ?? '' } : x)))}
+                                                    items={relations.map((r) => ({ value: r, label: r }))}
+                                                    placeholder="Relation"
+                                                />
+                                                <Input value={g.phone} onChange={(e) => setData('guarantors', data.guarantors.map((x, i) => (i === idx ? { ...x, phone: e.target.value } : x)))} placeholder="Phone" />
+                                                <Input value={g.email} onChange={(e) => setData('guarantors', data.guarantors.map((x, i) => (i === idx ? { ...x, email: e.target.value } : x)))} placeholder="Email" />
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <div className="flex justify-end">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('guarantor_cheques', [...data.guarantor_cheques, { bank_name: '', branch_name: '', cheque_no: '' }])}>
+                                            <Plus className="mr-2 h-4 w-4" /> Add Cheque
+                                        </Button>
+                                    </div>
+                                    {data.guarantor_cheques.map((c, idx) => (
+                                        <div key={idx} className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-3">
+                                            <ComboSelect value={c.bank_name || null} onChange={(v) => setData('guarantor_cheques', data.guarantor_cheques.map((x, i) => (i === idx ? { ...x, bank_name: v ?? '' } : x)))} items={banks.map((b) => ({ value: b, label: b }))} placeholder="Bank" />
+                                            <Input value={c.branch_name} onChange={(e) => setData('guarantor_cheques', data.guarantor_cheques.map((x, i) => (i === idx ? { ...x, branch_name: e.target.value } : x)))} placeholder="Branch" />
+                                            <div className="flex gap-2">
+                                                <Input value={c.cheque_no} onChange={(e) => setData('guarantor_cheques', data.guarantor_cheques.map((x, i) => (i === idx ? { ...x, cheque_no: e.target.value } : x)))} placeholder="Cheque No" />
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => setData('guarantor_cheques', data.guarantor_cheques.filter((_, i) => i !== idx))}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </CardContent>
                                 <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => setActiveTab('personal')}
-                                    >
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('nominee')}>
                                         Back
                                     </Button>
-                                    <Button
-                                        type="button"
-                                        onClick={() => setActiveTab('service')}
-                                    >
-                                        Next: Service Details
+                                    <Button type="button" onClick={() => setActiveTab('collateral')}>
+                                        Next: Collateral
                                     </Button>
                                 </CardFooter>
                             </Card>
                         </TabsContent>
 
-                        {/* Contact Information Tab */}
-                        <TabsContent value="contact">
+                        <TabsContent value="collateral">
                             <Card className="shadow-sm">
                                 <CardHeader className="border-b bg-gray-50">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="rounded-full bg-green-100 p-1.5">
-                                            <Phone className="h-5 w-5 text-green-600" />
-                                        </div>
-                                        <div>
-                                            <CardTitle>Contact Information</CardTitle>
-                                            <CardDescription>Contact and emergency details</CardDescription>
-                                        </div>
-                                    </div>
+                                    <CardTitle className="text-base">Collateral</CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-6 pt-6">
-                                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                                <CardContent className="space-y-4 pt-6">
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4"
+                                            checked={data.collateral.has_certificate}
+                                            onChange={(e) => setData('collateral', { ...data.collateral, has_certificate: e.target.checked })}
+                                        />
+                                        Certificate
+                                    </label>
+                                    {data.collateral.has_certificate && (
+                                        <div className="flex flex-wrap gap-3">
+                                            {['ssc', 'hsc', 'honors', 'masters'].map((lvl) => (
+                                                <label key={lvl} className="flex items-center gap-2 text-sm">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={data.collateral.certificate_levels.includes(lvl)}
+                                                        onChange={(e) => {
+                                                            const next = new Set(data.collateral.certificate_levels);
+                                                            if (e.target.checked) next.add(lvl);
+                                                            else next.delete(lvl);
+                                                            setData('collateral', { ...data.collateral, certificate_levels: Array.from(next) });
+                                                        }}
+                                                    />
+                                                    {lvl.toUpperCase()}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                         <div className="space-y-2">
-                                            <Label htmlFor="email">
-                                                Email <span className="text-red-500">*</span>
-                                            </Label>
-                                            <Input
-                                                id="email"
-                                                type="email"
-                                                value={data.email}
-                                                onChange={e => setData('email', e.target.value)}
-                                                placeholder="Enter email address"
-                                                required
-                                            />
-                                            {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+                                            <Label className="text-xs">Security Amount</Label>
+                                            <Input value={data.collateral.security_amount} onChange={(e) => setData('collateral', { ...data.collateral, security_amount: e.target.value })} />
                                         </div>
-
                                         <div className="space-y-2">
-                                            <Label htmlFor="email_id">
-                                                Email ID <span className="text-gray-500 text-sm">(Optional)</span>
-                                            </Label>
-                                            <Input
-                                                id="email_id"
-                                                type="email"
-                                                value={data.email_id}
-                                                onChange={e => setData('email_id', e.target.value)}
-                                                placeholder="Alternative email"
-                                            />
-                                            {errors.email_id && <p className="mt-1 text-sm text-red-500">{errors.email_id}</p>}
+                                            <Label className="text-xs">Collateral Interest</Label>
+                                            <Input value={data.collateral.collateral_interest} onChange={(e) => setData('collateral', { ...data.collateral, collateral_interest: e.target.value })} />
                                         </div>
-
                                         <div className="space-y-2">
-                                            <Label htmlFor="phone">
-                                                Phone Number
-                                            </Label>
-                                            <Input
-                                                id="phone"
-                                                value={data.phone}
-                                                onChange={e => setData('phone', e.target.value)}
-                                                placeholder="Enter phone number"
-                                            />
-                                            {errors.phone && <p className="mt-1 text-sm text-red-500">{errors.phone}</p>}
-                                        </div>
-
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="address">
-                                                Address
-                                            </Label>
-                                            <Textarea
-                                                id="address"
-                                                value={data.address}
-                                                onChange={e => setData('address', e.target.value)}
-                                                placeholder="Enter residential address"
-                                                rows={3}
-                                            />
-                                            {errors.address && <p className="mt-1 text-sm text-red-500">{errors.address}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="village">Village</Label>
-                                            <Input
-                                                id="village"
-                                                value={data.village}
-                                                onChange={e => setData('village', e.target.value)}
-                                                placeholder="Village"
-                                            />
-                                            {errors.village && <p className="mt-1 text-sm text-red-500">{errors.village}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="post_office">Post Office</Label>
-                                            <Input
-                                                id="post_office"
-                                                value={data.post_office}
-                                                onChange={e => setData('post_office', e.target.value)}
-                                                placeholder="Post office"
-                                            />
-                                            {errors.post_office && <p className="mt-1 text-sm text-red-500">{errors.post_office}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="union_pouroshova">Union / Pouroshova</Label>
-                                            <Input
-                                                id="union_pouroshova"
-                                                value={data.union_pouroshova}
-                                                onChange={e => setData('union_pouroshova', e.target.value)}
-                                                placeholder="Union/Pouroshova"
-                                            />
-                                            {errors.union_pouroshova && <p className="mt-1 text-sm text-red-500">{errors.union_pouroshova}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="ward_no">Ward No</Label>
-                                            <Input
-                                                id="ward_no"
-                                                value={data.ward_no}
-                                                onChange={e => setData('ward_no', e.target.value)}
-                                                placeholder="Ward no"
-                                            />
-                                            {errors.ward_no && <p className="mt-1 text-sm text-red-500">{errors.ward_no}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="upazila">Upazila</Label>
-                                            <Input
-                                                id="upazila"
-                                                value={data.upazila}
-                                                onChange={e => setData('upazila', e.target.value)}
-                                                placeholder="Upazila"
-                                            />
-                                            {errors.upazila && <p className="mt-1 text-sm text-red-500">{errors.upazila}</p>}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="district">District</Label>
-                                            <Input
-                                                id="district"
-                                                value={data.district}
-                                                onChange={e => setData('district', e.target.value)}
-                                                placeholder="District"
-                                            />
-                                            {errors.district && <p className="mt-1 text-sm text-red-500">{errors.district}</p>}
-                                        </div>
-
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="educational_qualification">Educational Qualification</Label>
-                                            <Textarea
-                                                id="educational_qualification"
-                                                value={data.educational_qualification}
-                                                onChange={e => setData('educational_qualification', e.target.value)}
-                                                placeholder="Educational qualifications"
-                                                rows={3}
-                                            />
-                                            {errors.educational_qualification && <p className="mt-1 text-sm text-red-500">{errors.educational_qualification}</p>}
-                                        </div>
-
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="emergency_contact">
-                                                Emergency Contact
-                                            </Label>
-                                            <Input
-                                                id="emergency_contact"
-                                                value={data.emergency_contact}
-                                                onChange={e => setData('emergency_contact', e.target.value)}
-                                                placeholder="Name and phone number of emergency contact"
-                                            />
-                                            {errors.emergency_contact && <p className="mt-1 text-sm text-red-500">{errors.emergency_contact}</p>}
-                                            <p className="mt-1 text-xs text-gray-500">
-                                                Provide the name and contact number of a person to contact in case of emergency
-                                            </p>
+                                            <Label className="text-xs">Collateral Date</Label>
+                                            <Input type="date" value={data.collateral.collateral_date} onChange={(e) => setData('collateral', { ...data.collateral, collateral_date: e.target.value })} />
                                         </div>
                                     </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs">Notes</Label>
+                                        <Textarea rows={2} value={data.collateral.notes} onChange={(e) => setData('collateral', { ...data.collateral, notes: e.target.value })} />
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('collateral_receive_cheques', [...data.collateral_receive_cheques, { bank_name: '', branch_name: '', cheque_no: '', notes: '' }])}>
+                                            <Plus className="mr-2 h-4 w-4" /> Receive Cheque
+                                        </Button>
+                                    </div>
+                                    {data.collateral_receive_cheques.map((c, idx) => (
+                                        <div key={idx} className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-4">
+                                            <ComboSelect value={c.bank_name || null} onChange={(v) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x, i) => (i === idx ? { ...x, bank_name: v ?? '' } : x)))} items={banks.map((b) => ({ value: b, label: b }))} placeholder="Bank" />
+                                            <Input value={c.branch_name} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x, i) => (i === idx ? { ...x, branch_name: e.target.value } : x)))} placeholder="Branch" />
+                                            <Input value={c.cheque_no} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x, i) => (i === idx ? { ...x, cheque_no: e.target.value } : x)))} placeholder="Cheque No" />
+                                            <div className="flex gap-2">
+                                                <Input value={c.notes || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x, i) => (i === idx ? { ...x, notes: e.target.value } : x)))} placeholder="Notes" />
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => setData('collateral_receive_cheques', data.collateral_receive_cheques.filter((_, i) => i !== idx))}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </CardContent>
                                 <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => setActiveTab('service')}
-                                    >
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('guarantor')}>
                                         Back
                                     </Button>
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                        className="bg-green-600 hover:bg-green-700"
-                                    >
+                                    <Button type="button" onClick={() => setActiveTab('asset')}>
+                                        Next: Org. Asset
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="asset">
+                            <Card className="shadow-sm">
+                                <CardHeader className="border-b bg-gray-50">
+                                    <CardTitle className="text-base">Org. Asset</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-6">
+                                    <div className="flex justify-end">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('assets', [...data.assets, { serial: '', asset_no: '', name: '', details: '', provided_quality: '', asset_price: '' }])}>
+                                            <Plus className="mr-2 h-4 w-4" /> Add Asset
+                                        </Button>
+                                    </div>
+                                    {data.assets.map((a, idx) => (
+                                        <div key={idx} className="rounded-md border p-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <div className="text-sm font-medium">Asset {idx + 1}</div>
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('assets', data.assets.filter((_, i) => i !== idx))}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <Input value={a.serial} onChange={(e) => setData('assets', data.assets.map((x, i) => (i === idx ? { ...x, serial: e.target.value } : x)))} placeholder="Serial" />
+                                                <Input value={a.asset_no} onChange={(e) => setData('assets', data.assets.map((x, i) => (i === idx ? { ...x, asset_no: e.target.value } : x)))} placeholder="Asset No" />
+                                                <Input value={a.name} onChange={(e) => setData('assets', data.assets.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <Input value={a.provided_quality} onChange={(e) => setData('assets', data.assets.map((x, i) => (i === idx ? { ...x, provided_quality: e.target.value } : x)))} placeholder="Provided Quality" />
+                                                <Input value={a.asset_price} onChange={(e) => setData('assets', data.assets.map((x, i) => (i === idx ? { ...x, asset_price: e.target.value } : x)))} placeholder="Asset Price" />
+                                            </div>
+                                            <Textarea className="mt-3" rows={2} value={a.details} onChange={(e) => setData('assets', data.assets.map((x, i) => (i === idx ? { ...x, details: e.target.value } : x)))} placeholder="Details" />
+                                        </div>
+                                    ))}
+                                </CardContent>
+                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('collateral')}>
+                                        Back
+                                    </Button>
+                                    <Button type="button" onClick={() => setActiveTab('experience')}>
+                                        Next: Experience
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="experience">
+                            <Card className="shadow-sm">
+                                <CardHeader className="border-b bg-gray-50">
+                                    <CardTitle className="text-base">Experience</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-6">
+                                    <div className="flex justify-end">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('experiences', [...data.experiences, { organization: '', from_date: '', to_date: '', designation: '', department: '', address: '' }])}>
+                                            <Plus className="mr-2 h-4 w-4" /> Add Experience
+                                        </Button>
+                                    </div>
+                                    {data.experiences.map((ex, idx) => (
+                                        <div key={idx} className="rounded-md border p-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <div className="text-sm font-medium">Experience {idx + 1}</div>
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('experiences', data.experiences.filter((_, i) => i !== idx))}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                <Input value={ex.organization} onChange={(e) => setData('experiences', data.experiences.map((x, i) => (i === idx ? { ...x, organization: e.target.value } : x)))} placeholder="Organization" />
+                                                <Input type="date" value={ex.from_date} onChange={(e) => setData('experiences', data.experiences.map((x, i) => (i === idx ? { ...x, from_date: e.target.value } : x)))} />
+                                                <Input type="date" value={ex.to_date} onChange={(e) => setData('experiences', data.experiences.map((x, i) => (i === idx ? { ...x, to_date: e.target.value } : x)))} />
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                <Input value={ex.designation} onChange={(e) => setData('experiences', data.experiences.map((x, i) => (i === idx ? { ...x, designation: e.target.value } : x)))} placeholder="Designation" />
+                                                <Input value={ex.department} onChange={(e) => setData('experiences', data.experiences.map((x, i) => (i === idx ? { ...x, department: e.target.value } : x)))} placeholder="Department" />
+                                            </div>
+                                            <Textarea className="mt-3" rows={2} value={ex.address} onChange={(e) => setData('experiences', data.experiences.map((x, i) => (i === idx ? { ...x, address: e.target.value } : x)))} placeholder="Address" />
+                                        </div>
+                                    ))}
+                                </CardContent>
+                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('asset')}>
+                                        Back
+                                    </Button>
+                                    <Button type="button" onClick={() => setActiveTab('training')}>
+                                        Next: Training
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="training">
+                            <Card className="shadow-sm">
+                                <CardHeader className="border-b bg-gray-50">
+                                    <CardTitle className="text-base">Training History</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-6">
+                                    <div className="flex justify-end">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('trainings', [...data.trainings, { training_title: '', institute: '', address: '', duration: '', remarks: '' }])}>
+                                            <Plus className="mr-2 h-4 w-4" /> Add Training
+                                        </Button>
+                                    </div>
+                                    {data.trainings.map((t, idx) => (
+                                        <div key={idx} className="rounded-md border p-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <div className="text-sm font-medium">Training {idx + 1}</div>
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('trainings', data.trainings.filter((_, i) => i !== idx))}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                <Input value={t.training_title} onChange={(e) => setData('trainings', data.trainings.map((x, i) => (i === idx ? { ...x, training_title: e.target.value } : x)))} placeholder="Training Title" />
+                                                <Input value={t.institute} onChange={(e) => setData('trainings', data.trainings.map((x, i) => (i === idx ? { ...x, institute: e.target.value } : x)))} placeholder="Institute" />
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                <Input value={t.duration} onChange={(e) => setData('trainings', data.trainings.map((x, i) => (i === idx ? { ...x, duration: e.target.value } : x)))} placeholder="Duration" />
+                                                <Input value={t.address} onChange={(e) => setData('trainings', data.trainings.map((x, i) => (i === idx ? { ...x, address: e.target.value } : x)))} placeholder="Address" />
+                                            </div>
+                                            <Textarea className="mt-3" rows={2} value={t.remarks} onChange={(e) => setData('trainings', data.trainings.map((x, i) => (i === idx ? { ...x, remarks: e.target.value } : x)))} placeholder="Remarks" />
+                                        </div>
+                                    ))}
+                                </CardContent>
+                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('experience')}>
+                                        Back
+                                    </Button>
+                                    <Button type="submit" disabled={processing} className="bg-green-600 hover:bg-green-700">
                                         {processing ? 'Creating...' : 'Create Employee'}
                                     </Button>
                                 </CardFooter>

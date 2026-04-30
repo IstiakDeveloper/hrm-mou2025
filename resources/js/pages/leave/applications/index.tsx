@@ -62,6 +62,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { PageSurface } from '@/components/page-surface';
 
 interface Department {
     id: number;
@@ -247,7 +248,7 @@ export default function ApplicationsIndex({
         <Layout>
             <Head title="Leave Applications" />
 
-            <div className="container mx-auto py-8">
+            <PageSurface>
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Leave Applications</h1>
@@ -640,7 +641,7 @@ export default function ApplicationsIndex({
                         </Pagination>
                     </div>
                 )}
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

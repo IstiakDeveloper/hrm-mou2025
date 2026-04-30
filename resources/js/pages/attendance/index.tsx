@@ -73,6 +73,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { PageSurface } from '@/components/page-surface';
 
 interface Department {
     id: number;
@@ -359,7 +360,7 @@ export default function AttendanceIndex({
         <Layout>
             <Head title="Daily Attendance" />
 
-            <div className="container mx-auto py-8">
+            <PageSurface>
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Daily Attendance</h1>
@@ -1094,7 +1095,7 @@ export default function AttendanceIndex({
                                                     status: status || ''
                                                 })}
                                                 className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${link.active
-                                                    ? 'z-10 bg-primary text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary'
+                                                    ? 'z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary'
                                                     : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
                                                     }`}
                                                 aria-current={link.active ? 'page' : undefined}
@@ -1125,7 +1126,7 @@ export default function AttendanceIndex({
                         </div>
                     </div>
                 )}
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

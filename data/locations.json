@@ -1,0 +1,5961 @@
+{
+  "divisions": [
+    "Barishal",
+    "Chattogram",
+    "Dhaka",
+    "Khulna",
+    "Mymensingh",
+    "Rajshahi",
+    "Rangpur",
+    "Sylhet"
+  ],
+  "districts": {
+    "Barishal": [
+      "Barguna",
+      "Barishal",
+      "Bhola",
+      "Jhalokati",
+      "Patuakhali",
+      "Pirojpur"
+    ],
+    "Chattogram": [
+      "Bandarban",
+      "Brahmanbaria",
+      "Chandpur",
+      "Chattogram",
+      "Cox's Bazar",
+      "Cumilla",
+      "Feni",
+      "Khagrachari",
+      "Lakshmipur",
+      "Noakhali",
+      "Rangamati"
+    ],
+    "Dhaka": [
+      "Dhaka",
+      "Faridpur",
+      "Gazipur",
+      "Gopalganj",
+      "Kishoreganj",
+      "Madaripur",
+      "Manikganj",
+      "Munshiganj",
+      "Narayanganj",
+      "Narsingdi",
+      "Rajbari",
+      "Shariatpur",
+      "Tangail"
+    ],
+    "Khulna": [
+      "Bagerhat",
+      "Chuadanga",
+      "Jashore",
+      "Jhenaidah",
+      "Khulna",
+      "Kushtia",
+      "Magura",
+      "Meherpur",
+      "Narail",
+      "Satkhira"
+    ],
+    "Mymensingh": [
+      "Jamalpur",
+      "Mymensingh",
+      "Netrokona",
+      "Sherpur"
+    ],
+    "Rajshahi": [
+      "Bogura",
+      "Joypurhat",
+      "Naogaon",
+      "Natore",
+      "Pabna",
+      "Rajshahi",
+      "Sirajganj"
+    ],
+    "Rangpur": [
+      "Dinajpur",
+      "Gaibandha",
+      "Kurigram",
+      "Lalmonirhat",
+      "Nilphamari",
+      "Panchagarh",
+      "Rangpur",
+      "Thakurgaon"
+    ],
+    "Sylhet": [
+      "Habiganj",
+      "Moulvibazar",
+      "Sunamganj",
+      "Sylhet"
+    ]
+  },
+  "upazilas": {
+    "Bagerhat": [
+      "Bagerhat Sadar",
+      "Chitalmari",
+      "Fakirhat",
+      "Kachua",
+      "Mollahat",
+      "Mongla",
+      "Morrelganj",
+      "Rampal",
+      "Sarankhola"
+    ],
+    "Bandarban": [
+      "Ali Kadam",
+      "Bandarban Sadar",
+      "Lama",
+      "Rowangchhari",
+      "Thanchi",
+      "Ruma"
+    ],
+    "Barguna": [
+      "Amtali",
+      "Bamna",
+      "Barguna Sadar",
+      "Betagi",
+      "Patharghata",
+      "Taltali"
+    ],
+    "Barishal": [
+      "Agailjhara",
+      "Babuganj",
+      "Bakerganj",
+      "Barajalia",
+      "Barishal Kotwali",
+      "Barishal Sadar",
+      "Gournadi",
+      "Hizla",
+      "Mehendiganj",
+      "Muladi",
+      "Uzirpur",
+      "Wazirpur"
+    ],
+    "Bhola": [
+      "Bhola Sadar",
+      "Borhanuddin",
+      "Char Fasson",
+      "Daulatkhan",
+      "Lalmohan",
+      "Manpura",
+      "Tazumuddin"
+    ],
+    "Bogura": [
+      "Adamdighi",
+      "Bogra Sadar",
+      "Dhunat",
+      "Dhupchanchia",
+      "Gabtali",
+      "Kahaloo",
+      "Nandigram",
+      "Sariakandi",
+      "Sherpur",
+      "Shibganj",
+      "Sonatala"
+    ],
+    "Brahmanbaria": [
+      "Akhaura",
+      "Bancharampur",
+      "Brahmanbaria Sadar",
+      "Kasba",
+      "Nabinagar",
+      "Nasirnagar",
+      "Sarail"
+    ],
+    "Chandpur": [
+      "Chandpur Sadar",
+      "Faridganj",
+      "Haimchar",
+      "Haziganj",
+      "Kachua",
+      "Matlab Dakkhin",
+      "Matlab Uttar",
+      "Shahrasti"
+    ],
+    "Chapainawabganj": [
+      "Bholahat",
+      "Chapainawabganj Sadar",
+      "Gomastapur",
+      "Nachole",
+      "Shibganj"
+    ],
+    "Chattogram": [
+      "Anwara",
+      "Banshkhali",
+      "Boalkhali",
+      "Chattogram Bandar",
+      "Fatikchhari",
+      "Hathazari",
+      "Lohagara",
+      "Mirsharai",
+      "Patiya",
+      "Rangunia",
+      "Raozan",
+      "Sandwip",
+      "Satkania",
+      "Sitakunda"
+    ],
+    "Chuadanga": [
+      "Alamdanga",
+      "Chuadanga Sadar",
+      "Damurhuda",
+      "Jibannagar"
+    ],
+    "Cumilla": [
+      "Barura",
+      "Brahmanpara",
+      "Burichang",
+      "Chandina",
+      "Chauddagram",
+      "Cumilla Sadar Dakkhin",
+      "Cumilla Sadar Uttar",
+      "Daudkandi",
+      "Debidwar",
+      "Homna",
+      "Laksam",
+      "Monohorgonj",
+      "Muradnagar",
+      "Nangalkot",
+      "Titas"
+    ],
+    "Cox's Bazar": [
+      "Chakaria",
+      "Cox's Bazar Sadar",
+      "Kutubdia",
+      "Maheshkhali",
+      "Pekua",
+      "Ramu",
+      "Teknaf",
+      "Ukhia"
+    ],
+    "Dhaka": [
+      "Adabor",
+      "Badda",
+      "Bangshal",
+      "Bhashantek",
+      "Cantonment",
+      "Chak Bazar",
+      "Darus Salam",
+      "Dhanmondi",
+      "Gulshan",
+      "Hazaribagh",
+      "Jatrabari",
+      "Kafrul",
+      "Kalabagan",
+      "Kamrangirchar",
+      "Keraniganj",
+      "Khilgaon",
+      "Kotwali",
+      "Lalbagh",
+      "Mirpur",
+      "Mohammadpur",
+      "Motijheel",
+      "Pallabi",
+      "Paltan",
+      "Ramna",
+      "Rampura",
+      "Sabujbagh",
+      "Shah Ali",
+      "Shahbagh",
+      "Sher-e-Bangla Nagar",
+      "Shyampur",
+      "Sutrapur",
+      "Tejgaon",
+      "Tejgaon Industrial Area",
+      "Turag",
+      "Uttar Khan",
+      "Uttara",
+      "Wari"
+    ],
+    "Dinajpur": [
+      "Birampur",
+      "Birganj",
+      "Bochaganj",
+      "Chirirbandar",
+      "Dinajpur Sadar",
+      "Khansama",
+      "Maharajganj",
+      "Nawabganj",
+      "Parbatipur"
+    ],
+    "Faridpur": [
+      "Alfadanga",
+      "Bhanga",
+      "Boalmari",
+      "Charbhadrasan",
+      "Faridpur Sadar",
+      "Madhukhali",
+      "Nagarkanda",
+      "Sadarpur",
+      "Shaltha"
+    ],
+    "Feni": [
+      "Chhagalnaiya",
+      "Daganbhuiyan",
+      "Feni Sadar",
+      "Parshuram",
+      "Sonagazi"
+    ],
+    "Gaibandha": [
+      "Fulchhari",
+      "Gaibandha Sadar",
+      "Gobindaganj",
+      "Palashbari",
+      "Sadullapur",
+      "Sughatta",
+      "Sundarganj"
+    ],
+    "Gazipur": [
+      "Gazipur Sadar",
+      "Kaliakair",
+      "Kapasia",
+      "Sreepur"
+    ],
+    "Gopalganj": [
+      "Gopalganj Sadar",
+      "Kashiani",
+      "Kotalipara",
+      "Muksudpur",
+      "Tungipara"
+    ],
+    "Habiganj": [
+      "Ajmiriganj",
+      "Bahubal",
+      "Baniachang",
+      "Chunarughat",
+      "Habiganj Sadar",
+      "Lakhai",
+      "Madhabpur",
+      "Nabiganj"
+    ],
+    "Jamalpur": [
+      "Baksiganj",
+      "Dewanganj",
+      "Islampur",
+      "Jamalpur Sadar",
+      "Madarganj",
+      "Melandaha",
+      "Sarishabari"
+    ],
+    "Jashore": [
+      "Abhaynagar",
+      "Bagherpara",
+      "Chaugachha",
+      "Jhikargachha",
+      "Jashore Sadar",
+      "Keshabpur",
+      "Manirampur",
+      "Sharsha"
+    ],
+    "Jhalokati": [
+      "Jhalokati Sadar",
+      "Kathalia",
+      "Nalchity",
+      "Rajapur"
+    ],
+    "Jhenaidah": [
+      "Harinakunda",
+      "Jhenaidah Sadar",
+      "Kaliganj",
+      "Kotchandpur",
+      "Maheshpur",
+      "Shailkupa"
+    ],
+    "Joypurhat": [
+      "Akkelpur",
+      "Joypurhat Sadar",
+      "Kalai",
+      "Khetlal",
+      "Panchbibi"
+    ],
+    "Khagrachari": [
+      "Dighinala",
+      "Khagrachhari Sadar",
+      "Laxmichhari",
+      "Mahalchhari",
+      "Manikchhari",
+      "Matiranga",
+      "Panchhari",
+      "Ramgarh"
+    ],
+    "Khulna": [
+      "Batiaghata",
+      "Dacope",
+      "Dighalia",
+      "Dumuria",
+      "Koyra",
+      "Paikgachha",
+      "Phultala",
+      "Rupsa",
+      "Terokhada",
+      "Khulna Sadar"
+    ],
+    "Kishoreganj": [
+      "Austagram",
+      "Bajitpur",
+      "Bhairab",
+      "Hossainpur",
+      "Itna",
+      "Karimganj",
+      "Katiadi",
+      "Kishoreganj Sadar",
+      "Kuliarchar",
+      "Mithamain",
+      "Nikli",
+      "Pakundia",
+      "Tarail"
+    ],
+    "Kurigram": [
+      "Bhurungamari",
+      "Char Rajibpur",
+      "Chilmari",
+      "Kurigram Sadar",
+      "Nageshwari",
+      "Phulbari",
+      "Raomari",
+      "Rajarhat",
+      "Ulipur"
+    ],
+    "Kushtia": [
+      "Bheramara",
+      "Daulatpur",
+      "Khoksa",
+      "Kumarkhali",
+      "Kushtia Sadar",
+      "Mirpur"
+    ],
+    "Lakshmipur": [
+      "Lakshmipur Sadar",
+      "Raipur",
+      "Ramganj",
+      "Ramgati",
+      "Komol Nagar"
+    ],
+    "Lalmonirhat": [
+      "Aditmari",
+      "Hatibandha",
+      "Kaliganj",
+      "Lalmonirhat Sadar",
+      "Patgram"
+    ],
+    "Madaripur": [
+      "Kalkini",
+      "Madaripur Sadar",
+      "Rajoir",
+      "Shibchar"
+    ],
+    "Magura": [
+      "Magura Sadar",
+      "Mohammadpur",
+      "Shalikha",
+      "Sreepur"
+    ],
+    "Manikganj": [
+      "Daulatpur",
+      "Gheor",
+      "Harirampur",
+      "Manikganj Sadar",
+      "Saturia",
+      "Shibaloy",
+      "Singair"
+    ],
+    "Meherpur": [
+      "Gangni",
+      "Meherpur Sadar",
+      "Mujib Nagar"
+    ],
+    "Moulvibazar": [
+      "Barlekha",
+      "Juri",
+      "Kamalganj",
+      "Kulaura",
+      "Moulvibazar Sadar",
+      "Rajnagar",
+      "Sreemangal"
+    ],
+    "Munshiganj": [
+      "Gazaria",
+      "Lohajang",
+      "Munshiganj Sadar",
+      "Sirajdikhan",
+      "Sreenagar",
+      "Tongibari"
+    ],
+    "Mymensingh": [
+      "Bhaluka",
+      "Dhobaura",
+      "Fulbaria",
+      "Gaffargaon",
+      "Gauripur",
+      "Haluaghat",
+      "Isshwargonj",
+      "Muktagachha",
+      "Mymensingh Sadar",
+      "Nandail",
+      "Phulpur",
+      "Trishal"
+    ],
+    "Naogaon": [
+      "Atrai",
+      "Badalgachhi",
+      "Dhamoirhat",
+      "Mahadebpur",
+      "Naogaon Sadar",
+      "Niamatpur",
+      "Patnitala",
+      "Porsha",
+      "Raninagar",
+      "Sapahar"
+    ],
+    "Narail": [
+      "Kalia",
+      "Lohagara",
+      "Narail Sadar",
+      "Naragati"
+    ],
+    "Narayanganj": [
+      "Araihazar",
+      "Baidder Bazar",
+      "Bandar",
+      "Narayanganj Sadar",
+      "Rupganj",
+      "Siddhirganj",
+      "Sonargaon"
+    ],
+    "Narsingdi": [
+      "Belabo",
+      "Monohardi",
+      "Narsingdi Sadar",
+      "Palash",
+      "Raipura",
+      "Shibpur"
+    ],
+    "Natore": [
+      "Baraigram",
+      "Gurudaspur",
+      "Lalpur",
+      "Natore Sadar",
+      "Singra"
+    ],
+    "Netrokona": [
+      "Atpara",
+      "Barhatta",
+      "Durgapur",
+      "Khaliajuri",
+      "Kalmakanda",
+      "Madan",
+      "Netrokona Sadar",
+      "Purbadhala"
+    ],
+    "Nilphamari": [
+      "Dimla",
+      "Domar",
+      "Jaldhaka",
+      "Kishoreganj",
+      "Nilphamari Sadar",
+      "Saidpur"
+    ],
+    "Noakhali": [
+      "Begumganj",
+      "Chatkhil",
+      "Companiganj",
+      "Hatiya",
+      "Noakhali Sadar",
+      "Senbagh",
+      "Subarnachar"
+    ],
+    "Pabna": [
+      "Atgharia",
+      "Bera",
+      "Bhangura",
+      "Chatmohar",
+      "Faridpur",
+      "Ishwardi",
+      "Pabna Sadar",
+      "Santhia",
+      "Sujanagar"
+    ],
+    "Panchagarh": [
+      "Atwari",
+      "Boda",
+      "Debiganj",
+      "Panchagarh Sadar",
+      "Tetulia"
+    ],
+    "Patuakhali": [
+      "Bauphal",
+      "Dashmina",
+      "Galachipa",
+      "Kala Para",
+      "Mirzaganj",
+      "Patuakhali Sadar",
+      "Rangabali"
+    ],
+    "Pirojpur": [
+      "Bhandaria",
+      "Kawkhali",
+      "Mathbaria",
+      "Nazirpur",
+      "Pirojpur Sadar",
+      "Zianagar"
+    ],
+    "Rajbari": [
+      "Baliakandi",
+      "Goalandaghat",
+      "Pangsha",
+      "Rajbari Sadar"
+    ],
+    "Rajshahi": [
+      "Bagha",
+      "Baghmara",
+      "Charghat",
+      "Durgapur",
+      "Godagari",
+      "Mohonpur",
+      "Paba",
+      "Puthia",
+      "Rajshahi Sadar",
+      "Tanore"
+    ],
+    "Rangamati": [
+      "Baghaichhari",
+      "Barkal",
+      "Kaptai",
+      "Juraichhari",
+      "Langadu",
+      "Naniarchar",
+      "Rajasthali",
+      "Rangamati Sadar"
+    ],
+    "Rangpur": [
+      "Badarganj",
+      "Gangachara",
+      "Kaunia",
+      "Mithapukur",
+      "Pirgachha",
+      "Rangpur Sadar",
+      "Taraganj"
+    ],
+    "Satkhira": [
+      "Assasuni",
+      "Debhata",
+      "Kalaroa",
+      "Kaliganj",
+      "Satkhira Sadar",
+      "Shyamnagar",
+      "Tala"
+    ],
+    "Shariatpur": [
+      "Bhedarganj",
+      "Damudya",
+      "Gosairhat",
+      "Naria",
+      "Shariatpur Sadar",
+      "Zajira"
+    ],
+    "Sherpur": [
+      "Jhenaigati",
+      "Nakla",
+      "Nalitabari",
+      "Sherpur Sadar",
+      "Sreebardi"
+    ],
+    "Sirajganj": [
+      "Belkuchi",
+      "Chauhali",
+      "Kamarkhanda",
+      "Kazipur",
+      "Raiganj",
+      "Shahjadpur",
+      "Sirajganj Sadar",
+      "Tarash",
+      "Ullapara"
+    ],
+    "Sunamganj": [
+      "Bishwamvarpur",
+      "Chhatak",
+      "Dharampasha",
+      "Duara bazar",
+      "Jagannathpur",
+      "Jamalganj",
+      "Shalla",
+      "Sunamganj Sadar",
+      "Tahirpur"
+    ],
+    "Sylhet": [
+      "Balaganj",
+      "Beanibazar",
+      "Bishwanath",
+      "Companiganj",
+      "Dakshin Surma",
+      "Fenchuganj",
+      "Golapganj",
+      "Gowainghat",
+      "Jaintiapur",
+      "Kanaighat",
+      "Zakiganj",
+      "Sylhet Sadar"
+    ],
+    "Tangail": [
+      "Basail",
+      "Bhuapur",
+      "Delduar",
+      "Ghatail",
+      "Gopalpur",
+      "Kalihati",
+      "Madhupur",
+      "Mirzapur",
+      "Nagarpur",
+      "Sakhipur",
+      "Tangail Sadar"
+    ],
+    "Thakurgaon": [
+      "Baliadangi",
+      "Haripur",
+      "Pirganj",
+      "Ranisankail",
+      "Thakurgaon Sadar"
+    ]
+  },
+  "unions": {
+    "Bagerhat Sadar": [
+      {
+        "name": "Bagerhat Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Bagerhat Town",
+          "Daspara"
+        ]
+      },
+      {
+        "name": "Hoglabunia",
+        "type": "union",
+        "villages": [
+          "Hoglabunia",
+          "Char Hoglabunia"
+        ]
+      },
+      {
+        "name": "Khanjahan Ali",
+        "type": "union",
+        "villages": [
+          "Khanjahan Ali",
+          "Narikel Baria"
+        ]
+      },
+      {
+        "name": "Rakhalgachhi",
+        "type": "union",
+        "villages": [
+          "Rakhalgachhi",
+          "Betbaria"
+        ]
+      },
+      {
+        "name": "Gaola",
+        "type": "union",
+        "villages": [
+          "Gaola",
+          "Paikara"
+        ]
+      },
+      {
+        "name": "Bhairabnagar",
+        "type": "union",
+        "villages": [
+          "Bhairabnagar",
+          "Khalisha Bunia"
+        ]
+      },
+      {
+        "name": "Bishnupur",
+        "type": "union",
+        "villages": [
+          "Bishnupur",
+          "Kadamtala"
+        ]
+      }
+    ],
+    "Chitalmari": [
+      {
+        "name": "Chitalmari",
+        "type": "union",
+        "villages": [
+          "Chitalmari",
+          "Kumari"
+        ]
+      },
+      {
+        "name": "Char Banthia",
+        "type": "union",
+        "villages": [
+          "Char Banthia",
+          "Badukhali"
+        ]
+      },
+      {
+        "name": "Kalara",
+        "type": "union",
+        "villages": [
+          "Kalara",
+          "Dhopakhali"
+        ]
+      },
+      {
+        "name": "Barokopa",
+        "type": "union",
+        "villages": [
+          "Barokopa",
+          "Shamukjhapi"
+        ]
+      },
+      {
+        "name": "Chandpai",
+        "type": "union",
+        "villages": [
+          "Chandpai",
+          "Kendua"
+        ]
+      }
+    ],
+    "Fakirhat": [
+      {
+        "name": "Fakirhat",
+        "type": "union",
+        "villages": [
+          "Fakirhat Bazar",
+          "Shobna"
+        ]
+      },
+      {
+        "name": "Betaga",
+        "type": "union",
+        "villages": [
+          "Betaga",
+          "Molla Haat"
+        ]
+      },
+      {
+        "name": "Subdia",
+        "type": "union",
+        "villages": [
+          "Subdia",
+          "Radhanagar"
+        ]
+      },
+      {
+        "name": "Lakhpur",
+        "type": "union",
+        "villages": [
+          "Lakhpur",
+          "Daulatpur"
+        ]
+      },
+      {
+        "name": "Naldha Maguramari",
+        "type": "union",
+        "villages": [
+          "Naldha",
+          "Maguramari"
+        ]
+      },
+      {
+        "name": "Pilajanga",
+        "type": "union",
+        "villages": [
+          "Pilajanga",
+          "Ghatbor"
+        ]
+      },
+      {
+        "name": "Alhidah Manikdaha",
+        "type": "union",
+        "villages": [
+          "Alhidah",
+          "Manikdaha"
+        ]
+      }
+    ],
+    "Kachua": [
+      {
+        "name": "Kachua",
+        "type": "union",
+        "villages": [
+          "Kachua Bazar",
+          "Gachbaria"
+        ]
+      },
+      {
+        "name": "Machhua",
+        "type": "union",
+        "villages": [
+          "Machhua",
+          "Dariala"
+        ]
+      },
+      {
+        "name": "Gopalpur",
+        "type": "union",
+        "villages": [
+          "Gopalpur",
+          "Raghunathpur"
+        ]
+      },
+      {
+        "name": "Dhopakhali",
+        "type": "union",
+        "villages": [
+          "Dhopakhali",
+          "Mirjat"
+        ]
+      },
+      {
+        "name": "Bithari",
+        "type": "union",
+        "villages": [
+          "Bithari",
+          "Jalma"
+        ]
+      }
+    ],
+    "Mollahat": [
+      {
+        "name": "Mollahat",
+        "type": "union",
+        "villages": [
+          "Mollahat Bazar",
+          "Kultali"
+        ]
+      },
+      {
+        "name": "Gaola",
+        "type": "union",
+        "villages": [
+          "Gaola",
+          "Bhojpatia"
+        ]
+      },
+      {
+        "name": "Chunkhola",
+        "type": "union",
+        "villages": [
+          "Chunkhola",
+          "Tentulbaria"
+        ]
+      },
+      {
+        "name": "Atharakhada",
+        "type": "union",
+        "villages": [
+          "Atharakhada",
+          "Kulbaria"
+        ]
+      },
+      {
+        "name": "Chuknagar",
+        "type": "union",
+        "villages": [
+          "Chuknagar",
+          "Komorpur"
+        ]
+      }
+    ],
+    "Mongla": [
+      {
+        "name": "Mongla Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Mongla Port",
+          "Chila"
+        ]
+      },
+      {
+        "name": "Mithakhali",
+        "type": "union",
+        "villages": [
+          "Mithakhali",
+          "Sundarban Char"
+        ]
+      },
+      {
+        "name": "Chila",
+        "type": "union",
+        "villages": [
+          "Chila",
+          "Joymoni"
+        ]
+      },
+      {
+        "name": "Burigoalini",
+        "type": "union",
+        "villages": [
+          "Burigoalini",
+          "Gabura"
+        ]
+      }
+    ],
+    "Morrelganj": [
+      {
+        "name": "Morrelganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Morrelganj Town",
+          "Baheratala"
+        ]
+      },
+      {
+        "name": "Morrelganj",
+        "type": "union",
+        "villages": [
+          "Morrelganj",
+          "Auria"
+        ]
+      },
+      {
+        "name": "Hoorintana",
+        "type": "union",
+        "villages": [
+          "Hoorintana",
+          "Char Khali"
+        ]
+      },
+      {
+        "name": "Khaulia",
+        "type": "union",
+        "villages": [
+          "Khaulia",
+          "Rajanagar"
+        ]
+      },
+      {
+        "name": "Barabaria",
+        "type": "union",
+        "villages": [
+          "Barabaria",
+          "Kalamegha"
+        ]
+      },
+      {
+        "name": "Teligati",
+        "type": "union",
+        "villages": [
+          "Teligati",
+          "Panchakaran"
+        ]
+      },
+      {
+        "name": "Puikhali",
+        "type": "union",
+        "villages": [
+          "Puikhali",
+          "Darimabad"
+        ]
+      },
+      {
+        "name": "Nishanbaria",
+        "type": "union",
+        "villages": [
+          "Nishanbaria",
+          "Chandkathi"
+        ]
+      },
+      {
+        "name": "Ramchandrapur",
+        "type": "union",
+        "villages": [
+          "Ramchandrapur",
+          "Gabua"
+        ]
+      }
+    ],
+    "Rampal": [
+      {
+        "name": "Rampal",
+        "type": "union",
+        "villages": [
+          "Rampal Bazar",
+          "Perikhali"
+        ]
+      },
+      {
+        "name": "Baintala",
+        "type": "union",
+        "villages": [
+          "Baintala",
+          "Gaokhali"
+        ]
+      },
+      {
+        "name": "Gaurambha",
+        "type": "union",
+        "villages": [
+          "Gaurambha",
+          "Mallikerbere"
+        ]
+      },
+      {
+        "name": "Hurka",
+        "type": "union",
+        "villages": [
+          "Hurka",
+          "Perikhali"
+        ]
+      },
+      {
+        "name": "Rajnagar",
+        "type": "union",
+        "villages": [
+          "Rajnagar",
+          "Ambuya"
+        ]
+      },
+      {
+        "name": "Baidyanathpur",
+        "type": "union",
+        "villages": [
+          "Baidyanathpur",
+          "Sultanpur"
+        ]
+      }
+    ],
+    "Sarankhola": [
+      {
+        "name": "Sarankhola",
+        "type": "union",
+        "villages": [
+          "Sarankhola Bazar",
+          "Rayenda"
+        ]
+      },
+      {
+        "name": "Dhansagor",
+        "type": "union",
+        "villages": [
+          "Dhansagor",
+          "Southkhali"
+        ]
+      },
+      {
+        "name": "Southkhali",
+        "type": "union",
+        "villages": [
+          "Southkhali",
+          "Gabura"
+        ]
+      },
+      {
+        "name": "Rayenda",
+        "type": "union",
+        "villages": [
+          "Rayenda",
+          "Budhhata"
+        ]
+      }
+    ],
+    "Amtali": [
+      {
+        "name": "Amtali Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Amtali Town",
+          "Gulishakhali"
+        ]
+      },
+      {
+        "name": "Amtali",
+        "type": "union",
+        "villages": [
+          "Amtali",
+          "Char Amtali"
+        ]
+      },
+      {
+        "name": "Arpangashia",
+        "type": "union",
+        "villages": [
+          "Arpangashia",
+          "Char Arpangashia"
+        ]
+      },
+      {
+        "name": "Chawra",
+        "type": "union",
+        "villages": [
+          "Chawra",
+          "Char Chawra"
+        ]
+      },
+      {
+        "name": "Gulishakhali",
+        "type": "union",
+        "villages": [
+          "Gulishakhali",
+          "Nishanbaria"
+        ]
+      },
+      {
+        "name": "Haldia",
+        "type": "union",
+        "villages": [
+          "Haldia",
+          "Char Haldia"
+        ]
+      },
+      {
+        "name": "Kukua",
+        "type": "union",
+        "villages": [
+          "Kukua",
+          "Atharbaria"
+        ]
+      }
+    ],
+    "Bamna": [
+      {
+        "name": "Bamna",
+        "type": "union",
+        "villages": [
+          "Bamna Bazar",
+          "Char Bamna"
+        ]
+      },
+      {
+        "name": "Bukabunia",
+        "type": "union",
+        "villages": [
+          "Bukabunia",
+          "Char Bukabunia"
+        ]
+      },
+      {
+        "name": "Ramna",
+        "type": "union",
+        "villages": [
+          "Ramna",
+          "Dakkhin Ramna"
+        ]
+      },
+      {
+        "name": "Kolachari",
+        "type": "union",
+        "villages": [
+          "Kolachari",
+          "Uttar Kolachari"
+        ]
+      }
+    ],
+    "Barguna Sadar": [
+      {
+        "name": "Barguna Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Barguna Town",
+          "Noltona"
+        ]
+      },
+      {
+        "name": "Barguna Sadar",
+        "type": "union",
+        "villages": [
+          "Barguna",
+          "Char Barguna"
+        ]
+      },
+      {
+        "name": "Naltona",
+        "type": "union",
+        "villages": [
+          "Naltona",
+          "Char Naltona"
+        ]
+      },
+      {
+        "name": "Badurkhali",
+        "type": "union",
+        "villages": [
+          "Badurkhali",
+          "Char Badurkhali"
+        ]
+      },
+      {
+        "name": "Baliatali",
+        "type": "union",
+        "villages": [
+          "Baliatali",
+          "Raihanpur"
+        ]
+      },
+      {
+        "name": "Gaishimara",
+        "type": "union",
+        "villages": [
+          "Gaishimara",
+          "Kewabania"
+        ]
+      },
+      {
+        "name": "M. Baria",
+        "type": "union",
+        "villages": [
+          "M. Baria",
+          "Nalua"
+        ]
+      }
+    ],
+    "Betagi": [
+      {
+        "name": "Betagi",
+        "type": "union",
+        "villages": [
+          "Betagi Bazar",
+          "Kajalia"
+        ]
+      },
+      {
+        "name": "Bura Mazumdar",
+        "type": "union",
+        "villages": [
+          "Bura Mazumdar",
+          "Char Bura"
+        ]
+      },
+      {
+        "name": "Hosnabad",
+        "type": "union",
+        "villages": [
+          "Hosnabad",
+          "Char Hosnabad"
+        ]
+      },
+      {
+        "name": "Kakchira",
+        "type": "union",
+        "villages": [
+          "Kakchira",
+          "Char Kakchira"
+        ]
+      },
+      {
+        "name": "Moktiar Abad",
+        "type": "union",
+        "villages": [
+          "Moktiar Abad",
+          "Shrirampur"
+        ]
+      },
+      {
+        "name": "Sarisher Para",
+        "type": "union",
+        "villages": [
+          "Sarisher Para",
+          "Kashipur"
+        ]
+      }
+    ],
+    "Patharghata": [
+      {
+        "name": "Patharghata Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Patharghata Town",
+          "Charuia"
+        ]
+      },
+      {
+        "name": "Patharghata",
+        "type": "union",
+        "villages": [
+          "Patharghata",
+          "Char Patharghata"
+        ]
+      },
+      {
+        "name": "Kalmegha",
+        "type": "union",
+        "villages": [
+          "Kalmegha",
+          "Char Kalmegha"
+        ]
+      },
+      {
+        "name": "Raihanpur",
+        "type": "union",
+        "villages": [
+          "Raihanpur",
+          "Uttar Raihanpur"
+        ]
+      },
+      {
+        "name": "Charuia",
+        "type": "union",
+        "villages": [
+          "Charuia",
+          "Char Charuia"
+        ]
+      },
+      {
+        "name": "Kanthaltali",
+        "type": "union",
+        "villages": [
+          "Kanthaltali",
+          "Char Kanthaltali"
+        ]
+      }
+    ],
+    "Taltali": [
+      {
+        "name": "Taltali",
+        "type": "union",
+        "villages": [
+          "Taltali",
+          "Char Taltali"
+        ]
+      },
+      {
+        "name": "Sonakata",
+        "type": "union",
+        "villages": [
+          "Sonakata",
+          "Char Sonakata"
+        ]
+      },
+      {
+        "name": "Barabagi",
+        "type": "union",
+        "villages": [
+          "Barabagi",
+          "Char Barabagi"
+        ]
+      },
+      {
+        "name": "Karaibaria",
+        "type": "union",
+        "villages": [
+          "Karaibaria",
+          "Char Karaibaria"
+        ]
+      },
+      {
+        "name": "Nihola Bardia",
+        "type": "union",
+        "villages": [
+          "Nihola",
+          "Bardia"
+        ]
+      }
+    ],
+    "Agailjhara": [
+      {
+        "name": "Ratnapur",
+        "type": "union",
+        "villages": [
+          "Ratnapur",
+          "Char Ratnapur"
+        ]
+      },
+      {
+        "name": "Bagdhair",
+        "type": "union",
+        "villages": [
+          "Bagdhair",
+          "Char Bagdhair"
+        ]
+      },
+      {
+        "name": "Rajapur",
+        "type": "union",
+        "villages": [
+          "Rajapur",
+          "Char Rajapur"
+        ]
+      },
+      {
+        "name": "Gailarchar",
+        "type": "union",
+        "villages": [
+          "Gailarchar",
+          "Char Gailarchar"
+        ]
+      },
+      {
+        "name": "Bakal",
+        "type": "union",
+        "villages": [
+          "Bakal",
+          "Char Bakal"
+        ]
+      }
+    ],
+    "Babuganj": [
+      {
+        "name": "Babuganj",
+        "type": "union",
+        "villages": [
+          "Babuganj Bazar",
+          "Char Babuganj"
+        ]
+      },
+      {
+        "name": "Kedia",
+        "type": "union",
+        "villages": [
+          "Kedia",
+          "Char Kedia"
+        ]
+      },
+      {
+        "name": "Chandpasha",
+        "type": "union",
+        "villages": [
+          "Chandpasha",
+          "Char Chandpasha"
+        ]
+      },
+      {
+        "name": "Rahoma",
+        "type": "union",
+        "villages": [
+          "Rahoma",
+          "Char Rahoma"
+        ]
+      },
+      {
+        "name": "Madhabpasha",
+        "type": "union",
+        "villages": [
+          "Madhabpasha",
+          "Uttar Madhabpasha"
+        ]
+      }
+    ],
+    "Bakerganj": [
+      {
+        "name": "Bakerganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Bakerganj Town",
+          "Padrishibpur"
+        ]
+      },
+      {
+        "name": "Darial",
+        "type": "union",
+        "villages": [
+          "Darial",
+          "Char Darial"
+        ]
+      },
+      {
+        "name": "Rangasree",
+        "type": "union",
+        "villages": [
+          "Rangasree",
+          "Char Rangasree"
+        ]
+      },
+      {
+        "name": "Padrishibpur",
+        "type": "union",
+        "villages": [
+          "Padrishibpur",
+          "Uttar Padrishibpur"
+        ]
+      },
+      {
+        "name": "Niyamati",
+        "type": "union",
+        "villages": [
+          "Niyamati",
+          "Char Niyamati"
+        ]
+      },
+      {
+        "name": "Syed Abad",
+        "type": "union",
+        "villages": [
+          "Syed Abad",
+          "Char Syed Abad"
+        ]
+      },
+      {
+        "name": "Garulia",
+        "type": "union",
+        "villages": [
+          "Garulia",
+          "Char Garulia"
+        ]
+      },
+      {
+        "name": "Kalashkathi",
+        "type": "union",
+        "villages": [
+          "Kalashkathi",
+          "Char Kalashkathi"
+        ]
+      },
+      {
+        "name": "Kala Baria",
+        "type": "union",
+        "villages": [
+          "Kala Baria",
+          "Char Kala Baria"
+        ]
+      },
+      {
+        "name": "Dubchar",
+        "type": "union",
+        "villages": [
+          "Dubchar",
+          "Uttar Dubchar"
+        ]
+      },
+      {
+        "name": "Nalchira",
+        "type": "union",
+        "villages": [
+          "Nalchira",
+          "Char Nalchira"
+        ]
+      }
+    ],
+    "Barishal Sadar": [
+      {
+        "name": "Barishal City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Barishal City",
+          "Natullabad"
+        ]
+      },
+      {
+        "name": "Char Aila",
+        "type": "union",
+        "villages": [
+          "Char Aila",
+          "Uttar Char Aila"
+        ]
+      },
+      {
+        "name": "Tungibaria",
+        "type": "union",
+        "villages": [
+          "Tungibaria",
+          "Char Tungibaria"
+        ]
+      },
+      {
+        "name": "Chalitabunia",
+        "type": "union",
+        "villages": [
+          "Chalitabunia",
+          "Char Chalitabunia"
+        ]
+      },
+      {
+        "name": "Char Monai",
+        "type": "union",
+        "villages": [
+          "Char Monai",
+          "Char Monai Bazar"
+        ]
+      }
+    ],
+    "Gournadi": [
+      {
+        "name": "Gournadi Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Gournadi Town",
+          "Batajor"
+        ]
+      },
+      {
+        "name": "Batajor",
+        "type": "union",
+        "villages": [
+          "Batajor",
+          "Char Batajor"
+        ]
+      },
+      {
+        "name": "Mahilara",
+        "type": "union",
+        "villages": [
+          "Mahilara",
+          "Char Mahilara"
+        ]
+      },
+      {
+        "name": "Nolchira",
+        "type": "union",
+        "villages": [
+          "Nolchira",
+          "Char Nolchira"
+        ]
+      },
+      {
+        "name": "Penjuri",
+        "type": "union",
+        "villages": [
+          "Penjuri",
+          "Char Penjuri"
+        ]
+      },
+      {
+        "name": "Samairtala",
+        "type": "union",
+        "villages": [
+          "Samairtala",
+          "Char Samairtala"
+        ]
+      }
+    ],
+    "Hizla": [
+      {
+        "name": "Hizla",
+        "type": "union",
+        "villages": [
+          "Hizla Bazar",
+          "Char Hizla"
+        ]
+      },
+      {
+        "name": "Guabaria",
+        "type": "union",
+        "villages": [
+          "Guabaria",
+          "Char Guabaria"
+        ]
+      },
+      {
+        "name": "Memanbari",
+        "type": "union",
+        "villages": [
+          "Memanbari",
+          "Char Memanbari"
+        ]
+      },
+      {
+        "name": "Basudev Para",
+        "type": "union",
+        "villages": [
+          "Basudev Para",
+          "Char Basudev"
+        ]
+      },
+      {
+        "name": "Shibpur",
+        "type": "union",
+        "villages": [
+          "Shibpur",
+          "Char Shibpur"
+        ]
+      }
+    ],
+    "Mehendiganj": [
+      {
+        "name": "Mehendiganj",
+        "type": "union",
+        "villages": [
+          "Mehendiganj Bazar",
+          "Char Mehendiganj"
+        ]
+      },
+      {
+        "name": "Chandpur",
+        "type": "union",
+        "villages": [
+          "Chandpur",
+          "Char Chandpur"
+        ]
+      },
+      {
+        "name": "Char Ekkria",
+        "type": "union",
+        "villages": [
+          "Char Ekkria",
+          "Char Ekkria Bazar"
+        ]
+      },
+      {
+        "name": "Jangalia",
+        "type": "union",
+        "villages": [
+          "Jangalia",
+          "Char Jangalia"
+        ]
+      },
+      {
+        "name": "Bidyanandapur",
+        "type": "union",
+        "villages": [
+          "Bidyanandapur",
+          "Char Bidyanandapur"
+        ]
+      },
+      {
+        "name": "Char Gopalpur",
+        "type": "union",
+        "villages": [
+          "Char Gopalpur",
+          "Uttar Char Gopalpur"
+        ]
+      },
+      {
+        "name": "Ulipur",
+        "type": "union",
+        "villages": [
+          "Ulipur",
+          "Char Ulipur"
+        ]
+      },
+      {
+        "name": "Char Bluff",
+        "type": "union",
+        "villages": [
+          "Char Bluff",
+          "Dakshin Char Bluff"
+        ]
+      }
+    ],
+    "Muladi": [
+      {
+        "name": "Muladi",
+        "type": "union",
+        "villages": [
+          "Muladi Bazar",
+          "Char Muladi"
+        ]
+      },
+      {
+        "name": "Batamara",
+        "type": "union",
+        "villages": [
+          "Batamara",
+          "Char Batamara"
+        ]
+      },
+      {
+        "name": "Char Kalekhan",
+        "type": "union",
+        "villages": [
+          "Char Kalekhan",
+          "Uttar Char Kalekhan"
+        ]
+      },
+      {
+        "name": "Nazipur",
+        "type": "union",
+        "villages": [
+          "Nazipur",
+          "Char Nazipur"
+        ]
+      },
+      {
+        "name": "Safimaddhar",
+        "type": "union",
+        "villages": [
+          "Safimaddhar",
+          "Char Safimaddhar"
+        ]
+      },
+      {
+        "name": "Kazirchar",
+        "type": "union",
+        "villages": [
+          "Kazirchar",
+          "Char Kazirchar"
+        ]
+      }
+    ],
+    "Uzirpur": [
+      {
+        "name": "Uzirpur",
+        "type": "union",
+        "villages": [
+          "Uzirpur Bazar",
+          "Char Uzirpur"
+        ]
+      },
+      {
+        "name": "Shikarpur",
+        "type": "union",
+        "villages": [
+          "Shikarpur",
+          "Char Shikarpur"
+        ]
+      },
+      {
+        "name": "Bambaria",
+        "type": "union",
+        "villages": [
+          "Bambaria",
+          "Char Bambaria"
+        ]
+      },
+      {
+        "name": "Bhitar Bambaria",
+        "type": "union",
+        "villages": [
+          "Bhitar Bambaria",
+          "Uttar Bhitar Bambaria"
+        ]
+      },
+      {
+        "name": "Harinathpur",
+        "type": "union",
+        "villages": [
+          "Harinathpur",
+          "Char Harinathpur"
+        ]
+      },
+      {
+        "name": "Sonapur",
+        "type": "union",
+        "villages": [
+          "Sonapur",
+          "Char Sonapur"
+        ]
+      },
+      {
+        "name": "Okia",
+        "type": "union",
+        "villages": [
+          "Okia",
+          "Char Okia"
+        ]
+      }
+    ],
+    "Bhola Sadar": [
+      {
+        "name": "Bhola Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Bhola Town",
+          "Sahar"
+        ]
+      },
+      {
+        "name": "Sahar",
+        "type": "union",
+        "villages": [
+          "Sahar",
+          "Uttar Sahar"
+        ]
+      },
+      {
+        "name": "Rajipur",
+        "type": "union",
+        "villages": [
+          "Rajipur",
+          "Char Rajipur"
+        ]
+      },
+      {
+        "name": "Alimabad",
+        "type": "union",
+        "villages": [
+          "Alimabad",
+          "Char Alimabad"
+        ]
+      },
+      {
+        "name": "Kachiya",
+        "type": "union",
+        "villages": [
+          "Kachiya",
+          "Char Kachiya"
+        ]
+      },
+      {
+        "name": "Veduria",
+        "type": "union",
+        "villages": [
+          "Veduria",
+          "Char Veduria"
+        ]
+      },
+      {
+        "name": "Bapuji Nagar",
+        "type": "union",
+        "villages": [
+          "Bapuji Nagar",
+          "Char Bapuji"
+        ]
+      }
+    ],
+    "Borhanuddin": [
+      {
+        "name": "Borhanuddin Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Borhanuddin Town",
+          "Chandpur"
+        ]
+      },
+      {
+        "name": "Kutba",
+        "type": "union",
+        "villages": [
+          "Kutba",
+          "Char Kutba"
+        ]
+      },
+      {
+        "name": "Chandpur",
+        "type": "union",
+        "villages": [
+          "Chandpur",
+          "Char Chandpur"
+        ]
+      },
+      {
+        "name": "Deula",
+        "type": "union",
+        "villages": [
+          "Deula",
+          "Char Deula"
+        ]
+      },
+      {
+        "name": "Hakimuddin",
+        "type": "union",
+        "villages": [
+          "Hakimuddin",
+          "Char Hakimuddin"
+        ]
+      },
+      {
+        "name": "Pachila",
+        "type": "union",
+        "villages": [
+          "Pachila",
+          "Char Pachila"
+        ]
+      }
+    ],
+    "Char Fasson": [
+      {
+        "name": "Char Fasson Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Char Fasson Town",
+          "Aslampur"
+        ]
+      },
+      {
+        "name": "Char Fasson",
+        "type": "union",
+        "villages": [
+          "Char Fasson",
+          "Uttar Char Fasson"
+        ]
+      },
+      {
+        "name": "Aslampur",
+        "type": "union",
+        "villages": [
+          "Aslampur",
+          "Char Aslampur"
+        ]
+      },
+      {
+        "name": "East Char Fasson",
+        "type": "union",
+        "villages": [
+          "East Char Fasson",
+          "Char East Fasson"
+        ]
+      },
+      {
+        "name": "Char Madraj",
+        "type": "union",
+        "villages": [
+          "Char Madraj",
+          "Uttar Char Madraj"
+        ]
+      },
+      {
+        "name": "Osmanganj",
+        "type": "union",
+        "villages": [
+          "Osmanganj",
+          "Char Osmanganj"
+        ]
+      },
+      {
+        "name": "Kachar Char",
+        "type": "union",
+        "villages": [
+          "Kachar Char",
+          "Dakkhin Kachar"
+        ]
+      },
+      {
+        "name": "Hazipur",
+        "type": "union",
+        "villages": [
+          "Hazipur",
+          "Char Hazipur"
+        ]
+      }
+    ],
+    "Daulatkhan": [
+      {
+        "name": "Daulatkhan Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Daulatkhan Town",
+          "Char Daulatkhan"
+        ]
+      },
+      {
+        "name": "Char Khali",
+        "type": "union",
+        "villages": [
+          "Char Khali",
+          "Uttar Char Khali"
+        ]
+      },
+      {
+        "name": "Madanpur",
+        "type": "union",
+        "villages": [
+          "Madanpur",
+          "Char Madanpur"
+        ]
+      },
+      {
+        "name": "Hazirhat",
+        "type": "union",
+        "villages": [
+          "Hazirhat",
+          "Char Hazirhat"
+        ]
+      },
+      {
+        "name": "Betua",
+        "type": "union",
+        "villages": [
+          "Betua",
+          "Char Betua"
+        ]
+      }
+    ],
+    "Lalmohan": [
+      {
+        "name": "Lalmohan Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Lalmohan Town",
+          "Chunakhali"
+        ]
+      },
+      {
+        "name": "Colsubet",
+        "type": "union",
+        "villages": [
+          "Colsubet",
+          "Char Colsubet"
+        ]
+      },
+      {
+        "name": "Chunakhali",
+        "type": "union",
+        "villages": [
+          "Chunakhali",
+          "Char Chunakhali"
+        ]
+      },
+      {
+        "name": "Dhali Gournagar",
+        "type": "union",
+        "villages": [
+          "Dhali Gournagar",
+          "Char Dhali"
+        ]
+      },
+      {
+        "name": "Pata Baisha",
+        "type": "union",
+        "villages": [
+          "Pata Baisha",
+          "Uttar Pata Baisha"
+        ]
+      },
+      {
+        "name": "Lord Hardinge",
+        "type": "union",
+        "villages": [
+          "Lord Hardinge",
+          "Char Lord Hardinge"
+        ]
+      },
+      {
+        "name": "Rajapur",
+        "type": "union",
+        "villages": [
+          "Rajapur",
+          "Char Rajapur"
+        ]
+      }
+    ],
+    "Manpura": [
+      {
+        "name": "Manpura",
+        "type": "union",
+        "villages": [
+          "Manpura Bazar",
+          "Char Manpura"
+        ]
+      },
+      {
+        "name": "Sakuchia",
+        "type": "union",
+        "villages": [
+          "Sakuchia",
+          "Char Sakuchia"
+        ]
+      },
+      {
+        "name": "Hazari Ganj",
+        "type": "union",
+        "villages": [
+          "Hazari Ganj",
+          "Char Hazari Ganj"
+        ]
+      }
+    ],
+    "Tazumuddin": [
+      {
+        "name": "Tazumuddin",
+        "type": "union",
+        "villages": [
+          "Tazumuddin Bazar",
+          "Char Tazumuddin"
+        ]
+      },
+      {
+        "name": "Chandrapat",
+        "type": "union",
+        "villages": [
+          "Chandrapat",
+          "Char Chandrapat"
+        ]
+      },
+      {
+        "name": "Shibpur",
+        "type": "union",
+        "villages": [
+          "Shibpur",
+          "Char Shibpur"
+        ]
+      },
+      {
+        "name": "Char Aira",
+        "type": "union",
+        "villages": [
+          "Char Aira",
+          "Uttar Char Aira"
+        ]
+      }
+    ],
+    "Keraniganj": [
+      {
+        "name": "Keraniganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Zinzira",
+          "Aganagar"
+        ]
+      },
+      {
+        "name": "Zinzira",
+        "type": "union",
+        "villages": [
+          "Zinzira",
+          "Shakhipur"
+        ]
+      },
+      {
+        "name": "Kalindi",
+        "type": "union",
+        "villages": [
+          "Kalindi",
+          "Char Kalindi"
+        ]
+      },
+      {
+        "name": "Subidkhali",
+        "type": "union",
+        "villages": [
+          "Subidkhali",
+          "Uttar Subidkhali"
+        ]
+      },
+      {
+        "name": "Basta",
+        "type": "union",
+        "villages": [
+          "Basta",
+          "Char Basta"
+        ]
+      },
+      {
+        "name": "Shubadya",
+        "type": "union",
+        "villages": [
+          "Shubadya",
+          "Konda"
+        ]
+      },
+      {
+        "name": "Teghoria",
+        "type": "union",
+        "villages": [
+          "Teghoria",
+          "Rajendrapur"
+        ]
+      },
+      {
+        "name": "Hasnabad",
+        "type": "union",
+        "villages": [
+          "Hasnabad",
+          "Char Hasnabad"
+        ]
+      }
+    ],
+    "Gazipur Sadar": [
+      {
+        "name": "Gazipur City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Gazipur City",
+          "Tongi"
+        ]
+      },
+      {
+        "name": "Pubail",
+        "type": "union",
+        "villages": [
+          "Pubail",
+          "Char Pubail"
+        ]
+      },
+      {
+        "name": "Bason",
+        "type": "union",
+        "villages": [
+          "Bason",
+          "Char Bason"
+        ]
+      },
+      {
+        "name": "Mawna",
+        "type": "union",
+        "villages": [
+          "Mawna",
+          "Char Mawna"
+        ]
+      },
+      {
+        "name": "Warishpur",
+        "type": "union",
+        "villages": [
+          "Warishpur",
+          "Char Warishpur"
+        ]
+      }
+    ],
+    "Kaliakair": [
+      {
+        "name": "Kaliakair Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Kaliakair Town",
+          "Chandra"
+        ]
+      },
+      {
+        "name": "Chandra",
+        "type": "union",
+        "villages": [
+          "Chandra",
+          "Char Chandra"
+        ]
+      },
+      {
+        "name": "Baroipath",
+        "type": "union",
+        "villages": [
+          "Baroipath",
+          "Uttar Baroipath"
+        ]
+      },
+      {
+        "name": "Mouchak",
+        "type": "union",
+        "villages": [
+          "Mouchak",
+          "Char Mouchak"
+        ]
+      },
+      {
+        "name": "Boali",
+        "type": "union",
+        "villages": [
+          "Boali",
+          "Char Boali"
+        ]
+      },
+      {
+        "name": "Dhala",
+        "type": "union",
+        "villages": [
+          "Dhala",
+          "Uttar Dhala"
+        ]
+      }
+    ],
+    "Kapasia": [
+      {
+        "name": "Kapasia",
+        "type": "union",
+        "villages": [
+          "Kapasia Bazar",
+          "Ghagortia"
+        ]
+      },
+      {
+        "name": "Ghagortia",
+        "type": "union",
+        "villages": [
+          "Ghagortia",
+          "Char Ghagortia"
+        ]
+      },
+      {
+        "name": "Tarabu",
+        "type": "union",
+        "villages": [
+          "Tarabu",
+          "Char Tarabu"
+        ]
+      },
+      {
+        "name": "Singhasree",
+        "type": "union",
+        "villages": [
+          "Singhasree",
+          "Char Singhasree"
+        ]
+      },
+      {
+        "name": "Rayer Khamar",
+        "type": "union",
+        "villages": [
+          "Rayer Khamar",
+          "Uttar Rayer Khamar"
+        ]
+      }
+    ],
+    "Sreepur": [
+      {
+        "name": "Sreepur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Sreepur Town",
+          "Maona"
+        ]
+      },
+      {
+        "name": "Maona",
+        "type": "union",
+        "villages": [
+          "Maona",
+          "Char Maona"
+        ]
+      },
+      {
+        "name": "Gosinga",
+        "type": "union",
+        "villages": [
+          "Gosinga",
+          "Char Gosinga"
+        ]
+      },
+      {
+        "name": "Telihati",
+        "type": "union",
+        "villages": [
+          "Telihati",
+          "Uttar Telihati"
+        ]
+      },
+      {
+        "name": "Rajabari",
+        "type": "union",
+        "villages": [
+          "Rajabari",
+          "Char Rajabari"
+        ]
+      },
+      {
+        "name": "Prohladpur",
+        "type": "union",
+        "villages": [
+          "Prohladpur",
+          "Char Prohladpur"
+        ]
+      }
+    ],
+    "Araihazar": [
+      {
+        "name": "Araihazar",
+        "type": "union",
+        "villages": [
+          "Araihazar Bazar",
+          "Char Araihazar"
+        ]
+      },
+      {
+        "name": "Haizadi",
+        "type": "union",
+        "villages": [
+          "Haizadi",
+          "Char Haizadi"
+        ]
+      },
+      {
+        "name": "Fatehpur",
+        "type": "union",
+        "villages": [
+          "Fatehpur",
+          "Char Fatehpur"
+        ]
+      },
+      {
+        "name": "Khadiapara",
+        "type": "union",
+        "villages": [
+          "Khadiapara",
+          "Uttar Khadiapara"
+        ]
+      },
+      {
+        "name": "Brahmandi",
+        "type": "union",
+        "villages": [
+          "Brahmandi",
+          "Char Brahmandi"
+        ]
+      },
+      {
+        "name": "Duptara",
+        "type": "union",
+        "villages": [
+          "Duptara",
+          "Char Duptara"
+        ]
+      },
+      {
+        "name": "Sahipur",
+        "type": "union",
+        "villages": [
+          "Sahipur",
+          "Char Sahipur"
+        ]
+      }
+    ],
+    "Narayanganj Sadar": [
+      {
+        "name": "Narayanganj City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Narayanganj City",
+          "Fatullah"
+        ]
+      },
+      {
+        "name": "Alir Tek",
+        "type": "union",
+        "villages": [
+          "Alir Tek",
+          "Char Alir Tek"
+        ]
+      },
+      {
+        "name": "Kashipur",
+        "type": "union",
+        "villages": [
+          "Kashipur",
+          "Char Kashipur"
+        ]
+      },
+      {
+        "name": "Kolarcher",
+        "type": "union",
+        "villages": [
+          "Kolarcher",
+          "Uttar Kolarcher"
+        ]
+      }
+    ],
+    "Sonargaon": [
+      {
+        "name": "Sonargaon",
+        "type": "union",
+        "villages": [
+          "Panam Nagar",
+          "Mograpara"
+        ]
+      },
+      {
+        "name": "Mograpara",
+        "type": "union",
+        "villages": [
+          "Mograpara",
+          "Char Mograpara"
+        ]
+      },
+      {
+        "name": "Baidyer Bazar",
+        "type": "union",
+        "villages": [
+          "Baidyer Bazar",
+          "Char Baidyer Bazar"
+        ]
+      },
+      {
+        "name": "Pirojpur",
+        "type": "union",
+        "villages": [
+          "Pirojpur",
+          "Char Pirojpur"
+        ]
+      },
+      {
+        "name": "Kashi Puratahsilarpur",
+        "type": "union",
+        "villages": [
+          "Kashi Pura",
+          "Tahsilarpur"
+        ]
+      },
+      {
+        "name": "Barodi",
+        "type": "union",
+        "villages": [
+          "Barodi",
+          "Char Barodi"
+        ]
+      },
+      {
+        "name": "Jampur",
+        "type": "union",
+        "villages": [
+          "Jampur",
+          "Char Jampur"
+        ]
+      }
+    ],
+    "Rupganj": [
+      {
+        "name": "Rupganj",
+        "type": "union",
+        "villages": [
+          "Rupganj Bazar",
+          "Char Rupganj"
+        ]
+      },
+      {
+        "name": "Murapara",
+        "type": "union",
+        "villages": [
+          "Murapara",
+          "Char Murapara"
+        ]
+      },
+      {
+        "name": "Bhulta",
+        "type": "union",
+        "villages": [
+          "Bhulta",
+          "Char Bhulta"
+        ]
+      },
+      {
+        "name": "Kanchan",
+        "type": "union",
+        "villages": [
+          "Kanchan",
+          "Char Kanchan"
+        ]
+      },
+      {
+        "name": "Tarab",
+        "type": "union",
+        "villages": [
+          "Tarab",
+          "Char Tarab"
+        ]
+      }
+    ],
+    "Sylhet Sadar": [
+      {
+        "name": "Sylhet City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Sylhet City",
+          "Ambarkhana"
+        ]
+      },
+      {
+        "name": "Khadadim",
+        "type": "union",
+        "villages": [
+          "Khadadim",
+          "Char Khadadim"
+        ]
+      },
+      {
+        "name": "Tukerbazar",
+        "type": "union",
+        "villages": [
+          "Tukerbazar",
+          "Char Tukerbazar"
+        ]
+      },
+      {
+        "name": "Jalalabad",
+        "type": "union",
+        "villages": [
+          "Jalalabad",
+          "Char Jalalabad"
+        ]
+      },
+      {
+        "name": "Kandigaon",
+        "type": "union",
+        "villages": [
+          "Kandigaon",
+          "Uttar Kandigaon"
+        ]
+      },
+      {
+        "name": "Hathkhola",
+        "type": "union",
+        "villages": [
+          "Hathkhola",
+          "Char Hathkhola"
+        ]
+      }
+    ],
+    "Balaganj": [
+      {
+        "name": "Balaganj",
+        "type": "union",
+        "villages": [
+          "Balaganj Bazar",
+          "Char Balaganj"
+        ]
+      },
+      {
+        "name": "Dewan Bazar",
+        "type": "union",
+        "villages": [
+          "Dewan Bazar",
+          "Char Dewan Bazar"
+        ]
+      },
+      {
+        "name": "Pailanpur",
+        "type": "union",
+        "villages": [
+          "Pailanpur",
+          "Uttar Pailanpur"
+        ]
+      },
+      {
+        "name": "Boaljur",
+        "type": "union",
+        "villages": [
+          "Boaljur",
+          "Char Boaljur"
+        ]
+      }
+    ],
+    "Beanibazar": [
+      {
+        "name": "Beanibazar Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Beanibazar Town",
+          "Tilpara"
+        ]
+      },
+      {
+        "name": "Tilpara",
+        "type": "union",
+        "villages": [
+          "Tilpara",
+          "Char Tilpara"
+        ]
+      },
+      {
+        "name": "Murarichor",
+        "type": "union",
+        "villages": [
+          "Murarichor",
+          "Char Murarichor"
+        ]
+      },
+      {
+        "name": "Mathiura",
+        "type": "union",
+        "villages": [
+          "Mathiura",
+          "Char Mathiura"
+        ]
+      },
+      {
+        "name": "Sheolaganj",
+        "type": "union",
+        "villages": [
+          "Sheolaganj",
+          "Uttar Sheolaganj"
+        ]
+      },
+      {
+        "name": "Dubi",
+        "type": "union",
+        "villages": [
+          "Dubi",
+          "Char Dubi"
+        ]
+      },
+      {
+        "name": "Kasheemnagar",
+        "type": "union",
+        "villages": [
+          "Kasheemnagar",
+          "Char Kasheemnagar"
+        ]
+      }
+    ],
+    "Gowainghat": [
+      {
+        "name": "Gowainghat",
+        "type": "union",
+        "villages": [
+          "Gowainghat Bazar",
+          "Char Gowainghat"
+        ]
+      },
+      {
+        "name": "Fatehpur",
+        "type": "union",
+        "villages": [
+          "Fatehpur",
+          "Uttar Fatehpur"
+        ]
+      },
+      {
+        "name": "Rustampur",
+        "type": "union",
+        "villages": [
+          "Rustampur",
+          "Char Rustampur"
+        ]
+      },
+      {
+        "name": "Noagaon",
+        "type": "union",
+        "villages": [
+          "Noagaon",
+          "Char Noagaon"
+        ]
+      },
+      {
+        "name": "Lengrpar",
+        "type": "union",
+        "villages": [
+          "Lengrpar",
+          "Char Lengrpar"
+        ]
+      },
+      {
+        "name": "Pirijpur",
+        "type": "union",
+        "villages": [
+          "Pirijpur",
+          "Uttar Pirijpur"
+        ]
+      }
+    ],
+    "Chattogram Bandar": [
+      {
+        "name": "Chattogram City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Port Area",
+          "Agrabad"
+        ]
+      },
+      {
+        "name": "Halishahar",
+        "type": "union",
+        "villages": [
+          "Halishahar",
+          "North Halishahar"
+        ]
+      },
+      {
+        "name": "Patenga",
+        "type": "union",
+        "villages": [
+          "Patenga",
+          "South Patenga"
+        ]
+      },
+      {
+        "name": "North Patenga",
+        "type": "union",
+        "villages": [
+          "North Patenga",
+          "Sadarghat"
+        ]
+      }
+    ],
+    "Anwara": [
+      {
+        "name": "Anwara",
+        "type": "union",
+        "villages": [
+          "Anwara Bazar",
+          "Char Anwara"
+        ]
+      },
+      {
+        "name": "Chatari",
+        "type": "union",
+        "villages": [
+          "Chatari",
+          "Char Chatari"
+        ]
+      },
+      {
+        "name": "Parua",
+        "type": "union",
+        "villages": [
+          "Parua",
+          "Char Parua"
+        ]
+      },
+      {
+        "name": "Haildhar",
+        "type": "union",
+        "villages": [
+          "Haildhar",
+          "Char Haildhar"
+        ]
+      },
+      {
+        "name": "Barakhain",
+        "type": "union",
+        "villages": [
+          "Barakhain",
+          "Char Barakhain"
+        ]
+      },
+      {
+        "name": "Raypur",
+        "type": "union",
+        "villages": [
+          "Raypur",
+          "Uttar Raypur"
+        ]
+      },
+      {
+        "name": "Bahubal",
+        "type": "union",
+        "villages": [
+          "Bahubal",
+          "Char Bahubal"
+        ]
+      },
+      {
+        "name": "Juldha",
+        "type": "union",
+        "villages": [
+          "Juldha",
+          "Char Juldha"
+        ]
+      }
+    ],
+    "Hathazari": [
+      {
+        "name": "Hathazari Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Hathazari Town",
+          "Garduara"
+        ]
+      },
+      {
+        "name": "Garduara",
+        "type": "union",
+        "villages": [
+          "Garduara",
+          "Char Garduara"
+        ]
+      },
+      {
+        "name": "Mekhala",
+        "type": "union",
+        "villages": [
+          "Mekhala",
+          "Char Mekhala"
+        ]
+      },
+      {
+        "name": "Gumanta",
+        "type": "union",
+        "villages": [
+          "Gumanta",
+          "Uttar Gumanta"
+        ]
+      },
+      {
+        "name": "Mirzapur",
+        "type": "union",
+        "villages": [
+          "Mirzapur",
+          "Char Mirzapur"
+        ]
+      },
+      {
+        "name": "Chikondandi",
+        "type": "union",
+        "villages": [
+          "Chikondandi",
+          "Uttar Chikondandi"
+        ]
+      },
+      {
+        "name": "Forhadabad",
+        "type": "union",
+        "villages": [
+          "Forhadabad",
+          "Char Forhadabad"
+        ]
+      },
+      {
+        "name": "Katirhat",
+        "type": "union",
+        "villages": [
+          "Katirhat",
+          "Uttar Katirhat"
+        ]
+      }
+    ],
+    "Cox's Bazar Sadar": [
+      {
+        "name": "Cox's Bazar Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Cox's Bazar Town",
+          "Kolatali"
+        ]
+      },
+      {
+        "name": "Kolatali",
+        "type": "union",
+        "villages": [
+          "Kolatali",
+          "Char Kolatali"
+        ]
+      },
+      {
+        "name": "Islamabad",
+        "type": "union",
+        "villages": [
+          "Islamabad",
+          "Char Islamabad"
+        ]
+      },
+      {
+        "name": "Jhilwnja",
+        "type": "union",
+        "villages": [
+          "Jhilwnja",
+          "Char Jhilwnja"
+        ]
+      },
+      {
+        "name": "Eidgaon",
+        "type": "union",
+        "villages": [
+          "Eidgaon",
+          "Char Eidgaon"
+        ]
+      },
+      {
+        "name": "Baraghop",
+        "type": "union",
+        "villages": [
+          "Baraghop",
+          "Char Baraghop"
+        ]
+      }
+    ],
+    "Teknaf": [
+      {
+        "name": "Teknaf Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Teknaf Town",
+          "Sabrang"
+        ]
+      },
+      {
+        "name": "Teknaf",
+        "type": "union",
+        "villages": [
+          "Teknaf",
+          "Char Teknaf"
+        ]
+      },
+      {
+        "name": "Sabrang",
+        "type": "union",
+        "villages": [
+          "Sabrang",
+          "Char Sabrang"
+        ]
+      },
+      {
+        "name": "Nhilla",
+        "type": "union",
+        "villages": [
+          "Nhilla",
+          "Char Nhilla"
+        ]
+      },
+      {
+        "name": "Baharchhara",
+        "type": "union",
+        "villages": [
+          "Baharchhara",
+          "Char Baharchhara"
+        ]
+      },
+      {
+        "name": "Whykhong",
+        "type": "union",
+        "villages": [
+          "Whykhong",
+          "Char Whykhong"
+        ]
+      }
+    ],
+    "Ukhia": [
+      {
+        "name": "Ukhia",
+        "type": "union",
+        "villages": [
+          "Ukhia Bazar",
+          "Char Ukhia"
+        ]
+      },
+      {
+        "name": "Jalia Palang",
+        "type": "union",
+        "villages": [
+          "Jalia Palang",
+          "Char Jalia Palang"
+        ]
+      },
+      {
+        "name": "Rajapalong",
+        "type": "union",
+        "villages": [
+          "Rajapalong",
+          "Char Rajapalong"
+        ]
+      },
+      {
+        "name": "Haldia Palang",
+        "type": "union",
+        "villages": [
+          "Haldia Palang",
+          "Char Haldia Palang"
+        ]
+      }
+    ],
+    "Khulna Sadar": [
+      {
+        "name": "Khulna City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Khulna City",
+          "Sonadanga"
+        ]
+      },
+      {
+        "name": "Hairala",
+        "type": "union",
+        "villages": [
+          "Hairala",
+          "Char Hairala"
+        ]
+      },
+      {
+        "name": "Daulatpur",
+        "type": "union",
+        "villages": [
+          "Daulatpur",
+          "Uttar Daulatpur"
+        ]
+      }
+    ],
+    "Dumuria": [
+      {
+        "name": "Dumuria Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Dumuria Town",
+          "Magurkhali"
+        ]
+      },
+      {
+        "name": "Magurkhali",
+        "type": "union",
+        "villages": [
+          "Magurkhali",
+          "Char Magurkhali"
+        ]
+      },
+      {
+        "name": "Atlia",
+        "type": "union",
+        "villages": [
+          "Atlia",
+          "Char Atlia"
+        ]
+      },
+      {
+        "name": "Rangpur",
+        "type": "union",
+        "villages": [
+          "Rangpur",
+          "Char Rangpur"
+        ]
+      },
+      {
+        "name": "Sholadana",
+        "type": "union",
+        "villages": [
+          "Sholadana",
+          "Char Sholadana"
+        ]
+      },
+      {
+        "name": "Raghunathpur",
+        "type": "union",
+        "villages": [
+          "Raghunathpur",
+          "Char Raghunathpur"
+        ]
+      },
+      {
+        "name": "Rudaghara",
+        "type": "union",
+        "villages": [
+          "Rudaghara",
+          "Char Rudaghara"
+        ]
+      },
+      {
+        "name": "Kuliaghara",
+        "type": "union",
+        "villages": [
+          "Kuliaghara",
+          "Uttar Kuliaghara"
+        ]
+      },
+      {
+        "name": "Kharnia",
+        "type": "union",
+        "villages": [
+          "Kharnia",
+          "Char Kharnia"
+        ]
+      },
+      {
+        "name": "Mirpur",
+        "type": "union",
+        "villages": [
+          "Mirpur",
+          "Char Mirpur"
+        ]
+      }
+    ],
+    "Rajshahi Sadar": [
+      {
+        "name": "Rajshahi City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Rajshahi City",
+          "Boalia"
+        ]
+      },
+      {
+        "name": "Char Ashariadaha",
+        "type": "union",
+        "villages": [
+          "Char Ashariadaha",
+          "Uttar Char Ashariadaha"
+        ]
+      },
+      {
+        "name": "Haripur",
+        "type": "union",
+        "villages": [
+          "Haripur",
+          "Char Haripur"
+        ]
+      },
+      {
+        "name": "Kazla",
+        "type": "union",
+        "villages": [
+          "Kazla",
+          "Char Kazla"
+        ]
+      }
+    ],
+    "Godagari": [
+      {
+        "name": "Godagari",
+        "type": "union",
+        "villages": [
+          "Godagari Bazar",
+          "Char Godagari"
+        ]
+      },
+      {
+        "name": "Debipur",
+        "type": "union",
+        "villages": [
+          "Debipur",
+          "Char Debipur"
+        ]
+      },
+      {
+        "name": "Basudebpur",
+        "type": "union",
+        "villages": [
+          "Basudebpur",
+          "Char Basudebpur"
+        ]
+      },
+      {
+        "name": "Char Ashariadaha",
+        "type": "union",
+        "villages": [
+          "Char Ashariadaha",
+          "Uttar Char Ashariadaha"
+        ]
+      },
+      {
+        "name": "Pakri",
+        "type": "union",
+        "villages": [
+          "Pakri",
+          "Char Pakri"
+        ]
+      },
+      {
+        "name": "Gogram",
+        "type": "union",
+        "villages": [
+          "Gogram",
+          "Char Gogram"
+        ]
+      },
+      {
+        "name": "Rishikul",
+        "type": "union",
+        "villages": [
+          "Rishikul",
+          "Char Rishikul"
+        ]
+      }
+    ],
+    "Rangpur Sadar": [
+      {
+        "name": "Rangpur City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Rangpur City",
+          "Shapla"
+        ]
+      },
+      {
+        "name": "Chandanpat",
+        "type": "union",
+        "villages": [
+          "Chandanpat",
+          "Char Chandanpat"
+        ]
+      },
+      {
+        "name": "Uttar Khidirpur",
+        "type": "union",
+        "villages": [
+          "Uttar Khidirpur",
+          "Dakkhin Khidirpur"
+        ]
+      },
+      {
+        "name": "Satgara",
+        "type": "union",
+        "villages": [
+          "Satgara",
+          "Char Satgara"
+        ]
+      },
+      {
+        "name": "Tajhat",
+        "type": "union",
+        "villages": [
+          "Tajhat",
+          "Char Tajhat"
+        ]
+      },
+      {
+        "name": "Mahiganj",
+        "type": "union",
+        "villages": [
+          "Mahiganj",
+          "Char Mahiganj"
+        ]
+      }
+    ],
+    "Mithapukur": [
+      {
+        "name": "Mithapukur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Mithapukur Town",
+          "Boro Hazra"
+        ]
+      },
+      {
+        "name": "Boro Hazra",
+        "type": "union",
+        "villages": [
+          "Boro Hazra",
+          "Char Boro Hazra"
+        ]
+      },
+      {
+        "name": "Mayenpur",
+        "type": "union",
+        "villages": [
+          "Mayenpur",
+          "Char Mayenpur"
+        ]
+      },
+      {
+        "name": "Pakia",
+        "type": "union",
+        "villages": [
+          "Pakia",
+          "Char Pakia"
+        ]
+      },
+      {
+        "name": "Khoragachh",
+        "type": "union",
+        "villages": [
+          "Khoragachh",
+          "Char Khoragachh"
+        ]
+      },
+      {
+        "name": "Balagram",
+        "type": "union",
+        "villages": [
+          "Balagram",
+          "Char Balagram"
+        ]
+      },
+      {
+        "name": "Chandanbaisa",
+        "type": "union",
+        "villages": [
+          "Chandanbaisa",
+          "Char Chandanbaisa"
+        ]
+      },
+      {
+        "name": "Mirzapur",
+        "type": "union",
+        "villages": [
+          "Mirzapur",
+          "Char Mirzapur"
+        ]
+      },
+      {
+        "name": "Payer Ber",
+        "type": "union",
+        "villages": [
+          "Payer Ber",
+          "Char Payer Ber"
+        ]
+      },
+      {
+        "name": "Rangpur Sadar",
+        "type": "union",
+        "villages": [
+          "Shapla",
+          "Char Shapla"
+        ]
+      }
+    ],
+    "Mymensingh Sadar": [
+      {
+        "name": "Mymensingh City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Mymensingh City",
+          "Ganginarpar"
+        ]
+      },
+      {
+        "name": "Akua",
+        "type": "union",
+        "villages": [
+          "Akua",
+          "Char Akua"
+        ]
+      },
+      {
+        "name": "Aitharer Char",
+        "type": "union",
+        "villages": [
+          "Aitharer Char",
+          "Uttar Aitharer Char"
+        ]
+      },
+      {
+        "name": "Kewatkhali",
+        "type": "union",
+        "villages": [
+          "Kewatkhali",
+          "Char Kewatkhali"
+        ]
+      },
+      {
+        "name": "Borar Char",
+        "type": "union",
+        "villages": [
+          "Borar Char",
+          "Uttar Borar Char"
+        ]
+      },
+      {
+        "name": "Char Ishwar",
+        "type": "union",
+        "villages": [
+          "Char Ishwar",
+          "Dakkhin Char Ishwar"
+        ]
+      },
+      {
+        "name": "Dapunia",
+        "type": "union",
+        "villages": [
+          "Dapunia",
+          "Char Dapunia"
+        ]
+      },
+      {
+        "name": "Boidyer Bazar",
+        "type": "union",
+        "villages": [
+          "Boidyer Bazar",
+          "Char Boidyer Bazar"
+        ]
+      },
+      {
+        "name": "Paranganj",
+        "type": "union",
+        "villages": [
+          "Paranganj",
+          "Char Paranganj"
+        ]
+      }
+    ],
+    "Trishal": [
+      {
+        "name": "Trishal Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Trishal Town",
+          "Balipara"
+        ]
+      },
+      {
+        "name": "Balipara",
+        "type": "union",
+        "villages": [
+          "Balipara",
+          "Char Balipara"
+        ]
+      },
+      {
+        "name": "Harirampur",
+        "type": "union",
+        "villages": [
+          "Harirampur",
+          "Char Harirampur"
+        ]
+      },
+      {
+        "name": "Matbari",
+        "type": "union",
+        "villages": [
+          "Matbari",
+          "Char Matbari"
+        ]
+      },
+      {
+        "name": "Kanthal",
+        "type": "union",
+        "villages": [
+          "Kanthal",
+          "Char Kanthal"
+        ]
+      },
+      {
+        "name": "Rampur",
+        "type": "union",
+        "villages": [
+          "Rampur",
+          "Char Rampur"
+        ]
+      },
+      {
+        "name": "Dhanikhola",
+        "type": "union",
+        "villages": [
+          "Dhanikhola",
+          "Char Dhanikhola"
+        ]
+      },
+      {
+        "name": "Moshakhali",
+        "type": "union",
+        "villages": [
+          "Moshakhali",
+          "Uttar Moshakhali"
+        ]
+      }
+    ],
+    "Habiganj Sadar": [
+      {
+        "name": "Habiganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Habiganj Town",
+          "Shayestaganj"
+        ]
+      },
+      {
+        "name": "Shayestaganj",
+        "type": "union",
+        "villages": [
+          "Shayestaganj",
+          "Char Shayestaganj"
+        ]
+      },
+      {
+        "name": "Gaznapur",
+        "type": "union",
+        "villages": [
+          "Gaznapur",
+          "Char Gaznapur"
+        ]
+      },
+      {
+        "name": "Bhadeshwar",
+        "type": "union",
+        "villages": [
+          "Bhadeshwar",
+          "Char Bhadeshwar"
+        ]
+      },
+      {
+        "name": "Lashkarpur",
+        "type": "union",
+        "villages": [
+          "Lashkarpur",
+          "Char Lashkarpur"
+        ]
+      },
+      {
+        "name": "Nurpur",
+        "type": "union",
+        "villages": [
+          "Nurpur",
+          "Char Nurpur"
+        ]
+      }
+    ],
+    "Moulvibazar Sadar": [
+      {
+        "name": "Moulvibazar Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Moulvibazar Town",
+          "Monumukh"
+        ]
+      },
+      {
+        "name": "Monumukh",
+        "type": "union",
+        "villages": [
+          "Monumukh",
+          "Char Monumukh"
+        ]
+      },
+      {
+        "name": "Mostafapur",
+        "type": "union",
+        "villages": [
+          "Mostafapur",
+          "Char Mostafapur"
+        ]
+      },
+      {
+        "name": "Kamalbazar",
+        "type": "union",
+        "villages": [
+          "Kamalbazar",
+          "Char Kamalbazar"
+        ]
+      },
+      {
+        "name": "Aknail",
+        "type": "union",
+        "villages": [
+          "Aknail",
+          "Char Aknail"
+        ]
+      },
+      {
+        "name": "Giasnagar",
+        "type": "union",
+        "villages": [
+          "Giasnagar",
+          "Char Giasnagar"
+        ]
+      }
+    ],
+    "Sreemangal": [
+      {
+        "name": "Sreemangal Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Sreemangal Town",
+          "Shatgaon"
+        ]
+      },
+      {
+        "name": "Shatgaon",
+        "type": "union",
+        "villages": [
+          "Shatgaon",
+          "Char Shatgaon"
+        ]
+      },
+      {
+        "name": "Rajghat",
+        "type": "union",
+        "villages": [
+          "Rajghat",
+          "Char Rajghat"
+        ]
+      },
+      {
+        "name": "Kalighat",
+        "type": "union",
+        "villages": [
+          "Kalighat",
+          "Char Kalighat"
+        ]
+      },
+      {
+        "name": "Mirzapur",
+        "type": "union",
+        "villages": [
+          "Mirzapur",
+          "Char Mirzapur"
+        ]
+      },
+      {
+        "name": "Sindurkhaan",
+        "type": "union",
+        "villages": [
+          "Sindurkhaan",
+          "Char Sindurkhaan"
+        ]
+      }
+    ],
+    "Sunamganj Sadar": [
+      {
+        "name": "Sunamganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Sunamganj Town",
+          "Surma"
+        ]
+      },
+      {
+        "name": "Surma",
+        "type": "union",
+        "villages": [
+          "Surma",
+          "Char Surma"
+        ]
+      },
+      {
+        "name": "Ilaspur",
+        "type": "union",
+        "villages": [
+          "Ilaspur",
+          "Char Ilaspur"
+        ]
+      },
+      {
+        "name": "Joybangla",
+        "type": "union",
+        "villages": [
+          "Joybangla",
+          "Char Joybangla"
+        ]
+      },
+      {
+        "name": "Molla Para",
+        "type": "union",
+        "villages": [
+          "Molla Para",
+          "Char Molla Para"
+        ]
+      }
+    ],
+    "Bogra Sadar": [
+      {
+        "name": "Bogura Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Bogura Town",
+          "Thanahat"
+        ]
+      },
+      {
+        "name": "Thanahat",
+        "type": "union",
+        "villages": [
+          "Thanahat",
+          "Char Thanahat"
+        ]
+      },
+      {
+        "name": "Erpul",
+        "type": "union",
+        "villages": [
+          "Erpul",
+          "Char Erpul"
+        ]
+      },
+      {
+        "name": "Nunnagola",
+        "type": "union",
+        "villages": [
+          "Nunnagola",
+          "Char Nunnagola"
+        ]
+      },
+      {
+        "name": "Sukhanhali",
+        "type": "union",
+        "villages": [
+          "Sukhanhali",
+          "Char Sukhanhali"
+        ]
+      },
+      {
+        "name": "Foridpur",
+        "type": "union",
+        "villages": [
+          "Foridpur",
+          "Char Foridpur"
+        ]
+      }
+    ],
+    "Shibganj": [
+      {
+        "name": "Shibganj",
+        "type": "union",
+        "villages": [
+          "Shibganj Bazar",
+          "Char Shibganj"
+        ]
+      },
+      {
+        "name": "Deoan Ata",
+        "type": "union",
+        "villages": [
+          "Deoan Ata",
+          "Char Deoan Ata"
+        ]
+      },
+      {
+        "name": "Mokamtala",
+        "type": "union",
+        "villages": [
+          "Mokamtala",
+          "Char Mokamtala"
+        ]
+      },
+      {
+        "name": "Buriganj",
+        "type": "union",
+        "villages": [
+          "Buriganj",
+          "Char Buriganj"
+        ]
+      },
+      {
+        "name": "Binail",
+        "type": "union",
+        "villages": [
+          "Binail",
+          "Char Binail"
+        ]
+      },
+      {
+        "name": "Chandanbaisa",
+        "type": "union",
+        "villages": [
+          "Chandanbaisa",
+          "Char Chandanbaisa"
+        ]
+      }
+    ],
+    "Dinajpur Sadar": [
+      {
+        "name": "Dinajpur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Dinajpur Town",
+          "Pulhat"
+        ]
+      },
+      {
+        "name": "Pulhat",
+        "type": "union",
+        "villages": [
+          "Pulhat",
+          "Char Pulhat"
+        ]
+      },
+      {
+        "name": "Sahebganj",
+        "type": "union",
+        "villages": [
+          "Sahebganj",
+          "Char Sahebganj"
+        ]
+      },
+      {
+        "name": "Auliapur",
+        "type": "union",
+        "villages": [
+          "Auliapur",
+          "Char Auliapur"
+        ]
+      },
+      {
+        "name": "Masimpur",
+        "type": "union",
+        "villages": [
+          "Masimpur",
+          "Char Masimpur"
+        ]
+      },
+      {
+        "name": "Shashara",
+        "type": "union",
+        "villages": [
+          "Shashara",
+          "Char Shashara"
+        ]
+      },
+      {
+        "name": "Chehelegazi",
+        "type": "union",
+        "villages": [
+          "Chehelegazi",
+          "Char Chehelegazi"
+        ]
+      }
+    ],
+    "Faridpur Sadar": [
+      {
+        "name": "Faridpur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Faridpur Town",
+          "Char Bhadrasan"
+        ]
+      },
+      {
+        "name": "Char Bhadrasan",
+        "type": "union",
+        "villages": [
+          "Char Bhadrasan",
+          "Uttar Char Bhadrasan"
+        ]
+      },
+      {
+        "name": "Aliabad",
+        "type": "union",
+        "villages": [
+          "Aliabad",
+          "Char Aliabad"
+        ]
+      },
+      {
+        "name": "Kamaluddin Nagar",
+        "type": "union",
+        "villages": [
+          "Kamaluddin Nagar",
+          "Char Kamaluddin"
+        ]
+      },
+      {
+        "name": "Kanaipur",
+        "type": "union",
+        "villages": [
+          "Kanaipur",
+          "Char Kanaipur"
+        ]
+      },
+      {
+        "name": "Subhabdi",
+        "type": "union",
+        "villages": [
+          "Subhabdi",
+          "Char Subhabdi"
+        ]
+      },
+      {
+        "name": "Ambikapur",
+        "type": "union",
+        "villages": [
+          "Ambikapur",
+          "Char Ambikapur"
+        ]
+      },
+      {
+        "name": "Nogor Kanda",
+        "type": "union",
+        "villages": [
+          "Nogor Kanda",
+          "Char Nogor Kanda"
+        ]
+      }
+    ],
+    "Narsingdi Sadar": [
+      {
+        "name": "Narsingdi Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Narsingdi Town",
+          "Amdia"
+        ]
+      },
+      {
+        "name": "Amdia",
+        "type": "union",
+        "villages": [
+          "Amdia",
+          "Char Amdia"
+        ]
+      },
+      {
+        "name": "Paika",
+        "type": "union",
+        "villages": [
+          "Paika",
+          "Char Paika"
+        ]
+      },
+      {
+        "name": "Margonbari",
+        "type": "union",
+        "villages": [
+          "Margonbari",
+          "Char Margonbari"
+        ]
+      },
+      {
+        "name": "Hazipur",
+        "type": "union",
+        "villages": [
+          "Hazipur",
+          "Char Hazipur"
+        ]
+      },
+      {
+        "name": "Char Sindurias",
+        "type": "union",
+        "villages": [
+          "Char Sindurias",
+          "Uttar Char Sindurias"
+        ]
+      }
+    ],
+    "Jamalpur Sadar": [
+      {
+        "name": "Jamalpur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Jamalpur Town",
+          "Sarishabari"
+        ]
+      },
+      {
+        "name": "Narandiya",
+        "type": "union",
+        "villages": [
+          "Narandiya",
+          "Char Narandiya"
+        ]
+      },
+      {
+        "name": "Titpalla",
+        "type": "union",
+        "villages": [
+          "Titpalla",
+          "Char Titpalla"
+        ]
+      },
+      {
+        "name": "Ranagachha",
+        "type": "union",
+        "villages": [
+          "Ranagachha",
+          "Char Ranagachha"
+        ]
+      },
+      {
+        "name": "Sharifpur",
+        "type": "union",
+        "villages": [
+          "Sharifpur",
+          "Char Sharifpur"
+        ]
+      },
+      {
+        "name": "Jhaurail",
+        "type": "union",
+        "villages": [
+          "Jhaurail",
+          "Char Jhaurail"
+        ]
+      },
+      {
+        "name": "Meshta",
+        "type": "union",
+        "villages": [
+          "Meshta",
+          "Char Meshta"
+        ]
+      },
+      {
+        "name": "Kendua",
+        "type": "union",
+        "villages": [
+          "Kendua",
+          "Char Kendua"
+        ]
+      }
+    ],
+    "Kushtia Sadar": [
+      {
+        "name": "Kushtia Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Kushtia Town",
+          "Amdah"
+        ]
+      },
+      {
+        "name": "Amdah",
+        "type": "union",
+        "villages": [
+          "Amdah",
+          "Char Amdah"
+        ]
+      },
+      {
+        "name": "Abdulpur",
+        "type": "union",
+        "villages": [
+          "Abdulpur",
+          "Char Abdulpur"
+        ]
+      },
+      {
+        "name": "Bara Bazar",
+        "type": "union",
+        "villages": [
+          "Bara Bazar",
+          "Char Bara Bazar"
+        ]
+      },
+      {
+        "name": "Harispur",
+        "type": "union",
+        "villages": [
+          "Harispur",
+          "Char Harispur"
+        ]
+      },
+      {
+        "name": "Jadu Bayer",
+        "type": "union",
+        "villages": [
+          "Jadu Bayer",
+          "Char Jadu Bayer"
+        ]
+      }
+    ],
+    "Manikganj Sadar": [
+      {
+        "name": "Manikganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Manikganj Town",
+          "Betila"
+        ]
+      },
+      {
+        "name": "Betila Mitara",
+        "type": "union",
+        "villages": [
+          "Betila",
+          "Mitara"
+        ]
+      },
+      {
+        "name": "Garpara",
+        "type": "union",
+        "villages": [
+          "Garpara",
+          "Char Garpara"
+        ]
+      },
+      {
+        "name": "Krishnapur",
+        "type": "union",
+        "villages": [
+          "Krishnapur",
+          "Char Krishnapur"
+        ]
+      },
+      {
+        "name": "Putail",
+        "type": "union",
+        "villages": [
+          "Putail",
+          "Char Putail"
+        ]
+      },
+      {
+        "name": "Dighi",
+        "type": "union",
+        "villages": [
+          "Dighi",
+          "Char Dighi"
+        ]
+      }
+    ],
+    "Munshiganj Sadar": [
+      {
+        "name": "Munshiganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Munshiganj Town",
+          "Panchsar"
+        ]
+      },
+      {
+        "name": "Panchsar",
+        "type": "union",
+        "villages": [
+          "Panchsar",
+          "Char Panchsar"
+        ]
+      },
+      {
+        "name": "Rampal",
+        "type": "union",
+        "villages": [
+          "Rampal",
+          "Char Rampal"
+        ]
+      },
+      {
+        "name": "Mirkadim",
+        "type": "union",
+        "villages": [
+          "Mirkadim",
+          "Char Mirkadim"
+        ]
+      },
+      {
+        "name": "Char Kanaia",
+        "type": "union",
+        "villages": [
+          "Char Kanaia",
+          "Uttar Char Kanaia"
+        ]
+      },
+      {
+        "name": "Bajra Yoga",
+        "type": "union",
+        "villages": [
+          "Bajra Yoga",
+          "Char Bajra Yoga"
+        ]
+      }
+    ],
+    "Tangail Sadar": [
+      {
+        "name": "Tangail Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Tangail Town",
+          "Santosh"
+        ]
+      },
+      {
+        "name": "Santosh",
+        "type": "union",
+        "villages": [
+          "Santosh",
+          "Char Santosh"
+        ]
+      },
+      {
+        "name": "Kakua",
+        "type": "union",
+        "villages": [
+          "Kakua",
+          "Char Kakua"
+        ]
+      },
+      {
+        "name": "Delduar",
+        "type": "union",
+        "villages": [
+          "Delduar",
+          "Char Delduar"
+        ]
+      },
+      {
+        "name": "Porabari",
+        "type": "union",
+        "villages": [
+          "Porabari",
+          "Char Porabari"
+        ]
+      },
+      {
+        "name": "Dhupail",
+        "type": "union",
+        "villages": [
+          "Dhupail",
+          "Char Dhupail"
+        ]
+      },
+      {
+        "name": "Gala",
+        "type": "union",
+        "villages": [
+          "Gala",
+          "Char Gala"
+        ]
+      },
+      {
+        "name": "Magra",
+        "type": "union",
+        "villages": [
+          "Magra",
+          "Char Magra"
+        ]
+      }
+    ],
+    "Kishoreganj Sadar": [
+      {
+        "name": "Kishoreganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Kishoreganj Town",
+          "Purbo Para"
+        ]
+      },
+      {
+        "name": "Purbo Baro Gram",
+        "type": "union",
+        "villages": [
+          "Purbo Baro Gram",
+          "Paschim Baro Gram"
+        ]
+      },
+      {
+        "name": "Mahinanda",
+        "type": "union",
+        "villages": [
+          "Mahinanda",
+          "Char Mahinanda"
+        ]
+      },
+      {
+        "name": "Rauta",
+        "type": "union",
+        "villages": [
+          "Rauta",
+          "Char Rauta"
+        ]
+      },
+      {
+        "name": "Shoilajana",
+        "type": "union",
+        "villages": [
+          "Shoilajana",
+          "Char Shoilajana"
+        ]
+      }
+    ],
+    "Gopalganj Sadar": [
+      {
+        "name": "Gopalganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Gopalganj Town",
+          "Ulpur"
+        ]
+      },
+      {
+        "name": "Ulpur",
+        "type": "union",
+        "villages": [
+          "Ulpur",
+          "Char Ulpur"
+        ]
+      },
+      {
+        "name": "Goplalganj Sadar",
+        "type": "union",
+        "villages": [
+          "Gopalganj",
+          "Uttar Gopalganj"
+        ]
+      },
+      {
+        "name": "Rohitail",
+        "type": "union",
+        "villages": [
+          "Rohitail",
+          "Char Rohitail"
+        ]
+      },
+      {
+        "name": "Paikkandi",
+        "type": "union",
+        "villages": [
+          "Paikkandi",
+          "Char Paikkandi"
+        ]
+      },
+      {
+        "name": "Char Patoria",
+        "type": "union",
+        "villages": [
+          "Char Patoria",
+          "Uttar Char Patoria"
+        ]
+      }
+    ],
+    "Madaripur Sadar": [
+      {
+        "name": "Madaripur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Madaripur Town",
+          "Char Khaljuri"
+        ]
+      },
+      {
+        "name": "Char Khaljuri",
+        "type": "union",
+        "villages": [
+          "Char Khaljuri",
+          "Uttar Char Khaljuri"
+        ]
+      },
+      {
+        "name": "Dhurail",
+        "type": "union",
+        "villages": [
+          "Dhurail",
+          "Char Dhurail"
+        ]
+      },
+      {
+        "name": "Kalia",
+        "type": "union",
+        "villages": [
+          "Kalia",
+          "Char Kalia"
+        ]
+      },
+      {
+        "name": "Musapur",
+        "type": "union",
+        "villages": [
+          "Musapur",
+          "Char Musapur"
+        ]
+      }
+    ],
+    "Rajbari Sadar": [
+      {
+        "name": "Rajbari Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Rajbari Town",
+          "Dadshi"
+        ]
+      },
+      {
+        "name": "Dadshi",
+        "type": "union",
+        "villages": [
+          "Dadshi",
+          "Char Dadshi"
+        ]
+      },
+      {
+        "name": "Sonnapur",
+        "type": "union",
+        "villages": [
+          "Sonnapur",
+          "Char Sonnapur"
+        ]
+      },
+      {
+        "name": "Khanganj",
+        "type": "union",
+        "villages": [
+          "Khanganj",
+          "Char Khanganj"
+        ]
+      },
+      {
+        "name": "Bamania",
+        "type": "union",
+        "villages": [
+          "Bamania",
+          "Char Bamania"
+        ]
+      }
+    ],
+    "Shariatpur Sadar": [
+      {
+        "name": "Shariatpur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Shariatpur Town",
+          "Palong"
+        ]
+      },
+      {
+        "name": "Palong",
+        "type": "union",
+        "villages": [
+          "Palong",
+          "Char Palong"
+        ]
+      },
+      {
+        "name": "Rudrakar",
+        "type": "union",
+        "villages": [
+          "Rudrakar",
+          "Char Rudrakar"
+        ]
+      },
+      {
+        "name": "Binodpur",
+        "type": "union",
+        "villages": [
+          "Binodpur",
+          "Char Binodpur"
+        ]
+      },
+      {
+        "name": "Angaria",
+        "type": "union",
+        "villages": [
+          "Angaria",
+          "Char Angaria"
+        ]
+      }
+    ],
+    "Jashore Sadar": [
+      {
+        "name": "Jashore Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Jashore Town",
+          "Basundia"
+        ]
+      },
+      {
+        "name": "Basundia",
+        "type": "union",
+        "villages": [
+          "Basundia",
+          "Char Basundia"
+        ]
+      },
+      {
+        "name": "Chanchra",
+        "type": "union",
+        "villages": [
+          "Chanchra",
+          "Char Chanchra"
+        ]
+      },
+      {
+        "name": "Noapara",
+        "type": "union",
+        "villages": [
+          "Noapara",
+          "Char Noapara"
+        ]
+      },
+      {
+        "name": "Churamankati",
+        "type": "union",
+        "villages": [
+          "Churamankati",
+          "Char Churamankati"
+        ]
+      },
+      {
+        "name": "Deyara",
+        "type": "union",
+        "villages": [
+          "Deyara",
+          "Char Deyara"
+        ]
+      }
+    ],
+    "Jhenaidah Sadar": [
+      {
+        "name": "Jhenaidah Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Jhenaidah Town",
+          "Sadar"
+        ]
+      },
+      {
+        "name": "Sarulia",
+        "type": "union",
+        "villages": [
+          "Sarulia",
+          "Char Sarulia"
+        ]
+      },
+      {
+        "name": "Gauripur",
+        "type": "union",
+        "villages": [
+          "Gauripur",
+          "Char Gauripur"
+        ]
+      },
+      {
+        "name": "Halidhani",
+        "type": "union",
+        "villages": [
+          "Halidhani",
+          "Char Halidhani"
+        ]
+      },
+      {
+        "name": "Pailagachhi",
+        "type": "union",
+        "villages": [
+          "Pailagachhi",
+          "Char Pailagachhi"
+        ]
+      },
+      {
+        "name": "Naldanga",
+        "type": "union",
+        "villages": [
+          "Naldanga",
+          "Char Naldanga"
+        ]
+      }
+    ],
+    "Chuadanga Sadar": [
+      {
+        "name": "Chuadanga Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Chuadanga Town",
+          "Baghulia"
+        ]
+      },
+      {
+        "name": "Baghulia",
+        "type": "union",
+        "villages": [
+          "Baghulia",
+          "Char Baghulia"
+        ]
+      },
+      {
+        "name": "Alfadanga",
+        "type": "union",
+        "villages": [
+          "Alfadanga",
+          "Char Alfadanga"
+        ]
+      },
+      {
+        "name": "Titudaha",
+        "type": "union",
+        "villages": [
+          "Titudaha",
+          "Char Titudaha"
+        ]
+      },
+      {
+        "name": "Ziapur",
+        "type": "union",
+        "villages": [
+          "Ziapur",
+          "Char Ziapur"
+        ]
+      }
+    ],
+    "Magura Sadar": [
+      {
+        "name": "Magura Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Magura Town",
+          "Atla"
+        ]
+      },
+      {
+        "name": "Atla",
+        "type": "union",
+        "villages": [
+          "Atla",
+          "Char Atla"
+        ]
+      },
+      {
+        "name": "Kutubpur",
+        "type": "union",
+        "villages": [
+          "Kutubpur",
+          "Char Kutubpur"
+        ]
+      },
+      {
+        "name": "Hazipur",
+        "type": "union",
+        "villages": [
+          "Hazipur",
+          "Char Hazipur"
+        ]
+      },
+      {
+        "name": "Islampur",
+        "type": "union",
+        "villages": [
+          "Islampur",
+          "Char Islampur"
+        ]
+      }
+    ],
+    "Meherpur Sadar": [
+      {
+        "name": "Meherpur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Meherpur Town",
+          "Amdah"
+        ]
+      },
+      {
+        "name": "Amdah",
+        "type": "union",
+        "villages": [
+          "Amdah",
+          "Char Amdah"
+        ]
+      },
+      {
+        "name": "Pirojpur",
+        "type": "union",
+        "villages": [
+          "Pirojpur",
+          "Char Pirojpur"
+        ]
+      },
+      {
+        "name": "Shyampur",
+        "type": "union",
+        "villages": [
+          "Shyampur",
+          "Char Shyampur"
+        ]
+      }
+    ],
+    "Narail Sadar": [
+      {
+        "name": "Narail Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Narail Town",
+          "Tularampur"
+        ]
+      },
+      {
+        "name": "Tularampur",
+        "type": "union",
+        "villages": [
+          "Tularampur",
+          "Char Tularampur"
+        ]
+      },
+      {
+        "name": "Chor Kali",
+        "type": "union",
+        "villages": [
+          "Chor Kali",
+          "Char Chor Kali"
+        ]
+      },
+      {
+        "name": "Mulia",
+        "type": "union",
+        "villages": [
+          "Mulia",
+          "Char Mulia"
+        ]
+      },
+      {
+        "name": "Banthia",
+        "type": "union",
+        "villages": [
+          "Banthia",
+          "Char Banthia"
+        ]
+      }
+    ],
+    "Satkhira Sadar": [
+      {
+        "name": "Satkhira Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Satkhira Town",
+          "Labsha"
+        ]
+      },
+      {
+        "name": "Labsha",
+        "type": "union",
+        "villages": [
+          "Labsha",
+          "Char Labsha"
+        ]
+      },
+      {
+        "name": "Alismahal",
+        "type": "union",
+        "villages": [
+          "Alismahal",
+          "Char Alismahal"
+        ]
+      },
+      {
+        "name": "Agardari",
+        "type": "union",
+        "villages": [
+          "Agardari",
+          "Char Agardari"
+        ]
+      },
+      {
+        "name": "Ghona",
+        "type": "union",
+        "villages": [
+          "Ghona",
+          "Char Ghona"
+        ]
+      },
+      {
+        "name": "Jhordi",
+        "type": "union",
+        "villages": [
+          "Jhordi",
+          "Char Jhordi"
+        ]
+      }
+    ],
+    "Pabna Sadar": [
+      {
+        "name": "Pabna Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Pabna Town",
+          "Ataikula"
+        ]
+      },
+      {
+        "name": "Ataikula",
+        "type": "union",
+        "villages": [
+          "Ataikula",
+          "Char Ataikula"
+        ]
+      },
+      {
+        "name": "Dapunia",
+        "type": "union",
+        "villages": [
+          "Dapunia",
+          "Char Dapunia"
+        ]
+      },
+      {
+        "name": "Madapur",
+        "type": "union",
+        "villages": [
+          "Madapur",
+          "Char Madapur"
+        ]
+      },
+      {
+        "name": "Lakshmipur",
+        "type": "union",
+        "villages": [
+          "Lakshmipur",
+          "Char Lakshmipur"
+        ]
+      },
+      {
+        "name": "Gachbaria",
+        "type": "union",
+        "villages": [
+          "Gachbaria",
+          "Char Gachbaria"
+        ]
+      }
+    ],
+    "Sirajganj Sadar": [
+      {
+        "name": "Sirajganj Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Sirajganj Town",
+          "Khamarkhanda"
+        ]
+      },
+      {
+        "name": "Khamarkhanda",
+        "type": "union",
+        "villages": [
+          "Khamarkhanda",
+          "Char Khamarkhanda"
+        ]
+      },
+      {
+        "name": "Ratanpur Bahuli",
+        "type": "union",
+        "villages": [
+          "Ratanpur",
+          "Bahuli"
+        ]
+      },
+      {
+        "name": "Shialkol",
+        "type": "union",
+        "villages": [
+          "Shialkol",
+          "Char Shialkol"
+        ]
+      },
+      {
+        "name": "Chalitadanga",
+        "type": "union",
+        "villages": [
+          "Chalitadanga",
+          "Char Chalitadanga"
+        ]
+      }
+    ],
+    "Naogaon Sadar": [
+      {
+        "name": "Naogaon Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Naogaon Town",
+          "Balihar"
+        ]
+      },
+      {
+        "name": "Balihar",
+        "type": "union",
+        "villages": [
+          "Balihar",
+          "Char Balihar"
+        ]
+      },
+      {
+        "name": "Hapania",
+        "type": "union",
+        "villages": [
+          "Hapania",
+          "Char Hapania"
+        ]
+      },
+      {
+        "name": "Tilna",
+        "type": "union",
+        "villages": [
+          "Tilna",
+          "Char Tilna"
+        ]
+      },
+      {
+        "name": "Kirtipur",
+        "type": "union",
+        "villages": [
+          "Kirtipur",
+          "Char Kirtipur"
+        ]
+      },
+      {
+        "name": "Barshail",
+        "type": "union",
+        "villages": [
+          "Barshail",
+          "Char Barshail"
+        ]
+      }
+    ],
+    "Natore Sadar": [
+      {
+        "name": "Natore Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Natore Town",
+          "Dighapatia"
+        ]
+      },
+      {
+        "name": "Dighapatia",
+        "type": "union",
+        "villages": [
+          "Dighapatia",
+          "Char Dighapatia"
+        ]
+      },
+      {
+        "name": "Kafuria",
+        "type": "union",
+        "villages": [
+          "Kafuria",
+          "Char Kafuria"
+        ]
+      },
+      {
+        "name": "Laxmipur Khoria",
+        "type": "union",
+        "villages": [
+          "Laxmipur",
+          "Khoria"
+        ]
+      },
+      {
+        "name": "Halsa",
+        "type": "union",
+        "villages": [
+          "Halsa",
+          "Char Halsa"
+        ]
+      }
+    ],
+    "Joypurhat Sadar": [
+      {
+        "name": "Joypurhat Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Joypurhat Town",
+          "Dharanji"
+        ]
+      },
+      {
+        "name": "Dharanji",
+        "type": "union",
+        "villages": [
+          "Dharanji",
+          "Char Dharanji"
+        ]
+      },
+      {
+        "name": "Moheshpur",
+        "type": "union",
+        "villages": [
+          "Moheshpur",
+          "Char Moheshpur"
+        ]
+      },
+      {
+        "name": "Amaia",
+        "type": "union",
+        "villages": [
+          "Amaia",
+          "Char Amaia"
+        ]
+      },
+      {
+        "name": "Dobirgram",
+        "type": "union",
+        "villages": [
+          "Dobirgram",
+          "Char Dobirgram"
+        ]
+      }
+    ],
+    "Gaibandha Sadar": [
+      {
+        "name": "Gaibandha Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Gaibandha Town",
+          "Khonagar"
+        ]
+      },
+      {
+        "name": "Khonagar",
+        "type": "union",
+        "villages": [
+          "Khonagar",
+          "Char Khonagar"
+        ]
+      },
+      {
+        "name": "Laxmipur",
+        "type": "union",
+        "villages": [
+          "Laxmipur",
+          "Char Laxmipur"
+        ]
+      },
+      {
+        "name": "Boali",
+        "type": "union",
+        "villages": [
+          "Boali",
+          "Char Boali"
+        ]
+      },
+      {
+        "name": "Saghata",
+        "type": "union",
+        "villages": [
+          "Saghata",
+          "Char Saghata"
+        ]
+      }
+    ],
+    "Kurigram Sadar": [
+      {
+        "name": "Kurigram Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Kurigram Town",
+          "Kanthalbari"
+        ]
+      },
+      {
+        "name": "Kanthalbari",
+        "type": "union",
+        "villages": [
+          "Kanthalbari",
+          "Char Kanthalbari"
+        ]
+      },
+      {
+        "name": "Bhelabari",
+        "type": "union",
+        "villages": [
+          "Bhelabari",
+          "Char Bhelabari"
+        ]
+      },
+      {
+        "name": "Ghogadaha",
+        "type": "union",
+        "villages": [
+          "Ghogadaha",
+          "Char Ghogadaha"
+        ]
+      },
+      {
+        "name": "Panchgachhi",
+        "type": "union",
+        "villages": [
+          "Panchgachhi",
+          "Char Panchgachhi"
+        ]
+      },
+      {
+        "name": "Yusufpur",
+        "type": "union",
+        "villages": [
+          "Yusufpur",
+          "Char Yusufpur"
+        ]
+      }
+    ],
+    "Lalmonirhat Sadar": [
+      {
+        "name": "Lalmonirhat Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Lalmonirhat Town",
+          "Rajpur"
+        ]
+      },
+      {
+        "name": "Rajpur",
+        "type": "union",
+        "villages": [
+          "Rajpur",
+          "Char Rajpur"
+        ]
+      },
+      {
+        "name": "Panchgram",
+        "type": "union",
+        "villages": [
+          "Panchgram",
+          "Char Panchgram"
+        ]
+      },
+      {
+        "name": "Kutir Char",
+        "type": "union",
+        "villages": [
+          "Kutir Char",
+          "Uttar Kutir Char"
+        ]
+      },
+      {
+        "name": "Mohendranagar",
+        "type": "union",
+        "villages": [
+          "Mohendranagar",
+          "Char Mohendranagar"
+        ]
+      }
+    ],
+    "Nilphamari Sadar": [
+      {
+        "name": "Nilphamari Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Nilphamari Town",
+          "Lakshmipur"
+        ]
+      },
+      {
+        "name": "Purab Chhatra",
+        "type": "union",
+        "villages": [
+          "Purab Chhatra",
+          "Paschim Chhatra"
+        ]
+      },
+      {
+        "name": "Lakshmipur Khora",
+        "type": "union",
+        "villages": [
+          "Lakshmipur Khora",
+          "Char Lakshmipur"
+        ]
+      },
+      {
+        "name": "Sonarai",
+        "type": "union",
+        "villages": [
+          "Sonarai",
+          "Char Sonarai"
+        ]
+      },
+      {
+        "name": "Charaikhola",
+        "type": "union",
+        "villages": [
+          "Charaikhola",
+          "Char Charaikhola"
+        ]
+      }
+    ],
+    "Panchagarh Sadar": [
+      {
+        "name": "Panchagarh Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Panchagarh Town",
+          "Haffanpara"
+        ]
+      },
+      {
+        "name": "Haffanpara",
+        "type": "union",
+        "villages": [
+          "Haffanpara",
+          "Char Haffanpara"
+        ]
+      },
+      {
+        "name": "Magura",
+        "type": "union",
+        "villages": [
+          "Magura",
+          "Char Magura"
+        ]
+      },
+      {
+        "name": "Chakla Haat",
+        "type": "union",
+        "villages": [
+          "Chakla Haat",
+          "Char Chakla Haat"
+        ]
+      },
+      {
+        "name": "Amarkhana",
+        "type": "union",
+        "villages": [
+          "Amarkhana",
+          "Char Amarkhana"
+        ]
+      }
+    ],
+    "Rangamati Sadar": [
+      {
+        "name": "Rangamati Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Rangamati Town",
+          "Balaghata"
+        ]
+      },
+      {
+        "name": "Balaghata",
+        "type": "union",
+        "villages": [
+          "Balaghata",
+          "Char Balaghata"
+        ]
+      },
+      {
+        "name": "Kaptai Karnafully",
+        "type": "union",
+        "villages": [
+          "Kaptai",
+          "Karnafully"
+        ]
+      },
+      {
+        "name": "Banduk Bhanga",
+        "type": "union",
+        "villages": [
+          "Banduk Bhanga",
+          "Char Banduk Bhanga"
+        ]
+      },
+      {
+        "name": "Mognachara",
+        "type": "union",
+        "villages": [
+          "Mognachara",
+          "Char Mognachara"
+        ]
+      }
+    ],
+    "Khagrachhari Sadar": [
+      {
+        "name": "Khagrachhari Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Khagrachhari Town",
+          "Panchhari"
+        ]
+      },
+      {
+        "name": "Golabari",
+        "type": "union",
+        "villages": [
+          "Golabari",
+          "Char Golabari"
+        ]
+      },
+      {
+        "name": "Perachhara",
+        "type": "union",
+        "villages": [
+          "Perachhara",
+          "Char Perachhara"
+        ]
+      },
+      {
+        "name": "Khagrachhari Sadar",
+        "type": "union",
+        "villages": [
+          "Khagrachhari",
+          "Uttar Khagrachhari"
+        ]
+      }
+    ],
+    "Bandarban Sadar": [
+      {
+        "name": "Bandarban Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Bandarban Town",
+          "Suwalak"
+        ]
+      },
+      {
+        "name": "Suwalak",
+        "type": "union",
+        "villages": [
+          "Suwalak",
+          "Char Suwalak"
+        ]
+      },
+      {
+        "name": "Rajbila",
+        "type": "union",
+        "villages": [
+          "Rajbila",
+          "Char Rajbila"
+        ]
+      },
+      {
+        "name": "Kuhalong",
+        "type": "union",
+        "villages": [
+          "Kuhalong",
+          "Char Kuhalong"
+        ]
+      }
+    ],
+    "Brahmanbaria Sadar": [
+      {
+        "name": "Brahmanbaria Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Brahmanbaria Town",
+          "Majlishpur"
+        ]
+      },
+      {
+        "name": "Majlishpur",
+        "type": "union",
+        "villages": [
+          "Majlishpur",
+          "Char Majlishpur"
+        ]
+      },
+      {
+        "name": "Sadekpur",
+        "type": "union",
+        "villages": [
+          "Sadekpur",
+          "Char Sadekpur"
+        ]
+      },
+      {
+        "name": "Sultanpur",
+        "type": "union",
+        "villages": [
+          "Sultanpur",
+          "Char Sultanpur"
+        ]
+      },
+      {
+        "name": "Naotana",
+        "type": "union",
+        "villages": [
+          "Naotana",
+          "Char Naotana"
+        ]
+      },
+      {
+        "name": "Ramrail",
+        "type": "union",
+        "villages": [
+          "Ramrail",
+          "Char Ramrail"
+        ]
+      }
+    ],
+    "Chandpur Sadar": [
+      {
+        "name": "Chandpur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Chandpur Town",
+          "Haimchar"
+        ]
+      },
+      {
+        "name": "Baburhat",
+        "type": "union",
+        "villages": [
+          "Baburhat",
+          "Char Baburhat"
+        ]
+      },
+      {
+        "name": "Bibirhat",
+        "type": "union",
+        "villages": [
+          "Bibirhat",
+          "Char Bibirhat"
+        ]
+      },
+      {
+        "name": "Rahimpur",
+        "type": "union",
+        "villages": [
+          "Rahimpur",
+          "Char Rahimpur"
+        ]
+      },
+      {
+        "name": "Ibrahimpur",
+        "type": "union",
+        "villages": [
+          "Ibrahimpur",
+          "Char Ibrahimpur"
+        ]
+      }
+    ],
+    "Cumilla Sadar Uttar": [
+      {
+        "name": "Cumilla City Corporation",
+        "type": "municipality",
+        "villages": [
+          "Cumilla City",
+          "Kandirpar"
+        ]
+      },
+      {
+        "name": "Bijoypur",
+        "type": "union",
+        "villages": [
+          "Bijoypur",
+          "Char Bijoypur"
+        ]
+      },
+      {
+        "name": "Barura Sadar",
+        "type": "union",
+        "villages": [
+          "Barura",
+          "Char Barura"
+        ]
+      }
+    ],
+    "Debidwar": [
+      {
+        "name": "Debidwar Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Debidwar Town",
+          "Eliotganj"
+        ]
+      },
+      {
+        "name": "Eliotganj",
+        "type": "union",
+        "villages": [
+          "Eliotganj",
+          "Char Eliotganj"
+        ]
+      },
+      {
+        "name": "Subil",
+        "type": "union",
+        "villages": [
+          "Subil",
+          "Char Subil"
+        ]
+      },
+      {
+        "name": "Dhemsa",
+        "type": "union",
+        "villages": [
+          "Dhemsa",
+          "Char Dhemsa"
+        ]
+      },
+      {
+        "name": "Raipura",
+        "type": "union",
+        "villages": [
+          "Raipura",
+          "Char Raipura"
+        ]
+      },
+      {
+        "name": "Gunaighor",
+        "type": "union",
+        "villages": [
+          "Gunaighor",
+          "Char Gunaighor"
+        ]
+      },
+      {
+        "name": "Fazilpur",
+        "type": "union",
+        "villages": [
+          "Fazilpur",
+          "Char Fazilpur"
+        ]
+      }
+    ],
+    "Feni Sadar": [
+      {
+        "name": "Feni Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Feni Town",
+          "Motiganj"
+        ]
+      },
+      {
+        "name": "Motiganj",
+        "type": "union",
+        "villages": [
+          "Motiganj",
+          "Char Motiganj"
+        ]
+      },
+      {
+        "name": "Panchgachiya",
+        "type": "union",
+        "villages": [
+          "Panchgachiya",
+          "Char Panchgachiya"
+        ]
+      },
+      {
+        "name": "Kazirhat",
+        "type": "union",
+        "villages": [
+          "Kazirhat",
+          "Char Kazirhat"
+        ]
+      },
+      {
+        "name": "Faridganj",
+        "type": "union",
+        "villages": [
+          "Faridganj",
+          "Char Faridganj"
+        ]
+      }
+    ],
+    "Lakshmipur Sadar": [
+      {
+        "name": "Lakshmipur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Lakshmipur Town",
+          "Dalalpur"
+        ]
+      },
+      {
+        "name": "Dalalpur",
+        "type": "union",
+        "villages": [
+          "Dalalpur",
+          "Char Dalalpur"
+        ]
+      },
+      {
+        "name": "Hazipur",
+        "type": "union",
+        "villages": [
+          "Hazipur",
+          "Char Hazipur"
+        ]
+      },
+      {
+        "name": "Chandraganj",
+        "type": "union",
+        "villages": [
+          "Chandraganj",
+          "Char Chandraganj"
+        ]
+      },
+      {
+        "name": "Bhobanipur",
+        "type": "union",
+        "villages": [
+          "Bhobanipur",
+          "Char Bhobanipur"
+        ]
+      },
+      {
+        "name": "Bhubanpur",
+        "type": "union",
+        "villages": [
+          "Bhubanpur",
+          "Char Bhubanpur"
+        ]
+      }
+    ],
+    "Noakhali Sadar": [
+      {
+        "name": "Noakhali Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Noakhali Town",
+          "Maijdee"
+        ]
+      },
+      {
+        "name": "Maijdee Court",
+        "type": "union",
+        "villages": [
+          "Maijdee",
+          "Char Maijdee"
+        ]
+      },
+      {
+        "name": "Eklashpur",
+        "type": "union",
+        "villages": [
+          "Eklashpur",
+          "Char Eklashpur"
+        ]
+      },
+      {
+        "name": "Kalu Pur",
+        "type": "union",
+        "villages": [
+          "Kalu Pur",
+          "Char Kalu Pur"
+        ]
+      },
+      {
+        "name": "Nandanpur",
+        "type": "union",
+        "villages": [
+          "Nandanpur",
+          "Char Nandanpur"
+        ]
+      }
+    ],
+    "Netrokona Sadar": [
+      {
+        "name": "Netrokona Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Netrokona Town",
+          "Madan"
+        ]
+      },
+      {
+        "name": "Rouha",
+        "type": "union",
+        "villages": [
+          "Rouha",
+          "Char Rouha"
+        ]
+      },
+      {
+        "name": "Kailati",
+        "type": "union",
+        "villages": [
+          "Kailati",
+          "Char Kailati"
+        ]
+      },
+      {
+        "name": "Lengura",
+        "type": "union",
+        "villages": [
+          "Lengura",
+          "Char Lengura"
+        ]
+      },
+      {
+        "name": "Thakurakona",
+        "type": "union",
+        "villages": [
+          "Thakurakona",
+          "Char Thakurakona"
+        ]
+      },
+      {
+        "name": "Medni",
+        "type": "union",
+        "villages": [
+          "Medni",
+          "Char Medni"
+        ]
+      }
+    ],
+    "Sherpur Sadar": [
+      {
+        "name": "Sherpur Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Sherpur Town",
+          "Char Sherpur"
+        ]
+      },
+      {
+        "name": "Gauripur",
+        "type": "union",
+        "villages": [
+          "Gauripur",
+          "Char Gauripur"
+        ]
+      },
+      {
+        "name": "Kamarer Char",
+        "type": "union",
+        "villages": [
+          "Kamarer Char",
+          "Uttar Kamarer Char"
+        ]
+      },
+      {
+        "name": "Pakuria",
+        "type": "union",
+        "villages": [
+          "Pakuria",
+          "Char Pakuria"
+        ]
+      },
+      {
+        "name": "Balairchar",
+        "type": "union",
+        "villages": [
+          "Balairchar",
+          "Char Balairchar"
+        ]
+      },
+      {
+        "name": "Char Mocharia",
+        "type": "union",
+        "villages": [
+          "Char Mocharia",
+          "Dakkhin Char Mocharia"
+        ]
+      }
+    ],
+    "Thakurgaon Sadar": [
+      {
+        "name": "Thakurgaon Pourashava",
+        "type": "municipality",
+        "villages": [
+          "Thakurgaon Town",
+          "Shibganj"
+        ]
+      },
+      {
+        "name": "Akhanagar",
+        "type": "union",
+        "villages": [
+          "Akhanagar",
+          "Char Akhanagar"
+        ]
+      },
+      {
+        "name": "Jamalganj",
+        "type": "union",
+        "villages": [
+          "Jamalganj",
+          "Char Jamalganj"
+        ]
+      },
+      {
+        "name": "Rajagaon",
+        "type": "union",
+        "villages": [
+          "Rajagaon",
+          "Char Rajagaon"
+        ]
+      },
+      {
+        "name": "Ruhanpur",
+        "type": "union",
+        "villages": [
+          "Ruhanpur",
+          "Char Ruhanpur"
+        ]
+      },
+      {
+        "name": "Shibganj",
+        "type": "union",
+        "villages": [
+          "Shibganj",
+          "Char Shibganj"
+        ]
+      }
+    ]
+  }
+}

@@ -41,6 +41,7 @@ import {
   PaginationNext,
   PaginationPrevious
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
   CalendarDays,
   ChevronDown,
@@ -261,7 +262,7 @@ export default function LeaveBalancesIndex({
     <Layout>
       <Head title="Leave Balances" />
 
-      <div className="container mx-auto py-8">
+            <PageSurface>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <div className="flex flex-wrap items-center gap-3">
@@ -707,7 +708,7 @@ export default function LeaveBalancesIndex({
             </Pagination>
           </div>
         )}
-      </div>
+            </PageSurface>
     </Layout>
   );
 }

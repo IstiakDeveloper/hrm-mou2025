@@ -103,8 +103,8 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
         let score = 0;
 
         // Length check
+        if (password.length >= 4) score += 1;
         if (password.length >= 8) score += 1;
-        if (password.length >= 12) score += 1;
 
         // Complexity checks
         if (/[A-Z]/.test(password)) score += 1;  // Has uppercase

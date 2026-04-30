@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PageSurface } from '@/components/page-surface';
 import {
     Table,
     TableBody,
@@ -158,7 +159,7 @@ export default function AdminNoticesIndex({ notices, filters }: IndexProps) {
         <Layout>
             <Head title="Notices" />
 
-            <div className="container mx-auto py-6 md:py-8">
+            <PageSurface className="py-6 md:py-8">
                 <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 md:text-3xl">
@@ -424,7 +425,7 @@ export default function AdminNoticesIndex({ notices, filters }: IndexProps) {
                         )}
                     </CardContent>
                 </Card>
-            </div>
+            </PageSurface>
 
             <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
                 <AlertDialogContent>

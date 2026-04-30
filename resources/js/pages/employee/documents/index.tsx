@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { PageSurface } from '@/components/page-surface';
 
 interface Employee {
   id: number;
@@ -96,7 +97,7 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
     <Layout>
       <Head title={`${employee.first_name} ${employee.last_name} - Documents`} />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="mb-6">
           <Link
             href={route('employees.show', employee.id)}
@@ -213,7 +214,7 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
             </Table>
           </CardContent>
         </Card>
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

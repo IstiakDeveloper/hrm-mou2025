@@ -20,6 +20,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageSurface } from '@/components/page-surface';
 
 interface ReportType {
   id: string;
@@ -71,7 +72,7 @@ export default function ReportIndex({ reportTypes }: ReportIndexProps) {
     <Layout>
       <Head title="Reports Dashboard" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Reports Dashboard</h1>
           <p className="mt-1 text-gray-500">
@@ -163,7 +164,7 @@ export default function ReportIndex({ reportTypes }: ReportIndexProps) {
             </Card>
           </div>
         </div>
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

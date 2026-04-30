@@ -27,6 +27,7 @@ import {
     PaginationNext,
     PaginationPrevious
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
     Building,
     Edit,
@@ -122,7 +123,7 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
         <Layout>
             <Head title="Branches" />
 
-            <div className="container mx-auto py-8">
+            <PageSurface>
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Branches</h1>
@@ -357,7 +358,7 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
                         </Pagination>
                     </div>
                 )}
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

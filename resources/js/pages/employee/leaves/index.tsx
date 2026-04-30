@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Calendar as CalendarIcon, Download, ArrowLeft, Search, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
+import { PageSurface } from '@/components/page-surface';
 
 interface LeaveType {
   id: number;
@@ -215,7 +216,7 @@ interface EmployeeLeavesProps {
       <Layout>
         <Head title={`Leaves - ${employee.first_name} ${employee.last_name}`} />
 
-        <div className="container mx-auto py-8">
+        <PageSurface>
           <div className="mb-6">
             <Link
               href={route('employees.show', employee.id)}
@@ -442,7 +443,7 @@ interface EmployeeLeavesProps {
               )}
             </CardContent>
           </Card>
-        </div>
+        </PageSurface>
       </Layout>
     );
   }

@@ -27,6 +27,7 @@ import {
   PaginationNext,
   PaginationPrevious
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
   Briefcase,
   ChevronDown,
@@ -111,7 +112,7 @@ export default function DesignationIndex({ designations, filters }: DesignationI
     <Layout>
       <Head title="Designations" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Designations</h1>
@@ -296,7 +297,7 @@ export default function DesignationIndex({ designations, filters }: DesignationI
             </Pagination>
           </div>
         )}
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

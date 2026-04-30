@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -63,7 +64,7 @@ class UserController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
+            'password' => 'required|string|min:4|confirmed',
             'role_ids' => 'required|array',
             'role_ids.*' => 'exists:roles,id',
             'employee_id' => 'required|exists:employees,id',
@@ -165,7 +166,7 @@ class UserController extends Controller
                 'max:255',
                 Rule::unique('users')->ignore($user->id),
             ],
-            'password' => 'nullable|string|min:8|confirmed',
+            'password' => 'nullable|string|min:4|confirmed',
             'role_ids' => 'required|array',
             'role_ids.*' => 'exists:roles,id',
             'employee_id' => 'required|exists:employees,id',
@@ -290,7 +291,7 @@ class UserController extends Controller
                 $emailsSent++;
             } catch (\Exception $e) {
                 $failedEmails[] = $user->email;
-                \Log::error("Failed to send email to user {$user->id}: ".$e->getMessage());
+                Log::error("Failed to send email to user {$user->id}: ".$e->getMessage());
             }
         }
 

@@ -45,6 +45,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import BulkEmailButton from '@/components/BulkEmailButton';
+import { PageSurface } from '@/components/page-surface';
 
 interface Role {
   id: number;
@@ -185,7 +186,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
     <Layout>
       <Head title="User Management" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
@@ -368,7 +369,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
                           })}
                           className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${
                             link.active
-                              ? 'z-10 bg-primary text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary'
+                              ? 'z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary'
                               : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
                           }`}
                         >
@@ -395,7 +396,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
             )}
           </CardContent>
         </Card>
-      </div>
+      </PageSurface>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>

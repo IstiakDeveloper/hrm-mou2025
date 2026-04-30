@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import axios from 'axios';
 import { toast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { PageSurface } from '@/components/page-surface';
 
 export default function Index({ notifications }) {
   const [notificationsData, setNotificationsData] = useState(notifications.data);
@@ -64,8 +65,7 @@ export default function Index({ notifications }) {
     <AdminLayout>
       <Head title="Notifications" />
 
-      <div className="py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <PageSurface className="py-6 px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-semibold text-xl text-gray-800 leading-tight">Notifications</h2>
             {notificationsData.some(notification => !notification.read_at) && (
@@ -140,8 +140,7 @@ export default function Index({ notifications }) {
               )}
             </CardContent>
           </Card>
-        </div>
-      </div>
+      </PageSurface>
     </AdminLayout>
   );
 }

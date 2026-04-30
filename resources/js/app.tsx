@@ -10,6 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { route as routeFn } from 'ziggy-js';
 import { type ComponentType } from 'react';
 import { initializeTheme } from './hooks/use-appearance';
+import SplashLoader from '@/components/splash-loader';
 
 declare global {
     const route: typeof routeFn;
@@ -52,7 +53,12 @@ createInertiaApp({
     setup({ el, App, props }) {
         const root = createRoot(el);
 
-        root.render(<App {...props} />);
+        root.render(
+            <>
+                <SplashLoader />
+                <App {...props} />
+            </>,
+        );
     },
     progress: {
         color: '#4B5563',

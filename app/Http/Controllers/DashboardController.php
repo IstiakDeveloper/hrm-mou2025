@@ -12,6 +12,7 @@ use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
 use App\Models\Movement;
 use App\Models\Transfer;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,6 +20,290 @@ use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
+    /**
+     * Attendance & Movement section dashboard (new UI, existing data).
+     * Admin-like users see operational overview; employees see a personal dashboard.
+     */
+    public function attendanceMovementSection(Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+
+        /** @var User $user */
+        $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
+        $today = Carbon::today();
+        $currentMonth = Carbon::now()->format('m');
+        $currentYear = Carbon::now()->format('Y');
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        $isAdminLike = collect([
+            'attendance.admin',
+            'attendance.view',
+            'movements.view',
+            'transfers.view',
+            'reports.view',
+        ])->contains(fn ($p) => $user->can($p) || $hasPermission($user, $p));
+
+        if (! $isAdminLike) {
+            $employee = $user->employee()->with(['department', 'branch'])->first();
+            if (! $employee) {
+                return redirect()->route('sections.index');
+            }
+
+            $todayAttendance = Attendance::where('employee_id', $employee->id)
+                ->where('date', $today)
+                ->first();
+
+            $recentAttendance = Attendance::where('employee_id', $employee->id)
+                ->orderBy('date', 'desc')
+                ->take(10)
+                ->get();
+
+            $recentMovements = Movement::where('employee_id', $employee->id)
+                ->orderBy('created_at', 'desc')
+                ->take(8)
+                ->get();
+
+            return Inertia::render('sections/attendance-movement/employee-dashboard', [
+                'employee' => $employee,
+                'todayAttendance' => $todayAttendance,
+                'recentAttendance' => $recentAttendance,
+                'recentMovements' => $recentMovements,
+            ]);
+        }
+
+        $attendanceStats = $hasPermission($user, 'attendance.view')
+            ? $this->getAttendanceStats($user, $today)
+            : ['present' => 0, 'absent' => 0, 'late' => 0];
+
+        $movementStats = $hasPermission($user, 'movements.view')
+            ? $this->getMovementStats($user, $today)
+            : ['pending' => 0, 'ongoing' => 0];
+
+        $transferStats = $hasPermission($user, 'transfers.view')
+            ? $this->getTransferStats($user, $currentMonth, $currentYear)
+            : ['pending' => 0, 'approved' => 0];
+
+        $recentMovements = $hasPermission($user, 'movements.view')
+            ? $this->getRecentMovements($user)
+            : [];
+
+        $recentTransfers = $hasPermission($user, 'transfers.view')
+            ? $this->getRecentTransfers($user)
+            : [];
+
+        $roles = $user->roles;
+        $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
+
+        return Inertia::render('sections/attendance-movement/dashboard', [
+            'attendanceStats' => $attendanceStats,
+            'movementStats' => $movementStats,
+            'transferStats' => $transferStats,
+            'recentMovements' => $recentMovements,
+            'recentTransfers' => $recentTransfers,
+            'userRole' => $role?->name ?? 'User',
+        ]);
+    }
+
+    /**
+     * Leave section dashboard (new UI, existing data).
+     * Admin-like users see operational overview; employees see a leave-focused view.
+     */
+    public function leaveSection(Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+
+        /** @var User $user */
+        $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
+        $today = Carbon::today();
+        $currentMonth = Carbon::now()->format('m');
+        $currentYear = Carbon::now()->format('Y');
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        $isAdminLike = collect([
+            'leave-types.create',
+            'leave-types.edit',
+            'leave-balances.admin',
+            'leave-applications.approve',
+            'reports.view',
+            'admin.access',
+        ])->contains(fn ($p) => $user->can($p) || $hasPermission($user, $p));
+
+        if (! $isAdminLike) {
+            // Employee leave-focused dashboard
+            $employee = $user->employee()->with(['department', 'branch'])->first();
+            if (! $employee) {
+                return redirect()->route('sections.index');
+            }
+
+            $leaveBalance = $this->getEmployeeLeaveBalance($employee->id);
+            $recentLeaves = LeaveApplication::with('leaveType')
+                ->where('employee_id', $employee->id)
+                ->orderBy('created_at', 'desc')
+                ->take(8)
+                ->get();
+
+            return Inertia::render('sections/leave/employee-dashboard', [
+                'employee' => $employee,
+                'leaveBalances' => $leaveBalance,
+                'recentLeaves' => $recentLeaves,
+            ]);
+        }
+
+        // Admin/HR leave overview (reuse existing logic)
+        $leaveStats = $hasPermission($user, 'leaves.view')
+            ? $this->getLeaveStats($user, $today, $currentMonth, $currentYear)
+            : ['pending' => 0, 'approved' => 0, 'todayOnLeave' => 0];
+
+        $recentLeaves = $hasPermission($user, 'leaves.view')
+            ? $this->getRecentLeaves($user)
+            : [];
+
+        $roles = $user->roles;
+        $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
+
+        return Inertia::render('sections/leave/dashboard', [
+            'leaveStats' => $leaveStats,
+            'recentLeaves' => $recentLeaves,
+            'userRole' => $role?->name ?? 'User',
+        ]);
+    }
+
+    /**
+     * Administration section dashboard (new UI, existing data).
+     * Only admin-like users can access.
+     */
+    public function administrationSection(Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+
+        /** @var User $user */
+        $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        $isAdminLike = collect([
+            'admin.access',
+            'roles.view',
+            'users.view',
+            'reports.view',
+        ])->contains(fn ($p) => $user->can($p) || $hasPermission($user, $p));
+
+        if (! $isAdminLike) {
+            abort(403);
+        }
+
+        // Lightweight stats for admin module
+        $userCount = User::query()->count();
+        $employeeCount = Employee::query()->count();
+        $branchCount = Branch::query()->count();
+
+        $roles = $user->roles;
+        $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
+
+        return Inertia::render('sections/administration/dashboard', [
+            'userCount' => $userCount,
+            'employeeCount' => $employeeCount,
+            'branchCount' => $branchCount,
+            'userRole' => $role?->name ?? 'User',
+        ]);
+    }
+
+    /**
+     * Human Resources section dashboard (new UI, existing data).
+     * Shows admin dashboard for HR/admin-like users; otherwise shows employee dashboard.
+     */
+    public function humanResources(Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+        /** @var User $user */
+        $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
+        $today = Carbon::today();
+        $currentMonth = Carbon::now()->format('m');
+        $currentYear = Carbon::now()->format('Y');
+
+        $isAdminLike = collect([
+            'employees.create',
+            'employees.edit',
+            'employees.admin',
+            'branches.create',
+            'branches.edit',
+            'departments.create',
+            'departments.edit',
+            'designations.create',
+            'designations.edit',
+            'leave-types.create',
+            'leave-types.edit',
+            'leave-balances.admin',
+            'attendance.admin',
+            'admin.access',
+        ])->contains(fn ($p) => $user->can($p));
+
+        if (! $isAdminLike) {
+            return $this->employeeDashboard($user, $today);
+        }
+
+        $stats = $this->getFilteredStats($user);
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        $attendanceStats = $hasPermission($user, 'attendance.view')
+            ? $this->getAttendanceStats($user, $today)
+            : ['present' => 0, 'absent' => 0, 'late' => 0];
+
+        $leaveStats = $hasPermission($user, 'leaves.view')
+            ? $this->getLeaveStats($user, $today, $currentMonth, $currentYear)
+            : ['pending' => 0, 'approved' => 0, 'todayOnLeave' => 0];
+
+        $movementStats = $hasPermission($user, 'movements.view')
+            ? $this->getMovementStats($user, $today)
+            : ['pending' => 0, 'ongoing' => 0];
+
+        $transferStats = $hasPermission($user, 'transfers.view')
+            ? $this->getTransferStats($user, $currentMonth, $currentYear)
+            : ['pending' => 0, 'approved' => 0];
+
+        $recentLeaves = $hasPermission($user, 'leaves.view')
+            ? $this->getRecentLeaves($user)
+            : [];
+
+        $recentMovements = $hasPermission($user, 'movements.view')
+            ? $this->getRecentMovements($user)
+            : [];
+
+        $recentTransfers = $hasPermission($user, 'transfers.view')
+            ? $this->getRecentTransfers($user)
+            : [];
+
+        $roles = $user->roles;
+        $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
+
+        return Inertia::render('sections/human-resources/dashboard', [
+            'stats' => $stats,
+            'attendanceStats' => $attendanceStats,
+            'leaveStats' => $leaveStats,
+            'movementStats' => $movementStats,
+            'transferStats' => $transferStats,
+            'recentLeaves' => $recentLeaves,
+            'recentMovements' => $recentMovements,
+            'recentTransfers' => $recentTransfers,
+            'userRole' => $role?->name ?? 'User',
+        ]);
+    }
+
     /**
      * Display the dashboard.
      */
@@ -45,36 +330,38 @@ class DashboardController extends Controller
         // Get all role names for display
         $roleNames = $roles->pluck('name')->toArray();
 
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
         // Get attendance stats if user has attendance.view permission
-        $attendanceStats = $user->hasPermission('attendance.view')
+        $attendanceStats = $hasPermission($user, 'attendance.view')
             ? $this->getAttendanceStats($user, $today)
             : ['present' => 0, 'absent' => 0, 'late' => 0];
 
         // Get leave stats if user has leaves.view permission
-        $leaveStats = $user->hasPermission('leaves.view')
+        $leaveStats = $hasPermission($user, 'leaves.view')
             ? $this->getLeaveStats($user, $today, $currentMonth, $currentYear)
             : ['pending' => 0, 'approved' => 0, 'todayOnLeave' => 0];
 
         // Get movement stats if user has movements.view permission
-        $movementStats = $user->hasPermission('movements.view')
+        $movementStats = $hasPermission($user, 'movements.view')
             ? $this->getMovementStats($user, $today)
             : ['pending' => 0, 'ongoing' => 0];
 
         // Get transfer stats if user has transfers.view permission
-        $transferStats = $user->hasPermission('transfers.view')
+        $transferStats = $hasPermission($user, 'transfers.view')
             ? $this->getTransferStats($user, $currentMonth, $currentYear)
             : ['pending' => 0, 'approved' => 0];
 
         // Get recent activities based on permissions
-        $recentLeaves = $user->hasPermission('leaves.view')
+        $recentLeaves = $hasPermission($user, 'leaves.view')
             ? $this->getRecentLeaves($user)
             : [];
 
-        $recentMovements = $user->hasPermission('movements.view')
+        $recentMovements = $hasPermission($user, 'movements.view')
             ? $this->getRecentMovements($user)
             : [];
 
-        $recentTransfers = $user->hasPermission('transfers.view')
+        $recentTransfers = $hasPermission($user, 'transfers.view')
             ? $this->getRecentTransfers($user)
             : [];
 
@@ -201,7 +488,7 @@ class DashboardController extends Controller
     private function getFilteredStats($user)
     {
         // If user is a branch manager, filter by their branch
-        $isBranchManager = $user->hasPermission('branch_manager');
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
 
         $employeeQuery = Employee::query();
@@ -229,7 +516,7 @@ class DashboardController extends Controller
      */
     private function getAttendanceStats($user, $today)
     {
-        $isBranchManager = $user->hasPermission('branch_manager');
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
 
         $query = Attendance::where('date', $today);
@@ -253,9 +540,9 @@ class DashboardController extends Controller
      */
     private function getLeaveStats($user, $today, $currentMonth, $currentYear)
     {
-        $isBranchManager = $user->hasPermission('branch_manager');
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
-        $isDepartmentHead = $user->hasPermission('department_head');
+        $isDepartmentHead = (bool) call_user_func([$user, 'hasPermission'], 'department_head');
         $departmentId = $user->employee->department_id ?? null;
 
         $baseQuery = LeaveApplication::query();
@@ -291,9 +578,9 @@ class DashboardController extends Controller
      */
     private function getMovementStats($user, $today)
     {
-        $isBranchManager = $user->hasPermission('branch_manager');
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
-        $isDepartmentHead = $user->hasPermission('department_head');
+        $isDepartmentHead = (bool) call_user_func([$user, 'hasPermission'], 'department_head');
         $departmentId = $user->employee->department_id ?? null;
 
         $baseQuery = Movement::query();
@@ -324,7 +611,7 @@ class DashboardController extends Controller
      */
     private function getTransferStats($user, $currentMonth, $currentYear)
     {
-        $isBranchManager = $user->hasPermission('branch_manager');
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
 
         $baseQuery = Transfer::query();
@@ -351,9 +638,9 @@ class DashboardController extends Controller
      */
     private function getRecentLeaves($user)
     {
-        $isBranchManager = $user->hasPermission('branch_manager');
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
-        $isDepartmentHead = $user->hasPermission('department_head');
+        $isDepartmentHead = (bool) call_user_func([$user, 'hasPermission'], 'department_head');
         $departmentId = $user->employee->department_id ?? null;
 
         $query = LeaveApplication::with(['employee', 'leaveType'])
@@ -376,9 +663,9 @@ class DashboardController extends Controller
      */
     private function getRecentMovements($user)
     {
-        $isBranchManager = $user->hasPermission('branch_manager');
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
-        $isDepartmentHead = $user->hasPermission('department_head');
+        $isDepartmentHead = (bool) call_user_func([$user, 'hasPermission'], 'department_head');
         $departmentId = $user->employee->department_id ?? null;
 
         $query = Movement::with('employee')
@@ -402,7 +689,7 @@ class DashboardController extends Controller
      */
     private function getRecentTransfers($user)
     {
-        $isBranchManager = $user->hasPermission('branch_manager');
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
 
         $query = Transfer::with(['employee', 'fromBranch', 'toBranch'])

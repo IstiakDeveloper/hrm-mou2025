@@ -27,6 +27,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { Edit, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
 
@@ -100,7 +101,7 @@ export default function ZoneIndex({ zones, filters }: ZoneIndexProps) {
     <Layout>
       <Head title="Zones" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Zones</h1>
@@ -267,7 +268,7 @@ export default function ZoneIndex({ zones, filters }: ZoneIndexProps) {
             </Pagination>
           </div>
         )}
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

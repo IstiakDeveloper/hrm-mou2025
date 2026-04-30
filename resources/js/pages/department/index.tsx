@@ -27,6 +27,7 @@ import {
   PaginationNext,
   PaginationPrevious
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
   Building,
   ChevronDown,
@@ -121,7 +122,7 @@ const hasPagination = departments.meta && departments.links;
     <Layout>
       <Head title="Departments" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Departments</h1>
@@ -328,7 +329,7 @@ const hasPagination = departments.meta && departments.links;
             </Pagination>
           </div>
         )}
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

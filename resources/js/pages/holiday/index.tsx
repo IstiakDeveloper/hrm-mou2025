@@ -34,6 +34,7 @@ import {
   PaginationNext,
   PaginationPrevious
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
   Calendar as CalendarIcon,
   Edit,
@@ -140,7 +141,7 @@ export default function HolidayIndex({ holidays, years, year, filters }: Holiday
     <Layout>
       <Head title="Holidays" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Holidays</h1>
@@ -367,7 +368,7 @@ export default function HolidayIndex({ holidays, years, year, filters }: Holiday
                         })}
                         className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
                           link.active
-                            ? 'z-10 bg-primary text-white focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary'
+                            ? 'z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary'
                             : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
                         }`}
                       >
@@ -394,7 +395,7 @@ export default function HolidayIndex({ holidays, years, year, filters }: Holiday
             </div>
           </div>
         )}
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

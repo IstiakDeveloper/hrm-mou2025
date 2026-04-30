@@ -23,6 +23,7 @@ import {
     Clock
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { PageSurface } from '@/components/page-surface';
 import { DatePicker } from '@/components/ui/date-picker';
 
 interface User {
@@ -213,7 +214,7 @@ export default function EmployeeMovements({
         <Layout>
             <Head title={`Movements - ${employee.first_name} ${employee.last_name}`} />
 
-            <div className="container mx-auto py-8">
+            <PageSurface>
                 <div className="mb-6">
                     <Link
                         href={route('employees.show', employee.id)}
@@ -404,7 +405,7 @@ export default function EmployeeMovements({
                         )}
                     </CardContent>
                 </Card>
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

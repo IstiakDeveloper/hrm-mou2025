@@ -49,7 +49,7 @@ class AuthController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard'));
+        return redirect()->intended(route('sections.index'));
     }
 
     /**
@@ -80,13 +80,14 @@ class AuthController extends Controller
      */
     public function updateProfile(Request $request)
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email,'.$user->id,
             'current_password' => 'nullable|required_with:password',
-            'password' => 'nullable|min:8|confirmed',
+            'password' => 'nullable|min:4|confirmed',
         ]);
 
         // Check current password if attempting to change password

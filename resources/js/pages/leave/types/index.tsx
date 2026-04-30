@@ -33,6 +33,7 @@ import {
   PaginationNext,
   PaginationPrevious
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
   Check,
   Edit,
@@ -118,7 +119,7 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
     <Layout>
       <Head title="Leave Types" />
 
-      <div className="container mx-auto py-8">
+            <PageSurface>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Leave Types</h1>
@@ -337,7 +338,7 @@ export default function LeaveTypesIndex({ leaveTypes, filters }: LeaveTypesIndex
             </Pagination>
           </div>
         )}
-      </div>
+            </PageSurface>
     </Layout>
   );
 }

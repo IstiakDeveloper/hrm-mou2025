@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { PageSurface } from '@/components/page-surface';
 
 interface Branch {
   id: number;
@@ -119,7 +120,7 @@ export default function AttendanceSettingsIndex({ settings, branches }: Attendan
     <Layout>
       <Head title="Attendance Settings" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Attendance Settings</h1>
@@ -297,7 +298,7 @@ export default function AttendanceSettingsIndex({ settings, branches }: Attendan
             </Table>
           </CardContent>
         </Card>
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

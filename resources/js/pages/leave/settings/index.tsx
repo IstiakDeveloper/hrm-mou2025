@@ -26,6 +26,7 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
     Select,
     SelectContent,
@@ -128,7 +129,7 @@ export default function LeaveSettingsIndex({
         <Layout>
             <Head title="Leave settings" />
 
-            <div className="container mx-auto py-8">
+            <PageSurface>
                 <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Leave approval tiers</h1>
@@ -351,7 +352,7 @@ export default function LeaveSettingsIndex({
                         </Pagination>
                     </div>
                 )}
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

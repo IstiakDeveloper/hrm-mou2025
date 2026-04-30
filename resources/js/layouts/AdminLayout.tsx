@@ -2,12 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import {
     User,
-    Home,
     Users,
-    Building,
-    Briefcase,
     ClipboardList,
-    Calendar,
     LogOut,
     Menu,
     X,
@@ -15,11 +11,7 @@ import {
     Settings,
     BarChart,
     Bell,
-    UserPlus,
-    BookOpen,
-    FileText,
     Activity,
-    LayoutDashboard,
     Award,
     CalendarDays,
     MapPin,
@@ -52,10 +44,10 @@ import {
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import NotificationDropdown from '@/components/notification-dropdown';
 import { hasAppPermission } from '@/lib/permissions';
+import { getActiveSectionId, getMenuTitlesForSection, getSectionById } from '@/lib/admin-sections';
 import {
     Dialog,
     DialogContent,
@@ -94,7 +86,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const { auth, notifications, activeMovement } = usePage().props as any;
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
-    const [collapsed, setCollapsed] = useState(false);
     const [showCloseMovementDialog, setShowCloseMovementDialog] = useState(false);
     const [closeMovementId, setCloseMovementId] = useState<number | null>(null);
     const [forgotReturnTime, setForgotReturnTime] = useState(false);
@@ -104,12 +95,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     // Get current path for highlighting active menu
     const currentPath = window.location.pathname;
+    const activeSectionId = getActiveSectionId(window.location);
+    const activeSection = getSectionById(activeSectionId);
     const employee = auth?.employee;
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
 
     // Toggle functions
     const toggleMobileNav = () => setIsMobileNavOpen(!isMobileNavOpen);
-    const toggleSidebar = () => setCollapsed(!collapsed);
     const toggleMenu = (menu: string) => setActiveMenu(activeMenu === menu ? null : menu);
 
     // Check if a menu item is active
@@ -194,12 +186,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     // Organized Menu Structure with EXACT permission names matching web.php
     const menuItems: MenuItemType[] = [
-        {
-            title: 'Dashboard',
-            icon: <LayoutDashboard className="w-5 h-5" />,
-            path: '/dashboard',
-            hasSubmenu: false,
-        },
         {
             title: 'My Notices',
             icon: <Bell className="w-5 h-5" />,
@@ -338,109 +324,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
     ];
 
-    // Desktop sidebar menu item component
-    const DesktopMenuItem = ({ item }: { item: MenuItemType }) => {
-        if (item.hrOnly && !isHRUser) return null;
-        if (item.permission && !hasPermission(item.permission)) return null;
+    const sectionMenuTitles = getMenuTitlesForSection(activeSectionId);
+    const visibleMenuItems = sectionMenuTitles
+        ? menuItems.filter((item) => sectionMenuTitles.includes(item.title))
+        : menuItems;
 
-        const permittedSubmenu = item.submenu?.filter(subItem =>
-            (!subItem.hrOnly || isHRUser)
-            && (!subItem.permission || hasPermission(subItem.permission))
-            && (!subItem.anyPermissions?.length
-                || subItem.anyPermissions.some((p) => hasPermission(p)))
-        );
-
-        if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
-
-        return item.hasSubmenu ? (
-            <Collapsible
-                open={!collapsed && activeMenu === item.title}
-                onOpenChange={() => !collapsed && toggleMenu(item.title)}
-                className="w-full"
-            >
-                <CollapsibleTrigger asChild>
-                    <div
-                        className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 group ${isActive(item.path)
-                                ? 'bg-green-50 text-green-700 font-medium shadow-sm'
-                                : 'hover:bg-gray-50 text-gray-700'
-                            }`}
-                    >
-                        <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
-                                        <div className={`${isActive(item.path)
-                                                ? 'text-green-700'
-                                                : 'text-gray-600 group-hover:text-gray-900'
-                                            }`}>
-                                            {item.icon}
-                                        </div>
-                                        {!collapsed && (
-                                            <span className="text-sm font-medium">{item.title}</span>
-                                        )}
-                                    </div>
-                                </TooltipTrigger>
-                                {collapsed && (
-                                    <TooltipContent side="right" className="bg-gray-900 text-white font-medium">
-                                        {item.title}
-                                    </TooltipContent>
-                                )}
-                            </Tooltip>
-                        </TooltipProvider>
-                        {!collapsed && (
-                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isActive(item.path) ? 'text-green-700' : 'text-gray-500'
-                                } ${activeMenu === item.title ? 'transform rotate-180' : ''}`} />
-                        )}
-                    </div>
-                </CollapsibleTrigger>
-                {!collapsed && (
-                    <CollapsibleContent className="pl-8 space-y-1 mt-2">
-                        {permittedSubmenu?.map((subItem, idx) => (
-                            <Link
-                                key={idx}
-                                href={subItem.path}
-                                className={`block p-2.5 rounded-md text-sm transition-all duration-200 ${currentPath === subItem.path
-                                        ? 'bg-green-50 text-green-700 font-medium border-l-2 border-green-500'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                    }`}
-                            >
-                                {subItem.title}
-                            </Link>
-                        ))}
-                    </CollapsibleContent>
-                )}
-            </Collapsible>
-        ) : (
-            <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Link
-                            href={item.path}
-                            className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-lg transition-all duration-200 ${isActive(item.path)
-                                    ? 'bg-green-50 text-green-700 font-medium shadow-sm'
-                                    : 'hover:bg-gray-50 text-gray-700'
-                                }`}
-                        >
-                            <div className={`${isActive(item.path) ? 'text-green-700' : 'text-gray-600'
-                                }`}>
-                                {item.icon}
-                            </div>
-                            {!collapsed && (
-                                <span className="text-sm font-medium">{item.title}</span>
-                            )}
-                        </Link>
-                    </TooltipTrigger>
-                    {collapsed && (
-                        <TooltipContent side="right" className="bg-gray-900 text-white font-medium">
-                            {item.title}
-                        </TooltipContent>
-                    )}
-                </Tooltip>
-            </TooltipProvider>
-        );
-    };
-
-    // Mobile sidebar menu item component
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
         if (item.hrOnly && !isHRUser) return null;
         if (item.permission && !hasPermission(item.permission)) return null;
@@ -575,186 +463,118 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     }, [flash]);
 
     return (
-        <div className="flex h-screen bg-gray-50">
-            {/* Desktop Sidebar */}
-            <aside className={`hidden md:flex flex-col border-r bg-white shadow-sm transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'
-                }`}>
-                {/* Header */}
-                <div className={`py-4 px-4 border-b flex ${collapsed ? 'justify-center' : 'justify-between'
-                    } items-center bg-gradient-to-r from-green-600 to-green-700 text-white`}>
-                    {!collapsed && (
-                        <Link href="/dashboard" className="flex items-center gap-2">
-                            <img src='/logo.png' className="w-7 h-7" alt="Logo" />
-                            <span className="text-xl font-bold">HRM System</span>
-                        </Link>
-                    )}
-                    {collapsed && (
-                        <Link href="/dashboard">
-                            <img src='/logo.png' className="w-7 h-7" alt="Logo" />
-                        </Link>
-                    )}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={toggleSidebar}
-                        className={`${collapsed ? 'hidden' : ''} hover:bg-green-600 text-white`}
-                    >
-                        <Menu className="w-5 h-5" />
-                    </Button>
-                </div>
-
-                {/* Navigation Menu */}
-                <ScrollArea className="flex-1 px-3 py-4">
-                    <nav className="space-y-2">
-                        {menuItems.map((item, idx) => (
-                            <DesktopMenuItem key={idx} item={item} />
-                        ))}
-                    </nav>
-                </ScrollArea>
-
-                {/* User Profile Section */}
-                <div className={`p-4 border-t bg-gray-50 ${collapsed ? 'flex justify-center' : ''}`}>
-                    {collapsed ? (
-                        <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Avatar className="w-10 h-10 cursor-pointer border-2 border-green-500">
-                                        <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                        <AvatarFallback className="bg-green-700 text-white text-sm">
-                                            {getInitials(auth.user.name)}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                </TooltipTrigger>
-                                <TooltipContent side="right" className="bg-gray-900 text-white">
-                                    <p className="font-medium">{auth.user.name}</p>
-                                    <p className="text-xs text-gray-300">{auth.user.email}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    ) : (
-                        <Link
-                            href="/settings/notifications"
-                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                        >
-                            <Avatar className="w-10 h-10 border-2 border-green-500">
-                                <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                <AvatarFallback className="bg-green-700 text-white text-sm">
-                                    {getInitials(auth.user.name)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div className="truncate">
-                                <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
-                                <p className="text-xs text-gray-500 truncate">{auth.user.email}</p>
-                            </div>
-                        </Link>
-                    )}
-                </div>
-            </aside>
-
-            {/* Mobile Sidebar */}
+        <div className="flex h-screen flex-col bg-gray-50">
+            {/* Mobile Navigation */}
             <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
-                <SheetContent side="left" className="w-[300px] sm:w-[350px] p-0 border-r-0">
-                    {/* Mobile Header */}
-                    <div className="p-4 border-b bg-gradient-to-r from-green-600 to-green-700 text-white">
+                <SheetContent side="left" className="w-[320px] sm:w-[360px] p-0 border-r-0">
+                    <div className="px-4 border-b bg-white/90 backdrop-blur text-gray-900">
                         <div className="flex items-center justify-between">
-                            <Link href="/dashboard" className="flex items-center gap-2">
-                                <img src='/logo.png' className="w-6 h-6" alt="Logo" />
-                                <span className="text-lg font-bold">HRM System</span>
+                            <Link href="/sections" className="flex items-center gap-2">
+                                <img src='/logo.png' className="w-8 h-8 rounded-xl" alt="Logo" />
+                                <div className="leading-tight">
+                                    <p className="text-sm font-semibold">Mousumi Erp</p>
+                                    {activeSection ? (
+                                        <p className="text-[11px] text-gray-600">{activeSection.title}</p>
+                                    ) : (
+                                        <p className="text-[11px] text-gray-600">Select a section</p>
+                                    )}
+                                </div>
                             </Link>
                             <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={toggleMobileNav}
-                                className="text-white hover:bg-green-600"
+                                className="text-gray-700 hover:bg-gray-100"
                             >
                                 <X className="w-5 h-5" />
                             </Button>
                         </div>
                     </div>
 
-                    {/* Mobile Navigation */}
-                    <ScrollArea className="h-[calc(100vh-160px)] px-3 py-4">
+                    <ScrollArea className="h-[calc(100vh-220px)] px-3 py-4">
+                        <div className="mb-3 flex items-center justify-between">
+                            <p className="text-[11px] font-semibold text-gray-500 tracking-wide">MENU</p>
+                            <Link
+                                href="/sections"
+                                className="text-xs font-medium text-green-700 hover:text-green-800 underline underline-offset-4"
+                                onClick={toggleMobileNav}
+                            >
+                                Change section
+                            </Link>
+                        </div>
                         <nav className="space-y-2">
-                            {menuItems.map((item, idx) => (
+                            {visibleMenuItems.map((item, idx) => (
                                 <MobileMenuItem key={idx} item={item} />
                             ))}
                         </nav>
                     </ScrollArea>
 
-                    {/* Mobile User Profile */}
                     <div className="p-4 border-t bg-gray-50">
                         <Link
-                            href="/settings/notifications"
-                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                            href="/logout"
+                            method="post"
+                            as="button"
+                            className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
                             onClick={toggleMobileNav}
                         >
-                            <Avatar className="w-10 h-10 border-2 border-green-500">
-                                <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                <AvatarFallback className="bg-green-700 text-white text-sm">
-                                    {getInitials(auth.user.name)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div>
-                                <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
-                                <p className="text-xs text-gray-500">{auth.user.email}</p>
-                            </div>
+                            <LogOut className="h-4 w-4" />
+                            Logout
                         </Link>
                     </div>
                 </SheetContent>
             </Sheet>
 
-            {/* Main Content */}
-            <div className="flex flex-col flex-1 overflow-hidden">
-                {/* Top Navbar */}
-                <header className="bg-white border-b shadow-sm">
-                    <div className="flex items-center justify-between px-4 py-3">
-                        {/* Mobile Menu Button */}
-                        <div className="flex items-center md:hidden">
-                            <Button variant="ghost" size="icon" onClick={toggleMobileNav} className="text-gray-700">
+            {/* Top Header + Horizontal Navigation */}
+            <header className="bg-white/90 backdrop-blur border-b border-gray-200 shadow-sm">
+                <div className="w-full px-4">
+                    <div className="h-14 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={toggleMobileNav}
+                                className="md:hidden text-gray-700 hover:bg-gray-100"
+                            >
                                 <Menu className="w-5 h-5" />
                             </Button>
-                        </div>
 
-                        {/* Mobile Logo */}
-                        <div className="md:hidden flex items-center">
-                            <Link href="/dashboard" className="flex items-center gap-2">
-                                <img src='/logo.png' className="w-6 h-6" alt="Logo" />
-                                <span className="text-lg font-bold text-gray-900">HRM System</span>
+                            <Link href="/sections" className="flex items-center gap-2 min-w-0">
+                                <img src="/logo.png" className="w-9 h-9 rounded-xl" alt="Logo" />
+                                <div className="min-w-0 leading-tight">
+                                    <p className="text-sm font-semibold text-gray-900">Mousumi Erp</p>
+                                    {activeSection ? (
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-[11px] text-gray-600 truncate">{activeSection.title}</p>
+                                            <span className="text-[11px] text-gray-300">•</span>
+                                            <Link
+                                                href="/sections"
+                                                className="text-[11px] font-medium text-green-700 hover:text-green-800 underline underline-offset-4"
+                                            >
+                                                Change
+                                            </Link>
+                                        </div>
+                                    ) : (
+                                        <p className="text-[11px] text-gray-600">Select a section</p>
+                                    )}
+                                </div>
                             </Link>
                         </div>
 
-                        {/* Desktop Expand Button */}
-                        <div className="hidden md:block">
-                            {collapsed && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={toggleSidebar}
-                                    className="text-gray-700 hover:bg-gray-100"
-                                >
-                                    <Menu className="w-5 h-5" />
-                                </Button>
-                            )}
-                        </div>
-
-                        {/* Right Side Items */}
-                        <div className="flex items-center ml-auto gap-3">
-                            {/* Active Movement Quick Close */}
+                        <div className="flex items-center gap-3">
                             {canCloseOwnMovement && (
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="border-green-600 text-green-700 hover:bg-green-50"
+                                    className="hidden sm:inline-flex border-green-600 text-green-700 hover:bg-green-50 text-xs"
                                     onClick={() => openCloseMovementDialog()}
                                 >
                                     <MapPin className="w-4 h-4 mr-2" />
                                     Close Movement
                                 </Button>
                             )}
-                            {/* Notifications */}
+
                             <NotificationDropdown />
 
-                            {/* User Menu */}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="sm" className="flex items-center gap-2 hover:bg-gray-100">
@@ -764,9 +584,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                                 {getInitials(auth.user.name)}
                                             </AvatarFallback>
                                         </Avatar>
-                                        <div className="hidden md:block text-left">
-                                            <p className="text-sm font-medium text-gray-900">{auth.user.name}</p>
-                                            <p className="text-xs text-gray-500">{auth.user.email}</p>
+                                        <div className="hidden md:block text-left leading-tight">
+                                            <p className="text-xs font-semibold text-gray-900">{auth.user.name}</p>
+                                            <p className="text-[11px] text-gray-500">{auth.user.email}</p>
                                         </div>
                                         <ChevronDown className="w-4 h-4 text-gray-500" />
                                     </Button>
@@ -797,7 +617,71 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </DropdownMenu>
                         </div>
                     </div>
-                </header>
+
+                    {/* Desktop Horizontal Menu */}
+                    <div className="hidden md:block">
+                        <div className="border-t border-gray-200 py-2">
+                            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                            {visibleMenuItems.map((item, idx) => {
+                                if (item.hrOnly && !isHRUser) return null;
+                                if (item.permission && !hasPermission(item.permission)) return null;
+
+                                const permittedSubmenu = item.submenu?.filter(subItem =>
+                                    (!subItem.hrOnly || isHRUser)
+                                    && (!subItem.permission || hasPermission(subItem.permission))
+                                    && (!subItem.anyPermissions?.length
+                                        || subItem.anyPermissions.some((p) => hasPermission(p)))
+                                );
+
+                                if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
+
+                                return item.hasSubmenu ? (
+                                    <DropdownMenu key={idx}>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className={`h-9 px-3 rounded-full text-xs font-medium ${isActive(item.path) ? 'bg-green-50 text-green-700 ring-1 ring-green-200' : 'text-gray-700 hover:bg-gray-100'
+                                                    }`}
+                                            >
+                                                <span className="mr-2">{item.icon}</span>
+                                                {item.title}
+                                                <ChevronDown className="ml-1 h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="w-64">
+                                            <DropdownMenuLabel className="text-xs">{item.title}</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            {permittedSubmenu?.map((subItem, subIdx) => (
+                                                <DropdownMenuItem key={subIdx} asChild>
+                                                    <Link href={subItem.path} className="cursor-pointer text-sm">
+                                                        {subItem.title}
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                ) : (
+                                    <Button
+                                        key={idx}
+                                        asChild
+                                        variant="ghost"
+                                        size="sm"
+                                        className={`h-9 px-3 rounded-full text-xs font-medium ${isActive(item.path) ? 'bg-green-50 text-green-700 ring-1 ring-green-200' : 'text-gray-700 hover:bg-gray-100'
+                                            }`}
+                                    >
+                                        <Link href={item.path}>
+                                            <span className="mr-2">{item.icon}</span>
+                                            {item.title}
+                                        </Link>
+                                    </Button>
+                                );
+                            })}
+                        </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
 
                 {/* Flash Messages */}
                 <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80">
@@ -867,10 +751,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 {/* Footer */}
                 <footer className="border-t py-3 bg-white">
                     <div className="container mx-auto px-4 text-center text-sm text-gray-600">
-                        <p>&copy; {new Date().getFullYear()} HRM System. All rights reserved.</p>
+                        <p>&copy; {new Date().getFullYear()} Mousumi Erp. All rights reserved.</p>
                     </div>
                 </footer>
-            </div>
 
             {/* Global Close Movement Dialog */}
             <Dialog

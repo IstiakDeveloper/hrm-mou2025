@@ -22,6 +22,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useMemo } from 'react';
+import { PageSurface } from '@/components/page-surface';
 
 interface Notice {
     id: string;
@@ -161,7 +162,7 @@ export default function MyNoticesIndex({ notices, filters, stats }: Props) {
         <Layout>
             <Head title="My Notices" />
 
-            <div className="container mx-auto py-6 md:py-8">
+            <PageSurface className="py-6 md:py-8">
                 {/* Header */}
                 <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -417,7 +418,7 @@ export default function MyNoticesIndex({ notices, filters, stats }: Props) {
                         )}
                     </CardContent>
                 </Card>
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

@@ -55,6 +55,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import InputError from '@/components/input-error';
 import { Label } from '@/components/ui/label';
+import { PageSurface } from '@/components/page-surface';
 import {
     Dialog,
     DialogContent,
@@ -239,7 +240,7 @@ export default function EmployeeIndex({
         <Layout>
             <Head title="Employee Management" />
 
-            <div className="container mx-auto py-8">
+            <PageSurface>
                 <div className="mb-8 flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Employee Management</h1>
@@ -661,7 +662,7 @@ export default function EmployeeIndex({
                         )}
                     </CardContent>
                 </Card>
-            </div>
+            </PageSurface>
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={!!employeeToDelete} onOpenChange={(open) => !open && setEmployeeToDelete(null)}>

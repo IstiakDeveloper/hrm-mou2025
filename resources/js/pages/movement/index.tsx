@@ -34,6 +34,7 @@ import {
     PaginationNext,
     PaginationPrevious
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
     ArrowLeft,
     ArrowRight,
@@ -263,7 +264,7 @@ export default function MovementIndex({
         <Layout>
             <Head title="Movement Requests" />
 
-            <div className="container mx-auto py-8">
+            <PageSurface>
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Movement Requests</h1>
@@ -729,7 +730,7 @@ export default function MovementIndex({
                         </CardContent>
                     </Card>
                 )}
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

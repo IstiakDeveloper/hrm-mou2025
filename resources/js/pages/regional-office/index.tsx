@@ -34,6 +34,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { Edit, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
 
@@ -124,7 +125,7 @@ export default function RegionalOfficeIndex({ regionalOffices, zones, filters }:
     <Layout>
       <Head title="Regional Offices" />
 
-      <div className="container mx-auto py-8">
+      <PageSurface>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Regional Offices</h1>
@@ -302,7 +303,7 @@ export default function RegionalOfficeIndex({ regionalOffices, zones, filters }:
             </Pagination>
           </div>
         )}
-      </div>
+      </PageSurface>
     </Layout>
   );
 }

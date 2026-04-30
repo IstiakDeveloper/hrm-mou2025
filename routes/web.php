@@ -155,6 +155,66 @@ Route::middleware(['auth'])->group(function () {
 
     require __DIR__.'/settings.php';
 
+    // Section Landing - Modules (available to all authenticated users)
+    Route::get('/sections', function () {
+        return Inertia::render('sections/index');
+    })->name('sections.index');
+
+    // Human Resources - dedicated dashboard (new design, old data)
+    Route::get('/sections/human-resources', [DashboardController::class, 'humanResources'])
+        ->name('sections.human-resources');
+
+    // Leave - dedicated dashboard (new design, old data)
+    Route::get('/sections/leave', [DashboardController::class, 'leaveSection'])
+        ->name('sections.leave');
+
+    // Administration - dedicated dashboard (new design, old data)
+    Route::get('/sections/administration', [DashboardController::class, 'administrationSection'])
+        ->name('sections.administration');
+
+    // Attendance & Movement - dedicated dashboard (new design, old data)
+    Route::get('/sections/attendance-movement', [DashboardController::class, 'attendanceMovementSection'])
+        ->name('sections.attendance-movement');
+
+    // Section Dashboard (Overview) - role-aware (employee vs admin)
+    Route::get('/sections/{section}', function (Request $request, string $section) {
+        $allowed = [
+            'human-resources',
+            'attendance-movement',
+            'leave',
+            'employee-loan',
+            'staff-fund',
+            'payroll',
+            'fixed-asset',
+            'store',
+            'recruitment',
+            'training',
+            'administration',
+        ];
+        if (! in_array($section, $allowed, true)) {
+            abort(404);
+        }
+
+        $user = $request->user();
+        $perm = fn (string $p): bool => method_exists($user, 'can') ? $user->can($p) : false;
+
+        $isAdminLike = collect([
+            'employees.create',
+            'employees.edit',
+            'employees.admin',
+            'attendance.admin',
+            'leave-types.create',
+            'leave-types.edit',
+            'leave-balances.admin',
+            'admin.access',
+        ])->contains(fn ($p) => $perm($p));
+
+        return Inertia::render('sections/section-dashboard', [
+            'sectionId' => $section,
+            'mode' => $isAdminLike ? 'admin' : 'employee',
+        ]);
+    })->name('sections.dashboard');
+
     // Dashboard - Available to all authenticated users
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -286,6 +346,14 @@ Route::middleware(['auth'])->group(function () {
     // ====================
     Route::middleware(['permission:employees.view'])->group(function () {
         Route::resource('employees', EmployeeController::class)->parameters(['employees' => 'employee']);
+
+        Route::get('employees/pin-suggestion', [EmployeeController::class, 'pinSuggestion'])
+            ->name('employees.pin-suggestion')
+            ->middleware('permission:employees.create');
+
+        Route::post('employees/villages', [EmployeeController::class, 'storeVillage'])
+            ->name('employees.villages.store')
+            ->middleware('permission:employees.create');
 
         // Import Wizard
         Route::post('employees/import/preview', [EmployeeController::class, 'importPreview'])
