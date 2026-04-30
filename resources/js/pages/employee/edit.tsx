@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     EMPLOYEE_V2_EDIT_DRAFT_PREFIX,
     asInputPatch,
@@ -247,6 +248,11 @@ export default function EmployeeEdit({
     const [activeTab, setActiveTab] = useState('general');
     const [photoPreview, setPhotoPreview] = useState<string | null>(employee.photo ? `/storage/${employee.photo}` : null);
     const [signaturePreview, setSignaturePreview] = useState<string | null>(employee.signature ? `/storage/${employee.signature}` : null);
+    const [addVillageModal, setAddVillageModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string }>({
+        open: false,
+        target: 'present',
+        name: '',
+    });
 
     useEffect(() => {
         if (!data.bank?.bank_name) {
@@ -329,6 +335,12 @@ export default function EmployeeEdit({
 
     const [sameAsPresent, setSameAsPresent] = useState(false);
 
+    const canOpenVillageModal = (target: 'present' | 'permanent') => {
+        const idx = target === 'present' ? 0 : 1;
+        const a = data.addresses?.[idx];
+        return !!(a?.division && a?.district && a?.upazila && a?.union);
+    };
+
     const buildAddressDetails = (a: any) => {
         const parts = [a?.village, a?.union, a?.upazila, a?.district, a?.division].filter(Boolean);
         return parts.join(', ');
@@ -348,14 +360,14 @@ export default function EmployeeEdit({
         setData('addresses', next);
     };
 
-    const addVillage = async () => {
-        const division = data.addresses?.[0]?.division || '';
-        const district = data.addresses?.[0]?.district || '';
-        const upazila = data.addresses?.[0]?.upazila || '';
-        const union = data.addresses?.[0]?.union || '';
-        if (!division || !district || !upazila || !union) return;
-        const name = window.prompt('New village name');
-        if (!name) return;
+    const persistVillage = async (target: 'present' | 'permanent', nameRaw: string) => {
+        const idx = target === 'present' ? 0 : 1;
+        const division = data.addresses?.[idx]?.division || '';
+        const district = data.addresses?.[idx]?.district || '';
+        const upazila = data.addresses?.[idx]?.upazila || '';
+        const union = data.addresses?.[idx]?.union || '';
+        const name = nameRaw.trim();
+        if (!division || !district || !upazila || !union || !name) return;
         try {
             const res = await fetch(route('employees.villages.store'), {
                 method: 'POST',
@@ -368,46 +380,21 @@ export default function EmployeeEdit({
             if (!res.ok) return;
             const j = await res.json();
             const createdName = (j?.village?.name ?? j?.name ?? name) as string;
-            const key = `p:${upazila}:${union}`;
+            const key = `${target === 'present' ? 'p' : 'r'}:${upazila}:${union}`;
             setExtraVillages((prev) => {
                 const arr = prev[key] ?? [];
                 return { ...prev, [key]: Array.from(new Set([...arr, createdName])) };
             });
-            setPresentAddress({ village: createdName });
+            if (target === 'present') setPresentAddress({ village: createdName });
+            else setPermanentAddress({ village: createdName });
         } catch {
             // ignore
         }
     };
 
-    const addVillagePermanent = async () => {
-        const division = data.addresses?.[1]?.division || '';
-        const district = data.addresses?.[1]?.district || '';
-        const upazila = data.addresses?.[1]?.upazila || '';
-        const union = data.addresses?.[1]?.union || '';
-        if (!division || !district || !upazila || !union) return;
-        const name = window.prompt('New village name');
-        if (!name) return;
-        try {
-            const res = await fetch(route('employees.villages.store'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
-                },
-                body: JSON.stringify({ division, district, upazila, union, name }),
-            });
-            if (!res.ok) return;
-            const j = await res.json();
-            const createdName = (j?.village?.name ?? j?.name ?? name) as string;
-            const key = `r:${upazila}:${union}`;
-            setExtraVillages((prev) => {
-                const arr = prev[key] ?? [];
-                return { ...prev, [key]: Array.from(new Set([...arr, createdName])) };
-            });
-            setPermanentAddress({ village: createdName });
-        } catch {
-            // ignore
-        }
+    const openAddVillageModal = (target: 'present' | 'permanent') => {
+        if (!canOpenVillageModal(target)) return;
+        setAddVillageModal({ open: true, target, name: '' });
     };
 
     const submit = (e: React.FormEvent) => {
@@ -659,7 +646,14 @@ export default function EmployeeEdit({
                                                             placeholder="Select Village"
                                                         />
                                                     </div>
-                                                    <Button type="button" variant="outline" size="icon" onClick={addVillage} title="Add village">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        onClick={() => openAddVillageModal('present')}
+                                                        title="Add village"
+                                                        disabled={!canOpenVillageModal('present')}
+                                                    >
                                                         <Plus className="h-4 w-4" />
                                                     </Button>
                                                 </div>
@@ -736,7 +730,14 @@ export default function EmployeeEdit({
                                                             disabled={sameAsPresent}
                                                         />
                                                     </div>
-                                                    <Button type="button" variant="outline" size="icon" onClick={addVillagePermanent} title="Add village" disabled={sameAsPresent}>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        onClick={() => openAddVillageModal('permanent')}
+                                                        title="Add village"
+                                                        disabled={sameAsPresent || !canOpenVillageModal('permanent')}
+                                                    >
                                                         <Plus className="h-4 w-4" />
                                                     </Button>
                                                 </div>
@@ -1227,6 +1228,50 @@ export default function EmployeeEdit({
                     </Tabs>
                 </form>
             </div>
+
+            <Dialog
+                open={addVillageModal.open}
+                onOpenChange={(open) => setAddVillageModal((s) => ({ ...s, open }))}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-sm">Add Village</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label className="text-xs">Village Name</Label>
+                        <Input
+                            value={addVillageModal.name}
+                            onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value }))}
+                            placeholder="Type village name"
+                            autoFocus
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            This will be saved and available for future selection.
+                        </p>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setAddVillageModal((s) => ({ ...s, open: false }))}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={async () => {
+                                const target = addVillageModal.target;
+                                const name = addVillageModal.name;
+                                await persistVillage(target, name);
+                                setAddVillageModal({ open: false, target: 'present', name: '' });
+                            }}
+                            disabled={!addVillageModal.name.trim()}
+                        >
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Layout>
     );
 }

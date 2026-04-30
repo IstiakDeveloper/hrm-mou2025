@@ -55,6 +55,194 @@ class EmployeeController extends Controller
     }
 
     /**
+     * phpMyAdmin "Export to JSON" format stores the actual rows in the table entry's "data" key.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function readPhpMyAdminExportTableData(string $absPath, string $tableName): array
+    {
+        $decoded = $this->readJsonArrayFile($absPath);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        foreach ($decoded as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+            if (($entry['type'] ?? null) !== 'table') {
+                continue;
+            }
+            if (($entry['name'] ?? null) !== $tableName) {
+                continue;
+            }
+            $data = $entry['data'] ?? null;
+            return is_array($data) ? $data : [];
+        }
+
+        return [];
+    }
+
+    /**
+     * Build the frontend-friendly location payload from data/locations/*.json.
+     * Falls back to legacy data/locations.json if folder is missing.
+     *
+     * Shape:
+     * - divisions: list<string>
+     * - districts: array<divisionName, list<string>>
+     * - upazilas: array<districtName, list<string>>
+     * - unions: array<upazilaName, list<array{name,type,villages:list<string>}>>>
+     */
+    private function buildLocationsPayload(): array
+    {
+        $folder = base_path('data/locations');
+        $divisionsPath = $folder.'/divisions.json';
+        $districtsPath = $folder.'/districts.json';
+        $upazilasPath = $folder.'/upazilas.json';
+        $unionsPath = $folder.'/unions.json';
+        $villagesPath = $folder.'/villages.json';
+
+        if (! is_dir($folder) || ! file_exists($divisionsPath)) {
+            // Legacy single file
+            return $this->readJsonArrayFile(base_path('data/locations.json'));
+        }
+
+        $divisionsRows = $this->readPhpMyAdminExportTableData($divisionsPath, 'divisions');
+        $districtRows = $this->readPhpMyAdminExportTableData($districtsPath, 'districts');
+        $upazilaRows = $this->readPhpMyAdminExportTableData($upazilasPath, 'upazilas');
+        $unionRows = $this->readPhpMyAdminExportTableData($unionsPath, 'unions');
+        $villageRowsRaw = $this->readJsonArrayFile($villagesPath); // user-maintained, starts empty
+
+        $divisionIdToName = [];
+        $divisions = [];
+        foreach ($divisionsRows as $r) {
+            $id = (string) ($r['id'] ?? '');
+            $name = trim((string) ($r['name'] ?? ''));
+            if ($id === '' || $name === '') {
+                continue;
+            }
+            $divisionIdToName[$id] = $name;
+            $divisions[] = $name;
+        }
+        $divisions = array_values(array_unique($divisions));
+        sort($divisions);
+
+        $districtIdToName = [];
+        $districtIdToDivisionName = [];
+        $districtsByDivision = [];
+        foreach ($districtRows as $r) {
+            $id = (string) ($r['id'] ?? '');
+            $divisionId = (string) ($r['division_id'] ?? '');
+            $name = trim((string) ($r['name'] ?? ''));
+            if ($id === '' || $name === '' || $divisionId === '') {
+                continue;
+            }
+            $divisionName = $divisionIdToName[$divisionId] ?? null;
+            if (! $divisionName) {
+                continue;
+            }
+            $districtIdToName[$id] = $name;
+            $districtIdToDivisionName[$id] = $divisionName;
+            $districtsByDivision[$divisionName] = $districtsByDivision[$divisionName] ?? [];
+            $districtsByDivision[$divisionName][] = $name;
+        }
+        foreach ($districtsByDivision as $k => $arr) {
+            $arr = array_values(array_unique($arr));
+            sort($arr);
+            $districtsByDivision[$k] = $arr;
+        }
+
+        $upazilaIdToName = [];
+        $upazilaIdToDistrictName = [];
+        $upazilasByDistrict = [];
+        foreach ($upazilaRows as $r) {
+            $id = (string) ($r['id'] ?? '');
+            $districtId = (string) ($r['district_id'] ?? '');
+            $name = trim((string) ($r['name'] ?? ''));
+            if ($id === '' || $name === '' || $districtId === '') {
+                continue;
+            }
+            $districtName = $districtIdToName[$districtId] ?? null;
+            if (! $districtName) {
+                continue;
+            }
+            $upazilaIdToName[$id] = $name;
+            $upazilaIdToDistrictName[$id] = $districtName;
+            $upazilasByDistrict[$districtName] = $upazilasByDistrict[$districtName] ?? [];
+            $upazilasByDistrict[$districtName][] = $name;
+        }
+        foreach ($upazilasByDistrict as $k => $arr) {
+            $arr = array_values(array_unique($arr));
+            sort($arr);
+            $upazilasByDistrict[$k] = $arr;
+        }
+
+        // villages.json can store either {union_id,name} or {upazila,union,name} records
+        $villagesByUnionId = [];
+        $villagesByUpazilaUnionKey = [];
+        if (is_array($villageRowsRaw)) {
+            foreach ($villageRowsRaw as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $name = trim((string) ($row['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $unionId = trim((string) ($row['union_id'] ?? ''));
+                if ($unionId !== '') {
+                    $villagesByUnionId[$unionId] = $villagesByUnionId[$unionId] ?? [];
+                    $villagesByUnionId[$unionId][] = $name;
+                }
+                $upazilaName = trim((string) ($row['upazila'] ?? ''));
+                $unionName = trim((string) ($row['union'] ?? ''));
+                if ($upazilaName !== '' && $unionName !== '') {
+                    $key = $upazilaName.'|'.$unionName;
+                    $villagesByUpazilaUnionKey[$key] = $villagesByUpazilaUnionKey[$key] ?? [];
+                    $villagesByUpazilaUnionKey[$key][] = $name;
+                }
+            }
+        }
+
+        $unionsByUpazila = [];
+        foreach ($unionRows as $r) {
+            $id = (string) ($r['id'] ?? '');
+            $upazilaId = (string) ($r['upazilla_id'] ?? $r['upazila_id'] ?? '');
+            $name = trim((string) ($r['name'] ?? ''));
+            if ($id === '' || $upazilaId === '' || $name === '') {
+                continue;
+            }
+            $upazilaName = $upazilaIdToName[$upazilaId] ?? null;
+            if (! $upazilaName) {
+                continue;
+            }
+            $villages = $villagesByUnionId[$id] ?? [];
+            $villages = array_merge($villages, $villagesByUpazilaUnionKey[$upazilaName.'|'.$name] ?? []);
+            $villages = array_values(array_unique(array_filter(array_map('strval', $villages))));
+            sort($villages);
+
+            $unionsByUpazila[$upazilaName] = $unionsByUpazila[$upazilaName] ?? [];
+            $unionsByUpazila[$upazilaName][] = [
+                'name' => $name,
+                'type' => 'union',
+                'villages' => $villages,
+            ];
+        }
+
+        foreach ($unionsByUpazila as $k => $arr) {
+            usort($arr, fn ($a, $b) => strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+            $unionsByUpazila[$k] = $arr;
+        }
+
+        return [
+            'divisions' => $divisions,
+            'districts' => $districtsByDivision,
+            'upazilas' => $upazilasByDistrict,
+            'unions' => $unionsByUpazila,
+        ];
+    }
+
+    /**
      * Normalize empty strings to null so nullable unique columns (e.g. nid) and FKs do not break inserts.
      */
     private function normalizeEmployeeRequestPayload(Request $request): void
@@ -236,6 +424,82 @@ class EmployeeController extends Controller
             Arr::only($validated, ['division', 'district', 'upazila', 'union', 'name']),
             Arr::only($validated, ['created_by'])
         );
+
+        // Persist to data/locations/villages.json so it can be selected later (starts empty).
+        try {
+            $villagesPath = base_path('data/locations/villages.json');
+            if (! file_exists($villagesPath)) {
+                @file_put_contents($villagesPath, json_encode([], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+            }
+
+            $existing = $this->readJsonArrayFile($villagesPath);
+            if (! is_array($existing)) {
+                $existing = [];
+            }
+
+            // Resolve union_id if possible (unions.json uses upazilla_id, so we narrow by upazila name + union name)
+            $unionId = null;
+            try {
+                $upazilaName = trim((string) ($validated['upazila'] ?? ''));
+                $unionName = trim((string) ($validated['union'] ?? ''));
+                if ($upazilaName !== '' && $unionName !== '') {
+                    $upazilaRows = $this->readPhpMyAdminExportTableData(base_path('data/locations/upazilas.json'), 'upazilas');
+                    $unionRows = $this->readPhpMyAdminExportTableData(base_path('data/locations/unions.json'), 'unions');
+                    $upazilaId = null;
+                    foreach ($upazilaRows as $ur) {
+                        if (trim((string) ($ur['name'] ?? '')) === $upazilaName) {
+                            $upazilaId = (string) ($ur['id'] ?? '');
+                            break;
+                        }
+                    }
+                    if (is_string($upazilaId) && $upazilaId !== '') {
+                        foreach ($unionRows as $rr) {
+                            $rid = (string) ($rr['id'] ?? '');
+                            $rupazilaId = (string) ($rr['upazilla_id'] ?? $rr['upazila_id'] ?? '');
+                            $rname = trim((string) ($rr['name'] ?? ''));
+                            if ($rid !== '' && $rupazilaId === $upazilaId && $rname === $unionName) {
+                                $unionId = $rid;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+                $unionId = null;
+            }
+
+            $newEntry = [
+                'name' => $village->name,
+            ];
+            if (is_string($unionId) && $unionId !== '') {
+                $newEntry['union_id'] = $unionId;
+            } else {
+                // fallback so we can still match by names
+                $newEntry['upazila'] = (string) ($village->upazila ?? '');
+                $newEntry['union'] = (string) ($village->union ?? '');
+            }
+
+            $existsAlready = false;
+            foreach ($existing as $row) {
+                if (! is_array($row)) continue;
+                if (trim((string) ($row['name'] ?? '')) !== $newEntry['name']) continue;
+                if (! empty($newEntry['union_id']) && trim((string) ($row['union_id'] ?? '')) === $newEntry['union_id']) {
+                    $existsAlready = true;
+                    break;
+                }
+                if (empty($newEntry['union_id']) && trim((string) ($row['upazila'] ?? '')) === ($newEntry['upazila'] ?? '') && trim((string) ($row['union'] ?? '')) === ($newEntry['union'] ?? '')) {
+                    $existsAlready = true;
+                    break;
+                }
+            }
+
+            if (! $existsAlready) {
+                $existing[] = $newEntry;
+                @file_put_contents($villagesPath, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+            }
+        } catch (\Throwable) {
+            // ignore file persistence errors
+        }
 
         return response()->json([
             'id' => $village->id,
@@ -514,7 +778,7 @@ class EmployeeController extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
-        $locations = $this->readJsonArrayFile(base_path('data/locations.json'));
+        $locations = $this->buildLocationsPayload();
 
         return Inertia::render('employee/create', [
             'oldInput' => old(),
@@ -1010,7 +1274,7 @@ class EmployeeController extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
-        $locations = $this->readJsonArrayFile(base_path('data/locations.json'));
+        $locations = $this->buildLocationsPayload();
 
         // Load new tabbed relational data (so edit does not wipe on update)
         $employeePayload = $employee->toArray();

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     EMPLOYEE_V2_CREATE_DRAFT_KEY,
     asInputPatch,
@@ -305,6 +306,11 @@ export default function EmployeeCreate({
     const [activeTab, setActiveTab] = useState('general');
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
+    const [addVillageModal, setAddVillageModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string }>({
+        open: false,
+        target: 'present',
+        name: '',
+    });
 
     useEffect(() => {
         // Default bank
@@ -416,45 +422,20 @@ export default function EmployeeCreate({
 
     const [sameAsPresent, setSameAsPresent] = useState(false);
 
-    const addVillage = async () => {
-        const division = data.addresses[0]?.division || '';
-        const district = data.addresses[0]?.district || '';
-        const upazila = data.addresses[0]?.upazila || '';
-        const union = data.addresses[0]?.union || '';
-        if (!division || !district || !upazila || !union) return;
-        const name = window.prompt('New village name');
-        if (!name) return;
-        try {
-            const res = await fetch(route('employees.villages.store'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
-                },
-                body: JSON.stringify({ division, district, upazila, union, name }),
-            });
-            if (!res.ok) return;
-            const j = await res.json();
-            const createdName = (j?.village?.name ?? j?.name ?? name) as string;
-            const key = `p:${upazila}:${union}`;
-            setExtraVillages((prev) => {
-                const arr = prev[key] ?? [];
-                return { ...prev, [key]: Array.from(new Set([...arr, createdName])) };
-            });
-            setPresentAddress({ village: createdName });
-        } catch {
-            // ignore
-        }
+    const canOpenVillageModal = (target: 'present' | 'permanent') => {
+        const idx = target === 'present' ? 0 : 1;
+        const a = data.addresses[idx];
+        return !!(a?.division && a?.district && a?.upazila && a?.union);
     };
 
-    const addVillagePermanent = async () => {
-        const division = data.addresses[1]?.division || '';
-        const district = data.addresses[1]?.district || '';
-        const upazila = data.addresses[1]?.upazila || '';
-        const union = data.addresses[1]?.union || '';
-        if (!division || !district || !upazila || !union) return;
-        const name = window.prompt('New village name');
-        if (!name) return;
+    const persistVillage = async (target: 'present' | 'permanent', nameRaw: string) => {
+        const idx = target === 'present' ? 0 : 1;
+        const division = data.addresses[idx]?.division || '';
+        const district = data.addresses[idx]?.district || '';
+        const upazila = data.addresses[idx]?.upazila || '';
+        const union = data.addresses[idx]?.union || '';
+        const name = nameRaw.trim();
+        if (!division || !district || !upazila || !union || !name) return;
         try {
             const res = await fetch(route('employees.villages.store'), {
                 method: 'POST',
@@ -467,12 +448,13 @@ export default function EmployeeCreate({
             if (!res.ok) return;
             const j = await res.json();
             const createdName = (j?.village?.name ?? j?.name ?? name) as string;
-            const key = `r:${upazila}:${union}`;
+            const key = `${target === 'present' ? 'p' : 'r'}:${upazila}:${union}`;
             setExtraVillages((prev) => {
                 const arr = prev[key] ?? [];
                 return { ...prev, [key]: Array.from(new Set([...arr, createdName])) };
             });
-            setPermanentAddress({ village: createdName });
+            if (target === 'present') setPresentAddress({ village: createdName });
+            else setPermanentAddress({ village: createdName });
         } catch {
             // ignore
         }
@@ -810,7 +792,17 @@ export default function EmployeeCreate({
                                                             placeholder="Select Village"
                                                         />
                                                     </div>
-                                                    <Button type="button" variant="outline" size="icon" onClick={addVillage} title="Add village">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        onClick={() => {
+                                                            if (!canOpenVillageModal('present')) return;
+                                                            setAddVillageModal({ open: true, target: 'present', name: '' });
+                                                        }}
+                                                        title="Add village"
+                                                        disabled={!canOpenVillageModal('present')}
+                                                    >
                                                         <Plus className="h-4 w-4" />
                                                     </Button>
                                                 </div>
@@ -888,7 +880,17 @@ export default function EmployeeCreate({
                                                             disabled={sameAsPresent}
                                                         />
                                                     </div>
-                                                    <Button type="button" variant="outline" size="icon" onClick={addVillagePermanent} title="Add village" disabled={sameAsPresent}>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        onClick={() => {
+                                                            if (!canOpenVillageModal('permanent')) return;
+                                                            setAddVillageModal({ open: true, target: 'permanent', name: '' });
+                                                        }}
+                                                        title="Add village"
+                                                        disabled={sameAsPresent || !canOpenVillageModal('permanent')}
+                                                    >
                                                         <Plus className="h-4 w-4" />
                                                     </Button>
                                                 </div>
@@ -1501,6 +1503,50 @@ export default function EmployeeCreate({
                     </Tabs>
                 </form>
             </div>
+
+            <Dialog
+                open={addVillageModal.open}
+                onOpenChange={(open) => setAddVillageModal((s) => ({ ...s, open }))}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-sm">Add Village</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label className="text-xs">Village Name</Label>
+                        <Input
+                            value={addVillageModal.name}
+                            onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value }))}
+                            placeholder="Type village name"
+                            autoFocus
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            This will be saved and available for future selection.
+                        </p>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setAddVillageModal((s) => ({ ...s, open: false }))}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={async () => {
+                                const target = addVillageModal.target;
+                                const name = addVillageModal.name;
+                                await persistVillage(target, name);
+                                setAddVillageModal({ open: false, target: 'present', name: '' });
+                            }}
+                            disabled={!addVillageModal.name.trim()}
+                        >
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Layout>
     );
 }
