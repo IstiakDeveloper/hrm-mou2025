@@ -27,13 +27,17 @@ use App\Http\Controllers\Leave\LeaveTypeController;
 use App\Http\Controllers\Movement\MovementController;
 use App\Http\Controllers\MyNoticeController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Organization\EmployeeTypeController;
+use App\Http\Controllers\Organization\ProgramController;
+use App\Http\Controllers\Organization\ProjectController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RegionalOffice\RegionalOfficeController;
 use App\Http\Controllers\Report\ReportController;
 use App\Http\Controllers\Transfer\TransferController;
-use App\Http\Controllers\Zone\ZoneController;
 use App\Http\Controllers\ZKTeco\ZKDeviceController;
+use App\Http\Controllers\Zone\ZoneController;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -104,7 +108,7 @@ Route::get('/error/{type}', function ($type) {
 // PUBLIC ROUTES
 // ====================
 Route::get('/', function () {
-    return Auth::check() ? redirect()->route('dashboard') : redirect()->route('login');
+    return Auth::check() ? redirect()->route('sections.index') : redirect()->route('login');
 });
 
 Route::get('/admin/roles/fix-permissions', [RoleController::class, 'fixAllRolePermissions'])
@@ -133,10 +137,18 @@ Route::get('/debug/role/{role}', function (Role $role) {
         'permission_count' => count($permissions),
     ]);
 })->name('debug.role');
-// NOTE:
-// Do NOT expose Artisan command endpoints via HTTP.
-// On shared hosting, commands like `storage:link` may fail (exec/symlink disabled),
-// and exposing `migrate` publicly is a critical security risk.
+
+// Run DB migrations via GET /migrate (local env, or set ALLOW_MIGRATE_HTTP=true in .env).
+// Remove ALLOW_MIGRATE_HTTP after one-time deploy; never leave it true on public servers.
+Route::get('/migrate', function () {
+
+    Artisan::call('migrate', ['--force' => true]);
+
+    return response()->json([
+        'ok' => true,
+        'output' => Artisan::output(),
+    ]);
+})->name('migrate.http');
 
 // ====================
 // AUTHENTICATION ROUTES
@@ -196,7 +208,8 @@ Route::middleware(['auth'])->group(function () {
         }
 
         $user = $request->user();
-        $perm = fn (string $p): bool => method_exists($user, 'can') ? $user->can($p) : false;
+        $perm = fn (string $p): bool => $user instanceof User
+            && ($user->can($p) || $user->hasPermission($p));
 
         $isAdminLike = collect([
             'employees.create',
@@ -215,8 +228,10 @@ Route::middleware(['auth'])->group(function () {
         ]);
     })->name('sections.dashboard');
 
-    // Dashboard - Available to all authenticated users
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // Legacy URL: send everyone to the section picker (module home)
+    Route::get('/dashboard', function () {
+        return redirect()->route('sections.index');
+    })->name('dashboard');
 
     // ====================
     // EMPLOYEE SELF ATTENDANCE (PWA GEO-FENCE)
@@ -264,7 +279,7 @@ Route::middleware(['auth'])->group(function () {
         //   /admin/utils/storage-link?token=YOUR_TOKEN
         Route::get('utils/storage-link', function (Request $request) {
             $token = env('STORAGE_LINK_TOKEN');
-            if (!is_string($token) || $token === '' || !hash_equals($token, (string) $request->query('token', ''))) {
+            if (! is_string($token) || $token === '' || ! hash_equals($token, (string) $request->query('token', ''))) {
                 abort(404);
             }
 
@@ -524,6 +539,64 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{designation}', [DesignationController::class, 'destroy'])
             ->name('destroy')
             ->middleware('permission:designations.delete');
+    });
+
+    // Employee types, programs & projects (employee form lookups; list like departments, edits aligned with employee create/edit)
+    Route::middleware(['permission:departments.view'])->prefix('employee-types')->name('employee-types.')->group(function () {
+        Route::get('/', [EmployeeTypeController::class, 'index'])->name('index');
+        Route::get('/create', [EmployeeTypeController::class, 'create'])
+            ->name('create')
+            ->middleware('permission:employees.create');
+        Route::post('/', [EmployeeTypeController::class, 'store'])
+            ->name('store')
+            ->middleware('permission:employees.create');
+        Route::get('/{employee_type}/edit', [EmployeeTypeController::class, 'edit'])
+            ->name('edit')
+            ->middleware('permission:employees.edit');
+        Route::put('/{employee_type}', [EmployeeTypeController::class, 'update'])
+            ->name('update')
+            ->middleware('permission:employees.edit');
+        Route::delete('/{employee_type}', [EmployeeTypeController::class, 'destroy'])
+            ->name('destroy')
+            ->middleware('permission:employees.delete');
+    });
+
+    Route::middleware(['permission:departments.view'])->prefix('programs')->name('programs.')->group(function () {
+        Route::get('/', [ProgramController::class, 'index'])->name('index');
+        Route::get('/create', [ProgramController::class, 'create'])
+            ->name('create')
+            ->middleware('permission:employees.create');
+        Route::post('/', [ProgramController::class, 'store'])
+            ->name('store')
+            ->middleware('permission:employees.create');
+        Route::get('/{program}/edit', [ProgramController::class, 'edit'])
+            ->name('edit')
+            ->middleware('permission:employees.edit');
+        Route::put('/{program}', [ProgramController::class, 'update'])
+            ->name('update')
+            ->middleware('permission:employees.edit');
+        Route::delete('/{program}', [ProgramController::class, 'destroy'])
+            ->name('destroy')
+            ->middleware('permission:employees.delete');
+    });
+
+    Route::middleware(['permission:departments.view'])->prefix('projects')->name('projects.')->group(function () {
+        Route::get('/', [ProjectController::class, 'index'])->name('index');
+        Route::get('/create', [ProjectController::class, 'create'])
+            ->name('create')
+            ->middleware('permission:employees.create');
+        Route::post('/', [ProjectController::class, 'store'])
+            ->name('store')
+            ->middleware('permission:employees.create');
+        Route::get('/{project}/edit', [ProjectController::class, 'edit'])
+            ->name('edit')
+            ->middleware('permission:employees.edit');
+        Route::put('/{project}', [ProjectController::class, 'update'])
+            ->name('update')
+            ->middleware('permission:employees.edit');
+        Route::delete('/{project}', [ProjectController::class, 'destroy'])
+            ->name('destroy')
+            ->middleware('permission:employees.delete');
     });
 
     // ====================
@@ -798,10 +871,6 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{transfer}/approve', [TransferController::class, 'approve'])->name('approve');
             Route::post('/{transfer}/reject', [TransferController::class, 'reject'])->name('reject');
         });
-
-        Route::get('/report', [TransferController::class, 'report'])
-            ->name('report')
-            ->middleware('permission:reports.view');
     });
 
     // ====================

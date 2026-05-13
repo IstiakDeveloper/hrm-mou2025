@@ -115,7 +115,10 @@ class AttendanceController extends Controller
             });
         });
 
-        $attendances = $query->paginate(100)->withQueryString();
+        $perPage = $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
+
+        $attendances = $query->paginate($perPage)->withQueryString();
 
         // Format times, remarks, and ADD MOVEMENT DATA
         $attendances->getCollection()->transform(function ($attendance) use ($date) {
@@ -231,7 +234,7 @@ class AttendanceController extends Controller
             'attendances' => $formattedAttendances,
             'branches' => $this->getAccessibleBranches($user),
             'departments' => $this->getAccessibleDepartments($user),
-            'filters' => $request->only(['date', 'branch_id', 'department_id', 'status', 'search']),
+            'filters' => $request->only(['date', 'branch_id', 'department_id', 'status', 'search', 'per_page']),
             'date' => $date->format('Y-m-d'),
             'readableDate' => $date->format('l, F j, Y'),
             'userPermissions' => [

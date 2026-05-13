@@ -515,165 +515,138 @@ export default function AttendanceMonthly({
                 <div className="mb-6">
                     <Link
                         href={route('attendance.index')}
-                        className="flex w-fit items-center text-gray-500 hover:text-gray-700"
+                        className="flex w-fit items-center text-gray-500 hover:text-gray-700 transition-colors font-medium text-sm"
                     >
-                        <ArrowLeft className="mr-1 h-4 w-4" />
+                        <ArrowLeft className="mr-1.5 h-4 w-4" />
                         <span>Back to Daily Attendance</span>
                     </Link>
                 </div>
 
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Monthly Attendance</h1>
-                        <p className="mt-1 text-gray-500">
-                            View attendance records for {monthLabel}
-                        </p>
-                    </div>
+                <div className="mb-6 space-y-4">
+                    {/* Top row: Title and primary actions */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Monthly Attendance</h1>
+                            <p className="mt-1 text-sm text-slate-500">
+                                View attendance records for {monthLabel}
+                            </p>
+                        </div>
 
-                    <div className="mt-4 md:mt-0 flex flex-wrap gap-2">
-                        <Button
-                            variant="outline"
-                            className="flex items-center"
-                            onClick={() => handleMonthChange(prevMonthString)}
-                        >
-                            <Calendar className="mr-1 h-4 w-4" />
-                            {format(prevMonth, 'MMM yyyy')}
-                        </Button>
-
-                        <Button
-                            variant="outline"
-                            className="flex items-center bg-blue-50"
-                        >
-                            <Calendar className="mr-1 h-4 w-4" />
-                            {format(monthDate, 'MMM yyyy')}
-                        </Button>
-
-                        <Button
-                            variant="outline"
-                            className="flex items-center"
-                            onClick={() => handleMonthChange(nextMonthString)}
-                        >
-                            <Calendar className="mr-1 h-4 w-4" />
-                            {format(nextMonth, 'MMM yyyy')}
-                        </Button>
-
-                        <Link href={route('attendance.report')}>
-                            <Button variant="outline" className="flex items-center">
-                                <BarChart className="mr-1 h-4 w-4" />
-                                View Report
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium"
+                                onClick={() => handleMonthChange(prevMonthString)}
+                            >
+                                <Calendar className="mr-2 h-4 w-4 text-slate-400" />
+                                {format(prevMonth, 'MMM yyyy')}
                             </Button>
-                        </Link>
 
-                        <Button
-                            variant="outline"
-                            className="flex items-center"
-                            onClick={handleExportPDF}
-                        >
-                            <Download className="mr-1 h-4 w-4" />
-                            Export PDF
-                        </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 bg-blue-50 border-blue-200 text-blue-700 shadow-sm font-semibold pointer-events-none"
+                            >
+                                <Calendar className="mr-2 h-4 w-4 text-blue-600" />
+                                {format(monthDate, 'MMM yyyy')}
+                            </Button>
 
-                        {userPermissions.canCreate && (
-                            <Link href={route('attendance.create')}>
-                                <Button className="flex items-center">
-                                    <Clock className="mr-1 h-4 w-4" />
-                                    Add Attendance
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium"
+                                onClick={() => handleMonthChange(nextMonthString)}
+                            >
+                                <Calendar className="mr-2 h-4 w-4 text-slate-400" />
+                                {format(nextMonth, 'MMM yyyy')}
+                            </Button>
+
+                            <Link href={route('attendance.report')}>
+                                <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
+                                    <BarChart className="mr-2 h-4 w-4 text-slate-500" />
+                                    View Report
                                 </Button>
                             </Link>
+
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium"
+                                onClick={handleExportPDF}
+                            >
+                                <Download className="mr-2 h-4 w-4 text-slate-500" />
+                                Export PDF
+                            </Button>
+
+                            {userPermissions.canCreate && (
+                                <Link href={route('attendance.create')}>
+                                    <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-medium">
+                                        <Clock className="mr-1 h-4 w-4" />
+                                        Add Attendance
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Role-based Context Message */}
+                    {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
+                        <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+                            <Info className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-sm">
+                                You are viewing your own monthly attendance records.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {/* Compact Filter Bar */}
+                    <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 w-full bg-slate-50/50 p-3 rounded-xl border border-slate-200">
+                        <div className="relative flex-1 min-w-[200px]">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                placeholder="Search by name or employee ID..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+                            />
+                        </div>
+
+                        {canFilterByBranch && branches.length > 1 && (
+                            <Select value={branchId || undefined} onValueChange={(value) => setBranchId(value === "all" ? null : value)}>
+                                <SelectTrigger className="w-[160px] h-9 text-sm bg-white border-slate-200 rounded-lg">
+                                    <SelectValue placeholder="Select branch" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Branches</SelectItem>
+                                    {branches.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         )}
+
+                        {canFilterByDepartment && departments.length > 1 && (
+                            <Select value={departmentId || undefined} onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}>
+                                <SelectTrigger className="w-[160px] h-9 text-sm bg-white border-slate-200 rounded-lg">
+                                    <SelectValue placeholder="Select department" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Depts</SelectItem>
+                                    {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        )}
+
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" onClick={resetFilters} size="sm" className="h-9 text-slate-500 hover:text-slate-700">
+                                Reset
+                            </Button>
+                            <Button onClick={handleSearch} size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">
+                                Apply Filters
+                            </Button>
+                        </div>
                     </div>
                 </div>
-
-                {/* Role-based Context Message */}
-                {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
-                    <Alert className="mb-6">
-                        <Info className="h-4 w-4" />
-                        <AlertDescription>
-                            You are viewing your own monthly attendance records.
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Filters */}
-                <Card className="mb-6">
-                    <CardHeader className="pb-3">
-                        <CardTitle>Filters</CardTitle>
-                        <CardDescription>
-                            {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead
-                                ? "Filter your attendance records"
-                                : "Filter employees by name, branch or department"}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-                            <div className="flex-1">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                                    <Input
-                                        placeholder="Search by name or employee ID..."
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        className="pl-10"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Only show branch filter if user can filter by branch */}
-                            {canFilterByBranch && branches.length > 1 && (
-                                <div className="w-full md:w-64">
-                                    <Select
-                                        value={branchId || undefined}
-                                        onValueChange={(value) => setBranchId(value === "all" ? null : value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select branch" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Branches</SelectItem>
-                                            {branches.map((branch) => (
-                                                <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                    {branch.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-
-                            {/* Only show department filter if user can filter by department */}
-                            {canFilterByDepartment && departments.length > 1 && (
-                                <div className="w-full md:w-64">
-                                    <Select
-                                        value={departmentId || undefined}
-                                        onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Departments</SelectItem>
-                                            {departments.map((department) => (
-                                                <SelectItem key={department.id} value={department.id.toString()}>
-                                                    {department.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-
-                            <div className="flex space-x-2">
-                                <Button variant="outline" onClick={resetFilters}>
-                                    Reset
-                                </Button>
-                                <Button onClick={handleSearch}>
-                                    Apply Filters
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
 
                 {/* Legend */}
                 <div className="mb-4 flex flex-wrap gap-4">

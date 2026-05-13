@@ -13,6 +13,11 @@ class RegionalOfficeController extends Controller
 {
     public function index(Request $request)
     {
+        $perPage = (int) $request->get('per_page', 10);
+        if (!in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+            $perPage = 10;
+        }
+
         $regionalOffices = RegionalOffice::query()
             ->with([
                 'zone:id,name,code',
@@ -26,7 +31,7 @@ class RegionalOfficeController extends Controller
                 $query->where('zone_id', $zoneId);
             })
             ->orderBy('name')
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
 
         $zones = Zone::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
@@ -34,7 +39,7 @@ class RegionalOfficeController extends Controller
         return Inertia::render('regional-office/index', [
             'regionalOffices' => $regionalOffices,
             'zones' => $zones,
-            'filters' => $request->only(['search', 'zone_id']),
+            'filters' => $request->only(['search', 'zone_id', 'per_page']),
         ]);
     }
 

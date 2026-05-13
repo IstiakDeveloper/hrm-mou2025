@@ -15,6 +15,11 @@ class DepartmentController extends Controller
      */
     public function index(Request $request)
     {
+        $perPage = (int) $request->get('per_page', 10);
+        if (!in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+            $perPage = 10;
+        }
+
         // Query departments
         $departments = Department::query()
             ->with(['parentDepartment'])
@@ -22,7 +27,7 @@ class DepartmentController extends Controller
                 $query->where('name', 'like', "%{$search}%");
             })
             ->orderBy('name')
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
 
         // Get all head employee IDs from the departments
@@ -71,7 +76,7 @@ class DepartmentController extends Controller
                     'next' => $departments->nextPageUrl(),
                 ],
             ],
-            'filters' => $request->only(['search']),
+            'filters' => $request->only(['search', 'per_page']),
         ]);
     }
 

@@ -12,11 +12,17 @@ import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     EMPLOYEE_V2_EDIT_DRAFT_PREFIX,
+    applyUnifiedNidSmartFields,
     asInputPatch,
     clearEmployeeDraft,
+    combinedNidOrSmartCardDisplay,
+    formatEmployeeDocumentTypeLabel,
+    getNidOrSmartCardClientError,
     hasPatchKeys,
+    hydrateEmployeeDocumentRowsForForm,
     loadEmployeeDraft,
     mergeSerializableIntoForm,
+    newEmployeeDocumentFormRow,
     saveEmployeeDraft,
     toSerializableEmployeeForm,
 } from '@/lib/employee-v2-form-persist';
@@ -24,8 +30,21 @@ import {
     ArrowLeft,
     Plus,
     Trash2,
+    Upload,
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+/** Repeatable “multiple add” rows: stacked on small screens, one horizontal row on large screens */
+const RF_ROW = 'flex flex-col gap-2 lg:flex-row lg:flex-nowrap lg:items-end lg:gap-2 lg:overflow-x-auto lg:pb-0.5';
+const RF_ROW_TOP = 'flex flex-col gap-2 lg:flex-row lg:flex-nowrap lg:items-start lg:gap-2 lg:overflow-x-auto lg:pb-0.5';
+const RF_ROW_CTR = 'flex flex-col gap-2 lg:flex-row lg:flex-nowrap lg:items-center lg:gap-2 lg:overflow-x-auto lg:pb-0.5';
+const RF_CELL = 'min-w-0 flex-1 space-y-1';
+
+function getCsrfTokenFromPage(): string {
+    const el = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
+    return el?.content?.trim() ?? '';
+}
+
 type LocationUnion = { name: string; type: string; villages: string[] };
 
 interface Department {
@@ -41,6 +60,7 @@ interface Designation {
 interface Branch {
     id: number;
     name: string;
+    branch_code?: string;
 }
 
 interface Employee {
@@ -71,6 +91,7 @@ interface Employee {
     program_id?: number | null;
     project_id?: number | null;
     nid?: string;
+    smart_card_number?: string;
     birth_registration_number?: string;
     tin_certificate_no?: string;
     driving_license_no?: string;
@@ -97,9 +118,14 @@ interface Employee {
     assets?: any[];
     experiences?: any[];
     trainings?: any[];
+    documents?: any[];
 }
 
 type EmployeeEditFormData = any;
+
+function withHydratedEditDocuments(form: EmployeeEditFormData): EmployeeEditFormData {
+    return { ...form, documents: hydrateEmployeeDocumentRowsForForm(form.documents ?? []) };
+}
 
 function employeeToFormBase(employee: Employee): EmployeeEditFormData {
     const base = {
@@ -129,7 +155,10 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         last_designation_id: employee.last_designation_id ? String(employee.last_designation_id) : '',
         program_id: employee.program_id ? String(employee.program_id) : '',
         project_id: employee.project_id ? String(employee.project_id) : '',
-        nid: employee.nid || '',
+        nid: combinedNidOrSmartCardDisplay(employee.nid, employee.smart_card_number)
+            .replace(/\D/g, '')
+            .slice(0, 17),
+        smart_card_number: '',
         birth_registration_number: employee.birth_registration_number || '',
         tin_certificate_no: employee.tin_certificate_no || '',
         driving_license_no: employee.driving_license_no || '',
@@ -169,6 +198,7 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         assets: (employee.assets as any[]) ?? [],
         experiences: (employee.experiences as any[]) ?? [],
         trainings: (employee.trainings as any[]) ?? [],
+        documents: hydrateEmployeeDocumentRowsForForm((employee as any).documents ?? []),
     };
     return base;
 }
@@ -177,13 +207,17 @@ function buildInitialEditForm(employee: Employee, oldInput: unknown): EmployeeEd
     const base = employeeToFormBase(employee);
     const fromServer = asInputPatch(oldInput);
     if (hasPatchKeys(fromServer)) {
-        return mergeSerializableIntoForm(base, fromServer) as EmployeeEditFormData;
+        return withHydratedEditDocuments(
+            applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromServer) as unknown as Record<string, unknown>) as EmployeeEditFormData
+        );
     }
     const fromDraft = loadEmployeeDraft(`${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`);
     if (fromDraft) {
-        return mergeSerializableIntoForm(base, fromDraft as Record<string, unknown>) as EmployeeEditFormData;
+        return withHydratedEditDocuments(
+            applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromDraft as Record<string, unknown>) as unknown as Record<string, unknown>) as EmployeeEditFormData
+        );
     }
-    return base;
+    return withHydratedEditDocuments(applyUnifiedNidSmartFields(base as unknown as Record<string, unknown>) as EmployeeEditFormData);
 }
 
 interface EmployeeEditProps {
@@ -193,6 +227,15 @@ interface EmployeeEditProps {
     branches: Branch[];
     managers: Employee[];
     statuses: string[];
+    employeeTypes: { id: number; name: string; probation_months: number }[];
+    programs: { id: number; name: string; type: 'core' | 'project' }[];
+    projects: { id: number; name: string }[];
+    banks: string[];
+    relations: string[];
+    educationBoards: string[];
+    locations: any;
+    defaultBankName: string;
+    documentTypes: string[];
     oldInput?: Record<string, unknown>;
     errors?: {
         [key: string]: string;
@@ -200,6 +243,12 @@ interface EmployeeEditProps {
 }
 
 export default function EmployeeEdit({
+    employee,
+    departments,
+    designations,
+    branches,
+    managers,
+    statuses,
     employeeTypes,
     programs,
     projects,
@@ -208,6 +257,7 @@ export default function EmployeeEdit({
     educationBoards,
     locations,
     defaultBankName,
+    documentTypes = [],
     oldInput,
     errors: errorsProp = {},
 }: EmployeeEditProps) {
@@ -217,10 +267,7 @@ export default function EmployeeEdit({
     const errors = { ...errorsProp, ...formErrors } as Record<string, string | undefined>;
     const submitError = errors['submit'];
 
-    const csrfToken = useMemo(() => {
-        const el = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
-        return el?.content ?? '';
-    }, []);
+    const nidOrSmartClientError = useMemo(() => getNidOrSmartCardClientError(data.nid), [data.nid]);
 
     const editDraftKey = `${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`;
 
@@ -234,8 +281,8 @@ export default function EmployeeEdit({
         const json = JSON.stringify(patch);
         if (lastServerOldJson.current === json) return;
         lastServerOldJson.current = json;
-        const next = mergeSerializableIntoForm(employeeToFormBase(employee), patch) as any;
-        setData({ ...next, photo: null, signature: null });
+        const next = applyUnifiedNidSmartFields(mergeSerializableIntoForm(employeeToFormBase(employee), patch) as unknown as Record<string, unknown>) as any;
+        setData({ ...withHydratedEditDocuments(next), photo: null, signature: null });
     }, [oldInput, setData, employee]);
 
     useEffect(() => {
@@ -248,10 +295,18 @@ export default function EmployeeEdit({
     const [activeTab, setActiveTab] = useState('general');
     const [photoPreview, setPhotoPreview] = useState<string | null>(employee.photo ? `/storage/${employee.photo}` : null);
     const [signaturePreview, setSignaturePreview] = useState<string | null>(employee.signature ? `/storage/${employee.signature}` : null);
-    const [addVillageModal, setAddVillageModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string }>({
+    const [addVillageModal, setAddVillageModal] = useState<{
+        open: boolean;
+        target: 'present' | 'permanent';
+        name: string;
+        error: string;
+        saving: boolean;
+    }>({
         open: false,
         target: 'present',
         name: '',
+        error: '',
+        saving: false,
     });
 
     useEffect(() => {
@@ -261,12 +316,34 @@ export default function EmployeeEdit({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const branchItems: ComboSelectItem<string>[] = branches.map((b) => ({ value: String(b.id), label: b.name }));
+    const branchItems: ComboSelectItem<string>[] = branches.map((b) => {
+        const code = (b.branch_code ?? '').trim();
+        const label = code ? `${b.name} (${code})` : b.name;
+        return { value: String(b.id), label, keywords: `${b.name} ${code}`.trim() };
+    });
+    const bankBranchItems: ComboSelectItem<string>[] = useMemo(
+        () =>
+            branches.map((b) => {
+                const code = (b.branch_code ?? '').trim();
+                const label = code ? `${b.name} (${code})` : b.name;
+                return { value: label, label, keywords: `${b.name} ${code}`.trim() };
+            }),
+        [branches],
+    );
     const deptItems: ComboSelectItem<string>[] = departments.map((d) => ({ value: String(d.id), label: d.name }));
     const desigItems: ComboSelectItem<string>[] = designations.map((d) => ({ value: String(d.id), label: d.name }));
     const employeeTypeItems: ComboSelectItem<string>[] = employeeTypes.map((t) => ({ value: String(t.id), label: t.name, keywords: `probation ${t.probation_months}` }));
     const programItems: ComboSelectItem<string>[] = programs.map((p) => ({ value: String(p.id), label: p.name, keywords: p.type }));
     const projectItems: ComboSelectItem<string>[] = projects.map((p) => ({ value: String(p.id), label: p.name }));
+    const religionItems: ComboSelectItem<string>[] = [
+        { value: 'Islam', label: 'Islam' },
+        { value: 'Hindu', label: 'Hindu' },
+        { value: 'Christian', label: 'Christian' },
+        { value: 'Buddhist', label: 'Buddhist' },
+        { value: 'Sikh', label: 'Sikh' },
+        { value: 'Jain', label: 'Jain' },
+        { value: 'Other', label: 'Other' },
+    ];
 
     const divisionItems: ComboSelectItem<string>[] = (locations?.divisions ?? []).map((d: string) => ({ value: d, label: d }));
     const districtItems: ComboSelectItem<string>[] = ((locations?.districts?.[data.addresses?.[0]?.division] ?? []) as string[]).map((d) => ({ value: d, label: d }));
@@ -288,6 +365,8 @@ export default function EmployeeEdit({
         const key = `p:${data.addresses?.[0]?.upazila || ''}:${data.addresses?.[0]?.union || ''}`;
         const extra = extraVillages[key] ?? [];
         const merged = Array.from(new Set([...base, ...extra]));
+        const selected = (data.addresses?.[0]?.village ?? '').trim();
+        if (selected && !merged.includes(selected)) merged.push(selected);
         return merged.map((v) => ({ value: v, label: v }));
     }, [presentSelectedUnion, extraVillages, data.addresses]);
 
@@ -309,6 +388,8 @@ export default function EmployeeEdit({
         const key = `r:${data.addresses?.[1]?.upazila || ''}:${data.addresses?.[1]?.union || ''}`;
         const extra = extraVillages[key] ?? [];
         const merged = Array.from(new Set([...base, ...extra]));
+        const selected = (data.addresses?.[1]?.village ?? '').trim();
+        if (selected && !merged.includes(selected)) merged.push(selected);
         return merged.map((v) => ({ value: v, label: v }));
     }, [permSelectedUnion, extraVillages, data.addresses]);
 
@@ -333,7 +414,9 @@ export default function EmployeeEdit({
         return years >= 0 ? String(years) : '';
     }, [data.birth_date_certificate, data.birth_date_original]);
 
-    const [sameAsPresent, setSameAsPresent] = useState(false);
+    const [sameAsPermanent, setSameAsPermanent] = useState(false);
+    const sameAsPermanentRef = useRef(false);
+    sameAsPermanentRef.current = sameAsPermanent;
 
     const canOpenVillageModal = (target: 'present' | 'permanent') => {
         const idx = target === 'present' ? 0 : 1;
@@ -357,29 +440,61 @@ export default function EmployeeEdit({
         const next = [...data.addresses];
         next[1] = { ...next[1], ...patch };
         next[1] = { ...next[1], address_details: buildAddressDetails(next[1]) };
+        if (sameAsPermanentRef.current) {
+            next[0] = { ...next[0], ...next[1], type: 'present' };
+            next[0] = { ...next[0], address_details: buildAddressDetails(next[0]) };
+        }
         setData('addresses', next);
     };
 
-    const persistVillage = async (target: 'present' | 'permanent', nameRaw: string) => {
+    const persistVillage = async (target: 'present' | 'permanent', nameRaw: string): Promise<{ ok: boolean; error?: string }> => {
         const idx = target === 'present' ? 0 : 1;
         const division = data.addresses?.[idx]?.division || '';
         const district = data.addresses?.[idx]?.district || '';
         const upazila = data.addresses?.[idx]?.upazila || '';
         const union = data.addresses?.[idx]?.union || '';
         const name = nameRaw.trim();
-        if (!division || !district || !upazila || !union || !name) return;
+        if (!division || !district || !upazila || !union || !name) {
+            return { ok: false, error: 'Division, district, upazila, union, and village name are required.' };
+        }
+        const csrf = getCsrfTokenFromPage();
+        if (!csrf) {
+            return { ok: false, error: 'Security token missing. Refresh the page and try again.' };
+        }
         try {
             const res = await fetch(route('employees.villages.store'), {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': csrf,
                 },
-                body: JSON.stringify({ division, district, upazila, union, name }),
+                body: JSON.stringify({ _token: csrf, division, district, upazila, union, name }),
             });
-            if (!res.ok) return;
-            const j = await res.json();
-            const createdName = (j?.village?.name ?? j?.name ?? name) as string;
+            const raw = await res.text();
+            let j: Record<string, unknown> = {};
+            try {
+                j = JSON.parse(raw) as Record<string, unknown>;
+            } catch {
+                j = {};
+            }
+            if (!res.ok) {
+                const msgFromServer =
+                    (typeof j.message === 'string' && j.message) ||
+                    (j.errors && typeof j.errors === 'object'
+                        ? Object.values(j.errors as Record<string, string[]>)
+                              .flat()
+                              .filter(Boolean)
+                              .join(' ')
+                        : '') ||
+                    (res.status === 419 ? 'Session expired (CSRF). Refresh the page and try again.' : '') ||
+                    (res.status === 403 ? 'You do not have permission to add villages.' : '') ||
+                    `Request failed (${res.status}).`;
+                return { ok: false, error: msgFromServer };
+            }
+            const createdName = (typeof j.name === 'string' && j.name) || name;
             const key = `${target === 'present' ? 'p' : 'r'}:${upazila}:${union}`;
             setExtraVillages((prev) => {
                 const arr = prev[key] ?? [];
@@ -387,18 +502,23 @@ export default function EmployeeEdit({
             });
             if (target === 'present') setPresentAddress({ village: createdName });
             else setPermanentAddress({ village: createdName });
+            return { ok: true };
         } catch {
-            // ignore
+            return { ok: false, error: 'Network error. Check your connection and try again.' };
         }
     };
 
     const openAddVillageModal = (target: 'present' | 'permanent') => {
         if (!canOpenVillageModal(target)) return;
-        setAddVillageModal({ open: true, target, name: '' });
+        setAddVillageModal({ open: true, target, name: '', error: '', saving: false });
     };
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (getNidOrSmartCardClientError(data.nid)) {
+            setActiveTab('general');
+            return;
+        }
         post(route('employees.update', employee.id), {
             preserveScroll: true,
             forceFormData: true,
@@ -431,7 +551,7 @@ export default function EmployeeEdit({
 
                 <form onSubmit={submit}>
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10 mb-6">
+                        <TabsList className="mb-6 grid w-full grid-cols-2 gap-1 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-11">
                             <TabsTrigger value="general">General Setup</TabsTrigger>
                             <TabsTrigger value="education">Educational</TabsTrigger>
                             <TabsTrigger value="salary">Salary</TabsTrigger>
@@ -442,6 +562,7 @@ export default function EmployeeEdit({
                             <TabsTrigger value="asset">Org. Asset</TabsTrigger>
                             <TabsTrigger value="experience">Experience</TabsTrigger>
                             <TabsTrigger value="training">Training</TabsTrigger>
+                            <TabsTrigger value="documents">Documents</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="general">
@@ -480,7 +601,7 @@ export default function EmployeeEdit({
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Religion</Label>
-                                                <Input value={data.religion} onChange={(e) => setData('religion', e.target.value)} />
+                                                <ComboSelect value={data.religion || null} onChange={(v) => setData('religion', v ?? '')} items={religionItems} placeholder="Select religion" />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Marital Status</Label>
@@ -560,17 +681,46 @@ export default function EmployeeEdit({
                                         {/* Middle column */}
                                         <div className="space-y-2">
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">National Id</Label>
-                                                <Input value={data.nid} onChange={(e) => setData('nid', e.target.value)} />
+                                                <Label className="pt-2 text-xs">National ID or Smart Card</Label>
+                                                <div className="space-y-1">
+                                                    <Input
+                                                        inputMode="numeric"
+                                                        autoComplete="off"
+                                                        maxLength={17}
+                                                        aria-invalid={!!(errors.nid || errors.smart_card_number || nidOrSmartClientError)}
+                                                        value={data.nid || ''}
+                                                        onChange={(e) => {
+                                                            const digits = e.target.value.replace(/\D/g, '').slice(0, 17);
+                                                            setData('nid', digits);
+                                                        }}
+                                                        placeholder="10, 13, or 17 digits"
+                                                        className={
+                                                            errors.nid || errors.smart_card_number || nidOrSmartClientError
+                                                                ? 'border-destructive focus-visible:ring-destructive/25'
+                                                                : undefined
+                                                        }
+                                                    />
+                                                    <p className="text-[11px] text-muted-foreground">Digits only: 10, 13, or 17 characters.</p>
+                                                    {(errors.nid || errors.smart_card_number || nidOrSmartClientError) && (
+                                                        <p className="text-xs text-destructive" role="alert">
+                                                            {errors.nid || errors.smart_card_number || nidOrSmartClientError}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-center gap-2">
-                                                <Label className="text-xs">Is Project Employee</Label>
-                                                <input type="checkbox" className="h-4 w-4" checked={!!data.is_project_employee} onChange={(e) => setData('is_project_employee', e.target.checked)} />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-center gap-2">
-                                                <Label className="text-xs">Is Custodian</Label>
-                                                <input type="checkbox" className="h-4 w-4" checked={!!data.is_custodian} onChange={(e) => setData('is_custodian', e.target.checked)} />
-                                            </div>
+                                            <Label className="flex cursor-pointer flex-row flex-nowrap items-center gap-2 py-1 text-xs leading-none">
+                                                <span className="select-none">Is Project Employee</span>
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 shrink-0"
+                                                    checked={!!data.is_project_employee}
+                                                    onChange={(e) => setData('is_project_employee', e.target.checked)}
+                                                />
+                                            </Label>
+                                            <Label className="flex cursor-pointer flex-row flex-nowrap items-center gap-2 py-1 text-xs leading-none">
+                                                <span className="select-none">Is Custodian</span>
+                                                <input type="checkbox" className="h-4 w-4 shrink-0" checked={!!data.is_custodian} onChange={(e) => setData('is_custodian', e.target.checked)} />
+                                            </Label>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Identification Mark</Label>
                                                 <Input value={data.identification_mark || ''} onChange={(e) => setData('identification_mark', e.target.value)} />
@@ -587,17 +737,98 @@ export default function EmployeeEdit({
                                                 <Label className="pt-2 text-xs">Mobile No(Official)</Label>
                                                 <Input value={data.mobile_official || ''} onChange={(e) => setData('mobile_official', e.target.value)} />
                                             </div>
+                                            <div className="pt-2 text-xs font-medium text-muted-foreground">Permanent Address</div>
+
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Division</Label>
+                                                <ComboSelect
+                                                    value={data.addresses?.[1]?.division || null}
+                                                    onChange={(v) => setPermanentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' })}
+                                                    items={divisionItems}
+                                                    placeholder="Division"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">District</Label>
+                                                <ComboSelect
+                                                    value={data.addresses?.[1]?.district || null}
+                                                    onChange={(v) => setPermanentAddress({ district: v ?? '', upazila: '', union: '', village: '' })}
+                                                    items={permDistrictItems}
+                                                    placeholder="District"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Thana/Upazilla</Label>
+                                                <ComboSelect
+                                                    value={data.addresses?.[1]?.upazila || null}
+                                                    onChange={(v) => setPermanentAddress({ upazila: v ?? '', union: '', village: '' })}
+                                                    items={permUpazilaItems}
+                                                    placeholder="Upazila"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Union</Label>
+                                                <ComboSelect
+                                                    value={data.addresses?.[1]?.union || null}
+                                                    onChange={(v) => setPermanentAddress({ union: v ?? '', village: '' })}
+                                                    items={permUnionItems}
+                                                    placeholder="Union"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
+                                                <Label className="pt-2 text-xs">Village</Label>
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1">
+                                                        <ComboSelect
+                                                            value={data.addresses?.[1]?.village || null}
+                                                            onChange={(v) => setPermanentAddress({ village: v ?? '' })}
+                                                            items={permVillageItems}
+                                                            placeholder="Select Village"
+                                                        />
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        onClick={() => openAddVillageModal('permanent')}
+                                                        title="Add village"
+                                                        disabled={!canOpenVillageModal('permanent')}
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <Label className="flex cursor-pointer flex-row flex-nowrap items-center gap-2 py-1 text-xs leading-none">
+                                                <span className="select-none">Same as Permanent Address</span>
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 shrink-0"
+                                                    checked={sameAsPermanent}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setSameAsPermanent(checked);
+                                                        if (!checked) return;
+                                                        const next = [...data.addresses];
+                                                        next[0] = { ...next[0], ...next[1], type: 'present' };
+                                                        next[0] = { ...next[0], address_details: buildAddressDetails(next[0]) };
+                                                        setData('addresses', next);
+                                                    }}
+                                                />
+                                            </Label>
+
+                                            <div className="pt-2 text-xs font-medium text-muted-foreground">Present Address</div>
+
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Division</Label>
                                                 <ComboSelect
                                                     value={data.addresses?.[0]?.division || null}
                                                     onChange={(v) => {
-                                                        const next = [...data.addresses];
-                                                        next[0] = { ...next[0], division: v ?? '', district: '', upazila: '', union: '', village: '' };
-                                                        setData('addresses', next);
+                                                        setPresentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' });
                                                     }}
                                                     items={divisionItems}
                                                     placeholder="Division"
+                                                    disabled={sameAsPermanent}
                                                 />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
@@ -609,6 +840,7 @@ export default function EmployeeEdit({
                                                     }}
                                                     items={districtItems}
                                                     placeholder="District"
+                                                    disabled={sameAsPermanent}
                                                 />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
@@ -620,6 +852,7 @@ export default function EmployeeEdit({
                                                     }}
                                                     items={upazilaItems}
                                                     placeholder="Upazila"
+                                                    disabled={sameAsPermanent}
                                                 />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
@@ -631,6 +864,7 @@ export default function EmployeeEdit({
                                                     }}
                                                     items={presentUnionItems}
                                                     placeholder="Union"
+                                                    disabled={sameAsPermanent}
                                                 />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
@@ -644,6 +878,7 @@ export default function EmployeeEdit({
                                                             }}
                                                             items={presentVillageItems}
                                                             placeholder="Select Village"
+                                                            disabled={sameAsPermanent}
                                                         />
                                                     </div>
                                                     <Button
@@ -652,91 +887,7 @@ export default function EmployeeEdit({
                                                         size="icon"
                                                         onClick={() => openAddVillageModal('present')}
                                                         title="Add village"
-                                                        disabled={!canOpenVillageModal('present')}
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-center gap-2">
-                                                <Label className="text-xs">Same as Present Address</Label>
-                                                <input
-                                                    type="checkbox"
-                                                    className="h-4 w-4"
-                                                    checked={sameAsPresent}
-                                                    onChange={(e) => {
-                                                        const checked = e.target.checked;
-                                                        setSameAsPresent(checked);
-                                                        if (!checked) return;
-                                                        const next = [...data.addresses];
-                                                        next[1] = { ...next[1], ...next[0], type: 'permanent' };
-                                                        next[1] = { ...next[1], address_details: buildAddressDetails(next[1]) };
-                                                        setData('addresses', next);
-                                                    }}
-                                                />
-                                            </div>
-
-                                            <div className="pt-2 text-xs font-medium text-muted-foreground">Permanent Address (Selected Item)</div>
-
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Division</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[1]?.division || null}
-                                                    onChange={(v) => setPermanentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' })}
-                                                    items={divisionItems}
-                                                    placeholder="Division"
-                                                    disabled={sameAsPresent}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">District</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[1]?.district || null}
-                                                    onChange={(v) => setPermanentAddress({ district: v ?? '', upazila: '', union: '', village: '' })}
-                                                    items={permDistrictItems}
-                                                    placeholder="District"
-                                                    disabled={sameAsPresent}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Thana/Upazilla</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[1]?.upazila || null}
-                                                    onChange={(v) => setPermanentAddress({ upazila: v ?? '', union: '', village: '' })}
-                                                    items={permUpazilaItems}
-                                                    placeholder="Upazila"
-                                                    disabled={sameAsPresent}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Union</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[1]?.union || null}
-                                                    onChange={(v) => setPermanentAddress({ union: v ?? '', village: '' })}
-                                                    items={permUnionItems}
-                                                    placeholder="Union"
-                                                    disabled={sameAsPresent}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Village</Label>
-                                                <div className="flex gap-2">
-                                                    <div className="flex-1">
-                                                        <ComboSelect
-                                                            value={data.addresses?.[1]?.village || null}
-                                                            onChange={(v) => setPermanentAddress({ village: v ?? '' })}
-                                                            items={permVillageItems}
-                                                            placeholder="Select Village"
-                                                            disabled={sameAsPresent}
-                                                        />
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        onClick={() => openAddVillageModal('permanent')}
-                                                        title="Add village"
-                                                        disabled={sameAsPresent || !canOpenVillageModal('permanent')}
+                                                        disabled={sameAsPermanent || !canOpenVillageModal('present')}
                                                     >
                                                         <Plus className="h-4 w-4" />
                                                     </Button>
@@ -840,10 +991,47 @@ export default function EmployeeEdit({
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                                <Input value={ed.degree || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, degree: e.target.value } : x)))} placeholder="Degree" />
-                                                <Input value={ed.institute || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, institute: e.target.value } : x)))} placeholder="Institute" />
-                                                <ComboSelect value={ed.board || null} onChange={(v) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, board: v ?? '' } : x)))} items={educationBoards.map((b: string) => ({ value: b, label: b }))} placeholder="Board" />
+                                            <div className={RF_ROW}>
+                                                <div className={RF_CELL}>
+                                                    <Label className="text-xs">Degree</Label>
+                                                    <Input value={ed.degree || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, degree: e.target.value } : x)))} placeholder="e.g. SSC" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Label className="text-xs">Institute</Label>
+                                                    <Input value={ed.institute || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, institute: e.target.value } : x)))} />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Label className="text-xs">Board</Label>
+                                                    <ComboSelect value={ed.board || null} onChange={(v) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, board: v ?? '' } : x)))} items={educationBoards.map((b: string) => ({ value: b, label: b }))} placeholder="Select board" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Label className="text-xs">Group</Label>
+                                                    <Input value={ed.group_name || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, group_name: e.target.value } : x)))} />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Label className="text-xs">Subject</Label>
+                                                    <Input value={ed.subject || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, subject: e.target.value } : x)))} />
+                                                </div>
+                                                <div className={`${RF_CELL} min-w-[17rem] shrink-0 lg:min-w-[19rem]`}>
+                                                    <Label className="text-xs">Result</Label>
+                                                    <div className="flex gap-2">
+                                                        <div className="w-[9.75rem] shrink-0">
+                                                            <ComboSelect
+                                                                value={ed.result_type || null}
+                                                                onChange={(v) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, result_type: (v ?? '') as any } : x)))}
+                                                                items={[
+                                                                    { value: 'gpa', label: 'GPA' },
+                                                                    { value: 'cgpa', label: 'CGPA' },
+                                                                    { value: 'other', label: 'Other' },
+                                                                ]}
+                                                                placeholder="Type"
+                                                            />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <Input value={ed.result_value || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, result_value: e.target.value } : x)))} placeholder="Value" />
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -892,7 +1080,12 @@ export default function EmployeeEdit({
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="text-xs">Branch Name</Label>
-                                            <Input value={data.bank.branch_name} onChange={(e) => setData('bank', { ...data.bank, branch_name: e.target.value })} />
+                                            <ComboSelect
+                                                value={data.bank.branch_name || null}
+                                                onChange={(v) => setData('bank', { ...data.bank, branch_name: v ?? '' })}
+                                                items={bankBranchItems}
+                                                placeholder="e.g. Naogaon Sadar (0001)"
+                                            />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -957,19 +1150,27 @@ export default function EmployeeEdit({
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                                <Input value={n.name || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
-                                                <ComboSelect
-                                                    value={n.relation || null}
-                                                    onChange={(v) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, relation: v ?? '' } : x)))}
-                                                    items={relations.map((r: string) => ({ value: r, label: r }))}
-                                                    placeholder="Relation"
-                                                />
-                                                <Input value={n.contact || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, contact: e.target.value } : x)))} placeholder="Contact" />
-                                            </div>
-                                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                                                <Input type="date" value={n.date_of_birth || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, date_of_birth: e.target.value } : x)))} />
-                                                <Input value={String(n.share ?? '')} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, share: e.target.value } : x)))} placeholder="Share" />
+                                            <div className={RF_ROW}>
+                                                <div className={RF_CELL}>
+                                                    <Input value={n.name || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <ComboSelect
+                                                        value={n.relation || null}
+                                                        onChange={(v) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, relation: v ?? '' } : x)))}
+                                                        items={relations.map((r: string) => ({ value: r, label: r }))}
+                                                        placeholder="Relation"
+                                                    />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={n.contact || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, contact: e.target.value } : x)))} placeholder="Contact" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input type="date" value={n.date_of_birth || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, date_of_birth: e.target.value } : x)))} />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={String(n.share ?? '')} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, share: e.target.value } : x)))} placeholder="Share" />
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -1004,15 +1205,25 @@ export default function EmployeeEdit({
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                                <Input value={g.name || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
-                                                <Input value={String(g.age ?? '')} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, age: e.target.value } : x)))} placeholder="Age" />
-                                                <Input value={g.occupation || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, occupation: e.target.value } : x)))} placeholder="Occupation" />
-                                            </div>
-                                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                                                <ComboSelect value={g.relation || null} onChange={(v) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, relation: v ?? '' } : x)))} items={relations.map((r: string) => ({ value: r, label: r }))} placeholder="Relation" />
-                                                <Input value={g.phone || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, phone: e.target.value } : x)))} placeholder="Phone" />
-                                                <Input value={g.email || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, email: e.target.value } : x)))} placeholder="Email" />
+                                            <div className={RF_ROW}>
+                                                <div className={RF_CELL}>
+                                                    <Input value={g.name || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={String(g.age ?? '')} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, age: e.target.value } : x)))} placeholder="Age" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={g.occupation || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, occupation: e.target.value } : x)))} placeholder="Occupation" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <ComboSelect value={g.relation || null} onChange={(v) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, relation: v ?? '' } : x)))} items={relations.map((r: string) => ({ value: r, label: r }))} placeholder="Relation" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={g.phone || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, phone: e.target.value } : x)))} placeholder="Phone" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={g.email || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, email: e.target.value } : x)))} placeholder="Email" />
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -1023,14 +1234,20 @@ export default function EmployeeEdit({
                                         </Button>
                                     </div>
                                     {data.guarantor_cheques.map((c: any, idx: number) => (
-                                        <div key={idx} className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-3">
-                                            <ComboSelect value={c.bank_name || null} onChange={(v) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, bank_name: v ?? '' } : x)))} items={banks.map((b: string) => ({ value: b, label: b }))} placeholder="Bank" />
-                                            <Input value={c.branch_name || ''} onChange={(e) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, branch_name: e.target.value } : x)))} placeholder="Branch" />
-                                            <div className="flex gap-2">
-                                                <Input value={c.cheque_no || ''} onChange={(e) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, cheque_no: e.target.value } : x)))} placeholder="Cheque No" />
-                                                <Button type="button" variant="ghost" size="icon" onClick={() => setData('guarantor_cheques', data.guarantor_cheques.filter((_: any, i: number) => i !== idx))}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                        <div key={idx} className="rounded-md border p-3">
+                                            <div className={RF_ROW_CTR}>
+                                                <div className={RF_CELL}>
+                                                    <ComboSelect value={c.bank_name || null} onChange={(v) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, bank_name: v ?? '' } : x)))} items={banks.map((b: string) => ({ value: b, label: b }))} placeholder="Bank" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={c.branch_name || ''} onChange={(e) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, branch_name: e.target.value } : x)))} placeholder="Branch" />
+                                                </div>
+                                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                                    <Input className="min-w-0 flex-1" value={c.cheque_no || ''} onChange={(e) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, cheque_no: e.target.value } : x)))} placeholder="Cheque No" />
+                                                    <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => setData('guarantor_cheques', data.guarantor_cheques.filter((_: any, i: number) => i !== idx))}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -1088,15 +1305,23 @@ export default function EmployeeEdit({
                                         </Button>
                                     </div>
                                     {data.collateral_receive_cheques.map((c: any, idx: number) => (
-                                        <div key={idx} className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-4">
-                                            <ComboSelect value={c.bank_name || null} onChange={(v) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, bank_name: v ?? '' } : x)))} items={banks.map((b: string) => ({ value: b, label: b }))} placeholder="Bank" />
-                                            <Input value={c.branch_name || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, branch_name: e.target.value } : x)))} placeholder="Branch" />
-                                            <Input value={c.cheque_no || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, cheque_no: e.target.value } : x)))} placeholder="Cheque No" />
-                                            <div className="flex gap-2">
-                                                <Input value={c.notes || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, notes: e.target.value } : x)))} placeholder="Notes" />
-                                                <Button type="button" variant="ghost" size="icon" onClick={() => setData('collateral_receive_cheques', data.collateral_receive_cheques.filter((_: any, i: number) => i !== idx))}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                        <div key={idx} className="rounded-md border p-3">
+                                            <div className={RF_ROW_CTR}>
+                                                <div className={RF_CELL}>
+                                                    <ComboSelect value={c.bank_name || null} onChange={(v) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, bank_name: v ?? '' } : x)))} items={banks.map((b: string) => ({ value: b, label: b }))} placeholder="Bank" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={c.branch_name || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, branch_name: e.target.value } : x)))} placeholder="Branch" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={c.cheque_no || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, cheque_no: e.target.value } : x)))} placeholder="Cheque No" />
+                                                </div>
+                                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                                    <Input className="min-w-0 flex-1" value={c.notes || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, notes: e.target.value } : x)))} placeholder="Notes" />
+                                                    <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => setData('collateral_receive_cheques', data.collateral_receive_cheques.filter((_: any, i: number) => i !== idx))}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -1131,10 +1356,22 @@ export default function EmployeeEdit({
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                                <Input value={String(a.serial ?? '')} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, serial: e.target.value } : x)))} placeholder="Serial" />
-                                                <Input value={a.asset_no || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, asset_no: e.target.value } : x)))} placeholder="Asset No" />
-                                                <Input value={a.name || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
+                                            <div className={RF_ROW}>
+                                                <div className={RF_CELL}>
+                                                    <Input value={String(a.serial ?? '')} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, serial: e.target.value } : x)))} placeholder="Serial" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={a.asset_no || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, asset_no: e.target.value } : x)))} placeholder="Asset No" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={a.name || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={a.provided_quality || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, provided_quality: e.target.value } : x)))} placeholder="Provided Quality" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={String(a.asset_price ?? '')} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, asset_price: e.target.value } : x)))} placeholder="Asset Price" />
+                                                </div>
                                             </div>
                                             <Textarea className="mt-3" rows={2} value={a.details || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, details: e.target.value } : x)))} placeholder="Details" />
                                         </div>
@@ -1170,11 +1407,24 @@ export default function EmployeeEdit({
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                                <Input value={ex.organization || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, organization: e.target.value } : x)))} placeholder="Organization" />
-                                                <Input type="date" value={ex.from_date || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, from_date: e.target.value } : x)))} />
-                                                <Input type="date" value={ex.to_date || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, to_date: e.target.value } : x)))} />
+                                            <div className={RF_ROW}>
+                                                <div className={RF_CELL}>
+                                                    <Input value={ex.organization || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, organization: e.target.value } : x)))} placeholder="Organization" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input type="date" value={ex.from_date || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, from_date: e.target.value } : x)))} />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input type="date" value={ex.to_date || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, to_date: e.target.value } : x)))} />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={ex.designation || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, designation: e.target.value } : x)))} placeholder="Designation" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={ex.department || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, department: e.target.value } : x)))} placeholder="Department" />
+                                                </div>
                                             </div>
+                                            <Textarea className="mt-3" rows={2} value={ex.address || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, address: e.target.value } : x)))} placeholder="Address" />
                                         </div>
                                     ))}
                                 </CardContent>
@@ -1208,15 +1458,173 @@ export default function EmployeeEdit({
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                                <Input value={t.training_title || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, training_title: e.target.value } : x)))} placeholder="Training Title" />
-                                                <Input value={t.institute || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, institute: e.target.value } : x)))} placeholder="Institute" />
+                                            <div className={RF_ROW}>
+                                                <div className={RF_CELL}>
+                                                    <Input value={t.training_title || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, training_title: e.target.value } : x)))} placeholder="Training Title" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={t.institute || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, institute: e.target.value } : x)))} placeholder="Institute" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={t.duration || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, duration: e.target.value } : x)))} placeholder="Duration" />
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Input value={t.address || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, address: e.target.value } : x)))} placeholder="Address" />
+                                                </div>
+                                            </div>
+                                            <Textarea className="mt-3" rows={2} value={t.remarks || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, remarks: e.target.value } : x)))} placeholder="Remarks" />
+                                        </div>
+                                    ))}
+                                </CardContent>
+                                <CardFooter className="flex justify-between border-t bg-gray-50 px-6 py-4">
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('experience')}>
+                                        Back
+                                    </Button>
+                                    <Button type="button" onClick={() => setActiveTab('documents')}>
+                                        Next: Documents
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="documents">
+                            <Card className="shadow-sm">
+                                <CardHeader className="border-b bg-gray-50">
+                                    <CardTitle className="text-base">Documents</CardTitle>
+                                    <CardDescription className="text-xs">
+                                        Add or replace files. Removing a row here deletes that document. Max 5MB each — PDF, images, DOC/DOCX.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-6">
+                                    <div className="flex justify-end">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setData('documents', [...(data.documents || []), newEmployeeDocumentFormRow()])}
+                                        >
+                                            <Plus className="mr-2 h-4 w-4" /> Add document
+                                        </Button>
+                                    </div>
+                                    {!(data.documents || []).length ? (
+                                        <p className="text-center text-sm text-muted-foreground">No documents. Click &quot;Add document&quot; to upload.</p>
+                                    ) : null}
+                                    {(data.documents || []).map((doc: any, idx: number) => (
+                                        <div key={doc.clientKey} className="space-y-3 rounded-md border p-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="text-sm font-medium">Document {idx + 1}</div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setData('documents', (data.documents || []).filter((_: any, i: number) => i !== idx))}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <div className={RF_ROW_TOP}>
+                                                <div className={`${RF_CELL} min-w-[8.5rem]`}>
+                                                    <Label className="text-xs">Document type</Label>
+                                                    <select
+                                                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                                        value={doc.document_type || ''}
+                                                        onChange={(e) =>
+                                                            setData(
+                                                                'documents',
+                                                                (data.documents || []).map((d: any, i: number) =>
+                                                                    i === idx ? { ...d, document_type: e.target.value } : d
+                                                                )
+                                                            )
+                                                        }
+                                                    >
+                                                        <option value="">Select type</option>
+                                                        {documentTypes.map((t) => (
+                                                            <option key={t} value={t}>
+                                                                {formatEmployeeDocumentTypeLabel(t)}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    {errors[`documents.${idx}.document_type`] && (
+                                                        <p className="text-xs text-destructive">{errors[`documents.${idx}.document_type`]}</p>
+                                                    )}
+                                                </div>
+                                                <div className={RF_CELL}>
+                                                    <Label className="text-xs">Title</Label>
+                                                    <Input
+                                                        value={doc.title || ''}
+                                                        onChange={(e) =>
+                                                            setData(
+                                                                'documents',
+                                                                (data.documents || []).map((d: any, i: number) => (i === idx ? { ...d, title: e.target.value } : d))
+                                                            )
+                                                        }
+                                                        placeholder="e.g. NID scan"
+                                                    />
+                                                    {errors[`documents.${idx}.title`] && (
+                                                        <p className="text-xs text-destructive">{errors[`documents.${idx}.title`]}</p>
+                                                    )}
+                                                </div>
+                                                <div className={`${RF_CELL} shrink-0 lg:max-w-[9.5rem]`}>
+                                                    <Label className="text-xs">Expiry date (optional)</Label>
+                                                    <Input
+                                                        type="date"
+                                                        value={doc.expiry_date || ''}
+                                                        onChange={(e) =>
+                                                            setData(
+                                                                'documents',
+                                                                (data.documents || []).map((d: any, i: number) => (i === idx ? { ...d, expiry_date: e.target.value } : d))
+                                                            )
+                                                        }
+                                                    />
+                                                </div>
+                                                <div className={`${RF_CELL} min-w-[7rem] shrink-0`}>
+                                                    <Label className="text-xs">File {!doc.id ? <span className="text-destructive">*</span> : null}</Label>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-xs hover:bg-muted/50">
+                                                            <Upload className="h-3.5 w-3.5" />
+                                                            <span>{doc.file ? doc.file.name : doc.existing_file_path ? 'Replace file' : 'Choose file'}</span>
+                                                            <input
+                                                                type="file"
+                                                                className="hidden"
+                                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                                onChange={(e) => {
+                                                                    const f = e.target.files?.[0] ?? null;
+                                                                    setData(
+                                                                        'documents',
+                                                                        (data.documents || []).map((d: any, i: number) => (i === idx ? { ...d, file: f } : d))
+                                                                    );
+                                                                }}
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                    {doc.existing_file_path && !doc.file ? (
+                                                        <p className="text-[11px] text-muted-foreground">Current: {String(doc.existing_file_path).split('/').pop()}</p>
+                                                    ) : null}
+                                                    {errors[`documents.${idx}.file`] && (
+                                                        <p className="text-xs text-destructive">{errors[`documents.${idx}.file`]}</p>
+                                                    )}
+                                                </div>
+                                                <div className={`${RF_CELL} min-w-[10rem]`}>
+                                                    <Label className="text-xs">Description (optional)</Label>
+                                                    <Textarea
+                                                        rows={2}
+                                                        className="text-xs"
+                                                        value={doc.description || ''}
+                                                        onChange={(e) =>
+                                                            setData(
+                                                                'documents',
+                                                                (data.documents || []).map((d: any, i: number) => (i === idx ? { ...d, description: e.target.value } : d))
+                                                            )
+                                                        }
+                                                        placeholder="Notes"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
                                 </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('experience')}>
+                                <CardFooter className="flex justify-between border-t bg-gray-50 px-6 py-4">
+                                    <Button type="button" variant="outline" onClick={() => setActiveTab('training')}>
                                         Back
                                     </Button>
                                     <Button type="submit" disabled={processing} className="bg-green-600 hover:bg-green-700">
@@ -1231,7 +1639,13 @@ export default function EmployeeEdit({
 
             <Dialog
                 open={addVillageModal.open}
-                onOpenChange={(open) => setAddVillageModal((s) => ({ ...s, open }))}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false });
+                    } else {
+                        setAddVillageModal((s) => ({ ...s, open: true }));
+                    }
+                }}
             >
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
@@ -1241,10 +1655,11 @@ export default function EmployeeEdit({
                         <Label className="text-xs">Village Name</Label>
                         <Input
                             value={addVillageModal.name}
-                            onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value }))}
+                            onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value, error: '' }))}
                             placeholder="Type village name"
                             autoFocus
                         />
+                        {addVillageModal.error ? <p className="text-xs text-red-600">{addVillageModal.error}</p> : null}
                         <p className="text-[11px] text-muted-foreground">
                             This will be saved and available for future selection.
                         </p>
@@ -1253,7 +1668,8 @@ export default function EmployeeEdit({
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => setAddVillageModal((s) => ({ ...s, open: false }))}
+                            onClick={() => setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })}
+                            disabled={addVillageModal.saving}
                         >
                             Cancel
                         </Button>
@@ -1262,12 +1678,17 @@ export default function EmployeeEdit({
                             onClick={async () => {
                                 const target = addVillageModal.target;
                                 const name = addVillageModal.name;
-                                await persistVillage(target, name);
-                                setAddVillageModal({ open: false, target: 'present', name: '' });
+                                setAddVillageModal((s) => ({ ...s, saving: true, error: '' }));
+                                const result = await persistVillage(target, name);
+                                if (result.ok) {
+                                    setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false });
+                                } else {
+                                    setAddVillageModal((s) => ({ ...s, saving: false, error: result.error ?? 'Could not save village.' }));
+                                }
                             }}
-                            disabled={!addVillageModal.name.trim()}
+                            disabled={!addVillageModal.name.trim() || addVillageModal.saving}
                         >
-                            Save
+                            {addVillageModal.saving ? 'Saving…' : 'Save'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -11,4 +11,8 @@ class Project extends Model
         'code',
         'is_active',
     ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 }

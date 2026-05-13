@@ -130,6 +130,7 @@ interface EmployeeIndexProps {
         department_id?: string;
         branch_id?: string;
         status?: string;
+        per_page?: string;
     };
     success?: string;
 }
@@ -146,6 +147,7 @@ export default function EmployeeIndex({
         department_id: filters.department_id || '',
         branch_id: filters.branch_id || '',
         status: filters.status || '',
+        per_page: filters.per_page || '10',
     });
 
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
@@ -180,6 +182,7 @@ export default function EmployeeIndex({
         if (merged.department_id) params.department_id = merged.department_id;
         if (merged.branch_id) params.branch_id = merged.branch_id;
         if (merged.status) params.status = merged.status;
+        if (merged.per_page && merged.per_page !== '10') params.per_page = merged.per_page;
 
         router.get(route('employees.index'), params, { preserveState: true, replace: true });
     };
@@ -379,28 +382,28 @@ export default function EmployeeIndex({
                     </Alert>
                 )}
 
-                <Card className="shadow-sm">
-                    <CardHeader className="bg-gray-50 border-b pb-4">
-                        <div className="flex items-center justify-between">
-                            <CardTitle>Employees Directory</CardTitle>
+                <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <CardHeader className="bg-white border-b border-slate-100 pb-5 pt-6 px-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <CardTitle className="text-lg font-bold text-slate-800 tracking-wide">Employees Directory</CardTitle>
 
                             <div className="flex items-center gap-2">
                                 <form onSubmit={handleSearch} className="flex items-center">
                                     <div className="relative flex-1">
-                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                         <Input
                                             type="search"
                                             name="search"
                                             placeholder="Search employees..."
                                             value={data.search}
                                             onChange={e => setData('search', e.target.value)}
-                                            className="pl-8 w-60 md:w-80"
+                                            className="pl-9 h-9 w-[220px] md:w-[300px] text-sm bg-slate-50 border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
                                         />
                                     </div>
                                     <Button
                                         type="submit"
                                         variant="secondary"
-                                        className="ml-2"
+                                        className="ml-2 h-9 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium"
                                         disabled={processing}
                                     >
                                         Search
@@ -411,7 +414,7 @@ export default function EmployeeIndex({
                                     variant="outline"
                                     size="icon"
                                     onClick={() => setShowFilters(!showFilters)}
-                                    className={showFilters ? 'bg-gray-100' : ''}
+                                    className={`h-9 w-9 rounded-lg border-slate-200 transition-colors ${showFilters ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'text-slate-500 hover:bg-slate-50'}`}
                                 >
                                     <Filter className="h-4 w-4" />
                                 </Button>
@@ -500,14 +503,14 @@ export default function EmployeeIndex({
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="bg-gray-50">
-                                        <TableHead>Employee</TableHead>
-                                        <TableHead>ID</TableHead>
-                                        <TableHead>Department</TableHead>
-                                        <TableHead>Branch</TableHead>
-                                        <TableHead>Contact</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
+                                    <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Employee</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">ID</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Department</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Contact</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -527,8 +530,8 @@ export default function EmployeeIndex({
                                         </TableRow>
                                     ) : (
                                         employees.data.map((employee) => (
-                                            <TableRow key={employee.id} className="hover:bg-gray-50">
-                                                <TableCell>
+                                            <TableRow key={employee.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
+                                                <TableCell className="pl-6">
                                                     <div className="flex items-center space-x-3">
                                                         <Avatar className="h-9 w-9">
                                                             {employee.photo ? (
@@ -540,57 +543,47 @@ export default function EmployeeIndex({
                                                             )}
                                                         </Avatar>
                                                         <div>
-                                                            <div className="font-medium">
+                                                            <div className="font-semibold text-[13px] text-slate-800">
                                                                 {employee.full_name_en || employee.name_en || `${employee.first_name} ${employee.last_name}`}
                                                             </div>
-                                                            <div className="text-sm text-gray-500">
+                                                            <div className="text-[12px] font-medium text-emerald-600/90 mt-0.5">
                                                                 {employee.designation.name}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{employee.pin || employee.employee_id}</TableCell>
-                                                <TableCell>{employee.department.name}</TableCell>
-                                                <TableCell>{employee.branch.name}</TableCell>
+                                                <TableCell className="text-[13px] text-slate-600 font-medium">{employee.pin || employee.employee_id}</TableCell>
+                                                <TableCell className="text-[13px] text-slate-600">{employee.department.name}</TableCell>
+                                                <TableCell className="text-[13px] text-slate-600">{employee.branch.name}</TableCell>
                                                 <TableCell>
-                                                    <div className="text-sm">
-                                                        <div>{employee.email}</div>
-                                                        {employee.phone && <div className="text-gray-500">{employee.phone}</div>}
+                                                    <div className="text-[13px] text-slate-600">
+                                                        <div className="font-medium">{employee.email}</div>
+                                                        {employee.phone && <div className="text-slate-500 mt-0.5">{employee.phone}</div>}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>{getStatusBadge(employee.status)}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                                                <span className="sr-only">Open menu</span>
-                                                                <MoreHorizontal className="h-4 w-4" />
+                                                <TableCell className="text-right pr-6">
+                                                    <div className="flex items-center justify-end gap-2 transition-opacity duration-200">
+                                                        <Link href={route('employees.show', employee.id)}>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors" title="View Details">
+                                                                <Eye className="h-4 w-4" />
                                                             </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <Link href={route('employees.show', employee.id)}>
-                                                                <DropdownMenuItem className="cursor-pointer">
-                                                                    <Eye className="mr-2 h-4 w-4" />
-                                                                    <span>View</span>
-                                                                </DropdownMenuItem>
-                                                            </Link>
-
-                                                            <Link href={route('employees.edit', employee.id)}>
-                                                                <DropdownMenuItem className="cursor-pointer">
-                                                                    <Edit className="mr-2 h-4 w-4" />
-                                                                    <span>Edit</span>
-                                                                </DropdownMenuItem>
-                                                            </Link>
-
-                                                            <DropdownMenuItem
-                                                                className="cursor-pointer text-destructive focus:text-destructive"
-                                                                onClick={() => setEmployeeToDelete(employee)}
-                                                            >
-                                                                <Trash className="mr-2 h-4 w-4" />
-                                                                <span>Delete</span>
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                        </Link>
+                                                        <Link href={route('employees.edit', employee.id)}>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-colors" title="Edit Employee">
+                                                                <Edit className="h-4 w-4" />
+                                                            </Button>
+                                                        </Link>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
+                                                            title="Delete Employee"
+                                                            onClick={() => setEmployeeToDelete(employee)}
+                                                        >
+                                                            <Trash className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -600,48 +593,84 @@ export default function EmployeeIndex({
                         </div>
 
                         {/* Pagination */}
-                        {employees.last_page > 1 && (
-                            <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6">
-                                <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                                    <div>
-                                        <p className="text-sm text-gray-700">
-                                            Showing <span className="font-medium">{(employees.current_page - 1) * employees.per_page + 1}</span> to{' '}
-                                            <span className="font-medium">
-                                                {Math.min(employees.current_page * employees.per_page, employees.total)}
-                                            </span>{' '}
-                                            of <span className="font-medium">{employees.total}</span> employees
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                        {/* Pagination */}
+                        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4 rounded-b-xl">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 text-[13px] text-slate-500">
+                                    <span className="hidden sm:inline">Rows per page:</span>
+                                    <Select
+                                        value={data.per_page}
+                                        onValueChange={(value) => applyFilters({ per_page: value })}
+                                    >
+                                        <SelectTrigger className="h-8 w-[70px] text-[13px] bg-white border-slate-200">
+                                            <SelectValue placeholder="10" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="25">25</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                            <SelectItem value="100">100</SelectItem>
+                                            <SelectItem value="200">200</SelectItem>
+                                            <SelectItem value="500">500</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="hidden sm:block">
+                                    <p className="text-[13px] text-slate-500">
+                                        Showing <span className="font-semibold text-slate-700">{employees.total > 0 ? (employees.current_page - 1) * employees.per_page + 1 : 0}</span> to{' '}
+                                        <span className="font-semibold text-slate-700">
+                                            {Math.min(employees.current_page * employees.per_page, employees.total)}
+                                        </span>{' '}
+                                        of <span className="font-semibold text-slate-700">{employees.total}</span> entries
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {employees.last_page > 1 && (
+                                <div className="flex items-center justify-end">
+                                        <nav className="isolate inline-flex -space-x-px gap-1.5" aria-label="Pagination">
                                             {employees.current_page > 1 && (
                                                 <Link
                                                     href={route('employees.index', {
                                                         page: employees.current_page - 1,
                                                         ...filters,
                                                     })}
-                                                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
+                                                    className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                                 >
                                                     <span className="sr-only">Previous</span>
-                                                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                                                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                                                 </Link>
                                             )}
 
-                                            {employees.links.slice(1, -1).map((link, i) => (
-                                                <Link
-                                                    key={i}
-                                                    href={route('employees.index', {
-                                                        page: i + 1,
-                                                        ...filters,
-                                                    })}
-                                                    className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${link.active
-                                                        ? 'z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary'
-                                                        : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
+                                            {employees.links.slice(1, -1).map((link, i) => {
+                                                const isActive = link.active;
+                                                // Some links might be "..." when there are many pages
+                                                const isDots = link.label === '...';
+                                                
+                                                if (isDots) {
+                                                    return (
+                                                        <span key={i} className="relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-medium text-slate-400">
+                                                            ...
+                                                        </span>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <Link
+                                                        key={i}
+                                                        href={route('employees.index', {
+                                                            page: i + 1,
+                                                            ...filters,
+                                                        })}
+                                                        className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
+                                                            isActive
+                                                                ? 'z-10 bg-emerald-600 text-white shadow-sm border border-emerald-600'
+                                                                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-emerald-600 hover:border-emerald-200 focus:z-20'
                                                         }`}
-                                                >
-                                                    {link.label}
-                                                </Link>
-                                            ))}
+                                                        dangerouslySetInnerHTML={{ __html: link.label }}
+                                                    />
+                                                );
+                                            })}
 
                                             {employees.current_page < employees.last_page && (
                                                 <Link
@@ -649,17 +678,16 @@ export default function EmployeeIndex({
                                                         page: employees.current_page + 1,
                                                         ...filters,
                                                     })}
-                                                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
+                                                    className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                                 >
                                                     <span className="sr-only">Next</span>
-                                                    <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                                                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
                                                 </Link>
                                             )}
                                         </nav>
-                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </CardContent>
                 </Card>
             </PageSurface>

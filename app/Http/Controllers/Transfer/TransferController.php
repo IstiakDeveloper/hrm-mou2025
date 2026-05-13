@@ -8,7 +8,6 @@ use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\Transfer;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -30,11 +29,11 @@ class TransferController extends Controller
             'toDepartment',
             'fromDesignation',
             'toDesignation',
-            'approver'
+            'approver',
         ]);
 
         // If user is not an admin, filter by relevant transfers
-        if (!$user->hasPermission('transfers.view')) {
+        if (! $user->hasPermission('transfers.view')) {
             if ($user->employee) {
                 // Regular employee can only see their own transfers
                 $query->where('employee_id', $user->employee->id);
@@ -45,8 +44,8 @@ class TransferController extends Controller
         }
 
         $query->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
-            })
+            $query->where('status', $status);
+        })
             ->when($request->department_id, function ($query, $departmentId) {
                 $query->whereHas('employee', function ($q) use ($departmentId) {
                     $q->where('department_id', $departmentId);
@@ -70,8 +69,8 @@ class TransferController extends Controller
             ->when($request->search, function ($query, $search) {
                 $query->whereHas('employee', function ($q) use ($search) {
                     $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere('employee_id', 'like', "%{$search}%");
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%");
                 });
             });
 
@@ -90,6 +89,7 @@ class TransferController extends Controller
             'employees' => $employees,
             'filters' => $request->only(['status', 'department_id', 'employee_id', 'from_branch_id', 'to_branch_id', 'from_date', 'to_date', 'search']),
             'canApprove' => $user->hasPermission('transfers.approve'),
+            'canViewTransferReport' => $user->hasPermission('reports.view') && $user->hasPermission('transfers.view'),
         ]);
     }
 
@@ -100,7 +100,7 @@ class TransferController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('transfers.create')) {
+        if (! $user->hasPermission('transfers.create')) {
             return redirect()->route('transfers.index')
                 ->with('error', 'You do not have permission to create transfer requests.');
         }
@@ -117,6 +117,7 @@ class TransferController extends Controller
             'designations' => $designations,
         ]);
     }
+
     /**
      * Store a newly created transfer.
      */
@@ -124,7 +125,7 @@ class TransferController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('transfers.create')) {
+        if (! $user->hasPermission('transfers.create')) {
             return redirect()->route('transfers.index')
                 ->with('error', 'You do not have permission to create transfer requests.');
         }
@@ -178,7 +179,7 @@ class TransferController extends Controller
             'toDepartment',
             'fromDesignation',
             'toDesignation',
-            'approver'
+            'approver',
         ]);
 
         $user = Auth::user();
@@ -197,7 +198,7 @@ class TransferController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('transfers.edit')) {
+        if (! $user->hasPermission('transfers.edit')) {
             return redirect()->route('transfers.index')
                 ->with('error', 'You do not have permission to edit transfer requests.');
         }
@@ -228,7 +229,7 @@ class TransferController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('transfers.edit')) {
+        if (! $user->hasPermission('transfers.edit')) {
             return redirect()->route('transfers.index')
                 ->with('error', 'You do not have permission to update transfer requests.');
         }
@@ -265,7 +266,7 @@ class TransferController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('transfers.edit')) {
+        if (! $user->hasPermission('transfers.edit')) {
             return redirect()->route('transfers.index')
                 ->with('error', 'You do not have permission to cancel transfer requests.');
         }
@@ -289,7 +290,7 @@ class TransferController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('transfers.approve')) {
+        if (! $user->hasPermission('transfers.approve')) {
             return redirect()->route('transfers.index')
                 ->with('error', 'You do not have permission to approve transfer requests.');
         }
@@ -315,7 +316,7 @@ class TransferController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('transfers.approve')) {
+        if (! $user->hasPermission('transfers.approve')) {
             return redirect()->route('transfers.index')
                 ->with('error', 'You do not have permission to reject transfer requests.');
         }
@@ -346,7 +347,7 @@ class TransferController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasPermission('transfers.edit')) {
+        if (! $user->hasPermission('transfers.edit')) {
             return redirect()->route('transfers.index')
                 ->with('error', 'You do not have permission to complete transfer requests.');
         }
@@ -376,72 +377,5 @@ class TransferController extends Controller
 
         return redirect()->route('transfers.index')
             ->with('success', 'Transfer completed successfully.');
-    }
-
-    /**
-     * Display transfer report.
-     */
-    public function report(Request $request)
-    {
-        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
-        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
-
-        $query = Transfer::with([
-            'employee.department',
-            'employee.designation',
-            'fromBranch',
-            'toBranch',
-            'fromDepartment',
-            'toDepartment',
-            'fromDesignation',
-            'toDesignation',
-            'approver'
-        ])
-            ->whereBetween('effective_date', [$startDate, $endDate])
-            ->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
-            })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                });
-            })
-            ->when($request->from_branch_id, function ($query, $branchId) {
-                $query->where('from_branch_id', $branchId);
-            })
-            ->when($request->to_branch_id, function ($query, $branchId) {
-                $query->where('to_branch_id', $branchId);
-            })
-            ->when($request->employee_id, function ($query, $employeeId) {
-                $query->where('employee_id', $employeeId);
-            });
-
-        $transfers = $query->orderBy('effective_date', 'desc')
-            ->paginate(15)
-            ->withQueryString();
-
-        // Summary statistics
-        $summary = [
-            'total' => $query->count(),
-            'approved' => $query->where('status', 'approved')->count(),
-            'rejected' => $query->where('status', 'rejected')->count(),
-            'pending' => $query->where('status', 'pending')->count(),
-            'completed' => $query->where('status', 'completed')->count(),
-        ];
-
-        $departments = Department::all();
-        $branches = Branch::all();
-        $employees = Employee::where('status', 'active')->get();
-
-        return Inertia::render('transfer/report', [
-            'transfers' => $transfers,
-            'departments' => $departments,
-            'branches' => $branches,
-            'employees' => $employees,
-            'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'from_branch_id', 'to_branch_id', 'employee_id']),
-            'startDate' => $startDate->format('Y-m-d'),
-            'endDate' => $endDate->format('Y-m-d'),
-            'summary' => $summary,
-        ]);
     }
 }

@@ -1,10 +1,11 @@
 import React from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ADMIN_SECTIONS, type AdminSectionId, storeSection } from '@/lib/admin-sections';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, Lock, XCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
+import { hasAppPermission } from '@/lib/permissions';
 
 export default function SectionsIndex() {
     const { auth } = usePage().props as any;
@@ -36,7 +37,7 @@ export default function SectionsIndex() {
                         <div className="flex items-center gap-3 min-w-0">
                             <img src="/logo.png" alt="Logo" className="h-9 w-9 rounded-xl" />
                             <div className="min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 leading-tight">Mousumi Erp</p>
+                                <p className="text-sm font-semibold text-gray-900 leading-tight">Mousumi ERP</p>
                                 <p className="text-[11px] text-gray-600 leading-tight">Select a section to continue</p>
                             </div>
                         </div>
@@ -78,7 +79,39 @@ export default function SectionsIndex() {
                 <div className="w-full max-w-5xl grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5 place-items-center">
                     {ADMIN_SECTIONS.map((section) => {
                         const Icon = section.icon;
-                        const enabled = Boolean(section.href);
+                        const moduleActive = Boolean(section.href);
+                        const hasAccess = (() => {
+                            // Minimal, user-facing gating for section picker
+                            switch (section.id) {
+                                case 'human-resources':
+                                    return (
+                                        hasAppPermission(auth, 'employees.view') ||
+                                        hasAppPermission(auth, 'transfers.view') ||
+                                        hasAppPermission(auth, 'holidays.view') ||
+                                        hasAppPermission(auth, 'branches.view') ||
+                                        hasAppPermission(auth, 'departments.view') ||
+                                        hasAppPermission(auth, 'designations.view') ||
+                                        hasAppPermission(auth, 'attendance.admin') ||
+                                        hasAppPermission(auth, 'employees.admin') ||
+                                        hasAppPermission(auth, 'admin.access')
+                                    );
+                                case 'attendance-movement':
+                                    return hasAppPermission(auth, 'attendance.view') || hasAppPermission(auth, 'movements.view');
+                                case 'leave':
+                                    return hasAppPermission(auth, 'leave-applications.view') || hasAppPermission(auth, 'leaves.view');
+                                case 'administration':
+                                    return (
+                                        hasAppPermission(auth, 'admin.access') ||
+                                        hasAppPermission(auth, 'users.view') ||
+                                        hasAppPermission(auth, 'roles.view') ||
+                                        hasAppPermission(auth, 'reports.view')
+                                    );
+                                default:
+                                    // Future modules: show as locked unless backend enables them
+                                    return false;
+                            }
+                        })();
+                        const enabled = moduleActive && hasAccess;
                         const commonClasses =
                             'group relative select-none rounded-2xl border bg-white/90 p-3 sm:p-4 shadow-sm transition-all will-change-transform';
 
@@ -103,6 +136,37 @@ export default function SectionsIndex() {
                                     </p>
                                 </div>
                             </Link>
+                        ) : moduleActive && !hasAccess ? (
+                            <TooltipProvider delayDuration={150}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div
+                                            key={section.id}
+                                            className={`${commonClasses} border-green-200 opacity-85 cursor-not-allowed`}
+                                            aria-disabled="true"
+                                        >
+                                            <div className="absolute -top-2 -right-2">
+                                                <span className="inline-flex items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-amber-200">
+                                                    <Lock className="h-6 w-6 text-amber-600" />
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col items-center justify-center text-center gap-2">
+                                                <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-3xl bg-gradient-to-b from-green-50 to-white text-green-700 grid place-items-center border border-green-100">
+                                                    <Icon className="h-11 w-11 sm:h-14 sm:w-14 opacity-90" />
+                                                </div>
+                                                <p className="text-[11px] sm:text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
+                                                    {section.title}
+                                                </p>
+                                                <p className="text-[10px] text-amber-700 font-semibold">No access</p>
+                                            </div>
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="bg-gray-900 text-white">
+                                        <p className="text-xs font-semibold">Permission required</p>
+                                        <p className="text-[11px] text-gray-300">Ask your admin to enable access for this module.</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                         ) : (
                             <div
                                 key={section.id}

@@ -87,7 +87,7 @@ class PushNotificationController extends Controller
             $request->user(),
             (string) config('app.name'),
             'Test notification — push is working.',
-            url('/dashboard')
+            url('/sections')
         );
 
         $this->pushLog()->info('Push test: sent', [

@@ -176,6 +176,7 @@ interface TransferIndexProps {
     search?: string;
   };
   canApprove: boolean;
+  canViewTransferReport: boolean;
 }
 
 export default function TransferIndex({
@@ -184,7 +185,8 @@ export default function TransferIndex({
   branches,
   employees,
   filters,
-  canApprove
+  canApprove,
+  canViewTransferReport,
 }: TransferIndexProps) {
   // Initialize state with filters or "all" for select components
   const [status, setStatus] = useState(filters.status || 'all');
@@ -266,11 +268,11 @@ export default function TransferIndex({
             </p>
           </div>
           <div className="flex gap-2">
-            {canApprove && (
-              <Link href={route('transfers.report')}>
+            {canViewTransferReport && (
+              <Link href={route('reports.transfer')}>
                 <Button variant="outline" className="flex items-center">
                   <CalendarRange className="mr-1 h-4 w-4" />
-                  Transfer Report
+                  Branch transfer register
                 </Button>
               </Link>
             )}

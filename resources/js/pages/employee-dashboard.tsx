@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Head, Link, router } from "@inertiajs/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,7 +11,7 @@ import {
     UserCircle,
     Building2,
     MapPin,
-    Calendar as CalendarIcon,
+    CalendarDays,
     Clock,
     FileText,
     Briefcase,
@@ -23,11 +23,14 @@ import {
     Plus,
     AlertTriangle,
     AlertCircle,
-    CalendarDays
+    IdCard,
+    Palmtree,
 } from "lucide-react";
-import { format, parseISO, differenceInMinutes, differenceInHours } from "date-fns";
+import { format, differenceInMinutes, differenceInHours } from "date-fns";
 import AdminLayout from "@/layouts/AdminLayout";
-import { Link, router } from "@inertiajs/react";
+import { PageSurface } from "@/components/page-surface";
+import { cn } from "@/lib/utils";
+import { useSelfAttendanceCheck } from "@/hooks/use-self-attendance-check";
 
 // Types for better code organization
 interface Employee {
@@ -78,6 +81,28 @@ interface LeaveApplication {
     status: 'Approved' | 'Rejected' | 'Pending';
 }
 
+interface HrProfile {
+    designation?: string | null;
+    department?: string | null;
+    branch?: string | null;
+    joining_date?: string | null;
+    confirmation_date?: string | null;
+    employment_status?: string | null;
+    work_email?: string | null;
+    phone?: string | null;
+    reporting_manager?: string | null;
+    reporting_employee_id?: string | null;
+    employee_type?: string | null;
+    program?: string | null;
+    project?: string | null;
+}
+
+interface HolidayRow {
+    date: string;
+    title: string;
+    description?: string | null;
+}
+
 interface DashboardProps {
     employee: Employee;
     todayAttendance?: Attendance;
@@ -85,19 +110,10 @@ interface DashboardProps {
     leaveBalances: LeaveBalance[];
     recentLeaves: LeaveApplication[];
     recentMovements: Movement[];
+    hrProfile: HrProfile;
+    upcomingHolidays: HolidayRow[];
+    weekendDaySummary?: string | null;
 }
-
-type GeoSample = {
-    lat: number;
-    lng: number;
-    accuracy: number | null;
-    at: string;
-};
-
-type LocationPreview = {
-    bestAccuracy: number | null;
-    sampleCount: number;
-};
 
 export default function EmployeeDashboard({
     employee,
@@ -105,33 +121,53 @@ export default function EmployeeDashboard({
     recentAttendance,
     leaveBalances,
     recentLeaves,
-    recentMovements
+    recentMovements,
+    hrProfile,
+    upcomingHolidays,
+    weekendDaySummary,
 }: DashboardProps) {
     // State management
-    const [currentDate, setCurrentDate] = useState(new Date());
     const [clockTime, setClockTime] = useState("");
     const [activeMovements, setActiveMovements] = useState<Movement[]>([]);
     const [countdownTimes, setCountdownTimes] = useState<Record<string, string>>({});
     const [elapsedTimes, setElapsedTimes] = useState<Record<string, string>>({});
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [completedMovementIds, setCompletedMovementIds] = useState<string[]>([]);
-    const [attendanceError, setAttendanceError] = useState<string | null>(null);
-    const [locationStatus, setLocationStatus] = useState<string | null>(null);
-    const [locationProgress, setLocationProgress] = useState<number>(0);
-    const [locationPreview, setLocationPreview] = useState<LocationPreview>({
-        bestAccuracy: null,
-        sampleCount: 0,
-    });
+    const {
+        isSubmitting,
+        attendanceError,
+        locationStatus,
+        locationProgress,
+        locationPreview,
+        handleCheckIn,
+        handleCheckOut,
+    } = useSelfAttendanceCheck();
+
+    const hrDisplayRows = useMemo(
+        () =>
+            [
+                ["Designation", hrProfile.designation],
+                ["Department", hrProfile.department],
+                ["Branch", hrProfile.branch],
+                ["Employee type", hrProfile.employee_type],
+                ["Program", hrProfile.program],
+                ["Project", hrProfile.project],
+                ["Joining date", hrProfile.joining_date],
+                ["Confirmation", hrProfile.confirmation_date],
+                ["Status", hrProfile.employment_status],
+                ["Reporting to", hrProfile.reporting_manager],
+                ["Supervisor ID", hrProfile.reporting_employee_id],
+                ["Email", hrProfile.work_email],
+                ["Phone", hrProfile.phone],
+            ].filter(([, v]) => v != null && String(v).trim() !== ""),
+        [hrProfile],
+    );
 
     // Initialize active movements
     useEffect(() => {
         if (recentMovements?.length > 0) {
-            const active = recentMovements.filter(m =>
-                m.status === 'active' && !completedMovementIds.includes(m.id)
-            );
+            const active = recentMovements.filter((m) => m.status === 'active');
             setActiveMovements(active);
         }
-    }, [recentMovements, completedMovementIds]);
+    }, [recentMovements]);
 
     // Timer management for movements
     useEffect(() => {
@@ -260,218 +296,6 @@ export default function EmployeeDashboard({
         window.dispatchEvent(new CustomEvent('hrm:movement-close', { detail: { movementId: Number(movementId) } }));
     };
 
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-    const getCurrentPositionOnce = (opts?: Partial<PositionOptions>) =>
-        new Promise<GeolocationPosition>((resolve, reject) => {
-            if (!navigator.geolocation) {
-                reject(new Error("Geolocation not supported"));
-                return;
-            }
-
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 30000,
-                maximumAge: 5000,
-                ...opts,
-            });
-        });
-
-    const getBestLocation = async (sampleCount = 3) => {
-        const samples: GeoSample[] = [];
-        let lastError: any = null;
-        setLocationProgress(5);
-        setLocationPreview({
-            bestAccuracy: null,
-            sampleCount: 0,
-        });
-
-        for (let i = 0; i < sampleCount; i++) {
-            setLocationStatus(`Getting location... (${i + 1}/${sampleCount})`);
-            setLocationProgress(10 + Math.round((i / sampleCount) * 60));
-
-            try {
-                const pos = await getCurrentPositionOnce({
-                    enableHighAccuracy: true,
-                    timeout: 30000,
-                    maximumAge: 0,
-                });
-
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
-                const accuracy = typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
-
-                samples.push({
-                    lat,
-                    lng,
-                    accuracy,
-                    at: new Date(pos.timestamp).toISOString(),
-                });
-                setLocationPreview((prev) => {
-                    const currentBest =
-                        prev.bestAccuracy === null ? Number.POSITIVE_INFINITY : prev.bestAccuracy;
-                    const nextBest =
-                        accuracy === null ? Number.POSITIVE_INFINITY : accuracy;
-                    const isBetter = nextBest < currentBest;
-
-                    return {
-                        bestAccuracy: isBetter ? accuracy : prev.bestAccuracy,
-                        sampleCount: prev.sampleCount + 1,
-                    };
-                });
-            } catch (e: any) {
-                // If high-accuracy times out (common indoors), retry with relaxed settings once.
-                lastError = e;
-                if (e?.code === 3) {
-                    try {
-                        const pos = await getCurrentPositionOnce({
-                            enableHighAccuracy: false,
-                            timeout: 15000,
-                            maximumAge: 15000,
-                        });
-
-                        const lat = pos.coords.latitude;
-                        const lng = pos.coords.longitude;
-                        const accuracy = typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
-
-                        samples.push({
-                            lat,
-                            lng,
-                            accuracy,
-                            at: new Date(pos.timestamp).toISOString(),
-                        });
-                        setLocationPreview((prev) => {
-                            const currentBest =
-                                prev.bestAccuracy === null ? Number.POSITIVE_INFINITY : prev.bestAccuracy;
-                            const nextBest =
-                                accuracy === null ? Number.POSITIVE_INFINITY : accuracy;
-                            const isBetter = nextBest < currentBest;
-
-                            return {
-                                bestAccuracy: isBetter ? accuracy : prev.bestAccuracy,
-                                sampleCount: prev.sampleCount + 1,
-                            };
-                        });
-                    } catch (e2: any) {
-                        lastError = e2;
-                    }
-                }
-            }
-
-            // Small delay improves GPS lock stability across samples.
-            if (i < sampleCount - 1) {
-                await sleep(800);
-            }
-        }
-
-        if (samples.length === 0) {
-            throw lastError || new Error("Unable to get location.");
-        }
-
-        setLocationProgress(75);
-        const best = samples
-            .slice()
-            .sort((a, b) => (a.accuracy ?? Number.POSITIVE_INFINITY) - (b.accuracy ?? Number.POSITIVE_INFINITY))[0];
-
-        return { best, samples };
-    };
-
-    const handleCheckIn = async () => {
-        setAttendanceError(null);
-        setIsSubmitting(true);
-        setLocationProgress(0);
-
-        try {
-            const { best, samples } = await getBestLocation(3);
-            setLocationStatus("Submitting check-in...");
-            setLocationProgress(90);
-
-            router.post(
-                route("employee.attendance.check-in"),
-                { lat: best.lat, lng: best.lng, accuracy: best.accuracy, samples },
-                {
-                    preserveScroll: true,
-                    onError: (errors) => {
-                        const msg =
-                            (errors as any)?.attendance ||
-                            (errors as any)?.lat ||
-                            (errors as any)?.lng ||
-                            "Check-in failed.";
-                        setAttendanceError(String(msg));
-                    },
-                    onFinish: () => {
-                        setIsSubmitting(false);
-                        setLocationStatus(null);
-                        setLocationProgress(100);
-                        window.setTimeout(() => setLocationProgress(0), 800);
-                    },
-                }
-            );
-        } catch (e: any) {
-            setIsSubmitting(false);
-            setLocationStatus(null);
-            setLocationProgress(0);
-
-            if (e?.code === 1) {
-                setAttendanceError("Location permission denied. Please allow location access.");
-            } else if (e?.code === 2) {
-                setAttendanceError("Location unavailable. Please turn on GPS and try again.");
-            } else if (e?.code === 3) {
-                setAttendanceError("Location request timed out. Please try again in an open area.");
-            } else {
-                setAttendanceError(e?.message ? String(e.message) : "Unable to get location.");
-            }
-        }
-    };
-
-    const handleCheckOut = async () => {
-        setAttendanceError(null);
-        setIsSubmitting(true);
-        setLocationProgress(0);
-
-        try {
-            const { best, samples } = await getBestLocation(3);
-            setLocationStatus("Submitting check-out...");
-            setLocationProgress(90);
-
-            router.post(
-                route("employee.attendance.check-out"),
-                { lat: best.lat, lng: best.lng, accuracy: best.accuracy, samples },
-                {
-                    preserveScroll: true,
-                    onError: (errors) => {
-                        const msg =
-                            (errors as any)?.attendance ||
-                            (errors as any)?.lat ||
-                            (errors as any)?.lng ||
-                            "Check-out failed.";
-                        setAttendanceError(String(msg));
-                    },
-                    onFinish: () => {
-                        setIsSubmitting(false);
-                        setLocationStatus(null);
-                        setLocationProgress(100);
-                        window.setTimeout(() => setLocationProgress(0), 800);
-                    },
-                }
-            );
-        } catch (e: any) {
-            setIsSubmitting(false);
-            setLocationStatus(null);
-            setLocationProgress(0);
-
-            if (e?.code === 1) {
-                setAttendanceError("Location permission denied. Please allow location access.");
-            } else if (e?.code === 2) {
-                setAttendanceError("Location unavailable. Please turn on GPS and try again.");
-            } else if (e?.code === 3) {
-                setAttendanceError("Location request timed out. Please try again in an open area.");
-            } else {
-                setAttendanceError(e?.message ? String(e.message) : "Unable to get location.");
-            }
-        }
-    };
-
     // Navigation handlers
     const goToCreateLeave = () => {
         router.visit(route('leave.applications.create'));
@@ -486,7 +310,9 @@ export default function EmployeeDashboard({
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
     return (
         <AdminLayout>
-            <div className="flex flex-col gap-6 p-4 md:p-6">
+            <Head title="Human resources" />
+            <PageSurface className="px-4 md:px-6">
+            <div className="flex flex-col gap-6">
                 {(attendanceError || locationStatus) && (
                     <Alert className={attendanceError ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50"}>
                         {(attendanceError ? <XCircle className="h-4 w-4 text-red-600" /> : <AlertCircle className="h-4 w-4 text-blue-600" />)}
@@ -567,7 +393,8 @@ export default function EmployeeDashboard({
                             </AvatarFallback>
                         </Avatar>
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900">{fullName}</h1>
+                            <h1 className="text-2xl font-bold text-gray-900">Human resources</h1>
+                            <p className="mt-0.5 text-lg font-semibold text-gray-800">{fullName}</p>
                             <div className="flex flex-wrap items-center gap-2 text-gray-600 text-sm">
                                 <div className="flex items-center gap-1">
                                     <UserCircle className="h-4 w-4" />
@@ -609,7 +436,7 @@ export default function EmployeeDashboard({
                         {/* Date and Time */}
                         <div className="text-right">
                             <div className="text-sm text-gray-500">
-                                {format(currentDate, "EEEE, MMMM d, yyyy")}
+                                {format(new Date(), "EEEE, MMMM d, yyyy")}
                             </div>
                             <div className="text-xl font-mono text-gray-900">{clockTime}</div>
                         </div>
@@ -739,71 +566,59 @@ export default function EmployeeDashboard({
                     </CardContent>
                 </Card>
 
-                {/* Main Dashboard Content */}
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                    {/* Left Column - Calendar & Attendance */}
-                    <div className="xl:col-span-1 flex flex-col gap-6">
-                        <Card className="shadow-sm">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <CalendarIcon className="h-5 w-5 text-blue-600" />
-                                    Calendar
+                {/* Main dashboard */}
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:gap-5">
+                    {/* Left — HR profile */}
+                    <div className="flex flex-col gap-4 xl:w-[380px] xl:shrink-0">
+                        <Card className="overflow-hidden border-emerald-200/70 bg-white/90 shadow-sm">
+                            <CardHeader className="border-b border-emerald-100 bg-gradient-to-r from-emerald-50/80 to-white py-3">
+                                <CardTitle className="flex items-center gap-2 text-base font-semibold text-zinc-900">
+                                    <IdCard className="h-5 w-5 shrink-0 text-emerald-700" />
+                                    HR information
                                 </CardTitle>
+                                <CardDescription className="text-xs">
+                                    Posting, reporting line, and contact on record
+                                </CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <Calendar
-                                    mode="single"
-                                    selected={currentDate}
-                                    onSelect={(day) => {
-                                        if (day) setCurrentDate(day);
-                                    }}
-                                    className="rounded-md border"
-                                />
+                            <CardContent className="space-y-0 pt-3 text-sm">
+                                {hrDisplayRows.length === 0 ? (
+                                    <p className="py-2 text-xs text-zinc-500">
+                                        No HR profile fields are on file yet. Contact HR if something is missing.
+                                    </p>
+                                ) : (
+                                    hrDisplayRows.map(([label, val]) => (
+                                        <div
+                                            key={label}
+                                            className="flex items-start justify-between gap-3 border-b border-zinc-50 py-2 last:border-b-0"
+                                        >
+                                            <span className="shrink-0 text-zinc-500">{label}</span>
+                                            <span className="max-w-[58%] text-right font-medium text-zinc-900 break-words">
+                                                {String(val)}
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
                             </CardContent>
                         </Card>
 
-                        <Card className="shadow-sm">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-lg">Recent Attendance</CardTitle>
-                                <CardDescription>Your attendance history</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    {recentAttendance?.length > 0 ? (
-                                        recentAttendance.map((attendance, index) => (
-                                            <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                                                <div>
-                                                    <div className="font-medium text-sm">
-                                                        {format(new Date(attendance.date), "EEEE, MMM d")}
-                                                    </div>
-                                                    <div className="text-xs text-gray-500">
-                                                        {formatTime(attendance.check_in)} - {formatTime(attendance.check_out)}
-                                                    </div>
-                                                </div>
-                                                <Badge
-                                                    className={`text-xs ${attendance.status === "Present"
-                                                            ? "bg-green-100 text-green-800"
-                                                            : "bg-yellow-100 text-yellow-800"
-                                                        }`}
-                                                >
-                                                    {attendance.status}
-                                                </Badge>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center text-gray-500 py-8 text-sm">
-                                            No recent attendance records
-                                        </div>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
+                        {weekendDaySummary ? (
+                            <Card className="border-emerald-200/70 bg-white/90 shadow-sm">
+                                <CardHeader className="py-3">
+                                    <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                                        <Palmtree className="h-4 w-4 text-amber-600" />
+                                        Weekend (this branch)
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pb-3 pt-0 text-sm text-zinc-700">{weekendDaySummary}</CardContent>
+                            </Card>
+                        ) : null}
                     </div>
 
-                    {/* Right Columns - Tabs Content */}
-                    <div className="xl:col-span-2">
+                    {/* Right — main content */}
+                    <div className="flex min-w-0 flex-1 flex-col gap-4">
+                        {/* Primary — leave & movements (always stays at top) */}
                         <Tabs defaultValue="leaves" className="w-full">
-                            <TabsList className="grid grid-cols-3 mb-6 h-auto p-1">
+                            <TabsList className="grid grid-cols-3 mb-6 h-auto p-1 bg-white/80 border border-emerald-100">
                                 <TabsTrigger
                                     value="leaves"
                                     className="text-xs sm:text-sm px-2 sm:px-3 py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm"
@@ -868,7 +683,7 @@ export default function EmployeeDashboard({
                                 <Card className="shadow-sm">
                                     <CardHeader>
                                         <CardTitle className="flex items-center gap-2">
-                                            <FileText className="h-5 w-5 text-blue-600" />
+                                            <FileText className="h-5 w-5 text-emerald-700" />
                                             Recent Leave Applications
                                         </CardTitle>
                                         <CardDescription>Status of your recent leave requests</CardDescription>
@@ -885,8 +700,8 @@ export default function EmployeeDashboard({
                                                             </div>
                                                         </div>
                                                         <Badge
-                                                            className={`${leave.status === "Approved" ? "bg-green-100 text-green-800" :
-                                                                    leave.status === "Rejected" ? "bg-red-100 text-red-800" :
+                                                            className={`${String(leave.status).toLowerCase() === "approved" ? "bg-green-100 text-green-800" :
+                                                                    String(leave.status).toLowerCase() === "rejected" ? "bg-red-100 text-red-800" :
                                                                         "bg-yellow-100 text-yellow-800"
                                                                 }`}
                                                         >
@@ -898,10 +713,12 @@ export default function EmployeeDashboard({
                                                 <div className="text-center text-gray-500 py-8">No recent leave applications</div>
                                             )}
                                         </div>
-                                        <div className="mt-6 flex justify-end">
-                                            <Button variant="outline" className="border-gray-300">
-                                                View All Applications
-                                                <ArrowRight className="h-4 w-4 ml-2" />
+                                        <div className="mt-4 flex justify-end">
+                                            <Button variant="outline" size="sm" className="border-gray-300" asChild>
+                                                <Link href={route("leave.applications.index")}>
+                                                    View all applications
+                                                    <ArrowRight className="h-4 w-4 ml-2" />
+                                                </Link>
                                             </Button>
                                         </div>
                                     </CardContent>
@@ -912,7 +729,7 @@ export default function EmployeeDashboard({
                                 <Card className="shadow-sm">
                                     <CardHeader>
                                         <CardTitle className="flex items-center gap-2">
-                                            <Briefcase className="h-5 w-5 text-purple-600" />
+                                            <Briefcase className="h-5 w-5 text-emerald-700" />
                                             Recent Movements
                                         </CardTitle>
                                         <CardDescription>Your recent movements and transfers</CardDescription>
@@ -920,9 +737,7 @@ export default function EmployeeDashboard({
                                     <CardContent>
                                         <div className="space-y-4">
                                             {recentMovements?.length > 0 ? (
-                                                recentMovements
-                                                    .filter(movement => !(completedMovementIds.includes(movement.id) && movement.status === 'active'))
-                                                    .map((movement, index) => (
+                                                recentMovements.map((movement, index) => (
                                                         <div key={index} className="border border-gray-200 rounded-lg p-4 space-y-3">
                                                             <div className="flex justify-between items-start">
                                                                 <div className="flex-1">
@@ -955,7 +770,7 @@ export default function EmployeeDashboard({
 
                                                             <div className="flex flex-wrap justify-between text-sm text-gray-600">
                                                                 <div className="flex items-center gap-2">
-                                                                    <CalendarIcon className="h-4 w-4" />
+                                                                    <CalendarDays className="h-4 w-4" />
                                                                     <span>
                                                                         {format(new Date(movement.from_datetime), "MMM d, h:mm a")}
                                                                     </span>
@@ -979,7 +794,7 @@ export default function EmployeeDashboard({
                                                             )}
 
                                                             {/* Timer and actions for active movements */}
-                                                            {movement.status === 'active' && !completedMovementIds.includes(movement.id) && (
+                                                            {movement.status === 'active' && (
                                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
                                                                     <div className="flex flex-wrap items-center gap-2">
                                                                         <div className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs flex items-center gap-1">
@@ -1015,7 +830,7 @@ export default function EmployeeDashboard({
 
                                         {/* Add Movement Button */}
                                         <div className="mt-6">
-                                            <Button onClick={goToCreateMovement} className="w-full bg-blue-600 hover:bg-blue-700">
+                                            <Button onClick={goToCreateMovement} className="w-full bg-emerald-600 hover:bg-emerald-700">
                                                 <Briefcase className="h-4 w-4 mr-2" />
                                                 Add Movement
                                             </Button>
@@ -1024,9 +839,83 @@ export default function EmployeeDashboard({
                                 </Card>
                             </TabsContent>
                         </Tabs>
+
+                        {/* Secondary — compact cards */}
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                            <Card className="border-emerald-200/70 bg-white/90 shadow-sm">
+                                <CardHeader className="py-3">
+                                    <CardTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                                        <CalendarDays className="h-4 w-4 text-emerald-700" />
+                                        Upcoming holidays
+                                    </CardTitle>
+                                    <CardDescription className="text-xs">Next dates for your branch rules</CardDescription>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    {upcomingHolidays?.length ? (
+                                        <ul className="divide-y divide-zinc-100">
+                                            {upcomingHolidays.map((h, i) => (
+                                                <li key={i} className="flex items-start justify-between gap-2 py-2.5 text-sm">
+                                                    <span className="min-w-0 font-medium leading-snug text-zinc-900">
+                                                        {h.title}
+                                                    </span>
+                                                    <span className="shrink-0 tabular-nums text-xs text-zinc-500">
+                                                        {format(new Date(h.date), 'd MMM')}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="py-2 text-xs text-zinc-500">No upcoming holidays in this window.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border-emerald-200/70 bg-white/90 shadow-sm">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-base">Recent attendance</CardTitle>
+                                    <CardDescription>Last 7 days</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-3">
+                                        {recentAttendance?.length > 0 ? (
+                                            recentAttendance.map((attendance, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="flex items-start justify-between gap-3 py-2 border-b border-gray-100 last:border-b-0"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <div className="truncate font-medium text-sm">
+                                                            {format(new Date(attendance.date), "EEEE, MMM d")}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {formatTime(attendance.check_in)} - {formatTime(attendance.check_out)}
+                                                        </div>
+                                                    </div>
+                                                    <Badge
+                                                        className={cn(
+                                                            "shrink-0 text-xs",
+                                                            String(attendance.status).toLowerCase() === "present"
+                                                                ? "bg-emerald-100 text-emerald-800"
+                                                                : "bg-amber-100 text-amber-800",
+                                                        )}
+                                                    >
+                                                        {attendance.status}
+                                                    </Badge>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-gray-500 py-8 text-sm">
+                                                No recent attendance records
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
                     </div>
                 </div>
             </div>
+            </PageSurface>
         </AdminLayout>
     );
 }

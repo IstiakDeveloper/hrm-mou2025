@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\Department;
+use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\LeaveApplication;
 use App\Models\LeaveType;
@@ -143,7 +144,7 @@ class ReportController extends Controller
             'employee.department',
             'employee.designation',
             'employee.currentBranch', // Add branch relation if needed
-            'leaveType'
+            'leaveType',
         ])
             ->whereBetween('start_date', [$startDate, $endDate])
             ->when($request->status, function ($query, $status) {
@@ -190,7 +191,8 @@ class ReportController extends Controller
             ->orderBy('first_name')
             ->get()
             ->map(function ($employee) {
-                $employee->full_name = trim($employee->first_name . ' ' . ($employee->last_name ?? ''));
+                $employee->full_name = trim($employee->first_name.' '.($employee->last_name ?? ''));
+
                 return $employee;
             });
 
@@ -211,7 +213,6 @@ class ReportController extends Controller
         ]);
     }
 
-
     public function downloadLeaveReportPdf(Request $request)
     {
         $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
@@ -221,7 +222,7 @@ class ReportController extends Controller
             'employee.department',
             'employee.designation',
             'employee.currentBranch',
-            'leaveType'
+            'leaveType',
         ])
             ->whereBetween('start_date', [$startDate, $endDate])
             ->when($request->status, function ($query, $status) {
@@ -264,7 +265,8 @@ class ReportController extends Controller
             ->get()
             ->keyBy('id')
             ->map(function ($employee) {
-                $employee->full_name = trim($employee->first_name . ' ' . ($employee->last_name ?? ''));
+                $employee->full_name = trim($employee->first_name.' '.($employee->last_name ?? ''));
+
                 return $employee;
             });
         $leaveTypes = LeaveType::select('id', 'name')->get()->keyBy('id');
@@ -273,19 +275,19 @@ class ReportController extends Controller
         // Prepare filter labels for display
         $filterLabels = [];
         if ($request->status) {
-            $filterLabels[] = 'Status: ' . ucfirst($request->status);
+            $filterLabels[] = 'Status: '.ucfirst($request->status);
         }
         if ($request->department_id && isset($departments[$request->department_id])) {
-            $filterLabels[] = 'Department: ' . $departments[$request->department_id]->name;
+            $filterLabels[] = 'Department: '.$departments[$request->department_id]->name;
         }
         if ($request->employee_id && isset($employees[$request->employee_id])) {
-            $filterLabels[] = 'Employee: ' . $employees[$request->employee_id]->full_name;
+            $filterLabels[] = 'Employee: '.$employees[$request->employee_id]->full_name;
         }
         if ($request->leave_type_id && isset($leaveTypes[$request->leave_type_id])) {
-            $filterLabels[] = 'Leave Type: ' . $leaveTypes[$request->leave_type_id]->name;
+            $filterLabels[] = 'Leave Type: '.$leaveTypes[$request->leave_type_id]->name;
         }
         if ($request->branch_id && isset($branches[$request->branch_id])) {
-            $filterLabels[] = 'Branch: ' . $branches[$request->branch_id]->name;
+            $filterLabels[] = 'Branch: '.$branches[$request->branch_id]->name;
         }
 
         $data = [
@@ -305,7 +307,7 @@ class ReportController extends Controller
         $pdf->setPaper('A4', 'landscape'); // Landscape for better table view
 
         // Generate filename
-        $filename = 'leave-report-' . $startDate->format('Y-m-d') . '-to-' . $endDate->format('Y-m-d') . '.pdf';
+        $filename = 'leave-report-'.$startDate->format('Y-m-d').'-to-'.$endDate->format('Y-m-d').'.pdf';
 
         return $pdf->download($filename);
     }
@@ -380,54 +382,122 @@ class ReportController extends Controller
             'toBranch',
             'fromDepartment',
             'toDepartment',
-            'approver'
+            'approver',
         ])
-            ->whereBetween('effective_date', [$startDate, $endDate])
-            ->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
+            ->whereDate('effective_date', '>=', $startDate->format('Y-m-d'))
+            ->whereDate('effective_date', '<=', $endDate->format('Y-m-d'))
+            ->when($request->filled('status'), function ($query) use ($request) {
+                $query->where('status', $request->status);
             })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
+            ->when($request->filled('department_id'), function ($query) use ($request) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('department_id', $request->department_id);
                 });
             })
-            ->when($request->from_branch_id, function ($query, $branchId) {
-                $query->where('from_branch_id', $branchId);
+            ->when($request->filled('from_branch_id'), function ($query) use ($request) {
+                $query->where('from_branch_id', $request->from_branch_id);
             })
-            ->when($request->to_branch_id, function ($query, $branchId) {
-                $query->where('to_branch_id', $branchId);
+            ->when($request->filled('to_branch_id'), function ($query) use ($request) {
+                $query->where('to_branch_id', $request->to_branch_id);
             })
-            ->when($request->employee_id, function ($query, $employeeId) {
-                $query->where('employee_id', $employeeId);
+            ->when($request->filled('employee_id'), function ($query) use ($request) {
+                $query->where('employee_id', $request->employee_id);
+            })
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $s = trim((string) $request->search);
+                $query->where(function ($inner) use ($s) {
+                    $inner->where('transfer_order_no', 'like', '%'.$s.'%')
+                        ->orWhere('reason', 'like', '%'.$s.'%')
+                        ->orWhereHas('employee', function ($eq) use ($s) {
+                            $eq->where('first_name', 'like', '%'.$s.'%')
+                                ->orWhere('last_name', 'like', '%'.$s.'%')
+                                ->orWhere('employee_id', 'like', '%'.$s.'%')
+                                ->orWhere('name_en', 'like', '%'.$s.'%')
+                                ->orWhere('name_bn', 'like', '%'.$s.'%');
+                        });
+                });
             });
 
-        $transfers = $query->orderBy('effective_date', 'desc')
+        $transfers = (clone $query)->orderBy('effective_date', 'desc')
             ->paginate(15)
             ->withQueryString();
 
-        // Summary statistics
         $summary = [
-            'total' => $query->count(),
-            'approved' => $query->where('status', 'approved')->count(),
-            'rejected' => $query->where('status', 'rejected')->count(),
-            'pending' => $query->where('status', 'pending')->count(),
-            'completed' => $query->where('status', 'completed')->count(),
+            'total' => (clone $query)->count(),
+            'approved' => (clone $query)->where('status', 'approved')->count(),
+            'rejected' => (clone $query)->where('status', 'rejected')->count(),
+            'pending' => (clone $query)->where('status', 'pending')->count(),
+            'completed' => (clone $query)->where('status', 'completed')->count(),
         ];
 
-        $departments = Department::all();
-        $branches = Branch::all();
-        $employees = Employee::where('status', 'active')->get();
+        $branches = Branch::orderBy('name')->get(['id', 'name']);
+        $departments = Department::orderBy('name')->get(['id', 'name']);
+        $employees = Employee::where('status', 'active')->orderBy('first_name')->get(['id', 'employee_id', 'first_name', 'last_name']);
+
+        $branchFlow = $this->transferBranchFlowStats(clone $query, $branches);
 
         return Inertia::render('report/transfer', [
             'transfers' => $transfers,
             'departments' => $departments,
             'branches' => $branches,
             'employees' => $employees,
-            'filters' => $request->only(['start_date', 'end_date', 'status', 'department_id', 'from_branch_id', 'to_branch_id', 'employee_id']),
+            'branchFlow' => $branchFlow,
+            'filters' => $request->only([
+                'start_date',
+                'end_date',
+                'status',
+                'department_id',
+                'from_branch_id',
+                'to_branch_id',
+                'employee_id',
+                'search',
+            ]),
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'summary' => $summary,
         ]);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Transfer>  $query
+     * @param  \Illuminate\Support\Collection<int, \App\Models\Branch>  $branches
+     * @return array<int, array{id: int, name: string, outgoing: int, incoming: int, total: int}>
+     */
+    private function transferBranchFlowStats($query, $branches): array
+    {
+        $nameById = $branches->keyBy('id');
+
+        $outgoing = (clone $query)
+            ->whereNotNull('from_branch_id')
+            ->selectRaw('from_branch_id as branch_id, COUNT(*) as c')
+            ->groupBy('from_branch_id')
+            ->pluck('c', 'branch_id');
+
+        $incoming = (clone $query)
+            ->whereNotNull('to_branch_id')
+            ->selectRaw('to_branch_id as branch_id, COUNT(*) as c')
+            ->groupBy('to_branch_id')
+            ->pluck('c', 'branch_id');
+
+        $ids = $outgoing->keys()->merge($incoming->keys())->unique()->filter();
+
+        $rows = [];
+        foreach ($ids as $id) {
+            $bid = (int) $id;
+            $out = (int) ($outgoing[$id] ?? 0);
+            $in = (int) ($incoming[$id] ?? 0);
+            $rows[] = [
+                'id' => $bid,
+                'name' => optional($nameById->get($bid))->name ?? ('Branch #'.$bid),
+                'outgoing' => $out,
+                'incoming' => $in,
+                'total' => $out + $in,
+            ];
+        }
+
+        usort($rows, fn ($a, $b) => $b['total'] <=> $a['total']);
+
+        return array_slice($rows, 0, 12);
     }
 
     /**
@@ -466,28 +536,36 @@ class ReportController extends Controller
                 });
             });
 
-        $employees = $query->orderBy('id')
+        $employees = (clone $query)->orderBy('id')
             ->paginate(15)
             ->withQueryString();
 
-        // Summary statistics
+        // Summary — clone the filtered query each time (do not chain where() on one builder)
         $summary = [
-            'total' => $query->count(),
-            'active' => $query->where('status', 'active')->count(),
-            'inactive' => $query->where('status', 'inactive')->count(),
-            'onLeave' => $query->where('status', 'on_leave')->count(),
-            'terminated' => $query->where('status', 'terminated')->count(),
-            'male' => $query->where('gender', 'male')->count(),
-            'female' => $query->where('gender', 'female')->count(),
+            'total' => (clone $query)->count(),
+            'active' => (clone $query)->where('status', 'active')->count(),
+            'inactive' => (clone $query)->where('status', 'inactive')->count(),
+            'onLeave' => (clone $query)->where('status', 'on_leave')->count(),
+            'terminated' => (clone $query)->where('status', 'terminated')->count(),
+            'male' => (clone $query)->where('gender', 'male')->count(),
+            'female' => (clone $query)->where('gender', 'female')->count(),
         ];
 
         $branches = Branch::all();
         $departments = Department::all();
-        $designations = Department::with('designations')->get()->map(function ($department) {
+
+        // Designations are no longer scoped to departments (see migrations). Frontend still expects
+        // { id, name, designations[] } per department for the cascading select — attach the global list to each.
+        $designationList = Designation::orderBy('name')->get(['id', 'name']);
+        $designations = Department::orderBy('name')->get(['id', 'name'])->map(function ($department) use ($designationList) {
             return [
                 'id' => $department->id,
                 'name' => $department->name,
-                'designations' => $department->designations,
+                'designations' => $designationList->map(fn ($d) => [
+                    'id' => $d->id,
+                    'name' => $d->name,
+                    'department_id' => $department->id,
+                ])->values()->all(),
             ];
         });
 
@@ -504,7 +582,7 @@ class ReportController extends Controller
                 'gender',
                 'join_start_date',
                 'join_end_date',
-                'search'
+                'search',
             ]),
             'statuses' => ['active', 'inactive', 'on_leave', 'terminated'],
             'genders' => ['male', 'female', 'other'],

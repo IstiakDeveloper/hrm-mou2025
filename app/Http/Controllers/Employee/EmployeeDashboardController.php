@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Employee;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\Employee;
-use App\Models\User;
+use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
-use App\Models\Movement;
-use App\Models\AttendanceSetting;
-use App\Models\Holiday;
 use App\Models\LeaveType;
+use App\Models\Movement;
+use App\Models\User;
 use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -20,7 +20,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Mpdf\Mpdf;
-
 
 class EmployeeDashboardController extends Controller
 {
@@ -42,7 +41,7 @@ class EmployeeDashboardController extends Controller
         $selectedEmployee = null;
         $dateRange = [
             'from' => null,
-            'to' => null
+            'to' => null,
         ];
         $filterType = 'custom'; // default filter type (custom, year, all)
         $filterYear = date('Y'); // default year is current year
@@ -105,7 +104,7 @@ class EmployeeDashboardController extends Controller
 
             $dateRange = [
                 'from' => $fromDate,
-                'to' => $toDate
+                'to' => $toDate,
             ];
 
             // Generate data for selected employee and date range
@@ -269,10 +268,10 @@ class EmployeeDashboardController extends Controller
 
         $base = empty($typeNames)
             ? 'On approved leave'
-            : 'On approved leave (' . implode(', ', $typeNames) . ')';
+            : 'On approved leave ('.implode(', ', $typeNames).')';
 
         if ($clockRemarks !== null && $clockRemarks !== '') {
-            return $base . ' — ' . $clockRemarks;
+            return $base.' — '.$clockRemarks;
         }
 
         return $base;
@@ -285,27 +284,28 @@ class EmployeeDashboardController extends Controller
     {
         if (empty($reportData['has_movement'])) {
             $base = 'On duty';
-        } elseif (!empty($reportData['multiple_movements'])) {
-            $base = 'On duty — ' . (int) $reportData['total_movements'] . ' movements';
+        } elseif (! empty($reportData['multiple_movements'])) {
+            $base = 'On duty — '.(int) $reportData['total_movements'].' movements';
         } else {
             $type = ucfirst((string) ($reportData['movement_type'] ?? 'official'));
             $purpose = (string) ($reportData['movement_purpose'] ?? '');
             $dest = (string) ($reportData['movement_destination'] ?? '');
-            $base = 'On duty — ' . $type . ' movement';
+            $base = 'On duty — '.$type.' movement';
             if ($purpose !== '') {
-                $base .= ': ' . $purpose;
+                $base .= ': '.$purpose;
             }
             if ($dest !== '') {
-                $base .= ' → ' . $dest;
+                $base .= ' → '.$dest;
             }
         }
 
         if ($clockRemarks !== null && $clockRemarks !== '') {
-            return $base . ' — ' . $clockRemarks;
+            return $base.' — '.$clockRemarks;
         }
 
         return $base;
     }
+
     /**
      * Enhanced getAttendanceData method with proper movement integration
      */
@@ -332,9 +332,6 @@ class EmployeeDashboardController extends Controller
                 return Carbon::parse($date)->format('Y-m-d');
             })
             ->toArray();
-
-
-
 
         // Get all attendances within date range WITH movements
         $attendances = DB::table('attendances')
@@ -378,7 +375,7 @@ class EmployeeDashboardController extends Controller
             : [];
 
         // Instantiate Attendance model for method access
-        $attendanceModel = new Attendance();
+        $attendanceModel = new Attendance;
 
         $reports = [];
 
@@ -431,7 +428,7 @@ class EmployeeDashboardController extends Controller
             $isOnLeave = $leavesOnDate->isNotEmpty();
 
             // Check if attendance record has valid check-in (not just record exists)
-            $hasValidAttendance = !is_null($existingAttendance) && !is_null($existingAttendance->check_in);
+            $hasValidAttendance = ! is_null($existingAttendance) && ! is_null($existingAttendance->check_in);
             $attendanceRowStatus = $existingAttendance
                 ? ($existingAttendance->status ?? null)
                 : null;
@@ -464,7 +461,7 @@ class EmployeeDashboardController extends Controller
                             'from_datetime' => $movement->from_datetime,
                             'to_datetime' => $movement->to_datetime,
                             'actual_return_datetime' => $movement->actual_return_datetime,
-                            'status' => $movement->status
+                            'status' => $movement->status,
                         ];
                     })->toArray();
                 } else {
@@ -491,8 +488,8 @@ class EmployeeDashboardController extends Controller
                             'from_datetime' => $singleMovement->from_datetime,
                             'to_datetime' => $singleMovement->to_datetime,
                             'actual_return_datetime' => $singleMovement->actual_return_datetime,
-                            'status' => $singleMovement->status
-                        ]
+                            'status' => $singleMovement->status,
+                        ],
                     ];
                 }
             }
@@ -555,11 +552,11 @@ class EmployeeDashboardController extends Controller
                     if ($reportData['has_movement']) {
                         $movementInfo = [];
                         if ($reportData['multiple_movements']) {
-                            $movementInfo[] = $reportData['total_movements'] . ' movements';
+                            $movementInfo[] = $reportData['total_movements'].' movements';
                         } else {
-                            $movementInfo[] = ucfirst((string) $reportData['movement_type']) . ' movement: ' . ($reportData['movement_purpose'] ?? '');
+                            $movementInfo[] = ucfirst((string) $reportData['movement_type']).' movement: '.($reportData['movement_purpose'] ?? '');
                         }
-                        $remarks = implode(' | ', $movementInfo) . ($remarks ? ' | ' . $remarks : '');
+                        $remarks = implode(' | ', $movementInfo).($remarks ? ' | '.$remarks : '');
                     }
                     $reportData['remarks'] = $remarks;
                     break;
@@ -584,14 +581,15 @@ class EmployeeDashboardController extends Controller
     private function generateRemarks($attendance)
     {
         // Skip if no check-in or check-out
-        if (!$attendance->check_in || !$attendance->check_out) {
-            if (!$attendance->check_in && !$attendance->check_out) {
+        if (! $attendance->check_in || ! $attendance->check_out) {
+            if (! $attendance->check_in && ! $attendance->check_out) {
                 $attendance->auto_remarks = 'Absent';
-            } elseif (!$attendance->check_in) {
+            } elseif (! $attendance->check_in) {
                 $attendance->auto_remarks = 'Missing check-in';
-            } elseif (!$attendance->check_out) {
+            } elseif (! $attendance->check_out) {
                 $attendance->auto_remarks = 'Missing check-out';
             }
+
             return;
         }
 
@@ -599,8 +597,9 @@ class EmployeeDashboardController extends Controller
             // Get attendance settings
             $settings = $this->getAttendanceSettings($attendance);
 
-            if (!$settings) {
+            if (! $settings) {
                 $attendance->auto_remarks = 'Regular';
+
                 return;
             }
 
@@ -645,6 +644,7 @@ class EmployeeDashboardController extends Controller
 
             if ($isWeekend) {
                 $attendance->auto_remarks = 'Weekend work';
+
                 return;
             }
 
@@ -733,7 +733,7 @@ class EmployeeDashboardController extends Controller
                 }
             }
 
-            $attendance->auto_remarks = !empty($remarks) ? implode(', ', $remarks) : 'Regular';
+            $attendance->auto_remarks = ! empty($remarks) ? implode(', ', $remarks) : 'Regular';
         } catch (\Exception $e) {
             $attendance->auto_remarks = 'Regular';
         }
@@ -747,7 +747,7 @@ class EmployeeDashboardController extends Controller
         try {
             // Get employee directly from ID
             $employee = Employee::find($attendance->employee_id);
-            if (!$employee) {
+            if (! $employee) {
                 return null;
             }
 
@@ -758,7 +758,8 @@ class EmployeeDashboardController extends Controller
 
             return $settings;
         } catch (\Exception $e) {
-            Log::error('Error getting attendance settings: ' . $e->getMessage());
+            Log::error('Error getting attendance settings: '.$e->getMessage());
+
             return null;
         }
     }
@@ -778,7 +779,7 @@ class EmployeeDashboardController extends Controller
             'holiday' => 0,
             'late' => 0,
             'early_departure' => 0,
-            'overtime' => 0
+            'overtime' => 0,
         ];
 
         foreach ($attendanceData as $record) {
@@ -845,8 +846,8 @@ class EmployeeDashboardController extends Controller
                     'days' => $leave->days,
                     'status' => $leave->status,
                     'reason' => $leave->reason,
-                    'date_range' => $startDate->format('M d') . ' - ' . $endDate->format('M d, Y'),
-                    'is_paid' => $leave->leaveType->is_paid
+                    'date_range' => $startDate->format('M d').' - '.$endDate->format('M d, Y'),
+                    'is_paid' => $leave->leaveType->is_paid,
                 ];
             });
     }
@@ -871,7 +872,7 @@ class EmployeeDashboardController extends Controller
                     'allocated_days' => $balance->allocated_days,
                     'used_days' => $balance->used_days,
                     'remaining_days' => $balance->remaining_days,
-                    'is_paid' => $balance->leaveType->is_paid
+                    'is_paid' => $balance->leaveType->is_paid,
                 ];
             });
 
@@ -879,21 +880,21 @@ class EmployeeDashboardController extends Controller
         $allLeaveTypes = LeaveType::get();
         foreach ($allLeaveTypes as $leaveType) {
             $exists = $leaveBalances->where('type', $leaveType->name)->count() > 0;
-            if (!$exists) {
+            if (! $exists) {
                 $leaveBalances->push([
                     'id' => null,
                     'type' => $leaveType->name,
                     'allocated_days' => 0,
                     'used_days' => 0,
                     'remaining_days' => 0,
-                    'is_paid' => $leaveType->is_paid
+                    'is_paid' => $leaveType->is_paid,
                 ]);
             }
         }
 
         return [
             'year' => $year,
-            'balances' => $leaveBalances
+            'balances' => $leaveBalances,
         ];
     }
 
@@ -942,7 +943,7 @@ class EmployeeDashboardController extends Controller
 
                     // Add "Actual return: " note if different from planned
                     if ($plannedToDateTime->format('Y-m-d H:i') !== $actualToDateTime->format('Y-m-d H:i')) {
-                        $timeRange .= ' (Actual: ' . $actualToDateTime->format('M d, Y H:i') . ')';
+                        $timeRange .= ' (Actual: '.$actualToDateTime->format('M d, Y H:i').')';
                     }
                 }
 
@@ -961,7 +962,7 @@ class EmployeeDashboardController extends Controller
                     'is_returned' => $movement->is_returned,
                     'remarks' => $movement->remarks,
                     'formatted_time_range' => $timeRange,
-                    'duration_hours' => round($durationInHours, 1)
+                    'duration_hours' => round($durationInHours, 1),
                 ];
             });
     }
@@ -977,10 +978,10 @@ class EmployeeDashboardController extends Controller
         $sameDay = $from->isSameDay($to);
 
         if ($sameDay) {
-            return $from->format('M d, Y') . ', ' . $from->format('h:i A') . ' - ' . $to->format('h:i A');
+            return $from->format('M d, Y').', '.$from->format('h:i A').' - '.$to->format('h:i A');
         }
 
-        return $from->format('M d') . ' - ' . $to->format('M d, Y');
+        return $from->format('M d').' - '.$to->format('M d, Y');
     }
 
     /**
@@ -1039,7 +1040,7 @@ class EmployeeDashboardController extends Controller
             ]);
 
             // Add document metadata
-            $mpdf->SetTitle('Employee Report - ' . $employee->first_name . ' ' . $employee->last_name);
+            $mpdf->SetTitle('Employee Report - '.$employee->first_name.' '.$employee->last_name);
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
@@ -1054,14 +1055,14 @@ class EmployeeDashboardController extends Controller
                 'fromDate' => $fromDate,
                 'toDate' => $toDate,
                 'filterType' => $filterType,
-                'generatedAt' => Carbon::now()->format('M d, Y H:i')
+                'generatedAt' => Carbon::now()->format('M d, Y H:i'),
             ])->render();
 
             // Write HTML to the PDF document
             $mpdf->WriteHTML($html);
 
             // Set the download filename
-            $filename = 'Employee_Report_' . str_replace(' ', '_', $employee->first_name) . '_' . date('Y-m-d') . '.pdf';
+            $filename = 'Employee_Report_'.str_replace(' ', '_', $employee->first_name).'_'.date('Y-m-d').'.pdf';
 
             // Output the PDF
             return response()->make(
@@ -1069,21 +1070,21 @@ class EmployeeDashboardController extends Controller
                 200,
                 [
                     'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                    'Content-Disposition' => 'attachment; filename="'.$filename.'"',
                     'Cache-Control' => 'public, must-revalidate, max-age=0',
                     'Pragma' => 'public',
                 ]
             );
         } catch (\Exception $e) {
             // Log the error
-            Log::error('PDF generation error: ' . $e->getMessage(), [
+            Log::error('PDF generation error: '.$e->getMessage(), [
                 'employee_id' => $employeeId,
                 'from_date' => $fromDate,
-                'to_date' => $toDate
+                'to_date' => $toDate,
             ]);
 
             // Return with error message
-            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: '.$e->getMessage());
         }
     }
 
@@ -1134,7 +1135,7 @@ class EmployeeDashboardController extends Controller
             ]);
 
             // Add document metadata
-            $mpdf->SetTitle('Attendance Report - ' . $employee->first_name . ' ' . $employee->last_name);
+            $mpdf->SetTitle('Attendance Report - '.$employee->first_name.' '.$employee->last_name);
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
@@ -1146,14 +1147,14 @@ class EmployeeDashboardController extends Controller
                 'fromDate' => $fromDate,
                 'toDate' => $toDate,
                 'filterType' => $filterType,
-                'generatedAt' => Carbon::now()->format('M d, Y H:i')
+                'generatedAt' => Carbon::now()->format('M d, Y H:i'),
             ])->render();
 
             // Write HTML to the PDF document
             $mpdf->WriteHTML($html);
 
             // Set the download filename
-            $filename = 'Attendance_Report_' . str_replace(' ', '_', $employee->first_name) . '_' . date('Y-m-d') . '.pdf';
+            $filename = 'Attendance_Report_'.str_replace(' ', '_', $employee->first_name).'_'.date('Y-m-d').'.pdf';
 
             // Output the PDF
             return response()->make(
@@ -1161,17 +1162,17 @@ class EmployeeDashboardController extends Controller
                 200,
                 [
                     'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                    'Content-Disposition' => 'attachment; filename="'.$filename.'"',
                     'Cache-Control' => 'public, must-revalidate, max-age=0',
                     'Pragma' => 'public',
                 ]
             );
         } catch (\Exception $e) {
             // Log the error
-            Log::error('Attendance PDF generation error: ' . $e->getMessage());
+            Log::error('Attendance PDF generation error: '.$e->getMessage());
 
             // Return with error message
-            return back()->with('error', 'Failed to generate attendance PDF: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate attendance PDF: '.$e->getMessage());
         }
     }
 
@@ -1193,7 +1194,7 @@ class EmployeeDashboardController extends Controller
             'include_leave_types' => 'nullable|array',
             'include_leave_types.*' => 'string',
             'exclude_leave_types' => 'nullable|array',
-            'exclude_leave_types.*' => 'string'
+            'exclude_leave_types.*' => 'string',
         ]);
 
         $employeeId = (int) $validated['employee_id'];
@@ -1229,7 +1230,7 @@ class EmployeeDashboardController extends Controller
             ]);
 
             // Add document metadata
-            $mpdf->SetTitle('Leave Report - ' . $employee->first_name . ' ' . $employee->last_name);
+            $mpdf->SetTitle('Leave Report - '.$employee->first_name.' '.$employee->last_name);
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
@@ -1247,22 +1248,22 @@ class EmployeeDashboardController extends Controller
                 'filterDescription' => $filterDescription,
                 'includeLeaveTypes' => $includeLeaveTypes,
                 'excludeLeaveTypes' => $excludeLeaveTypes,
-                'generatedAt' => Carbon::now()->format('M d, Y H:i')
+                'generatedAt' => Carbon::now()->format('M d, Y H:i'),
             ])->render();
 
             // Write HTML to the PDF document
             $mpdf->WriteHTML($html);
 
             // Set the download filename with filter info
-            $filename = 'Leave_Report_' . str_replace(' ', '_', $employee->first_name);
+            $filename = 'Leave_Report_'.str_replace(' ', '_', $employee->first_name);
 
-            if ($filterMode === 'specific' && !empty($includeLeaveTypes)) {
-                $filename .= '_' . count($includeLeaveTypes) . '_types';
-            } elseif ($filterMode === 'exclude' && !empty($excludeLeaveTypes)) {
-                $filename .= '_excluding_' . count($excludeLeaveTypes) . '_types';
+            if ($filterMode === 'specific' && ! empty($includeLeaveTypes)) {
+                $filename .= '_'.count($includeLeaveTypes).'_types';
+            } elseif ($filterMode === 'exclude' && ! empty($excludeLeaveTypes)) {
+                $filename .= '_excluding_'.count($excludeLeaveTypes).'_types';
             }
 
-            $filename .= '_' . date('Y-m-d') . '.pdf';
+            $filename .= '_'.date('Y-m-d').'.pdf';
 
             // Output the PDF
             return response()->make(
@@ -1270,17 +1271,17 @@ class EmployeeDashboardController extends Controller
                 200,
                 [
                     'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                    'Content-Disposition' => 'attachment; filename="'.$filename.'"',
                     'Cache-Control' => 'public, must-revalidate, max-age=0',
                     'Pragma' => 'public',
                 ]
             );
         } catch (\Exception $e) {
             // Log the error
-            Log::error('Leave PDF generation error: ' . $e->getMessage());
+            Log::error('Leave PDF generation error: '.$e->getMessage());
 
             // Return with error message
-            return back()->with('error', 'Failed to generate leave PDF: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate leave PDF: '.$e->getMessage());
         }
     }
 
@@ -1302,11 +1303,11 @@ class EmployeeDashboardController extends Controller
             ->with('leaveType');
 
         // Apply leave type filtering
-        if ($filterMode === 'specific' && !empty($includeLeaveTypes)) {
+        if ($filterMode === 'specific' && ! empty($includeLeaveTypes)) {
             $query->whereHas('leaveType', function ($q) use ($includeLeaveTypes) {
                 $q->whereIn('name', $includeLeaveTypes);
             });
-        } elseif ($filterMode === 'exclude' && !empty($excludeLeaveTypes)) {
+        } elseif ($filterMode === 'exclude' && ! empty($excludeLeaveTypes)) {
             $query->whereHas('leaveType', function ($q) use ($excludeLeaveTypes) {
                 $q->whereNotIn('name', $excludeLeaveTypes);
             });
@@ -1327,8 +1328,8 @@ class EmployeeDashboardController extends Controller
                     'days' => $leave->days,
                     'status' => $leave->status,
                     'reason' => $leave->reason,
-                    'date_range' => $startDate->format('M d') . ' - ' . $endDate->format('M d, Y'),
-                    'is_paid' => $leave->leaveType->is_paid
+                    'date_range' => $startDate->format('M d').' - '.$endDate->format('M d, Y'),
+                    'is_paid' => $leave->leaveType->is_paid,
                 ];
             });
     }
@@ -1347,11 +1348,11 @@ class EmployeeDashboardController extends Controller
             ->with('leaveType');
 
         // Apply leave type filtering for balances
-        if ($filterMode === 'specific' && !empty($includeLeaveTypes)) {
+        if ($filterMode === 'specific' && ! empty($includeLeaveTypes)) {
             $query->whereHas('leaveType', function ($q) use ($includeLeaveTypes) {
                 $q->whereIn('name', $includeLeaveTypes);
             });
-        } elseif ($filterMode === 'exclude' && !empty($excludeLeaveTypes)) {
+        } elseif ($filterMode === 'exclude' && ! empty($excludeLeaveTypes)) {
             $query->whereHas('leaveType', function ($q) use ($excludeLeaveTypes) {
                 $q->whereNotIn('name', $excludeLeaveTypes);
             });
@@ -1365,16 +1366,16 @@ class EmployeeDashboardController extends Controller
                     'allocated_days' => $balance->allocated_days,
                     'used_days' => $balance->used_days,
                     'remaining_days' => $balance->remaining_days,
-                    'is_paid' => $balance->leaveType->is_paid
+                    'is_paid' => $balance->leaveType->is_paid,
                 ];
             });
 
         // Get filtered leave types with zero balance if not in leave balances
         $leaveTypesQuery = LeaveType::query();
 
-        if ($filterMode === 'specific' && !empty($includeLeaveTypes)) {
+        if ($filterMode === 'specific' && ! empty($includeLeaveTypes)) {
             $leaveTypesQuery->whereIn('name', $includeLeaveTypes);
-        } elseif ($filterMode === 'exclude' && !empty($excludeLeaveTypes)) {
+        } elseif ($filterMode === 'exclude' && ! empty($excludeLeaveTypes)) {
             $leaveTypesQuery->whereNotIn('name', $excludeLeaveTypes);
         }
 
@@ -1382,21 +1383,21 @@ class EmployeeDashboardController extends Controller
 
         foreach ($allLeaveTypes as $leaveType) {
             $exists = $leaveBalances->where('type', $leaveType->name)->count() > 0;
-            if (!$exists) {
+            if (! $exists) {
                 $leaveBalances->push([
                     'id' => null,
                     'type' => $leaveType->name,
                     'allocated_days' => 0,
                     'used_days' => 0,
                     'remaining_days' => 0,
-                    'is_paid' => $leaveType->is_paid
+                    'is_paid' => $leaveType->is_paid,
                 ]);
             }
         }
 
         return [
             'year' => $year,
-            'balances' => $leaveBalances->toArray() // ✅ Convert to array to avoid collection issues
+            'balances' => $leaveBalances->toArray(), // ✅ Convert to array to avoid collection issues
         ];
     }
 
@@ -1410,13 +1411,15 @@ class EmployeeDashboardController extends Controller
                 if (empty($includeLeaveTypes)) {
                     return 'No leave types selected';
                 }
-                return 'Including only: ' . implode(', ', $includeLeaveTypes);
+
+                return 'Including only: '.implode(', ', $includeLeaveTypes);
 
             case 'exclude':
                 if (empty($excludeLeaveTypes)) {
                     return 'All leave types included';
                 }
-                return 'Excluding: ' . implode(', ', $excludeLeaveTypes);
+
+                return 'Excluding: '.implode(', ', $excludeLeaveTypes);
 
             default:
                 return 'All leave types included';
@@ -1474,7 +1477,7 @@ class EmployeeDashboardController extends Controller
             ]);
 
             // Add document metadata
-            $mpdf->SetTitle('Movement Report - ' . $employee->first_name . ' ' . $employee->last_name);
+            $mpdf->SetTitle('Movement Report - '.$employee->first_name.' '.$employee->last_name);
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
@@ -1485,14 +1488,14 @@ class EmployeeDashboardController extends Controller
                 'fromDate' => $fromDate,
                 'toDate' => $toDate,
                 'filterType' => $filterType,
-                'generatedAt' => Carbon::now()->format('M d, Y H:i')
+                'generatedAt' => Carbon::now()->format('M d, Y H:i'),
             ])->render();
 
             // Write HTML to the PDF document
             $mpdf->WriteHTML($html);
 
             // Set the download filename
-            $filename = 'Movement_Report_' . str_replace(' ', '_', $employee->first_name) . '_' . date('Y-m-d') . '.pdf';
+            $filename = 'Movement_Report_'.str_replace(' ', '_', $employee->first_name).'_'.date('Y-m-d').'.pdf';
 
             // Output the PDF
             return response()->make(
@@ -1500,17 +1503,17 @@ class EmployeeDashboardController extends Controller
                 200,
                 [
                     'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                    'Content-Disposition' => 'attachment; filename="'.$filename.'"',
                     'Cache-Control' => 'public, must-revalidate, max-age=0',
                     'Pragma' => 'public',
                 ]
             );
         } catch (\Exception $e) {
             // Log the error
-            Log::error('Movement PDF generation error: ' . $e->getMessage());
+            Log::error('Movement PDF generation error: '.$e->getMessage());
 
             // Return with error message
-            return back()->with('error', 'Failed to generate movement PDF: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate movement PDF: '.$e->getMessage());
         }
     }
 
@@ -1539,7 +1542,7 @@ class EmployeeDashboardController extends Controller
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, array{id: int, name: string, department: string, designation: string}>
+     * @return \Illuminate\Support\Collection<int, array{id: int, employee_id: string, name: string, department: string, designation: string}>
      */
     private function employeesForDashboardDropdown(User $user)
     {
@@ -1553,15 +1556,15 @@ class EmployeeDashboardController extends Controller
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->get()->map(function ($employee) {
-            $fullName = $employee->first_name . ($employee->last_name ? ' ' . $employee->last_name : '');
+            $fullName = $employee->first_name.($employee->last_name ? ' '.$employee->last_name : '');
 
             return [
                 'id' => $employee->id,
-                'name' => $fullName . ' (' . $employee->employee_id . ')',
+                'employee_id' => (string) $employee->employee_id,
+                'name' => $fullName.' ('.$employee->employee_id.')',
                 'department' => $employee->department?->name ?? '',
                 'designation' => $employee->designation?->name ?? '',
             ];
         });
     }
 }
-

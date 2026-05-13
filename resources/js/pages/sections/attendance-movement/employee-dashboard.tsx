@@ -1,26 +1,106 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowUpRight, CalendarDays, Clock, MapPin, Plus } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
+import { useSelfAttendanceCheck } from '@/hooks/use-self-attendance-check';
+import {
+    ArrowUpRight,
+    CalendarDays,
+    ChevronRight,
+    Clock,
+    LayoutGrid,
+    LogIn,
+    LogOut,
+    Plus,
+    UserRound,
+    XCircle,
+    AlertCircle,
+} from 'lucide-react';
+import { format, parseISO, isValid } from 'date-fns';
+import { cn } from '@/lib/utils';
 
-type Props = {
-    employee: any;
-    todayAttendance: any | null;
-    recentAttendance: any[];
-    recentMovements: any[];
+type AttendanceRow = {
+    date?: string;
+    status?: string | null;
+    check_in?: string | null;
+    check_out?: string | null;
 };
 
-function Pill({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] font-semibold text-gray-500 tracking-wide">{label}</p>
-            <p className="mt-1 text-sm font-semibold text-gray-900">{value}</p>
-        </div>
-    );
+type MovementRow = {
+    id: number;
+    purpose?: string | null;
+    from_datetime?: string | null;
+    status?: string | null;
+};
+
+type EmployeeLite = {
+    id: number;
+    department?: { name?: string } | null;
+};
+
+type Props = {
+    employee: EmployeeLite;
+    todayAttendance: AttendanceRow | null;
+    recentAttendance: AttendanceRow[];
+    recentMovements: MovementRow[];
+};
+
+function formatDay(iso?: string | null): string {
+    if (!iso) return '—';
+    try {
+        const d = parseISO(iso.length <= 10 ? `${iso}T12:00:00` : iso);
+        return isValid(d) ? format(d, 'EEE d MMM yyyy') : '—';
+    } catch {
+        return '—';
+    }
+}
+
+function formatClock(iso?: string | null): string {
+    if (!iso) return '—';
+    try {
+        const d = parseISO(iso);
+        return isValid(d) ? format(d, 'h:mm a') : '—';
+    } catch {
+        return '—';
+    }
+}
+
+function statusLabel(s?: string | null): string {
+    if (!s || !String(s).trim()) return 'No record';
+    return String(s).replace(/_/g, ' ');
+}
+
+/** Subtle top accent — works on light AdminLayout */
+function statusTopBorder(status?: string | null): string {
+    const s = String(status ?? '').toLowerCase();
+    if (s === 'present' || s === 'on_duty') return 'border-t-emerald-500';
+    if (s === 'late') return 'border-t-amber-500';
+    if (s === 'absent') return 'border-t-rose-500';
+    if (s === 'leave' || s === 'holiday' || s === 'weekend') return 'border-t-violet-400';
+    return 'border-t-sky-500';
+}
+
+function attendanceRowBorder(status?: string | null): string {
+    const s = String(status ?? '').toLowerCase();
+    if (s === 'present' || s === 'on_duty') return 'border-l-emerald-500';
+    if (s === 'late') return 'border-l-amber-500';
+    if (s === 'absent') return 'border-l-rose-500';
+    if (s === 'leave' || s === 'holiday' || s === 'weekend') return 'border-l-violet-500';
+    return 'border-l-zinc-300';
+}
+
+function listStatusBadgeClass(status?: string | null): string {
+    const s = String(status ?? '').toLowerCase();
+    if (s === 'present' || s === 'on_duty') return 'border-emerald-200 bg-emerald-50 text-emerald-900';
+    if (s === 'late') return 'border-amber-200 bg-amber-50 text-amber-900';
+    if (s === 'absent') return 'border-rose-200 bg-rose-50 text-rose-900';
+    if (s === 'leave' || s === 'holiday' || s === 'weekend') return 'border-violet-200 bg-violet-50 text-violet-900';
+    return 'border-zinc-200 bg-zinc-50 text-zinc-800';
 }
 
 export default function AttendanceMovementEmployeeDashboard({
@@ -29,152 +109,342 @@ export default function AttendanceMovementEmployeeDashboard({
     recentAttendance,
     recentMovements,
 }: Props) {
-    const { auth } = usePage().props as any;
+    const { auth } = usePage().props as { auth?: { user?: { name?: string } } };
 
-    const status = todayAttendance?.status ? String(todayAttendance.status) : 'N/A';
-    const checkIn = todayAttendance?.check_in_time ? String(todayAttendance.check_in_time) : '—';
-    const checkOut = todayAttendance?.check_out_time ? String(todayAttendance.check_out_time) : '—';
+    const {
+        isSubmitting,
+        attendanceError,
+        locationStatus,
+        locationProgress,
+        locationPreview,
+        handleCheckIn,
+        handleCheckOut,
+    } = useSelfAttendanceCheck();
+
+    const todayStatus = useMemo(() => statusLabel(todayAttendance?.status), [todayAttendance?.status]);
+    const checkIn = formatClock(todayAttendance?.check_in ?? null);
+    const checkOut = formatClock(todayAttendance?.check_out ?? null);
+    const topBorder = useMemo(() => statusTopBorder(todayAttendance?.status), [todayAttendance?.status]);
 
     return (
         <Layout>
-            <Head title="Attendance & Movement" />
+            <Head title="My attendance & movements" />
 
-            <PageSurface>
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0">
-                        <Badge className="bg-green-600 hover:bg-green-600 text-white text-[10px] px-2 py-1">
-                            EMPLOYEE DASHBOARD
-                        </Badge>
-                        <h1 className="mt-3 text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
-                            My Attendance & Movements
-                        </h1>
-                        <p className="mt-1 text-sm text-gray-600">
-                            Today’s status, recent attendance and movement history.
-                        </p>
-                        <p className="mt-2 text-[11px] text-gray-500">
-                            {auth?.user?.name} • {employee?.department?.name ?? 'Department'}
-                        </p>
-                    </div>
+            <PageSurface className="px-3 sm:px-0">
+                {(attendanceError || locationStatus) && (
+                    <Alert
+                        className={`mb-4 ${attendanceError ? 'border-rose-200 bg-rose-50' : 'border-sky-200 bg-sky-50'}`}
+                    >
+                        {attendanceError ? (
+                            <XCircle className="h-4 w-4 text-rose-600" />
+                        ) : (
+                            <AlertCircle className="h-4 w-4 text-sky-600" />
+                        )}
+                        <AlertTitle className={attendanceError ? 'text-rose-900' : 'text-sky-900'}>
+                            {attendanceError ? 'Attendance action blocked' : 'Working'}
+                        </AlertTitle>
+                        <AlertDescription className={attendanceError ? 'text-rose-800' : 'text-sky-800'}>
+                            {attendanceError || locationStatus}
+                        </AlertDescription>
+                    </Alert>
+                )}
 
-                    <div className="flex items-center gap-2">
-                        <Button asChild variant="outline" className="text-xs">
-                            <Link href="/sections">Change section</Link>
-                        </Button>
-                        <Button asChild className="text-xs bg-green-600 hover:bg-green-700">
-                            <Link href="/movements/create?section=attendance-movement">
-                                <Plus className="mr-2 h-4 w-4" />
-                                Request movement
-                            </Link>
-                        </Button>
-                    </div>
-                </div>
-
-                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <Pill label="TODAY STATUS" value={status} />
-                    <Pill label="CHECK IN" value={checkIn} />
-                    <Pill label="CHECK OUT" value={checkOut} />
-                </div>
-
-                <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    <Card className="border-gray-200 shadow-sm lg:col-span-2">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-base font-semibold text-gray-900">Recent attendance</CardTitle>
-                            <CardDescription className="text-xs">Last 10 records</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                {recentAttendance?.length ? recentAttendance.map((x, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
-                                    >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-semibold text-gray-900 truncate">
-                                                    {x.date ? new Date(x.date).toLocaleDateString() : 'Date'}
-                                                </p>
-                                                <p className="text-xs text-gray-600 truncate">
-                                                    Status: {x.status ?? '—'} • In: {x.check_in_time ?? '—'} • Out: {x.check_out_time ?? '—'}
-                                                </p>
-                                            </div>
-                                            <Badge variant="outline" className="text-[10px]">
-                                                {String(x.status ?? '').toUpperCase() || '—'}
-                                            </Badge>
-                                        </div>
-                                    </div>
-                                )) : (
-                                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
-                                        No attendance records
-                                    </div>
-                                )}
+                {/* Compact light header + today stats */}
+                <Card
+                    className={cn(
+                        'overflow-hidden border-zinc-200/90 bg-gradient-to-b from-white to-zinc-50/90 shadow-sm',
+                        'border-t-4',
+                        topBorder,
+                    )}
+                >
+                    <CardContent className="space-y-4 p-4 sm:p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                                    Attendance & movement · {format(new Date(), 'EEE d MMM yyyy')}
+                                </p>
+                                <h1 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+                                    My overview
+                                </h1>
+                                <p className="mt-1 line-clamp-2 text-xs text-zinc-600 sm:text-sm">
+                                    Today&apos;s punches and your latest records — same light theme as the rest of the
+                                    app.
+                                </p>
+                                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-zinc-500">
+                                    <UserRound className="inline h-3.5 w-3.5 text-zinc-400" />
+                                    <span className="font-medium text-zinc-700">{auth?.user?.name ?? '—'}</span>
+                                    <span className="text-zinc-300">·</span>
+                                    <span className="truncate">{employee?.department?.name ?? 'Department'}</span>
+                                </p>
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border-gray-200 shadow-sm">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-base font-semibold text-gray-900">Quick links</CardTitle>
-                            <CardDescription className="text-xs">Common actions</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            <Button asChild variant="outline" className="w-full justify-between text-xs">
-                                <Link href="/employee/dashboard?section=attendance-movement">
-                                    My dashboard <ArrowUpRight className="h-4 w-4" />
-                                </Link>
-                            </Button>
-                            <Button asChild variant="outline" className="w-full justify-between text-xs">
-                                <Link href="/employee/movements?section=attendance-movement">
-                                    My movements <ArrowUpRight className="h-4 w-4" />
-                                </Link>
-                            </Button>
-                            <Button asChild variant="outline" className="w-full justify-between text-xs">
-                                <Link href="/employee/attendance?section=attendance-movement">
-                                    Attendance (PWA) <ArrowUpRight className="h-4 w-4" />
-                                </Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div className="mt-6">
-                    <Card className="border-gray-200 shadow-sm">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-base font-semibold text-gray-900">Recent movements</CardTitle>
-                            <CardDescription className="text-xs">Last 8 requests</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                {recentMovements?.length ? recentMovements.map((x, idx) => (
-                                    <Link
-                                        key={idx}
-                                        href={`/movements/${x.id}?section=attendance-movement`}
-                                        className="block rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                    >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-semibold text-gray-900 truncate">
-                                                    {x.purpose ?? 'Movement'}
-                                                </p>
-                                                <p className="text-xs text-gray-600 truncate">
-                                                    {x.from_datetime ? new Date(x.from_datetime).toLocaleString() : ''} • {x.status ?? ''}
-                                                </p>
-                                            </div>
-                                            <Badge variant="outline" className="text-[10px]">
-                                                {String(x.status ?? '').toUpperCase() || '—'}
-                                            </Badge>
-                                        </div>
+                            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                                <Button asChild variant="outline" size="sm" className="h-9 min-h-0 text-xs">
+                                    <Link href="/sections">Sections</Link>
+                                </Button>
+                                <Button asChild size="sm" className="h-9 min-h-0 bg-indigo-600 text-xs hover:bg-indigo-700">
+                                    <Link href="/movements/create?section=attendance-movement">
+                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                        Movement
                                     </Link>
-                                )) : (
-                                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
-                                        No movement requests
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Today</p>
+                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-semibold capitalize text-zinc-900">{todayStatus}</span>
+                                    {todayAttendance?.status ? (
+                                        <Badge
+                                            variant="outline"
+                                            className={cn(
+                                                'text-[10px] font-semibold capitalize',
+                                                listStatusBadgeClass(todayAttendance.status),
+                                            )}
+                                        >
+                                            {String(todayAttendance.status).replace(/_/g, ' ')}
+                                        </Badge>
+                                    ) : null}
+                                </div>
+                            </div>
+                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
+                                <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                                    <LogIn className="h-3 w-3 text-emerald-600" />
+                                    In
+                                </p>
+                                <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-zinc-900">
+                                    {checkIn}
+                                </p>
+                            </div>
+                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
+                                <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                                    <LogOut className="h-3 w-3 text-sky-600" />
+                                    Out
+                                </p>
+                                <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-zinc-900">
+                                    {checkOut}
+                                </p>
+                            </div>
+                        </div>
+
+                        {(isSubmitting || locationProgress > 0) && (
+                            <div className="rounded-xl border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/90 p-4 shadow-sm">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="truncate text-xs font-medium text-zinc-700">
+                                            {locationStatus || 'Checking location…'}
+                                        </div>
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                                            <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-sky-800 ring-1 ring-sky-200">
+                                                GPS
+                                            </span>
+                                            {locationPreview.sampleCount > 0 && (
+                                                <span className="truncate">
+                                                    Best accuracy:{' '}
+                                                    <span className="font-semibold text-zinc-800">
+                                                        {locationPreview.bestAccuracy !== null
+                                                            ? `${Math.round(locationPreview.bestAccuracy)}m`
+                                                            : 'N/A'}
+                                                    </span>
+                                                    {' · '}Samples:{' '}
+                                                    <span className="font-semibold text-zinc-800">
+                                                        {locationPreview.sampleCount}
+                                                    </span>
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
+                                    <div className="shrink-0 text-xs font-semibold tabular-nums text-zinc-700">
+                                        {Math.min(100, Math.max(0, locationProgress))}%
+                                    </div>
+                                </div>
+                                <div className="mt-3">
+                                    <Progress value={locationProgress} className="h-2" />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                                    Self attendance
+                                </span>
+                                <span className="text-xs text-zinc-600">Uses your device location (geofence).</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {(!todayAttendance || !todayAttendance.check_in) && (
+                                    <Button
+                                        type="button"
+                                        className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                        onClick={handleCheckIn}
+                                        disabled={isSubmitting}
+                                    >
+                                        <LogIn className="mr-2 h-4 w-4" />
+                                        {isSubmitting ? 'Processing…' : 'Check in'}
+                                    </Button>
+                                )}
+                                {todayAttendance?.check_in && !todayAttendance.check_out && (
+                                    <Button
+                                        type="button"
+                                        className="bg-sky-600 text-white hover:bg-sky-700"
+                                        onClick={handleCheckOut}
+                                        disabled={isSubmitting}
+                                    >
+                                        <LogOut className="mr-2 h-4 w-4" />
+                                        {isSubmitting ? 'Processing…' : 'Check out'}
+                                    </Button>
                                 )}
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
+                    <div className="grid grid-cols-1 gap-4 lg:col-span-8 lg:grid-cols-2">
+                        <Card className="overflow-hidden border-zinc-200/90 shadow-sm">
+                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3 sm:px-5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="text-base font-semibold text-zinc-900">
+                                            Recent attendance
+                                        </CardTitle>
+                                        <CardDescription className="text-xs">Last 10 records</CardDescription>
+                                    </div>
+                                    <CalendarDays className="hidden h-4 w-4 text-zinc-400 sm:block" />
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                {recentAttendance?.length ? (
+                                    <ul className="divide-y divide-zinc-100">
+                                        {recentAttendance.map((x, idx) => (
+                                            <li
+                                                key={`${x.date ?? idx}-${idx}`}
+                                                className={cn(
+                                                    'border-l-4 px-3 py-3 transition-colors hover:bg-zinc-50/80 sm:px-4',
+                                                    attendanceRowBorder(x.status),
+                                                )}
+                                            >
+                                                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                                                    <p className="text-sm font-semibold text-zinc-900">
+                                                        {formatDay(x.date ?? null)}
+                                                    </p>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            'w-fit text-[10px] font-semibold capitalize',
+                                                            listStatusBadgeClass(x.status),
+                                                        )}
+                                                    >
+                                                        {statusLabel(x.status)}
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-xs text-zinc-600">
+                                                    <span className="font-medium text-zinc-700">In</span>{' '}
+                                                    {formatClock(x.check_in ?? null)}
+                                                    <span className="mx-1 text-zinc-300">·</span>
+                                                    <span className="font-medium text-zinc-700">Out</span>{' '}
+                                                    {formatClock(x.check_out ?? null)}
+                                                </p>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <div className="px-4 py-10 text-center text-sm text-zinc-600">
+                                        No attendance rows yet.
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card className="overflow-hidden border-zinc-200/90 shadow-sm">
+                            <CardHeader className="border-b border-zinc-100 bg-indigo-50/40 px-4 py-3 sm:px-5">
+                                <CardTitle className="text-base font-semibold text-zinc-900">Recent movements</CardTitle>
+                                <CardDescription className="text-xs">Open a request for details</CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-3 sm:p-4">
+                                {recentMovements?.length ? (
+                                    <div className="space-y-1.5">
+                                        {recentMovements.map((x) => (
+                                            <Link
+                                                key={x.id}
+                                                href={route('movements.show', x.id)}
+                                                className="group flex min-h-[44px] items-center gap-2.5 rounded-lg border border-zinc-100 bg-white p-2.5 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 sm:gap-3 sm:p-3"
+                                            >
+                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                                                    <Clock className="h-4 w-4" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-sm font-medium text-zinc-900 group-hover:text-indigo-900">
+                                                        {x.purpose?.trim() ? x.purpose : 'Movement'}
+                                                    </p>
+                                                    <p className="truncate text-[11px] text-zinc-500">
+                                                        {x.from_datetime
+                                                            ? format(parseISO(x.from_datetime), 'd MMM, h:mm a')
+                                                            : ''}
+                                                        {x.status ? ` · ${x.status}` : ''}
+                                                    </p>
+                                                </div>
+                                                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 group-hover:text-indigo-400" />
+                                            </Link>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-lg border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-600">
+                                        No movements in this list.
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="lg:col-span-4">
+                        <Card className="border-zinc-200/90 shadow-sm lg:sticky lg:top-4">
+                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                    <LayoutGrid className="h-4 w-4 text-zinc-500" />
+                                    <CardTitle className="text-sm font-semibold text-zinc-900">Quick links</CardTitle>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="flex flex-col gap-1.5 p-3">
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
+                                >
+                                    <Link href={route('employee.dashboard')}>
+                                        Full report
+                                        <ArrowUpRight className="h-3.5 w-3.5 text-indigo-600" />
+                                    </Link>
+                                </Button>
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
+                                >
+                                    <Link href="/employee/movements?section=attendance-movement">
+                                        My movements
+                                        <ArrowUpRight className="h-3.5 w-3.5 text-indigo-600" />
+                                    </Link>
+                                </Button>
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
+                                >
+                                    <Link href="/employee/attendance?section=attendance-movement">
+                                        PWA attendance
+                                        <ArrowUpRight className="h-3.5 w-3.5 text-indigo-600" />
+                                    </Link>
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             </PageSurface>
         </Layout>
     );
 }
-

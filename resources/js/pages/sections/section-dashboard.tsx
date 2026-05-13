@@ -27,11 +27,13 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
             case 'human-resources':
                 return mode === 'admin'
                     ? [
+                        { label: 'HR dashboard', href: '/sections/human-resources' },
                         { label: 'Employees', href: '/employees' },
                         { label: 'Organization Setup', href: '/branches' },
+                        { label: 'Transfers', href: '/transfers' },
                         { label: 'Holidays', href: '/holidays' },
+                        { label: 'Employee report', href: '/reports/employee' },
                     ]
-                    : [
                         { label: 'My Profile', href: '/profile' },
                         { label: 'My Leaves', href: '/employee/leaves' },
                         { label: 'My Movements', href: '/employee/movements' },
@@ -39,8 +41,11 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
             case 'attendance-movement':
                 return mode === 'admin'
                     ? [
+                        { label: 'Attendance & movement dashboard', href: '/sections/attendance-movement' },
                         { label: 'Daily Attendance', href: '/attendance' },
+                        { label: 'Monthly View', href: '/attendance/monthly' },
                         { label: 'Attendance Report', href: '/attendance/report' },
+                        { label: 'Attendance sheet report', href: '/attendance/sheet-report' },
                         { label: 'Movements', href: '/movements' },
                     ]
                     : [
@@ -51,9 +56,10 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
             case 'leave':
                 return mode === 'admin'
                     ? [
+                        { label: 'Leave dashboard', href: '/sections/leave' },
                         { label: 'Leave Applications', href: '/leave/applications' },
                         { label: 'Leave Report', href: '/leave/applications/report' },
-                        { label: 'Leave Types', href: '/leave/types' },
+                        { label: 'Leave summary report', href: '/reports/leave' },
                     ]
                     : [
                         { label: 'My Leaves', href: '/employee/leaves' },
@@ -62,9 +68,10 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     ];
             case 'administration':
                 return [
+                    { label: 'Administration dashboard', href: '/sections/administration' },
                     { label: 'Users', href: '/admin/users' },
                     { label: 'Roles', href: '/admin/roles' },
-                    { label: 'Reports', href: '/reports' },
+                    { label: 'Reports overview', href: '/reports' },
                 ];
             default:
                 return [];

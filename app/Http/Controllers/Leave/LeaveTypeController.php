@@ -14,16 +14,19 @@ class LeaveTypeController extends Controller
      */
     public function index(Request $request)
     {
+        $perPage = $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
+
         $leaveTypes = LeaveType::when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%");
             })
             ->orderBy('name')
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
 
         return Inertia::render('leave/types/index', [
             'leaveTypes' => $leaveTypes,
-            'filters' => $request->only(['search']),
+            'filters' => $request->only(['search', 'per_page']),
         ]);
     }
 

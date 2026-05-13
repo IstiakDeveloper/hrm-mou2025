@@ -439,8 +439,11 @@ class LeaveApplicationController extends Controller
             'bindings' => $query->getBindings()
         ]);
 
+        $perPage = $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
+
         $applications = $query->orderBy('id', 'desc')
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
 
         $applications->getCollection()->transform(function (LeaveApplication $app) use ($user) {
@@ -462,7 +465,7 @@ class LeaveApplicationController extends Controller
             'applications' => $applications,
             'departments' => $departments,
             'employees' => $employees,
-            'filters' => $request->only(['status', 'department_id', 'employee_id', 'from_date', 'to_date', 'search']),
+            'filters' => $request->only(['status', 'department_id', 'employee_id', 'from_date', 'to_date', 'search', 'per_page']),
             'canApprove' => $canApproveAny,
             'userPermissions' => [
                 'canView' => $hasViewPermission,

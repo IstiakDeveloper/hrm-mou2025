@@ -42,18 +42,18 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     {
         id: 'human-resources',
         title: 'HUMAN RESOURCES',
-        description: 'Employee & organization setup',
+        description: 'Employee, organization & transfers',
         icon: Users,
         href: '/sections/human-resources',
-        menuTitles: ['Employee Management', 'Organization Setup', 'Holidays'],
+        menuTitles: ['Employee Management', 'Organization Setup', 'Holidays', 'Transfers', 'Reports'],
     },
     {
         id: 'attendance-movement',
         title: 'ATTENDANCE & MOVEMENT',
-        description: 'Attendance, movement, transfers',
+        description: 'Attendance and field movement',
         icon: ClipboardList,
         href: '/sections/attendance-movement',
-        menuTitles: ['Attendance', 'Movement & Transfer'],
+        menuTitles: ['Attendance', 'Movement', 'Reports'],
     },
     {
         id: 'leave',
@@ -61,7 +61,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Leave applications & settings',
         icon: CalendarDays,
         href: '/sections/leave',
-        menuTitles: ['Leave Management'],
+        menuTitles: ['Leave Management', 'Reports'],
     },
     {
         id: 'employee-loan',
@@ -157,7 +157,13 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     }
 
     if (p.startsWith('/leave')) return 'leave';
-    if (p.startsWith('/attendance') || p.startsWith('/movements') || p.startsWith('/transfers') || p.startsWith('/zkteco')) {
+    if (p.startsWith('/transfers')) return 'human-resources';
+    if (p.startsWith('/reports/attendance')) return 'attendance-movement';
+    if (p.startsWith('/reports/leave')) return 'leave';
+    if (p.startsWith('/reports/movement')) return 'attendance-movement';
+    if (p.startsWith('/reports/transfer')) return 'human-resources';
+    if (p.startsWith('/reports/employee')) return 'human-resources';
+    if (p.startsWith('/attendance') || p.startsWith('/movements') || p.startsWith('/zkteco')) {
         return 'attendance-movement';
     }
     if (
@@ -169,6 +175,9 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         p.startsWith('/designations') ||
         p.startsWith('/holidays') ||
         p.startsWith('/organization-chart') ||
+        p.startsWith('/employee-types') ||
+        p.startsWith('/programs') ||
+        p.startsWith('/projects') ||
         p.startsWith('/employee/')
     ) {
         return 'human-resources';

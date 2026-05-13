@@ -11,21 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-    Pagination,
-    PaginationContent,
-    PaginationEllipsis,
-    PaginationItem,
-    PaginationLink,
-    PaginationNext,
-    PaginationPrevious,
-} from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import { PageSurface } from '@/components/page-surface';
 import {
     Select,
@@ -35,7 +21,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Edit, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { Edit, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Designation {
     id: number;
@@ -97,16 +83,27 @@ export default function LeaveSettingsIndex({
     canEdit,
 }: {
     tiers: TiersPayload;
-    filters: { context?: string; is_active?: string };
+    filters: { context?: string; is_active?: string; per_page?: string };
     canEdit: boolean;
 }) {
     const [contextFilter, setContextFilter] = useState(filters.context ?? '');
     const [activeFilter, setActiveFilter] = useState(filters.is_active ?? '');
+    const [perPage, setPerPage] = useState(filters.per_page || '15');
 
     const filterQuery = () => ({
         context: contextFilter || undefined,
         is_active: activeFilter === '' ? undefined : activeFilter,
+        per_page: perPage,
     });
+
+    const handlePerPageChange = (value: string) => {
+        setPerPage(value);
+        router.get(route('leave.settings.index'), {
+            context: contextFilter || undefined,
+            is_active: activeFilter === '' ? undefined : activeFilter,
+            per_page: value,
+        }, { preserveState: true });
+    };
 
     const applyFilters = () => {
         router.get(route('leave.settings.index'), filterQuery(), { preserveState: true });
@@ -115,7 +112,8 @@ export default function LeaveSettingsIndex({
     const resetFilters = () => {
         setContextFilter('');
         setActiveFilter('');
-        router.get(route('leave.settings.index'));
+        setPerPage('15');
+        router.get(route('leave.settings.index'), { per_page: '15' }, { preserveState: true });
     };
 
     const handleDelete = (id: number) => {
@@ -130,96 +128,89 @@ export default function LeaveSettingsIndex({
             <Head title="Leave settings" />
 
             <PageSurface>
-                <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="mb-6 flex flex-col gap-4 md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-5">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Leave approval tiers</h1>
-                        <p className="mt-1 max-w-3xl text-gray-600">
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Leave Approval Tiers</h1>
+                        <p className="mt-1 max-w-3xl text-sm text-slate-500">
                             <strong>Head office:</strong> one list of steps — e.g. up to 3 days → department head, higher
                             max → executive director. <strong>Branch:</strong> separate list — e.g. up to 1 day → branch
-                            manager, up to 3 → regional manager (pick “By designation” and choose that role). For each
+                            manager, up to 3 → regional manager. For each
                             request we use the <em>smallest</em> max that still covers the leave length.
                         </p>
                     </div>
-                    {canEdit && (
-                        <Link href={route('leave.settings.create')}>
-                            <Button className="flex items-center">
-                                <Plus className="mr-1 h-4 w-4" />
-                                Add tier
-                            </Button>
-                        </Link>
-                    )}
-                </div>
 
-                <Card className="mb-6">
-                    <CardHeader className="pb-3">
-                        <CardTitle>Filters</CardTitle>
-                        <CardDescription>Head office vs branch tiers</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-4 md:flex-row md:items-end">
-                        <div className="flex-1 space-y-2">
-                            <span className="text-sm font-medium">Where</span>
-                            <Select
-                                value={contextFilter || '__all__'}
-                                onValueChange={(v) => setContextFilter(v === '__all__' ? '' : v)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="All" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__all__">All</SelectItem>
-                                    <SelectItem value="head_office">Head office</SelectItem>
-                                    <SelectItem value="branch">Branch</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="flex-1 space-y-2">
-                            <span className="text-sm font-medium">Status</span>
-                            <Select
-                                value={activeFilter || '__all__'}
-                                onValueChange={(v) => setActiveFilter(v === '__all__' ? '' : v)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="All" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__all__">All</SelectItem>
-                                    <SelectItem value="1">Active</SelectItem>
-                                    <SelectItem value="0">Inactive</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button type="button" variant="outline" onClick={resetFilters}>
-                                Reset
-                            </Button>
-                            <Button type="button" onClick={applyFilters}>
+                    <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+                        <Select
+                            value={contextFilter || '__all__'}
+                            onValueChange={(v) => setContextFilter(v === '__all__' ? '' : v)}
+                        >
+                            <SelectTrigger className="h-9 w-full sm:w-36 text-sm bg-white">
+                                <SelectValue placeholder="Where" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all__">All Locations</SelectItem>
+                                <SelectItem value="head_office">Head office</SelectItem>
+                                <SelectItem value="branch">Branch</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select
+                            value={activeFilter || '__all__'}
+                            onValueChange={(v) => setActiveFilter(v === '__all__' ? '' : v)}
+                        >
+                            <SelectTrigger className="h-9 w-full sm:w-32 text-sm bg-white">
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all__">All Status</SelectItem>
+                                <SelectItem value="1">Active</SelectItem>
+                                <SelectItem value="0">Inactive</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            {(contextFilter || activeFilter !== '') && (
+                                <Button onClick={resetFilters} variant="ghost" size="sm" className="h-9 px-2 text-slate-500">
+                                    Clear
+                                </Button>
+                            )}
+                            <Button onClick={applyFilters} size="sm" className="h-9 w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700">
                                 Apply
                             </Button>
+                            {canEdit && (
+                                <Link href={route('leave.settings.create')} className="w-full sm:w-auto">
+                                    <Button size="sm" className="h-9 w-full sm:w-auto flex items-center bg-emerald-600 hover:bg-emerald-700">
+                                        <Plus className="mr-1 h-4 w-4" />
+                                        Add Tier
+                                    </Button>
+                                </Link>
+                            )}
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
 
-                <Card>
+                <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
                     <CardContent className="p-0">
+                        <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>Where</TableHead>
-                                    <TableHead>Up to (days)</TableHead>
-                                    <TableHead>Approver</TableHead>
-                                    <TableHead>Active</TableHead>
-                                    {canEdit && <TableHead className="text-right">Actions</TableHead>}
+                                <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider pl-6">Where</TableHead>
+                                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Up to (days)</TableHead>
+                                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Approver</TableHead>
+                                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Active</TableHead>
+                                    {canEdit && <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {tiers.data?.length ? (
                                     tiers.data.map((row) => (
-                                        <TableRow key={row.id}>
-                                            <TableCell className="font-medium">
+                                        <TableRow key={row.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
+                                            <TableCell className="font-medium text-[13px] pl-6 text-slate-800">
                                                 {CONTEXT_LABEL[row.context] ?? row.context}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="outline">≤ {row.max_leave_days}</Badge>
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">≤ {row.max_leave_days}</Badge>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="text-sm">
@@ -237,32 +228,27 @@ export default function LeaveSettingsIndex({
                                                 )}
                                             </TableCell>
                                             {canEdit && (
-                                                <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem
-                                                                className="cursor-pointer"
-                                                                onClick={() =>
-                                                                    router.get(route('leave.settings.edit', row.id))
-                                                                }
-                                                            >
-                                                                <Edit className="mr-2 h-4 w-4" />
-                                                                Edit
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                className="cursor-pointer text-red-600 focus:text-red-600"
-                                                                onClick={() => handleDelete(row.id)}
-                                                            >
-                                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                                Delete
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                <TableCell className="text-right pr-6">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors" 
+                                                            title="Edit"
+                                                            onClick={() => router.get(route('leave.settings.edit', row.id))}
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
+                                                            title="Delete"
+                                                            onClick={() => handleDelete(row.id)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
                                                 </TableCell>
                                             )}
                                         </TableRow>
@@ -285,71 +271,100 @@ export default function LeaveSettingsIndex({
                                 )}
                             </TableBody>
                         </Table>
+                        </div>
                     </CardContent>
                 </Card>
 
-                {hasPagination && (
-                    <div className="mt-6">
-                        <Pagination>
-                            <PaginationContent>
-                                {tiers.meta.current_page > 1 && (
-                                    <PaginationItem>
-                                        <PaginationPrevious
-                                            href={tiers.links.prev || '#'}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (tiers.links.prev) {
-                                                    router.get(tiers.links.prev, filterQuery(), { preserveState: true });
-                                                }
-                                            }}
-                                        />
-                                    </PaginationItem>
-                                )}
+                {tiers.meta && tiers.meta.last_page > 1 && (
+                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4 rounded-b-xl mt-4">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 text-[13px] text-slate-500">
+                                <span className="hidden sm:inline">Rows per page:</span>
+                                <Select
+                                    value={perPage}
+                                    onValueChange={handlePerPageChange}
+                                >
+                                    <SelectTrigger className="h-8 w-[70px] text-[13px] bg-white border-slate-200">
+                                        <SelectValue placeholder="15" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="15">15</SelectItem>
+                                        <SelectItem value="25">25</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                        <SelectItem value="100">100</SelectItem>
+                                        <SelectItem value="200">200</SelectItem>
+                                        <SelectItem value="500">500</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="hidden sm:block">
+                                <p className="text-[13px] text-slate-500">
+                                    Showing <span className="font-semibold text-slate-700">{tiers.meta.total > 0 ? (tiers.meta.current_page - 1) * tiers.meta.per_page + 1 : 0}</span> to{' '}
+                                    <span className="font-semibold text-slate-700">
+                                        {Math.min(tiers.meta.current_page * tiers.meta.per_page, tiers.meta.total)}
+                                    </span>{' '}
+                                    of <span className="font-semibold text-slate-700">{tiers.meta.total}</span> entries
+                                </p>
+                            </div>
+                        </div>
 
-                                {tiers.meta.links
-                                    .filter((l) => !l.label.includes('&laquo;') && !l.label.includes('&raquo;'))
-                                    .map((link, i) => {
-                                        const isNum = !Number.isNaN(Number(link.label));
-                                        if (!isNum && link.label === '...') {
+                        {tiers.meta.last_page > 1 && (
+                            <div className="flex items-center justify-end">
+                                <nav className="isolate inline-flex -space-x-px gap-1.5" aria-label="Pagination">
+                                    {tiers.meta.current_page > 1 && tiers.links?.prev && (
+                                        <Link
+                                            href={tiers.links.prev}
+                                            data={filterQuery()}
+                                            preserveState
+                                            className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
+                                        >
+                                            <span className="sr-only">Previous</span>
+                                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                                        </Link>
+                                    )}
+
+                                    {tiers.meta.links && tiers.meta.links.slice(1, -1).map((link, i) => {
+                                        const isActive = link.active;
+                                        const isDots = link.label === '...';
+
+                                        if (isDots) {
                                             return (
-                                                <PaginationItem key={i}>
-                                                    <PaginationEllipsis />
-                                                </PaginationItem>
+                                                <span key={i} className="relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-medium text-slate-400">
+                                                    ...
+                                                </span>
                                             );
                                         }
+
                                         return (
-                                            <PaginationItem key={i}>
-                                                <PaginationLink
-                                                    href={link.url || '#'}
-                                                    isActive={link.active}
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        if (link.url) {
-                                                            router.get(link.url, filterQuery(), { preserveState: true });
-                                                        }
-                                                    }}
-                                                >
-                                                    {link.label}
-                                                </PaginationLink>
-                                            </PaginationItem>
+                                            <Link
+                                                key={i}
+                                                href={link.url || '#'}
+                                                data={filterQuery()}
+                                                preserveState
+                                                className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${isActive
+                                                        ? 'z-10 bg-emerald-600 text-white shadow-sm border border-emerald-600'
+                                                        : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-emerald-600 hover:border-emerald-200 focus:z-20'
+                                                    }`}
+                                                dangerouslySetInnerHTML={{ __html: link.label }}
+                                            />
                                         );
                                     })}
 
-                                {tiers.meta.current_page < tiers.meta.last_page && (
-                                    <PaginationItem>
-                                        <PaginationNext
-                                            href={tiers.links.next || '#'}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (tiers.links.next) {
-                                                    router.get(tiers.links.next, filterQuery(), { preserveState: true });
-                                                }
-                                            }}
-                                        />
-                                    </PaginationItem>
-                                )}
-                            </PaginationContent>
-                        </Pagination>
+                                    {tiers.meta.current_page < tiers.meta.last_page && tiers.links?.next && (
+                                        <Link
+                                            href={tiers.links.next}
+                                            data={filterQuery()}
+                                            preserveState
+                                            className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
+                                        >
+                                            <span className="sr-only">Next</span>
+                                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                                        </Link>
+                                    )}
+                                </nav>
+                            </div>
+                        )}
                     </div>
                 )}
             </PageSurface>

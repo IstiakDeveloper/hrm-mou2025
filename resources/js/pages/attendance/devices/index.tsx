@@ -201,189 +201,181 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
       <Head title="Attendance Devices" />
 
       <PageSurface>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Attendance Devices</h1>
-            <p className="mt-1 text-gray-500">
-              Manage biometric and attendance tracking devices
-            </p>
+        <div className="mb-6 space-y-4">
+          {/* Top row: Title and primary actions */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Attendance Devices</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Manage biometric and attendance tracking devices
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href={route('attendance.devices.biometric-ids')}>
+                <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
+                  <UserCheck className="mr-2 h-4 w-4 text-slate-500" />
+                  Biometric IDs
+                </Button>
+              </Link>
+              <Link href={route('attendance.devices.sync-report')}>
+                <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
+                  <RefreshCw className="mr-2 h-4 w-4 text-slate-500" />
+                  Sync Report
+                </Button>
+              </Link>
+              <Link href={route('attendance.devices.create')}>
+                <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-medium">
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add Device
+                </Button>
+              </Link>
+            </div>
           </div>
 
-          <div className="mt-4 md:mt-0 flex space-x-2">
-            <Link href={route('attendance.devices.biometric-ids')}>
-              <Button variant="outline" className="flex items-center">
-                <UserCheck className="mr-1 h-4 w-4" />
-                Biometric IDs
+          {/* Compact Filter Bar */}
+          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 w-full bg-slate-50/50 p-3 rounded-xl border border-slate-200">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search by name, device ID or IP..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+              />
+            </div>
+
+            <div className="w-[160px]">
+              <Select value={branchId} onValueChange={(value) => setBranchId(value)}>
+                <SelectTrigger className="h-9 text-sm bg-white border-slate-200 rounded-lg">
+                  <SelectValue placeholder="Branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Branches</SelectItem>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id.toString()}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="w-[140px]">
+              <Select value={status} onValueChange={(value) => setStatus(value)}>
+                <SelectTrigger className="h-9 text-sm bg-white border-slate-200 rounded-lg">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {statuses.map((statusOption) => (
+                    <SelectItem key={statusOption} value={statusOption}>
+                      {statusOption.charAt(0).toUpperCase() + statusOption.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={resetFilters} size="sm" className="h-9 text-slate-500 hover:text-slate-700">
+                Reset
               </Button>
-            </Link>
-            <Link href={route('attendance.devices.sync-report')}>
-              <Button variant="outline" className="flex items-center">
-                <RefreshCw className="mr-1 h-4 w-4" />
-                Sync Report
+              <Button onClick={handleSearch} size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">
+                Apply Filters
               </Button>
-            </Link>
-            <Link href={route('attendance.devices.create')}>
-              <Button className="flex items-center">
-                <Plus className="mr-1 h-4 w-4" />
-                Add Device
-              </Button>
-            </Link>
+            </div>
           </div>
         </div>
 
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle>Filters</CardTitle>
-            <CardDescription>Filter devices by name, branch or status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                  <Input
-                    placeholder="Search by name, device ID or IP address..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-
-              <div className="w-full md:w-64">
-                <Select
-                  value={branchId}
-                  onValueChange={(value) => setBranchId(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Branches</SelectItem>
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="w-full md:w-64">
-                <Select
-                  value={status}
-                  onValueChange={(value) => setStatus(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {statuses.map((statusOption) => (
-                      <SelectItem key={statusOption} value={statusOption}>
-                        {statusOption.charAt(0).toUpperCase() + statusOption.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex space-x-2">
-                <Button variant="outline" onClick={resetFilters}>
-                  Reset
-                </Button>
-                <Button onClick={handleSearch}>
-                  Apply Filters
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Devices Table */}
-        <Card>
+        <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Device ID</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Sync</TableHead>
-                  <TableHead>Sync Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {devices.data && devices.data.length > 0 ? (
-                  devices.data.map((device) => (
-                    <TableRow key={device.id}>
-                      <TableCell>
-                        <div className="font-medium">{device.name}</div>
-                      </TableCell>
-                      <TableCell>{device.device_id}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Building className="mr-2 h-4 w-4 text-gray-400" />
-                          <span>{device.branch.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Network className="mr-2 h-4 w-4 text-gray-400" />
-                          <span>{device.ip_address}:{device.port}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(device.status)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Clock className="mr-2 h-4 w-4 text-gray-400" />
-                          <span>{formatDateTime(device.last_sync_at)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getSyncStatusBadge(device.last_sync_status)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider pl-6">Name</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Device ID</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">IP Address</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Last Sync</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Sync Status</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {devices.data && devices.data.length > 0 ? (
+                    devices.data.map((device) => (
+                      <TableRow key={device.id} className="hover:bg-slate-50 transition-colors group">
+                        <TableCell className="pl-6">
+                          <div className="font-semibold text-xs text-slate-800">{device.name}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-mono text-[11px] text-slate-500">{device.device_id}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center text-xs text-slate-600">
+                            <Building className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
+                            <span>{device.branch.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center text-xs text-slate-600">
+                            <Network className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
+                            <span className="font-mono">{device.ip_address}:{device.port}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="scale-90 origin-left">
+                            {getStatusBadge(device.status)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center text-xs text-slate-600">
+                            <Clock className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
+                            <span>{formatDateTime(device.last_sync_at)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="scale-90 origin-left">
+                            {getSyncStatusBadge(device.last_sync_status)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
                               onClick={() => testConnection(device.id)}
-                              className="cursor-pointer"
+                              className="h-8 w-8 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors"
+                              title="Test Connection"
                             >
-                              <Activity className="mr-2 h-4 w-4" />
-                              <span>Test Connection</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
+                              <Activity className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
                               onClick={() => router.get(route('attendance.devices.edit', device.id))}
-                              className="cursor-pointer"
+                              className="h-8 w-8 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-colors"
+                              title="Edit Device"
                             >
-                              <Edit className="mr-2 h-4 w-4" />
-                              <span>Edit</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
                               onClick={() => handleDelete(device.id)}
-                              className="cursor-pointer text-red-600 focus:text-red-600"
+                              className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors"
+                              title="Delete Device"
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
                   ))
                 ) : (
                   <TableRow>
@@ -403,6 +395,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
 

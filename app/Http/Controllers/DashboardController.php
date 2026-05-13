@@ -6,13 +6,20 @@ use App\Models\Attendance;
 use App\Models\AttendanceSetting;
 use App\Models\Branch;
 use App\Models\Department;
+use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\EmployeeType;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
 use App\Models\Movement;
+use App\Models\Program;
+use App\Models\Project;
+use App\Models\RegionalOffice;
+use App\Models\Role;
 use App\Models\Transfer;
 use App\Models\User;
+use App\Models\Zone;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -34,20 +41,16 @@ class DashboardController extends Controller
         /** @var User $user */
         $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
         $today = Carbon::today();
-        $currentMonth = Carbon::now()->format('m');
-        $currentYear = Carbon::now()->format('Y');
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
-        $isAdminLike = collect([
-            'attendance.admin',
-            'attendance.view',
-            'movements.view',
-            'transfers.view',
-            'reports.view',
-        ])->contains(fn ($p) => $user->can($p) || $hasPermission($user, $p));
+        // Only HR / platform admins see the operational (org-wide or branch-scoped) dashboard.
+        // Users who merely have attendance.view / movements.view / reports.view should see their own data here.
+        $seesOperationalAttendanceMovementDashboard = $hasPermission($user, 'attendance.admin')
+            || $hasPermission($user, 'admin.access')
+            || $hasPermission($user, 'employees.admin');
 
-        if (! $isAdminLike) {
+        if (! $seesOperationalAttendanceMovementDashboard) {
             $employee = $user->employee()->with(['department', 'branch'])->first();
             if (! $employee) {
                 return redirect()->route('sections.index');
@@ -83,16 +86,8 @@ class DashboardController extends Controller
             ? $this->getMovementStats($user, $today)
             : ['pending' => 0, 'ongoing' => 0];
 
-        $transferStats = $hasPermission($user, 'transfers.view')
-            ? $this->getTransferStats($user, $currentMonth, $currentYear)
-            : ['pending' => 0, 'approved' => 0];
-
         $recentMovements = $hasPermission($user, 'movements.view')
             ? $this->getRecentMovements($user)
-            : [];
-
-        $recentTransfers = $hasPermission($user, 'transfers.view')
-            ? $this->getRecentTransfers($user)
             : [];
 
         $roles = $user->roles;
@@ -101,9 +96,7 @@ class DashboardController extends Controller
         return Inertia::render('sections/attendance-movement/dashboard', [
             'attendanceStats' => $attendanceStats,
             'movementStats' => $movementStats,
-            'transferStats' => $transferStats,
             'recentMovements' => $recentMovements,
-            'recentTransfers' => $recentTransfers,
             'userRole' => $role?->name ?? 'User',
         ]);
     }
@@ -127,16 +120,14 @@ class DashboardController extends Controller
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
-        $isAdminLike = collect([
-            'leave-types.create',
-            'leave-types.edit',
-            'leave-balances.admin',
-            'leave-applications.approve',
-            'reports.view',
-            'admin.access',
-        ])->contains(fn ($p) => $user->can($p) || $hasPermission($user, $p));
+        // Operational leave overview: approvers / leave admins only — not everyone with reports.view.
+        $seesOperationalLeaveDashboard = $hasPermission($user, 'admin.access')
+            || $hasPermission($user, 'leave-types.create')
+            || $hasPermission($user, 'leave-types.edit')
+            || $hasPermission($user, 'leave-balances.admin')
+            || $hasPermission($user, 'leave-applications.approve');
 
-        if (! $isAdminLike) {
+        if (! $seesOperationalLeaveDashboard) {
             // Employee leave-focused dashboard
             $employee = $user->employee()->with(['department', 'branch'])->first();
             if (! $employee) {
@@ -203,18 +194,28 @@ class DashboardController extends Controller
             abort(403);
         }
 
-        // Lightweight stats for admin module
         $userCount = User::query()->count();
-        $employeeCount = Employee::query()->count();
-        $branchCount = Branch::query()->count();
+        $roleCount = Role::query()->count();
+        $recentUsers = User::query()
+            ->orderByDesc('created_at')
+            ->take(8)
+            ->get(['id', 'name', 'email', 'created_at'])
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'created_at' => $u->created_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
 
         $roles = $user->roles;
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
 
         return Inertia::render('sections/administration/dashboard', [
             'userCount' => $userCount,
-            'employeeCount' => $employeeCount,
-            'branchCount' => $branchCount,
+            'roleCount' => $roleCount,
+            'recentUsers' => $recentUsers,
             'userRole' => $role?->name ?? 'User',
         ]);
     }
@@ -232,8 +233,8 @@ class DashboardController extends Controller
         /** @var User $user */
         $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
         $today = Carbon::today();
-        $currentMonth = Carbon::now()->format('m');
-        $currentYear = Carbon::now()->format('Y');
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
         $isAdminLike = collect([
             'employees.create',
@@ -250,39 +251,29 @@ class DashboardController extends Controller
             'leave-balances.admin',
             'attendance.admin',
             'admin.access',
-        ])->contains(fn ($p) => $user->can($p));
+            'transfers.view',
+        ])->contains(fn ($p) => $user->can($p) || $hasPermission($user, $p));
 
         if (! $isAdminLike) {
             return $this->employeeDashboard($user, $today);
         }
 
+        $currentMonth = Carbon::now()->format('m');
+        $currentYear = Carbon::now()->format('Y');
+
         $stats = $this->getFilteredStats($user);
+        $recentEmployees = $hasPermission($user, 'employees.view')
+            ? $this->getRecentEmployeesForHr($user)
+            : [];
 
-        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
-
-        $attendanceStats = $hasPermission($user, 'attendance.view')
-            ? $this->getAttendanceStats($user, $today)
-            : ['present' => 0, 'absent' => 0, 'late' => 0];
-
-        $leaveStats = $hasPermission($user, 'leaves.view')
-            ? $this->getLeaveStats($user, $today, $currentMonth, $currentYear)
-            : ['pending' => 0, 'approved' => 0, 'todayOnLeave' => 0];
-
-        $movementStats = $hasPermission($user, 'movements.view')
-            ? $this->getMovementStats($user, $today)
-            : ['pending' => 0, 'ongoing' => 0];
+        $organizationHierarchy = ['zones' => []];
+        if ($hasPermission($user, 'zones.view') || $hasPermission($user, 'regional-offices.view') || $hasPermission($user, 'branches.view')) {
+            $organizationHierarchy = $this->getHrOrganizationZonesTree($user);
+        }
 
         $transferStats = $hasPermission($user, 'transfers.view')
             ? $this->getTransferStats($user, $currentMonth, $currentYear)
             : ['pending' => 0, 'approved' => 0];
-
-        $recentLeaves = $hasPermission($user, 'leaves.view')
-            ? $this->getRecentLeaves($user)
-            : [];
-
-        $recentMovements = $hasPermission($user, 'movements.view')
-            ? $this->getRecentMovements($user)
-            : [];
 
         $recentTransfers = $hasPermission($user, 'transfers.view')
             ? $this->getRecentTransfers($user)
@@ -293,12 +284,9 @@ class DashboardController extends Controller
 
         return Inertia::render('sections/human-resources/dashboard', [
             'stats' => $stats,
-            'attendanceStats' => $attendanceStats,
-            'leaveStats' => $leaveStats,
-            'movementStats' => $movementStats,
+            'organizationHierarchy' => $organizationHierarchy,
+            'recentEmployees' => $recentEmployees,
             'transferStats' => $transferStats,
-            'recentLeaves' => $recentLeaves,
-            'recentMovements' => $recentMovements,
             'recentTransfers' => $recentTransfers,
             'userRole' => $role?->name ?? 'User',
         ]);
@@ -384,11 +372,17 @@ class DashboardController extends Controller
     private function employeeDashboard($user, $today)
     {
         // Get the employee record for the user
-        $employee = $user->employee()->with(['department', 'branch'])->first();
+        $employee = $user->employee()->with([
+            'department',
+            'branch',
+            'designation',
+            'manager' => function ($query) {
+                $query->select('id', 'first_name', 'last_name', 'employee_id', 'name_en');
+            },
+        ])->first();
 
-        if (!$employee) {
-            // Fallback to regular dashboard if employee record not found
-            return $this->index();
+        if (! $employee) {
+            return redirect()->route('sections.index');
         }
 
         // Get today's attendance
@@ -418,14 +412,15 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
-
         // Get holidays for the current month and next month
         $startDate = now()->startOfMonth()->subMonth();
         $endDate = now()->endOfMonth()->addMonth();
 
+        $branchKey = $employee->current_branch_id;
+
         $holidays = Holiday::whereBetween('date', [$startDate, $endDate])
-            ->where(function ($query) use ($employee) {
-                $query->whereJsonContains('applicable_branches', $employee->branch_id)
+            ->where(function ($query) use ($branchKey) {
+                $query->whereJsonContains('applicable_branches', $branchKey)
                     ->orWhereNull('applicable_branches')
                     ->orWhere('applicable_branches', '[]');
             })
@@ -434,20 +429,64 @@ class DashboardController extends Controller
                 return [
                     'date' => $holiday->date,
                     'title' => $holiday->title,
-                    'description' => $holiday->description
+                    'description' => $holiday->description,
                 ];
             });
 
+        $upcomingHolidays = $holidays
+            ->filter(function ($row) use ($today) {
+                if (! isset($row['date'])) {
+                    return false;
+                }
+
+                return Carbon::parse($row['date'])->gte($today->copy()->startOfDay());
+            })
+            ->sortBy('date')
+            ->take(6)
+            ->values()
+            ->all();
+
         // Get weekend days from attendance settings
         $weekendDays = [];
-        if ($employee->branch_id) {
-            $attendanceSettings = AttendanceSetting::where('branch_id', $employee->branch_id)->first();
+        if ($branchKey) {
+            $attendanceSettings = AttendanceSetting::where('branch_id', $branchKey)->first();
             if ($attendanceSettings) {
                 // AttendanceSetting casts weekend_days to array; avoid json_decode(array)
                 $rawWeekend = $attendanceSettings->weekend_days ?? [];
                 $weekendDays = is_array($rawWeekend) ? $rawWeekend : (json_decode($rawWeekend ?? '[]', true) ?: []);
             }
         }
+
+        $manager = $employee->manager;
+        $reportingName = null;
+        if ($manager) {
+            $reportingName = trim((string) ($manager->name_en ?? ''));
+            if ($reportingName === '') {
+                $reportingName = trim(($manager->first_name ?? '').' '.($manager->last_name ?? ''));
+            }
+        }
+
+        $hrProfile = [
+            'designation' => $employee->designation?->name,
+            'department' => $employee->department?->name,
+            'branch' => $employee->branch?->name,
+            'joining_date' => $employee->joining_date?->format('Y-m-d'),
+            'confirmation_date' => $employee->confirmation_date?->format('Y-m-d'),
+            'employment_status' => $employee->status,
+            'work_email' => $employee->email,
+            'phone' => $employee->phone ?? $employee->mobile_official ?? $employee->mobile_personal,
+            'reporting_manager' => $reportingName,
+            'reporting_employee_id' => $manager?->employee_id,
+            'employee_type' => $employee->employee_type_id
+                ? EmployeeType::query()->whereKey($employee->employee_type_id)->value('name')
+                : null,
+            'program' => $employee->program_id
+                ? Program::query()->whereKey($employee->program_id)->value('name')
+                : null,
+            'project' => $employee->project_id
+                ? Project::query()->whereKey($employee->project_id)->value('name')
+                : null,
+        ];
 
         return Inertia::render('employee-dashboard', [
             'employee' => $employee,
@@ -458,7 +497,30 @@ class DashboardController extends Controller
             'recentMovements' => $recentMovements,
             'holidays' => $holidays,
             'weekendDays' => $weekendDays,
+            'weekendDaySummary' => $this->weekendDaysLabel($weekendDays),
+            'upcomingHolidays' => $upcomingHolidays,
+            'hrProfile' => $hrProfile,
         ]);
+    }
+
+    /**
+     * @param  list<int|string>  $weekendDays
+     */
+    private function weekendDaysLabel(array $weekendDays): ?string
+    {
+        if ($weekendDays === []) {
+            return null;
+        }
+
+        $labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        $parts = [];
+        foreach (array_unique(array_map('intval', $weekendDays)) as $i) {
+            if (isset($labels[$i])) {
+                $parts[] = $labels[$i];
+            }
+        }
+
+        return $parts === [] ? null : implode(', ', $parts);
     }
 
     /**
@@ -475,7 +537,7 @@ class DashboardController extends Controller
             'leaveApplications' => function ($query) use ($currentYear) {
                 $query->whereYear('start_date', $currentYear)
                     ->select('id', 'leave_type_id', 'employee_id', 'start_date', 'end_date', 'days', 'status');
-            }
+            },
         ])
             ->where('employee_id', $employeeId)
             ->where('year', $currentYear)
@@ -497,18 +559,160 @@ class DashboardController extends Controller
 
         // Filter by branch if user is a branch manager
         if ($isBranchManager && $branchId) {
-            $employeeQuery->where('branch_id', $branchId);
+            $employeeQuery->where('current_branch_id', $branchId);
             $branchQuery->where('id', $branchId);
             $departmentQuery->whereHas('employees', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
+                $q->where('current_branch_id', $branchId);
             });
         }
 
+        $branchesTotal = (clone $branchQuery)->count();
+        $branchesOperational = (clone $branchQuery)->where(function ($q) {
+            $q->whereNull('is_head_office')->orWhere('is_head_office', false);
+        })->count();
+        $branchesHeadOffice = (clone $branchQuery)->where('is_head_office', true)->count();
+
+        $totalEmployees = (clone $employeeQuery)->count();
+        $employeeActive = (clone $employeeQuery)->where('status', 'active')->count();
+        $employeeTerminated = (clone $employeeQuery)->where('status', 'terminated')->count();
+        $employeeInactive = (clone $employeeQuery)->where('status', 'inactive')->count();
+        $employeeOnLeave = (clone $employeeQuery)->where('status', 'on_leave')->count();
+        $employeesNonActive = max(0, $totalEmployees - $employeeActive);
+        $employeesTransferredPosting = (clone $employeeQuery)
+            ->whereNotNull('last_branch_id')
+            ->whereColumn('last_branch_id', '!=', 'current_branch_id')
+            ->count();
+
         return [
-            'totalEmployees' => $employeeQuery->count(),
-            'totalBranches' => $branchQuery->count(),
+            'totalEmployees' => $totalEmployees,
+            'totalBranches' => $branchesTotal,
+            'branchesTotal' => $branchesTotal,
+            'branchesOperational' => $branchesOperational,
+            'branchesHeadOffice' => $branchesHeadOffice,
             'totalDepartments' => $departmentQuery->count(),
+            'totalDesignations' => Designation::query()->count(),
+            'totalZones' => Zone::query()->count(),
+            'totalRegionalOffices' => RegionalOffice::query()->count(),
+            'employeeActive' => $employeeActive,
+            'employeeTerminated' => $employeeTerminated,
+            'employeeInactive' => $employeeInactive,
+            'employeeOnLeave' => $employeeOnLeave,
+            'employeesNonActive' => $employeesNonActive,
+            'employeesTransferredPosting' => $employeesTransferredPosting,
         ];
+    }
+
+    /**
+     * Zone → Regional office → Branches tree for the HR dashboard (scoped for branch managers).
+     *
+     * @return array{zones: array<int, array<string, mixed>>}
+     */
+    private function getHrOrganizationZonesTree(User $user): array
+    {
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
+        $branchId = $user->branch_id;
+
+        if ($isBranchManager && $branchId) {
+            $branch = Branch::query()->with(['regionalOffice.zone'])->find($branchId);
+            if (! $branch) {
+                return ['zones' => []];
+            }
+
+            $ro = $branch->regionalOffice;
+            $zone = $ro?->zone;
+            $isHo = (bool) $branch->is_head_office;
+
+            return ['zones' => [[
+                'id' => $zone?->id ?? 0,
+                'name' => $zone?->name ?? '—',
+                'code' => $zone?->code,
+                'regionalOffices' => [[
+                    'id' => $ro?->id ?? 0,
+                    'name' => $ro?->name ?? '—',
+                    'branchTotal' => 1,
+                    'branchOperational' => $isHo ? 0 : 1,
+                    'branchHeadOffice' => $isHo ? 1 : 0,
+                    'branchesPreview' => [[
+                        'id' => $branch->id,
+                        'name' => $branch->name,
+                        'isHeadOffice' => $isHo,
+                    ]],
+                    'branchesMoreCount' => 0,
+                ]],
+            ]]];
+        }
+
+        $zones = Zone::query()
+            ->orderBy('name')
+            ->with(['regionalOffices' => function ($q) {
+                $q->orderBy('name')->with(['branches' => fn ($b) => $b->orderBy('name')]);
+            }])
+            ->get();
+
+        $out = [];
+        foreach ($zones as $zone) {
+            $ros = [];
+            foreach ($zone->regionalOffices as $ro) {
+                $all = $ro->branches;
+                $total = $all->count();
+                $operational = $all->filter(fn (Branch $b) => ! $b->is_head_office)->count();
+                $head = $all->filter(fn (Branch $b) => (bool) $b->is_head_office)->count();
+                $preview = $all->take(20)->map(fn (Branch $b) => [
+                    'id' => $b->id,
+                    'name' => $b->name,
+                    'isHeadOffice' => (bool) $b->is_head_office,
+                ])->values()->all();
+
+                $ros[] = [
+                    'id' => $ro->id,
+                    'name' => $ro->name,
+                    'branchTotal' => $total,
+                    'branchOperational' => $operational,
+                    'branchHeadOffice' => $head,
+                    'branchesPreview' => $preview,
+                    'branchesMoreCount' => max(0, $total - 20),
+                ];
+            }
+
+            $out[] = [
+                'id' => $zone->id,
+                'name' => $zone->name,
+                'code' => $zone->code,
+                'regionalOffices' => $ros,
+            ];
+        }
+
+        return ['zones' => $out];
+    }
+
+    /**
+     * Recently added employee profiles (HR section activity feed).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getRecentEmployeesForHr(User $user): array
+    {
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
+        $branchId = $user->branch_id;
+
+        $query = Employee::query()
+            ->with(['department:id,name', 'branch:id,name'])
+            ->orderByDesc('created_at');
+
+        if ($isBranchManager && $branchId) {
+            $query->where('current_branch_id', $branchId);
+        }
+
+        return $query->take(8)->get()->map(fn (Employee $e) => [
+            'id' => $e->id,
+            'first_name' => $e->first_name,
+            'last_name' => $e->last_name,
+            'employee_id' => $e->employee_id,
+            'department' => $e->department?->name,
+            'branch' => $e->branch?->name,
+            'joining_date' => $e->joining_date,
+            'created_at' => $e->created_at?->toIso8601String(),
+        ])->all();
     }
 
     /**
@@ -524,7 +728,7 @@ class DashboardController extends Controller
         // Filter by branch if user is a branch manager
         if ($isBranchManager && $branchId) {
             $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
+                $q->where('current_branch_id', $branchId);
             });
         }
 
@@ -550,7 +754,7 @@ class DashboardController extends Controller
         // Apply filters based on user role
         if ($isBranchManager && $branchId) {
             $baseQuery->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
+                $q->where('current_branch_id', $branchId);
             });
         } elseif ($isDepartmentHead && $departmentId) {
             $baseQuery->whereHas('employee', function ($q) use ($departmentId) {
@@ -569,7 +773,7 @@ class DashboardController extends Controller
                 ->where('status', 'approved')
                 ->whereDate('start_date', '<=', $today)
                 ->whereDate('end_date', '>=', $today)
-                ->count()
+                ->count(),
         ];
     }
 
@@ -588,7 +792,7 @@ class DashboardController extends Controller
         // Apply filters based on user role
         if ($isBranchManager && $branchId) {
             $baseQuery->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
+                $q->where('current_branch_id', $branchId);
             });
         } elseif ($isDepartmentHead && $departmentId) {
             $baseQuery->whereHas('employee', function ($q) use ($departmentId) {
@@ -630,9 +834,10 @@ class DashboardController extends Controller
                 ->whereMonth('effective_date', $currentMonth)
                 ->whereYear('effective_date', $currentYear)
                 ->where('status', 'approved')
-                ->count()
+                ->count(),
         ];
     }
+
     /**
      * Get recent leave applications, filtered by branch or department if applicable
      */
@@ -648,7 +853,7 @@ class DashboardController extends Controller
 
         if ($isBranchManager && $branchId) {
             $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
+                $q->where('current_branch_id', $branchId);
             });
         } elseif ($isDepartmentHead && $departmentId) {
             $query->whereHas('employee', function ($q) use ($departmentId) {
@@ -658,6 +863,7 @@ class DashboardController extends Controller
 
         return $query->take(5)->get();
     }
+
     /**
      * Get recent movements, filtered by branch or department if applicable
      */
@@ -673,7 +879,7 @@ class DashboardController extends Controller
 
         if ($isBranchManager && $branchId) {
             $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
+                $q->where('current_branch_id', $branchId);
             });
         } elseif ($isDepartmentHead && $departmentId) {
             $query->whereHas('employee', function ($q) use ($departmentId) {

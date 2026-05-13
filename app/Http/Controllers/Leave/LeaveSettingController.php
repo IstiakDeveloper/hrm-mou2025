@@ -27,7 +27,10 @@ class LeaveSettingController extends Controller
             ->orderBy('context')
             ->orderBy('max_leave_days');
 
-        $paginator = $query->paginate(20)->withQueryString();
+        $perPage = $request->input('per_page', 15);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100, 200, 500]) ? $perPage : 15;
+
+        $paginator = $query->paginate($perPage)->withQueryString();
 
         return Inertia::render('leave/settings/index', [
             'tiers' => [
@@ -49,7 +52,7 @@ class LeaveSettingController extends Controller
                     'next' => $paginator->nextPageUrl(),
                 ],
             ],
-            'filters' => $request->only(['context', 'is_active']),
+            'filters' => $request->only(['context', 'is_active', 'per_page']),
             'canEdit' => $request->user()->hasPermission('leave-types.edit'),
         ]);
     }

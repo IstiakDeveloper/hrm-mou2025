@@ -11,4 +11,9 @@ class EmployeeType extends Model
         'probation_months',
         'is_active',
     ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+        'probation_months' => 'integer',
+    ];
 }

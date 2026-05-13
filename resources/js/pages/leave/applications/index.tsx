@@ -19,28 +19,7 @@ import {
     CardHeader,
     CardTitle
 } from '@/components/ui/card';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from '@/components/ui/select';
-import {
-    Pagination,
-    PaginationContent,
-    PaginationEllipsis,
-    PaginationItem,
-    PaginationLink,
-    PaginationNext,
-    PaginationPrevious
-} from '@/components/ui/pagination';
+import { PageSurface } from '@/components/page-surface';
 import {
     CalendarIcon,
     CheckCircle2,
@@ -54,6 +33,13 @@ import {
     XCircle
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
+} from '@/components/ui/select';
 import {
     Popover,
     PopoverContent,
@@ -150,6 +136,7 @@ interface ApplicationsIndexProps {
         from_date: string;
         to_date: string;
         search: string;
+        per_page?: string;
     };
     canApprove: boolean;
     userPermissions: {
@@ -187,6 +174,7 @@ export default function ApplicationsIndex({
     );
     const [fromDateOpen, setFromDateOpen] = useState(false);
     const [toDateOpen, setToDateOpen] = useState(false);
+    const [perPage, setPerPage] = useState(filters.per_page || '10');
 
     const handleSearch = () => {
         router.get(route('leave.applications.index'), {
@@ -196,6 +184,20 @@ export default function ApplicationsIndex({
             employee_id: employeeId === 'all' ? '' : employeeId,
             from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '',
             to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '',
+            per_page: perPage
+        }, { preserveState: true });
+    };
+
+    const handlePerPageChange = (value: string) => {
+        setPerPage(value);
+        router.get(route('leave.applications.index'), {
+            search,
+            status: status === 'all' ? '' : status,
+            department_id: departmentId === 'all' ? '' : departmentId,
+            employee_id: employeeId === 'all' ? '' : employeeId,
+            from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '',
+            to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '',
+            per_page: value
         }, { preserveState: true });
     };
 
@@ -213,7 +215,8 @@ export default function ApplicationsIndex({
         setEmployeeId('all');
         setFromDate(undefined);
         setToDate(undefined);
-        router.get(route('leave.applications.index'));
+        setPerPage('10');
+        router.get(route('leave.applications.index'), { per_page: '10' }, { preserveState: true });
     };
 
     const getStatusBadge = (status: string) => {
@@ -249,39 +252,34 @@ export default function ApplicationsIndex({
             <Head title="Leave Applications" />
 
             <PageSurface>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-5">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Leave Applications</h1>
-                        <p className="mt-1 text-gray-500">
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Leave Applications</h1>
+                        <p className="mt-1 text-sm text-slate-500">
                             Manage employee leave requests and approvals
                         </p>
                     </div>
 
-                    <div className="mt-4 md:mt-0 flex space-x-2">
-                        {/* Use a Button with onClick instead of Link for more reliable navigation */}
-                        <Button onClick={goToCreatePage} className="flex items-center">
-                            <Plus className="mr-1 h-4 w-4" />
-                            Apply for Leave
-                        </Button>
-
+                    <div className="flex items-center gap-2 w-full md:w-auto">
                         <Button
                             variant="outline"
-                            className="flex items-center"
+                            size="sm"
+                            className="h-9 flex items-center bg-white"
                             onClick={() => router.visit(route('leave.applications.report'))}
                         >
                             <FileText className="mr-1 h-4 w-4" />
-                            Leave Report
+                            Report
+                        </Button>
+                        <Button onClick={goToCreatePage} size="sm" className="h-9 flex items-center bg-emerald-600 hover:bg-emerald-700">
+                            <Plus className="mr-1 h-4 w-4" />
+                            Apply for Leave
                         </Button>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <Card className="mb-6">
-                    <CardHeader className="pb-3">
-                        <CardTitle>Filters</CardTitle>
-                        <CardDescription>Filter leave applications by status, date, department or employee</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                <Card className="mb-6 shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <CardContent className="p-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div className="space-y-2">
                                 <Label>From Date</Label>
@@ -413,10 +411,10 @@ export default function ApplicationsIndex({
                             </div>
 
                             <div className="flex space-x-2">
-                                <Button variant="outline" onClick={resetFilters}>
+                                <Button variant="outline" onClick={resetFilters} className="h-10 rounded-lg">
                                     Reset
                                 </Button>
-                                <Button onClick={handleSearch}>
+                                <Button onClick={handleSearch} className="h-10 rounded-lg bg-emerald-600 hover:bg-emerald-700">
                                     Apply
                                 </Button>
                             </div>
@@ -425,222 +423,244 @@ export default function ApplicationsIndex({
                 </Card>
 
                 {/* Applications Table */}
-                <Card>
+                <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
                     <CardContent className="p-0">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Employee</TableHead>
-                                    <TableHead>Leave Type</TableHead>
-                                    <TableHead>Duration</TableHead>
-                                    <TableHead>Days</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Applied On</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {applications && applications.data && applications.data.length > 0 ? (
-                                    applications.data.map((application) => (
-                                        <TableRow key={application.id}>
-                                            <TableCell>
-                                                <div className="font-medium">
-                                                    {application.employee && `${application.employee.first_name} ${application.employee.last_name}`}
-                                                </div>
-                                                <div className="text-xs text-gray-500">
-                                                    {application.employee && application.employee.employee_id}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                    {application.leave_type && application.leave_type.name}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="text-sm">
-                                                    {application.start_date && format(new Date(application.start_date), 'dd MMM yyyy')}
-                                                    {application.start_date !== application.end_date && (
-                                                        <span> to {format(new Date(application.end_date), 'dd MMM yyyy')}</span>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="font-medium">
-                                                    {application.days} {application.days > 1 ? 'days' : 'day'}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                {getStatusBadge(application.status)}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="text-sm">
-                                                    {application.applied_at && format(new Date(application.applied_at), 'dd MMM yyyy')}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                            <span className="sr-only">Open menu</span>
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider pl-6">Employee</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Leave Type</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Duration</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Days</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Applied On</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {applications.data.length > 0 ? (
+                                        applications.data.map((application) => (
+                                            <TableRow key={application.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
+                                                <TableCell className="pl-6">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="flex-shrink-0">
+                                                            <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                                                <User className="h-4 w-4" />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-semibold text-[13px] text-slate-800">
+                                                                {application.employee.first_name} {application.employee.last_name}
+                                                            </div>
+                                                            <div className="text-xs text-slate-500 font-mono">
+                                                                ID: {application.employee.employee_id}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                                        {application.leaveType.name}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="text-sm">
+                                                        {application.start_date && format(new Date(application.start_date), 'dd MMM yyyy')}
+                                                        {application.start_date !== application.end_date && (
+                                                            <span> to {format(new Date(application.end_date), 'dd MMM yyyy')}</span>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="font-medium">
+                                                        {application.days} {application.days > 1 ? 'days' : 'day'}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {getStatusBadge(application.status)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="text-sm">
+                                                        {application.applied_at && format(new Date(application.applied_at), 'dd MMM yyyy')}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right pr-6">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors" 
+                                                            title="View Details"
                                                             onClick={() => router.visit(route('leave.applications.show', application.id))}
-                                                            className="cursor-pointer"
                                                         >
-                                                            <Eye className="mr-2 h-4 w-4" />
-                                                            <span>View Details</span>
-                                                        </DropdownMenuItem>
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
 
                                                         {application.status === 'pending' && application.employee_id === userPermissions.employeeId && (
-                                                            <DropdownMenuItem
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 text-slate-600 bg-slate-50 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors" 
+                                                                title="Cancel"
                                                                 onClick={() => {
                                                                     if (confirm('Are you sure you want to cancel this leave application?')) {
                                                                         router.post(route('leave.applications.cancel', application.id));
                                                                     }
                                                                 }}
-                                                                className="cursor-pointer text-gray-600 focus:text-gray-600"
                                                             >
-                                                                <UserX className="mr-2 h-4 w-4" />
-                                                                <span>Cancel</span>
-                                                            </DropdownMenuItem>
+                                                                <UserX className="h-4 w-4" />
+                                                            </Button>
                                                         )}
 
                                                         {application.status === 'pending' && application.can_approve_action && (
-                                                                <>
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => router.post(route('leave.applications.approve', application.id))}
-                                                                        className="cursor-pointer text-green-600 focus:text-green-600"
-                                                                    >
-                                                                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                                        <span>Approve</span>
-                                                                    </DropdownMenuItem>
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => {
-                                                                            const reason = prompt('Please enter a reason for rejection:');
-                                                                            if (reason) {
-                                                                                router.post(route('leave.applications.reject', application.id), {
-                                                                                    rejection_reason: reason
-                                                                                });
-                                                                            }
-                                                                        }}
-                                                                        className="cursor-pointer text-red-600 focus:text-red-600"
-                                                                    >
-                                                                        <XCircle className="mr-2 h-4 w-4" />
-                                                                        <span>Reject</span>
-                                                                    </DropdownMenuItem>
-                                                                </>
-                                                            )}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                            <>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-8 w-8 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700 rounded-lg transition-colors" 
+                                                                    title="Approve"
+                                                                    onClick={() => router.post(route('leave.applications.approve', application.id))}
+                                                                >
+                                                                    <CheckCircle2 className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
+                                                                    title="Reject"
+                                                                    onClick={() => {
+                                                                        const reason = prompt('Please enter a reason for rejection:');
+                                                                        if (reason) {
+                                                                            router.post(route('leave.applications.reject', application.id), {
+                                                                                rejection_reason: reason
+                                                                            });
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <XCircle className="h-4 w-4" />
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="h-24 text-center">
+                                                No leave applications found.
+                                                {(search || status !== 'all' || departmentId !== 'all' || employeeId !== 'all' || fromDate || toDate) && (
+                                                    <Button
+                                                        variant="link"
+                                                        onClick={resetFilters}
+                                                        className="px-2 font-normal"
+                                                    >
+                                                        Clear filters
+                                                    </Button>
+                                                )}
                                             </TableCell>
                                         </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={7} className="h-24 text-center">
-                                            No leave applications found.
-                                            {(search || status !== 'all' || departmentId !== 'all' || employeeId !== 'all' || fromDate || toDate) && (
-                                                <Button
-                                                    variant="link"
-                                                    onClick={resetFilters}
-                                                    className="px-2 font-normal"
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        {/* Pagination */}
+                        {applications && applications.meta && applications.meta.last_page > 1 && (
+                            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4 rounded-b-xl">
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2 text-[13px] text-slate-500">
+                                        <span className="hidden sm:inline">Rows per page:</span>
+                                        <Select
+                                            value={perPage}
+                                            onValueChange={handlePerPageChange}
+                                        >
+                                            <SelectTrigger className="h-8 w-[70px] text-[13px] bg-white border-slate-200">
+                                                <SelectValue placeholder="10" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="10">10</SelectItem>
+                                                <SelectItem value="25">25</SelectItem>
+                                                <SelectItem value="50">50</SelectItem>
+                                                <SelectItem value="100">100</SelectItem>
+                                                <SelectItem value="200">200</SelectItem>
+                                                <SelectItem value="500">500</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="hidden sm:block">
+                                        <p className="text-[13px] text-slate-500">
+                                            Showing <span className="font-semibold text-slate-700">{applications.meta.total > 0 ? (applications.meta.current_page - 1) * applications.meta.per_page + 1 : 0}</span> to{' '}
+                                            <span className="font-semibold text-slate-700">
+                                                {Math.min(applications.meta.current_page * applications.meta.per_page, applications.meta.total)}
+                                            </span>{' '}
+                                            of <span className="font-semibold text-slate-700">{applications.meta.total}</span> entries
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                {applications.meta.last_page > 1 && (
+                                    <div className="flex items-center justify-end">
+                                        <nav className="isolate inline-flex -space-x-px gap-1.5" aria-label="Pagination">
+                                            {applications.meta.current_page > 1 && applications.links?.prev && (
+                                                <Link
+                                                    href={applications.links.prev}
+                                                    data={{ search, status: status === 'all' ? '' : status, department_id: departmentId === 'all' ? '' : departmentId, employee_id: employeeId === 'all' ? '' : employeeId, from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '', to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '', per_page: perPage }}
+                                                    preserveState
+                                                    className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                                 >
-                                                    Clear filters
-                                                </Button>
+                                                    <span className="sr-only">Previous</span>
+                                                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                                                </Link>
                                             )}
-                                        </TableCell>
-                                    </TableRow>
+
+                                            {applications.meta.links && applications.meta.links.slice(1, -1).map((link, i) => {
+                                                const isActive = link.active;
+                                                const isDots = link.label === '...';
+                                                
+                                                if (isDots) {
+                                                    return (
+                                                        <span key={i} className="relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-medium text-slate-400">
+                                                            ...
+                                                        </span>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <Link
+                                                        key={i}
+                                                        href={link.url || '#'}
+                                                        data={{ search, status: status === 'all' ? '' : status, department_id: departmentId === 'all' ? '' : departmentId, employee_id: employeeId === 'all' ? '' : employeeId, from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '', to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '', per_page: perPage }}
+                                                        preserveState
+                                                        className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
+                                                            isActive
+                                                                ? 'z-10 bg-emerald-600 text-white shadow-sm border border-emerald-600'
+                                                                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-emerald-600 hover:border-emerald-200 focus:z-20'
+                                                        }`}
+                                                        dangerouslySetInnerHTML={{ __html: link.label }}
+                                                    />
+                                                );
+                                            })}
+
+                                            {applications.meta.current_page < applications.meta.last_page && applications.links?.next && (
+                                                <Link
+                                                    href={applications.links.next}
+                                                    data={{ search, status: status === 'all' ? '' : status, department_id: departmentId === 'all' ? '' : departmentId, employee_id: employeeId === 'all' ? '' : employeeId, from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '', to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '', per_page: perPage }}
+                                                    preserveState
+                                                    className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
+                                                >
+                                                    <span className="sr-only">Next</span>
+                                                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                                                </Link>
+                                            )}
+                                        </nav>
+                                    </div>
                                 )}
-                            </TableBody>
-                        </Table>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
-
-                {/* Pagination */}
-                {applications && applications.meta && applications.meta.last_page > 1 && (
-                    <div className="mt-6">
-                        <Pagination>
-                            <PaginationContent>
-                                {applications.meta.current_page > 1 && applications.links.prev && (
-                                    <PaginationItem>
-                                        <PaginationPrevious
-                                            href={applications.links.prev || '#'}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                router.get(applications.links.prev || '', {
-                                                    search,
-                                                    status: status === 'all' ? '' : status,
-                                                    department_id: departmentId === 'all' ? '' : departmentId,
-                                                    employee_id: employeeId === 'all' ? '' : employeeId,
-                                                    from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '',
-                                                    to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '',
-                                                }, { preserveState: true });
-                                            }}
-                                        />
-                                    </PaginationItem>
-                                )}
-
-                                {applications.meta.links.filter(link => !link.label.includes('&laquo;') && !link.label.includes('&raquo;')).map((link, i) => {
-                                    const isPageNumber = !isNaN(Number(link.label));
-
-                                    if (!isPageNumber && link.label === '...') {
-                                        return (
-                                            <PaginationItem key={i}>
-                                                <PaginationEllipsis />
-                                            </PaginationItem>
-                                        );
-                                    }
-
-                                    return (
-                                        <PaginationItem key={i}>
-                                            <PaginationLink
-                                                href={link.url || '#'}
-                                                isActive={link.active}
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    if (link.url) {
-                                                        router.get(link.url, {
-                                                            search,
-                                                            status: status === 'all' ? '' : status,
-                                                            department_id: departmentId === 'all' ? '' : departmentId,
-                                                            employee_id: employeeId === 'all' ? '' : employeeId,
-                                                            from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '',
-                                                            to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '',
-                                                        }, { preserveState: true });
-                                                    }
-                                                }}
-                                            >
-                                                {link.label}
-                                            </PaginationLink>
-                                        </PaginationItem>
-                                    );
-                                })}
-
-                                {applications.meta.current_page < applications.meta.last_page && applications.links.next && (
-                                    <PaginationItem>
-                                        <PaginationNext
-                                            href={applications.links.next || '#'}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                router.get(applications.links.next || '', {
-                                                    search,
-                                                    status: status === 'all' ? '' : status,
-                                                    department_id: departmentId === 'all' ? '' : departmentId,
-                                                    employee_id: employeeId === 'all' ? '' : employeeId,
-                                                    from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '',
-                                                    to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '',
-                                                }, { preserveState: true });
-                                            }}
-                                        />
-                                    </PaginationItem>
-                                )}
-                            </PaginationContent>
-                        </Pagination>
-                    </div>
-                )}
             </PageSurface>
         </Layout>
     );

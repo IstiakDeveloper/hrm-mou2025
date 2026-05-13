@@ -18,7 +18,11 @@ class BranchController extends Controller
      */
     public function index(Request $request)
     {
-        // Query branches
+        $perPage = (int) $request->get('per_page', 10);
+        if (!in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+            $perPage = 10;
+        }
+
         $branches = Branch::query()
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
@@ -26,7 +30,7 @@ class BranchController extends Controller
             })
             ->with('branchHeadDesignation:id,name')
             ->orderBy('name')
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
 
         return Inertia::render('branch/index', [
@@ -61,7 +65,7 @@ class BranchController extends Controller
                     'next' => $branches->nextPageUrl(),
                 ],
             ],
-            'filters' => $request->only(['search']),
+            'filters' => $request->only(['search', 'per_page']),
         ]);
     }
 

@@ -11,4 +11,8 @@ class Program extends Model
         'type',
         'is_active',
     ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 }

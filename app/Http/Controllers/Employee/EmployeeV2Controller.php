@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Employee;
 
+use App\Http\Concerns\ResolvesEmployeeNidSmartCard;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Department;
@@ -24,6 +25,8 @@ use Inertia\Inertia;
 
 class EmployeeV2Controller extends Controller
 {
+    use ResolvesEmployeeNidSmartCard;
+
     /** Default role name used for employee user accounts. */
     private const AUTO_USER_EMPLOYEE_ROLE_NAME = 'Employee';
 
@@ -33,8 +36,11 @@ class EmployeeV2Controller extends Controller
     {
         try {
             $raw = @file_get_contents($absPath);
-            if (! is_string($raw) || trim($raw) === '') return [];
+            if (! is_string($raw) || trim($raw) === '') {
+                return [];
+            }
             $decoded = json_decode($raw, true);
+
             return is_array($decoded) ? $decoded : [];
         } catch (\Throwable) {
             return [];
@@ -45,6 +51,7 @@ class EmployeeV2Controller extends Controller
     {
         $d = (string) env(self::AUTO_EMAIL_DOMAIN_ENV, 'auto.local');
         $d = trim($d);
+
         return $d !== '' ? $d : 'auto.local';
     }
 
@@ -77,7 +84,9 @@ class EmployeeV2Controller extends Controller
         ];
 
         foreach ($nullableEmptiesToNull as $field) {
-            if (! $request->has($field)) continue;
+            if (! $request->has($field)) {
+                continue;
+            }
             $v = $request->input($field);
             if ($v === '' || $v === 'null') {
                 $request->merge([$field => null]);
@@ -191,6 +200,7 @@ class EmployeeV2Controller extends Controller
         foreach ($pins as $p) {
             if (preg_match('/^\\d+$/', $p)) {
                 $maxNormal = max($maxNormal, (int) $p);
+
                 continue;
             }
             if (preg_match('/^p-(\\d+)$/i', $p, $m)) {
@@ -236,19 +246,6 @@ class EmployeeV2Controller extends Controller
         ]);
     }
 
-    private function validateNidOrSmartCard(Request $request, string $field, string $messageKey): void
-    {
-        $v = trim((string) $request->input($field, ''));
-        if ($v === '') return;
-        $digits = preg_replace('/\\D+/', '', $v) ?? '';
-        $len = strlen($digits);
-        if (! in_array($len, [10, 13, 17], true)) {
-            $request->validate([$field => 'in:__invalid__'], [
-                "{$field}.in" => $messageKey,
-            ]);
-        }
-    }
-
     private function buildUsernameBaseFromPin(string $pin): string
     {
         $local = strtolower($pin);
@@ -278,6 +275,7 @@ class EmployeeV2Controller extends Controller
         $employeeRole = Role::query()->where('name', self::AUTO_USER_EMPLOYEE_ROLE_NAME)->first();
         if (! $employeeRole) {
             Log::warning('Auto user skipped: Employee role missing', ['employee_id' => $employee->id]);
+
             return;
         }
 
@@ -285,6 +283,7 @@ class EmployeeV2Controller extends Controller
         $pin = trim($pinRaw);
         if ($pin === '') {
             Log::warning('Auto user skipped: empty PIN', ['employee_id' => $employee->id]);
+
             return;
         }
 
@@ -339,6 +338,7 @@ class EmployeeV2Controller extends Controller
                 return 'Duplicate value: PIN or email may already exist. Please change them and try again.';
             }
         }
+
         return 'Employee could not be saved. Please try again.';
     }
 
@@ -348,6 +348,7 @@ class EmployeeV2Controller extends Controller
 
         try {
             $this->normalizeEmployeeRequestPayload($request);
+            $this->resolveNidAndSmartCardFromRequest($request);
 
             $maritalStatuses = [
                 'Single',
@@ -506,9 +507,6 @@ class EmployeeV2Controller extends Controller
                     'spouse_mobile' => 'required|string|max:20',
                 ]);
             }
-
-            // NID / Smart card validation (single input style supported if UI uses nid field)
-            $this->validateNidOrSmartCard($request, 'nid', 'NID/Smart Card must be 10, 13, or 17 digits.');
 
             $employeeData = Arr::only($validated, [
                 'pin',
@@ -806,6 +804,7 @@ class EmployeeV2Controller extends Controller
     {
         try {
             $this->normalizeEmployeeRequestPayload($request);
+            $this->resolveNidAndSmartCardFromRequest($request);
 
             $validated = $request->validate([
                 'current_branch_id' => 'required|exists:branches,id',

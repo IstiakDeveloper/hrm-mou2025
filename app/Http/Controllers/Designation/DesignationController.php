@@ -15,13 +15,18 @@ class DesignationController extends Controller
      */
     public function index(Request $request)
     {
+        $perPage = (int) $request->get('per_page', 10);
+        if (!in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+            $perPage = 10;
+        }
+
         $designationsQuery = Designation::query()
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%");
             })
             ->orderBy('rank');
 
-        $designations = $designationsQuery->paginate(10)->withQueryString();
+        $designations = $designationsQuery->paginate($perPage)->withQueryString();
 
         return Inertia::render('designation/index', [
             'designations' => [
@@ -43,7 +48,7 @@ class DesignationController extends Controller
                     'next' => $designations->nextPageUrl(),
                 ],
             ],
-            'filters' => $request->only(['search']),
+            'filters' => $request->only(['search', 'per_page']),
         ]);
     }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
+import { PageSurface } from '@/components/page-surface';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,6 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-    ArrowLeft,
     Calendar,
     CheckCircle,
     AlertCircle,
@@ -77,7 +77,6 @@ interface AttendanceRecord {
 }
 
 
-// ... (other interfaces remain the same)
 interface Department {
     id: number;
     name: string;
@@ -94,12 +93,13 @@ interface Employee {
     first_name: string;
     last_name: string;
     email: string;
-    department: Department;
-    designation: Designation;
+    department: Department | null;
+    designation: Designation | null;
 }
 
 interface EmployeeOption {
     id: number;
+    employee_id: string;
     name: string;
     department: string;
     designation: string;
@@ -203,6 +203,8 @@ export default function EmployeeDashboard({
     leaveSummary,
     userPermissions,
 }: EmployeeDashboardProps) {
+    const [activeTab, setActiveTab] = useState('summary');
+
     // State for filter form
     const [filters, setFilters] = useState({
         employeeId: selectedEmployee?.id || '',
@@ -216,21 +218,30 @@ export default function EmployeeDashboard({
     const [filteredEmployees, setFilteredEmployees] = useState(employees);
     const [showSearchResults, setShowSearchResults] = useState(false);
 
-    // Debug log for attendance data
     useEffect(() => {
-        if (attendanceData && attendanceData.length > 0) {
-            console.log('Attendance Data Sample:', attendanceData[0]);
-            const hasMovementData = attendanceData.some(record => record.has_movement);
-            console.log('Has movement data:', hasMovementData);
+        if (!selectedEmployee) {
+            return;
         }
-    }, [attendanceData]);
+        const opt = employees.find((e) => e.id === selectedEmployee.id);
+        setSearchQuery(opt?.name ?? `${selectedEmployee.first_name} ${selectedEmployee.last_name}`.trim());
+        setFilters((prev) => ({
+            ...prev,
+            employeeId: selectedEmployee.id,
+            filterType,
+            year: filterYear.toString(),
+            fromDate: dateRange.from ? new Date(dateRange.from) : null,
+            toDate: dateRange.to ? new Date(dateRange.to) : null,
+        }));
+    }, [selectedEmployee, employees, filterType, filterYear, dateRange.from, dateRange.to]);
 
     // Helper function to handle employee search
     useEffect(() => {
         if (searchQuery) {
-            const filtered = employees.filter(employee =>
-                employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                employee.employee_id?.toLowerCase().includes(searchQuery.toLowerCase())
+            const q = searchQuery.toLowerCase();
+            const filtered = employees.filter(
+                (employee) =>
+                    employee.name.toLowerCase().includes(q) ||
+                    employee.employee_id.toLowerCase().includes(q),
             );
             setFilteredEmployees(filtered);
             setShowSearchResults(true);
@@ -344,8 +355,8 @@ export default function EmployeeDashboard({
         }
 
         // Prepare query parameters
-        const params: Record<string, any> = {
-            employee_id: filters.employeeId,
+        const params: Record<string, string | number> = {
+            employee_id: Number(filters.employeeId),
             filter_type: filters.filterType,
         };
 
@@ -423,35 +434,24 @@ export default function EmployeeDashboard({
         window.open(url, '_blank');
     };
 
-    const downloadLeavePdf = () => {
-        const params = new URLSearchParams();
-        if (filters) {
-            if (filters.employeeId) {
-                params.append('employee_id', filters.employeeId.toString());
-            }
-            params.append('filter_type', filters.filterType);
-            if (filters.filterType === 'year') {
-                params.append('year', filters.year);
-            } else if (filters.filterType === 'custom' && filters.fromDate && filters.toDate) {
-                params.append('from_date', format(filters.fromDate, 'yyyy-MM-dd'));
-                params.append('to_date', format(filters.toDate, 'yyyy-MM-dd'));
-            } else if (dateRange && dateRange.from && dateRange.to) {
-                params.append('from_date', dateRange.from);
-                params.append('to_date', dateRange.to);
-            }
-        }
-        const url = `${route('employee.dashboard.leave.pdf')}?${params.toString()}`;
-        window.open(url, '_blank');
-    };
-
     return (
         <Layout>
-            <Head title="Employee Dashboard" />
+            <Head title="Employee report" />
 
-            <div className="container mx-auto py-8">
-                <h1 className="text-2xl font-bold text-gray-900 mb-6">
-                    Employee Dashboard
-                </h1>
+            <PageSurface className="px-4 sm:px-6">
+                <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Employee report</h1>
+                        <p className="mt-1 text-sm text-zinc-600">
+                            Attendance, leave, and movements for one employee. Dates cannot extend past today.
+                        </p>
+                    </div>
+                    {userPermissions.isEmployee && (
+                        <Badge variant="outline" className="w-fit text-xs text-zinc-600">
+                            Your access is limited to employees in your organogram scope.
+                        </Badge>
+                    )}
+                </div>
 
                 {/* Filter Card */}
                 <Card className="mb-8 shadow-sm">
@@ -473,55 +473,40 @@ export default function EmployeeDashboard({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
 
                             <div className="space-y-2">
-                                <Label htmlFor="employee_search">Select Employee</Label>
+                                <Label htmlFor="employee_search">Employee</Label>
                                 <div id="search-container" className="relative">
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                                     <Input
                                         id="employee_search"
                                         type="text"
-                                        placeholder="Search employee by name or ID..."
+                                        placeholder="Search by name or employee ID…"
                                         className="pl-8"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
+                                        onFocus={() => searchQuery && setShowSearchResults(true)}
                                         autoComplete="off"
                                     />
 
                                     {/* Search results dropdown */}
                                     {showSearchResults && filteredEmployees.length > 0 && (
-                                        <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                                        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-white shadow-lg">
                                             {filteredEmployees.map((employee) => (
                                                 <div
                                                     key={employee.id}
-                                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between items-center border-b last:border-0"
+                                                    className="flex cursor-pointer items-center justify-between border-b px-4 py-2 last:border-0 hover:bg-zinc-50"
                                                     onClick={() => handleEmployeeSelect(employee.id.toString())}
                                                 >
                                                     <div>
-                                                        <div className="font-medium">{employee.name}</div>
-                                                        <div className="text-sm text-gray-500">{employee.department}</div>
+                                                        <div className="font-medium text-zinc-900">{employee.name}</div>
+                                                        <div className="text-sm text-zinc-500">{employee.department}</div>
                                                     </div>
-                                                    <div className="text-xs text-gray-400">{employee.designation}</div>
+                                                    <div className="text-xs text-zinc-400">{employee.designation}</div>
                                                 </div>
                                             ))}
                                         </div>
                                     )}
                                 </div>
-
-                                {/* Keep the original Select as a fallback/alternative */}
-                                <Select
-                                    value={filters.employeeId.toString()}
-                                    onValueChange={handleEmployeeSelect}
-                                >
-                                    <SelectTrigger id="employee_select">
-                                        <SelectValue placeholder="Select an employee" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {employees.map((employee) => (
-                                            <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                {employee.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <p className="text-xs text-zinc-500">Pick a row above, then set the period and click Apply.</p>
                             </div>
 
                             <div>
@@ -614,7 +599,7 @@ export default function EmployeeDashboard({
                                                 {selectedEmployee.first_name} {selectedEmployee.last_name}
                                             </h2>
                                             <div className="text-sm text-gray-500">
-                                                {selectedEmployee.designation.name} • {selectedEmployee.department.name}
+                                                {selectedEmployee.designation?.name ?? '—'} · {selectedEmployee.department?.name ?? '—'}
                                             </div>
                                         </div>
                                     </div>
@@ -631,7 +616,7 @@ export default function EmployeeDashboard({
                         </div>
 
                         {/* Dashboard Tabs */}
-                        <Tabs defaultValue="summary" className="space-y-6">
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
                             <TabsList>
                                 <TabsTrigger value="summary">Summary</TabsTrigger>
                                 <TabsTrigger value="attendance">Attendance</TabsTrigger>
@@ -735,7 +720,14 @@ export default function EmployeeDashboard({
                                                                 </span>
                                                             </div>
                                                             <Progress
-                                                                value={(balance.used_days / balance.allocated_days) * 100}
+                                                                value={
+                                                                    balance.allocated_days > 0
+                                                                        ? Math.min(
+                                                                              100,
+                                                                              (balance.used_days / balance.allocated_days) * 100,
+                                                                          )
+                                                                        : 0
+                                                                }
                                                                 className="h-2"
                                                             />
                                                             <div className="flex justify-between text-xs text-gray-500">
@@ -767,8 +759,8 @@ export default function EmployeeDashboard({
 
                                                         {leaveData.length > 3 && (
                                                             <div className="text-center mt-2">
-                                                                <Button variant="ghost" size="sm" className="text-xs" onClick={() => document.querySelector('[data-value="leave"]')?.click()}>
-                                                                    View All ({leaveData.length})
+                                                                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setActiveTab('leave')}>
+                                                                    View all ({leaveData.length})
                                                                 </Button>
                                                             </div>
                                                         )}
@@ -833,8 +825,8 @@ export default function EmployeeDashboard({
 
                                                     {movementData.length > 3 && (
                                                         <div className="text-center mt-2">
-                                                            <Button variant="ghost" size="sm" className="text-xs" onClick={() => document.querySelector('[data-value="movement"]')?.click()}>
-                                                                View All ({movementData.length})
+                                                            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setActiveTab('movement')}>
+                                                                View all ({movementData.length})
                                                             </Button>
                                                         </div>
                                                     )}
@@ -887,18 +879,7 @@ export default function EmployeeDashboard({
                                                 </TableHeader>
                                                 <TableBody>
                                                     {attendanceData.length > 0 ? (
-                                                        attendanceData.map((record, index) => {
-                                                            // Debug log for movement data
-                                                            if (record.has_movement) {
-                                                                console.log('Movement data for', record.date, ':', {
-                                                                    has_movement: record.has_movement,
-                                                                    multiple_movements: record.multiple_movements,
-                                                                    total_movements: record.total_movements,
-                                                                    movement_type: record.movement_type,
-                                                                    movement_purpose: record.movement_purpose
-                                                                });
-                                                            }
-                                                            return (
+                                                        attendanceData.map((record, index) => (
                                                                 <TableRow
                                                                     key={index}
                                                                     className={record.has_movement ?
@@ -967,20 +948,8 @@ export default function EmployeeDashboard({
                                                                                                             <div className="text-sm space-y-1">
                                                                                                                 <div>
                                                                                                                     <span className="text-gray-500 font-medium">Purpose:</span>
-                                                                                                                    <div className="mt-1 p-2 bg-gray-50 rounded text-xs">
-                                                                                                                        {movement.purpose?.length > 80 ? (
-                                                                                                                            <div>
-                                                                                                                                {movement.purpose.substring(0, 80)}...
-                                                                                                                                <button
-                                                                                                                                    className="text-blue-600 hover:underline ml-1"
-                                                                                                                                    onClick={() => alert(movement.purpose)}
-                                                                                                                                >
-                                                                                                                                    Read Full
-                                                                                                                                </button>
-                                                                                                                            </div>
-                                                                                                                        ) : (
-                                                                                                                            movement.purpose
-                                                                                                                        )}
+                                                                                                                    <div className="mt-1 whitespace-pre-wrap break-words rounded bg-gray-50 p-2 text-xs text-gray-800">
+                                                                                                                        {movement.purpose || '—'}
                                                                                                                     </div>
                                                                                                                 </div>
 
@@ -1135,7 +1104,10 @@ export default function EmployeeDashboard({
                                                                                                 <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
                                                                                                     <button
                                                                                                         className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center"
-                                                                                                        onClick={() => window.open(`/movements/${record.movement_id}`, '_blank')}
+                                                                                                        onClick={() =>
+                                                                                                            record.movement_id &&
+                                                                                                            window.open(route('movements.show', record.movement_id), '_blank')
+                                                                                                        }
                                                                                                     >
                                                                                                         <FileText className="mr-1 h-4 w-4" />
                                                                                                         View Full Movement Record
@@ -1171,8 +1143,7 @@ export default function EmployeeDashboard({
                                                                         </div>
                                                                     </TableCell>
                                                                 </TableRow>
-                                                            );
-                                                        })
+                                                        ))
                                                     ) : (
                                                         <TableRow>
                                                             <TableCell colSpan={7} className="text-center py-6 text-gray-500">
@@ -1233,7 +1204,11 @@ export default function EmployeeDashboard({
                                                             </div>
                                                         </div>
                                                         <Progress
-                                                            value={(balance.used_days / balance.allocated_days) * 100}
+                                                            value={
+                                                                balance.allocated_days > 0
+                                                                    ? Math.min(100, (balance.used_days / balance.allocated_days) * 100)
+                                                                    : 0
+                                                            }
                                                             className="h-2"
                                                         />
                                                         <div className="flex justify-between mt-2 text-xs text-gray-500">
@@ -1418,7 +1393,7 @@ export default function EmployeeDashboard({
                         </p>
                     </div>
                 )}
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

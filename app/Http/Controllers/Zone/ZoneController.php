@@ -12,6 +12,11 @@ class ZoneController extends Controller
 {
     public function index(Request $request)
     {
+        $perPage = (int) $request->get('per_page', 10);
+        if (!in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+            $perPage = 10;
+        }
+
         $zones = Zone::query()
             ->with('zoneManager:id,employee_id,first_name,last_name')
             ->when($request->search, function ($query, $search) {
@@ -19,12 +24,12 @@ class ZoneController extends Controller
                     ->orWhere('code', 'like', "%{$search}%");
             })
             ->orderBy('name')
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
 
         return Inertia::render('zone/index', [
             'zones' => $zones,
-            'filters' => $request->only(['search']),
+            'filters' => $request->only(['search', 'per_page']),
         ]);
     }
 

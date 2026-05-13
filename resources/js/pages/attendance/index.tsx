@@ -13,12 +13,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import {
     Select,
     SelectContent,
     SelectItem,
@@ -64,6 +58,7 @@ import {
     MapPin
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+
 import {
     Popover,
     PopoverContent,
@@ -190,6 +185,7 @@ interface AttendanceIndexProps {
         department_id: string;
         status: string;
         search: string;
+        per_page?: string;
     };
     date: string;
     readableDate: string;
@@ -212,6 +208,7 @@ export default function AttendanceIndex({
     const [currentDate, setCurrentDate] = useState(date);
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [movementFilter, setMovementFilter] = useState(null);
+    const [perPage, setPerPage] = useState(filters.per_page || '10');
 
     const handleSearch = () => {
         router.get(route('attendance.index'), {
@@ -220,7 +217,21 @@ export default function AttendanceIndex({
             branch_id: branchId || '',
             department_id: departmentId || '',
             status: status || '',
-            movement_filter: movementFilter || ''
+            movement_filter: movementFilter || '',
+            per_page: perPage
+        }, { preserveState: true });
+    };
+
+    const handlePerPageChange = (value: string) => {
+        setPerPage(value);
+        router.get(route('attendance.index'), {
+            search,
+            date: currentDate,
+            branch_id: branchId || '',
+            department_id: departmentId || '',
+            status: status || '',
+            movement_filter: movementFilter || '',
+            per_page: value
         }, { preserveState: true });
     };
 
@@ -235,7 +246,8 @@ export default function AttendanceIndex({
         setBranchId(null);
         setDepartmentId(null);
         setStatus(null);
-        router.get(route('attendance.index'), { date: currentDate }, { preserveState: true });
+        setPerPage('10');
+        router.get(route('attendance.index'), { date: currentDate, per_page: '10' }, { preserveState: true });
     };
 
     const handleDateChange = (selectedDate: Date | undefined) => {
@@ -248,7 +260,8 @@ export default function AttendanceIndex({
                 search,
                 branch_id: branchId || '',
                 department_id: departmentId || '',
-                status: status || ''
+                status: status || '',
+                per_page: perPage
             }, { preserveState: true });
         }
     };
@@ -361,332 +374,268 @@ export default function AttendanceIndex({
             <Head title="Daily Attendance" />
 
             <PageSurface>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Daily Attendance</h1>
-                        <p className="mt-1 text-gray-500">
-                            View and manage attendance records for {readableDate}
-                        </p>
-                    </div>
+                <div className="mb-6 space-y-4">
+                    {/* Top row: Title and primary actions */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Daily Attendance</h1>
+                            <p className="mt-1 text-sm text-slate-500">
+                                View and manage attendance records for {readableDate}
+                            </p>
+                        </div>
 
-                    <div className="mt-4 md:mt-0 flex flex-wrap gap-2">
-                        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className="flex items-center">
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {currentDate ? format(new Date(currentDate), 'PPP') : 'Select date'}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <CalendarComponent
-                                    mode="single"
-                                    selected={currentDate ? new Date(currentDate) : undefined}
-                                    onSelect={handleDateChange}
-                                    initialFocus
-                                />
-                            </PopoverContent>
-                        </Popover>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
+                                        <CalendarIcon className="mr-2 h-4 w-4 text-emerald-600" />
+                                        {currentDate ? format(new Date(currentDate), 'MMM d, yyyy') : 'Select date'}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="end">
+                                    <CalendarComponent
+                                        mode="single"
+                                        selected={currentDate ? new Date(currentDate) : undefined}
+                                        onSelect={handleDateChange}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
 
-                        {userPermissions.canCreate && (
-                            <Link href={route('attendance.create')}>
-                                <Button className="flex items-center">
-                                    <Plus className="mr-1 h-4 w-4" />
-                                    Add Attendance
+                            <Link href={route('attendance.monthly')}>
+                                <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
+                                    <Calendar className="mr-2 h-4 w-4 text-slate-500" />
+                                    Monthly
                                 </Button>
                             </Link>
-                        )}
 
-                        {userPermissions.canSyncDevices && (
-                            <Button variant="outline" className="flex items-center" onClick={syncAttendance}>
-                                <RefreshCw className="mr-1 h-4 w-4" />
-                                Sync Devices
-                            </Button>
-                        )}
-
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="flex items-center">
-                                    <MoreHorizontal className="mr-1 h-4 w-4" />
-                                    <span>Options</span>
+                            <Link href={route('attendance.sheet-report')}>
+                                <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
+                                    <FileText className="mr-2 h-4 w-4 text-slate-500" />
+                                    Report
                                 </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <Link href={route('attendance.monthly')}>
-                                    <DropdownMenuItem className="cursor-pointer">
-                                        <Calendar className="mr-2 h-4 w-4" />
-                                        <span>Monthly View</span>
-                                    </DropdownMenuItem>
-                                </Link>
+                            </Link>
 
-                                <Link href={route('attendance.sheet-report')}>
-                                    <DropdownMenuItem className="cursor-pointer">
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        <span>Attendance Report</span>
-                                    </DropdownMenuItem>
+                            {userPermissions.canSyncDevices && (
+                                <>
+                                    <Link href={route('attendance.devices.index')}>
+                                        <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
+                                            <Clock className="mr-2 h-4 w-4 text-slate-500" />
+                                            Devices
+                                        </Button>
+                                    </Link>
+                                    <Link href={route('attendance.settings.index')}>
+                                        <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
+                                            <Building className="mr-2 h-4 w-4 text-slate-500" />
+                                            Settings
+                                        </Button>
+                                    </Link>
+                                </>
+                            )}
+
+                            {userPermissions.canCreate && (
+                                <Link href={route('attendance.create')}>
+                                    <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-medium">
+                                        <Plus className="mr-1 h-4 w-4" />
+                                        Add Attendance
+                                    </Button>
                                 </Link>
-                                {/* <Link href={route('attendance.report')}>
-                                    <DropdownMenuItem className="cursor-pointer">
-                                        <BarChart className="mr-2 h-4 w-4" />
-                                        <span>Attendance Report</span>
-                                    </DropdownMenuItem>
-                                </Link> */}
-                                {/* Only show device management for users with sync permission */}
-                                {userPermissions.canSyncDevices && (
-                                    <>
-                                        <Link href={route('attendance.devices.index')}>
-                                            <DropdownMenuItem className="cursor-pointer">
-                                                <Clock className="mr-2 h-4 w-4" />
-                                                <span>Manage Devices</span>
-                                            </DropdownMenuItem>
-                                        </Link>
-                                        <Link href={route('attendance.settings.index')}>
-                                            <DropdownMenuItem className="cursor-pointer">
-                                                <Clock className="mr-2 h-4 w-4" />
-                                                <span>Settings</span>
-                                            </DropdownMenuItem>
-                                        </Link>
-                                    </>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Role-based Context Message */}
+                    {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
+                        <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+                            <Info className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-sm">
+                                You are viewing your own attendance records.
+                                {userPermissions.canCreate && " You can add your own attendance records."}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {/* Compact Filter Bar */}
+                    <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 w-full bg-slate-50/50 p-3 rounded-xl border border-slate-200">
+                        <div className="relative flex-1 min-w-[200px]">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                placeholder="Search employee..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+                            />
+                        </div>
+
+                        {canFilterByBranch && branches.length > 1 && (
+                            <Select value={branchId || undefined} onValueChange={(value) => setBranchId(value === "all" ? null : value)}>
+                                <SelectTrigger className="w-[140px] h-9 text-sm bg-white border-slate-200 rounded-lg">
+                                    <SelectValue placeholder="Branch" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Branches</SelectItem>
+                                    {branches.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        )}
+
+                        {canFilterByDepartment && departments.length > 1 && (
+                            <Select value={departmentId || undefined} onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}>
+                                <SelectTrigger className="w-[140px] h-9 text-sm bg-white border-slate-200 rounded-lg">
+                                    <SelectValue placeholder="Department" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Depts</SelectItem>
+                                    {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        )}
+
+                        <Select value={movementFilter || undefined} onValueChange={(value) => setMovementFilter(value === "all" ? null : value)}>
+                            <SelectTrigger className="w-[140px] h-9 text-sm bg-white border-slate-200 rounded-lg">
+                                <SelectValue placeholder="Movement" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Records</SelectItem>
+                                <SelectItem value="with-movement">With Movement</SelectItem>
+                                <SelectItem value="without-movement">No Movement</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={status || undefined} onValueChange={(value) => setStatus(value === "all" ? null : value)}>
+                            <SelectTrigger className="w-[120px] h-9 text-sm bg-white border-slate-200 rounded-lg">
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="present">Present</SelectItem>
+                                <SelectItem value="absent">Absent</SelectItem>
+                                <SelectItem value="late">Late</SelectItem>
+                                <SelectItem value="half_day">Half Day</SelectItem>
+                                <SelectItem value="leave">Leave</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" onClick={resetFilters} size="sm" className="h-9 text-slate-500 hover:text-slate-700">
+                                Reset
+                            </Button>
+                            <Button onClick={handleSearch} size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">
+                                Apply
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                {/* Role-based Context Message */}
-                {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
-                    <Alert className="mb-6">
-                        <Info className="h-4 w-4" />
-                        <AlertDescription>
-                            You are viewing your own attendance records.
-                            {userPermissions.canCreate && " You can add your own attendance records."}
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Filters */}
-                <Card className="mb-6">
-                    <CardHeader className="pb-3">
-                        <CardTitle>Filters</CardTitle>
-                        <CardDescription>
-                            {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead
-                                ? "Filter your attendance records"
-                                : "Filter attendance by name, branch, department or status"}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-                            <div className="flex-1">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                                    <Input
-                                        placeholder="Search by name or employee ID..."
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        className="pl-10"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Only show branch filter if user can filter by branch */}
-                            {canFilterByBranch && branches.length > 1 && (
-                                <div className="w-full md:w-64">
-                                    <Select
-                                        value={branchId || undefined}
-                                        onValueChange={(value) => setBranchId(value === "all" ? null : value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select branch" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Branches</SelectItem>
-                                            {branches.map((branch) => (
-                                                <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                    {branch.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-
-                            {/* Only show department filter if user can filter by department */}
-                            {canFilterByDepartment && departments.length > 1 && (
-                                <div className="w-full md:w-64">
-                                    <Select
-                                        value={departmentId || undefined}
-                                        onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Departments</SelectItem>
-                                            {departments.map((department) => (
-                                                <SelectItem key={department.id} value={department.id.toString()}>
-                                                    {department.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-
-                            <div className="w-full md:w-64">
-                                <Select
-                                    value={movementFilter || undefined}
-                                    onValueChange={(value) => setMovementFilter(value === "all" ? null : value)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Movement Status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Records</SelectItem>
-                                        <SelectItem value="with-movement">With Movement</SelectItem>
-                                        <SelectItem value="without-movement">Without Movement</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="w-full md:w-64">
-                                <Select
-                                    value={status || undefined}
-                                    onValueChange={(value) => setStatus(value === "all" ? null : value)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Statuses</SelectItem>
-                                        <SelectItem value="present">Present</SelectItem>
-                                        <SelectItem value="absent">Absent</SelectItem>
-                                        <SelectItem value="late">Late</SelectItem>
-                                        <SelectItem value="half_day">Half Day</SelectItem>
-                                        <SelectItem value="leave">Leave</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="flex space-x-2">
-                                <Button variant="outline" onClick={resetFilters}>
-                                    Reset
-                                </Button>
-                                <Button onClick={handleSearch}>
-                                    Apply Filters
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
                 {/* Attendance Table */}
-                <Card>
+                <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
                     <CardContent className="p-0">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-gray-50">
-                                    <TableHead>Employee</TableHead>
-                                    <TableHead>Department</TableHead>
-                                    <TableHead>Check In</TableHead>
-                                    <TableHead>Check Out</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Device</TableHead>
-                                    <TableHead>Movement & Remarks</TableHead>
-                                    {(userPermissions.canEdit || userPermissions.canDelete) && (
-                                        <TableHead className="text-right">Actions</TableHead>
-                                    )}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {attendances.data && attendances.data.length > 0 ? (
-                                    attendances.data.map((attendance) => (
-                                        <TableRow
-                                            key={attendance.id}
-                                            className={attendance.has_movement ?
-                                                "hover:bg-blue-50/50 border-l-2 border-l-blue-200" :
-                                                "hover:bg-gray-50"
-                                            }
-                                        >
-                                            <TableCell>
-                                                <div className="flex items-center space-x-3">
-                                                    <div className="flex-shrink-0">
-                                                        <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
-                                                            <User className="h-4 w-4 text-white" />
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider pl-6">Employee</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Department</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Check In</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Check Out</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Device</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Movement & Remarks</TableHead>
+                                        {(userPermissions.canEdit || userPermissions.canDelete) && (
+                                            <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
+                                        )}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {attendances.data && attendances.data.length > 0 ? (
+                                        attendances.data.map((attendance) => (
+                                            <TableRow
+                                                key={attendance.id}
+                                                className={`hover:bg-slate-50 transition-colors border-b border-slate-100 group ${attendance.has_movement ? 'border-l-2 border-l-blue-400 bg-blue-50/10 hover:bg-blue-50/30' : ''}`}
+                                            >
+                                                <TableCell className="pl-6">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="flex-shrink-0">
+                                                            <div className="h-7 w-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                                                <User className="h-3.5 w-3.5" />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-semibold text-xs text-slate-800">
+                                                                {attendance.employee.first_name} {attendance.employee.last_name}
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-500 font-mono">
+                                                                ID: {attendance.employee.employee_id}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <div>
-                                                        <div className="font-medium text-gray-900">
-                                                            {attendance.employee.first_name} {attendance.employee.last_name}
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 font-mono">
-                                                            ID: {attendance.employee.employee_id}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </TableCell>
+                                                </TableCell>
 
-                                            <TableCell>
-                                                <div className="space-y-1">
-                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                        <Building2 className="mr-1 h-3 w-3" />
-                                                        {attendance.employee.department.name}
-                                                    </Badge>
-                                                    <div className="text-xs text-gray-500">
-                                                        {attendance.employee.designation.name}
+                                                <TableCell>
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-xs font-medium text-slate-700 flex items-center">
+                                                            <Building2 className="mr-1.5 h-3 w-3 text-slate-400" />
+                                                            {attendance.employee.department.name}
+                                                        </div>
+                                                        <div className="text-[11px] text-slate-500 pl-4">
+                                                            {attendance.employee.designation.name}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </TableCell>
+                                                </TableCell>
 
-                                            <TableCell>
+                                                <TableCell>
                                                 {attendance.check_in_formatted ? (
-                                                    <div className="flex items-center space-x-2">
-                                                        <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                                                        <div className="text-green-700 font-medium">
-                                                            <Clock className="inline mr-1 h-4 w-4 text-green-500" />
+                                                    <div className="flex items-center space-x-1.5">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-green-500"></div>
+                                                        <div className="text-green-700 font-medium text-xs">
+                                                            <Clock className="inline mr-1 h-3.5 w-3.5 text-green-500" />
                                                             {attendance.check_in_formatted}
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex items-center space-x-2">
-                                                        <div className="h-2 w-2 rounded-full bg-gray-300"></div>
-                                                        <span className="text-gray-500">Not checked in</span>
+                                                    <div className="flex items-center space-x-1.5">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-gray-300"></div>
+                                                        <span className="text-gray-500 text-xs">Not checked in</span>
                                                     </div>
                                                 )}
                                             </TableCell>
 
                                             <TableCell>
                                                 {attendance.check_out_formatted ? (
-                                                    <div className="flex items-center space-x-2">
-                                                        <div className="h-2 w-2 rounded-full bg-orange-500"></div>
-                                                        <div className="text-orange-700 font-medium">
-                                                            <Clock className="inline mr-1 h-4 w-4 text-orange-500" />
+                                                    <div className="flex items-center space-x-1.5">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-orange-500"></div>
+                                                        <div className="text-orange-700 font-medium text-xs">
+                                                            <Clock className="inline mr-1 h-3.5 w-3.5 text-orange-500" />
                                                             {attendance.check_out_formatted}
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex items-center space-x-2">
-                                                        <div className="h-2 w-2 rounded-full bg-gray-300"></div>
-                                                        <span className="text-gray-500">Not checked out</span>
+                                                    <div className="flex items-center space-x-1.5">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-gray-300"></div>
+                                                        <span className="text-gray-500 text-xs">Not checked out</span>
                                                     </div>
                                                 )}
                                             </TableCell>
 
                                             <TableCell>
-                                                {getStatusBadge(attendance.status)}
+                                                <div className="scale-90 origin-left">
+                                                    {getStatusBadge(attendance.status)}
+                                                </div>
                                             </TableCell>
 
                                             <TableCell>
                                                 {attendance.device ? (
-                                                    <div className="flex items-center space-x-2">
-                                                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                                                        <div className="text-sm">
-                                                            <span className="font-medium">{attendance.device.name}</span>
+                                                    <div className="flex items-center space-x-1.5">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
+                                                        <div className="text-xs">
+                                                            <span className="font-medium text-slate-700">{attendance.device.name}</span>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex items-center space-x-2">
-                                                        <div className="h-2 w-2 rounded-full bg-gray-300"></div>
-                                                        <span className="text-gray-500">Manual entry</span>
+                                                    <div className="flex items-center space-x-1.5">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-gray-300"></div>
+                                                        <span className="text-gray-500 text-[11px]">Manual entry</span>
                                                     </div>
                                                 )}
                                             </TableCell>
@@ -929,20 +878,20 @@ export default function AttendanceIndex({
                                                     </div>
                                                 ) : (
                                                     // No movement - show regular remarks
-                                                    <div className="space-y-2">
+                                                    <div className="space-y-1.5">
                                                         {attendance.auto_remarks ? (
-                                                            <div className="flex items-center text-sm bg-gray-50 p-2 rounded-md">
-                                                                {getRemarksIcon(attendance.auto_remarks)}
-                                                                <span className="ml-2">{attendance.auto_remarks}</span>
+                                                            <div className="flex items-center text-xs bg-gray-50 p-1.5 rounded-md">
+                                                                <div className="scale-75 origin-left -mr-1">{getRemarksIcon(attendance.auto_remarks)}</div>
+                                                                <span className="ml-0.5">{attendance.auto_remarks}</span>
                                                             </div>
                                                         ) : attendance.remarks ? (
-                                                            <div className="flex items-center text-sm bg-blue-50 p-2 rounded-md">
-                                                                <MessageSquare className="mr-2 h-4 w-4 text-blue-500 flex-shrink-0" />
+                                                            <div className="flex items-center text-xs bg-blue-50 p-1.5 rounded-md">
+                                                                <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
                                                                 <span className="text-gray-700">{attendance.remarks}</span>
                                                             </div>
                                                         ) : (
-                                                            <div className="flex items-center text-sm text-gray-400">
-                                                                <MessageSquare className="mr-2 h-4 w-4" />
+                                                            <div className="flex items-center text-[11px] text-gray-400">
+                                                                <MessageSquare className="mr-1.5 h-3 w-3" />
                                                                 <span>No additional notes</span>
                                                             </div>
                                                         )}
@@ -950,54 +899,45 @@ export default function AttendanceIndex({
                                                 )}
                                             </TableCell>
 
-                                            {(userPermissions.canEdit || userPermissions.canDelete) && (
-                                                <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                                                                <span className="sr-only">Open menu</span>
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-48">
+                                                {(userPermissions.canEdit || userPermissions.canDelete) && (
+                                                    <TableCell className="text-right pr-6">
+                                                        <div className="flex items-center justify-end gap-2 transition-opacity duration-200">
                                                             {userPermissions.canEdit && (
-                                                                <DropdownMenuItem
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-8 w-8 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-colors" 
+                                                                    title="Edit Attendance"
                                                                     onClick={() => router.get(route('attendance.edit', attendance.id))}
-                                                                    className="cursor-pointer"
                                                                 >
-                                                                    <Edit className="mr-2 h-4 w-4" />
-                                                                    <span>Edit Attendance</span>
-                                                                </DropdownMenuItem>
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
                                                             )}
-
                                                             {attendance.has_movement && (
-                                                                <DropdownMenuItem asChild>
-                                                                    <Link
-                                                                        href={route('movements.show', attendance.movement_id)}
-                                                                        className="cursor-pointer"
-                                                                    >
-                                                                        <Navigation className="mr-2 h-4 w-4" />
-                                                                        <span>View Movement</span>
-                                                                    </Link>
-                                                                </DropdownMenuItem>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-8 w-8 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors" 
+                                                                    title="View Movement"
+                                                                    onClick={() => router.get(route('movements.show', attendance.movement_id))}
+                                                                >
+                                                                    <Navigation className="h-4 w-4" />
+                                                                </Button>
                                                             )}
-
                                                             {userPermissions.canDelete && (
-                                                                <>
-                                                                    <div className="border-t my-1"></div>
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => handleDelete(attendance.id)}
-                                                                        className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                                                                    >
-                                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                                        <span>Delete Record</span>
-                                                                    </DropdownMenuItem>
-                                                                </>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
+                                                                    title="Delete Attendance"
+                                                                    onClick={() => handleDelete(attendance.id)}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
                                                             )}
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </TableCell>
-                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                )}
                                         </TableRow>
                                     ))
                                 ) : (
@@ -1029,101 +969,100 @@ export default function AttendanceIndex({
                                 )}
                             </TableBody>
                         </Table>
+                        </div>
                     </CardContent>
                 </Card>
 
                 {/* Pagination */}
-                {attendances.meta && attendances.meta.last_page > 1 && (
-                    <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6 mt-4">
-                        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                            <div>
-                                <p className="text-sm text-gray-700">
-                                    Showing <span className="font-medium">{(attendances.meta.current_page - 1) * 20 + 1}</span> to{' '}
-                                    <span className="font-medium">
-                                        {Math.min(attendances.meta.current_page * 20, attendances.meta.total)}
+                {hasPagination && (
+                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4 rounded-b-xl">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 text-[13px] text-slate-500">
+                                <span className="hidden sm:inline">Rows per page:</span>
+                                <Select
+                                    value={perPage}
+                                    onValueChange={handlePerPageChange}
+                                >
+                                    <SelectTrigger className="h-8 w-[70px] text-[13px] bg-white border-slate-200">
+                                        <SelectValue placeholder="10" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="25">25</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                        <SelectItem value="100">100</SelectItem>
+                                        <SelectItem value="200">200</SelectItem>
+                                        <SelectItem value="500">500</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="hidden sm:block">
+                                <p className="text-[13px] text-slate-500">
+                                    Showing <span className="font-semibold text-slate-700">{attendances.meta.total > 0 ? (attendances.meta.current_page - 1) * attendances.meta.per_page + 1 : 0}</span> to{' '}
+                                    <span className="font-semibold text-slate-700">
+                                        {Math.min(attendances.meta.current_page * attendances.meta.per_page, attendances.meta.total)}
                                     </span>{' '}
-                                    of <span className="font-medium">{attendances.meta.total}</span> attendance records
+                                    of <span className="font-semibold text-slate-700">{attendances.meta.total}</span> entries
                                 </p>
                             </div>
-                            <div>
-                                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                    {attendances.meta.current_page > 1 && (
+                        </div>
+
+                        {attendances.meta.last_page > 1 && (
+                            <div className="flex items-center justify-end">
+                                <nav className="isolate inline-flex -space-x-px gap-1.5" aria-label="Pagination">
+                                    {attendances.meta.current_page > 1 && attendances.links?.prev && (
                                         <Link
-                                            href={route('attendance.index', {
-                                                page: attendances.meta.current_page - 1,
-                                                search,
-                                                date: currentDate,
-                                                branch_id: branchId || '',
-                                                department_id: departmentId || '',
-                                                status: status || ''
-                                            })}
-                                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
+                                            href={attendances.links.prev}
+                                            data={{ search, date: currentDate, branch_id: branchId || '', department_id: departmentId || '', status: status || '', movement_filter: movementFilter || '', per_page: perPage }}
+                                            preserveState
+                                            className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                         >
                                             <span className="sr-only">Previous</span>
-                                            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                                         </Link>
                                     )}
 
                                     {attendances.meta.links && attendances.meta.links.slice(1, -1).map((link, i) => {
-                                        // Skip links that are just labels and not actual page links
-                                        if (link.label === '&laquo; Previous' || link.label === 'Next &raquo;') {
-                                            return null;
-                                        }
+                                        const isActive = link.active;
+                                        const isDots = link.label === '...';
 
-                                        // Handle ellipsis
-                                        if (link.label === '...') {
+                                        if (isDots) {
                                             return (
-                                                <span
-                                                    key={`ellipsis-${i}`}
-                                                    className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300"
-                                                >
+                                                <span key={i} className="relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-medium text-slate-400">
                                                     ...
                                                 </span>
                                             );
                                         }
 
-                                        // Regular page links
                                         return (
                                             <Link
                                                 key={i}
-                                                href={route('attendance.index', {
-                                                    page: link.label,
-                                                    search,
-                                                    date: currentDate,
-                                                    branch_id: branchId || '',
-                                                    department_id: departmentId || '',
-                                                    status: status || ''
-                                                })}
-                                                className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${link.active
-                                                    ? 'z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary'
-                                                    : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
+                                                href={link.url || '#'}
+                                                data={{ search, date: currentDate, branch_id: branchId || '', department_id: departmentId || '', status: status || '', movement_filter: movementFilter || '', per_page: perPage }}
+                                                preserveState
+                                                className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${isActive
+                                                        ? 'z-10 bg-emerald-600 text-white shadow-sm border border-emerald-600'
+                                                        : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-emerald-600 hover:border-emerald-200 focus:z-20'
                                                     }`}
-                                                aria-current={link.active ? 'page' : undefined}
-                                            >
-                                                {link.label}
-                                            </Link>
+                                                dangerouslySetInnerHTML={{ __html: link.label }}
+                                            />
                                         );
                                     })}
 
-                                    {attendances.meta.current_page < attendances.meta.last_page && (
+                                    {attendances.meta.current_page < attendances.meta.last_page && attendances.links?.next && (
                                         <Link
-                                            href={route('attendance.index', {
-                                                page: attendances.meta.current_page + 1,
-                                                search,
-                                                date: currentDate,
-                                                branch_id: branchId || '',
-                                                department_id: departmentId || '',
-                                                status: status || ''
-                                            })}
-                                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
+                                            href={attendances.links.next}
+                                            data={{ search, date: currentDate, branch_id: branchId || '', department_id: departmentId || '', status: status || '', movement_filter: movementFilter || '', per_page: perPage }}
+                                            preserveState
+                                            className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                         >
                                             <span className="sr-only">Next</span>
-                                            <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
                                         </Link>
                                     )}
                                 </nav>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
             </PageSurface>

@@ -250,6 +250,8 @@ class LeaveBalanceController extends Controller
         $year = (int) ($request->year ?? Carbon::now()->year);
         $branchId = $request->input('branch_id');
         $search = trim((string) $request->input('search', ''));
+        $perPage = $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
 
         $query = Employee::query()
             ->select([
@@ -289,7 +291,7 @@ class LeaveBalanceController extends Controller
 
         $employees = $query
             ->orderBy('id', 'desc')
-            ->paginate(15)
+            ->paginate($perPage)
             ->withQueryString();
 
         $branches = Branch::query()
@@ -308,6 +310,7 @@ class LeaveBalanceController extends Controller
                 'year' => (string) $year,
                 'branch_id' => $branchId ? (string) $branchId : '',
                 'search' => $search,
+                'per_page' => (string) $perPage,
             ],
             'year' => $year,
             'years' => range(Carbon::now()->year - 2, Carbon::now()->year + 1),

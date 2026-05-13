@@ -2,43 +2,50 @@
 
 namespace App\Http\Controllers\Employee;
 
+use App\Http\Concerns\ResolvesEmployeeNidSmartCard;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\EmployeeDocument;
 use App\Models\EmployeeType;
 use App\Models\LocationVillage;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\RegionalOffice;
-use App\Models\Zone;
 use App\Services\OrganogramAccessService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class EmployeeController extends Controller
 {
+    use ResolvesEmployeeNidSmartCard;
+
     private const EMPLOYEE_IMPORT_MAX_ROWS = 5000;
+
     private const EMPLOYEE_IMPORT_CACHE_TTL_SECONDS = 3600;
 
     private const AUTO_USER_EMPLOYEE_ROLE_NAME = 'Employee';
+
     private const AUTO_EMAIL_DOMAIN_ENV = 'HRM_AUTO_EMAIL_DOMAIN';
 
     private function getAutoEmailDomain(): string
     {
         $d = (string) env(self::AUTO_EMAIL_DOMAIN_ENV, 'auto.local');
         $d = trim($d);
+
         return $d !== '' ? $d : 'auto.local';
     }
 
@@ -46,8 +53,11 @@ class EmployeeController extends Controller
     {
         try {
             $raw = @file_get_contents($absPath);
-            if (! is_string($raw) || trim($raw) === '') return [];
+            if (! is_string($raw) || trim($raw) === '') {
+                return [];
+            }
             $decoded = json_decode($raw, true);
+
             return is_array($decoded) ? $decoded : [];
         } catch (\Throwable) {
             return [];
@@ -77,10 +87,83 @@ class EmployeeController extends Controller
                 continue;
             }
             $data = $entry['data'] ?? null;
+
             return is_array($data) ? $data : [];
         }
 
         return [];
+    }
+
+    /**
+     * Resolve bd_geo_code union id from human-readable names (division → district → upazila → union).
+     * Upazila names can repeat across Bangladesh, so district must be used to pick the correct upazila row.
+     */
+    private function resolveBdGeoUnionId(string $divisionName, string $districtName, string $upazilaName, string $unionName): ?string
+    {
+        $divisionName = trim($divisionName);
+        $districtName = trim($districtName);
+        $upazilaName = trim($upazilaName);
+        $unionName = trim($unionName);
+        if ($divisionName === '' || $districtName === '' || $upazilaName === '' || $unionName === '') {
+            return null;
+        }
+
+        $divisions = $this->readPhpMyAdminExportTableData(base_path('data/locations/divisions.json'), 'divisions');
+        $divisionId = null;
+        foreach ($divisions as $d) {
+            if (trim((string) ($d['name'] ?? '')) === $divisionName) {
+                $divisionId = (string) ($d['id'] ?? '');
+                break;
+            }
+        }
+        if ($divisionId === '' || $divisionId === null) {
+            return null;
+        }
+
+        $districts = $this->readPhpMyAdminExportTableData(base_path('data/locations/districts.json'), 'districts');
+        $districtId = null;
+        foreach ($districts as $dist) {
+            if (trim((string) ($dist['division_id'] ?? '')) !== $divisionId) {
+                continue;
+            }
+            if (trim((string) ($dist['name'] ?? '')) === $districtName) {
+                $districtId = (string) ($dist['id'] ?? '');
+                break;
+            }
+        }
+        if ($districtId === '' || $districtId === null) {
+            return null;
+        }
+
+        $upazilas = $this->readPhpMyAdminExportTableData(base_path('data/locations/upazilas.json'), 'upazilas');
+        $upazilaId = null;
+        foreach ($upazilas as $u) {
+            if (trim((string) ($u['district_id'] ?? '')) !== $districtId) {
+                continue;
+            }
+            if (trim((string) ($u['name'] ?? '')) === $upazilaName) {
+                $upazilaId = (string) ($u['id'] ?? '');
+                break;
+            }
+        }
+        if ($upazilaId === '' || $upazilaId === null) {
+            return null;
+        }
+
+        $unions = $this->readPhpMyAdminExportTableData(base_path('data/locations/unions.json'), 'unions');
+        foreach ($unions as $un) {
+            $upId = (string) ($un['upazilla_id'] ?? $un['upazila_id'] ?? '');
+            if ($upId !== $upazilaId) {
+                continue;
+            }
+            if (trim((string) ($un['name'] ?? '')) === $unionName) {
+                $rid = (string) ($un['id'] ?? '');
+
+                return $rid !== '' ? $rid : null;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -270,6 +353,155 @@ class EmployeeController extends Controller
     }
 
     /**
+     * @return array<int, string>
+     */
+    private function employeeTabDocumentTypes(): array
+    {
+        return ['national_id', 'passport', 'driving_license', 'education', 'certificate', 'contract', 'other'];
+    }
+
+    /**
+     * Sync employee_documents from the tabbed create/edit form (multipart indices align with $request->file("documents.{i}.file")).
+     */
+    private function syncEmployeeDocumentsFromTabbedForm(Request $request, Employee $employee, bool $isCreate): void
+    {
+        $rows = $request->input('documents');
+        if (! is_array($rows)) {
+            $rows = [];
+        }
+        $eid = (int) $employee->id;
+
+        /** @var list<array{index: int, id: int, document_type: string, title: string, description: ?string, expiry_date: ?\Illuminate\Support\Carbon}> $parsed */
+        $parsed = [];
+        $keptIds = [];
+
+        foreach ($rows as $index => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $documentType = trim((string) ($row['document_type'] ?? ''));
+            $title = trim((string) ($row['title'] ?? ''));
+            $descriptionRaw = trim((string) ($row['description'] ?? ''));
+            $description = $descriptionRaw !== '' ? $descriptionRaw : null;
+            $expiryRaw = $row['expiry_date'] ?? null;
+            $expiryDate = null;
+            if ($expiryRaw !== null && $expiryRaw !== '') {
+                $expiryDate = Carbon::parse((string) $expiryRaw)->startOfDay();
+            }
+
+            $id = isset($row['id']) ? (int) $row['id'] : 0;
+            $hasFile = $request->hasFile("documents.$index.file");
+            $file = $hasFile ? $request->file("documents.$index.file") : null;
+
+            $rowEmpty = $documentType === '' && $title === '' && ! $hasFile && $id <= 0;
+            if ($rowEmpty) {
+                continue;
+            }
+
+            if ($documentType === '' || $title === '') {
+                throw ValidationException::withMessages([
+                    "documents.$index.title" => 'Document type and title are required for each document row.',
+                ]);
+            }
+
+            if (! in_array($documentType, $this->employeeTabDocumentTypes(), true)) {
+                throw ValidationException::withMessages([
+                    "documents.$index.document_type" => 'Invalid document type.',
+                ]);
+            }
+
+            if ($id <= 0 && ! $hasFile) {
+                throw ValidationException::withMessages([
+                    "documents.$index.file" => 'Please upload a file for each new document.',
+                ]);
+            }
+
+            if ($hasFile && $file !== null) {
+                $ext = strtolower((string) $file->getClientOriginalExtension());
+                if (! in_array($ext, ['jpeg', 'jpg', 'png', 'pdf', 'doc', 'docx'], true)) {
+                    throw ValidationException::withMessages([
+                        "documents.$index.file" => 'Accepted formats: JPEG, PNG, PDF, DOC, DOCX.',
+                    ]);
+                }
+                if ($file->getSize() > 5120 * 1024) {
+                    throw ValidationException::withMessages([
+                        "documents.$index.file" => 'Maximum file size is 5MB.',
+                    ]);
+                }
+            }
+
+            if ($id > 0) {
+                if ($isCreate) {
+                    continue;
+                }
+                $doc = EmployeeDocument::query()->where('employee_id', $eid)->where('id', $id)->first();
+                if (! $doc) {
+                    throw ValidationException::withMessages([
+                        "documents.$index.id" => 'Document not found.',
+                    ]);
+                }
+                $keptIds[] = $id;
+            }
+
+            $parsed[] = [
+                'index' => (int) $index,
+                'id' => $id,
+                'document_type' => $documentType,
+                'title' => $title,
+                'description' => $description,
+                'expiry_date' => $expiryDate,
+                'has_file' => $hasFile,
+            ];
+        }
+
+        if (! $isCreate) {
+            $removeQuery = EmployeeDocument::query()->where('employee_id', $eid);
+            if ($keptIds !== []) {
+                $removeQuery->whereNotIn('id', $keptIds);
+            }
+            foreach ($removeQuery->get() as $removed) {
+                if ($removed->file_path) {
+                    Storage::disk('public')->delete($removed->file_path);
+                }
+                $removed->delete();
+            }
+        }
+
+        foreach ($parsed as $p) {
+            $index = $p['index'];
+            $hasFile = $request->hasFile("documents.$index.file");
+            $file = $hasFile ? $request->file("documents.$index.file") : null;
+
+            if ($p['id'] > 0) {
+                $doc = EmployeeDocument::query()->where('employee_id', $eid)->where('id', $p['id'])->first();
+                if (! $doc) {
+                    continue;
+                }
+                if ($hasFile && $file !== null) {
+                    if ($doc->file_path) {
+                        Storage::disk('public')->delete($doc->file_path);
+                    }
+                    $doc->file_path = $file->store('employee_documents', 'public');
+                }
+                $doc->document_type = $p['document_type'];
+                $doc->title = $p['title'];
+                $doc->description = $p['description'];
+                $doc->expiry_date = $p['expiry_date'];
+                $doc->save();
+            } elseif ($hasFile && $file !== null) {
+                EmployeeDocument::create([
+                    'employee_id' => $eid,
+                    'document_type' => $p['document_type'],
+                    'title' => $p['title'],
+                    'file_path' => $file->store('employee_documents', 'public'),
+                    'description' => $p['description'],
+                    'expiry_date' => $p['expiry_date'],
+                ]);
+            }
+        }
+    }
+
+    /**
      * Rich server-side logging when employee create/update fails outside validation.
      */
     private function logEmployeeSaveFailure(string $action, Request $request, ?Employee $employee, \Throwable $e): void
@@ -390,6 +622,7 @@ class EmployeeController extends Controller
         foreach ($pins as $p) {
             if (preg_match('/^\\d+$/', $p)) {
                 $maxNormal = max($maxNormal, (int) $p);
+
                 continue;
             }
             if (preg_match('/^p-(\\d+)$/i', $p, $m)) {
@@ -437,36 +670,12 @@ class EmployeeController extends Controller
                 $existing = [];
             }
 
-            // Resolve union_id if possible (unions.json uses upazilla_id, so we narrow by upazila name + union name)
-            $unionId = null;
-            try {
-                $upazilaName = trim((string) ($validated['upazila'] ?? ''));
-                $unionName = trim((string) ($validated['union'] ?? ''));
-                if ($upazilaName !== '' && $unionName !== '') {
-                    $upazilaRows = $this->readPhpMyAdminExportTableData(base_path('data/locations/upazilas.json'), 'upazilas');
-                    $unionRows = $this->readPhpMyAdminExportTableData(base_path('data/locations/unions.json'), 'unions');
-                    $upazilaId = null;
-                    foreach ($upazilaRows as $ur) {
-                        if (trim((string) ($ur['name'] ?? '')) === $upazilaName) {
-                            $upazilaId = (string) ($ur['id'] ?? '');
-                            break;
-                        }
-                    }
-                    if (is_string($upazilaId) && $upazilaId !== '') {
-                        foreach ($unionRows as $rr) {
-                            $rid = (string) ($rr['id'] ?? '');
-                            $rupazilaId = (string) ($rr['upazilla_id'] ?? $rr['upazila_id'] ?? '');
-                            $rname = trim((string) ($rr['name'] ?? ''));
-                            if ($rid !== '' && $rupazilaId === $upazilaId && $rname === $unionName) {
-                                $unionId = $rid;
-                                break;
-                            }
-                        }
-                    }
-                }
-            } catch (\Throwable) {
-                $unionId = null;
-            }
+            $unionId = $this->resolveBdGeoUnionId(
+                (string) ($validated['division'] ?? ''),
+                (string) ($validated['district'] ?? ''),
+                (string) ($validated['upazila'] ?? ''),
+                (string) ($validated['union'] ?? '')
+            );
 
             $newEntry = [
                 'name' => $village->name,
@@ -481,8 +690,12 @@ class EmployeeController extends Controller
 
             $existsAlready = false;
             foreach ($existing as $row) {
-                if (! is_array($row)) continue;
-                if (trim((string) ($row['name'] ?? '')) !== $newEntry['name']) continue;
+                if (! is_array($row)) {
+                    continue;
+                }
+                if (trim((string) ($row['name'] ?? '')) !== $newEntry['name']) {
+                    continue;
+                }
                 if (! empty($newEntry['union_id']) && trim((string) ($row['union_id'] ?? '')) === $newEntry['union_id']) {
                     $existsAlready = true;
                     break;
@@ -658,6 +871,7 @@ class EmployeeController extends Controller
         $pin = trim($pinRaw);
         if ($pin === '') {
             Log::warning('Auto user skipped: empty PIN', ['employee_id' => $employee->id]);
+
             return;
         }
 
@@ -733,8 +947,13 @@ class EmployeeController extends Controller
                 $query->where('status', $status);
             });
 
+        $perPage = (int) $request->get('per_page', 10);
+        if (!in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+            $perPage = 10;
+        }
+
         $employees = $query->orderBy('id', 'desc')
-            ->paginate(10)
+            ->paginate($perPage)
             ->withQueryString();
 
         $deptIds = OrganogramAccessService::accessibleDepartmentIdList($user);
@@ -751,7 +970,7 @@ class EmployeeController extends Controller
             'employees' => $employees,
             'departments' => $departments,
             'branches' => $branches,
-            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status']),
+            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status', 'per_page']),
         ]);
     }
 
@@ -768,7 +987,7 @@ class EmployeeController extends Controller
                 'regionalOffice.regionalManager:id,employee_id,first_name,last_name',
             ])
             ->orderBy('name')
-            ->get(['id', 'name', 'regional_office_id']);
+            ->get(['id', 'name', 'branch_code', 'regional_office_id']);
         $managers = Employee::where('status', 'active')->get();
 
         $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get();
@@ -791,6 +1010,7 @@ class EmployeeController extends Controller
                 return [
                     'id' => $branch->id,
                     'name' => $branch->name,
+                    'branch_code' => $branch->branch_code,
                     'regionalManager' => $regionalManager ? [
                         'id' => $regionalManager->id,
                         'employee_id' => $regionalManager->employee_id,
@@ -815,6 +1035,7 @@ class EmployeeController extends Controller
             'educationBoards' => $educationBoards,
             'locations' => $locations,
             'defaultBankName' => 'Prime Bank PLC',
+            'documentTypes' => $this->employeeTabDocumentTypes(),
         ]);
     }
 
@@ -827,6 +1048,7 @@ class EmployeeController extends Controller
 
         try {
             $this->normalizeEmployeeRequestPayload($request);
+            $this->resolveNidAndSmartCardFromRequest($request);
 
             $maritalStatuses = [
                 'Single',
@@ -977,6 +1199,13 @@ class EmployeeController extends Controller
                 'trainings.*.duration' => 'nullable|string|max:100',
                 'trainings.*.remarks' => 'nullable|string',
 
+                'documents' => 'nullable|array',
+                'documents.*.id' => 'nullable|integer',
+                'documents.*.document_type' => 'nullable|string|max:50',
+                'documents.*.title' => 'nullable|string|max:255',
+                'documents.*.description' => 'nullable|string',
+                'documents.*.expiry_date' => 'nullable|date',
+
                 'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
                 'signature' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
             ]);
@@ -1006,6 +1235,7 @@ class EmployeeController extends Controller
                 'assets',
                 'experiences',
                 'trainings',
+                'documents',
                 'photo',
                 'signature',
             ]);
@@ -1232,6 +1462,8 @@ class EmployeeController extends Controller
                         'updated_at' => now(),
                     ]);
                 }
+
+                $this->syncEmployeeDocumentsFromTabbedForm($request, $createdEmployee, true);
             });
 
             return redirect()->route('employees.index')
@@ -1262,7 +1494,7 @@ class EmployeeController extends Controller
                 'regionalOffice.regionalManager:id,employee_id,first_name,last_name',
             ])
             ->orderBy('name')
-            ->get(['id', 'name', 'regional_office_id']);
+            ->get(['id', 'name', 'branch_code', 'regional_office_id']);
         $managers = Employee::where('status', 'active')
             ->where('id', '!=', $employee->id)
             ->get();
@@ -1290,6 +1522,19 @@ class EmployeeController extends Controller
         $employeePayload['assets'] = DB::table('employee_assets')->where('employee_id', $employee->id)->get()->all();
         $employeePayload['experiences'] = DB::table('employee_experiences')->where('employee_id', $employee->id)->get()->all();
         $employeePayload['trainings'] = DB::table('employee_trainings')->where('employee_id', $employee->id)->get()->all();
+        $employeePayload['documents'] = EmployeeDocument::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (EmployeeDocument $d) => [
+                'id' => $d->id,
+                'document_type' => $d->document_type,
+                'title' => $d->title,
+                'description' => $d->description,
+                'expiry_date' => $d->expiry_date?->format('Y-m-d') ?? '',
+                'existing_file_path' => $d->file_path,
+            ])
+            ->all();
 
         return Inertia::render('employee/edit', [
             'oldInput' => old(),
@@ -1303,6 +1548,7 @@ class EmployeeController extends Controller
                 return [
                     'id' => $branch->id,
                     'name' => $branch->name,
+                    'branch_code' => $branch->branch_code,
                     'regionalManager' => $regionalManager ? [
                         'id' => $regionalManager->id,
                         'employee_id' => $regionalManager->employee_id,
@@ -1327,6 +1573,7 @@ class EmployeeController extends Controller
             'educationBoards' => $educationBoards,
             'locations' => $locations,
             'defaultBankName' => 'Prime Bank PLC',
+            'documentTypes' => $this->employeeTabDocumentTypes(),
         ]);
     }
 
@@ -1337,12 +1584,13 @@ class EmployeeController extends Controller
     {
         try {
             $this->normalizeEmployeeRequestPayload($request);
+            $this->resolveNidAndSmartCardFromRequest($request);
 
             $validated = $request->validate([
                 // Tab 1
                 'current_branch_id' => 'required|exists:branches,id',
                 'employee_type_id' => 'nullable|exists:employee_types,id',
-                'pin' => 'required|string|max:20|unique:employees,pin,' . $employee->id,
+                'pin' => 'required|string|max:20|unique:employees,pin,'.$employee->id,
 
                 'name_en' => 'required|string|max:255',
                 'name_bn' => 'nullable|string|max:255',
@@ -1373,7 +1621,7 @@ class EmployeeController extends Controller
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
 
-                'nid' => 'nullable|string|max:50|unique:employees,nid,' . $employee->id,
+                'nid' => 'nullable|string|max:50|unique:employees,nid,'.$employee->id,
                 'nid_number' => 'nullable|string|max:50',
                 'smart_card_number' => 'nullable|string|max:50',
                 'birth_registration_number' => 'nullable|string|max:50',
@@ -1477,6 +1725,17 @@ class EmployeeController extends Controller
                 'trainings.*.duration' => 'nullable|string|max:100',
                 'trainings.*.remarks' => 'nullable|string',
 
+                'documents' => 'nullable|array',
+                'documents.*.id' => [
+                    'nullable',
+                    'integer',
+                    Rule::exists('employee_documents', 'id')->where(fn ($q) => $q->where('employee_id', $employee->id)),
+                ],
+                'documents.*.document_type' => 'nullable|string|max:50',
+                'documents.*.title' => 'nullable|string|max:255',
+                'documents.*.description' => 'nullable|string',
+                'documents.*.expiry_date' => 'nullable|date',
+
                 'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
                 'signature' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
             ]);
@@ -1497,6 +1756,7 @@ class EmployeeController extends Controller
                 'assets',
                 'experiences',
                 'trainings',
+                'documents',
                 'photo',
                 'signature',
             ]);
@@ -1731,6 +1991,8 @@ class EmployeeController extends Controller
                         'updated_at' => now(),
                     ]);
                 }
+
+                $this->syncEmployeeDocumentsFromTabbedForm($request, $employee, false);
             });
 
             return redirect()->route('employees.index')
@@ -1760,7 +2022,7 @@ class EmployeeController extends Controller
             'lastBranch',
             'leaveApplications.leaveType',
             'leaveBalances.leaveType',
-            'movements'
+            'movements',
         ]);
 
         // Get current year leave balances
@@ -1805,7 +2067,7 @@ class EmployeeController extends Controller
 
             // Delete photo if exists
             if ($employee->photo) {
-                $photoPath = public_path('storage/' . $employee->photo);
+                $photoPath = public_path('storage/'.$employee->photo);
                 if (file_exists($photoPath)) {
                     unlink($photoPath);
                 }
@@ -1814,7 +2076,7 @@ class EmployeeController extends Controller
             // Delete employee
             $deleted = $employee->delete();
 
-            if (!$deleted) {
+            if (! $deleted) {
                 return redirect()->route('employees.index')
                     ->with('error', 'Failed to delete employee. Please try again.');
             }
@@ -1823,10 +2085,10 @@ class EmployeeController extends Controller
                 ->with('success', 'Employee deleted successfully.');
         } catch (\Exception $e) {
             // Log the error
-            Log::error('Employee deletion error: ' . $e->getMessage());
+            Log::error('Employee deletion error: '.$e->getMessage());
 
             return redirect()->route('employees.index')
-                ->with('error', 'An error occurred while deleting the employee: ' . $e->getMessage());
+                ->with('error', 'An error occurred while deleting the employee: '.$e->getMessage());
         }
     }
 
@@ -1879,23 +2141,26 @@ class EmployeeController extends Controller
 
         if ($ext === 'xlsx') {
             Log::warning('Employee import preview blocked: xlsx requires ext-zip', $debug);
+
             return back()->withErrors([
                 'file' => 'XLSX import requires PHP zip extension (ext-zip). Please upload CSV for now, or enable ext-zip to support XLSX.',
             ]);
         }
 
         $path = $file->store('imports/employees', 'local');
-        $absPath = storage_path('app/' . $path);
+        $absPath = storage_path('app/'.$path);
 
         try {
             $rows = $this->readCsvRows($absPath, $path);
             if (count($rows) === 0) {
                 Log::warning('Employee import preview failed: empty file', $debug + ['stored_path' => $path]);
+
                 return back()->withErrors(['file' => 'The file is empty.']);
             }
 
             if (count($rows) > self::EMPLOYEE_IMPORT_MAX_ROWS + 1) {
                 Log::warning('Employee import preview failed: too many rows', $debug + ['row_count' => count($rows)]);
+
                 return back()->withErrors([
                     'file' => 'Too many rows. Please split the file and try again.',
                 ]);
@@ -1943,6 +2208,7 @@ class EmployeeController extends Controller
             );
 
             Log::info('Employee import preview cached; redirecting to review', $debug);
+
             // Force navigation to the review page (works reliably even for file uploads)
             return Inertia::location(route('employees.import.review', ['importId' => $importId]));
         } catch (\Throwable $e) {
@@ -1979,8 +2245,12 @@ class EmployeeController extends Controller
         foreach ($rows as $r) {
             $pin = trim((string) ($r['pin'] ?? ''));
             $email = trim((string) ($r['email'] ?? ''));
-            if ($pin !== '') $pins[] = $pin;
-            if ($email !== '') $emails[] = $email;
+            if ($pin !== '') {
+                $pins[] = $pin;
+            }
+            if ($email !== '') {
+                $emails[] = $email;
+            }
         }
 
         $pins = array_values(array_unique($pins));
@@ -2010,13 +2280,17 @@ class EmployeeController extends Controller
         $dupInFilePins = [];
         $pinCounts = array_count_values(array_map('strtolower', $pins));
         foreach ($pinCounts as $p => $c) {
-            if ($c > 1) $dupInFilePins[$p] = true;
+            if ($c > 1) {
+                $dupInFilePins[$p] = true;
+            }
         }
 
         $dupInFileEmails = [];
         $emailCounts = array_count_values(array_map('strtolower', $emails));
         foreach ($emailCounts as $e => $c) {
-            if ($c > 1) $dupInFileEmails[$e] = true;
+            if ($c > 1) {
+                $dupInFileEmails[$e] = true;
+            }
         }
 
         $issuesByRow = [];
@@ -2029,15 +2303,31 @@ class EmployeeController extends Controller
             $email = trim((string) ($r['email'] ?? ''));
             $joiningDate = trim((string) ($r['joining_date'] ?? ''));
 
-            if ($pin === '') $issues[] = 'Missing PIN';
-            if ($nameEn === '') $issues[] = 'Missing name';
-            if ($email === '') $issues[] = 'Missing email';
-            if ($joiningDate === '') $issues[] = 'Missing joining_date';
+            if ($pin === '') {
+                $issues[] = 'Missing PIN';
+            }
+            if ($nameEn === '') {
+                $issues[] = 'Missing name';
+            }
+            if ($email === '') {
+                $issues[] = 'Missing email';
+            }
+            if ($joiningDate === '') {
+                $issues[] = 'Missing joining_date';
+            }
 
-            if ($pin !== '' && isset($existingPinSet[$pin])) $issues[] = 'Duplicate PIN exists in system';
-            if ($email !== '' && isset($existingEmailSet[strtolower($email)])) $issues[] = 'Duplicate email exists in system';
-            if ($pin !== '' && isset($dupInFilePins[strtolower($pin)])) $issues[] = 'Duplicate PIN inside file';
-            if ($email !== '' && isset($dupInFileEmails[strtolower($email)])) $issues[] = 'Duplicate email inside file';
+            if ($pin !== '' && isset($existingPinSet[$pin])) {
+                $issues[] = 'Duplicate PIN exists in system';
+            }
+            if ($email !== '' && isset($existingEmailSet[strtolower($email)])) {
+                $issues[] = 'Duplicate email exists in system';
+            }
+            if ($pin !== '' && isset($dupInFilePins[strtolower($pin)])) {
+                $issues[] = 'Duplicate PIN inside file';
+            }
+            if ($email !== '' && isset($dupInFileEmails[strtolower($email)])) {
+                $issues[] = 'Duplicate email inside file';
+            }
 
             if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
                 $issues[] = 'Invalid email format';
@@ -2074,7 +2364,7 @@ class EmployeeController extends Controller
     {
         $validated = $request->validate([
             'importId' => 'required|string',
-            'rows' => 'required|array|max:' . self::EMPLOYEE_IMPORT_MAX_ROWS,
+            'rows' => 'required|array|max:'.self::EMPLOYEE_IMPORT_MAX_ROWS,
             'rows.*.pin' => 'required|string|max:20',
             'rows.*.name_en' => 'required|string|max:255',
             'rows.*.email' => 'required|email',
@@ -2122,6 +2412,7 @@ class EmployeeController extends Controller
                 if (count($errors) > 0) {
                     $skipped++;
                     $rowErrors[] = ['row' => $rowNumber, 'errors' => $errors];
+
                     continue;
                 }
 
@@ -2167,7 +2458,7 @@ class EmployeeController extends Controller
             foreach ($createdByBranchId as $bid => $count) {
                 $branchBreakdown[] = [
                     'branch_id' => $bid,
-                    'branch_name' => $branchNames[$bid] ?? ('Branch #' . $bid),
+                    'branch_name' => $branchNames[$bid] ?? ('Branch #'.$bid),
                     'created' => $count,
                 ];
             }
@@ -2175,6 +2466,7 @@ class EmployeeController extends Controller
         }
 
         $message = "Import confirmed. Created {$created}, skipped {$skipped}.";
+
         return redirect()->route('employees.index')
             ->with('success', $message)
             ->with('import_summary', [
@@ -2276,6 +2568,7 @@ class EmployeeController extends Controller
             } elseif (count($r) > $targetCount) {
                 $r = array_slice($r, 0, $targetCount);
             }
+
             return $r;
         }, $rows);
 
@@ -2351,6 +2644,7 @@ class EmployeeController extends Controller
 
         if ($raw === '') {
             Log::warning('Employee import: file is empty string', ['path' => $absPath]);
+
             return [];
         }
 
@@ -2394,6 +2688,7 @@ class EmployeeController extends Controller
                 'path' => $absPath,
                 'has_null_bytes' => $hasNullBytes,
             ]);
+
             return [];
         }
 
@@ -2403,10 +2698,16 @@ class EmployeeController extends Controller
         $rows = [];
         foreach ($lines as $line) {
             $line = (string) $line;
-            if (trim($line) === '') continue;
+            if (trim($line) === '') {
+                continue;
+            }
             $data = str_getcsv($line, $delimiter);
-            if (! is_array($data)) continue;
-            if (count(array_filter($data, fn ($v) => trim((string) $v) !== '')) === 0) continue;
+            if (! is_array($data)) {
+                continue;
+            }
+            if (count(array_filter($data, fn ($v) => trim((string) $v) !== '')) === 0) {
+                continue;
+            }
             $rows[] = $data;
         }
 
@@ -2442,6 +2743,7 @@ class EmployeeController extends Controller
     {
         $header = $rows[0] ?? [];
         $data = array_slice($rows, 1);
+
         return [$header, $data];
     }
 
@@ -2453,10 +2755,11 @@ class EmployeeController extends Controller
             $key = preg_replace('/\s+/', '_', $key);
             $key = preg_replace('/[^a-z0-9_\x{0980}-\x{09FF}]/u', '', $key);
             if ($key === '') {
-                $key = 'col_' . $idx;
+                $key = 'col_'.$idx;
             }
             $map[$idx] = $key;
         }
+
         return $map;
     }
 
@@ -2466,22 +2769,29 @@ class EmployeeController extends Controller
         foreach ($headerMap as $idx => $key) {
             $assoc[$key] = $row[$idx] ?? null;
         }
+
         return $assoc;
     }
 
     private function firstNonEmpty(array $rowAssoc, array $keys): ?string
     {
         foreach ($keys as $k) {
-            if (! array_key_exists($k, $rowAssoc)) continue;
+            if (! array_key_exists($k, $rowAssoc)) {
+                continue;
+            }
             $v = trim((string) $rowAssoc[$k]);
-            if ($v !== '') return $v;
+            if ($v !== '') {
+                return $v;
+            }
         }
+
         return null;
     }
 
     private function valueOrNull(array $rowAssoc, array $keys): ?string
     {
         $v = $this->firstNonEmpty($rowAssoc, $keys);
+
         return $v !== null ? $v : null;
     }
 
@@ -2504,7 +2814,7 @@ class EmployeeController extends Controller
         // Try match by name (case-insensitive)
         $name = trim($raw);
         $model = $modelClass::query()
-            ->whereRaw('LOWER(' . $nameField . ') = ?', [strtolower($name)])
+            ->whereRaw('LOWER('.$nameField.') = ?', [strtolower($name)])
             ->first(['id']);
 
         return $model?->id ?? $defaultId;

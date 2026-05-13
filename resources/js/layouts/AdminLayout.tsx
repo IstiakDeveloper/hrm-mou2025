@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import {
     User,
@@ -8,6 +8,7 @@ import {
     Menu,
     X,
     ChevronDown,
+    ChevronRight,
     Settings,
     BarChart,
     Bell,
@@ -15,7 +16,10 @@ import {
     Award,
     CalendarDays,
     MapPin,
-    Building2
+    Building2,
+    ChevronsLeft,
+    ArrowLeftRight,
+    LayoutDashboard,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -47,7 +51,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import NotificationDropdown from '@/components/notification-dropdown';
 import { hasAppPermission } from '@/lib/permissions';
-import { getActiveSectionId, getMenuTitlesForSection, getSectionById } from '@/lib/admin-sections';
+import { getActiveSectionId, getMenuTitlesForSection, getSectionById, type AdminSectionId } from '@/lib/admin-sections';
 import {
     Dialog,
     DialogContent,
@@ -60,6 +64,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -79,12 +84,60 @@ interface MenuItemType {
         hrOnly?: boolean;
         /** Show if user has ANY of these permissions (omit to ignore). */
         anyPermissions?: string[];
+        /** Show only if user has ALL of these permissions (omit to ignore). */
+        allPermissions?: string[];
     }[];
+}
+
+function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<MenuItemType['submenu']> {
+    switch (sectionId) {
+        case 'human-resources':
+            return [
+                {
+                    title: 'Employee report',
+                    path: '/employee/dashboard',
+                    anyPermissions: [
+                        'employees.view',
+                        'leave-applications.view',
+                        'movements.view',
+                        'transfers.view',
+                        'attendance.view',
+                    ],
+                },
+                {
+                    title: 'Employee report',
+                    path: '/reports/employee',
+                    allPermissions: ['reports.view', 'employees.view'],
+                    hrOnly: true,
+                },
+                {
+                    title: 'Branch transfer register',
+                    path: '/reports/transfer',
+                    allPermissions: ['reports.view', 'transfers.view'],
+                },
+            ];
+        case 'attendance-movement':
+            return [
+                { title: 'Monthly View', path: '/attendance/monthly', permission: 'attendance.view' },
+                { title: 'Attendance Report', path: '/attendance/report', permission: 'attendance.view' },
+                { title: 'Attendance sheet report', path: '/attendance/sheet-report', permission: 'reports.view' },
+            ];
+        case 'leave':
+            return [
+                { title: 'Leave applications report', path: '/leave/applications/report', permission: 'reports.view' },
+                { title: 'Leave summary report', path: '/reports/leave', permission: 'reports.view' },
+            ];
+        case 'administration':
+            return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
+        default:
+            return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
+    }
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const { auth, notifications, activeMovement } = usePage().props as any;
-    const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const [showCloseMovementDialog, setShowCloseMovementDialog] = useState(false);
     const [closeMovementId, setCloseMovementId] = useState<number | null>(null);
@@ -101,14 +154,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
 
     // Toggle functions
-    const toggleMobileNav = () => setIsMobileNavOpen(!isMobileNavOpen);
-    const toggleMenu = (menu: string) => setActiveMenu(activeMenu === menu ? null : menu);
-
-    // Check if a menu item is active
-    const isActive = (path: string) => {
-        return currentPath === path ||
-            (path !== '/' && (currentPath.startsWith(path + '/') || currentPath === path));
+    const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+    const toggleMobileSidebar = () => setIsMobileSidebarOpen(!isMobileSidebarOpen);
+    const toggleMenu = (menu: string) => {
+        setActiveMenu(activeMenu === menu ? null : menu);
     };
+    const closeMobileSidebar = () => setIsMobileSidebarOpen(false);
 
     // Get initials from name for Avatar fallback
     const getInitials = (name: string) => {
@@ -184,8 +235,35 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeMovement?.id]);
 
+    /** Matches `DashboardController::humanResources` admin-like gate (+ transfers). */
+    const hrSectionDashboardAny: string[] = [
+        'employees.create',
+        'employees.edit',
+        'employees.admin',
+        'branches.create',
+        'branches.edit',
+        'departments.create',
+        'departments.edit',
+        'designations.create',
+        'designations.edit',
+        'leave-types.create',
+        'leave-types.edit',
+        'leave-balances.admin',
+        'attendance.admin',
+        'admin.access',
+        'transfers.view',
+    ];
+
+    const administrationSectionDashboardAny: string[] = [
+        'admin.access',
+        'roles.view',
+        'users.view',
+        'reports.view',
+    ];
+
     // Organized Menu Structure with EXACT permission names matching web.php
-    const menuItems: MenuItemType[] = [
+    const baseMenuItems = useMemo<MenuItemType[]>(
+        () => [
         {
             title: 'My Notices',
             icon: <Bell className="w-5 h-5" />,
@@ -200,17 +278,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             submenu: [
                 { title: 'All Employees', path: '/employees', permission: 'employees.view', hrOnly: true },
                 { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view', hrOnly: true },
-                {
-                    title: 'Employee Dashboard',
-                    path: '/employee/dashboard',
-                    anyPermissions: [
-                        'employees.view',
-                        'leave-applications.view',
-                        'movements.view',
-                        'transfers.view',
-                        'attendance.view',
-                    ],
-                },
             ]
         },
         {
@@ -226,6 +293,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 { title: 'Regional Offices', path: '/regional-offices', permission: 'regional-offices.view' },
                 { title: 'Departments', path: '/departments', permission: 'departments.view' },
                 { title: 'Designations', path: '/designations', permission: 'designations.view' },
+                { title: 'Employee Types', path: '/employee-types', permission: 'departments.view' },
+                { title: 'Programs', path: '/programs', permission: 'departments.view' },
+                { title: 'Projects', path: '/projects', permission: 'departments.view' },
             ]
         },
         {
@@ -236,8 +306,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             permission: 'attendance.view',
             submenu: [
                 { title: 'Daily Attendance', path: '/attendance', permission: 'attendance.view' },
-                { title: 'Monthly View', path: '/attendance/monthly', permission: 'attendance.view' },
-                { title: 'Attendance Report', path: '/attendance/report', permission: 'attendance.view' },
                 { title: 'Attendance Devices', path: '/attendance/devices', permission: 'attendance.admin' },
                 { title: 'Device Settings', path: '/attendance/settings', permission: 'attendance.admin' },
                 { title: 'ZKTeco Integration', path: '/zkteco', permission: 'attendance.admin' },
@@ -255,20 +323,26 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 { title: 'Leave Types', path: '/leave/types', permission: 'leave-types.view', hrOnly: true },
                 { title: 'Leave Balances', path: '/leave/balances', permission: 'leave-balances.view', hrOnly: true },
                 { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk', permission: 'leave-balances.admin', hrOnly: true },
-                { title: 'Leave Report', path: '/leave/applications/report', permission: 'reports.view' },
             ]
         },
         {
-            title: 'Movement & Transfer',
+            title: 'Movement',
             icon: <Activity className="w-5 h-5" />,
             path: '/movements',
             hasSubmenu: true,
             permission: 'movements.view',
             submenu: [
                 { title: 'Movements', path: '/movements', permission: 'movements.view' },
-                { title: 'Movement Report', path: '/movements/report', permission: 'reports.view' },
-                { title: 'Transfers', path: '/transfers', permission: 'transfers.view' },
-                { title: 'Transfer Report', path: '/transfers/report', permission: 'reports.view' },
+            ]
+        },
+        {
+            title: 'Transfers',
+            icon: <ArrowLeftRight className="w-5 h-5" />,
+            path: '/transfers',
+            hasSubmenu: true,
+            permission: 'transfers.view',
+            submenu: [
+                { title: 'All Transfers', path: '/transfers', permission: 'transfers.view' },
             ]
         },
         {
@@ -280,20 +354,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             submenu: [
                 { title: 'All Holidays', path: '/holidays', permission: 'holidays.view' },
                 { title: 'Holiday Calendar', path: '/holidays/calendar', permission: 'holidays.view' },
-            ]
-        },
-        {
-            title: 'Reports',
-            icon: <BarChart className="w-5 h-5" />,
-            path: '/reports',
-            hasSubmenu: true,
-            permission: 'reports.view',
-            submenu: [
-                { title: 'Attendance Report', path: '/attendance/sheet-report', permission: 'reports.view' },
-                { title: 'Leave Report', path: '/leave/applications/report', permission: 'reports.view' },
-                { title: 'Movement Report', path: '/reports/movement', permission: 'reports.view' },
-                { title: 'Transfer Report', path: '/reports/transfer', permission: 'reports.view' },
-                { title: 'Employee Report', path: '/reports/employee', permission: 'reports.view' },
             ]
         },
         {
@@ -322,12 +382,111 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 { title: 'Notifications', path: '/settings/notifications' },
             ]
         },
-    ];
+        ],
+        [],
+    );
 
-    const sectionMenuTitles = getMenuTitlesForSection(activeSectionId);
-    const visibleMenuItems = sectionMenuTitles
-        ? menuItems.filter((item) => sectionMenuTitles.includes(item.title))
-        : menuItems;
+    const menuItemsForLayout = useMemo(() => {
+        const sub = buildReportsSubmenu(activeSectionId);
+        const reportsPath = sub[0]?.path ?? '/reports';
+        const reportsItem: MenuItemType = {
+            title: 'Reports',
+            icon: <BarChart className="w-5 h-5" />,
+            path: reportsPath,
+            hasSubmenu: true,
+            submenu: sub,
+        };
+        const idx = baseMenuItems.findIndex((m) => m.title === 'User Management');
+        if (idx === -1) {
+            return [...baseMenuItems, reportsItem];
+        }
+        return [...baseMenuItems.slice(0, idx), reportsItem, ...baseMenuItems.slice(idx)];
+    }, [activeSectionId, baseMenuItems]);
+
+    const visibleMenuItems = useMemo(() => {
+        const titles = getMenuTitlesForSection(activeSectionId);
+        if (!titles) {
+            return menuItemsForLayout;
+        }
+        return titles
+            .map((title) => menuItemsForLayout.find((m) => m.title === title))
+            .filter((x): x is MenuItemType => Boolean(x));
+    }, [activeSectionId, menuItemsForLayout]);
+
+    /** All sidebar link paths — longest-prefix wins so /leave/applications does not swallow /leave/applications/report */
+    const menuNavPaths = useMemo(() => {
+        const paths = new Set<string>();
+        for (const item of menuItemsForLayout) {
+            if (item.hasSubmenu && item.submenu) {
+                for (const s of item.submenu) {
+                    if (s.path) paths.add(s.path);
+                }
+            } else if (item.path) {
+                paths.add(item.path);
+            }
+        }
+        return Array.from(paths);
+    }, [menuItemsForLayout]);
+
+    const isActive = useCallback(
+        (path: string) => {
+            if (!path || path === '/') return currentPath === path;
+            if (currentPath === path) return true;
+            const candidates = menuNavPaths.filter(
+                (p) => currentPath === p || (p !== '/' && currentPath.startsWith(p + '/')),
+            );
+            if (candidates.length === 0) return false;
+            const best = candidates.reduce((a, b) => (a.length >= b.length ? a : b));
+            return best === path;
+        },
+        [currentPath, menuNavPaths],
+    );
+
+    const hasAnyDashboardPerm = (perms: string[]) => perms.some((p) => hasPermission(p));
+
+    /** Same gate as `DashboardController::humanResources` admin branch — those users see org HR, not personal My HR. */
+    const showsAdminHrDashboard = hasAnyDashboardPerm(hrSectionDashboardAny);
+    const canSeePersonalHrDashboard = Boolean(employee?.id) && !showsAdminHrDashboard;
+
+    const sectionDashboardEntries: { title: string; path: string }[] = (() => {
+        if (!activeSectionId) {
+            return [];
+        }
+        switch (activeSectionId) {
+            case 'human-resources':
+                if (showsAdminHrDashboard) {
+                    return [{ title: 'HR dashboard', path: '/sections/human-resources' }];
+                }
+                if (canSeePersonalHrDashboard) {
+                    return [{ title: 'My HR', path: '/sections/human-resources' }];
+                }
+                return [];
+            case 'attendance-movement':
+                return hasPermission('attendance.view') || hasPermission('movements.view')
+                    ? [{ title: 'Attendance & movement', path: '/sections/attendance-movement' }]
+                    : [];
+            case 'leave':
+                return hasPermission('leave-applications.view') ? [{ title: 'Leave dashboard', path: '/sections/leave' }] : [];
+            case 'administration':
+                return hasAnyDashboardPerm(administrationSectionDashboardAny)
+                    ? [{ title: 'Administration', path: '/sections/administration' }]
+                    : [];
+            default:
+                return [];
+        }
+    })();
+
+    // Automatically expand the menu item if a child is active
+    useEffect(() => {
+        if (!activeMenu) {
+            const activeParent = visibleMenuItems.find(item =>
+                item.hasSubmenu && item.submenu?.some(subItem => isActive(subItem.path))
+            );
+            if (activeParent) {
+                setActiveMenu(activeParent.title);
+            }
+        }
+    }, [currentPath, visibleMenuItems, activeMenu, isActive]);
 
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
         if (item.hrOnly && !isHRUser) return null;
@@ -338,64 +497,73 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             && (!subItem.permission || hasPermission(subItem.permission))
             && (!subItem.anyPermissions?.length
                 || subItem.anyPermissions.some((p) => hasPermission(p)))
+            && (!subItem.allPermissions?.length
+                || subItem.allPermissions.every((p) => hasPermission(p)))
         );
 
         if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
 
+        const submenuSectionActive = permittedSubmenu?.some((s) => isActive(s.path)) ?? false;
+        const isMenuOpen = activeMenu === item.title;
+
         return item.hasSubmenu ? (
-            <Collapsible
-                open={activeMenu === item.title}
-                onOpenChange={() => toggleMenu(item.title)}
-                className="w-full"
-            >
-                <CollapsibleTrigger asChild>
-                    <div
-                        className={`flex items-center justify-between w-full p-3 rounded-lg cursor-pointer transition-all duration-200 ${isActive(item.path)
-                                ? 'bg-green-50 text-green-700 font-medium'
-                                : 'hover:bg-gray-50 text-gray-700'
-                            }`}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className={`${isActive(item.path) ? 'text-green-700' : 'text-gray-600'
-                                }`}>
-                                {item.icon}
-                            </div>
-                            <span className="text-sm font-medium">{item.title}</span>
+            <div className="mb-1 relative group">
+                <button
+                    onClick={() => toggleMenu(item.title)}
+                    title={!isSidebarOpen && !isMobileSidebarOpen ? item.title : undefined}
+                    className={`flex items-center transition-all duration-300 text-[13px] font-medium ${isSidebarOpen || isMobileSidebarOpen
+                            ? 'w-full justify-between px-3 py-2.5 rounded-lg'
+                            : 'w-11 h-11 justify-center mx-auto rounded-xl'
+                        } ${submenuSectionActive || isActive(item.path)
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        }`}
+                >
+                    <div className={`flex items-center ${isSidebarOpen || isMobileSidebarOpen ? 'gap-3' : ''}`}>
+                        <div className={`${submenuSectionActive || isActive(item.path) ? 'text-emerald-600' : 'text-slate-500'}`}>
+                            {React.cloneElement(item.icon as React.ReactElement, { className: 'w-[18px] h-[18px]' })}
                         </div>
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${activeMenu === item.title ? 'transform rotate-180' : ''
-                            } ${isActive(item.path) ? 'text-green-700' : 'text-gray-500'}`} />
+                        {(isSidebarOpen || isMobileSidebarOpen) && <span className="truncate tracking-wide">{item.title}</span>}
                     </div>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pl-8 space-y-1 mt-2">
-                    {permittedSubmenu?.map((subItem, idx) => (
-                        <Link
-                            key={idx}
-                            href={subItem.path}
-                            className={`block p-3 rounded-md text-sm transition-all duration-200 ${currentPath === subItem.path
-                                    ? 'bg-green-50 text-green-700 font-medium'
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                            onClick={toggleMobileNav}
-                        >
-                            {subItem.title}
-                        </Link>
-                    ))}
-                </CollapsibleContent>
-            </Collapsible>
+                    {(isSidebarOpen || isMobileSidebarOpen) && (
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-300 ${isMenuOpen ? 'rotate-90' : ''}`} />
+                    )}
+                </button>
+                {isMenuOpen && (isSidebarOpen || isMobileSidebarOpen) && (
+                    <div className="ml-9 mt-1 space-y-0.5 border-l border-emerald-500/20 pl-4 py-1">
+                        {permittedSubmenu?.map((subItem, idx) => (
+                            <Link
+                                key={idx}
+                                href={subItem.path}
+                                className={`block px-3 py-2 rounded-md text-[12px] transition-all duration-200 tracking-wide ${isActive(subItem.path)
+                                        ? 'bg-emerald-50 text-emerald-700 font-semibold'
+                                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                                    }`}
+                                onClick={closeMobileSidebar}
+                            >
+                                {subItem.title}
+                            </Link>
+                        ))}
+                    </div>
+                )}
+            </div>
         ) : (
             <Link
                 href={item.path}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${isActive(item.path)
-                        ? 'bg-green-50 text-green-700 font-medium'
-                        : 'hover:bg-gray-50 text-gray-700'
+                title={!isSidebarOpen && !isMobileSidebarOpen ? item.title : undefined}
+                className={`flex items-center transition-all duration-300 text-[13px] font-medium mb-1 ${isSidebarOpen || isMobileSidebarOpen
+                        ? 'w-full gap-3 px-3 py-2.5 rounded-lg'
+                        : 'w-11 h-11 justify-center mx-auto rounded-xl'
+                    } ${isActive(item.path)
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                     }`}
-                onClick={toggleMobileNav}
+                onClick={closeMobileSidebar}
             >
-                <div className={`${isActive(item.path) ? 'text-green-700' : 'text-gray-600'
-                    }`}>
-                    {item.icon}
+                <div className={`${isActive(item.path) ? 'text-emerald-600' : 'text-slate-500'}`}>
+                    {React.cloneElement(item.icon as React.ReactElement, { className: 'w-[18px] h-[18px]' })}
                 </div>
-                <span className="text-sm font-medium">{item.title}</span>
+                {(isSidebarOpen || isMobileSidebarOpen) && <span className="truncate tracking-wide">{item.title}</span>}
             </Link>
         );
     };
@@ -463,297 +631,341 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     }, [flash]);
 
     return (
-        <div className="flex h-screen flex-col bg-gray-50">
-            {/* Mobile Navigation */}
-            <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
-                <SheetContent side="left" className="w-[320px] sm:w-[360px] p-0 border-r-0">
-                    <div className="px-4 border-b bg-white/90 backdrop-blur text-gray-900">
-                        <div className="flex items-center justify-between">
-                            <Link href="/sections" className="flex items-center gap-2">
-                                <img src='/logo.png' className="w-8 h-8 rounded-xl" alt="Logo" />
-                                <div className="leading-tight">
-                                    <p className="text-sm font-semibold">Mousumi Erp</p>
-                                    {activeSection ? (
-                                        <p className="text-[11px] text-gray-600">{activeSection.title}</p>
-                                    ) : (
-                                        <p className="text-[11px] text-gray-600">Select a section</p>
-                                    )}
+        <div className="relative flex h-screen flex-col bg-slate-50">
+            {/* Subtle animated background (light theme) */}
+            <style>{`
+                @keyframes hrm-bg-shift {
+                    0% { transform: translate3d(-2%, -2%, 0) scale(1.02); filter: saturate(1.05); opacity: 0.95; }
+                    50% { transform: translate3d(2%, 1%, 0) scale(1.06); filter: saturate(1.15); opacity: 1; }
+                    100% { transform: translate3d(-2%, -2%, 0) scale(1.02); filter: saturate(1.05); opacity: 0.95; }
+                }
+            `}</style>
+            <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        background:
+                            'radial-gradient(900px 520px at 14% 10%, rgba(16,185,129,0.20), rgba(16,185,129,0) 60%),' +
+                            'radial-gradient(820px 520px at 86% 22%, rgba(34,197,94,0.14), rgba(34,197,94,0) 55%),' +
+                            'radial-gradient(900px 620px at 52% 90%, rgba(59,130,246,0.08), rgba(59,130,246,0) 60%),' +
+                            'linear-gradient(180deg, rgba(248,250,252,1) 0%, rgba(241,245,249,1) 35%, rgba(255,255,255,1) 100%)',
+                        animation: 'hrm-bg-shift 18s ease-in-out infinite',
+                    }}
+                />
+            </div>
+            {/* Desktop Sidebar */}
+            <div className="relative z-10 flex flex-1 overflow-hidden">
+                {/* Sidebar */}
+                <aside
+                    className={`hidden md:flex flex-col bg-white/95 backdrop-blur border-r border-emerald-900/15 transition-all duration-300 z-20 shadow-sm relative ${isSidebarOpen ? 'w-[260px]' : 'w-[84px]'
+                        }`}
+                >
+                    {/* Toggle Button */}
+                    <button
+                        onClick={toggleSidebar}
+                        className="absolute -right-3.5 top-6 bg-white/90 backdrop-blur border border-emerald-900/10 shadow-sm rounded-full p-1 text-slate-400 hover:text-emerald-700 hover:border-emerald-300/60 hover:bg-emerald-50/80 transition-all z-50 flex items-center justify-center"
+                    >
+                        <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${isSidebarOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Sidebar Header */}
+                    <div className={`h-16 border-b border-emerald-900/10 bg-white/90 backdrop-blur flex items-center transition-all ${isSidebarOpen ? 'px-4 justify-start' : 'px-0 justify-center'}`}>
+                        <Link href="/sections" className="flex items-center gap-3 min-w-0" title={!isSidebarOpen ? "Mousumi ERP" : undefined}>
+                            <div className="bg-emerald-50 p-1.5 rounded-lg flex items-center justify-center border border-emerald-100 shrink-0">
+                                <img src="/logo.png" className="w-6 h-6 rounded-md object-contain" alt="Logo" />
+                            </div>
+                            {isSidebarOpen && (
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[14px] font-bold text-slate-800 tracking-wide truncate">Mousumi ERP</p>
+                                    <p className="text-[10px] text-emerald-600 font-semibold truncate uppercase tracking-widest">{activeSection?.title || 'System'}</p>
                                 </div>
-                            </Link>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={toggleMobileNav}
-                                className="text-gray-700 hover:bg-gray-100"
-                            >
-                                <X className="w-5 h-5" />
-                            </Button>
-                        </div>
+                            )}
+                        </Link>
                     </div>
 
-                    <ScrollArea className="h-[calc(100vh-220px)] px-3 py-4">
-                        <div className="mb-3 flex items-center justify-between">
-                            <p className="text-[11px] font-semibold text-gray-500 tracking-wide">MENU</p>
-                            <Link
-                                href="/sections"
-                                className="text-xs font-medium text-green-700 hover:text-green-800 underline underline-offset-4"
-                                onClick={toggleMobileNav}
-                            >
-                                Change section
-                            </Link>
+                    {/* Sidebar Menu */}
+                    <ScrollArea className="flex-1 px-3 py-5">
+                        {sectionDashboardEntries.length > 0 && (
+                            <div className={cn('mb-4', isSidebarOpen ? 'px-0' : 'px-0')}>
+                                {isSidebarOpen && (
+                                    <p className="mb-1.5 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dashboard</p>
+                                )}
+                                <div className={cn('flex flex-col gap-1', !isSidebarOpen && 'items-center')}>
+                                    {sectionDashboardEntries.map((d) => (
+                                        <Link
+                                            key={d.path}
+                                            href={d.path}
+                                            title={!isSidebarOpen ? d.title : undefined}
+                                            className={cn(
+                                                'flex items-center font-semibold tracking-wide transition-all duration-200',
+                                                isSidebarOpen
+                                                    ? 'mx-3 w-[calc(100%-1.5rem)] gap-2 rounded-lg px-3 py-2.5 text-[12px]'
+                                                    : 'mx-auto h-11 w-11 justify-center rounded-xl',
+                                                isActive(d.path)
+                                                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20'
+                                                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300',
+                                            )}
+                                        >
+                                            {isSidebarOpen ? (
+                                                <>
+                                                    <LayoutDashboard className="h-4 w-4 shrink-0 text-emerald-600" />
+                                                    <span className="min-w-0 truncate">{d.title}</span>
+                                                </>
+                                            ) : (
+                                                <LayoutDashboard
+                                                    className={cn(
+                                                        'h-[18px] w-[18px]',
+                                                        isActive(d.path) ? 'text-emerald-600' : 'text-slate-500',
+                                                    )}
+                                                />
+                                            )}
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div className="mb-3 px-3">
+                            <p className={`text-[10px] font-bold text-slate-400 uppercase tracking-widest ${!isSidebarOpen && 'text-center'}`}>
+                                {isSidebarOpen ? 'Main Menu' : '•••'}
+                            </p>
                         </div>
-                        <nav className="space-y-2">
+                        <nav className="space-y-0.5">
                             {visibleMenuItems.map((item, idx) => (
                                 <MobileMenuItem key={idx} item={item} />
                             ))}
                         </nav>
                     </ScrollArea>
 
-                    <div className="p-4 border-t bg-gray-50">
+                    {/* Sidebar Footer - Logout */}
+                    <div className="p-4 border-t border-slate-200">
                         <Link
                             href="/logout"
                             method="post"
                             as="button"
-                            className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                            onClick={toggleMobileNav}
+                            title={!isSidebarOpen ? "Sign Out" : undefined}
+                            className={`flex items-center transition-all duration-200 font-medium text-[13px] tracking-wide text-red-600 hover:bg-red-50 hover:text-red-700 ${isSidebarOpen
+                                    ? 'w-full gap-3 px-3 py-2.5 rounded-lg'
+                                    : 'w-11 h-11 justify-center mx-auto rounded-xl'
+                                }`}
                         >
-                            <LogOut className="h-4 w-4" />
-                            Logout
+                            <LogOut className="w-[18px] h-[18px]" />
+                            {isSidebarOpen && 'Sign Out'}
                         </Link>
                     </div>
-                </SheetContent>
-            </Sheet>
+                </aside>
 
-            {/* Top Header + Horizontal Navigation */}
-            <header className="bg-white/90 backdrop-blur border-b border-gray-200 shadow-sm">
-                <div className="w-full px-4">
-                    <div className="h-14 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={toggleMobileNav}
-                                className="md:hidden text-gray-700 hover:bg-gray-100"
-                            >
-                                <Menu className="w-5 h-5" />
-                            </Button>
-
-                            <Link href="/sections" className="flex items-center gap-2 min-w-0">
-                                <img src="/logo.png" className="w-9 h-9 rounded-xl" alt="Logo" />
-                                <div className="min-w-0 leading-tight">
-                                    <p className="text-sm font-semibold text-gray-900">Mousumi Erp</p>
-                                    {activeSection ? (
-                                        <div className="flex items-center gap-2">
-                                            <p className="text-[11px] text-gray-600 truncate">{activeSection.title}</p>
-                                            <span className="text-[11px] text-gray-300">•</span>
-                                            <Link
-                                                href="/sections"
-                                                className="text-[11px] font-medium text-green-700 hover:text-green-800 underline underline-offset-4"
-                                            >
-                                                Change
-                                            </Link>
-                                        </div>
-                                    ) : (
-                                        <p className="text-[11px] text-gray-600">Select a section</p>
-                                    )}
+                {/* Mobile Sidebar Sheet */}
+                <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+                    <SheetContent side="left" className="w-72 p-0 border-r-0 md:hidden bg-white text-slate-800">
+                        <div className="px-4 border-b border-slate-200 h-16 flex items-center justify-between">
+                            <Link href="/sections" className="flex items-center gap-3">
+                                <div className="bg-emerald-50 p-1.5 rounded-lg flex items-center justify-center border border-emerald-100">
+                                    <img src="/logo.png" className="w-6 h-6 rounded-md object-contain" alt="Logo" />
+                                </div>
+                                <div className="leading-tight">
+                                    <p className="text-[14px] font-bold text-slate-800 tracking-wide">Mousumi ERP</p>
+                                    <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-widest">{activeSection?.title || 'System'}</p>
                                 </div>
                             </Link>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            {canCloseOwnMovement && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="hidden sm:inline-flex border-green-600 text-green-700 hover:bg-green-50 text-xs"
-                                    onClick={() => openCloseMovementDialog()}
-                                >
-                                    <MapPin className="w-4 h-4 mr-2" />
-                                    Close Movement
-                                </Button>
-                            )}
-
-                            <NotificationDropdown />
-
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="flex items-center gap-2 hover:bg-gray-100">
-                                        <Avatar className="w-8 h-8 border-2 border-green-500">
-                                            <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                            <AvatarFallback className="bg-green-700 text-white text-xs">
-                                                {getInitials(auth.user.name)}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="hidden md:block text-left leading-tight">
-                                            <p className="text-xs font-semibold text-gray-900">{auth.user.name}</p>
-                                            <p className="text-[11px] text-gray-500">{auth.user.email}</p>
-                                        </div>
-                                        <ChevronDown className="w-4 h-4 text-gray-500" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem asChild>
-                                        <Link href="/settings" className="cursor-pointer">
-                                            <Settings className="w-4 h-4 mr-2" />
-                                            Settings
-                                        </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                        <Link href="/settings/notifications" className="cursor-pointer">
-                                            <Bell className="w-4 h-4 mr-2" />
-                                            Push notifications
-                                        </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem asChild>
-                                        <Link href="/logout" method="post" as="button" className="cursor-pointer w-full text-left">
-                                            <LogOut className="w-4 h-4 mr-2" />
-                                            Logout
-                                        </Link>
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    </div>
-
-                    {/* Desktop Horizontal Menu */}
-                    <div className="hidden md:block">
-                        <div className="border-t border-gray-200 py-2">
-                            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                            {visibleMenuItems.map((item, idx) => {
-                                if (item.hrOnly && !isHRUser) return null;
-                                if (item.permission && !hasPermission(item.permission)) return null;
-
-                                const permittedSubmenu = item.submenu?.filter(subItem =>
-                                    (!subItem.hrOnly || isHRUser)
-                                    && (!subItem.permission || hasPermission(subItem.permission))
-                                    && (!subItem.anyPermissions?.length
-                                        || subItem.anyPermissions.some((p) => hasPermission(p)))
-                                );
-
-                                if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
-
-                                return item.hasSubmenu ? (
-                                    <DropdownMenu key={idx}>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className={`h-9 px-3 rounded-full text-xs font-medium ${isActive(item.path) ? 'bg-green-50 text-green-700 ring-1 ring-green-200' : 'text-gray-700 hover:bg-gray-100'
-                                                    }`}
+                        <ScrollArea className="h-[calc(100vh-130px)] px-3 py-5">
+                            {sectionDashboardEntries.length > 0 && (
+                                <div className="mb-4 px-0">
+                                    <p className="mb-1.5 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dashboard</p>
+                                    <div className="flex flex-col gap-1 px-3">
+                                        {sectionDashboardEntries.map((d) => (
+                                            <Link
+                                                key={d.path}
+                                                href={d.path}
+                                                onClick={closeMobileSidebar}
+                                                className={cn(
+                                                    'flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-[12px] font-semibold tracking-wide transition-all duration-200',
+                                                    isActive(d.path)
+                                                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20'
+                                                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300',
+                                                )}
                                             >
-                                                <span className="mr-2">{item.icon}</span>
-                                                {item.title}
-                                                <ChevronDown className="ml-1 h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="start" className="w-64">
-                                            <DropdownMenuLabel className="text-xs">{item.title}</DropdownMenuLabel>
-                                            <DropdownMenuSeparator />
-                                            {permittedSubmenu?.map((subItem, subIdx) => (
-                                                <DropdownMenuItem key={subIdx} asChild>
-                                                    <Link href={subItem.path} className="cursor-pointer text-sm">
-                                                        {subItem.title}
-                                                    </Link>
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                ) : (
-                                    <Button
-                                        key={idx}
-                                        asChild
-                                        variant="ghost"
-                                        size="sm"
-                                        className={`h-9 px-3 rounded-full text-xs font-medium ${isActive(item.path) ? 'bg-green-50 text-green-700 ring-1 ring-green-200' : 'text-gray-700 hover:bg-gray-100'
-                                            }`}
-                                    >
-                                        <Link href={item.path}>
-                                            <span className="mr-2">{item.icon}</span>
-                                            {item.title}
-                                        </Link>
-                                    </Button>
-                                );
-                            })}
-                        </div>
-                        </div>
-                    </div>
-                </div>
-            </header>
+                                                <LayoutDashboard className="h-4 w-4 shrink-0 text-emerald-600" />
+                                                <span className="min-w-0 truncate">{d.title}</span>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            <div className="mb-3 px-3">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                    Main Menu
+                                </p>
+                            </div>
+                            <nav className="space-y-0.5">
+                                {visibleMenuItems.map((item, idx) => (
+                                    <MobileMenuItem key={idx} item={item} />
+                                ))}
+                            </nav>
+                        </ScrollArea>
 
-                {/* Flash Messages */}
-                <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80">
-                    {showSuccess && (
-                        <Alert variant="default" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5">
-                            <CheckCircle className="h-4 w-4" />
-                            <AlertDescription>{flash.success}</AlertDescription>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-1 top-1 text-green-800 hover:bg-green-100 h-6 w-6"
-                                onClick={() => setShowSuccess(false)}
+                        <div className="p-4 border-t border-slate-200 absolute bottom-0 left-0 right-0 md:hidden">
+                            <Link
+                                href="/logout"
+                                method="post"
+                                as="button"
+                                className="w-full flex items-center justify-center gap-2 rounded-lg bg-red-50 py-2.5 text-[13px] font-medium tracking-wide text-red-600 hover:bg-red-100 hover:text-red-700 transition-colors"
                             >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </Alert>
-                    )}
-                    {showError && (
-                        <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 animate-in fade-in slide-in-from-top-5">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertDescription>{flash.error}</AlertDescription>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-1 top-1 text-red-800 hover:bg-red-100 h-6 w-6"
-                                onClick={() => setShowError(false)}
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </Alert>
-                    )}
-                    {showWarning && (
-                        <Alert variant="default" className="bg-yellow-50 border-yellow-200 text-yellow-800 animate-in fade-in slide-in-from-top-5">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertDescription>{flash.warning}</AlertDescription>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-1 top-1 text-yellow-800 hover:bg-yellow-100 h-6 w-6"
-                                onClick={() => setShowWarning(false)}
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </Alert>
-                    )}
-                    {showInfo && (
-                        <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-5">
-                            <Info className="h-4 w-4" />
-                            <AlertDescription>{flash.info}</AlertDescription>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-1 top-1 text-blue-800 hover:bg-blue-100 h-6 w-6"
-                                onClick={() => setShowInfo(false)}
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </Alert>
-                    )}
-                </div>
+                                <LogOut className="h-[18px] w-[18px]" />
+                                Sign Out
+                            </Link>
+                        </div>
+                    </SheetContent>
+                </Sheet>
 
                 {/* Main Content Area */}
-                <main className="flex-1 overflow-auto bg-gray-50 px-4">
-                    {children}
-                </main>
+                <div className="flex flex-col flex-1 overflow-hidden">
+                    {/* Top Header */}
+                        <header className="h-16 bg-white/90 backdrop-blur-md border-b border-emerald-900/15 shadow-sm px-4 lg:px-6 z-10 sticky top-0">
+                        <div className="h-full flex items-center justify-between gap-4">
+                            {/* Left: Mobile Menu Button */}
+                            <div className="flex items-center gap-3 md:hidden">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={toggleMobileSidebar}
+                                        className="text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
+                                >
+                                    <Menu className="w-5 h-5" />
+                                </Button>
+                            </div>
 
-                {/* Footer */}
-                <footer className="border-t py-3 bg-white">
-                    <div className="container mx-auto px-4 text-center text-sm text-gray-600">
-                        <p>&copy; {new Date().getFullYear()} Mousumi Erp. All rights reserved.</p>
-                    </div>
-                </footer>
+                            {/* Right: User Menu & Notifications */}
+                            <div className="flex items-center gap-4 ml-auto">
+                                {canCloseOwnMovement && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="hidden sm:inline-flex border-emerald-500/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-500/50 shadow-sm transition-all text-xs font-semibold tracking-wide h-8"
+                                        onClick={() => openCloseMovementDialog()}
+                                    >
+                                        <MapPin className="w-3.5 h-3.5 mr-1.5" />
+                                        Close Movement
+                                    </Button>
+                                )}
+
+                                <NotificationDropdown />
+
+                                <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="flex items-center gap-2.5 hover:bg-slate-100/80 px-2 rounded-full py-1 h-auto transition-colors">
+                                            <Avatar className="w-8 h-8 border-2 border-white shadow-sm ring-1 ring-slate-200">
+                                                <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
+                                                <AvatarFallback className="bg-emerald-600 text-white text-[11px] font-bold tracking-wider">
+                                                    {getInitials(auth.user.name)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="hidden sm:block text-left leading-tight pr-1">
+                                                <p className="text-[13px] font-bold text-slate-700 tracking-wide">{auth.user.name}</p>
+                                                <p className="text-[11px] font-medium text-slate-500">{auth.user.email}</p>
+                                            </div>
+                                            <ChevronDown className="w-4 h-4 text-slate-400 hidden sm:block" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-xl shadow-slate-200/50">
+                                        <DropdownMenuLabel className="font-bold text-slate-700 text-[13px]">My Account</DropdownMenuLabel>
+                                        <DropdownMenuSeparator className="bg-slate-100" />
+                                        <DropdownMenuItem asChild className="rounded-lg cursor-pointer hover:bg-slate-50 focus:bg-slate-50 transition-colors">
+                                            <Link href="/settings" className="flex items-center text-[13px] font-medium text-slate-600">
+                                                <Settings className="w-4 h-4 mr-2.5 text-slate-400" />
+                                                Settings
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild className="rounded-lg cursor-pointer hover:bg-slate-50 focus:bg-slate-50 transition-colors">
+                                            <Link href="/settings/notifications" className="flex items-center text-[13px] font-medium text-slate-600">
+                                                <Bell className="w-4 h-4 mr-2.5 text-slate-400" />
+                                                Notifications
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator className="bg-slate-100" />
+                                        <DropdownMenuItem asChild className="rounded-lg cursor-pointer hover:bg-red-50 focus:bg-red-50 transition-colors">
+                                            <Link href="/logout" method="post" as="button" className="w-full text-left flex items-center text-[13px] font-medium text-red-600">
+                                                <LogOut className="w-4 h-4 mr-2.5 text-red-500" />
+                                                Sign out
+                                            </Link>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="flex-1 overflow-auto bg-transparent px-4 lg:px-6 py-6 lg:py-8">
+                        <div className="w-full rounded-2xl border border-slate-200/70 bg-white/75 backdrop-blur shadow-sm shadow-slate-200/40 p-4 lg:p-6">
+                            {children}
+                        </div>
+                    </main>
+                </div>
+            </div>
+
+            {/* Flash Messages */}
+            <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none">
+                {showSuccess && (
+                    <Alert variant="default" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
+                        <CheckCircle className="h-4 w-4" />
+                        <AlertDescription>{flash.success}</AlertDescription>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1 text-green-800 hover:bg-green-100 h-6 w-6"
+                            onClick={() => setShowSuccess(false)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </Alert>
+                )}
+                {showError && (
+                    <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{flash.error}</AlertDescription>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1 text-red-800 hover:bg-red-100 h-6 w-6"
+                            onClick={() => setShowError(false)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </Alert>
+                )}
+                {showWarning && (
+                    <Alert variant="default" className="bg-yellow-50 border-yellow-200 text-yellow-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>{flash.warning}</AlertDescription>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1 text-yellow-800 hover:bg-yellow-100 h-6 w-6"
+                            onClick={() => setShowWarning(false)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </Alert>
+                )}
+                {showInfo && (
+                    <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
+                        <Info className="h-4 w-4" />
+                        <AlertDescription>{flash.info}</AlertDescription>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1 text-blue-800 hover:bg-blue-100 h-6 w-6"
+                            onClick={() => setShowInfo(false)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </Alert>
+                )}
+            </div>
 
             {/* Global Close Movement Dialog */}
             <Dialog
