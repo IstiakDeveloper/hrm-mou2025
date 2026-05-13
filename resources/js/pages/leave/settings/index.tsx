@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageSurface } from '@/components/page-surface';
-import { PageSurface } from '@/components/page-surface';
 import {
     Select,
     SelectContent,
@@ -315,7 +314,6 @@ export default function LeaveSettingsIndex({
                                     {tiers.meta.current_page > 1 && tiers.links?.prev && (
                                         <Link
                                             href={tiers.links.prev}
-                                            data={filterQuery()}
                                             preserveState
                                             className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                         >
@@ -340,7 +338,6 @@ export default function LeaveSettingsIndex({
                                             <Link
                                                 key={i}
                                                 href={link.url || '#'}
-                                                data={filterQuery()}
                                                 preserveState
                                                 className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${isActive
                                                         ? 'z-10 bg-emerald-600 text-white shadow-sm border border-emerald-600'
@@ -354,7 +351,6 @@ export default function LeaveSettingsIndex({
                                     {tiers.meta.current_page < tiers.meta.last_page && tiers.links?.next && (
                                         <Link
                                             href={tiers.links.next}
-                                            data={filterQuery()}
                                             preserveState
                                             className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                         >

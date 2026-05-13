@@ -298,7 +298,7 @@ class LeaveBalanceController extends Controller
             });
 
         $employees = $query
-            ->orderBy('id', 'desc')
+            ->orderBy('id')
             ->paginate($perPage)
             ->withQueryString();
 

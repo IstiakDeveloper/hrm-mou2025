@@ -34,6 +34,7 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                         { label: 'Holidays', href: '/holidays' },
                         { label: 'Employee report', href: '/reports/employee' },
                     ]
+                    : [
                         { label: 'My Profile', href: '/profile' },
                         { label: 'My Leaves', href: '/employee/leaves' },
                         { label: 'My Movements', href: '/employee/movements' },

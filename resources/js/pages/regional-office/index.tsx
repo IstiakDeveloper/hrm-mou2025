@@ -306,7 +306,6 @@ export default function RegionalOfficeIndex({ regionalOffices, zones, filters }:
                   {regionalOffices.meta.current_page > 1 && regionalOffices.links?.prev && (
                     <Link
                       href={regionalOffices.links.prev}
-                      data={{ search, zone_id: zoneId, per_page: perPage }}
                       preserveState
                       className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                     >
@@ -331,7 +330,6 @@ export default function RegionalOfficeIndex({ regionalOffices, zones, filters }:
                       <Link
                         key={i}
                         href={link.url || '#'}
-                        data={{ search, zone_id: zoneId, per_page: perPage }}
                         preserveState
                         className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
                           isActive
@@ -346,7 +344,6 @@ export default function RegionalOfficeIndex({ regionalOffices, zones, filters }:
                   {regionalOffices.meta.current_page < regionalOffices.meta.last_page && regionalOffices.links?.next && (
                     <Link
                       href={regionalOffices.links.next}
-                      data={{ search, zone_id: zoneId, per_page: perPage }}
                       preserveState
                       className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                     >

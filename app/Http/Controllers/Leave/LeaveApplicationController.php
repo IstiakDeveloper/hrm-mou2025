@@ -441,7 +441,7 @@ class LeaveApplicationController extends Controller
         $perPage = $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
 
-        $applications = $query->orderBy('id', 'desc')
+        $applications = $query->orderBy('id')
             ->paginate($perPage)
             ->withQueryString();
 

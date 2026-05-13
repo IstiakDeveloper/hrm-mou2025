@@ -310,7 +310,6 @@ const hasPagination = departments.meta && departments.links;
                       {departments.meta.current_page > 1 && departments.links?.prev && (
                         <Link
                           href={departments.links.prev}
-                          data={{ search, per_page: perPage }}
                           preserveState
                           className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                         >
@@ -335,7 +334,6 @@ const hasPagination = departments.meta && departments.links;
                           <Link
                             key={i}
                             href={link.url || '#'}
-                            data={{ search, per_page: perPage }}
                             preserveState
                             className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
                               isActive
@@ -350,7 +348,6 @@ const hasPagination = departments.meta && departments.links;
                       {departments.meta.current_page < departments.meta.last_page && departments.links?.next && (
                         <Link
                           href={departments.links.next}
-                          data={{ search, per_page: perPage }}
                           preserveState
                           className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                         >

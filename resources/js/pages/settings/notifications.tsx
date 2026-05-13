@@ -2,18 +2,11 @@ import HeadingSmall from '@/components/heading-small';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { createOrGetPushSubscription, postPushSubscriptionToServer } from '@/lib/push-subscription';
-import { type BreadcrumbItem, type SharedData } from '@/types';
-import AppLayout from '@/layouts/app-layout';
+import { type SharedData } from '@/types';
+import AdminLayout from '@/layouts/AdminLayout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useState } from 'react';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Notifications',
-        href: '/settings/notifications',
-    },
-];
 
 export default function NotificationsSettings({ subscriptionCount }: { subscriptionCount: number }) {
     const { push, flash } = usePage<SharedData>().props;
@@ -80,7 +73,7 @@ export default function NotificationsSettings({ subscriptionCount }: { subscript
     }, []);
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <AdminLayout>
             <Head title="Notifications" />
 
             <SettingsLayout>
@@ -149,6 +142,6 @@ export default function NotificationsSettings({ subscriptionCount }: { subscript
                     </p>
                 </div>
             </SettingsLayout>
-        </AppLayout>
+        </AdminLayout>
     );
 }

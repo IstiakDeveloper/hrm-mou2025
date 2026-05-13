@@ -20,7 +20,7 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { PageSurface } from '@/components/page-surface';
-import { PageSurface } from '@/components/page-surface';
+import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -667,7 +667,6 @@ export default function LeaveBalancesIndex({
                   {employees.meta.current_page > 1 && employees.links?.prev && (
                     <Link
                       href={employees.links.prev}
-                      data={{ search, year: selectedYear, branch_id: branchId === 'all' ? '' : branchId, per_page: perPage }}
                       preserveState
                       className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                     >
@@ -692,7 +691,6 @@ export default function LeaveBalancesIndex({
                       <Link
                         key={i}
                         href={link.url || '#'}
-                        data={{ search, year: selectedYear, branch_id: branchId === 'all' ? '' : branchId, per_page: perPage }}
                         preserveState
                         className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${isActive
                             ? 'z-10 bg-emerald-600 text-white shadow-sm border border-emerald-600'
@@ -706,7 +704,6 @@ export default function LeaveBalancesIndex({
                   {employees.meta.current_page < employees.meta.last_page && employees.links?.next && (
                     <Link
                       href={employees.links.next}
-                      data={{ search, year: selectedYear, branch_id: branchId === 'all' ? '' : branchId, per_page: perPage }}
                       preserveState
                       className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                     >

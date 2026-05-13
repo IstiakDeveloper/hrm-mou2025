@@ -28,8 +28,7 @@ class BranchController extends Controller
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('branch_code', 'like', "%{$search}%");
             })
-            ->with('branchHeadDesignation:id,name')
-            ->orderBy('name')
+            ->orderBy('branch_code')
             ->paginate($perPage)
             ->withQueryString();
 
@@ -43,9 +42,8 @@ class BranchController extends Controller
                         'contact_number' => $branch->contact_number,
                         'branch_code' => $branch->branch_code,
                         'is_head_office' => (bool) $branch->is_head_office,
-                        'headDesignation' => $branch->branchHeadDesignation
-                            ? ['id' => $branch->branchHeadDesignation->id, 'name' => $branch->branchHeadDesignation->name]
-                            : null,
+                        'geofence_latitude' => $branch->geofence_latitude,
+                        'geofence_longitude' => $branch->geofence_longitude,
                     ];
                 })->values()->all(),
                 'meta' => [

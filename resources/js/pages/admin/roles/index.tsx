@@ -248,7 +248,7 @@ export default function RolesIndex({ roles, filters, success }: RolesIndexProps)
               </Table>
             </div>
 
-            {/* Pagination */}
+            {/* Pagination — Laravel `link.url` carries correct page + query (never `i + 1`). */}
             {roles.last_page > 1 && (
               <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6">
                 <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
@@ -263,48 +263,67 @@ export default function RolesIndex({ roles, filters, success }: RolesIndexProps)
                   </div>
                   <div>
                     <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                      {roles.current_page > 1 && (
+                      {roles.current_page > 1 && roles.links[0]?.url ? (
                         <Link
-                          href={route('admin.roles.index', {
-                            page: roles.current_page - 1,
-                            search: data.search,
-                          })}
+                          href={roles.links[0].url}
+                          preserveState
                           className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
                         >
                           <span className="sr-only">Previous</span>
                           <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                         </Link>
-                      )}
+                      ) : null}
 
-                      {roles.links.slice(1, -1).map((link, i) => (
-                        <Link
-                          key={i}
-                          href={route('admin.roles.index', {
-                            page: i + 1,
-                            search: data.search,
-                          })}
-                          className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${
-                            link.active
-                              ? 'z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary'
-                              : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
-                          }`}
-                        >
-                          {link.label}
-                        </Link>
-                      ))}
+                      {roles.links.slice(1, -1).map((link, i) => {
+                        const isActive = link.active;
+                        const isDots = link.label === '...';
 
-                      {roles.current_page < roles.last_page && (
+                        if (isDots) {
+                          return (
+                            <span
+                              key={i}
+                              className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-400 ring-1 ring-inset ring-gray-300"
+                            >
+                              ...
+                            </span>
+                          );
+                        }
+
+                        if (isActive && !link.url) {
+                          return (
+                            <span
+                              key={i}
+                              className="relative inline-flex items-center px-4 py-2 text-sm font-medium z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+                              dangerouslySetInnerHTML={{ __html: link.label }}
+                            />
+                          );
+                        }
+
+                        return (
+                          <Link
+                            key={i}
+                            href={link.url || '#'}
+                            preserveState
+                            className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${
+                              link.active
+                                ? 'z-10 bg-primary text-white focus:outline-2 focus:outline-offset-2 focus:outline-primary'
+                                : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
+                            }`}
+                            dangerouslySetInnerHTML={{ __html: link.label }}
+                          />
+                        );
+                      })}
+
+                      {roles.current_page < roles.last_page && roles.links[roles.links.length - 1]?.url ? (
                         <Link
-                          href={route('admin.roles.index', {
-                            page: roles.current_page + 1,
-                            search: data.search,
-                          })}
+                          href={roles.links[roles.links.length - 1].url!}
+                          preserveState
                           className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0"
                         >
                           <span className="sr-only">Next</span>
                           <ChevronRight className="h-5 w-5" aria-hidden="true" />
                         </Link>
-                      )}
+                      ) : null}
                     </nav>
                   </div>
                 </div>

@@ -209,22 +209,6 @@ function addresseeRoleDetailLine(addressee: LeavePdfAddressee | undefined, appli
     return title;
 }
 
-/** True when the bold role line adds something beyond the salutation (avoids repeating the same title after "To, …"). */
-function shouldShowAddresseeRoleDetailLine(addressee: LeavePdfAddressee | undefined, application: LeaveApplication): boolean {
-    const roleLine = addresseeRoleDetailLine(addressee, application).trim();
-    if (!roleLine) {
-        return false;
-    }
-    const salutationBody = addresseeSalutation(addressee, application)
-        .trim()
-        .replace(/^To,\s*/i, '')
-        .trim();
-    if (roleLine.toLowerCase() === salutationBody.toLowerCase()) {
-        return false;
-    }
-    return true;
-}
-
 /** Opening line for the letter — follows active leave approval tier (or ED when tier exceeds / no tier). */
 function addresseeSalutation(addressee?: LeavePdfAddressee, application?: LeaveApplication): string {
     const title = (addressee?.title ?? '').trim();
@@ -251,6 +235,39 @@ function addresseeSalutation(addressee?: LeavePdfAddressee, application?: LeaveA
         default:
             return title ? `To, ${title}` : 'To, Executive Director';
     }
+}
+
+function addresseeSalutationBody(
+    addressee?: LeavePdfAddressee,
+    application?: LeaveApplication
+): string {
+    return addresseeSalutation(addressee, application)
+        .trim()
+        .replace(/^To,\s*/i, '')
+        .trim();
+}
+
+/** Text after "To," — prefers role+location line when it adds detail beyond the salutation body; optional addressee name. */
+function addresseeSecondLine(
+    addressee: LeavePdfAddressee | undefined,
+    application: LeaveApplication
+): string {
+    const body = addresseeSalutationBody(addressee, application);
+    const role = addresseeRoleDetailLine(addressee, application).trim();
+    let line: string;
+    if (role && body && role.toLowerCase() !== body.toLowerCase()) {
+        line = role;
+    } else {
+        line = body || role;
+    }
+    if (!line) {
+        line = 'Executive Director';
+    }
+    const name = (addressee?.name ?? '').trim();
+    if (name && addressee?.type !== 'department_head') {
+        return `${name}, ${line}`;
+    }
+    return line;
 }
 
 export default function Pdf({ application, currentDate, addressee }: PdfProps) {
@@ -289,8 +306,8 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
                         <div className="header-logo-column">
                             <div className="company-logo">
                                 <img
-                                    src="/mousumi.png"
-                                    alt="Mousumi Logo"
+                                    src="/logo.png"
+                                    alt="Company logo"
                                     className="logo-image"
                                     onError={(e) => {
                                         e.currentTarget.style.display = 'none';
@@ -325,15 +342,10 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
                         <p>Date: {formatDate(application.applied_at)}</p>
                     </div>
 
-                    {/* Addressee — tier from Leave settings (resolveTierApprovers); else legacy HO/ED rules */}
+                    {/* Addressee — two lines: "To," then role/title (tier from Leave settings / legacy rules) */}
                     <div className="addressee-section">
-                        <p className="addressee-line">{addresseeSalutation(addressee, application)}</p>
-                        {addressee?.name && addressee.type !== 'department_head' ? (
-                            <p className="addressee-name">{addressee.name}</p>
-                        ) : null}
-                        {shouldShowAddresseeRoleDetailLine(addressee, application) ? (
-                            <p className="addressee-title">{addresseeRoleDetailLine(addressee, application)}</p>
-                        ) : null}
+                        <p className="addressee-line">To,</p>
+                        <p className="addressee-title">{addresseeSecondLine(addressee, application)}</p>
                     </div>
 
                     {/* Subject */}
@@ -569,7 +581,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           font-family: 'Times New Roman', serif;
           color: #000;
           line-height: 1.6;
-          font-size: 14px;
+          font-size: 14.5px;
         }
 
         .page-content {
@@ -587,7 +599,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           align-items: center;
           margin-bottom: 14px;
           padding-bottom: 12px;
-          border-bottom: 2px solid #0f172a;
+
         }
 
         .header-logo-column {
@@ -630,7 +642,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         }
 
         .logo-text {
-          font-size: 11px;
+          font-size: 11.5px;
           font-weight: bold;
           text-align: center;
           line-height: 1.2;
@@ -643,7 +655,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         }
 
         .company-name {
-          font-size: 22px;
+          font-size: 22.5px;
           font-weight: bold;
           margin: 0 0 4px 0;
           letter-spacing: 0.12em;
@@ -651,7 +663,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         }
 
         .company-location {
-          font-size: 13px;
+          font-size: 13.5px;
           margin: 0;
           font-weight: normal;
           color: #334155;
@@ -667,7 +679,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         }
 
         .document-title {
-          font-size: 16px;
+          font-size: 16.5px;
           font-weight: bold;
           margin: 0;
           letter-spacing: 1px;
@@ -681,7 +693,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           color: white;
           padding: 2px 8px;
           border-radius: 4px;
-          font-size: 10px;
+          font-size: 10.5px;
           font-weight: bold;
         }
 
@@ -692,7 +704,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
 
         .application-date p {
           margin: 0;
-          font-size: 13px;
+          font-size: 13.5px;
         }
 
         .addressee-section {
@@ -701,7 +713,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
 
         .addressee-line, .addressee-name, .addressee-title, .addressee-company {
           margin: 3px 0;
-          font-size: 13px;
+          font-size: 13.5px;
         }
 
         .addressee-name {
@@ -718,7 +730,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
 
         .subject-section p {
           margin: 0;
-          font-size: 13px;
+          font-size: 13.5px;
         }
 
         .content-section {
@@ -728,12 +740,12 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
 
         .greeting {
           margin-bottom: 10px;
-          font-size: 13px;
+          font-size: 13.5px;
         }
 
         .main-content {
           margin-bottom: 10px;
-          font-size: 13px;
+          font-size: 13.5px;
           line-height: 1.4;
         }
 
@@ -747,12 +759,12 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         .reason-text {
           margin: 3px 0 0 0;
           font-style: italic;
-          font-size: 12px;
+          font-size: 12.5px;
         }
 
         .closing-content {
           margin-top: 10px;
-          font-size: 13px;
+          font-size: 13.5px;
           line-height: 1.4;
         }
 
@@ -761,14 +773,14 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         }
 
         .info-title {
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: bold;
           margin: 0 0 5px 0;
         }
 
         .leave-balance {
           margin: 0;
-          font-size: 12px;
+          font-size: 12.5px;
           background: #f0f8ff;
           padding: 6px;
           border-left: 3px solid #2563eb;
@@ -781,7 +793,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           border: 1px solid #cbd5e1;
           border-radius: 4px;
           overflow: hidden;
-          font-size: 11px;
+          font-size: 11.5px;
         }
 
         .leave-balance-columns {
@@ -813,7 +825,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           text-align: center;
           white-space: nowrap;
           font-weight: bold;
-          font-size: 12px;
+          font-size: 12.5px;
         }
 
         .employee-section {
@@ -822,13 +834,13 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         }
 
         .respectfully {
-          font-size: 13px;
+          font-size: 13.5px;
           margin-bottom: 8px;
           font-weight: bold;
         }
 
         .employee-details, .approval-details, .digital-approval-info {
-          font-size: 11px;
+          font-size: 11.5px;
         }
 
         .detail-item {
@@ -841,7 +853,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           font-weight: bold;
           min-width: 110px;
           margin-right: 8px;
-          font-size: 11px;
+          font-size: 11.5px;
         }
 
         .detail-value {
@@ -851,19 +863,19 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         .detail-value.approved {
           color: #22c55e;
           font-weight: bold;
-          font-size: 12px;
+          font-size: 12.5px;
         }
 
         .detail-value.rejected {
           color: #dc2626;
           font-weight: bold;
-          font-size: 12px;
+          font-size: 12.5px;
         }
 
         .detail-value.pending {
           color: #2563eb;
           font-weight: bold;
-          font-size: 12px;
+          font-size: 12.5px;
         }
 
         .approval-section {
@@ -880,19 +892,28 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         }
 
         .approved-shadow {
-          box-shadow: 0 8px 25px rgba(34, 197, 94, 0.3);
+          box-shadow:
+            0 0 0 1px rgba(0, 0, 0, 0.12),
+            0 3px 10px rgba(0, 0, 0, 0.16),
+            0 10px 28px rgba(34, 197, 94, 0.42);
           border-color: #22c55e;
           background: linear-gradient(145deg, #f0fdf4, #ffffff);
         }
 
         .rejected-shadow {
-          box-shadow: 0 8px 25px rgba(220, 38, 38, 0.3);
+          box-shadow:
+            0 0 0 1px rgba(0, 0, 0, 0.12),
+            0 3px 10px rgba(0, 0, 0, 0.16),
+            0 10px 28px rgba(220, 38, 38, 0.42);
           border-color: #dc2626;
           background: linear-gradient(145deg, #fef2f2, #ffffff);
         }
 
         .pending-shadow {
-          box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
+          box-shadow:
+            0 0 0 1px rgba(0, 0, 0, 0.12),
+            0 3px 10px rgba(0, 0, 0, 0.16),
+            0 10px 28px rgba(37, 99, 235, 0.42);
           border-color: #2563eb;
           background: linear-gradient(145deg, #eff6ff, #ffffff);
         }
@@ -901,7 +922,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           background: #f0f0f0;
           padding: 4px 8px;
           margin: 0;
-          font-size: 11px;
+          font-size: 11.5px;
           font-weight: bold;
           text-align: center;
           border-bottom: 1px solid #000;
@@ -941,7 +962,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         .rejection-notice h4 {
           color: #dc2626;
           margin: 0 0 10px 0;
-          font-size: 16px;
+          font-size: 16.5px;
         }
 
         .rejection-notice p {
@@ -952,7 +973,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         .digital-footer {
           margin-top: 10px;
           text-align: center;
-          font-size: 10px;
+          font-size: 10.5px;
           border-top: 1px solid #ccc;
           padding-top: 6px;
           background: #f8fafc;
@@ -1088,22 +1109,26 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
         }
 
         .stamp-icon {
-          font-size: 60px;
+          font-size: 60.5px;
           font-weight: bold;
           margin-bottom: 5px;
-          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+          text-shadow:
+            0.5px 0.5px 0 rgba(0, 0, 0, 0.22),
+            1px 2px 4px rgba(0, 0, 0, 0.18);
         }
 
         .stamp-text {
-          font-size: 32px;
+          font-size: 32.5px;
           font-weight: 900;
           letter-spacing: 6px;
           margin-bottom: 5px;
-          text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+          text-shadow:
+            0.5px 0.5px 0 rgba(0, 0, 0, 0.22),
+            1px 2px 3px rgba(0, 0, 0, 0.18);
         }
 
         .stamp-date {
-          font-size: 14px;
+          font-size: 14.5px;
           font-weight: bold;
           letter-spacing: 1px;
         }
@@ -1125,6 +1150,9 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
             padding: 6mm;
             min-height: auto;
             position: relative;
+            box-shadow:
+              0 0 0 1px rgba(0, 0, 0, 0.35),
+              0 3px 10px rgba(0, 0, 0, 0.25) !important;
           }
 
           @page {
@@ -1136,21 +1164,30 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
             break-inside: avoid;
           }
 
-          /* Print-optimized colors */
+          /* Strong neutral shadow so grayscale / laser print still shows depth */
           .approved-shadow {
-            box-shadow: none !important;
+            box-shadow:
+              0 0 0 1px rgba(0, 0, 0, 0.45),
+              0 2px 6px rgba(0, 0, 0, 0.32),
+              0 6px 16px rgba(0, 0, 0, 0.28) !important;
             border: 2px solid #22c55e !important;
             background: #f0fdf4 !important;
           }
 
           .rejected-shadow {
-            box-shadow: none !important;
+            box-shadow:
+              0 0 0 1px rgba(0, 0, 0, 0.45),
+              0 2px 6px rgba(0, 0, 0, 0.32),
+              0 6px 16px rgba(0, 0, 0, 0.28) !important;
             border: 2px solid #dc2626 !important;
             background: #fef2f2 !important;
           }
 
           .pending-shadow {
-            box-shadow: none !important;
+            box-shadow:
+              0 0 0 1px rgba(0, 0, 0, 0.45),
+              0 2px 6px rgba(0, 0, 0, 0.32),
+              0 6px 16px rgba(0, 0, 0, 0.28) !important;
             border: 2px solid #2563eb !important;
             background: #eff6ff !important;
           }
@@ -1188,7 +1225,9 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           }
 
           .stamp-icon, .stamp-text, .stamp-date {
-            text-shadow: none !important;
+            text-shadow:
+              1px 1px 0 rgba(0, 0, 0, 0.42),
+              2px 3px 5px rgba(0, 0, 0, 0.32) !important;
           }
         }
 
@@ -1199,7 +1238,10 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
           }
 
           .page-content {
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            box-shadow:
+              0 0 0 1px rgba(0, 0, 0, 0.08),
+              0 4px 22px rgba(0, 0, 0, 0.14),
+              0 14px 40px rgba(0, 0, 0, 0.12);
           }
         }
       `}</style>

@@ -74,7 +74,7 @@ class TransferController extends Controller
                 });
             });
 
-        $transfers = $query->orderBy('id', 'desc')
+        $transfers = $query->orderBy('id')
             ->paginate(10)
             ->withQueryString();
 

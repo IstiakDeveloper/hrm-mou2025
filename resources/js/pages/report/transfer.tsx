@@ -29,11 +29,10 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Calendar as CalendarIcon, Filter, Printer, RefreshCcw, FileBarChart2, Building2, ArrowRight } from 'lucide-react';
+import { Filter, Printer, RefreshCcw, FileBarChart2, Building2, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO, subDays, startOfMonth, endOfMonth } from 'date-fns';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
+import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
 
 interface Transfer {
@@ -392,38 +391,32 @@ export default function TransferReport({
                     <CardContent className="space-y-4 pt-4">
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
                             <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-zinc-700">From (effective)</label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className="h-9 w-full justify-start text-left text-xs font-normal">
-                                            <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                                            {fromDate ? format(fromDate, 'MMM d, yyyy') : 'Pick'}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <Calendar mode="single" selected={fromDate} onSelect={setFromDate} initialFocus />
-                                    </PopoverContent>
-                                </Popover>
+                                <label htmlFor="transfer-filter-from" className="text-xs font-medium text-zinc-700">
+                                    From (effective)
+                                </label>
+                                <DatePicker
+                                    id="transfer-filter-from"
+                                    selected={fromDate ?? null}
+                                    onSelect={(d) => {
+                                        setFromDate(d ?? undefined);
+                                        if (d && toDate && toDate < d) {
+                                            setToDate(d);
+                                        }
+                                    }}
+                                    placeholderText="DD-MM-YYYY"
+                                />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-zinc-700">To (effective)</label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className="h-9 w-full justify-start text-left text-xs font-normal">
-                                            <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                                            {toDate ? format(toDate, 'MMM d, yyyy') : 'Pick'}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <Calendar
-                                            mode="single"
-                                            selected={toDate}
-                                            onSelect={setToDate}
-                                            initialFocus
-                                            disabled={(date) => (fromDate ? date < fromDate : false)}
-                                        />
-                                    </PopoverContent>
-                                </Popover>
+                                <label htmlFor="transfer-filter-to" className="text-xs font-medium text-zinc-700">
+                                    To (effective)
+                                </label>
+                                <DatePicker
+                                    id="transfer-filter-to"
+                                    selected={toDate ?? null}
+                                    onSelect={(d) => setToDate(d ?? undefined)}
+                                    placeholderText="DD-MM-YYYY"
+                                    minDate={fromDate}
+                                />
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-zinc-700">Status</label>

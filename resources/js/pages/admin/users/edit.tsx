@@ -16,8 +16,21 @@ interface Employee {
   id: number;
   employee_id: string;
   biometric_id?: string | null;
-  first_name: string;
-  last_name: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  name_en?: string | null;
+}
+
+function employeeFullName(employee: Employee): string {
+  const nameEn = (employee.name_en ?? '').trim();
+  if (nameEn) {
+    return nameEn;
+  }
+
+  return [employee.first_name, employee.last_name]
+    .map((part) => (part ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
 }
 
 function previewLoginUsername(emp: Employee | undefined): string {
@@ -73,8 +86,15 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
   // Extract role IDs from user.roles
   const userRoleIds = user.roles ? user.roles.map(role => role.id) : [];
 
+  const linkedEmployeeOnLoad = employees.find((emp) => emp.id === user.employee_id);
+  const initialUsername =
+    user.username != null && String(user.username).trim() !== ''
+      ? String(user.username).trim()
+      : previewLoginUsername(linkedEmployeeOnLoad);
+
   const { data, setData, put, processing } = useForm({
     name: user.name || '',
+    username: initialUsername,
     email: user.email || '',
     password: '',
     password_confirmation: '',
@@ -160,6 +180,19 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
     }
   };
 
+  const handleEmployeeChange = (value: string) => {
+    const employeeId = value === 'none' ? '' : value;
+    setData('employee_id', employeeId);
+
+    const selectedEmployee = employees.find(employee => employee.id.toString() === employeeId);
+    if (selectedEmployee) {
+      const fullName = employeeFullName(selectedEmployee);
+      if (fullName) {
+        setData('name', fullName);
+      }
+    }
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     put(route('admin.users.update', user.id));
@@ -219,19 +252,23 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="login-username-preview">Login username</Label>
+                    <Label htmlFor="username">
+                      Username <span className="text-red-500">*</span>
+                    </Label>
                     <Input
-                      id="login-username-preview"
+                      id="username"
                       type="text"
-                      readOnly
-                      value={loginUsernamePreview}
-                      placeholder="Select an employee"
-                      className="bg-gray-50 font-mono text-sm"
+                      value={data.username}
+                      onChange={(e) => setData('username', e.target.value)}
+                      placeholder="Login username"
+                      className="font-mono text-sm"
                       spellCheck={false}
+                      autoComplete="username"
                     />
+                    {errors.username && <p className="mt-1 text-sm text-red-500">{errors.username}</p>}
                     <p className="text-xs text-gray-500">
-                      Same as the employee&apos;s ID (as stored). Current login name:{' '}
-                      <span className="font-mono">{user.username ?? '—'}</span>
+                      Suggested from linked employee:{' '}
+                      <span className="font-mono text-gray-700">{loginUsernamePreview || '—'}</span>
                     </p>
                   </div>
 
@@ -402,7 +439,7 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                     </Label>
                     <Select
                       value={data.employee_id ? data.employee_id.toString() : undefined}
-                      onValueChange={value => setData('employee_id', value === 'none' ? '' : value)}
+                      onValueChange={handleEmployeeChange}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select an employee" />
@@ -411,7 +448,7 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                       <SelectItem value="none">None</SelectItem>
                         {employees.map(employee => (
                           <SelectItem key={employee.id} value={employee.id.toString()}>
-                            {employee.first_name} {employee.last_name} ({employee.employee_id})
+                            {employeeFullName(employee)} ({employee.employee_id})
                           </SelectItem>
                         ))}
                       </SelectContent>

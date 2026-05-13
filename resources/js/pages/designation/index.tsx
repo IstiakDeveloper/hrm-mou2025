@@ -278,7 +278,6 @@ export default function DesignationIndex({ designations, filters }: DesignationI
                       {designations.meta.current_page > 1 && designations.links?.prev && (
                         <Link
                           href={designations.links.prev}
-                          data={{ search, per_page: perPage }}
                           preserveState
                           className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                         >
@@ -303,7 +302,6 @@ export default function DesignationIndex({ designations, filters }: DesignationI
                           <Link
                             key={i}
                             href={link.url || '#'}
-                            data={{ search, per_page: perPage }}
                             preserveState
                             className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
                               isActive
@@ -318,7 +316,6 @@ export default function DesignationIndex({ designations, filters }: DesignationI
                       {designations.meta.current_page < designations.meta.last_page && designations.links?.next && (
                         <Link
                           href={designations.links.next}
-                          data={{ search, per_page: perPage }}
                           preserveState
                           className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                         >

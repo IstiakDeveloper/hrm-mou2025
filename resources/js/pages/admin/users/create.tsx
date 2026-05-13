@@ -15,9 +15,22 @@ interface Employee {
     id: number;
     employee_id: string;
     biometric_id?: string | null;
-    first_name: string;
-    last_name: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    name_en?: string | null;
     email?: string;
+}
+
+function employeeFullName(employee: Employee): string {
+    const nameEn = (employee.name_en ?? '').trim();
+    if (nameEn) {
+        return nameEn;
+    }
+
+    return [employee.first_name, employee.last_name]
+        .map((part) => (part ?? '').trim())
+        .filter(Boolean)
+        .join(' ');
 }
 
 function previewLoginUsername(emp: Employee | undefined): string {
@@ -89,12 +102,11 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
         // Find the selected employee
         if (employeeId) {
             const selectedEmployee = employees.find(emp => emp.id.toString() === employeeId);
-            if (selectedEmployee && selectedEmployee.email) {
-                // Auto-populate email field with employee's email
-                setData('email', selectedEmployee.email);
-
-                // Optionally set name if you want to auto-populate it too
-                setData('name', `${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
+            if (selectedEmployee) {
+                setData('name', employeeFullName(selectedEmployee));
+                if (selectedEmployee.email) {
+                    setData('email', selectedEmployee.email);
+                }
             }
         }
     };
@@ -233,7 +245,7 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
                                             <SelectContent>
                                                 {employees.map(employee => (
                                                     <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                        {employee.first_name} {employee.last_name} ({employee.employee_id})
+                                                        {employeeFullName(employee)} ({employee.employee_id})
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>

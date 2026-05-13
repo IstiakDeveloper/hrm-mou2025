@@ -175,7 +175,7 @@ class MovementController extends Controller
                 });
             });
 
-        $movements = $query->orderBy('id', 'desc')
+        $movements = $query->orderBy('id')
             ->paginate(10)
             ->withQueryString();
 

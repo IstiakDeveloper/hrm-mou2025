@@ -592,8 +592,7 @@ export default function EmployeeIndex({
                             </Table>
                         </div>
 
-                        {/* Pagination */}
-                        {/* Pagination */}
+                        {/* Pagination — use Laravel `link.url` (correct page + query string); never `i + 1` (wrong for ellipses). */}
                         <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4 rounded-b-xl">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2 text-[13px] text-slate-500">
@@ -625,66 +624,73 @@ export default function EmployeeIndex({
                                     </p>
                                 </div>
                             </div>
-                            
+
                             {employees.last_page > 1 && (
                                 <div className="flex items-center justify-end">
-                                        <nav className="isolate inline-flex -space-x-px gap-1.5" aria-label="Pagination">
-                                            {employees.current_page > 1 && (
-                                                <Link
-                                                    href={route('employees.index', {
-                                                        page: employees.current_page - 1,
-                                                        ...filters,
-                                                    })}
-                                                    className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
-                                                >
-                                                    <span className="sr-only">Previous</span>
-                                                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                                                </Link>
-                                            )}
+                                    <nav className="isolate inline-flex -space-x-px gap-1.5" aria-label="Pagination">
+                                        {employees.current_page > 1 && employees.links[0]?.url ? (
+                                            <Link
+                                                href={employees.links[0].url}
+                                                preserveState
+                                                className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 hover:border-emerald-200 hover:bg-slate-50 hover:text-emerald-600 focus:z-20"
+                                            >
+                                                <span className="sr-only">Previous</span>
+                                                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                                            </Link>
+                                        ) : null}
 
-                                            {employees.links.slice(1, -1).map((link, i) => {
-                                                const isActive = link.active;
-                                                // Some links might be "..." when there are many pages
-                                                const isDots = link.label === '...';
-                                                
-                                                if (isDots) {
-                                                    return (
-                                                        <span key={i} className="relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-medium text-slate-400">
-                                                            ...
-                                                        </span>
-                                                    );
-                                                }
+                                        {employees.links.slice(1, -1).map((link, i) => {
+                                            const isActive = link.active;
+                                            const isDots = link.label === '...';
 
+                                            if (isDots) {
                                                 return (
-                                                    <Link
+                                                    <span
                                                         key={i}
-                                                        href={route('employees.index', {
-                                                            page: i + 1,
-                                                            ...filters,
-                                                        })}
-                                                        className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
-                                                            isActive
-                                                                ? 'z-10 bg-emerald-600 text-white shadow-sm border border-emerald-600'
-                                                                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-emerald-600 hover:border-emerald-200 focus:z-20'
-                                                        }`}
+                                                        className="relative inline-flex h-8 w-8 items-center justify-center text-[13px] font-medium text-slate-400"
+                                                    >
+                                                        ...
+                                                    </span>
+                                                );
+                                            }
+
+                                            if (isActive && !link.url) {
+                                                return (
+                                                    <span
+                                                        key={i}
+                                                        className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-600 bg-emerald-600 text-[13px] font-semibold text-white shadow-sm"
                                                         dangerouslySetInnerHTML={{ __html: link.label }}
                                                     />
                                                 );
-                                            })}
+                                            }
 
-                                            {employees.current_page < employees.last_page && (
+                                            return (
                                                 <Link
-                                                    href={route('employees.index', {
-                                                        page: employees.current_page + 1,
-                                                        ...filters,
-                                                    })}
-                                                    className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
-                                                >
-                                                    <span className="sr-only">Next</span>
-                                                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                                                </Link>
-                                            )}
-                                        </nav>
+                                                    key={i}
+                                                    href={link.url || '#'}
+                                                    preserveState
+                                                    className={`relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-semibold shadow-sm transition-all duration-200 ${
+                                                        isActive
+                                                            ? 'z-10 border border-emerald-600 bg-emerald-600 text-white shadow-sm'
+                                                            : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-slate-50 hover:text-emerald-600 focus:z-20'
+                                                    }`}
+                                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                                />
+                                            );
+                                        })}
+
+                                        {employees.current_page < employees.last_page &&
+                                        employees.links[employees.links.length - 1]?.url ? (
+                                            <Link
+                                                href={employees.links[employees.links.length - 1].url!}
+                                                preserveState
+                                                className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 hover:border-emerald-200 hover:bg-slate-50 hover:text-emerald-600 focus:z-20"
+                                            >
+                                                <span className="sr-only">Next</span>
+                                                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                                            </Link>
+                                        ) : null}
+                                    </nav>
                                 </div>
                             )}
                         </div>

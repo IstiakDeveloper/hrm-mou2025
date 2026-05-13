@@ -17,7 +17,7 @@ class EmployeeDocumentController extends Controller
     public function index(Employee $employee)
     {
         $documents = EmployeeDocument::where('employee_id', $employee->id)
-            ->orderBy('id', 'desc')
+            ->orderBy('id')
             ->get();
 
         return Inertia::render('employee/documents/index', [

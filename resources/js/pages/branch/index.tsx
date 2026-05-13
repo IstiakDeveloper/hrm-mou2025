@@ -25,23 +25,15 @@ import {
     Edit,
     Eye,
     MapPin,
-    MoreHorizontal,
     Phone,
     Plus,
     Search,
-    Trash2,
-    User,
     ChevronLeft,
     ChevronRight,
     Trash,
     X
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-
-interface DesignationLite {
-    id: number;
-    name: string;
-}
 
 interface Branch {
     id: number;
@@ -50,7 +42,8 @@ interface Branch {
     contact_number: string | null;
     branch_code: string;
     is_head_office: boolean;
-    headDesignation?: DesignationLite | null;
+    geofence_latitude: number | null;
+    geofence_longitude: number | null;
 }
 
 interface PaginationLinks {
@@ -180,7 +173,8 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch Code</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Address</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Contact</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch Head</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Latitude</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Longitude</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -228,13 +222,17 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                {branch.headDesignation ? (
-                                                    <div className="flex items-center text-[13px] text-slate-600 font-medium">
-                                                        <User className="mr-1.5 h-4 w-4 text-slate-400" />
-                                                        <span>{branch.headDesignation.name}</span>
-                                                    </div>
+                                                {branch.geofence_latitude !== null ? (
+                                                    <span className="text-[13px] text-slate-600 font-medium">{branch.geofence_latitude}</span>
                                                 ) : (
-                                                    <span className="text-[13px] text-slate-400 italic">Not assigned</span>
+                                                    <span className="text-[13px] text-slate-400 italic">Not specified</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {branch.geofence_longitude !== null ? (
+                                                    <span className="text-[13px] text-slate-600 font-medium">{branch.geofence_longitude}</span>
+                                                ) : (
+                                                    <span className="text-[13px] text-slate-400 italic">Not specified</span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right pr-6">
@@ -272,7 +270,7 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">
+                                        <TableCell colSpan={7} className="h-24 text-center">
                                             No branches found.
                                             {search && (
                                                 <Button
@@ -330,7 +328,6 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
                                             {branches.meta.current_page > 1 && branches.links?.prev && (
                                                 <Link
                                                     href={branches.links.prev}
-                                                    data={{ search, per_page: perPage }}
                                                     preserveState
                                                     className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                                 >
@@ -355,7 +352,6 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
                                                     <Link
                                                         key={i}
                                                         href={link.url || '#'}
-                                                        data={{ search, per_page: perPage }}
                                                         preserveState
                                                         className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
                                                             isActive
@@ -370,7 +366,6 @@ export default function BranchIndex({ branches, filters }: BranchIndexProps) {
                                             {branches.meta.current_page < branches.meta.last_page && branches.links?.next && (
                                                 <Link
                                                     href={branches.links.next}
-                                                    data={{ search, per_page: perPage }}
                                                     preserveState
                                                     className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                                 >

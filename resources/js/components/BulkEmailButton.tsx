@@ -1,19 +1,22 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
-import { Mail, Send } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-// Add this button to your users index page
 const BulkEmailButton: React.FC = () => {
-  return (
-    <Link
-      href={route('admin.users.bulk-email.form')}
-      className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-    >
-      <Mail className="w-5 h-5" />
-      <span>Bulk Email</span>
-      <Send className="w-4 h-4" />
-    </Link>
-  );
+    return (
+        <Link href={route('admin.users.bulk-email.form')} className="w-full sm:w-auto">
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 w-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto"
+            >
+                <Mail className="mr-1.5 h-4 w-4" />
+                Bulk email
+            </Button>
+        </Link>
+    );
 };
 
 export default BulkEmailButton;

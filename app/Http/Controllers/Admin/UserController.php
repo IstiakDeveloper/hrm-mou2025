@@ -17,11 +17,31 @@ use Inertia\Inertia;
 
 class UserController extends Controller
 {
+    private function employeeFullName(Employee $employee): string
+    {
+        $name = trim((string) ($employee->name_en ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $name = trim(implode(' ', array_filter([
+            $employee->first_name,
+            $employee->last_name,
+        ], fn ($part) => trim((string) $part) !== '')));
+
+        return $name !== '' ? $name : 'Employee '.$employee->employee_id;
+    }
+
     /**
      * Display a listing of users.
      */
     public function index(Request $request)
     {
+        $perPage = (int) $request->get('per_page', 10);
+        if (! in_array($perPage, [10, 25, 50, 100, 200, 500], true)) {
+            $perPage = 10;
+        }
+
         $users = User::with('roles', 'employee', 'branch')
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -30,13 +50,31 @@ class UserController extends Controller
                         ->orWhere('username', 'like', "%{$search}%");
                 });
             })
-            ->orderBy('id', 'desc')
-            ->paginate(10)
+            ->orderBy('id')
+            ->paginate($perPage)
             ->withQueryString();
 
         return Inertia::render('admin/users/index', [
-            'users' => $users,
-            'filters' => $request->only(['search']),
+            'users' => [
+                'data' => $users->getCollection()->values()->all(),
+                'meta' => [
+                    'current_page' => $users->currentPage(),
+                    'from' => $users->firstItem(),
+                    'last_page' => $users->lastPage(),
+                    'links' => $users->linkCollection()->toArray(),
+                    'path' => $users->path(),
+                    'per_page' => $users->perPage(),
+                    'to' => $users->lastItem(),
+                    'total' => $users->total(),
+                ],
+                'links' => [
+                    'first' => $users->url(1),
+                    'last' => $users->url($users->lastPage()),
+                    'prev' => $users->previousPageUrl(),
+                    'next' => $users->nextPageUrl(),
+                ],
+            ],
+            'filters' => $request->only(['search', 'per_page']),
         ]);
     }
 
@@ -45,7 +83,7 @@ class UserController extends Controller
      */
     public function create()
     {
-        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'first_name', 'last_name', 'email')->get();
+        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'first_name', 'last_name', 'name_en', 'email')->get();
         $roles = Role::all();
         $branches = Branch::all();
 
@@ -91,7 +129,7 @@ class UserController extends Controller
         );
 
         $user = User::create([
-            'name' => $request->name,
+            'name' => $this->employeeFullName($employee),
             'username' => $resolvedUsername,
             'email' => $request->email,
             'password' => Hash::make($plainPassword),
@@ -139,7 +177,7 @@ class UserController extends Controller
     public function edit(User $user)
     {
         $roles = Role::all();
-        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'first_name', 'last_name', 'email')->get();
+        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'first_name', 'last_name', 'name_en', 'email')->get();
         $branches = Branch::all();
 
         $user->load('roles');
@@ -159,6 +197,12 @@ class UserController extends Controller
     {
         $rules = [
             'name' => 'required|string|max:255',
+            'username' => [
+                'required',
+                'string',
+                'max:191',
+                Rule::unique('users', 'username')->ignore($user->id),
+            ],
             'email' => [
                 'required',
                 'string',
@@ -178,6 +222,12 @@ class UserController extends Controller
             $rules = ['active_status' => 'boolean'];
         }
 
+        if (isset($rules['username'])) {
+            $request->merge([
+                'username' => trim((string) ($request->input('username') ?? '')),
+            ]);
+        }
+
         $request->validate($rules);
 
         if ($request->has('active_status') && count($request->all()) === 1) {
@@ -192,7 +242,8 @@ class UserController extends Controller
                 }
             }
 
-            $user->name = $request->name;
+            $user->name = $employee ? $this->employeeFullName($employee) : $request->name;
+            $user->username = trim((string) $request->username);
             $user->email = $request->email;
             $user->employee_id = $request->employee_id;
             $user->branch_id = $request->branch_id;
@@ -200,13 +251,6 @@ class UserController extends Controller
 
             if ($request->filled('password')) {
                 $user->password = Hash::make($request->password);
-            }
-
-            if ($employee) {
-                $user->username = $this->ensureUniqueUsername(
-                    $this->usernameFromEmployee($employee),
-                    $user->id,
-                );
             }
 
             $user->save();

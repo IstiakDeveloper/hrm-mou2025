@@ -954,7 +954,7 @@ class EmployeeController extends Controller
             $perPage = 10;
         }
 
-        $employees = $query->orderBy('id', 'desc')
+        $employees = $query->orderBy('id')
             ->paginate($perPage)
             ->withQueryString();
 
@@ -2100,31 +2100,41 @@ class EmployeeController extends Controller
     public function organizationChart()
     {
         $headOffice = Branch::query()
-            ->with(['headEmployee.designation', 'employees.designation'])
-            ->withCount('employees')
+            ->with([
+                'headEmployee' => fn ($q) => $q->where('status', 'active')->with('designation'),
+                'employees' => fn ($q) => $q->where('status', 'active')->with('designation'),
+            ])
+            ->withCount([
+                'employees' => fn ($q) => $q->where('status', 'active'),
+            ])
             ->where('is_head_office', true)
             ->first();
 
         $zones = Zone::with([
-            'zoneManager.designation',
+            'zoneManager' => fn ($q) => $q->where('status', 'active')->with('designation'),
             'regionalOffices' => function ($q) {
                 $q->orderBy('name');
             },
-            'regionalOffices.regionalManager.designation',
+            'regionalOffices.regionalManager' => fn ($q) => $q->where('status', 'active')->with('designation'),
             'regionalOffices.branches' => function ($q) {
                 $q->where('is_head_office', false)
                     ->orderBy('name')
-                    ->withCount('employees');
+                    ->withCount([
+                        'employees' => fn ($employeeQuery) => $employeeQuery->where('status', 'active'),
+                    ]);
             },
-            'regionalOffices.branches.headEmployee.designation',
-            'regionalOffices.branches.employees.designation',
+            'regionalOffices.branches.headEmployee' => fn ($q) => $q->where('status', 'active')->with('designation'),
+            'regionalOffices.branches.employees' => fn ($q) => $q->where('status', 'active')->with('designation'),
         ])->orderBy('name')->get();
 
         $zones->each(function (Zone $zone): void {
             $zoneTotal = 0;
             foreach ($zone->regionalOffices as $ro) {
                 /** @var RegionalOffice $ro */
-                $roTotal = (int) $ro->branches->sum(fn (Branch $b): int => (int) $b->employees_count);
+                $roTotal = (int) $ro->branches->reduce(
+                    fn (int $total, Branch $branch): int => $total + (int) $branch->employees_count,
+                    0
+                );
                 $ro->setAttribute('employee_count', $roTotal);
                 $zoneTotal += $roTotal;
             }

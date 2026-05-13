@@ -29,6 +29,7 @@ import {
     MoreHorizontal,
     Plus,
     Search,
+    User,
     UserX,
     XCircle
 } from 'lucide-react';
@@ -48,7 +49,6 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { PageSurface } from '@/components/page-surface';
 
 interface Department {
     id: number;
@@ -72,7 +72,7 @@ interface LeaveType {
     name: string;
 }
 
-interface User {
+interface LeaveApproverUser {
     id: number;
     name: string;
 }
@@ -91,8 +91,10 @@ interface LeaveApplication {
     rejection_reason: string | null;
     documents: string | null;
     employee: Employee;
-    leaveType: LeaveType;
-    approver: User | null;
+    /** Laravel serializes relation as `leave_type` in JSON; support both. */
+    leaveType?: LeaveType;
+    leave_type?: LeaveType;
+    approver: LeaveApproverUser | null;
     /** Set by server: current user may approve/reject this row (tier + legacy rules). */
     can_approve_action?: boolean;
 }
@@ -461,7 +463,7 @@ export default function ApplicationsIndex({
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                        {application.leaveType.name}
+                                                        {application.leaveType?.name ?? application.leave_type?.name ?? '—'}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell>
@@ -606,7 +608,6 @@ export default function ApplicationsIndex({
                                             {applications.meta.current_page > 1 && applications.links?.prev && (
                                                 <Link
                                                     href={applications.links.prev}
-                                                    data={{ search, status: status === 'all' ? '' : status, department_id: departmentId === 'all' ? '' : departmentId, employee_id: employeeId === 'all' ? '' : employeeId, from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '', to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '', per_page: perPage }}
                                                     preserveState
                                                     className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                                 >
@@ -631,7 +632,6 @@ export default function ApplicationsIndex({
                                                     <Link
                                                         key={i}
                                                         href={link.url || '#'}
-                                                        data={{ search, status: status === 'all' ? '' : status, department_id: departmentId === 'all' ? '' : departmentId, employee_id: employeeId === 'all' ? '' : employeeId, from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '', to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '', per_page: perPage }}
                                                         preserveState
                                                         className={`relative inline-flex items-center justify-center w-8 h-8 text-[13px] font-semibold rounded-lg transition-all duration-200 shadow-sm ${
                                                             isActive
@@ -646,7 +646,6 @@ export default function ApplicationsIndex({
                                             {applications.meta.current_page < applications.meta.last_page && applications.links?.next && (
                                                 <Link
                                                     href={applications.links.next}
-                                                    data={{ search, status: status === 'all' ? '' : status, department_id: departmentId === 'all' ? '' : departmentId, employee_id: employeeId === 'all' ? '' : employeeId, from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '', to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '', per_page: perPage }}
                                                     preserveState
                                                     className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 focus:z-20 transition-all duration-200 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
                                                 >
