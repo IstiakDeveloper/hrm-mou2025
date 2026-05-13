@@ -35,8 +35,10 @@ class AttendanceController extends Controller
         }
         if (is_string($value)) {
             $decoded = json_decode($value, true);
+
             return is_array($decoded) ? $decoded : [];
         }
+
         return [];
     }
 
@@ -205,6 +207,7 @@ class AttendanceController extends Controller
             }
 
             $this->generateRemarks($attendance);
+
             return $attendance;
         });
 
@@ -249,22 +252,21 @@ class AttendanceController extends Controller
         ]);
     }
 
-
     /**
      * Generate remarks for the attendance record based on settings
      */
-
     private function generateRemarks($attendance)
     {
         // Skip if no check-in or check-out
-        if (!$attendance->check_in || !$attendance->check_out) {
-            if (!$attendance->check_in && !$attendance->check_out) {
+        if (! $attendance->check_in || ! $attendance->check_out) {
+            if (! $attendance->check_in && ! $attendance->check_out) {
                 $attendance->auto_remarks = 'Absent';
-            } elseif (!$attendance->check_in) {
+            } elseif (! $attendance->check_in) {
                 $attendance->auto_remarks = 'Missing check-in';
-            } elseif (!$attendance->check_out) {
+            } elseif (! $attendance->check_out) {
                 $attendance->auto_remarks = 'Missing check-out';
             }
+
             return;
         }
 
@@ -274,8 +276,9 @@ class AttendanceController extends Controller
         // Get attendance settings for the branch
         $settings = AttendanceSetting::where('branch_id', $branchId)->first();
 
-        if (!$settings) {
+        if (! $settings) {
             $attendance->auto_remarks = 'No attendance settings found for branch';
+
             return;
         }
 
@@ -321,6 +324,7 @@ class AttendanceController extends Controller
 
             if ($isWeekend) {
                 $attendance->auto_remarks = 'Weekend work';
+
                 return;
             }
 
@@ -409,11 +413,11 @@ class AttendanceController extends Controller
                 }
             }
 
-            $attendance->auto_remarks = !empty($remarks) ? implode(', ', $remarks) : 'Regular';
+            $attendance->auto_remarks = ! empty($remarks) ? implode(', ', $remarks) : 'Regular';
         } catch (\Exception $e) {
             // Log the error for debugging
-            \Log::error('Error generating remarks: ' . $e->getMessage());
-            $attendance->auto_remarks = 'Error calculating remarks: ' . $e->getMessage();
+            \Log::error('Error generating remarks: '.$e->getMessage());
+            $attendance->auto_remarks = 'Error calculating remarks: '.$e->getMessage();
         }
     }
 
@@ -423,7 +427,7 @@ class AttendanceController extends Controller
     public function monthly(Request $request)
     {
         $user = Auth::user();
-        $month = $request->month ? Carbon::parse($request->month . '-01') : Carbon::today()->startOfMonth();
+        $month = $request->month ? Carbon::parse($request->month.'-01') : Carbon::today()->startOfMonth();
         $startDate = $month->copy()->startOfMonth();
         $endDate = $month->copy()->endOfMonth();
         $daysInMonth = $month->daysInMonth;
@@ -532,7 +536,7 @@ class AttendanceController extends Controller
                         'work_end_time' => $setting->work_end_time,
                         'late_threshold_minutes' => $setting->late_threshold_minutes,
                         'half_day_hours' => $setting->half_day_hours,
-                    ]
+                    ],
                 ];
             })->toArray();
 
@@ -565,6 +569,7 @@ class AttendanceController extends Controller
             $applicable = is_array($branchesRaw) ? $branchesRaw : (is_string($branchesRaw) ? (json_decode($branchesRaw, true) ?: []) : []);
             if (empty($applicable)) {
                 $holidayApplicable['*'][$date] = true;
+
                 continue;
             }
             foreach ($applicable as $bid) {
@@ -684,7 +689,7 @@ class AttendanceController extends Controller
         $employee = Employee::findOrFail($request->employee_id);
 
         // Verify user has permission to manage this employee's attendance
-        if (!$this->canManageEmployeeAttendance($user, $employee)) {
+        if (! $this->canManageEmployeeAttendance($user, $employee)) {
             return redirect()->back()->withErrors([
                 'employee_id' => 'You do not have permission to create attendance records for this employee.',
             ]);
@@ -726,7 +731,7 @@ class AttendanceController extends Controller
         $user = Auth::user();
 
         // Check permission to edit this attendance record
-        if (!$this->canManageEmployeeAttendance($user, $attendance->employee)) {
+        if (! $this->canManageEmployeeAttendance($user, $attendance->employee)) {
             abort(403, 'You do not have permission to edit this attendance record.');
         }
 
@@ -766,7 +771,7 @@ class AttendanceController extends Controller
         $user = Auth::user();
 
         // Check permission to update this attendance record
-        if (!$this->canManageEmployeeAttendance($user, $attendance->employee)) {
+        if (! $this->canManageEmployeeAttendance($user, $attendance->employee)) {
             abort(403, 'You do not have permission to update this attendance record.');
         }
 
@@ -854,9 +859,9 @@ class AttendanceController extends Controller
 
             // Retrieve branch ID for weekend settings
             $branchId = $request->branch_id;
-            if (!$branchId && $user->branch_id) {
+            if (! $branchId && $user->branch_id) {
                 $branchId = $user->branch_id;
-            } elseif (!$branchId && $user->employee && $user->employee->current_branch_id) {
+            } elseif (! $branchId && $user->employee && $user->employee->current_branch_id) {
                 $branchId = $user->employee->current_branch_id;
             }
 
@@ -903,7 +908,7 @@ class AttendanceController extends Controller
                 'late' => 0,
                 'half_day' => 0,
                 'leave' => 0,
-                'on_duty' => 0
+                'on_duty' => 0,
             ];
 
             // Process each date
@@ -918,7 +923,7 @@ class AttendanceController extends Controller
                 $holiday = $isHoliday ? $holidayMap->get($date) : null;
 
                 // Count working days
-                if (!$isWeekend && !$isHoliday) {
+                if (! $isWeekend && ! $isHoliday) {
                     $totalWorkingDays++;
                 }
 
@@ -927,7 +932,7 @@ class AttendanceController extends Controller
                     'employee.department',
                     'employee.designation',
                     'employee.branch',
-                    'device'
+                    'device',
                 ])->whereDate('date', $date);
 
                 // Apply filters based on user permissions and role
@@ -949,7 +954,7 @@ class AttendanceController extends Controller
                 } elseif ($request->has('excluded_departments') && is_array($request->excluded_departments)) {
                     // All departments selected but some are excluded
                     $excludedDepartments = $request->excluded_departments;
-                    if (!empty($excludedDepartments)) {
+                    if (! empty($excludedDepartments)) {
                         $query->whereHas('employee', function ($q) use ($excludedDepartments) {
                             $q->whereNotIn('department_id', $excludedDepartments);
                         });
@@ -1061,14 +1066,15 @@ class AttendanceController extends Controller
                         } elseif ($attendance->has_movement) {
                             return 1;
                         }
+
                         return 0;
-                    })
+                    }),
                 ];
 
                 // Add to overall stats
                 foreach ($overallStats as $key => $value) {
-                    if (isset($dateStats['total_' . $key])) {
-                        $overallStats[$key] += $dateStats['total_' . $key];
+                    if (isset($dateStats['total_'.$key])) {
+                        $overallStats[$key] += $dateStats['total_'.$key];
                     }
                 }
 
@@ -1084,7 +1090,7 @@ class AttendanceController extends Controller
                     'total_absent' => $dateStats['total_absent'],
                     'total_late' => $dateStats['total_late'],
                     'total_movements' => $dateStats['total_movements_count'],
-                    'employees_with_movement' => $dateStats['employees_with_movement']
+                    'employees_with_movement' => $dateStats['employees_with_movement'],
                 ]);
             }
 
@@ -1137,21 +1143,21 @@ class AttendanceController extends Controller
                     'branch_name' => $branchName,
                     'department_name' => $departmentName,
                     'excluded_departments' => $excludedDepartmentNames,
-                    'filter_type' => $request->department_id === 'all' || !$request->department_id ? 'all_with_exclusions' : 'specific_department',
-                    'date_range_formatted' => $startDate->format('d M, Y') . ' to ' . $endDate->format('d M, Y'),
+                    'filter_type' => $request->department_id === 'all' || ! $request->department_id ? 'all_with_exclusions' : 'specific_department',
+                    'date_range_formatted' => $startDate->format('d M, Y').' to '.$endDate->format('d M, Y'),
                     'generated_at' => Carbon::now(),
                     'generated_by' => $user->name,
                     'filter_applied' => [
                         'branch_filter' => $request->branch_id ? true : false,
                         'department_filter' => $request->department_id ? true : false,
-                        'department_exclusion_filter' => !empty($excludedDepartmentNames),
-                        'date_range_days' => $daysDifference + 1
-                    ]
+                        'department_exclusion_filter' => ! empty($excludedDepartmentNames),
+                        'date_range_days' => $daysDifference + 1,
+                    ],
                 ],
                 'weekend_settings' => [
                     'weekend_days' => $weekendDays,
                     'branch_id' => $branchId,
-                    'has_custom_settings' => $attendanceSettings ? true : false
+                    'has_custom_settings' => $attendanceSettings ? true : false,
                 ],
                 'holidays_list' => $holidaysCollection->map(function ($holiday) {
                     return [
@@ -1165,25 +1171,25 @@ class AttendanceController extends Controller
                 'performance_metrics' => [
                     'data_processing_time' => microtime(true),
                     'memory_usage' => memory_get_usage(true),
-                    'query_optimization' => 'Optimized with eager loading and department exclusion support'
-                ]
+                    'query_optimization' => 'Optimized with eager loading and department exclusion support',
+                ],
             ];
 
         } catch (\Exception $e) {
             // Log the error for debugging
-            \Log::error('Error in getAttendancePreviewData: ' . $e->getMessage(), [
+            \Log::error('Error in getAttendancePreviewData: '.$e->getMessage(), [
                 'user_id' => $user->id,
                 'start_date' => $startDate->format('Y-m-d'),
                 'end_date' => $endDate->format('Y-m-d'),
                 'filters' => $request->only(['branch_id', 'department_id', 'excluded_departments']),
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             // Return error response
             return [
                 'error' => true,
-                'message' => 'Unable to generate preview data: ' . $e->getMessage(),
+                'message' => 'Unable to generate preview data: '.$e->getMessage(),
                 'dateRange' => [],
                 'attendanceByDate' => collect(),
                 'summary' => [
@@ -1194,20 +1200,18 @@ class AttendanceController extends Controller
                     'total_employees' => 0,
                     'total_attendance_records' => 0,
                     'total_movements' => 0,
-                    'error_occurred' => true
-                ]
+                    'error_occurred' => true,
+                ],
             ];
         }
     }
-
-
 
     public function generatePdf(Request $request)
     {
         $user = Auth::user();
 
         // Check permission
-        if (!$user->hasPermission('reports.export')) {
+        if (! $user->hasPermission('reports.export')) {
             abort(403, 'You do not have permission to export attendance reports.');
         }
 
@@ -1248,7 +1252,7 @@ class AttendanceController extends Controller
             'branchName' => $branchName,
             'departmentName' => $departmentName,
             'excludedDepartments' => $excludedDepartmentNames,
-            'filterType' => $request->department_id === 'all' || !$request->department_id ? 'all_with_exclusions' : 'specific_department',
+            'filterType' => $request->department_id === 'all' || ! $request->department_id ? 'all_with_exclusions' : 'specific_department',
             'generatedBy' => $user->name,
             'generatedAt' => now(),
         ]);
@@ -1260,16 +1264,17 @@ class AttendanceController extends Controller
         ]);
 
         // Create filename with excluded departments info
-        $fileName = 'attendance_report_' . $startDate->format('Y-m-d') . '_to_' . $endDate->format('Y-m-d');
+        $fileName = 'attendance_report_'.$startDate->format('Y-m-d').'_to_'.$endDate->format('Y-m-d');
 
-        if (!empty($excludedDepartmentNames)) {
-            $fileName .= '_excluding_' . count($excludedDepartmentNames) . '_depts';
+        if (! empty($excludedDepartmentNames)) {
+            $fileName .= '_excluding_'.count($excludedDepartmentNames).'_depts';
         }
 
         $fileName .= '.pdf';
 
         return $pdf->download($fileName);
     }
+
     /**
      * Delete the specified attendance record.
      */
@@ -1278,7 +1283,7 @@ class AttendanceController extends Controller
         $user = Auth::user();
 
         // Check permission to delete this attendance record
-        if (!$this->canManageEmployeeAttendance($user, $attendance->employee)) {
+        if (! $this->canManageEmployeeAttendance($user, $attendance->employee)) {
             abort(403, 'You do not have permission to delete this attendance record.');
         }
 
@@ -1362,7 +1367,7 @@ class AttendanceController extends Controller
         $user = Auth::user();
 
         // Check if user has permission to sync devices
-        if (!$user->hasPermission('attendance.sync')) {
+        if (! $user->hasPermission('attendance.sync')) {
             abort(403, 'You do not have permission to sync attendance devices.');
         }
 
@@ -1371,7 +1376,7 @@ class AttendanceController extends Controller
         // and pulling attendance logs
 
         // For now, just logging the request
-        \Log::info('Attendance sync requested by user: ' . $user->id);
+        \Log::info('Attendance sync requested by user: '.$user->id);
 
         return redirect()->route('attendance.index')
             ->with('success', 'Attendance data synchronized successfully from devices.');

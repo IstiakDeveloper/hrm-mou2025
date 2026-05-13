@@ -4,15 +4,15 @@ namespace App\Http\Controllers\Leave;
 
 use App\Http\Controllers\Controller;
 use App\Mail\LeaveApplicationNotification;
+use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
-use App\Models\Attendance;
 use App\Models\LeaveApplication;
 use App\Models\LeaveApproval;
+use App\Models\LeaveApprovalTier;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
-use App\Models\LeaveApprovalTier;
 use App\Models\User;
 use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
@@ -20,7 +20,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class LeaveApplicationController extends Controller
@@ -436,7 +435,7 @@ class LeaveApplicationController extends Controller
         // Final SQL query log with all filters
         \Log::info('Final SQL query with all filters:', [
             'sql' => $query->toSql(),
-            'bindings' => $query->getBindings()
+            'bindings' => $query->getBindings(),
         ]);
 
         $perPage = $request->input('per_page', 10);
@@ -483,6 +482,7 @@ class LeaveApplicationController extends Controller
             'currentUserId' => $user->id,
         ]);
     }
+
     /**
      * Get departments accessible to the user based on permissions
      */
@@ -556,7 +556,7 @@ class LeaveApplicationController extends Controller
             }
 
             // And department heads to their department
-            if (!$user->hasPermission('employees.view') && $user->employee && $user->employee->department_id) {
+            if (! $user->hasPermission('employees.view') && $user->employee && $user->employee->department_id) {
                 $employee = Employee::find($application->employee_id);
                 $department = Department::find($user->employee->department_id);
                 $isDepartmentHead = $department && $department->head_employee_id == $user->employee->id;
@@ -577,6 +577,7 @@ class LeaveApplicationController extends Controller
         // Branch heads can view applications from their branch
         if ($isBranchHead && $user->branch_id) {
             $employee = Employee::find($application->employee_id);
+
             return $employee && $employee->current_branch_id == $user->branch_id;
         }
 
@@ -596,6 +597,7 @@ class LeaveApplicationController extends Controller
             // Team leaders can view their direct reports' applications
             if ($user->employee) {
                 $employee = Employee::find($application->employee_id);
+
                 return $employee && $employee->reporting_to == $user->employee->id;
             }
 
@@ -751,6 +753,7 @@ class LeaveApplicationController extends Controller
         // Branch heads can cancel applications from their branch
         if ($isBranchHead && $user->branch_id && $application->status == 'pending') {
             $employee = Employee::find($application->employee_id);
+
             return $employee && $employee->current_branch_id == $user->branch_id;
         }
 
@@ -764,6 +767,7 @@ class LeaveApplicationController extends Controller
             // Branch managers for their branch
             if ($user->hasPermission('branch_manager') && $user->branch_id) {
                 $employee = Employee::find($application->employee_id);
+
                 return $employee && $employee->current_branch_id == $user->branch_id;
             }
 
@@ -774,6 +778,7 @@ class LeaveApplicationController extends Controller
 
                 if ($isDepartmentHead) {
                     $employee = Employee::find($application->employee_id);
+
                     return $employee && $employee->department_id == $user->employee->department_id;
                 }
             }
@@ -790,7 +795,7 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
-        if (!$employee) {
+        if (! $employee) {
 
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You must be associated with an employee record to apply for leave.');
@@ -829,7 +834,7 @@ class LeaveApplicationController extends Controller
         } else {
             $employee = $user->employee;
 
-            if (!$employee) {
+            if (! $employee) {
                 return redirect()->route('leave.applications.index')
                     ->with('error', 'You must be associated with an employee record to apply for leave.');
             }
@@ -859,14 +864,14 @@ class LeaveApplicationController extends Controller
         }
 
         // Check leave balance for regular employees (not for admins creating on behalf)
-        if (!$user->hasPermission('leave-applications.edit')) {
+        if (! $user->hasPermission('leave-applications.edit')) {
             $currentYear = Carbon::now()->year;
             $balance = LeaveBalance::where('employee_id', $employee->id)
                 ->where('leave_type_id', $request->leave_type_id)
                 ->where('year', $currentYear)
                 ->first();
 
-            if (!$balance) {
+            if (! $balance) {
                 return redirect()->back()->withErrors([
                     'leave_type_id' => 'You do not have a leave balance for this leave type.',
                 ])->withInput();
@@ -874,7 +879,7 @@ class LeaveApplicationController extends Controller
 
             if ($balance->remaining_days < $days) {
                 return redirect()->back()->withErrors([
-                    'leave_type_id' => 'Not enough leave balance. Available: ' . $balance->remaining_days . ' days, Requested: ' . $days . ' days.',
+                    'leave_type_id' => 'Not enough leave balance. Available: '.$balance->remaining_days.' days, Requested: '.$days.' days.',
                 ])->withInput();
             }
         }
@@ -920,7 +925,7 @@ class LeaveApplicationController extends Controller
             'status' => $status,
             'approved_by' => $approvedBy,
             'applied_at' => now(),
-            'documents' => !empty($documents) ? json_encode($documents) : null,
+            'documents' => ! empty($documents) ? json_encode($documents) : null,
         ]);
 
         // Create approval record if auto-approved
@@ -941,7 +946,7 @@ class LeaveApplicationController extends Controller
             $this->syncAttendanceForApprovedLeave($leaveApplication);
         }
         // Send notification emails to department head and branch head if not auto-approved
-        else if ($status === 'pending') {
+        elseif ($status === 'pending') {
             try {
                 // Get fresh employee data with department and branch
                 $employee = Employee::with(['department', 'branch'])->find($employee->id);
@@ -957,7 +962,7 @@ class LeaveApplicationController extends Controller
         }
 
         return redirect()->route('leave.applications.index')
-            ->with('success', 'Leave application submitted successfully for ' . $days . ' day(s).');
+            ->with('success', 'Leave application submitted successfully for '.$days.' day(s).');
     }
 
     /**
@@ -1006,7 +1011,7 @@ class LeaveApplicationController extends Controller
             $endDate = Carbon::parse($leaveApplication->end_date)->format('M d, Y');
 
             // Construct employee full name
-            $employeeName = $employee->first_name . ' ' . $employee->last_name;
+            $employeeName = $employee->first_name.' '.$employee->last_name;
 
             // Notification details
             $title = 'New Leave Application';
@@ -1066,18 +1071,18 @@ class LeaveApplicationController extends Controller
      */
     private function getDepartmentHeads($departmentId)
     {
-        if (!$departmentId) {
+        if (! $departmentId) {
             return collect([]);
         }
 
         $department = Department::find($departmentId);
-        if (!$department || !$department->head_employee_id) {
+        if (! $department || ! $department->head_employee_id) {
             return collect([]);
         }
 
         // Find the user associated with the department head
         $departmentHeadEmployee = Employee::find($department->head_employee_id);
-        if (!$departmentHeadEmployee) {
+        if (! $departmentHeadEmployee) {
             return collect([]);
         }
 
@@ -1087,7 +1092,7 @@ class LeaveApplicationController extends Controller
         \Log::info('Department head lookup', [
             'department_id' => $departmentId,
             'department_head_employee_id' => $department->head_employee_id,
-            'users_found' => $departmentHeadUsers->count()
+            'users_found' => $departmentHeadUsers->count(),
         ]);
 
         return $departmentHeadUsers;
@@ -1098,18 +1103,18 @@ class LeaveApplicationController extends Controller
      */
     private function getBranchHeads($branchId)
     {
-        if (!$branchId) {
+        if (! $branchId) {
             return collect([]);
         }
 
         $branch = Branch::find($branchId);
-        if (!$branch || !$branch->head_employee_id) {
+        if (! $branch || ! $branch->head_employee_id) {
             return collect([]);
         }
 
         // Find the user associated with the branch head
         $branchHeadEmployee = Employee::find($branch->head_employee_id);
-        if (!$branchHeadEmployee) {
+        if (! $branchHeadEmployee) {
             return collect([]);
         }
 
@@ -1119,7 +1124,7 @@ class LeaveApplicationController extends Controller
         \Log::info('Branch head lookup', [
             'branch_id' => $branchId,
             'branch_head_employee_id' => $branch->head_employee_id,
-            'users_found' => $branchHeadUsers->count()
+            'users_found' => $branchHeadUsers->count(),
         ]);
 
         return $branchHeadUsers;
@@ -1149,7 +1154,7 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
 
         // Check if user has permission to view this application
-        if (!$this->canViewApplication($user, $application)) {
+        if (! $this->canViewApplication($user, $application)) {
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to view this leave application.');
         }
@@ -1192,7 +1197,7 @@ class LeaveApplicationController extends Controller
     {
         $user = Auth::user();
 
-        if (!$this->canCancelApplication($user, $application)) {
+        if (! $this->canCancelApplication($user, $application)) {
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to cancel this leave application.');
         }
@@ -1209,7 +1214,6 @@ class LeaveApplicationController extends Controller
             ->with('success', 'Leave application cancelled successfully.');
     }
 
-
     /**
      * Approve the specified leave application.
      */
@@ -1218,7 +1222,7 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
         $application->loadMissing(['employee.currentBranch', 'employee.branch']);
 
-        if (!$this->canApproveApplication($user, $application)) {
+        if (! $this->canApproveApplication($user, $application)) {
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to approve this leave application.');
         }
@@ -1289,7 +1293,7 @@ class LeaveApplicationController extends Controller
                         \Log::info('In-app notification sent successfully', [
                             'application_id' => $application->id,
                             'employee_id' => $employee->id,
-                            'user_id' => $employeeUser->id
+                            'user_id' => $employeeUser->id,
                         ]);
 
                         // Only send email if the user has a valid email
@@ -1302,36 +1306,36 @@ class LeaveApplicationController extends Controller
                             \Log::info('Email notification sent successfully', [
                                 'application_id' => $application->id,
                                 'employee_id' => $employee->id,
-                                'email' => $employeeUser->email
+                                'email' => $employeeUser->email,
                             ]);
                         } else {
                             \Log::warning('Email notification not sent - invalid or missing email', [
                                 'application_id' => $application->id,
                                 'employee_id' => $employee->id,
-                                'email' => $employeeUser->email ?? 'null'
+                                'email' => $employeeUser->email ?? 'null',
                             ]);
                         }
                     } catch (\Exception $e) {
                         // Log notification error but continue with the process
-                        \Log::error('Error sending notifications: ' . $e->getMessage(), [
+                        \Log::error('Error sending notifications: '.$e->getMessage(), [
                             'application_id' => $application->id,
                             'employee_id' => $employee->id,
                             'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString()
+                            'trace' => $e->getTraceAsString(),
                         ]);
                     }
                 } else {
                     // Log warning if user account not found
                     \Log::warning('Employee user account not found for notifications', [
                         'application_id' => $application->id,
-                        'employee_id' => $employee->id
+                        'employee_id' => $employee->id,
                     ]);
                 }
             } else {
                 // Log warning if employee not found
                 \Log::warning('Employee not found for notifications', [
                     'application_id' => $application->id,
-                    'employee_id' => $application->employee_id
+                    'employee_id' => $application->employee_id,
                 ]);
             }
 
@@ -1341,10 +1345,10 @@ class LeaveApplicationController extends Controller
                 ->with('success', 'Leave application approved successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Error approving leave application: ' . $e->getMessage(), [
+            \Log::error('Error approving leave application: '.$e->getMessage(), [
                 'application_id' => $application->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return redirect()->route('leave.applications.index')
@@ -1378,7 +1382,7 @@ class LeaveApplicationController extends Controller
                 ->where('date', $dateStr)
                 ->first();
 
-            if (!$attendance) {
+            if (! $attendance) {
                 Attendance::create([
                     'employee_id' => $employeeId,
                     'date' => $dateStr,
@@ -1388,8 +1392,9 @@ class LeaveApplicationController extends Controller
                 ]);
             } else {
                 // If there is any punch, don't override (employee might have worked)
-                if (!empty($attendance->check_in) || !empty($attendance->check_out)) {
+                if (! empty($attendance->check_in) || ! empty($attendance->check_out)) {
                     $cursor->addDay();
+
                     continue;
                 }
 
@@ -1412,7 +1417,7 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
         $application->loadMissing(['employee.currentBranch', 'employee.branch']);
 
-        if (!$this->canApproveApplication($user, $application)) {
+        if (! $this->canApproveApplication($user, $application)) {
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to reject leave applications.');
         }
@@ -1453,18 +1458,19 @@ class LeaveApplicationController extends Controller
     {
         $user = Auth::user();
 
-        if (!$this->canViewApplication($user, $application)) {
+        if (! $this->canViewApplication($user, $application)) {
             abort(403, 'Unauthorized action.');
         }
 
         $documents = json_decode($application->documents, true);
 
-        if (!isset($documents[$index])) {
+        if (! isset($documents[$index])) {
             abort(404);
         }
 
         $document = $documents[$index];
-        return response()->download(storage_path('app/public/' . $document['path']), $document['name']);
+
+        return response()->download(storage_path('app/public/'.$document['path']), $document['name']);
     }
 
     /**
@@ -1488,8 +1494,8 @@ class LeaveApplicationController extends Controller
 
         // Special handling for regular employees with view permission
         $isRegularEmployeeWithViewPermission = $userEmployeeId && $hasViewPermission &&
-            !$hasReportPermission && !$isBranchManager &&
-            !$hasEmployeeViewPermission;
+            ! $hasReportPermission && ! $isBranchManager &&
+            ! $hasEmployeeViewPermission;
 
         // Determine if user is a department head
         $isDepartmentHead = false;
@@ -1511,13 +1517,13 @@ class LeaveApplicationController extends Controller
 
         // Apply permission-based filters
         if (
-            ($userEmployeeId && !$hasViewPermission && !$hasReportPermission && !$isBranchManager && !$isDepartmentHead) ||
+            ($userEmployeeId && ! $hasViewPermission && ! $hasReportPermission && ! $isBranchManager && ! $isDepartmentHead) ||
             $isRegularEmployeeWithViewPermission
         ) {
             // Regular employee - only see their own applications
             $query->where('employee_id', $userEmployeeId);
             \Log::info('Regular employee - report showing only their applications', [
-                'employee_id' => $userEmployeeId
+                'employee_id' => $userEmployeeId,
             ]);
         } elseif ($isBranchManager) {
             // Branch manager - see applications from their branch
@@ -1525,7 +1531,7 @@ class LeaveApplicationController extends Controller
                 $q->where('current_branch_id', $user->branch_id);
             });
             \Log::info('Branch manager - report filtered by branch', [
-                'branch_id' => $user->branch_id
+                'branch_id' => $user->branch_id,
             ]);
         } elseif ($isDepartmentHead) {
             // Department head - see applications from their department
@@ -1534,19 +1540,19 @@ class LeaveApplicationController extends Controller
                     $q->where('department_id', $userDepartmentId);
                 });
                 \Log::info('Department head - report filtered by department', [
-                    'department_id' => $userDepartmentId
+                    'department_id' => $userDepartmentId,
                 ]);
             } else {
                 // Fallback to own applications if no department association
                 $query->where('employee_id', $userEmployeeId);
             }
-        } elseif ($userEmployeeId && $userDepartmentId && !$hasEmployeeViewPermission) {
+        } elseif ($userEmployeeId && $userDepartmentId && ! $hasEmployeeViewPermission) {
             // Users with department associations but not full employee view
             $query->whereHas('employee', function ($q) use ($userDepartmentId) {
                 $q->where('department_id', $userDepartmentId);
             });
             \Log::info('User with department restriction - report filtered by department', [
-                'department_id' => $userDepartmentId
+                'department_id' => $userDepartmentId,
             ]);
         } elseif ($hasReportPermission || ($hasViewPermission && $hasEmployeeViewPermission)) {
             // Full admin or user with reports permission - no filtering
@@ -1659,8 +1665,6 @@ class LeaveApplicationController extends Controller
         }
     }
 
-
-
     /**
      * Generate PDF view for leave application
      */
@@ -1669,7 +1673,7 @@ class LeaveApplicationController extends Controller
         $user = Auth::user();
 
         // Check if user has permission to view this application
-        if (!$this->canViewApplication($user, $application)) {
+        if (! $this->canViewApplication($user, $application)) {
             return redirect()->route('leave.applications.index')
                 ->with('error', 'You do not have permission to view this leave application.');
         }
@@ -1681,7 +1685,7 @@ class LeaveApplicationController extends Controller
                 'employee.designation',
                 'leaveType',
                 'approver',
-                'approvals.approver'
+                'approvals.approver',
             ]);
 
             // Load leave balances for current year (all types)
@@ -1695,7 +1699,8 @@ class LeaveApplicationController extends Controller
             $application->leaveBalance = $leaveBalances->firstWhere('leave_type_id', (int) $application->leave_type_id);
             $application->leaveBalances = $leaveBalances;
         } catch (\Exception $e) {
-            \Log::error('Error loading leave application relationships: ' . $e->getMessage());
+            \Log::error('Error loading leave application relationships: '.$e->getMessage());
+
             return redirect()->route('leave.applications.index')
                 ->with('error', 'Error loading leave application data.');
         }

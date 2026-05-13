@@ -13,8 +13,10 @@ use App\Models\EmployeeType;
 use App\Models\LocationVillage;
 use App\Models\Program;
 use App\Models\Project;
+use App\Models\RegionalOffice;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\Zone;
 use App\Services\OrganogramAccessService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -948,7 +950,7 @@ class EmployeeController extends Controller
             });
 
         $perPage = (int) $request->get('per_page', 10);
-        if (!in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+        if (! in_array($perPage, [10, 25, 50, 100, 200, 500])) {
             $perPage = 10;
         }
 
@@ -2097,12 +2099,41 @@ class EmployeeController extends Controller
      */
     public function organizationChart()
     {
-        $departments = Department::with(['headEmployee', 'employees.designation'])
-            ->orderBy('name')
-            ->get();
+        $headOffice = Branch::query()
+            ->with(['headEmployee.designation', 'employees.designation'])
+            ->withCount('employees')
+            ->where('is_head_office', true)
+            ->first();
+
+        $zones = Zone::with([
+            'zoneManager.designation',
+            'regionalOffices' => function ($q) {
+                $q->orderBy('name');
+            },
+            'regionalOffices.regionalManager.designation',
+            'regionalOffices.branches' => function ($q) {
+                $q->where('is_head_office', false)
+                    ->orderBy('name')
+                    ->withCount('employees');
+            },
+            'regionalOffices.branches.headEmployee.designation',
+            'regionalOffices.branches.employees.designation',
+        ])->orderBy('name')->get();
+
+        $zones->each(function (Zone $zone): void {
+            $zoneTotal = 0;
+            foreach ($zone->regionalOffices as $ro) {
+                /** @var RegionalOffice $ro */
+                $roTotal = (int) $ro->branches->sum(fn (Branch $b): int => (int) $b->employees_count);
+                $ro->setAttribute('employee_count', $roTotal);
+                $zoneTotal += $roTotal;
+            }
+            $zone->setAttribute('employee_count', $zoneTotal);
+        });
 
         return Inertia::render('employee/organization-chart', [
-            'departments' => $departments,
+            'headOffice' => $headOffice,
+            'zones' => $zones,
         ]);
     }
 

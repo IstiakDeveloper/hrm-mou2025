@@ -94,7 +94,7 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
         case 'human-resources':
             return [
                 {
-                    title: 'Employee report',
+                    title: 'Employee Full Report',
                     path: '/employee/dashboard',
                     anyPermissions: [
                         'employees.view',
@@ -105,7 +105,7 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                     ],
                 },
                 {
-                    title: 'Employee report',
+                    title: 'Employee Report',
                     path: '/reports/employee',
                     allPermissions: ['reports.view', 'employees.view'],
                     hrOnly: true,

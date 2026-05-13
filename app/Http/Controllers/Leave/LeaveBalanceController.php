@@ -63,6 +63,7 @@ class LeaveBalanceController extends Controller
         $maternityTypeIds = $allTypes
             ->filter(function (LeaveType $lt) {
                 $n = strtolower(trim((string) $lt->name));
+
                 return $n !== '' && str_contains($n, 'maternity');
             })
             ->pluck('id')
@@ -71,12 +72,14 @@ class LeaveBalanceController extends Controller
         $paternityTypeIds = $allTypes
             ->filter(function (LeaveType $lt) {
                 $n = strtolower(trim((string) $lt->name));
+
                 return $n !== '' && str_contains($n, 'paternity');
             })
             ->pluck('id')
             ->values();
         $byNormalizedName = $allTypes->mapWithKeys(function (LeaveType $lt) {
             $key = strtolower(trim((string) $lt->name));
+
             return [$key => $lt];
         });
 
@@ -87,11 +90,13 @@ class LeaveBalanceController extends Controller
             $exact = $byNormalizedName->get($canonical);
             if ($exact) {
                 $resolvedTypes[$canonical] = $exact;
+
                 continue;
             }
 
             $match = $allTypes->first(function (LeaveType $lt) use ($keyword) {
                 $n = strtolower(trim((string) $lt->name));
+
                 return $n !== '' && str_contains($n, $keyword);
             });
 
@@ -109,7 +114,7 @@ class LeaveBalanceController extends Controller
             ->all();
 
         if (count($missing) > 0) {
-            return redirect()->back()->with('error', 'Missing leave types: ' . implode(', ', $missing) . '. Please create them first.');
+            return redirect()->back()->with('error', 'Missing leave types: '.implode(', ', $missing).'. Please create them first.');
         }
 
         $employees = Employee::query()
@@ -196,12 +201,14 @@ class LeaveBalanceController extends Controller
                             $keptWrongGenderWithUsage++;
                         }
                     }
+
                     continue;
                 }
 
                 if ($existing) {
                     if (! $updateExisting) {
                         $skippedExisting++;
+
                         continue;
                     }
 
@@ -209,6 +216,7 @@ class LeaveBalanceController extends Controller
                     $existing->remaining_days = max(0, (int) $existing->allocated_days - (int) $existing->used_days);
                     $existing->save();
                     $updated++;
+
                     continue;
                 }
 
@@ -422,8 +430,8 @@ class LeaveBalanceController extends Controller
     public function allocateBulk()
     {
         $employees = Employee::with(['department', 'designation'])
-        ->where('status', 'active')
-        ->get();
+            ->where('status', 'active')
+            ->get();
         $departments = Department::all();
         $leaveTypes = LeaveType::all();
         $currentYear = Carbon::now()->year;
@@ -465,6 +473,7 @@ class LeaveBalanceController extends Controller
 
             if ($existing) {
                 $skipped++;
+
                 continue;
             }
 

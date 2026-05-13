@@ -18,8 +18,8 @@ class LeaveTypeController extends Controller
         $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
 
         $leaveTypes = LeaveType::when($request->search, function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%");
-            })
+            $query->where('name', 'like', "%{$search}%");
+        })
             ->orderBy('name')
             ->paginate($perPage)
             ->withQueryString();
@@ -73,7 +73,7 @@ class LeaveTypeController extends Controller
     public function update(Request $request, LeaveType $leaveType)
     {
         $request->validate([
-            'name' => 'required|string|max:255|unique:leave_types,name,' . $leaveType->id,
+            'name' => 'required|string|max:255|unique:leave_types,name,'.$leaveType->id,
             'days_allowed' => 'required|integer|min:0',
             'is_paid' => 'required|boolean',
             'description' => 'nullable|string',

@@ -16,7 +16,7 @@ class DepartmentController extends Controller
     public function index(Request $request)
     {
         $perPage = (int) $request->get('per_page', 10);
-        if (!in_array($perPage, [10, 25, 50, 100, 200, 500])) {
+        if (! in_array($perPage, [10, 25, 50, 100, 200, 500])) {
             $perPage = 10;
         }
 
@@ -35,7 +35,7 @@ class DepartmentController extends Controller
 
         // Get all the head employees in a single query
         $headEmployees = [];
-        if (!empty($headEmployeeIds)) {
+        if (! empty($headEmployeeIds)) {
             $employees = \App\Models\Employee::whereIn('id', $headEmployeeIds)
                 ->select('id', 'employee_id', 'first_name', 'last_name', 'photo')
                 ->get()
@@ -48,7 +48,7 @@ class DepartmentController extends Controller
         // Convert to array and manually set head employees
         $departmentsArray = $departments->toArray();
         foreach ($departmentsArray['data'] as &$department) {
-            if (!empty($department['head_employee_id']) && isset($headEmployees[$department['head_employee_id']])) {
+            if (! empty($department['head_employee_id']) && isset($headEmployees[$department['head_employee_id']])) {
                 $department['headEmployee'] = $headEmployees[$department['head_employee_id']];
             } else {
                 $department['headEmployee'] = null;
