@@ -30,6 +30,12 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Organization\EmployeeTypeController;
 use App\Http\Controllers\Organization\ProgramController;
 use App\Http\Controllers\Organization\ProjectController;
+use App\Http\Controllers\Payroll\BranchPayrollBankController;
+use App\Http\Controllers\Payroll\PayscaleController;
+use App\Http\Controllers\Payroll\SalaryGradeController;
+use App\Http\Controllers\Payroll\SalaryHeadController;
+use App\Http\Controllers\Payroll\SalaryStepController;
+use App\Http\Controllers\Payroll\SalaryStructureController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RegionalOffice\RegionalOfficeController;
 use App\Http\Controllers\Report\ReportController;
@@ -187,6 +193,10 @@ Route::middleware(['auth'])->group(function () {
     // Attendance & Movement - dedicated dashboard (new design, old data)
     Route::get('/sections/attendance-movement', [DashboardController::class, 'attendanceMovementSection'])
         ->name('sections.attendance-movement');
+
+    // Payroll - setup dashboard & master data
+    Route::get('/sections/payroll', [DashboardController::class, 'payrollSection'])
+        ->name('sections.payroll');
 
     // Section Dashboard (Overview) - role-aware (employee vs admin)
     Route::get('/sections/{section}', function (Request $request, string $section) {
@@ -597,6 +607,80 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{project}', [ProjectController::class, 'destroy'])
             ->name('destroy')
             ->middleware('permission:employees.delete');
+    });
+
+    // ====================
+    // PAYROLL SETUP (master data)
+    // ====================
+    Route::middleware(['permission:payroll.view'])->group(function () {
+        Route::prefix('payscales')->name('payscales.')->group(function () {
+            Route::get('/', [PayscaleController::class, 'index'])->name('index');
+            Route::get('/create', [PayscaleController::class, 'create'])->name('create')->middleware('permission:payroll.create');
+            Route::post('/', [PayscaleController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/{payscale}/edit', [PayscaleController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
+            Route::put('/{payscale}', [PayscaleController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::delete('/{payscale}', [PayscaleController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+        });
+
+        Route::prefix('salary-grades')->name('salary-grades.')->group(function () {
+            Route::get('/', [SalaryGradeController::class, 'index'])->name('index');
+            Route::get('/create', [SalaryGradeController::class, 'create'])->name('create')->middleware('permission:payroll.create');
+            Route::post('/', [SalaryGradeController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/{salary_grade}/edit', [SalaryGradeController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
+            Route::put('/{salary_grade}', [SalaryGradeController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::delete('/{salary_grade}', [SalaryGradeController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+        });
+
+        Route::prefix('salary-steps')->name('salary-steps.')->group(function () {
+            Route::get('/', [SalaryStepController::class, 'index'])->name('index');
+            Route::get('/create', [SalaryStepController::class, 'create'])->name('create')->middleware('permission:payroll.create');
+            Route::post('/', [SalaryStepController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/{salary_step}/edit', [SalaryStepController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
+            Route::put('/{salary_step}', [SalaryStepController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::delete('/{salary_step}', [SalaryStepController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+        });
+
+        Route::prefix('salary-heads')->name('salary-heads.')->group(function () {
+            Route::get('/', [SalaryHeadController::class, 'index'])->name('index');
+            Route::get('/create', [SalaryHeadController::class, 'create'])->name('create')->middleware('permission:payroll.create');
+            Route::post('/', [SalaryHeadController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/{salary_head}/edit', [SalaryHeadController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
+            Route::put('/{salary_head}', [SalaryHeadController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::delete('/{salary_head}', [SalaryHeadController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+        });
+
+        Route::prefix('salary-structures')->name('salary-structures.')->group(function () {
+            Route::get('/', [SalaryStructureController::class, 'index'])->name('index');
+            Route::get('/manual', [SalaryStructureController::class, 'manual'])->name('manual');
+            Route::post('/manual', [SalaryStructureController::class, 'saveManual'])->name('manual.save')->middleware('permission:payroll.edit');
+            Route::delete('/{salary_structure}', [SalaryStructureController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+        });
+
+        Route::prefix('branch-payroll-banks')->name('branch-payroll-banks.')->group(function () {
+            Route::get('/', [BranchPayrollBankController::class, 'index'])->name('index');
+            Route::get('/create', [BranchPayrollBankController::class, 'create'])->name('create')->middleware('permission:payroll.create');
+            Route::post('/', [BranchPayrollBankController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/{branch_payroll_bank}/edit', [BranchPayrollBankController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
+            Route::put('/{branch_payroll_bank}', [BranchPayrollBankController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::delete('/{branch_payroll_bank}', [BranchPayrollBankController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+        });
+
+        Route::get('/salary-head-modifications', [\App\Http\Controllers\Payroll\SalaryHeadModificationController::class, 'index'])->name('salary-head-modifications.index');
+        Route::post('/salary-head-modifications', [\App\Http\Controllers\Payroll\SalaryHeadModificationController::class, 'store'])->name('salary-head-modifications.store')->middleware('permission:payroll.edit');
+
+        Route::get('/salary-withheld', [\App\Http\Controllers\Payroll\SalaryWithheldController::class, 'index'])->name('salary-withheld.index');
+        Route::post('/salary-withheld', [\App\Http\Controllers\Payroll\SalaryWithheldController::class, 'store'])->name('salary-withheld.store')->middleware('permission:payroll.edit');
+        Route::delete('/salary-withheld/{salary_withheld}', [\App\Http\Controllers\Payroll\SalaryWithheldController::class, 'destroy'])->name('salary-withheld.destroy')->middleware('permission:payroll.delete');
+
+        Route::get('/salary-process', [\App\Http\Controllers\Payroll\SalaryProcessController::class, 'index'])->name('salary-process.index');
+        Route::post('/salary-process', [\App\Http\Controllers\Payroll\SalaryProcessController::class, 'process'])->name('salary-process.process')->middleware('permission:payroll.edit');
+
+        Route::get('/salary-post', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'index'])->name('salary-post.index');
+        Route::get('/salary-post/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'show'])->name('salary-post.show');
+        Route::post('/salary-post/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'post'])->name('salary-post.post')->middleware('permission:payroll.edit');
+
+        Route::get('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'index'])->name('salary-rollback.index');
+        Route::post('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'rollback'])->name('salary-rollback.rollback')->middleware('permission:payroll.edit');
     });
 
     // ====================

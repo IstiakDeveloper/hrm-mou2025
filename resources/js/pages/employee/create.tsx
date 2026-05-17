@@ -28,6 +28,12 @@ import {
 } from '@/lib/employee-v2-form-persist';
 import { cn } from '@/lib/utils';
 import {
+    EmployeeSalaryAssignment,
+    type PayrollGradeOption,
+    type PayrollPayscaleOption,
+    type PayrollStepOption,
+} from '@/components/employee/EmployeeSalaryAssignment';
+import {
     ArrowLeft,
     Plus,
     Trash2,
@@ -239,6 +245,10 @@ function getCreateFormDefaults(): EmployeeCreateFormData {
         last_designation_id: '',
         program_id: '',
         project_id: '',
+        payscale_id: '',
+        salary_grade_id: '',
+        salary_step_id: '',
+        basic_salary: '',
         mobile_personal: '',
         mobile_official: '',
         addresses: [
@@ -318,6 +328,9 @@ function flattenEmployeeFormErrors(err: Record<string, string | undefined>): str
 }
 
 function errorFieldKeyToEmployeeCreateTab(key: string): EmployeeCreateTabId {
+    if (key === 'payscale_id' || key === 'salary_grade_id' || key === 'salary_step_id' || key === 'basic_salary') {
+        return 'salary';
+    }
     if (key.startsWith('educations')) return 'education';
     if (key.startsWith('bank')) return 'bank';
     if (key.startsWith('nominees')) return 'nominee';
@@ -443,6 +456,9 @@ interface EmployeeCreateProps {
     locations: any;
     defaultBankName: string;
     documentTypes: string[];
+    payscales: PayrollPayscaleOption[];
+    payrollGrades: PayrollGradeOption[];
+    payrollSteps: PayrollStepOption[];
     oldInput?: Record<string, unknown>;
     errors?: {
         [key: string]: string;
@@ -462,6 +478,9 @@ export default function EmployeeCreate({
     locations,
     defaultBankName,
     documentTypes = [],
+    payscales = [],
+    payrollGrades = [],
+    payrollSteps = [],
     oldInput,
     errors: errorsProp = {},
 }: EmployeeCreateProps) {
@@ -1612,9 +1631,24 @@ export default function EmployeeCreate({
                             <Card className="shadow-sm">
                                 <CardHeader className="border-b bg-gray-50">
                                     <CardTitle className="text-base">Salary</CardTitle>
-                                    <CardDescription className="text-xs">Grade/Step (skippable for now)</CardDescription>
+                                    <CardDescription className="text-xs">Payscale, grade, and step for payroll</CardDescription>
                                 </CardHeader>
-                                <CardContent className="pt-6 text-sm text-muted-foreground">This section is skippable now.</CardContent>
+                                <CardContent className="pt-6">
+                                    <EmployeeSalaryAssignment
+                                        payscales={payscales}
+                                        grades={payrollGrades}
+                                        steps={payrollSteps}
+                                        payscaleId={data.payscale_id}
+                                        salaryGradeId={data.salary_grade_id}
+                                        salaryStepId={data.salary_step_id}
+                                        basicSalary={data.basic_salary}
+                                        onPayscaleIdChange={(v) => setData('payscale_id', v)}
+                                        onSalaryGradeIdChange={(v) => setData('salary_grade_id', v)}
+                                        onSalaryStepIdChange={(v) => setData('salary_step_id', v)}
+                                        onBasicSalaryChange={(v) => setData('basic_salary', v)}
+                                        errors={errors}
+                                    />
+                                </CardContent>
                                 <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
                                     <Button type="button" variant="outline" onClick={() => requestTabChange('education')}>
                                         Back

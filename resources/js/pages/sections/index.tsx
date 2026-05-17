@@ -106,6 +106,11 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'roles.view') ||
                                         hasAppPermission(auth, 'reports.view')
                                     );
+                                case 'payroll':
+                                    return (
+                                        hasAppPermission(auth, 'payroll.view') ||
+                                        hasAppPermission(auth, 'admin.access')
+                                    );
                                 default:
                                     // Future modules: show as locked unless backend enables them
                                     return false;

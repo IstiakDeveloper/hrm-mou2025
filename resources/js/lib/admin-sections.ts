@@ -78,8 +78,10 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     {
         id: 'payroll',
         title: 'PAYROLL',
-        description: 'Salary & payslips',
+        description: 'Salary setup & payslips',
         icon: BriefcaseBusiness,
+        href: '/sections/payroll',
+        menuTitles: ['Payroll Setup', 'Salary', 'Reports'],
     },
     {
         id: 'fixed-asset',
@@ -183,6 +185,16 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         return 'human-resources';
     }
     if (p.startsWith('/admin/') || p.startsWith('/reports') || p.startsWith('/settings')) return 'administration';
+    if (
+        p.startsWith('/payscales') ||
+        p.startsWith('/salary-grades') ||
+        p.startsWith('/salary-steps') ||
+        p.startsWith('/salary-heads') ||
+        p.startsWith('/salary-structures') ||
+        p.startsWith('/branch-payroll-banks')
+    ) {
+        return 'payroll';
+    }
 
     return null;
 }

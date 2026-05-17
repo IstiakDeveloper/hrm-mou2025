@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Database\Seeders\OrganizationStructureSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -46,6 +45,7 @@ class DatabaseSeeder extends Seeder
                     'department_head', 'branch_manager',
                     'organogram.executive_director', 'organogram.microfinance_director', 'organogram.microfinance_assistant_director',
                     'organogram.zonal_manager', 'organogram.regional_manager',
+                    'payroll.view', 'payroll.create', 'payroll.edit', 'payroll.delete',
                 ]))),
             ]
         );
@@ -314,6 +314,12 @@ class DatabaseSeeder extends Seeder
         $this->seedUser('ad@mail.com', 'Asst Director MF', $microfinanceAsstDirectorRole->id, [$microfinanceAsstDirectorRole->id]);
         $this->seedUser('zm@mail.com', 'Zonal Manager', $zonalManagerRole->id, [$zonalManagerRole->id]);
         $this->seedUser('rm@mail.com', 'Regional Manager', $regionalManagerRole->id, [$regionalManagerRole->id]);
+
+        // Optional: repair employees indexes (MySQL/MariaDB) + sync data/excel/* on `php artisan db:seed`.
+        // Set in .env: SEED_HR_FILE_SYNC=true
+        if (filter_var(env('SEED_HR_FILE_SYNC', false), FILTER_VALIDATE_BOOL)) {
+            $this->call(HrEmployeeFilesSyncSeeder::class);
+        }
     }
 
     /**

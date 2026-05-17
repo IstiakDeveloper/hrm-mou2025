@@ -79,6 +79,9 @@ class Employee extends Model
         'last_promotion_date',
         'probation_period_days',
         'basic_salary',
+        'payscale_id',
+        'salary_grade_id',
+        'salary_step_id',
         'bank_account_details',
         'signature',
     ];
@@ -98,6 +101,17 @@ class Employee extends Model
         'is_project_employee' => 'boolean',
         'is_custodian' => 'boolean',
     ];
+
+    /**
+     * Employees in these statuses still "hold" unique identifiers (PIN, NID, employee_id, phone, etc.).
+     * Inactive / terminated employees may share values with a new hire.
+     *
+     * @return list<string>
+     */
+    public static function statusesReservingUniqueIdentifiers(): array
+    {
+        return ['active', 'on_leave'];
+    }
 
     protected $appends = [
         'pin',
@@ -125,7 +139,7 @@ class Employee extends Model
 
         $first = (string) ($this->attributes['first_name'] ?? '');
         $last = (string) ($this->attributes['last_name'] ?? '');
-        $fallback = trim($first . ' ' . $last);
+        $fallback = trim($first.' '.$last);
 
         return $fallback !== '' ? $fallback : null;
     }
@@ -215,6 +229,31 @@ class Employee extends Model
         return $this->belongsTo(Designation::class, 'last_designation_id');
     }
 
+    public function payscale()
+    {
+        return $this->belongsTo(Payscale::class);
+    }
+
+    public function salaryGrade()
+    {
+        return $this->belongsTo(SalaryGrade::class, 'salary_grade_id');
+    }
+
+    public function salaryStep()
+    {
+        return $this->belongsTo(SalaryStep::class, 'salary_step_id');
+    }
+
+    public function program()
+    {
+        return $this->belongsTo(Program::class);
+    }
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class);
+    }
+
     public function branch()
     {
         return $this->belongsTo(Branch::class, 'current_branch_id');
@@ -239,6 +278,7 @@ class Employee extends Model
     {
         return $this->lastDesignation?->name;
     }
+
     public function manager()
     {
         return $this->belongsTo(Employee::class, 'reporting_to');
@@ -288,7 +328,6 @@ class Employee extends Model
     {
         return $this->hasMany(EmployeeDocument::class);
     }
-
 
     public function currentBranch()
     {

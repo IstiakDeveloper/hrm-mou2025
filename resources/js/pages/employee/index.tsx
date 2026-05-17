@@ -107,6 +107,11 @@ interface Branch {
     name: string;
 }
 
+interface EmployeeTypeOption {
+    id: number;
+    name: string;
+}
+
 interface PaginationData {
     current_page: number;
     last_page: number;
@@ -125,11 +130,13 @@ interface EmployeeIndexProps {
     } & PaginationData;
     departments: Department[];
     branches: Branch[];
+    employee_types: EmployeeTypeOption[];
     filters: {
         search?: string;
         department_id?: string;
         branch_id?: string;
         status?: string;
+        employee_type_id?: string;
         per_page?: string;
     };
     success?: string;
@@ -139,6 +146,7 @@ export default function EmployeeIndex({
     employees,
     departments,
     branches,
+    employee_types,
     filters,
     success
 }: EmployeeIndexProps) {
@@ -147,6 +155,7 @@ export default function EmployeeIndex({
         department_id: filters.department_id || '',
         branch_id: filters.branch_id || '',
         status: filters.status || '',
+        employee_type_id: filters.employee_type_id || '',
         per_page: filters.per_page || '10',
     });
 
@@ -166,7 +175,7 @@ export default function EmployeeIndex({
     const importRowErrors = (page?.props?.flash?.import_row_errors as { row: number; errors: string[] }[] | undefined) ?? [];
 
     const [showFilters, setShowFilters] = useState(
-        !!(filters.department_id || filters.branch_id || filters.status)
+        !!(filters.department_id || filters.branch_id || filters.status || filters.employee_type_id)
     );
 
     const applyFilters = (next: Partial<typeof data>) => {
@@ -182,6 +191,7 @@ export default function EmployeeIndex({
         if (merged.department_id) params.department_id = merged.department_id;
         if (merged.branch_id) params.branch_id = merged.branch_id;
         if (merged.status) params.status = merged.status;
+        if (merged.employee_type_id) params.employee_type_id = merged.employee_type_id;
         if (merged.per_page && merged.per_page !== '10') params.per_page = merged.per_page;
 
         router.get(route('employees.index'), params, { preserveState: true, replace: true });
@@ -214,6 +224,7 @@ export default function EmployeeIndex({
             department_id: '',
             branch_id: '',
             status: '',
+            employee_type_id: '',
         });
     };
 
@@ -422,7 +433,7 @@ export default function EmployeeIndex({
                         </div>
 
                         {showFilters && (
-                            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
+                            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                                 <div>
                                     <Select
                                         value={data.department_id || 'all'}
@@ -485,6 +496,27 @@ export default function EmployeeIndex({
                                     </Select>
                                 </div>
 
+                                <div>
+                                    <Select
+                                        value={data.employee_type_id || 'all'}
+                                        onValueChange={value => {
+                                            applyFilters({ employee_type_id: value === 'all' ? '' : value });
+                                        }}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Filter by Employee Type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Employee Types</SelectItem>
+                                            {employee_types.map((type) => (
+                                                <SelectItem key={type.id} value={type.id.toString()}>
+                                                    {type.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
                                 <div className="flex items-center">
                                     <Button
                                         variant="outline"
@@ -521,7 +553,7 @@ export default function EmployeeIndex({
                                                     <Users className="h-8 w-8 text-gray-400" />
                                                     <h3 className="mt-2 text-lg font-medium text-gray-900">No Employees Found</h3>
                                                     <p className="mt-1 text-gray-500">
-                                                        {data.search || data.department_id || data.branch_id || data.status
+                                                        {data.search || data.department_id || data.branch_id || data.status || data.employee_type_id
                                                             ? 'Try different search filters'
                                                             : 'Get started by adding a new employee'}
                                                     </p>

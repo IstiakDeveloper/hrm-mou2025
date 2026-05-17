@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,59 @@ import {
     Trash2,
     Upload,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid, parse, parseISO } from 'date-fns';
+import {
+    EmployeeSalaryAssignment,
+    type PayrollGradeOption,
+    type PayrollPayscaleOption,
+    type PayrollStepOption,
+} from '@/components/employee/EmployeeSalaryAssignment';
+
+const DISPLAY_DATE_FMT = 'dd-MM-yyyy';
+const SERVER_DATE_FMT = 'yyyy-MM-dd';
+
+/** Values from API/drafts may be ISO, `Y-m-d`, or already `dd-MM-yyyy`. */
+function toFormDisplayDate(value: unknown): string {
+    if (value == null || value === '') return '';
+    const s = String(value).trim();
+    if (!s) return '';
+    if (/^\d{2}-\d{2}-\d{4}$/.test(s)) return s;
+    const datePart = s.includes('T') ? (s.split('T')[0] ?? s) : s;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+        const d = parse(datePart, SERVER_DATE_FMT, new Date());
+        return isValid(d) ? format(d, DISPLAY_DATE_FMT) : '';
+    }
+    const iso = parseISO(s);
+    if (isValid(iso)) return format(iso, DISPLAY_DATE_FMT);
+    const slash = parse(s, 'dd/MM/yyyy', new Date());
+    if (isValid(slash)) return format(slash, DISPLAY_DATE_FMT);
+    return '';
+}
+
+function displayDateToServer(value: unknown): string {
+    if (value == null || value === '') return '';
+    const s = String(value).trim();
+    if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const d = parse(s, DISPLAY_DATE_FMT, new Date());
+    return isValid(d) ? format(d, SERVER_DATE_FMT) : '';
+}
+
+function parseFormDateValue(raw: unknown): Date | null {
+    if (raw == null) return null;
+    const s = String(raw).trim();
+    if (!s) return null;
+    if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+        const d = parse(s, DISPLAY_DATE_FMT, new Date());
+        return isValid(d) ? d : null;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const d = parse(s, SERVER_DATE_FMT, new Date());
+        return isValid(d) ? d : null;
+    }
+    const iso = parseISO(s.includes('T') ? s : `${s}T00:00:00`);
+    return isValid(iso) ? iso : null;
+}
 
 /** Repeatable “multiple add” rows: stacked on small screens, one horizontal row on large screens */
 const RF_ROW = 'flex flex-col gap-2 lg:flex-row lg:flex-nowrap lg:items-end lg:gap-2 lg:overflow-x-auto lg:pb-0.5';
@@ -90,6 +142,10 @@ interface Employee {
     last_designation_id?: number;
     program_id?: number | null;
     project_id?: number | null;
+    payscale_id?: number | null;
+    salary_grade_id?: number | null;
+    salary_step_id?: number | null;
+    basic_salary?: string | number | null;
     nid?: string;
     smart_card_number?: string;
     birth_registration_number?: string;
@@ -127,6 +183,64 @@ function withHydratedEditDocuments(form: EmployeeEditFormData): EmployeeEditForm
     return { ...form, documents: hydrateEmployeeDocumentRowsForForm(form.documents ?? []) };
 }
 
+function normalizeEditFormDisplayDates(form: EmployeeEditFormData): EmployeeEditFormData {
+    const out = { ...form };
+    out.birth_date_certificate = toFormDisplayDate(form.birth_date_certificate);
+    out.birth_date_original = toFormDisplayDate(form.birth_date_original);
+    out.date_of_birth = toFormDisplayDate(form.date_of_birth);
+    out.joining_date = toFormDisplayDate(form.joining_date);
+    out.confirmation_date = toFormDisplayDate(form.confirmation_date);
+    out.nominees = (form.nominees ?? []).map((n: any) => ({
+        ...n,
+        date_of_birth: toFormDisplayDate(n.date_of_birth),
+    }));
+    out.collateral = {
+        ...(form.collateral ?? {}),
+        collateral_date: toFormDisplayDate(form.collateral?.collateral_date),
+    };
+    out.experiences = (form.experiences ?? []).map((ex: any) => ({
+        ...ex,
+        from_date: toFormDisplayDate(ex.from_date),
+        to_date: toFormDisplayDate(ex.to_date),
+    }));
+    out.documents = (form.documents ?? []).map((doc: any) => ({
+        ...doc,
+        expiry_date: toFormDisplayDate(doc.expiry_date),
+    }));
+    return out;
+}
+
+function transformSubmitDates(form: EmployeeEditFormData): EmployeeEditFormData {
+    const out = { ...form };
+    out.birth_date_certificate = displayDateToServer(form.birth_date_certificate);
+    out.birth_date_original = displayDateToServer(form.birth_date_original);
+    out.date_of_birth = displayDateToServer(form.date_of_birth);
+    out.joining_date = displayDateToServer(form.joining_date);
+    out.confirmation_date = displayDateToServer(form.confirmation_date);
+    out.nominees = (form.nominees ?? []).map((n: any) => ({
+        ...n,
+        date_of_birth: displayDateToServer(n.date_of_birth),
+    }));
+    out.collateral = {
+        ...(form.collateral ?? {}),
+        collateral_date: displayDateToServer(form.collateral?.collateral_date),
+    };
+    out.experiences = (form.experiences ?? []).map((ex: any) => ({
+        ...ex,
+        from_date: displayDateToServer(ex.from_date),
+        to_date: displayDateToServer(ex.to_date),
+    }));
+    out.documents = (form.documents ?? []).map((doc: any) => ({
+        ...doc,
+        expiry_date: displayDateToServer(doc.expiry_date),
+    }));
+    return out;
+}
+
+function finalizeEmployeeEditForm(form: EmployeeEditFormData): EmployeeEditFormData {
+    return normalizeEditFormDisplayDates(withHydratedEditDocuments(form));
+}
+
 function employeeToFormBase(employee: Employee): EmployeeEditFormData {
     const base = {
         _method: 'PUT',
@@ -144,7 +258,7 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         birth_date_original: (employee.birth_date_original as any) || '',
         date_of_birth: (employee.date_of_birth as any) || '',
         blood_group: employee.blood_group || '',
-        joining_date: employee.joining_date || format(new Date(), 'yyyy-MM-dd'),
+        joining_date: employee.joining_date || format(new Date(), DISPLAY_DATE_FMT),
         confirmation_date: employee.confirmation_date || '',
         fathers_name: employee.fathers_name || '',
         fathers_mobile: employee.fathers_mobile || '',
@@ -155,6 +269,13 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         last_designation_id: employee.last_designation_id ? String(employee.last_designation_id) : '',
         program_id: employee.program_id ? String(employee.program_id) : '',
         project_id: employee.project_id ? String(employee.project_id) : '',
+        payscale_id: employee.payscale_id ? String(employee.payscale_id) : '',
+        salary_grade_id: employee.salary_grade_id ? String(employee.salary_grade_id) : '',
+        salary_step_id: employee.salary_step_id ? String(employee.salary_step_id) : '',
+        basic_salary:
+            employee.basic_salary != null && employee.basic_salary !== ''
+                ? String(employee.basic_salary)
+                : '',
         nid: combinedNidOrSmartCardDisplay(employee.nid, employee.smart_card_number)
             .replace(/\D/g, '')
             .slice(0, 17),
@@ -203,21 +324,66 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
     return base;
 }
 
-function buildInitialEditForm(employee: Employee, oldInput: unknown): EmployeeEditFormData {
+function flattenEmployeeFormErrors(err: Record<string, string | undefined>): string[] {
+    const out: string[] = [];
+    for (const [k, v] of Object.entries(err)) {
+        if (!v || k === 'submit') continue;
+        const label = k.replace(/\./g, ' › ');
+        out.push(`${label}: ${v}`);
+    }
+    return out;
+}
+
+function errorFieldKeyToEmployeeEditTab(key: string): string {
+    if (key === 'payscale_id' || key === 'salary_grade_id' || key === 'salary_step_id' || key === 'basic_salary') {
+        return 'salary';
+    }
+    if (key.startsWith('educations')) return 'education';
+    if (key.startsWith('bank')) return 'bank';
+    if (key.startsWith('nominees')) return 'nominee';
+    if (key.startsWith('guarantors') || key.startsWith('guarantor_cheques')) return 'guarantor';
+    if (key.startsWith('collateral')) return 'collateral';
+    if (key.startsWith('assets')) return 'asset';
+    if (key.startsWith('experiences')) return 'experience';
+    if (key.startsWith('trainings')) return 'training';
+    if (key.startsWith('documents')) return 'documents';
+    return 'general';
+}
+
+function inferFirstTabFromEmployeeErrors(err: Record<string, string | undefined>): string | null {
+    const keys = Object.keys(err).filter((k) => err[k] && k !== 'submit');
+    if (keys.length === 0) return null;
+    const tabOrder = ['general', 'education', 'salary', 'bank', 'nominee', 'guarantor', 'collateral', 'asset', 'experience', 'training', 'documents'];
+    let best: string | null = null;
+    let bestIdx = Infinity;
+    for (const k of keys) {
+        const tab = errorFieldKeyToEmployeeEditTab(k);
+        const idx = tabOrder.indexOf(tab);
+        if (idx >= 0 && idx < bestIdx) {
+            bestIdx = idx;
+            best = tab;
+        }
+    }
+    return best;
+}
+
+function buildInitialEditForm(employee: Employee, oldInput: unknown, allowDraft: boolean): EmployeeEditFormData {
     const base = employeeToFormBase(employee);
     const fromServer = asInputPatch(oldInput);
     if (hasPatchKeys(fromServer)) {
-        return withHydratedEditDocuments(
+        return finalizeEmployeeEditForm(
             applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromServer) as unknown as Record<string, unknown>) as EmployeeEditFormData
         );
     }
-    const fromDraft = loadEmployeeDraft(`${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`);
-    if (fromDraft) {
-        return withHydratedEditDocuments(
-            applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromDraft as Record<string, unknown>) as unknown as Record<string, unknown>) as EmployeeEditFormData
-        );
+    if (allowDraft) {
+        const fromDraft = loadEmployeeDraft(`${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`);
+        if (fromDraft) {
+            return finalizeEmployeeEditForm(
+                applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromDraft as Record<string, unknown>) as unknown as Record<string, unknown>) as EmployeeEditFormData
+            );
+        }
     }
-    return withHydratedEditDocuments(applyUnifiedNidSmartFields(base as unknown as Record<string, unknown>) as EmployeeEditFormData);
+    return finalizeEmployeeEditForm(applyUnifiedNidSmartFields(base as unknown as Record<string, unknown>) as EmployeeEditFormData);
 }
 
 interface EmployeeEditProps {
@@ -236,6 +402,9 @@ interface EmployeeEditProps {
     locations: any;
     defaultBankName: string;
     documentTypes: string[];
+    payscales: PayrollPayscaleOption[];
+    payrollGrades: PayrollGradeOption[];
+    payrollSteps: PayrollStepOption[];
     oldInput?: Record<string, unknown>;
     errors?: {
         [key: string]: string;
@@ -258,18 +427,36 @@ export default function EmployeeEdit({
     locations,
     defaultBankName,
     documentTypes = [],
+    payscales = [],
+    payrollGrades = [],
+    payrollSteps = [],
     oldInput,
     errors: errorsProp = {},
 }: EmployeeEditProps) {
-    const initialForm = useMemo(() => buildInitialEditForm(employee, oldInput), [employee, oldInput]);
-    const { data, setData, post, processing, errors: formErrors } = useForm(initialForm);
+    const { flash } = usePage<{ flash?: { success?: string; error?: string; warning?: string } }>().props;
+    const editDraftKey = `${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`;
+    const initialForm = useMemo(
+        () => buildInitialEditForm(employee, oldInput, !flash?.success),
+        [employee, oldInput, flash?.success],
+    );
+    const { data, setData, post, transform, processing, errors: formErrors } = useForm(initialForm);
+
+    useEffect(() => {
+        transform((payload) => transformSubmitDates(payload as EmployeeEditFormData));
+    }, [transform]);
 
     const errors = { ...errorsProp, ...formErrors } as Record<string, string | undefined>;
     const submitError = errors['submit'];
+    const validationMessages = useMemo(() => flattenEmployeeFormErrors(errors), [errors]);
 
     const nidOrSmartClientError = useMemo(() => getNidOrSmartCardClientError(data.nid), [data.nid]);
 
-    const editDraftKey = `${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`;
+    useEffect(() => {
+        if (!flash?.success) return;
+        clearEmployeeDraft(editDraftKey);
+        const next = finalizeEmployeeEditForm(employeeToFormBase(employee));
+        setData({ ...next, photo: null, signature: null });
+    }, [flash?.success, employee.id, employee.payscale_id, employee.salary_grade_id, employee.salary_step_id, employee.basic_salary, editDraftKey, setData]);
 
     const lastServerOldJson = useRef<string | null>(null);
     useEffect(() => {
@@ -282,7 +469,7 @@ export default function EmployeeEdit({
         if (lastServerOldJson.current === json) return;
         lastServerOldJson.current = json;
         const next = applyUnifiedNidSmartFields(mergeSerializableIntoForm(employeeToFormBase(employee), patch) as unknown as Record<string, unknown>) as any;
-        setData({ ...withHydratedEditDocuments(next), photo: null, signature: null });
+        setData({ ...finalizeEmployeeEditForm(next), photo: null, signature: null });
     }, [oldInput, setData, employee]);
 
     useEffect(() => {
@@ -404,9 +591,8 @@ export default function EmployeeEdit({
 
     const derivedAge = useMemo(() => {
         const raw = data.birth_date_original || data.birth_date_certificate;
-        if (!raw) return '';
-        const d = new Date(raw);
-        if (Number.isNaN(d.getTime())) return '';
+        const d = parseFormDateValue(raw);
+        if (!d) return '';
         const today = new Date();
         let years = today.getFullYear() - d.getFullYear();
         const m = today.getMonth() - d.getMonth();
@@ -515,14 +701,23 @@ export default function EmployeeEdit({
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (getNidOrSmartCardClientError(data.nid)) {
+        const nidErr = getNidOrSmartCardClientError(data.nid);
+        if (nidErr) {
             setActiveTab('general');
             return;
         }
         post(route('employees.update', employee.id), {
             preserveScroll: true,
             forceFormData: true,
-            onSuccess: () => clearEmployeeDraft(editDraftKey),
+            onSuccess: () => {
+                clearEmployeeDraft(editDraftKey);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            },
+            onError: (errs) => {
+                const tab = inferFirstTabFromEmployeeErrors(errs as Record<string, string | undefined>);
+                if (tab) setActiveTab(tab);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            },
         });
     };
 
@@ -542,10 +737,37 @@ export default function EmployeeEdit({
                     <p className="mt-1 text-gray-500">Update employee details</p>
                 </div>
 
+                {flash?.success && (
+                    <Alert className="mb-6 border-emerald-200 bg-emerald-50 text-emerald-950">
+                        <AlertTitle>Saved</AlertTitle>
+                        <AlertDescription>{flash.success}</AlertDescription>
+                    </Alert>
+                )}
+
+                {flash?.error && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertTitle>Error</AlertTitle>
+                        <AlertDescription>{flash.error}</AlertDescription>
+                    </Alert>
+                )}
+
                 {submitError && (
                     <Alert variant="destructive" className="mb-6">
                         <AlertTitle>Could not save</AlertTitle>
                         <AlertDescription>{submitError}</AlertDescription>
+                    </Alert>
+                )}
+
+                {validationMessages.length > 0 && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertTitle>Please fix the following</AlertTitle>
+                        <AlertDescription>
+                            <ul className="mt-2 list-disc space-y-1 pl-4 text-sm">
+                                {validationMessages.map((msg) => (
+                                    <li key={msg}>{msg}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
                     </Alert>
                 )}
 
@@ -634,11 +856,21 @@ export default function EmployeeEdit({
                                             )}
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Birth Date (Certificate)</Label>
-                                                <Input type="date" value={data.birth_date_certificate} onChange={(e) => setData('birth_date_certificate', e.target.value)} />
+                                                <Input
+                                                    placeholder={DISPLAY_DATE_FMT}
+                                                    autoComplete="off"
+                                                    value={data.birth_date_certificate}
+                                                    onChange={(e) => setData('birth_date_certificate', e.target.value)}
+                                                />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Birth Date (Original)</Label>
-                                                <Input type="date" value={data.birth_date_original} onChange={(e) => setData('birth_date_original', e.target.value)} />
+                                                <Input
+                                                    placeholder={DISPLAY_DATE_FMT}
+                                                    autoComplete="off"
+                                                    value={data.birth_date_original}
+                                                    onChange={(e) => setData('birth_date_original', e.target.value)}
+                                                />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Age</Label>
@@ -650,7 +882,12 @@ export default function EmployeeEdit({
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Joining Date *</Label>
-                                                <Input type="date" value={data.joining_date} onChange={(e) => setData('joining_date', e.target.value)} />
+                                                <Input
+                                                    placeholder={DISPLAY_DATE_FMT}
+                                                    autoComplete="off"
+                                                    value={data.joining_date}
+                                                    onChange={(e) => setData('joining_date', e.target.value)}
+                                                />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Probation Period</Label>
@@ -658,7 +895,12 @@ export default function EmployeeEdit({
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Confirmation Date</Label>
-                                                <Input type="date" value={data.confirmation_date} onChange={(e) => setData('confirmation_date', e.target.value)} />
+                                                <Input
+                                                    placeholder={DISPLAY_DATE_FMT}
+                                                    autoComplete="off"
+                                                    value={data.confirmation_date}
+                                                    onChange={(e) => setData('confirmation_date', e.target.value)}
+                                                />
                                             </div>
                                             <div className="grid grid-cols-[150px,1fr] items-start gap-2">
                                                 <Label className="pt-2 text-xs">Department *</Label>
@@ -1052,9 +1294,24 @@ export default function EmployeeEdit({
                             <Card className="shadow-sm">
                                 <CardHeader className="border-b bg-gray-50">
                                     <CardTitle className="text-base">Salary</CardTitle>
-                                    <CardDescription className="text-xs">Skippable</CardDescription>
+                                    <CardDescription className="text-xs">Payscale, grade, and step for payroll</CardDescription>
                                 </CardHeader>
-                                <CardContent className="pt-6 text-sm text-muted-foreground">This section is skippable now.</CardContent>
+                                <CardContent className="pt-6">
+                                    <EmployeeSalaryAssignment
+                                        payscales={payscales}
+                                        grades={payrollGrades}
+                                        steps={payrollSteps}
+                                        payscaleId={data.payscale_id}
+                                        salaryGradeId={data.salary_grade_id}
+                                        salaryStepId={data.salary_step_id}
+                                        basicSalary={data.basic_salary}
+                                        onPayscaleIdChange={(v) => setData('payscale_id', v)}
+                                        onSalaryGradeIdChange={(v) => setData('salary_grade_id', v)}
+                                        onSalaryStepIdChange={(v) => setData('salary_step_id', v)}
+                                        onBasicSalaryChange={(v) => setData('basic_salary', v)}
+                                        errors={errors}
+                                    />
+                                </CardContent>
                                 <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
                                     <Button type="button" variant="outline" onClick={() => setActiveTab('education')}>Back</Button>
                                     <Button type="button" onClick={() => setActiveTab('bank')}>Next: Bank</Button>
@@ -1166,7 +1423,17 @@ export default function EmployeeEdit({
                                                     <Input value={n.contact || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, contact: e.target.value } : x)))} placeholder="Contact" />
                                                 </div>
                                                 <div className={RF_CELL}>
-                                                    <Input type="date" value={n.date_of_birth || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, date_of_birth: e.target.value } : x)))} />
+                                                    <Input
+                                                        placeholder={DISPLAY_DATE_FMT}
+                                                        autoComplete="off"
+                                                        value={n.date_of_birth || ''}
+                                                        onChange={(e) =>
+                                                            setData(
+                                                                'nominees',
+                                                                data.nominees.map((x: any, i: number) => (i === idx ? { ...x, date_of_birth: e.target.value } : x))
+                                                            )
+                                                        }
+                                                    />
                                                 </div>
                                                 <div className={RF_CELL}>
                                                     <Input value={String(n.share ?? '')} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, share: e.target.value } : x)))} placeholder="Share" />
@@ -1295,7 +1562,12 @@ export default function EmployeeEdit({
                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                         <Input value={String(data.collateral?.security_amount ?? '')} onChange={(e) => setData('collateral', { ...data.collateral, security_amount: e.target.value })} placeholder="Security Amount" />
                                         <Input value={String(data.collateral?.collateral_interest ?? '')} onChange={(e) => setData('collateral', { ...data.collateral, collateral_interest: e.target.value })} placeholder="Collateral Interest" />
-                                        <Input type="date" value={data.collateral?.collateral_date ?? ''} onChange={(e) => setData('collateral', { ...data.collateral, collateral_date: e.target.value })} />
+                                        <Input
+                                            placeholder={DISPLAY_DATE_FMT}
+                                            autoComplete="off"
+                                            value={data.collateral?.collateral_date ?? ''}
+                                            onChange={(e) => setData('collateral', { ...data.collateral, collateral_date: e.target.value })}
+                                        />
                                     </div>
                                     <Textarea rows={2} value={data.collateral?.notes ?? ''} onChange={(e) => setData('collateral', { ...data.collateral, notes: e.target.value })} placeholder="Notes" />
 
@@ -1412,10 +1684,30 @@ export default function EmployeeEdit({
                                                     <Input value={ex.organization || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, organization: e.target.value } : x)))} placeholder="Organization" />
                                                 </div>
                                                 <div className={RF_CELL}>
-                                                    <Input type="date" value={ex.from_date || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, from_date: e.target.value } : x)))} />
+                                                    <Input
+                                                        placeholder={DISPLAY_DATE_FMT}
+                                                        autoComplete="off"
+                                                        value={ex.from_date || ''}
+                                                        onChange={(e) =>
+                                                            setData(
+                                                                'experiences',
+                                                                data.experiences.map((x: any, i: number) => (i === idx ? { ...x, from_date: e.target.value } : x))
+                                                            )
+                                                        }
+                                                    />
                                                 </div>
                                                 <div className={RF_CELL}>
-                                                    <Input type="date" value={ex.to_date || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, to_date: e.target.value } : x)))} />
+                                                    <Input
+                                                        placeholder={DISPLAY_DATE_FMT}
+                                                        autoComplete="off"
+                                                        value={ex.to_date || ''}
+                                                        onChange={(e) =>
+                                                            setData(
+                                                                'experiences',
+                                                                data.experiences.map((x: any, i: number) => (i === idx ? { ...x, to_date: e.target.value } : x))
+                                                            )
+                                                        }
+                                                    />
                                                 </div>
                                                 <div className={RF_CELL}>
                                                     <Input value={ex.designation || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, designation: e.target.value } : x)))} placeholder="Designation" />
@@ -1567,7 +1859,8 @@ export default function EmployeeEdit({
                                                 <div className={`${RF_CELL} shrink-0 lg:max-w-[9.5rem]`}>
                                                     <Label className="text-xs">Expiry date (optional)</Label>
                                                     <Input
-                                                        type="date"
+                                                        placeholder={DISPLAY_DATE_FMT}
+                                                        autoComplete="off"
                                                         value={doc.expiry_date || ''}
                                                         onChange={(e) =>
                                                             setData(

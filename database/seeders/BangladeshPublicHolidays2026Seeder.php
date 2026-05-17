@@ -52,4 +52,3 @@ class BangladeshPublicHolidays2026Seeder extends Seeder
         }
     }
 }
-

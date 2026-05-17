@@ -8,6 +8,7 @@ use App\Models\AttendanceDevice;
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\Holiday;
+use App\Support\EmployeePinLookup;
 use App\Models\LeaveApplication;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -304,13 +305,14 @@ class ZKTecoAPIController extends Controller
             return false;
         }
 
-        // Find employee by employee_id
-        $employee = Employee::where('employee_id', (string) $record['id'])->first();
+        // Match device PIN to DB pin/employee_id (leading zeros ignored, e.g. device "95" → "0095")
+        $employee = EmployeePinLookup::findEmployee((string) $record['id']);
 
         // Log the employee lookup details for debugging
         Log::info('ZKTeco sync: Employee lookup details', [
             'record_id' => $record['id'],
             'record_id_type' => gettype($record['id']),
+            'pin_variants' => EmployeePinLookup::variants((string) $record['id']),
             'employee_found' => ($employee !== null)
         ]);
 
@@ -386,13 +388,14 @@ class ZKTecoAPIController extends Controller
      */
     private function processAgentRecord($record, $device)
     {
-        // Find employee by employee_id
-        $employee = Employee::where('employee_id', (string) $record['id'])->first();
+        // Match device PIN to DB pin/employee_id (leading zeros ignored, e.g. device "95" → "0095")
+        $employee = EmployeePinLookup::findEmployee((string) $record['id']);
 
         // Log the employee lookup details for debugging
         Log::info('ZKTeco sync: Employee lookup details', [
             'record_id' => $record['id'],
             'record_id_type' => gettype($record['id']),
+            'pin_variants' => EmployeePinLookup::variants((string) $record['id']),
             'employee_found' => ($employee !== null)
         ]);
 
@@ -1370,8 +1373,7 @@ class ZKTecoAPIController extends Controller
                 continue;
             }
 
-            // Find employee by employee_id - ensure string comparison
-            $employee = Employee::where('employee_id', (string) $user['id'])->first();
+            $employee = EmployeePinLookup::findEmployee((string) $user['id']);
             if (!$employee) {
                 $skipped++;
                 continue;

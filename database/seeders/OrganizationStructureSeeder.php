@@ -179,4 +179,3 @@ class OrganizationStructureSeeder extends Seeder
         }
     }
 }
-

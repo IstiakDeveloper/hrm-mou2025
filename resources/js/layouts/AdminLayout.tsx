@@ -14,12 +14,14 @@ import {
     Bell,
     Activity,
     Award,
+    BriefcaseBusiness,
     CalendarDays,
     MapPin,
     Building2,
     ChevronsLeft,
     ArrowLeftRight,
     LayoutDashboard,
+    Wallet,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -129,6 +131,8 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
             ];
         case 'administration':
             return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
+        case 'payroll':
+            return [{ title: 'Payroll dashboard', path: '/sections/payroll', permission: 'payroll.view' }];
         default:
             return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
     }
@@ -261,6 +265,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'reports.view',
     ];
 
+    const payrollSectionDashboardAny: string[] = [
+        'payroll.view',
+        'payroll.create',
+        'payroll.edit',
+        'admin.access',
+    ];
+
     // Organized Menu Structure with EXACT permission names matching web.php
     const baseMenuItems = useMemo<MenuItemType[]>(
         () => [
@@ -355,6 +366,37 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 { title: 'All Holidays', path: '/holidays', permission: 'holidays.view' },
                 { title: 'Holiday Calendar', path: '/holidays/calendar', permission: 'holidays.view' },
             ]
+        },
+        {
+            title: 'Payroll Setup',
+            icon: <BriefcaseBusiness className="w-5 h-5" />,
+            path: '/payscales',
+            hasSubmenu: true,
+            permission: 'payroll.view',
+            hrOnly: true,
+            submenu: [
+                { title: 'Payscales', path: '/payscales', permission: 'payroll.view' },
+                { title: 'Grades', path: '/salary-grades', permission: 'payroll.view' },
+                { title: 'Steps', path: '/salary-steps', permission: 'payroll.view' },
+                { title: 'Salary Components', path: '/salary-heads', permission: 'payroll.view' },
+                { title: 'Salary Structure', path: '/salary-structures/manual', permission: 'payroll.view' },
+                { title: 'Branch Wise Bank', path: '/branch-payroll-banks', permission: 'payroll.view' },
+            ],
+        },
+        {
+            title: 'Salary',
+            icon: <Wallet className="w-5 h-5" />,
+            path: '/salary-process',
+            hasSubmenu: true,
+            permission: 'payroll.view',
+            hrOnly: true,
+            submenu: [
+                { title: 'Head Modification', path: '/salary-head-modifications', permission: 'payroll.view' },
+                { title: 'Salary Withheld', path: '/salary-withheld', permission: 'payroll.view' },
+                { title: 'Salary Process', path: '/salary-process', permission: 'payroll.view' },
+                { title: 'Salary Post', path: '/salary-post', permission: 'payroll.view' },
+                { title: 'Salary Rollback', path: '/salary-rollback', permission: 'payroll.view' },
+            ],
         },
         {
             title: 'User Management',
@@ -470,6 +512,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             case 'administration':
                 return hasAnyDashboardPerm(administrationSectionDashboardAny)
                     ? [{ title: 'Administration', path: '/sections/administration' }]
+                    : [];
+            case 'payroll':
+                return hasAnyDashboardPerm(payrollSectionDashboardAny)
+                    ? [{ title: 'Payroll', path: '/sections/payroll' }]
                     : [];
             default:
                 return [];

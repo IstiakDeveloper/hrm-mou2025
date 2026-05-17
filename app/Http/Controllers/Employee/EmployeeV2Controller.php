@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Employee;
 
+use App\Http\Concerns\EmployedEmployeeUniqueIdentifiers;
 use App\Http\Concerns\ResolvesEmployeeNidSmartCard;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
@@ -25,6 +26,7 @@ use Inertia\Inertia;
 
 class EmployeeV2Controller extends Controller
 {
+    use EmployedEmployeeUniqueIdentifiers;
     use ResolvesEmployeeNidSmartCard;
 
     /** Default role name used for employee user accounts. */
@@ -363,7 +365,7 @@ class EmployeeV2Controller extends Controller
             $validated = $request->validate([
                 'current_branch_id' => 'required|exists:branches,id',
                 'employee_type_id' => 'nullable|exists:employee_types,id',
-                'pin' => 'required|string|max:20|unique:employees,pin',
+                'pin' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('pin')],
 
                 'name_en' => 'required|string|max:255',
                 'name_bn' => 'nullable|string|max:255',
@@ -393,9 +395,9 @@ class EmployeeV2Controller extends Controller
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
 
-                'nid' => 'nullable|string|max:50|unique:employees,nid',
+                'nid' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid')],
                 'nid_number' => 'nullable|string|max:50',
-                'smart_card_number' => 'nullable|string|max:50',
+                'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number')],
                 'birth_registration_number' => 'nullable|string|max:50',
                 'tin_certificate_no' => 'nullable|string|max:50',
                 'driving_license_no' => 'nullable|string|max:50',
@@ -406,7 +408,7 @@ class EmployeeV2Controller extends Controller
                 'identification_mark' => 'nullable|string|max:255',
 
                 'email' => 'nullable|email',
-                'mobile_personal' => 'required|string|max:20',
+                'mobile_personal' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('mobile_personal')],
                 'mobile_official' => 'nullable|string|max:20',
                 'phone' => 'nullable|string|max:20',
                 'email_id' => 'nullable|email',
@@ -809,7 +811,7 @@ class EmployeeV2Controller extends Controller
             $validated = $request->validate([
                 'current_branch_id' => 'required|exists:branches,id',
                 'employee_type_id' => 'nullable|exists:employee_types,id',
-                'pin' => 'required|string|max:20|unique:employees,pin,'.$employee->id,
+                'pin' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('pin', $employee->id)],
                 'name_en' => 'required|string|max:255',
                 'name_bn' => 'nullable|string|max:255',
                 'gender' => 'nullable|string|max:20',
@@ -832,9 +834,9 @@ class EmployeeV2Controller extends Controller
                 'last_designation_id' => 'nullable|exists:designations,id',
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
-                'nid' => 'nullable|string|max:50|unique:employees,nid,'.$employee->id,
+                'nid' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid', $employee->id)],
                 'nid_number' => 'nullable|string|max:50',
-                'smart_card_number' => 'nullable|string|max:50',
+                'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number', $employee->id)],
                 'birth_registration_number' => 'nullable|string|max:50',
                 'tin_certificate_no' => 'nullable|string|max:50',
                 'driving_license_no' => 'nullable|string|max:50',
@@ -843,7 +845,7 @@ class EmployeeV2Controller extends Controller
                 'is_custodian' => 'nullable|boolean',
                 'identification_mark' => 'nullable|string|max:255',
                 'email' => 'nullable|email',
-                'mobile_personal' => 'required|string|max:20',
+                'mobile_personal' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('mobile_personal', $employee->id)],
                 'mobile_official' => 'nullable|string|max:20',
                 'phone' => 'nullable|string|max:20',
                 'email_id' => 'nullable|email',

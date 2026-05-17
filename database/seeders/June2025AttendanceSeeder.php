@@ -2,12 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Employee;
 use App\Models\Attendance;
 use App\Models\AttendanceDevice;
+use App\Models\Employee;
 use App\Models\LeaveApplication;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -27,12 +27,13 @@ class June2025AttendanceSeeder extends Seeder
 
         if ($employees->isEmpty()) {
             $this->command->warn('No active employees found!');
+
             return;
         }
 
         // Get first attendance device (or create a dummy one)
         $device = AttendanceDevice::first();
-        if (!$device) {
+        if (! $device) {
             $this->command->warn('No attendance device found! Creating a dummy device.');
             $device = $this->createDummyDevice();
         }
@@ -41,7 +42,7 @@ class June2025AttendanceSeeder extends Seeder
         $daysInMonth = Carbon::create($year, $month, 1)->daysInMonth;
 
         $this->command->info("Generating attendance data for June $year ($daysInMonth days)");
-        $this->command->info("Total employees: " . $employees->count());
+        $this->command->info('Total employees: '.$employees->count());
 
         // Progress bar
         $bar = $this->command->getOutput()->createProgressBar($employees->count() * $daysInMonth);
@@ -56,6 +57,7 @@ class June2025AttendanceSeeder extends Seeder
                 // Skip if it's a weekend (Only Friday in Bangladesh)
                 if ($date->isFriday()) {
                     $bar->advance();
+
                     continue;
                 }
 
@@ -113,12 +115,14 @@ class June2025AttendanceSeeder extends Seeder
         // Handle leave status
         if ($isOnLeave) {
             $attendance['status'] = 'leave';
+
             return $attendance;
         }
 
         // Handle movement status
         if ($isOnMovement) {
             $attendance['status'] = 'on_duty';
+
             // You can add movement_id here if needed
             return $attendance;
         }
@@ -128,6 +132,7 @@ class June2025AttendanceSeeder extends Seeder
 
         if ($attendancePattern === 'absent') {
             $attendance['status'] = 'absent';
+
             return $attendance;
         }
 
@@ -267,7 +272,7 @@ class June2025AttendanceSeeder extends Seeder
         $dateObj = Carbon::parse($date);
 
         // Check if Movement model exists
-        if (!class_exists('\App\Models\Movement')) {
+        if (! class_exists('\App\Models\Movement')) {
             return false;
         }
 
@@ -291,7 +296,7 @@ class June2025AttendanceSeeder extends Seeder
         } catch (\Exception $e) {
             Log::error('Error creating attendance record', [
                 'data' => $attendanceData,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -314,5 +319,3 @@ class June2025AttendanceSeeder extends Seeder
         ]);
     }
 }
-
-

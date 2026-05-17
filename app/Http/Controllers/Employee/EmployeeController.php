@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Employee;
 
+use App\Http\Concerns\EmployedEmployeeUniqueIdentifiers;
 use App\Http\Concerns\ResolvesEmployeeNidSmartCard;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
@@ -11,8 +12,11 @@ use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\EmployeeType;
 use App\Models\LocationVillage;
+use App\Models\Payscale;
 use App\Models\Program;
 use App\Models\Project;
+use App\Models\SalaryGrade;
+use App\Models\SalaryStep;
 use App\Models\RegionalOffice;
 use App\Models\Role;
 use App\Models\User;
@@ -33,6 +37,7 @@ use Inertia\Inertia;
 
 class EmployeeController extends Controller
 {
+    use EmployedEmployeeUniqueIdentifiers;
     use ResolvesEmployeeNidSmartCard;
 
     private const EMPLOYEE_IMPORT_MAX_ROWS = 5000;
@@ -330,6 +335,70 @@ class EmployeeController extends Controller
     /**
      * Normalize empty strings to null so nullable unique columns (e.g. nid) and FKs do not break inserts.
      */
+    /**
+     * @return array{payscales: \Illuminate\Support\Collection, payrollGrades: \Illuminate\Support\Collection, payrollSteps: \Illuminate\Support\Collection}
+     */
+    private function employeePayrollFormOptions(): array
+    {
+        return [
+            'payscales' => Payscale::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'payrollGrades' => SalaryGrade::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('code')
+                ->get(['id', 'payscale_id', 'code', 'name']),
+            'payrollSteps' => SalaryStep::query()
+                ->where('is_active', true)
+                ->orderBy('step_number')
+                ->get(['id', 'salary_grade_id', 'step_number', 'basic_salary']),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function assertEmployeePayrollAssignment(array &$validated): void
+    {
+        $payscaleId = $validated['payscale_id'] ?? null;
+        $gradeId = $validated['salary_grade_id'] ?? null;
+        $stepId = $validated['salary_step_id'] ?? null;
+
+        $validated['payscale_id'] = $payscaleId ?: null;
+        $validated['salary_grade_id'] = $gradeId ?: null;
+        $validated['salary_step_id'] = $stepId ?: null;
+
+        if (! $payscaleId && ! $gradeId && ! $stepId) {
+            return;
+        }
+
+        if (! $payscaleId || ! $gradeId || ! $stepId) {
+            throw ValidationException::withMessages([
+                'salary_step_id' => 'Select payscale, grade, and step together, or leave all blank.',
+            ]);
+        }
+
+        $grade = SalaryGrade::query()->find($gradeId);
+        if (! $grade || (int) $grade->payscale_id !== (int) $payscaleId) {
+            throw ValidationException::withMessages([
+                'salary_grade_id' => 'Grade does not belong to the selected payscale.',
+            ]);
+        }
+
+        $step = SalaryStep::query()->find($stepId);
+        if (! $step || (int) $step->salary_grade_id !== (int) $gradeId) {
+            throw ValidationException::withMessages([
+                'salary_step_id' => 'Step does not belong to the selected grade.',
+            ]);
+        }
+
+        if (empty($validated['basic_salary']) && $step->basic_salary !== null) {
+            $validated['basic_salary'] = $step->basic_salary;
+        }
+    }
+
     private function normalizeEmployeeRequestPayload(Request $request): void
     {
         $nullableEmptiesToNull = [
@@ -341,6 +410,7 @@ class EmployeeController extends Controller
             'marital_status', 'spouse_name', 'spouse_mobile',
             'dropout_date', 'dropout_reason', 'final_payment_date', 'last_promotion_date',
             'reporting_to', 'last_branch_id',
+            'payscale_id', 'salary_grade_id', 'salary_step_id', 'basic_salary',
         ];
 
         foreach ($nullableEmptiesToNull as $field) {
@@ -947,6 +1017,9 @@ class EmployeeController extends Controller
             })
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
+            })
+            ->when($request->employee_type_id, function ($query, $employeeTypeId) {
+                $query->where('employee_type_id', $employeeTypeId);
             });
 
         $perPage = (int) $request->get('per_page', 10);
@@ -968,11 +1041,14 @@ class EmployeeController extends Controller
             ? Branch::query()->orderBy('name')->get()
             : Branch::query()->whereIn('id', $branchIds)->orderBy('name')->get();
 
+        $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get();
+
         return Inertia::render('employee/index', [
             'employees' => $employees,
             'departments' => $departments,
             'branches' => $branches,
-            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status', 'per_page']),
+            'employee_types' => $employeeTypes,
+            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status', 'employee_type_id', 'per_page']),
         ]);
     }
 
@@ -1038,6 +1114,7 @@ class EmployeeController extends Controller
             'locations' => $locations,
             'defaultBankName' => 'Prime Bank PLC',
             'documentTypes' => $this->employeeTabDocumentTypes(),
+            ...$this->employeePayrollFormOptions(),
         ]);
     }
 
@@ -1066,7 +1143,7 @@ class EmployeeController extends Controller
                 // Tab 1
                 'current_branch_id' => 'required|exists:branches,id',
                 'employee_type_id' => 'nullable|exists:employee_types,id',
-                'pin' => 'required|string|max:20|unique:employees,pin',
+                'pin' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('pin')],
 
                 'name_en' => 'required|string|max:255',
                 'name_bn' => 'nullable|string|max:255',
@@ -1097,9 +1174,9 @@ class EmployeeController extends Controller
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
 
-                'nid' => 'nullable|string|max:50|unique:employees,nid',
+                'nid' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid')],
                 'nid_number' => 'nullable|string|max:50',
-                'smart_card_number' => 'nullable|string|max:50',
+                'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number')],
                 'birth_registration_number' => 'nullable|string|max:50',
                 'tin_certificate_no' => 'nullable|string|max:50',
                 'driving_license_no' => 'nullable|string|max:50',
@@ -1113,8 +1190,13 @@ class EmployeeController extends Controller
                 'email' => 'nullable|email',
                 'email_id' => 'nullable|email',
                 'phone' => 'nullable|string|max:20',
-                'mobile_personal' => 'required|string|max:20',
+                'mobile_personal' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('mobile_personal')],
                 'mobile_official' => 'nullable|string|max:20',
+
+                'payscale_id' => 'nullable|exists:payscales,id',
+                'salary_grade_id' => 'nullable|exists:salary_grades,id',
+                'salary_step_id' => 'nullable|exists:salary_steps,id',
+                'basic_salary' => 'nullable|numeric|min:0',
 
                 // Nested tab payloads
                 'addresses' => 'nullable|array',
@@ -1220,6 +1302,8 @@ class EmployeeController extends Controller
                     'spouse_mobile' => 'required|string|max:20',
                 ]);
             }
+
+            $this->assertEmployeePayrollAssignment($validated);
 
             if (empty($validated['last_designation_id'])) {
                 $validated['last_designation_id'] = $validated['joining_designation_id'];
@@ -1576,6 +1660,7 @@ class EmployeeController extends Controller
             'locations' => $locations,
             'defaultBankName' => 'Prime Bank PLC',
             'documentTypes' => $this->employeeTabDocumentTypes(),
+            ...$this->employeePayrollFormOptions(),
         ]);
     }
 
@@ -1592,7 +1677,7 @@ class EmployeeController extends Controller
                 // Tab 1
                 'current_branch_id' => 'required|exists:branches,id',
                 'employee_type_id' => 'nullable|exists:employee_types,id',
-                'pin' => 'required|string|max:20|unique:employees,pin,'.$employee->id,
+                'pin' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('pin', $employee->id)],
 
                 'name_en' => 'required|string|max:255',
                 'name_bn' => 'nullable|string|max:255',
@@ -1623,9 +1708,9 @@ class EmployeeController extends Controller
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
 
-                'nid' => 'nullable|string|max:50|unique:employees,nid,'.$employee->id,
+                'nid' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid', $employee->id)],
                 'nid_number' => 'nullable|string|max:50',
-                'smart_card_number' => 'nullable|string|max:50',
+                'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number', $employee->id)],
                 'birth_registration_number' => 'nullable|string|max:50',
                 'tin_certificate_no' => 'nullable|string|max:50',
                 'driving_license_no' => 'nullable|string|max:50',
@@ -1639,8 +1724,13 @@ class EmployeeController extends Controller
                 'email' => 'nullable|email',
                 'email_id' => 'nullable|email',
                 'phone' => 'nullable|string|max:20',
-                'mobile_personal' => 'required|string|max:20',
+                'mobile_personal' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('mobile_personal', $employee->id)],
                 'mobile_official' => 'nullable|string|max:20',
+
+                'payscale_id' => 'nullable|exists:payscales,id',
+                'salary_grade_id' => 'nullable|exists:salary_grades,id',
+                'salary_step_id' => 'nullable|exists:salary_steps,id',
+                'basic_salary' => 'nullable|numeric|min:0',
 
                 // Nested tab payloads
                 'addresses' => 'nullable|array',
@@ -1741,6 +1831,8 @@ class EmployeeController extends Controller
                 'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
                 'signature' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
             ]);
+
+            $this->assertEmployeePayrollAssignment($validated);
 
             if (empty($validated['last_designation_id'])) {
                 $validated['last_designation_id'] = $validated['joining_designation_id'];
@@ -1997,7 +2089,8 @@ class EmployeeController extends Controller
                 $this->syncEmployeeDocumentsFromTabbedForm($request, $employee, false);
             });
 
-            return redirect()->route('employees.index')
+            return redirect()
+                ->route('employees.edit', $employee)
                 ->with('success', 'Employee updated successfully.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             throw $e;
@@ -2297,13 +2390,20 @@ class EmployeeController extends Controller
         $pins = array_values(array_unique($pins));
         $emails = array_values(array_unique($emails));
 
+        $employedStatuses = Employee::statusesReservingUniqueIdentifiers();
+
         $existingPins = [];
         if (count($pins) > 0) {
             $existingPins = Employee::query()
+                ->whereIn('status', $employedStatuses)
                 ->whereIn('pin', $pins)
-                ->orWhereIn('employee_id', $pins)
                 ->pluck('pin')
-                ->merge(Employee::query()->whereIn('employee_id', $pins)->pluck('employee_id'))
+                ->merge(
+                    Employee::query()
+                        ->whereIn('status', $employedStatuses)
+                        ->whereIn('employee_id', $pins)
+                        ->pluck('employee_id')
+                )
                 ->filter()
                 ->map(fn ($v) => (string) $v)
                 ->unique()
@@ -2314,7 +2414,11 @@ class EmployeeController extends Controller
 
         $existingEmailSet = [];
         if (count($emails) > 0) {
-            $existingEmails = Employee::query()->whereIn('email', $emails)->pluck('email')->all();
+            $existingEmails = Employee::query()
+                ->whereIn('status', $employedStatuses)
+                ->whereIn('email', $emails)
+                ->pluck('email')
+                ->all();
             $existingEmailSet = array_fill_keys(array_map('strtolower', $existingEmails), true);
         }
 
@@ -2432,6 +2536,8 @@ class EmployeeController extends Controller
         $rowErrors = [];
         $createdByBranchId = [];
 
+        $employedStatuses = Employee::statusesReservingUniqueIdentifiers();
+
         DB::beginTransaction();
         try {
             foreach ($validated['rows'] as $idx => $row) {
@@ -2440,10 +2546,15 @@ class EmployeeController extends Controller
                 $email = trim((string) $row['email']);
 
                 $errors = [];
-                if (Employee::where('pin', $pin)->orWhere('employee_id', $pin)->exists()) {
+                if (Employee::query()
+                    ->whereIn('status', $employedStatuses)
+                    ->where(function ($q) use ($pin) {
+                        $q->where('pin', $pin)->orWhere('employee_id', $pin);
+                    })
+                    ->exists()) {
                     $errors[] = 'Duplicate PIN/Employee ID';
                 }
-                if (Employee::where('email', $email)->exists()) {
+                if (Employee::query()->whereIn('status', $employedStatuses)->where('email', $email)->exists()) {
                     $errors[] = 'Duplicate email';
                 }
                 if (User::where('email', $email)->exists()) {

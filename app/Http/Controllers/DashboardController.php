@@ -12,8 +12,15 @@ use App\Models\EmployeeType;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
+use App\Models\BranchPayrollBank;
 use App\Models\Movement;
+use App\Models\Payscale;
 use App\Models\Program;
+use App\Models\SalaryGrade;
+use App\Models\SalaryHead;
+use App\Models\SalaryStep;
+use App\Models\PayrollRun;
+use App\Models\SalaryStructure;
 use App\Models\Project;
 use App\Models\RegionalOffice;
 use App\Models\Role;
@@ -216,6 +223,47 @@ class DashboardController extends Controller
             'userCount' => $userCount,
             'roleCount' => $roleCount,
             'recentUsers' => $recentUsers,
+            'userRole' => $role?->name ?? 'User',
+        ]);
+    }
+
+    /**
+     * Payroll section dashboard — master data setup overview.
+     */
+    public function payrollSection(Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+
+        /** @var User $user */
+        $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        if (! $hasPermission($user, 'payroll.view') && ! $hasPermission($user, 'admin.access')) {
+            abort(403);
+        }
+
+        $roles = $user->roles;
+        $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
+
+        $branchCount = Branch::query()->count();
+        $mappedBranches = BranchPayrollBank::query()->count();
+
+        return Inertia::render('sections/payroll/dashboard', [
+            'stats' => [
+                'payscales' => Payscale::query()->count(),
+                'grades' => SalaryGrade::query()->count(),
+                'steps' => SalaryStep::query()->count(),
+                'heads' => SalaryHead::query()->count(),
+                'structures' => SalaryStructure::query()->count(),
+                'branchBanks' => $mappedBranches,
+                'branchesUnmapped' => max(0, $branchCount - $mappedBranches),
+                'processedRuns' => PayrollRun::query()->where('status', 'processed')->count(),
+                'postedRuns' => PayrollRun::query()->where('status', 'posted')->count(),
+            ],
             'userRole' => $role?->name ?? 'User',
         ]);
     }

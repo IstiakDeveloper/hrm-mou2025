@@ -74,6 +74,16 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     { label: 'Roles', href: '/admin/roles' },
                     { label: 'Reports overview', href: '/reports' },
                 ];
+            case 'payroll':
+                return [
+                    { label: 'Payroll dashboard', href: '/sections/payroll' },
+                    { label: 'Payscales', href: '/payscales' },
+                    { label: 'Grades', href: '/salary-grades' },
+                    { label: 'Steps', href: '/salary-steps' },
+                    { label: 'Salary Heads', href: '/salary-heads' },
+                    { label: 'Salary Structure (manual)', href: '/salary-structures/manual' },
+                    { label: 'Branch Wise Bank', href: '/branch-payroll-banks' },
+                ];
             default:
                 return [];
         }
