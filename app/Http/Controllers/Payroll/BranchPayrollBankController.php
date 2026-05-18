@@ -47,6 +47,7 @@ class BranchPayrollBankController extends Controller
         return Inertia::render('payroll/branch-payroll-banks/create', [
             'branches' => Branch::query()
                 ->whereNotIn('id', $assigned)
+                ->orderBy('branch_code')
                 ->orderBy('name')
                 ->get(['id', 'name', 'branch_code']),
             'banks' => $this->bankList(),

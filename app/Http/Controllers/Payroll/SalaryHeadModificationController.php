@@ -29,12 +29,19 @@ class SalaryHeadModificationController extends Controller
         $rows = [];
         $searched = $request->boolean('searched');
 
-        if ($searched && $request->filled('salary_head_id') && $request->filled('effective_from')) {
+        if ($searched) {
+            if (! $request->filled('salary_head_id')) {
+                throw ValidationException::withMessages(['salary_head_id' => 'Select a salary component.']);
+            }
+            if (! $request->filled('effective_from')) {
+                throw ValidationException::withMessages(['effective_from' => 'Select an effective from date.']);
+            }
+
             $head = SalaryHead::findOrFail($request->integer('salary_head_id'));
             $asOf = PayrollFormHelper::parseDisplayDate($request->input('effective_from'))
-                ?? throw ValidationException::withMessages(['effective_from' => 'Invalid date.']);
+                ?? throw ValidationException::withMessages(['effective_from' => 'Invalid date. Use dd-mm-yyyy.']);
 
-            $employees = $this->applyPayrollEmployeeFilters(Employee::query(), $request)
+            $employees = $this->applyPayrollEmployeeFilters(Employee::query(), $request, payrollReadyOnly: true)
                 ->with(['department', 'designation', 'branch', 'project', 'payscale', 'salaryGrade', 'salaryStep'])
                 ->orderBy('pin')
                 ->get();
@@ -48,6 +55,15 @@ class SalaryHeadModificationController extends Controller
                 ->get()
                 ->unique('employee_id')
                 ->keyBy('employee_id');
+
+            if ($employees->isEmpty()) {
+                return Inertia::render('payroll/head-modifications/index', [
+                    ...$this->payrollFilterOptions(payrollReadyEmployeesOnly: true),
+                    'filters' => array_merge($filters, ['searched' => $searched]),
+                    'rows' => [],
+                    'searchNotice' => 'No active employees with payscale, grade, and step match your filters.',
+                ]);
+            }
 
             foreach ($employees as $employee) {
                 $preview = $this->calculator->previewHeadValue($employee, $head, $asOf);
@@ -69,9 +85,10 @@ class SalaryHeadModificationController extends Controller
         }
 
         return Inertia::render('payroll/head-modifications/index', [
-            ...$this->payrollFilterOptions(),
+            ...$this->payrollFilterOptions(payrollReadyEmployeesOnly: true),
             'filters' => array_merge($filters, ['searched' => $searched]),
             'rows' => $rows,
+            'searchNotice' => null,
         ]);
     }
 

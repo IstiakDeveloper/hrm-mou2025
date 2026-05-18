@@ -323,13 +323,13 @@ class AttendanceExportController extends Controller
         }
 
         // Apply branch filter if provided and user has permission
-        if ($request->branch_id && ($user->hasPermission('admin') || $user->hasPermission('branch_manager'))) {
+        if ($request->branch_id && ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager'))) {
             $query->where('employees.current_branch_id', $request->branch_id);
         }
 
         // Apply department filter if provided and user has permission
         if ($request->department_id &&
-            ($user->hasPermission('admin') || $user->hasPermission('branch_manager') || $user->hasPermission('department_head'))) {
+            ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager') || $user->hasPermission('department_head'))) {
             $query->where('employees.department_id', $request->department_id);
         }
 

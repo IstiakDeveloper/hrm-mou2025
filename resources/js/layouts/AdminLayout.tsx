@@ -22,6 +22,12 @@ import {
     ArrowLeftRight,
     LayoutDashboard,
     Wallet,
+    Boxes,
+    ArrowRightLeft,
+    UserCheck,
+    Wrench,
+    Trash2,
+    TrendingDown,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -54,6 +60,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import NotificationDropdown from '@/components/notification-dropdown';
 import { hasAppPermission } from '@/lib/permissions';
 import { getActiveSectionId, getMenuTitlesForSection, getSectionById, type AdminSectionId } from '@/lib/admin-sections';
+import { FIXED_ASSET_REPORT_NAV, fixedAssetReportPath } from '@/lib/fixed-asset-reports';
 import {
     Dialog,
     DialogContent,
@@ -79,6 +86,8 @@ interface MenuItemType {
     hasSubmenu: boolean;
     permission?: string;
     hrOnly?: boolean;
+    /** Visible only when the logged-in user has a linked employee profile. */
+    employeeOnly?: boolean;
     submenu?: {
         title: string;
         path: string;
@@ -132,7 +141,30 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
         case 'administration':
             return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
         case 'payroll':
-            return [{ title: 'Payroll dashboard', path: '/sections/payroll', permission: 'payroll.view' }];
+            return [
+                { title: 'Grade Step Calculation Report', path: '/payroll/reports/grade-step-calculation', permission: 'payroll.view' },
+                { title: 'Salary Sheet (Posted)', path: '/payroll/reports/salary-sheet-posted', permission: 'payroll.view' },
+                { title: 'Salary Sheet (Un-posted)', path: '/payroll/reports/salary-sheet-unposted', permission: 'payroll.view' },
+                { title: 'Salary Sheet (Employee Wise Posted)', path: '/payroll/reports/salary-sheet-employee-posted', permission: 'payroll.view' },
+                { title: 'Salary Sheet (Employee Wise Unposted)', path: '/payroll/reports/salary-sheet-employee-unposted', permission: 'payroll.view' },
+                { title: 'Salary Sheet (Date Range)', path: '/payroll/reports/salary-sheet-date-range', permission: 'payroll.view' },
+                { title: 'Salary Sheet Report (Branch Wise)', path: '/payroll/reports/salary-sheet-branch-wise', permission: 'payroll.view' },
+                { title: 'Salary Sheet Report (Month Wise)', path: '/payroll/reports/salary-sheet-month-wise', permission: 'payroll.view' },
+                { title: 'Salary Sheet Report (Designation Wise)', path: '/payroll/reports/salary-sheet-designation-wise', permission: 'payroll.view' },
+                { title: 'Bank Advice Report', path: '/payroll/reports/bank-advice', permission: 'payroll.view' },
+                { title: 'Bank Advice Bonus Report', path: '/payroll/reports/bank-advice-bonus', permission: 'payroll.view' },
+                { title: 'Salary Addition Register', path: '/payroll/reports/addition-register', permission: 'payroll.view' },
+                { title: 'Salary Deduction Register', path: '/payroll/reports/deduction-register', permission: 'payroll.view' },
+                { title: 'Advance Salary Report', path: '/payroll/reports/advance-salary', permission: 'payroll.view' },
+                { title: 'Bonus Register', path: '/payroll/reports/bonus-register', permission: 'payroll.view' },
+                { title: 'Salary Certificate', path: '/payroll/reports/salary-certificate', permission: 'payroll.view' },
+            ];
+        case 'fixed-asset':
+            return FIXED_ASSET_REPORT_NAV.map((r) => ({
+                title: r.title,
+                path: fixedAssetReportPath(r.slug),
+                permission: 'fixed-assets.view',
+            }));
         default:
             return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
     }
@@ -152,6 +184,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     // Get current path for highlighting active menu
     const currentPath = window.location.pathname;
+    const currentSearch = window.location.search;
     const activeSectionId = getActiveSectionId(window.location);
     const activeSection = getSectionById(activeSectionId);
     const employee = auth?.employee;
@@ -195,7 +228,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'admin.access',
     ].some((p) => hasPermission(p));
 
-    const canCloseOwnMovement = Boolean(activeMovement?.id && auth?.employee?.id && activeMovement.employee_id === auth.employee.id);
+    const canCloseOwnMovement = Boolean(
+        activeMovement?.id
+        && auth?.employee?.id
+        && activeMovement.employee_id === auth.employee.id
+        && hasPermission('movements.complete')
+    );
 
     const openCloseMovementDialog = (movementId?: number) => {
         setCloseError(null);
@@ -272,6 +310,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'admin.access',
     ];
 
+    const fixedAssetSectionDashboardAny: string[] = [
+        'fixed-assets.view',
+        'fixed-assets.create',
+        'fixed-assets.edit',
+        'admin.access',
+    ];
+
     // Organized Menu Structure with EXACT permission names matching web.php
     const baseMenuItems = useMemo<MenuItemType[]>(
         () => [
@@ -280,6 +325,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             icon: <Bell className="w-5 h-5" />,
             path: '/my-notices',
             hasSubmenu: false,
+        },
+        {
+            title: 'My Assets',
+            icon: <Boxes className="w-5 h-5" />,
+            path: '/my-assets',
+            hasSubmenu: false,
+            employeeOnly: true,
         },
         {
             title: 'Employee Management',
@@ -384,6 +436,22 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             ],
         },
         {
+            title: 'Bonus',
+            icon: <Award className="w-5 h-5" />,
+            path: '/bonus-types',
+            hasSubmenu: true,
+            permission: 'payroll.view',
+            hrOnly: true,
+            submenu: [
+                { title: 'Bonus Type', path: '/bonus-types', permission: 'payroll.view' },
+                { title: 'Bonus Configuration', path: '/bonus-configurations', permission: 'payroll.view' },
+                { title: 'Bonus Calculation', path: '/bonus-calculation', permission: 'payroll.view' },
+                { title: 'Bonus Withheld', path: '/salary-withheld?salary_type=bonus', permission: 'payroll.view' },
+                { title: 'Bonus Post', path: '/bonus-post', permission: 'payroll.view' },
+                { title: 'Bonus Rollback', path: '/salary-rollback?salary_type=bonus', permission: 'payroll.view' },
+            ],
+        },
+        {
             title: 'Salary',
             icon: <Wallet className="w-5 h-5" />,
             path: '/salary-process',
@@ -397,6 +465,51 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 { title: 'Salary Post', path: '/salary-post', permission: 'payroll.view' },
                 { title: 'Salary Rollback', path: '/salary-rollback', permission: 'payroll.view' },
             ],
+        },
+        {
+            title: 'Asset Setup',
+            icon: <Boxes className="w-5 h-5" />,
+            path: '/asset-categories',
+            hasSubmenu: false,
+            permission: 'fixed-assets.view',
+            hrOnly: true,
+        },
+        {
+            title: 'Asset Register',
+            icon: <Boxes className="w-5 h-5" />,
+            path: '/fixed-assets',
+            hasSubmenu: false,
+            permission: 'fixed-assets.view',
+            hrOnly: true,
+        },
+        {
+            title: 'Asset Operations',
+            icon: <Wrench className="w-5 h-5" />,
+            path: '/asset-assignments',
+            hasSubmenu: true,
+            permission: 'fixed-assets.view',
+            hrOnly: true,
+            submenu: [
+                { title: 'Employee Assignments', path: '/asset-assignments', permission: 'fixed-assets.view' },
+                { title: 'Maintenance Log', path: '/asset-maintenances', permission: 'fixed-assets.view' },
+                { title: 'Disposal Requests', path: '/asset-disposals', permission: 'fixed-assets.view' },
+            ],
+        },
+        {
+            title: 'Asset Transfers',
+            icon: <ArrowRightLeft className="w-5 h-5" />,
+            path: '/asset-transfers',
+            hasSubmenu: false,
+            permission: 'fixed-assets.view',
+            hrOnly: true,
+        },
+        {
+            title: 'Depreciation',
+            icon: <TrendingDown className="w-5 h-5" />,
+            path: '/asset-depreciation',
+            hasSubmenu: false,
+            permission: 'fixed-assets.view',
+            hrOnly: true,
         },
         {
             title: 'User Management',
@@ -450,10 +563,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         if (!titles) {
             return menuItemsForLayout;
         }
-        return titles
+        const globalTitles = ['My Notices', ...(employee?.id ? (['My Assets'] as const) : [])];
+        const mergedTitles = [...globalTitles, ...titles.filter((t) => !globalTitles.includes(t))];
+        return mergedTitles
             .map((title) => menuItemsForLayout.find((m) => m.title === title))
             .filter((x): x is MenuItemType => Boolean(x));
-    }, [activeSectionId, menuItemsForLayout]);
+    }, [activeSectionId, menuItemsForLayout, employee?.id]);
 
     /** All sidebar link paths — longest-prefix wins so /leave/applications does not swallow /leave/applications/report */
     const menuNavPaths = useMemo(() => {
@@ -472,16 +587,39 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const isActive = useCallback(
         (path: string) => {
-            if (!path || path === '/') return currentPath === path;
-            if (currentPath === path) return true;
-            const candidates = menuNavPaths.filter(
-                (p) => currentPath === p || (p !== '/' && currentPath.startsWith(p + '/')),
-            );
-            if (candidates.length === 0) return false;
+            const [pathBase, pathQuery] = path.split('?');
+            const expectedParams = pathQuery ? new URLSearchParams(pathQuery) : null;
+
+            const pathMatches = (base: string) =>
+                currentPath === base || (base !== '/' && currentPath.startsWith(`${base}/`));
+
+            if (!pathBase || pathBase === '/') {
+                return currentPath === pathBase;
+            }
+
+            if (pathMatches(pathBase)) {
+                if (!expectedParams) {
+                    return true;
+                }
+                const actual = new URLSearchParams(currentSearch);
+                for (const [key, value] of expectedParams) {
+                    if (actual.get(key) !== value) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            const candidates = menuNavPaths
+                .map((p) => p.split('?')[0])
+                .filter((base) => pathMatches(base));
+            if (candidates.length === 0) {
+                return false;
+            }
             const best = candidates.reduce((a, b) => (a.length >= b.length ? a : b));
-            return best === path;
+            return best === pathBase && !expectedParams;
         },
-        [currentPath, menuNavPaths],
+        [currentPath, currentSearch, menuNavPaths],
     );
 
     const hasAnyDashboardPerm = (perms: string[]) => perms.some((p) => hasPermission(p));
@@ -517,6 +655,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return hasAnyDashboardPerm(payrollSectionDashboardAny)
                     ? [{ title: 'Payroll', path: '/sections/payroll' }]
                     : [];
+            case 'fixed-asset':
+                return hasAnyDashboardPerm(fixedAssetSectionDashboardAny)
+                    ? [{ title: 'Fixed Asset', path: '/sections/fixed-asset' }]
+                    : [];
             default:
                 return [];
         }
@@ -536,6 +678,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
         if (item.hrOnly && !isHRUser) return null;
+        if (item.employeeOnly && !employee?.id) return null;
         if (item.permission && !hasPermission(item.permission)) return null;
 
         const permittedSubmenu = item.submenu?.filter(subItem =>
@@ -576,7 +719,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     )}
                 </button>
                 {isMenuOpen && (isSidebarOpen || isMobileSidebarOpen) && (
-                    <div className="ml-9 mt-1 space-y-0.5 border-l border-emerald-500/20 pl-4 py-1">
+                    <div
+                        className={cn(
+                            'ml-9 mt-1 space-y-0.5 border-l border-emerald-500/20 pl-4 py-1',
+                            (permittedSubmenu?.length ?? 0) > 8 &&
+                                'max-h-[min(320px,45vh)] overflow-y-auto overscroll-contain pr-1',
+                        )}
+                    >
                         {permittedSubmenu?.map((subItem, idx) => (
                             <Link
                                 key={idx}
@@ -685,6 +834,20 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     50% { transform: translate3d(2%, 1%, 0) scale(1.06); filter: saturate(1.15); opacity: 1; }
                     100% { transform: translate3d(-2%, -2%, 0) scale(1.02); filter: saturate(1.05); opacity: 0.95; }
                 }
+                .sidebar-nav-scroll {
+                    scrollbar-width: thin;
+                    scrollbar-color: rgba(16, 185, 129, 0.45) transparent;
+                }
+                .sidebar-nav-scroll::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .sidebar-nav-scroll::-webkit-scrollbar-thumb {
+                    background: rgba(16, 185, 129, 0.35);
+                    border-radius: 999px;
+                }
+                .sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
+                    background: rgba(16, 185, 129, 0.55);
+                }
             `}</style>
             <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
                 <div
@@ -703,7 +866,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <div className="relative z-10 flex flex-1 overflow-hidden">
                 {/* Sidebar */}
                 <aside
-                    className={`hidden md:flex flex-col bg-white/95 backdrop-blur border-r border-emerald-900/15 transition-all duration-300 z-20 shadow-sm relative ${isSidebarOpen ? 'w-[260px]' : 'w-[84px]'
+                    className={`hidden md:flex h-full min-h-0 shrink-0 flex-col bg-white/95 backdrop-blur border-r border-emerald-900/15 transition-all duration-300 z-20 shadow-sm relative ${isSidebarOpen ? 'w-[260px]' : 'w-[84px]'
                         }`}
                 >
                     {/* Toggle Button */}
@@ -715,7 +878,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </button>
 
                     {/* Sidebar Header */}
-                    <div className={`h-16 border-b border-emerald-900/10 bg-white/90 backdrop-blur flex items-center transition-all ${isSidebarOpen ? 'px-4 justify-start' : 'px-0 justify-center'}`}>
+                    <div className={`shrink-0 h-16 border-b border-emerald-900/10 bg-white/90 backdrop-blur flex items-center transition-all ${isSidebarOpen ? 'px-4 justify-start' : 'px-0 justify-center'}`}>
                         <Link href="/sections" className="flex items-center gap-3 min-w-0" title={!isSidebarOpen ? "Mousumi ERP" : undefined}>
                             <div className="bg-emerald-50 p-1.5 rounded-lg flex items-center justify-center border border-emerald-100 shrink-0">
                                 <img src="/logo.png" className="w-6 h-6 rounded-md object-contain" alt="Logo" />
@@ -729,8 +892,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </Link>
                     </div>
 
-                    {/* Sidebar Menu */}
-                    <ScrollArea className="flex-1 px-3 py-5">
+                    {/* Sidebar Menu — min-h-0 + overflow so long menus (e.g. Reports) scroll */}
+                    <div className="sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-5">
                         {sectionDashboardEntries.length > 0 && (
                             <div className={cn('mb-4', isSidebarOpen ? 'px-0' : 'px-0')}>
                                 {isSidebarOpen && (
@@ -780,10 +943,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 <MobileMenuItem key={idx} item={item} />
                             ))}
                         </nav>
-                    </ScrollArea>
+                    </div>
 
                     {/* Sidebar Footer - Logout */}
-                    <div className="p-4 border-t border-slate-200">
+                    <div className="shrink-0 p-4 border-t border-slate-200">
                         <Link
                             href="/logout"
                             method="post"
@@ -802,8 +965,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                 {/* Mobile Sidebar Sheet */}
                 <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-                    <SheetContent side="left" className="w-72 p-0 border-r-0 md:hidden bg-white text-slate-800">
-                        <div className="px-4 border-b border-slate-200 h-16 flex items-center justify-between">
+                    <SheetContent side="left" className="flex h-full max-h-[100dvh] w-72 flex-col gap-0 p-0 border-r-0 md:hidden bg-white text-slate-800">
+                        <div className="shrink-0 px-4 border-b border-slate-200 h-16 flex items-center justify-between">
                             <Link href="/sections" className="flex items-center gap-3">
                                 <div className="bg-emerald-50 p-1.5 rounded-lg flex items-center justify-center border border-emerald-100">
                                     <img src="/logo.png" className="w-6 h-6 rounded-md object-contain" alt="Logo" />
@@ -815,7 +978,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </Link>
                         </div>
 
-                        <ScrollArea className="h-[calc(100vh-130px)] px-3 py-5">
+                        <div className="sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-5">
                             {sectionDashboardEntries.length > 0 && (
                                 <div className="mb-4 px-0">
                                     <p className="mb-1.5 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dashboard</p>
@@ -849,9 +1012,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     <MobileMenuItem key={idx} item={item} />
                                 ))}
                             </nav>
-                        </ScrollArea>
+                        </div>
 
-                        <div className="p-4 border-t border-slate-200 absolute bottom-0 left-0 right-0 md:hidden">
+                        <div className="shrink-0 p-4 border-t border-slate-200 md:hidden">
                             <Link
                                 href="/logout"
                                 method="post"

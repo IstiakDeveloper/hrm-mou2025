@@ -3,12 +3,14 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
 import {
     ArrowUpRight,
+    Award,
     BriefcaseBusiness,
     Building2,
     Layers,
     ListOrdered,
     Settings2,
     Wallet,
+    FileBarChart2,
 } from 'lucide-react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
@@ -137,8 +139,8 @@ export default function PayrollDashboard({ stats, userRole }: Props) {
                     </Card>
                 )}
 
-                <section>
-                    <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Quick links</h2>
+                <section className="mb-6">
+                    <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Payroll setup</h2>
                     <div className={cn(shortcutGrid)}>
                         {can('payroll.view') && <ShortcutTile href={`/payscales${section}`} title="Payscales" icon={BriefcaseBusiness} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-grades${section}`} title="Grades" icon={Layers} />}
@@ -146,6 +148,31 @@ export default function PayrollDashboard({ stats, userRole }: Props) {
                         {can('payroll.view') && <ShortcutTile href={`/salary-heads${section}`} title="Salary heads" icon={Wallet} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-structures/manual${section}`} title="Salary structure (manual)" icon={Settings2} />}
                         {can('payroll.view') && <ShortcutTile href={`/branch-payroll-banks${section}`} title="Branch wise bank" icon={Building2} />}
+                    </div>
+                </section>
+
+                <section className="mb-6">
+                    <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Reports</h2>
+                    <div className={cn(shortcutGrid)}>
+                        {can('payroll.view') && (
+                            <ShortcutTile href={`/payroll/reports${section}`} title="All payroll reports" icon={FileBarChart2} />
+                        )}
+                    </div>
+                </section>
+
+                <section>
+                    <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Bonus</h2>
+                    <div className={cn(shortcutGrid)}>
+                        {can('payroll.view') && <ShortcutTile href={`/bonus-types${section}`} title="Bonus type" icon={Award} />}
+                        {can('payroll.view') && <ShortcutTile href={`/bonus-configurations${section}`} title="Bonus configuration" icon={Settings2} />}
+                        {can('payroll.view') && <ShortcutTile href={`/bonus-calculation${section}`} title="Bonus calculation" icon={Award} />}
+                        {can('payroll.view') && (
+                            <ShortcutTile
+                                href={`/bonus-post${section}`}
+                                title="Bonus post"
+                                icon={Award}
+                            />
+                        )}
                     </div>
                 </section>
             </PageSurface>

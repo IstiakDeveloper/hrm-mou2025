@@ -2109,6 +2109,10 @@ class EmployeeController extends Controller
     {
         $employee->load([
             'department',
+            'employeeType',
+            'payscale',
+            'salaryGrade',
+            'salaryStep',
             'designation',
             'branch',
             'manager',
@@ -2138,6 +2142,18 @@ class EmployeeController extends Controller
             ->orderBy('created_at', 'desc')
             ->limit(5)
             ->get();
+
+        $employee->addresses = \Illuminate\Support\Facades\DB::table('employee_addresses')->where('employee_id', $employee->id)->get()->all();
+        $employee->educations = \Illuminate\Support\Facades\DB::table('employee_educations')->where('employee_id', $employee->id)->get()->all();
+        $employee->bank = \Illuminate\Support\Facades\DB::table('employee_bank_accounts')->where('employee_id', $employee->id)->first();
+        $employee->nominees = \Illuminate\Support\Facades\DB::table('employee_nominees')->where('employee_id', $employee->id)->get()->all();
+        $employee->guarantors = \Illuminate\Support\Facades\DB::table('employee_guarantors')->where('employee_id', $employee->id)->get()->all();
+        $employee->guarantor_cheques = \Illuminate\Support\Facades\DB::table('employee_guarantor_cheques')->where('employee_id', $employee->id)->get()->all();
+        $employee->collateral = \Illuminate\Support\Facades\DB::table('employee_collaterals')->where('employee_id', $employee->id)->first();
+        $employee->collateral_receive_cheques = \Illuminate\Support\Facades\DB::table('employee_collateral_receive_cheques')->where('employee_id', $employee->id)->get()->all();
+        $employee->assets = \Illuminate\Support\Facades\DB::table('employee_assets')->where('employee_id', $employee->id)->get()->all();
+        $employee->experiences = \Illuminate\Support\Facades\DB::table('employee_experiences')->where('employee_id', $employee->id)->get()->all();
+        $employee->trainings = \Illuminate\Support\Facades\DB::table('employee_trainings')->where('employee_id', $employee->id)->get()->all();
 
         return Inertia::render('employee/show', [
             'employee' => $employee,

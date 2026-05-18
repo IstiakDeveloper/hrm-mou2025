@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import Layout from '@/layouts/AdminLayout';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ComboSelect } from '@/components/ComboSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { DatePicker } from '@/components/ui/date-picker';
-import { PayrollFilterGrid, PayrollField } from '@/components/payroll/PayrollFilterGrid';
+import { PayrollComboField, PayrollFilterGrid, PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { DISPLAY_DATE_FMT, parseFormDateValue } from '@/lib/display-date';
 import { Pencil, Search, Save } from 'lucide-react';
@@ -26,6 +27,7 @@ type Row = {
 type Props = {
     filters: Record<string, string | boolean>;
     rows: Row[];
+    searchNotice?: string | null;
     branches: { id: number; name: string }[];
     departments: { id: number; name: string }[];
     designations: { id: number; name: string }[];
@@ -35,7 +37,8 @@ type Props = {
     salaryHeads: { id: number; name: string; short_name?: string }[];
 };
 
-export default function SalaryHeadModificationIndex({ filters: initialFilters, rows: initialRows, ...options }: Props) {
+export default function SalaryHeadModificationIndex({ filters: initialFilters, rows: initialRows, searchNotice, ...options }: Props) {
+    const { errors: pageErrors = {}, flash } = usePage<{ errors?: Record<string, string>; flash?: { success?: string } }>().props;
     const [filters, setFilters] = useState<Record<string, string>>({
         branch_id: String(initialFilters.branch_id || ''),
         department_id: String(initialFilters.department_id || ''),
@@ -49,12 +52,25 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
     });
     const [rows, setRows] = useState(initialRows);
     const [saving, setSaving] = useState(false);
+    const [clientErrors, setClientErrors] = useState<string[]>([]);
 
     React.useEffect(() => setRows(initialRows), [initialRows]);
 
     const setFilter = (key: string, value: string) => setFilters((f) => ({ ...f, [key]: value }));
 
-    const loadEmployees = () => router.get(route('salary-head-modifications.index'), { ...filters, searched: 1 });
+    const loadEmployees = () => {
+        const msgs: string[] = [];
+        if (!filters.salary_head_id) msgs.push('Select a salary component.');
+        if (!filters.effective_from?.trim()) msgs.push('Select an effective from date.');
+        if (msgs.length) {
+            setClientErrors(msgs);
+            return;
+        }
+        setClientErrors([]);
+        router.get(route('salary-head-modifications.index'), { ...filters, searched: 1 }, {
+            onError: (errs) => setClientErrors(Object.values(errs as Record<string, string>).filter(Boolean)),
+        });
+    };
 
     const save = () => {
         setSaving(true);
@@ -74,8 +90,28 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                 <PayrollPageHeader
                     icon={Pencil}
                     title="Component overrides"
-                    description="Change a single salary component (e.g. house rent) for selected employees. Overrides apply from the effective date when payroll is calculated."
+                    description="Only active employees with payscale, grade, and step assigned are included. Overrides apply from the effective date when payroll is calculated."
                 />
+
+                {flash?.success && (
+                    <Alert className="mb-6 border-emerald-200 bg-emerald-50 text-emerald-950">
+                        <AlertTitle>Saved</AlertTitle>
+                        <AlertDescription>{flash.success}</AlertDescription>
+                    </Alert>
+                )}
+
+                {(clientErrors.length > 0 || Object.keys(pageErrors).length > 0) && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertTitle>Cannot load</AlertTitle>
+                        <AlertDescription>
+                            <ul className="mt-2 list-disc space-y-1 pl-4 text-sm">
+                                {[...clientErrors, ...Object.values(pageErrors).filter(Boolean)].map((msg) => (
+                                    <li key={msg}>{msg}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 <PayrollSectionCard title="Filters & component" description="Narrow down employees, then pick which component to override." className="mb-6">
                     <PayrollFilterGrid filters={filters} setFilter={setFilter} {...options} />
@@ -86,17 +122,21 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                 onSelect={(d) => setFilter('effective_from', d ? format(d, DISPLAY_DATE_FMT) : '')}
                             />
                         </PayrollField>
-                        <PayrollField label="Salary component" required>
-                            <Select value={filters.salary_head_id || 'none'} onValueChange={(v) => setFilter('salary_head_id', v === 'none' ? '' : v)}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Select component" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Select component</SelectItem>
-                                    {options.salaryHeads.map((h) => (
-                                        <SelectItem key={h.id} value={String(h.id)}>{h.short_name || h.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </PayrollField>
+                        <PayrollComboField
+                            label="Salary component"
+                            required
+                            value={filters.salary_head_id}
+                            onChange={(v) => setFilter('salary_head_id', v)}
+                            items={[
+                                { value: '', label: 'Select component', disabled: true },
+                                ...options.salaryHeads.map((h) => ({
+                                    value: String(h.id),
+                                    label: h.short_name || h.name,
+                                    keywords: h.name,
+                                })),
+                            ]}
+                            placeholder="Search component…"
+                        />
                         <PayrollField label="Note (optional)">
                             <Input value={filters.reason} onChange={(e) => setFilter('reason', e.target.value)} placeholder="Reason for override" className="h-10" />
                         </PayrollField>
@@ -140,13 +180,15 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                <Select value={row.amount_type} onValueChange={(v) => patchRow(row.employee_id, { amount_type: v })}>
-                                                    <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="percentage">Percent of basic</SelectItem>
-                                                        <SelectItem value="fixed">Fixed amount</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                <ComboSelect
+                                                    value={row.amount_type}
+                                                    onChange={(v) => patchRow(row.employee_id, { amount_type: v ?? 'fixed' })}
+                                                    items={[
+                                                        { value: 'percentage', label: 'Percent of basic' },
+                                                        { value: 'fixed', label: 'Fixed amount' },
+                                                    ]}
+                                                    className="h-9 w-40"
+                                                />
                                             </TableCell>
                                             <TableCell>
                                                 <Input className="h-9 w-full min-w-[7rem] text-right" type="number" min={0} step="any" value={row.amount} onChange={(e) => patchRow(row.employee_id, { amount: e.target.value })} />
@@ -160,7 +202,12 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                     </PayrollSectionCard>
                 ) : (
                     initialFilters.searched && (
-                        <PayrollEmptyState message="No employees match your filters, or search without selecting a component." />
+                        <PayrollEmptyState
+                            message={
+                                searchNotice ??
+                                'No active employees with payscale, grade, and step match your filters.'
+                            }
+                        />
                     )
                 )}
             </PayrollPage>

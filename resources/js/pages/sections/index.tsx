@@ -111,6 +111,13 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'payroll.view') ||
                                         hasAppPermission(auth, 'admin.access')
                                     );
+                                case 'fixed-asset':
+                                    return (
+                                        hasAppPermission(auth, 'fixed-assets.view') ||
+                                        hasAppPermission(auth, 'fixed-assets.create') ||
+                                        hasAppPermission(auth, 'fixed-assets.edit') ||
+                                        hasAppPermission(auth, 'admin.access')
+                                    );
                                 default:
                                     // Future modules: show as locked unless backend enables them
                                     return false;

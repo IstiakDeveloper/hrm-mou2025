@@ -1,11 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PayrollFilterGrid, PayrollField } from '@/components/payroll/PayrollFilterGrid';
+import {
+    PayrollComboField,
+    PayrollFilterGrid,
+    PayrollMonthSelect,
+    PayrollYearSelect,
+} from '@/components/payroll/PayrollFilterGrid';
 import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { RotateCcw, Search } from 'lucide-react';
 
@@ -59,6 +64,8 @@ export default function SalaryRollbackIndex({ filters: init, rows, ...options }:
     });
     const [selected, setSelected] = useState<number[]>([]);
     const [rolling, setRolling] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const { flash } = usePage<{ flash?: { success?: string; error?: string } }>().props;
 
     const runIds = useMemo(
         () => [...new Set(rows.filter((r) => selected.includes(r.payslip_id)).map((r) => r.payroll_run_id))],
@@ -67,7 +74,14 @@ export default function SalaryRollbackIndex({ filters: init, rows, ...options }:
 
     const setFilter = (key: string, value: string) => setFilters((f) => ({ ...f, [key]: value }));
 
-    const load = () => router.get(route('salary-rollback.index'), { ...filters, searched: 1 });
+    const load = () => {
+        if (!filters.month) {
+            setLoadError('Select a month before loading payroll.');
+            return;
+        }
+        setLoadError(null);
+        router.get(route('salary-rollback.index'), { ...filters, searched: 1 });
+    };
 
     const rollback = () => {
         if (!runIds.length) return;
@@ -89,33 +103,40 @@ export default function SalaryRollbackIndex({ filters: init, rows, ...options }:
                     description="Remove a calculated or posted payroll for a month so you can run Calculate payroll again. This deletes payslip data for the selected run."
                 />
 
+                {flash?.success && (
+                    <Alert className="mb-6 border-emerald-200 bg-emerald-50 text-emerald-950">
+                        <AlertTitle>Done</AlertTitle>
+                        <AlertDescription>{flash.success}</AlertDescription>
+                    </Alert>
+                )}
+
+                {loadError && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertTitle>Cannot load</AlertTitle>
+                        <AlertDescription>{loadError}</AlertDescription>
+                    </Alert>
+                )}
+
                 <PayrollSectionCard title="Find payroll" className="mb-6">
                     <div className="grid gap-4 sm:grid-cols-3">
-                        <PayrollField label="Month" required>
-                            <Select value={filters.month || 'none'} onValueChange={(v) => setFilter('month', v === 'none' ? '' : v)}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Select month" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Select month</SelectItem>
-                                    {options.months.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </PayrollField>
-                        <PayrollField label="Year">
-                            <Select value={filters.year} onValueChange={(v) => setFilter('year', v)}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
-                                <SelectContent>{options.years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </PayrollField>
-                        <PayrollField label="Pay type">
-                            <Select value={filters.salary_type} onValueChange={(v) => setFilter('salary_type', v)}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(salaryTypeLabels).map(([v, label]) => (
-                                        <SelectItem key={v} value={v}>{label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </PayrollField>
+                        <PayrollMonthSelect
+                            value={filters.month}
+                            onChange={(v) => setFilter('month', v)}
+                            months={options.months}
+                            required
+                        />
+                        <PayrollYearSelect
+                            value={filters.year}
+                            onChange={(v) => setFilter('year', v)}
+                            years={options.years}
+                        />
+                        <PayrollComboField
+                            label="Pay type"
+                            value={filters.salary_type}
+                            onChange={(v) => setFilter('salary_type', v || 'salary')}
+                            items={Object.entries(salaryTypeLabels).map(([value, label]) => ({ value, label }))}
+                            placeholder="Select pay type"
+                        />
                     </div>
                     <PayrollFilterGrid filters={filters} setFilter={setFilter} {...options} showProgram={false} />
                     <PayrollFormActions>

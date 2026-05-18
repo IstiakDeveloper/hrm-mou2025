@@ -2,17 +2,23 @@ import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
+import {
+    PayrollBranchSelect,
+    PayrollComboField,
+    PayrollEmployeeSelect,
+    PayrollField,
+    PayrollMonthSelect,
+    PayrollYearSelect,
+} from '@/components/payroll/PayrollFilterGrid';
 import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { Ban, Save, Trash2 } from 'lucide-react';
 
 type Props = {
     filters: Record<string, string>;
     records: { id: number; employee_label: string; year: number; month: number; salary_type: string; reason: string | null; created_at: string | null }[];
-    branches: { id: number; name: string }[];
+    branches: { id: number; name: string; branch_code?: string | null }[];
     employees: { id: number; pin?: string; name_en?: string }[];
     salaryTypes: { value: string; label: string }[];
     months: { value: number; label: string }[];
@@ -43,59 +49,42 @@ export default function SalaryWithheldIndex({ filters: init, records, branches, 
 
     return (
         <Layout>
-            <Head title="Hold salary" />
+            <Head title={form.salary_type === 'bonus' ? 'Hold bonus' : 'Hold salary'} />
             <PayrollPage>
                 <PayrollPageHeader
                     icon={Ban}
-                    title="Hold salary payment"
+                    title={form.salary_type === 'bonus' ? 'Hold bonus payment' : 'Hold salary payment'}
                     description="Mark an employee so they are not paid for a given month. Net pay will be zero when payroll is calculated."
                 />
 
                 <PayrollSectionCard title="New hold" description="Employee will be skipped for payment in this period." className="mb-6 max-w-3xl">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <PayrollField label="Year" required>
-                            <Select value={form.year} onValueChange={(v) => setForm((f) => ({ ...f, year: v }))}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
-                                <SelectContent>{years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </PayrollField>
-                        <PayrollField label="Month" required>
-                            <Select value={form.month || 'none'} onValueChange={(v) => setForm((f) => ({ ...f, month: v === 'none' ? '' : v }))}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Select month" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Select month</SelectItem>
-                                    {months.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </PayrollField>
-                        <PayrollField label="Branch" required>
-                            <Select value={form.branch_id || 'none'} onValueChange={(v) => setForm((f) => ({ ...f, branch_id: v === 'none' ? '' : v }))}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Select branch" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Select branch</SelectItem>
-                                    {branches.map((b) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </PayrollField>
-                        <PayrollField label="Employee" required>
-                            <Select value={form.employee_id || 'none'} onValueChange={(v) => setForm((f) => ({ ...f, employee_id: v === 'none' ? '' : v }))}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Select employee" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Select employee</SelectItem>
-                                    {employees.map((e) => (
-                                        <SelectItem key={e.id} value={String(e.id)}>{[e.pin, e.name_en].filter(Boolean).join(' — ')}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </PayrollField>
-                        <PayrollField label="Pay type">
-                            <Select value={form.salary_type} onValueChange={(v) => setForm((f) => ({ ...f, salary_type: v }))}>
-                                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {salaryTypes.map((t) => <SelectItem key={t.value} value={t.value}>{salaryTypeLabels[t.value] ?? t.label}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </PayrollField>
+                        <PayrollYearSelect value={form.year} onChange={(v) => setForm((f) => ({ ...f, year: v }))} years={years} required />
+                        <PayrollMonthSelect value={form.month} onChange={(v) => setForm((f) => ({ ...f, month: v }))} months={months} required />
+                        <PayrollBranchSelect
+                            value={form.branch_id}
+                            onChange={(v) => setForm((f) => ({ ...f, branch_id: v }))}
+                            branches={branches}
+                            required
+                            allowAll={false}
+                        />
+                        <PayrollEmployeeSelect
+                            value={form.employee_id}
+                            onChange={(v) => setForm((f) => ({ ...f, employee_id: v }))}
+                            employees={employees}
+                            required
+                            allowAll={false}
+                        />
+                        <PayrollComboField
+                            label="Pay type"
+                            value={form.salary_type}
+                            onChange={(v) => setForm((f) => ({ ...f, salary_type: v }))}
+                            items={salaryTypes.map((t) => ({
+                                value: t.value,
+                                label: salaryTypeLabels[t.value] ?? t.label,
+                            }))}
+                            placeholder="Select pay type"
+                        />
                         <PayrollField label="Reason" className="sm:col-span-2">
                             <Textarea value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} rows={2} placeholder="Why is salary held?" />
                         </PayrollField>

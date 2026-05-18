@@ -14,11 +14,23 @@ use App\Http\Controllers\Branch\BranchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Department\DepartmentController;
 use App\Http\Controllers\Designation\DesignationController;
+use App\Http\Controllers\Employee\EmployeeAssetController;
 use App\Http\Controllers\Employee\EmployeeController;
 use App\Http\Controllers\Employee\EmployeeDashboardController;
 use App\Http\Controllers\Employee\EmployeeDocumentController;
 use App\Http\Controllers\Employee\EmployeeLeaveController;
 use App\Http\Controllers\Employee\EmployeeMovementController;
+use App\Http\Controllers\FixedAsset\AssetAssignmentController;
+use App\Http\Controllers\FixedAsset\AssetCategoryController;
+use App\Http\Controllers\FixedAsset\AssetDepreciationController;
+use App\Http\Controllers\FixedAsset\AssetDisposalController;
+use App\Http\Controllers\FixedAsset\AssetRevaluationController;
+use App\Http\Controllers\FixedAsset\AssetMaintenanceController;
+use App\Http\Controllers\FixedAsset\AssetTransferController;
+use App\Http\Controllers\FixedAsset\FixedAssetController;
+use App\Http\Controllers\FixedAsset\FixedAssetDashboardController;
+use App\Http\Controllers\FixedAsset\FixedAssetImportController;
+use App\Http\Controllers\FixedAsset\FixedAssetReportController;
 use App\Http\Controllers\Holiday\HolidayController;
 use App\Http\Controllers\Leave\LeaveApplicationController;
 use App\Http\Controllers\Leave\LeaveBalanceController;
@@ -30,6 +42,10 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Organization\EmployeeTypeController;
 use App\Http\Controllers\Organization\ProgramController;
 use App\Http\Controllers\Organization\ProjectController;
+use App\Http\Controllers\Payroll\BonusCalculationController;
+use App\Http\Controllers\Payroll\BonusConfigurationController;
+use App\Http\Controllers\Payroll\BonusPostController;
+use App\Http\Controllers\Payroll\BonusTypeController;
 use App\Http\Controllers\Payroll\BranchPayrollBankController;
 use App\Http\Controllers\Payroll\PayscaleController;
 use App\Http\Controllers\Payroll\SalaryGradeController;
@@ -198,6 +214,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/sections/payroll', [DashboardController::class, 'payrollSection'])
         ->name('sections.payroll');
 
+    Route::get('/sections/fixed-asset', FixedAssetDashboardController::class)
+        ->middleware('permission:fixed-assets.view')
+        ->name('sections.fixed-asset');
+
     // Section Dashboard (Overview) - role-aware (employee vs admin)
     Route::get('/sections/{section}', function (Request $request, string $section) {
         $allowed = [
@@ -256,11 +276,13 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('throttle:10,1');
     });
 
-    // Profile - Available to all authenticated users
-    Route::prefix('profile')->name('profile.')->group(function () {
+    Route::get('/my-assets', [EmployeeAssetController::class, 'index'])->name('my-assets.index');
+
+    // Profile (self-service; requires profile permissions on role)
+    Route::prefix('profile')->name('profile.')->middleware(['permission:profile.view'])->group(function () {
         Route::get('/', [ProfileController::class, 'edit'])->name('edit');
-        Route::patch('/', [ProfileController::class, 'update'])->name('update');
-        Route::patch('/password', [ProfileController::class, 'updatePassword'])->name('password.update');
+        Route::patch('/', [ProfileController::class, 'update'])->name('update')->middleware('permission:profile.edit');
+        Route::patch('/password', [ProfileController::class, 'updatePassword'])->name('password.update')->middleware('permission:profile.edit');
     });
 
     // Notifications - Available to all authenticated users
@@ -344,20 +366,33 @@ Route::middleware(['auth'])->group(function () {
         Route::get('users/bulk-email/form', [UserController::class, 'bulkEmailForm'])->name('users.bulk-email.form');
         Route::post('users/bulk-email/send', [UserController::class, 'sendBulkEmails'])->name('users.bulk-email.send');
         // User Management
-        Route::middleware(['permission:users.view'])->group(function () {
-            Route::resource('users', UserController::class)->parameters(['users' => 'user']);
-            Route::post('users/{user}/toggle-status', [UserController::class, 'toggleStatus'])
-                ->name('users.toggle-status')
+        Route::middleware(['permission:users.view'])->prefix('users')->name('users.')->group(function () {
+            Route::get('/', [UserController::class, 'index'])->name('index');
+            Route::get('/create', [UserController::class, 'create'])->name('create')->middleware('permission:users.create');
+            Route::post('/', [UserController::class, 'store'])->name('store')->middleware('permission:users.create');
+            Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit')->middleware('permission:users.edit');
+            Route::put('/{user}', [UserController::class, 'update'])->name('update')->middleware('permission:users.edit');
+            Route::patch('/{user}', [UserController::class, 'update'])->middleware('permission:users.edit');
+            Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy')->middleware('permission:users.delete');
+            Route::post('/{user}/toggle-status', [UserController::class, 'toggleStatus'])
+                ->name('toggle-status')
                 ->middleware('permission:users.edit');
         });
 
         // Role & Permission Management
-        Route::middleware(['permission:roles.view'])->group(function () {
-            Route::resource('roles', RoleController::class)->parameters(['roles' => 'role']);
-            Route::get('permissions', [RoleController::class, 'permissions'])
-                ->name('permissions.index')
-                ->middleware('permission:roles.view');
+        Route::middleware(['permission:roles.view'])->prefix('roles')->name('roles.')->group(function () {
+            Route::get('/', [RoleController::class, 'index'])->name('index');
+            Route::get('/create', [RoleController::class, 'create'])->name('create')->middleware('permission:roles.create');
+            Route::post('/', [RoleController::class, 'store'])->name('store')->middleware('permission:roles.create');
+            Route::get('/{role}', [RoleController::class, 'show'])->name('show');
+            Route::get('/{role}/edit', [RoleController::class, 'edit'])->name('edit')->middleware('permission:roles.edit');
+            Route::put('/{role}', [RoleController::class, 'update'])->name('update')->middleware('permission:roles.edit');
+            Route::patch('/{role}', [RoleController::class, 'update'])->middleware('permission:roles.edit');
+            Route::delete('/{role}', [RoleController::class, 'destroy'])->name('destroy')->middleware('permission:roles.delete');
         });
+        Route::get('permissions', [RoleController::class, 'permissions'])
+            ->name('permissions.index')
+            ->middleware('permission:roles.view');
 
         Route::get('notices', [AdminNoticeController::class, 'index'])->name('notices.index');
         Route::get('notices/create', [AdminNoticeController::class, 'create'])->name('notices.create');
@@ -665,6 +700,32 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/{branch_payroll_bank}', [BranchPayrollBankController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
         });
 
+        Route::prefix('bonus-types')->name('bonus-types.')->group(function () {
+            Route::get('/', [BonusTypeController::class, 'index'])->name('index');
+            Route::get('/create', [BonusTypeController::class, 'create'])->name('create')->middleware('permission:payroll.create');
+            Route::post('/', [BonusTypeController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/{bonus_type}/edit', [BonusTypeController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
+            Route::put('/{bonus_type}', [BonusTypeController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::delete('/{bonus_type}', [BonusTypeController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+        });
+
+        Route::prefix('bonus-configurations')->name('bonus-configurations.')->group(function () {
+            Route::get('/', [BonusConfigurationController::class, 'index'])->name('index');
+            Route::get('/create', [BonusConfigurationController::class, 'create'])->name('create')->middleware('permission:payroll.create');
+            Route::post('/', [BonusConfigurationController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/{bonus_configuration}/edit', [BonusConfigurationController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
+            Route::put('/{bonus_configuration}', [BonusConfigurationController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::delete('/{bonus_configuration}', [BonusConfigurationController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+        });
+
+        Route::get('/bonus-calculation', [BonusCalculationController::class, 'index'])->name('bonus-calculation.index');
+        Route::post('/bonus-calculation', [BonusCalculationController::class, 'process'])->name('bonus-calculation.process')->middleware('permission:payroll.edit');
+
+        Route::get('/bonus-post', [BonusPostController::class, 'index'])->name('bonus-post.index');
+        Route::get('/bonus-post/{payroll_run}', [BonusPostController::class, 'show'])->name('bonus-post.show');
+        Route::put('/bonus-post/{payroll_run}/payslips', [BonusPostController::class, 'updatePayslips'])->name('bonus-post.update-payslips')->middleware('permission:payroll.edit');
+        Route::post('/bonus-post/{payroll_run}', [BonusPostController::class, 'post'])->name('bonus-post.post')->middleware('permission:payroll.edit');
+
         Route::get('/salary-head-modifications', [\App\Http\Controllers\Payroll\SalaryHeadModificationController::class, 'index'])->name('salary-head-modifications.index');
         Route::post('/salary-head-modifications', [\App\Http\Controllers\Payroll\SalaryHeadModificationController::class, 'store'])->name('salary-head-modifications.store')->middleware('permission:payroll.edit');
 
@@ -677,10 +738,97 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/salary-post', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'index'])->name('salary-post.index');
         Route::get('/salary-post/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'show'])->name('salary-post.show');
+        Route::put('/salary-post/{payroll_run}/payslips', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'updatePayslips'])->name('salary-post.update-payslips')->middleware('permission:payroll.edit');
         Route::post('/salary-post/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'post'])->name('salary-post.post')->middleware('permission:payroll.edit');
 
         Route::get('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'index'])->name('salary-rollback.index');
         Route::post('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'rollback'])->name('salary-rollback.rollback')->middleware('permission:payroll.edit');
+
+        Route::prefix('payroll/reports')->name('payroll.reports.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'index'])->name('index');
+            Route::get('/{report}', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'show'])->name('show');
+            Route::get('/{report}/print', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'print'])->name('print');
+            Route::middleware(['permission:reports.export'])->group(function () {
+                Route::get('/{report}/pdf', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'pdf'])->name('pdf');
+                Route::get('/{report}/excel', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'excel'])->name('excel');
+            });
+        });
+    });
+
+    // ====================
+    // FIXED ASSET
+    // ====================
+    Route::middleware(['permission:fixed-assets.view'])->group(function () {
+        Route::prefix('asset-categories')->name('asset-categories.')->group(function () {
+            Route::get('/', [AssetCategoryController::class, 'index'])->name('index');
+            Route::get('/create', [AssetCategoryController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+            Route::post('/', [AssetCategoryController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+            Route::get('/{asset_category}/edit', [AssetCategoryController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+            Route::put('/{asset_category}', [AssetCategoryController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+            Route::delete('/{asset_category}', [AssetCategoryController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+        });
+
+        Route::prefix('fixed-assets')->name('fixed-assets.')->group(function () {
+            Route::get('/', [FixedAssetController::class, 'index'])->name('index');
+            Route::get('/import', [FixedAssetImportController::class, 'index'])->name('import.index')->middleware('permission:fixed-assets.create');
+            Route::post('/import/preview', [FixedAssetImportController::class, 'preview'])->name('import.preview')->middleware('permission:fixed-assets.create');
+            Route::post('/import/commit', [FixedAssetImportController::class, 'commit'])->name('import.commit')->middleware('permission:fixed-assets.create');
+            Route::get('/create', [FixedAssetController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+            Route::post('/', [FixedAssetController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+            Route::get('/{fixed_asset}', [FixedAssetController::class, 'show'])->name('show');
+            Route::get('/{fixed_asset}/edit', [FixedAssetController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+            Route::put('/{fixed_asset}', [FixedAssetController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+            Route::delete('/{fixed_asset}', [FixedAssetController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+        });
+
+        Route::prefix('asset-transfers')->name('asset-transfers.')->group(function () {
+            Route::get('/', [AssetTransferController::class, 'index'])->name('index');
+            Route::get('/create', [AssetTransferController::class, 'create'])->name('create')->middleware('permission:fixed-assets.edit');
+            Route::post('/', [AssetTransferController::class, 'store'])->name('store')->middleware('permission:fixed-assets.edit');
+        });
+
+        Route::prefix('asset-assignments')->name('asset-assignments.')->group(function () {
+            Route::get('/', [AssetAssignmentController::class, 'index'])->name('index');
+            Route::get('/employees', [AssetAssignmentController::class, 'employeesByBranch'])->name('employees');
+            Route::get('/create', [AssetAssignmentController::class, 'create'])->name('create')->middleware('permission:fixed-assets.edit');
+            Route::post('/', [AssetAssignmentController::class, 'store'])->name('store')->middleware('permission:fixed-assets.edit');
+            Route::post('/{asset_assignment}/release', [AssetAssignmentController::class, 'release'])->name('release')->middleware('permission:fixed-assets.edit');
+        });
+
+        Route::prefix('asset-maintenances')->name('asset-maintenances.')->group(function () {
+            Route::get('/', [AssetMaintenanceController::class, 'index'])->name('index');
+            Route::get('/create', [AssetMaintenanceController::class, 'create'])->name('create')->middleware('permission:fixed-assets.edit');
+            Route::post('/', [AssetMaintenanceController::class, 'store'])->name('store')->middleware('permission:fixed-assets.edit');
+            Route::get('/{asset_maintenance}/edit', [AssetMaintenanceController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+            Route::put('/{asset_maintenance}', [AssetMaintenanceController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+            Route::delete('/{asset_maintenance}', [AssetMaintenanceController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+        });
+
+        Route::prefix('asset-disposals')->name('asset-disposals.')->group(function () {
+            Route::get('/', [AssetDisposalController::class, 'index'])->name('index');
+            Route::get('/create', [AssetDisposalController::class, 'create'])->name('create')->middleware('permission:fixed-assets.edit');
+            Route::post('/', [AssetDisposalController::class, 'store'])->name('store')->middleware('permission:fixed-assets.edit');
+            Route::post('/{asset_disposal}/approve', [AssetDisposalController::class, 'approve'])->name('approve')->middleware('permission:fixed-assets.delete');
+            Route::post('/{asset_disposal}/reject', [AssetDisposalController::class, 'reject'])->name('reject')->middleware('permission:fixed-assets.delete');
+        });
+
+        Route::prefix('asset-depreciation')->name('asset-depreciation.')->group(function () {
+            Route::get('/', [AssetDepreciationController::class, 'index'])->name('index');
+            Route::post('/run', [AssetDepreciationController::class, 'run'])->name('run')->middleware('permission:fixed-assets.edit');
+            Route::get('/schedule/{fixed_asset}', [AssetDepreciationController::class, 'schedule'])->name('schedule');
+        });
+
+        Route::post('/fixed-assets/{fixed_asset}/revaluation', [AssetRevaluationController::class, 'store'])
+            ->name('fixed-assets.revaluation.store')
+            ->middleware('permission:fixed-assets.edit');
+
+        Route::prefix('fixed-asset/reports')->name('fixed-asset.reports.')->group(function () {
+            Route::get('/', [FixedAssetReportController::class, 'index'])->name('index');
+            Route::get('/{report}/print', [FixedAssetReportController::class, 'print'])->name('print');
+            Route::get('/{report}/pdf', [FixedAssetReportController::class, 'pdf'])->name('pdf');
+            Route::get('/{report}/excel', [FixedAssetReportController::class, 'excel'])->name('excel');
+            Route::get('/{report}', [FixedAssetReportController::class, 'show'])->name('show');
+        });
     });
 
     // ====================
@@ -916,7 +1064,8 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('permission:movements.cancel');
 
         Route::post('/{movement}/complete', [MovementController::class, 'complete'])
-            ->name('complete');
+            ->name('complete')
+            ->middleware('permission:movements.complete');
 
         // Manager/HR approval actions
         Route::middleware(['permission:movements.approve'])->group(function () {

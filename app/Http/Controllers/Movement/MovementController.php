@@ -570,9 +570,10 @@ class MovementController extends Controller
         $canClose = false;
 
         if (
-            $userEmployee &&
-            (int) $userEmployee->id === (int) $movement->employee_id &&
-            $movement->status === 'active'
+            $user->hasPermission('movements.complete')
+            && $userEmployee
+            && (int) $userEmployee->id === (int) $movement->employee_id
+            && $movement->status === 'active'
         ) {
             $canClose = true;
         }
@@ -594,6 +595,11 @@ class MovementController extends Controller
 
         $user = Auth::user();
         $userEmployee = $user->employee;
+
+        if (! $user->hasPermission('movements.complete')) {
+            return redirect()->route('movements.index')
+                ->with('error', 'You do not have permission to complete movements.');
+        }
 
         // Check if user can close this movement - with proper type casting
         if (! $userEmployee || (int) $userEmployee->id !== (int) $movement->employee_id) {

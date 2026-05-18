@@ -1,0 +1,190 @@
+<?php
+
+namespace App\Http\Controllers\FixedAsset;
+
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\FixedAsset\Concerns\ResolvesFixedAssetBranchScope;
+use App\Models\AssetCategory;
+use App\Models\Branch;
+use App\Models\FixedAsset;
+use App\Services\FixedAssetReportService;
+use App\Support\FixedAssetReportCsvExporter;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class FixedAssetReportController extends Controller
+{
+    use ResolvesFixedAssetBranchScope;
+
+    public function __construct(
+        private readonly FixedAssetReportService $reports,
+    ) {}
+
+    public function index()
+    {
+        $first = array_key_first(config('fixed_asset_reports.reports', []));
+
+        return redirect()->route('fixed-asset.reports.show', $first ?: 'asset-tracking');
+    }
+
+    public function show(Request $request, string $report)
+    {
+        $config = $this->reportConfig($report);
+        $forcedBranch = $this->scopedBranchIdForUser($request->user());
+        $filters = $this->reports->applyDefaultDateRange(
+            $this->reports->filtersFromRequest($request, $forcedBranch),
+            $config,
+        );
+        $generated = $request->boolean('generate');
+        $payload = null;
+        $error = null;
+
+        if ($generated) {
+            $strictDateRange = ! empty($config['date_range'])
+                && in_array($config['template'] ?? '', ['repair-list', 'transfer-log', 'disposal-list'], true);
+
+            if ($strictDateRange && ! $filters['date_from'] && ! $filters['date_to']) {
+                $error = 'Please select date from and date to.';
+            } else {
+                $payload = $this->reports->build($report, $config, $filters);
+            }
+        }
+
+        $query = $request->getQueryString();
+
+        return Inertia::render('fixed-asset/reports/show', [
+            'companyName' => config('fixed_asset_reports.company_name'),
+            'report' => [
+                'slug' => $report,
+                'title' => $config['title'],
+                'description' => $config['description'] ?? '',
+                'filters' => $config['filters'] ?? [],
+                'dateRange' => (bool) ($config['date_range'] ?? false),
+                'purchaseMonth' => ($config['purchase_group'] ?? null) === 'month',
+            ],
+            'filterOptions' => $this->filterOptions($request, $config),
+            'filters' => $this->filterValuesForView($filters),
+            'branchScoped' => $forcedBranch !== null,
+            'generated' => $generated,
+            'payload' => $payload,
+            'periodLabel' => $this->reports->periodLabel($filters, $config),
+            'error' => $error,
+            'exportUrls' => $generated && $payload ? [
+                'print' => route('fixed-asset.reports.print', $report).($query ? '?'.$query : ''),
+                'pdf' => route('fixed-asset.reports.pdf', $report).($query ? '?'.$query : ''),
+                'excel' => route('fixed-asset.reports.excel', $report).($query ? '?'.$query : ''),
+            ] : null,
+        ]);
+    }
+
+    public function print(Request $request, string $report)
+    {
+        $data = $this->documentData($request, $report);
+        $data['printMode'] = true;
+
+        return view('fixed-asset.reports.document', $data);
+    }
+
+    public function pdf(Request $request, string $report)
+    {
+        $data = $this->documentData($request, $report);
+        $pdf = Pdf::loadView('fixed-asset.reports.document', $data)->setPaper('a4', 'portrait');
+        $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.pdf';
+
+        return $pdf->download($filename);
+    }
+
+    public function excel(Request $request, string $report): StreamedResponse
+    {
+        $data = $this->documentData($request, $report);
+        [$headers, $rows] = FixedAssetReportCsvExporter::rowsFromPayload($data['payload']);
+        $filename = str($report)->slug().'-'.now()->format('Y-m-d').'.csv';
+
+        return FixedAssetReportCsvExporter::download($filename, $headers, $rows);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function documentData(Request $request, string $report): array
+    {
+        $config = $this->reportConfig($report);
+        $forcedBranch = $this->scopedBranchIdForUser($request->user());
+        $filters = $this->reports->applyDefaultDateRange(
+            $this->reports->filtersFromRequest($request, $forcedBranch),
+            $config,
+        );
+        $payload = $this->reports->build($report, $config, $filters);
+
+        return [
+            'companyName' => config('fixed_asset_reports.company_name'),
+            'title' => $config['title'],
+            'periodLabel' => $this->reports->periodLabel($filters, $config),
+            'generatedAt' => now()->format('d M Y H:i'),
+            'payload' => $payload,
+            'printMode' => false,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function reportConfig(string $report): array
+    {
+        $config = config("fixed_asset_reports.reports.{$report}");
+        if (! $config) {
+            abort(404);
+        }
+
+        return $config;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, string>
+     */
+    private function filterValuesForView(array $filters): array
+    {
+        return [
+            'branch_id' => $filters['branch_id'] ? (string) $filters['branch_id'] : '',
+            'asset_category_id' => $filters['asset_category_id'] ? (string) $filters['asset_category_id'] : '',
+            'status' => $filters['status'] ?? '',
+            'date_from' => $filters['date_from'] ?? '',
+            'date_to' => $filters['date_to'] ?? '',
+            'year' => (string) $filters['year'],
+            'month' => (string) $filters['month'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function filterOptions(Request $request, array $config): array
+    {
+        $allowed = $config['filters'] ?? [];
+        $scopedBranch = $this->scopedBranchIdForUser($request->user());
+
+        $branches = Branch::query()
+            ->where('is_active', true)
+            ->when($scopedBranch, fn ($q) => $q->where('id', $scopedBranch))
+            ->orderBy('is_head_office', 'desc')
+            ->orderBy('name')
+            ->get(['id', 'name', 'branch_code', 'is_head_office']);
+
+        return [
+            'branches' => $branches,
+            'categories' => in_array('asset_category_id', $allowed, true)
+                ? AssetCategory::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name'])
+                : [],
+            'statuses' => collect(FixedAsset::STATUSES)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            'years' => range((int) date('Y'), (int) date('Y') - 10),
+            'months' => collect(range(1, 12))->map(fn ($m) => [
+                'value' => $m,
+                'label' => date('F', mktime(0, 0, 0, $m, 1)),
+            ]),
+        ];
+    }
+}

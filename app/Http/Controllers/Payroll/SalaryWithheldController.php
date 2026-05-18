@@ -16,6 +16,7 @@ class SalaryWithheldController extends Controller
     {
         $records = SalaryWithheld::query()
             ->with(['employee:id,pin,name_en,employee_id', 'creator:id,name'])
+            ->when($request->filled('salary_type'), fn ($q) => $q->where('salary_type', $request->input('salary_type')))
             ->when($request->filled('year'), fn ($q) => $q->where('year', $request->integer('year')))
             ->when($request->filled('month'), fn ($q) => $q->where('month', $request->integer('month')))
             ->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))

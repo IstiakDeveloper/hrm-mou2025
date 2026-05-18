@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PayrollPayscaleFilter } from '@/components/payroll/PayrollFilterGrid';
 import { Edit, Layers, Plus, Search, Trash2 } from 'lucide-react';
 
 type PayscaleOption = { id: number; name: string };
@@ -76,26 +76,14 @@ export default function SalaryGradeIndex({
                             placeholder="Search grade name..."
                             className="max-w-sm"
                         />
-                        <Select
-                            value={payscaleId || 'all'}
-                            onValueChange={(v) => {
-                                const next = v === 'all' ? '' : v;
+                        <PayrollPayscaleFilter
+                            value={payscaleId}
+                            onChange={(next) => {
                                 setPayscaleId(next);
                                 applyFilters({ payscale_id: next });
                             }}
-                        >
-                            <SelectTrigger className="w-[220px]">
-                                <SelectValue placeholder="All payscales" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All payscales</SelectItem>
-                                {payscales.map((p) => (
-                                    <SelectItem key={p.id} value={String(p.id)}>
-                                        {p.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            payscales={payscales}
+                        />
                         <Button variant="outline" onClick={() => applyFilters()}>
                             <Search className="h-4 w-4" />
                         </Button>

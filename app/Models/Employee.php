@@ -214,6 +214,11 @@ class Employee extends Model
         return $this->belongsTo(Department::class);
     }
 
+    public function employeeType()
+    {
+        return $this->belongsTo(EmployeeType::class);
+    }
+
     public function designation()
     {
         return $this->belongsTo(Designation::class);

@@ -17,16 +17,26 @@ trait ProvidesPayrollFilters
     /**
      * @return array<string, mixed>
      */
-    protected function payrollFilterOptions(): array
+    protected function payrollFilterOptions(bool $payrollReadyEmployeesOnly = false): array
     {
+        $employeeQuery = Employee::query()->where('status', 'active');
+        if ($payrollReadyEmployeesOnly) {
+            $employeeQuery
+                ->whereNotNull('payscale_id')
+                ->whereNotNull('salary_grade_id')
+                ->whereNotNull('salary_step_id');
+        }
+
         return [
-            'branches' => Branch::query()->orderBy('name')->get(['id', 'name']),
+            'branches' => Branch::query()
+                ->orderBy('branch_code')
+                ->orderBy('name')
+                ->get(['id', 'name', 'branch_code']),
             'departments' => Department::query()->orderBy('name')->get(['id', 'name']),
             'designations' => Designation::query()->orderBy('name')->get(['id', 'name']),
             'programs' => Program::query()->orderBy('name')->get(['id', 'name']),
             'projects' => Project::query()->orderBy('name')->get(['id', 'name']),
-            'employees' => Employee::query()
-                ->where('status', 'active')
+            'employees' => $employeeQuery
                 ->orderBy('pin')
                 ->get(['id', 'pin', 'name_en', 'employee_id']),
             'salaryHeads' => SalaryHead::query()
@@ -69,9 +79,9 @@ trait ProvidesPayrollFilters
         ];
     }
 
-    protected function applyPayrollEmployeeFilters(Builder $query, Request $request): Builder
+    protected function applyPayrollEmployeeFilters(Builder $query, Request $request, bool $payrollReadyOnly = false): Builder
     {
-        return $query
+        $query = $query
             ->where('status', 'active')
             ->when($request->filled('branch_id'), fn ($q) => $q->where('current_branch_id', $request->integer('branch_id')))
             ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
@@ -79,5 +89,14 @@ trait ProvidesPayrollFilters
             ->when($request->filled('program_id'), fn ($q) => $q->where('program_id', $request->integer('program_id')))
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
             ->when($request->filled('employee_id'), fn ($q) => $q->where('id', $request->integer('employee_id')));
+
+        if ($payrollReadyOnly) {
+            $query
+                ->whereNotNull('payscale_id')
+                ->whereNotNull('salary_grade_id')
+                ->whereNotNull('salary_step_id');
+        }
+
+        return $query;
     }
 }

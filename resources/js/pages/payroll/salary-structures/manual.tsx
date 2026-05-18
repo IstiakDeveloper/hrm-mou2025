@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ComboSelect } from '@/components/ComboSelect';
+import { PayrollComboField } from '@/components/payroll/PayrollFilterGrid';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FolderOpen, Search, Save } from 'lucide-react';
@@ -160,18 +161,15 @@ function StructureTable({
                             headLabel={row.short_name}
                             headSub={row.name}
                             amountType={
-                                <Select
+                                <ComboSelect
                                     value={row.amount_type}
-                                    onValueChange={(v) => onChange(row.salary_head_id, { amount_type: v })}
-                                >
-                                    <SelectTrigger className={typeSelectClass}>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="percentage">PERCENTAGE</SelectItem>
-                                        <SelectItem value="fixed">FIXED</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    onChange={(v) => onChange(row.salary_head_id, { amount_type: v ?? 'fixed' })}
+                                    items={[
+                                        { value: 'percentage', label: 'PERCENTAGE' },
+                                        { value: 'fixed', label: 'FIXED' },
+                                    ]}
+                                    className={typeSelectClass}
+                                />
                             }
                             amountNode={
                                 <Input
@@ -354,72 +352,52 @@ export default function SalaryStructureManual({
                 <Card className="mb-4 w-full bg-slate-50">
                     <CardContent className="pt-4">
                         <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-                            <div className="min-w-0 space-y-1 sm:col-span-1">
-                                <Label className="text-xs">Salary Scale</Label>
-                                <Select
-                                    value={payscaleId || 'none'}
-                                    onValueChange={(v) => {
-                                        setPayscaleId(v === 'none' ? '' : v);
-                                        setGradeId('');
-                                        setStepId('');
-                                    }}
-                                >
-                                    <SelectTrigger className="h-10 w-full">
-                                        <SelectValue placeholder="Select" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">—</SelectItem>
-                                        {payscales.map((p) => (
-                                            <SelectItem key={p.id} value={String(p.id)}>
-                                                {p.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="min-w-0 space-y-1">
-                                <Label className="text-xs">Grade</Label>
-                                <Select
-                                    value={gradeId || 'none'}
-                                    onValueChange={(v) => {
-                                        setGradeId(v === 'none' ? '' : v);
-                                        setStepId('');
-                                    }}
-                                    disabled={!payscaleId}
-                                >
-                                    <SelectTrigger className="h-10 w-full">
-                                        <SelectValue placeholder="Select" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">—</SelectItem>
-                                        {grades.map((g) => (
-                                            <SelectItem key={g.id} value={String(g.id)}>
-                                                {g.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="min-w-0 space-y-1">
-                                <Label className="text-xs">Step</Label>
-                                <Select
-                                    value={stepId || 'none'}
-                                    onValueChange={(v) => setStepId(v === 'none' ? '' : v)}
-                                    disabled={!gradeId}
-                                >
-                                    <SelectTrigger className="h-10 w-full">
-                                        <SelectValue placeholder="Select" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">—</SelectItem>
-                                        {steps.map((s) => (
-                                            <SelectItem key={s.id} value={String(s.id)}>
-                                                {s.step_number}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            <PayrollComboField
+                                label="Salary Scale"
+                                value={payscaleId}
+                                onChange={(v) => {
+                                    setPayscaleId(v);
+                                    setGradeId('');
+                                    setStepId('');
+                                }}
+                                items={[
+                                    { value: '', label: 'Select payscale', disabled: true },
+                                    ...payscales.map((p) => ({ value: String(p.id), label: p.name })),
+                                ]}
+                                required
+                                placeholder="Search payscale…"
+                            />
+                            <PayrollComboField
+                                label="Grade"
+                                value={gradeId}
+                                onChange={(v) => {
+                                    setGradeId(v);
+                                    setStepId('');
+                                }}
+                                disabled={!payscaleId}
+                                items={[
+                                    { value: '', label: 'Select grade', disabled: true },
+                                    ...grades.map((g) => ({ value: String(g.id), label: g.name })),
+                                ]}
+                                required
+                                placeholder="Search grade…"
+                            />
+                            <PayrollComboField
+                                label="Step"
+                                value={stepId}
+                                onChange={(v) => setStepId(v)}
+                                disabled={!gradeId}
+                                items={[
+                                    { value: '', label: 'Select step', disabled: true },
+                                    ...steps.map((s) => ({
+                                        value: String(s.id),
+                                        label: `Step ${s.step_number}`,
+                                        keywords: String(s.step_number),
+                                    })),
+                                ]}
+                                required
+                                placeholder="Search step…"
+                            />
                             <div className="flex min-w-0 flex-col justify-end gap-2 sm:col-span-2 lg:col-span-1">
                                 <Button
                                     type="button"

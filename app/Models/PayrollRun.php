@@ -12,6 +12,7 @@ class PayrollRun extends Model
         'year',
         'month',
         'salary_type',
+        'bonus_configuration_id',
         'branch_id',
         'program_id',
         'project_id',
@@ -51,6 +52,11 @@ class PayrollRun extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function bonusConfiguration(): BelongsTo
+    {
+        return $this->belongsTo(BonusConfiguration::class);
     }
 
     public function payslips(): HasMany

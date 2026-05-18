@@ -84,6 +84,17 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     { label: 'Salary Structure (manual)', href: '/salary-structures/manual' },
                     { label: 'Branch Wise Bank', href: '/branch-payroll-banks' },
                 ];
+            case 'fixed-asset':
+                return [
+                    { label: 'Fixed Asset dashboard', href: '/sections/fixed-asset' },
+                    { label: 'Asset categories', href: '/asset-categories' },
+                    { label: 'Asset register', href: '/fixed-assets' },
+                    { label: 'Employee assignments', href: '/asset-assignments' },
+                    { label: 'Maintenance log', href: '/asset-maintenances' },
+                    { label: 'Disposal requests', href: '/asset-disposals' },
+                    { label: 'Branch transfers', href: '/asset-transfers' },
+                    { label: 'Depreciation', href: '/asset-depreciation' },
+                ];
             default:
                 return [];
         }

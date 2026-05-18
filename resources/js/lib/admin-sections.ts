@@ -81,13 +81,15 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Salary setup & payslips',
         icon: BriefcaseBusiness,
         href: '/sections/payroll',
-        menuTitles: ['Payroll Setup', 'Salary', 'Reports'],
+        menuTitles: ['Payroll Setup', 'Bonus', 'Salary', 'Reports'],
     },
     {
         id: 'fixed-asset',
         title: 'FIXED ASSET',
-        description: 'Asset tracking',
+        description: 'Asset tracking across branches',
         icon: Boxes,
+        href: '/sections/fixed-asset',
+        menuTitles: ['Asset Setup', 'Asset Register', 'Asset Operations', 'Asset Transfers', 'Depreciation', 'Reports'],
     },
     {
         id: 'inventory',
@@ -186,12 +188,34 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     }
     if (p.startsWith('/admin/') || p.startsWith('/reports') || p.startsWith('/settings')) return 'administration';
     if (
+        p.startsWith('/asset-categories') ||
+        p.startsWith('/fixed-assets') ||
+        p.startsWith('/asset-transfers') ||
+        p.startsWith('/asset-assignments') ||
+        p.startsWith('/asset-maintenances') ||
+        p.startsWith('/asset-disposals') ||
+        p.startsWith('/asset-depreciation') ||
+        p.startsWith('/fixed-asset/reports')
+    ) {
+        return 'fixed-asset';
+    }
+    if (
         p.startsWith('/payscales') ||
         p.startsWith('/salary-grades') ||
         p.startsWith('/salary-steps') ||
         p.startsWith('/salary-heads') ||
         p.startsWith('/salary-structures') ||
-        p.startsWith('/branch-payroll-banks')
+        p.startsWith('/branch-payroll-banks') ||
+        p.startsWith('/bonus-types') ||
+        p.startsWith('/bonus-configurations') ||
+        p.startsWith('/bonus-calculation') ||
+        p.startsWith('/bonus-post') ||
+        p.startsWith('/salary-head-modifications') ||
+        p.startsWith('/salary-withheld') ||
+        p.startsWith('/salary-process') ||
+        p.startsWith('/salary-post') ||
+        p.startsWith('/salary-rollback') ||
+        p.startsWith('/payroll/reports')
     ) {
         return 'payroll';
     }
