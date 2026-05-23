@@ -28,6 +28,9 @@ import {
     Wrench,
     Trash2,
     TrendingDown,
+    Gift,
+    Landmark,
+    Coins,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -60,6 +63,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import NotificationDropdown from '@/components/notification-dropdown';
 import { hasAppPermission } from '@/lib/permissions';
 import { getActiveSectionId, getMenuTitlesForSection, getSectionById, type AdminSectionId } from '@/lib/admin-sections';
+import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { FIXED_ASSET_REPORT_NAV, fixedAssetReportPath } from '@/lib/fixed-asset-reports';
 import {
     Dialog,
@@ -140,6 +144,17 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
             ];
         case 'administration':
             return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
+        case 'staff-fund':
+            return [
+                { title: 'Entitlements register', path: '/gratuity/reports/entitlements-register', permission: 'payroll.view' },
+                { title: 'Eligible employees', path: '/gratuity/reports/eligible-employees', permission: 'payroll.view' },
+                { title: 'Projected liability', path: '/gratuity/reports/projected-liability', permission: 'payroll.view' },
+                { title: 'Liability by department', path: '/gratuity/reports/liability-by-department', permission: 'payroll.view' },
+                { title: 'Unpaid liability', path: '/gratuity/reports/unpaid-liability', permission: 'payroll.view' },
+                { title: 'Settlement history', path: '/gratuity/reports/settlement-history', permission: 'payroll.view' },
+                { title: 'Payment summary', path: '/gratuity/reports/payment-summary', permission: 'payroll.view' },
+                { title: 'Gratuity rules', path: '/gratuity/reports/gratuity-rules', permission: 'payroll.view' },
+            ];
         case 'payroll':
             return [
                 { title: 'Grade Step Calculation Report', path: '/payroll/reports/grade-step-calculation', permission: 'payroll.view' },
@@ -310,6 +325,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'admin.access',
     ];
 
+    const staffFundSectionDashboardAny: string[] = [
+        'payroll.view',
+        'payroll.edit',
+        'admin.access',
+    ];
+
     const fixedAssetSectionDashboardAny: string[] = [
         'fixed-assets.view',
         'fixed-assets.create',
@@ -466,6 +487,38 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 { title: 'Salary Rollback', path: '/salary-rollback', permission: 'payroll.view' },
             ],
         },
+        ...STAFF_FUND_NAV_GROUPS.flatMap((group) => {
+            const GroupIcon = group.icon;
+            if (group.items.length === 1) {
+                const item = group.items[0];
+                return [
+                    {
+                        title: item.title,
+                        icon: <GroupIcon className="w-5 h-5" />,
+                        path: staffFundPath(item.path),
+                        hasSubmenu: false as const,
+                        permission: 'payroll.view',
+                        hrOnly: true,
+                    },
+                ];
+            }
+
+            return [
+                {
+                    title: group.title,
+                    icon: <GroupIcon className="w-5 h-5" />,
+                    path: staffFundPath(group.defaultPath),
+                    hasSubmenu: true as const,
+                    permission: 'payroll.view',
+                    hrOnly: true,
+                    submenu: group.items.map((item) => ({
+                        title: item.title,
+                        path: staffFundPath(item.path),
+                        permission: item.permission ?? 'payroll.view',
+                    })),
+                },
+            ];
+        }),
         {
             title: 'Asset Setup',
             icon: <Boxes className="w-5 h-5" />,
@@ -597,9 +650,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return currentPath === pathBase;
             }
 
-            if (pathMatches(pathBase)) {
-                if (!expectedParams) {
-                    return true;
+            // Links with ?section=… (staff fund) must match the path exactly — not as a prefix of
+            // /provident-fund/interest, /provident-fund/withdrawals, etc.
+            if (expectedParams) {
+                if (currentPath !== pathBase) {
+                    return false;
                 }
                 const actual = new URLSearchParams(currentSearch);
                 for (const [key, value] of expectedParams) {
@@ -610,6 +665,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return true;
             }
 
+            if (currentPath === pathBase) {
+                return true;
+            }
+
+            // Prefix match only for the longest matching sidebar path (e.g. /provident-fund/interest
+            // must not highlight /provident-fund "PF Register").
             const candidates = menuNavPaths
                 .map((p) => p.split('?')[0])
                 .filter((base) => pathMatches(base));
@@ -617,7 +678,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return false;
             }
             const best = candidates.reduce((a, b) => (a.length >= b.length ? a : b));
-            return best === pathBase && !expectedParams;
+            return best === pathBase;
         },
         [currentPath, currentSearch, menuNavPaths],
     );
@@ -654,6 +715,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             case 'payroll':
                 return hasAnyDashboardPerm(payrollSectionDashboardAny)
                     ? [{ title: 'Payroll', path: '/sections/payroll' }]
+                    : [];
+            case 'staff-fund':
+                return hasAnyDashboardPerm(staffFundSectionDashboardAny)
+                    ? [{ title: 'Staff Fund', path: '/sections/staff-fund' }]
                     : [];
             case 'fixed-asset':
                 return hasAnyDashboardPerm(fixedAssetSectionDashboardAny)

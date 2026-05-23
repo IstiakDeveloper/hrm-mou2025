@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Edit, Plus, Search, Trash2 } from 'lucide-react';
+import { Building2, Edit, Plus, Search, Trash2, X } from 'lucide-react';
+import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
 
 type BranchRef = { id: number; name: string; branch_code: string | null };
 type BranchPayrollBankRow = {
@@ -26,7 +27,7 @@ export default function BranchPayrollBankIndex({
     filters,
     unassignedBranchCount,
 }: {
-    records: { data: BranchPayrollBankRow[]; meta: { current_page: number; last_page: number; total: number } };
+    records: { data: BranchPayrollBankRow[]; meta: PaginationMeta; links: any };
     filters: { search?: string; per_page?: string };
     unassignedBranchCount: number;
 }) {
@@ -46,70 +47,77 @@ export default function BranchPayrollBankIndex({
         <Layout>
             <Head title="Branch Payroll Banks" />
             <PageSurface>
-                <div className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-5">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Branch payroll banks</h1>
-                        <p className="text-sm text-gray-500">
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Branch Payroll Banks</h1>
+                        <p className="text-sm text-slate-500 mt-1">
                             Payroll bank accounts per branch
                             {unassignedBranchCount > 0 && (
-                                <span className="ml-2 text-amber-600">({unassignedBranchCount} branches without a record)</span>
+                                <span className="ml-2 text-amber-600 font-medium">({unassignedBranchCount} branches without a record)</span>
                             )}
                         </p>
                     </div>
-                    <Link href={route('branch-payroll-banks.create')}>
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add record
-                        </Button>
-                    </Link>
+                    <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                placeholder="Search branch, bank, account..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+                            />
+                            {search && (
+                                <button
+                                    onClick={() => { setSearch(''); router.get(route('branch-payroll-banks.index'), { search: '', per_page: filters.per_page }, { preserveState: true }); }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button onClick={applyFilters} size="sm" className="h-9 w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700">
+                                Search
+                            </Button>
+                            <Link href={route('branch-payroll-banks.create')} className="w-full sm:w-auto">
+                                <Button size="sm" className="h-9 w-full sm:w-auto flex items-center bg-emerald-600 hover:bg-emerald-700">
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    Add Record
+                                </Button>
+                            </Link>
+                        </div>
+                    </div>
                 </div>
 
-                <Card className="mb-4">
-                    <CardContent className="flex gap-2 pt-4">
-                        <Input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-                            placeholder="Search branch, bank, account..."
-                            className="max-w-sm"
-                        />
-                        <Button variant="outline" onClick={applyFilters}>
-                            <Search className="h-4 w-4" />
-                        </Button>
-                    </CardContent>
-                </Card>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Building2 className="h-5 w-5" />
-                            All records
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Branch</TableHead>
-                                    <TableHead>Bank</TableHead>
-                                    <TableHead>Bank branch</TableHead>
-                                    <TableHead>Account</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
+
+                <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-slate-50/80 border-b border-slate-200">
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider pl-6">Branch</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Bank</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Bank branch</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Account</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Type</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
                             <TableBody>
                                 {records.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center text-muted-foreground">
+                                        <TableCell colSpan={7} className="h-24 text-center text-slate-500">
                                             No branch payroll bank records found.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     records.data.map((r) => (
-                                        <TableRow key={r.id}>
-                                            <TableCell className="font-medium">
+                                        <TableRow key={r.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
+                                            <TableCell className="pl-6 font-medium text-slate-800">
                                                 {r.branch?.name ?? '—'}
                                                 {r.branch?.branch_code ? ` (${r.branch.branch_code})` : ''}
                                             </TableCell>
@@ -122,21 +130,32 @@ export default function BranchPayrollBankIndex({
                                                     {r.is_active ? 'Active' : 'Inactive'}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="space-x-2 text-right">
-                                                <Link href={route('branch-payroll-banks.edit', r.id)}>
-                                                    <Button variant="outline" size="sm">
-                                                        <Edit className="h-4 w-4" />
+                                            <TableCell className="text-right pr-6">
+                                                <div className="flex items-center justify-end gap-2 transition-opacity duration-200">
+                                                    <Link href={route('branch-payroll-banks.edit', r.id)}>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-colors" title="Edit">
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    </Link>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" title="Delete" onClick={() => handleDelete(r.id)}>
+                                                        <Trash2 className="h-4 w-4" />
                                                     </Button>
-                                                </Link>
-                                                <Button variant="outline" size="sm" onClick={() => handleDelete(r.id)}>
-                                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                                </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
                                 )}
                             </TableBody>
-                        </Table>
+                            </Table>
+                        </div>
+                        <DataTablePagination
+                            meta={records.meta}
+                            links={records.links}
+                            perPage={filters.per_page || '10'} 
+                            onPerPageChange={(val) => {
+                                router.get(route('branch-payroll-banks.index'), { ...filters, per_page: val }, { preserveState: true });
+                            }}
+                        />
                     </CardContent>
                 </Card>
             </PageSurface>

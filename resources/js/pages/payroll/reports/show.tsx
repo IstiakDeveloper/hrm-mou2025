@@ -13,6 +13,7 @@ import {
     PayrollYearSelect,
 } from '@/components/payroll/PayrollFilterGrid';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
+import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
 import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
 type ReportMeta = {
@@ -24,6 +25,7 @@ type ReportMeta = {
 };
 
 type Props = {
+    companyName?: string;
     report: ReportMeta;
     filterOptions: {
         branches: { id: number; name: string; branch_code?: string | null }[];
@@ -188,6 +190,7 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
 }
 
 export default function PayrollReportShow({
+    companyName,
     report,
     filterOptions,
     filters: initFilters,
@@ -376,6 +379,12 @@ export default function PayrollReportShow({
                                 </>
                             )}
                         </div>
+                        <ReportDocumentHeader
+                            companyName={companyName}
+                            title={report.title}
+                            periodLabel={periodLabel}
+                            rowCount={(payload.meta as { row_count?: number } | undefined)?.row_count}
+                        />
                         <ReportPreview payload={payload} />
                     </PayrollSectionCard>
                 )}

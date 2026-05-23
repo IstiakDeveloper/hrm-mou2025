@@ -377,7 +377,9 @@ export default function SalaryStructureManual({
                                 disabled={!payscaleId}
                                 items={[
                                     { value: '', label: 'Select grade', disabled: true },
-                                    ...grades.map((g) => ({ value: String(g.id), label: g.name })),
+                                    ...grades
+                                        .filter((g) => !payscaleId || g.payscale_id === Number(payscaleId))
+                                        .map((g) => ({ value: String(g.id), label: g.name || '—' })),
                                 ]}
                                 required
                                 placeholder="Search grade…"
@@ -389,11 +391,13 @@ export default function SalaryStructureManual({
                                 disabled={!gradeId}
                                 items={[
                                     { value: '', label: 'Select step', disabled: true },
-                                    ...steps.map((s) => ({
-                                        value: String(s.id),
-                                        label: `Step ${s.step_number}`,
-                                        keywords: String(s.step_number),
-                                    })),
+                                    ...steps
+                                        .filter((s) => !gradeId || s.salary_grade_id === Number(gradeId))
+                                        .map((s) => ({
+                                            value: String(s.id),
+                                            label: `Step ${s.step_number}`,
+                                            keywords: String(s.step_number),
+                                        })),
                                 ]}
                                 required
                                 placeholder="Search step…"

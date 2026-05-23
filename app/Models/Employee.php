@@ -79,6 +79,9 @@ class Employee extends Model
         'last_promotion_date',
         'probation_period_days',
         'basic_salary',
+        'pf_balance',
+        'pf_enrolled',
+        'pf_enrollment_date',
         'payscale_id',
         'salary_grade_id',
         'salary_step_id',
@@ -97,6 +100,9 @@ class Employee extends Model
         'final_payment_date' => 'date',
         'last_promotion_date' => 'date',
         'basic_salary' => 'decimal:2',
+        'pf_balance' => 'decimal:2',
+        'pf_enrolled' => 'boolean',
+        'pf_enrollment_date' => 'date',
         'bank_account_details' => 'array',
         'is_project_employee' => 'boolean',
         'is_custodian' => 'boolean',
@@ -332,6 +338,16 @@ class Employee extends Model
     public function documents()
     {
         return $this->hasMany(EmployeeDocument::class);
+    }
+
+    public function pfTransactions()
+    {
+        return $this->hasMany(EmployeePfTransaction::class);
+    }
+
+    public function gratuityPayments()
+    {
+        return $this->hasMany(EmployeeGratuityPayment::class);
     }
 
     public function currentBranch()

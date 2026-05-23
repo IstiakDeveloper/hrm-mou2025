@@ -74,6 +74,13 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     { label: 'Roles', href: '/admin/roles' },
                     { label: 'Reports overview', href: '/reports' },
                 ];
+            case 'staff-fund':
+                return [
+                    { label: 'Staff Fund dashboard', href: '/sections/staff-fund' },
+                    { label: 'PF Register', href: '/provident-fund' },
+                    { label: 'Gratuity entitlements', href: '/gratuity' },
+                    { label: 'Gratuity payments', href: '/gratuity/payments' },
+                ];
             case 'payroll':
                 return [
                     { label: 'Payroll dashboard', href: '/sections/payroll' },

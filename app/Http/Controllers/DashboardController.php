@@ -5,28 +5,31 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\AttendanceSetting;
 use App\Models\Branch;
+use App\Models\BranchPayrollBank;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\EmployeeGratuityPayment;
+use App\Models\EmployeePfTransaction;
 use App\Models\EmployeeType;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
-use App\Models\BranchPayrollBank;
 use App\Models\Movement;
+use App\Models\PayrollRun;
 use App\Models\Payscale;
 use App\Models\Program;
-use App\Models\SalaryGrade;
-use App\Models\SalaryHead;
-use App\Models\SalaryStep;
-use App\Models\PayrollRun;
-use App\Models\SalaryStructure;
 use App\Models\Project;
 use App\Models\RegionalOffice;
 use App\Models\Role;
+use App\Models\SalaryGrade;
+use App\Models\SalaryHead;
+use App\Models\SalaryStep;
+use App\Models\SalaryStructure;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Zone;
+use App\Support\SafeSchema;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -250,19 +253,80 @@ class DashboardController extends Controller
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
 
         $branchCount = Branch::query()->count();
-        $mappedBranches = BranchPayrollBank::query()->count();
+        $mappedBranches = SafeSchema::modelCount(BranchPayrollBank::class);
 
         return Inertia::render('sections/payroll/dashboard', [
             'stats' => [
-                'payscales' => Payscale::query()->count(),
-                'grades' => SalaryGrade::query()->count(),
-                'steps' => SalaryStep::query()->count(),
-                'heads' => SalaryHead::query()->count(),
-                'structures' => SalaryStructure::query()->count(),
+                'payscales' => SafeSchema::modelCount(Payscale::class),
+                'grades' => SafeSchema::modelCount(SalaryGrade::class),
+                'steps' => SafeSchema::modelCount(SalaryStep::class),
+                'heads' => SafeSchema::modelCount(SalaryHead::class),
+                'structures' => SafeSchema::modelCount(SalaryStructure::class),
                 'branchBanks' => $mappedBranches,
                 'branchesUnmapped' => max(0, $branchCount - $mappedBranches),
-                'processedRuns' => PayrollRun::query()->where('status', 'processed')->count(),
-                'postedRuns' => PayrollRun::query()->where('status', 'posted')->count(),
+                'processedRuns' => SafeSchema::modelCount(PayrollRun::class, fn ($q) => $q->where('status', 'processed')),
+                'postedRuns' => SafeSchema::modelCount(PayrollRun::class, fn ($q) => $q->where('status', 'posted')),
+            ],
+            'userRole' => $role?->name ?? 'User',
+        ]);
+    }
+
+    /**
+     * Staff Fund section dashboard — PF & gratuity overview.
+     */
+    public function staffFundSection(Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+
+        /** @var User $user */
+        $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        if (! $hasPermission($user, 'payroll.view') && ! $hasPermission($user, 'admin.access')) {
+            abort(403);
+        }
+
+        $roles = $user->roles;
+        $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
+
+        $monthStart = Carbon::today()->startOfMonth()->toDateString();
+        $monthEnd = Carbon::today()->endOfMonth()->toDateString();
+        $fiveYearsAgo = Carbon::today()->subYears(5)->toDateString();
+
+        $pfEnrolled = SafeSchema::modelCount(Employee::class, fn ($q) => $q
+            ->whereIn('status', ['active', 'on_leave'])
+            ->where('pf_enrolled', true));
+
+        $totalPfBalance = (float) (Employee::query()
+            ->whereIn('status', ['active', 'on_leave'])
+            ->sum('pf_balance') ?? 0);
+
+        $pfCreditsMonth = (float) (EmployeePfTransaction::query()
+            ->where('transaction_type', 'payroll')
+            ->whereBetween('transaction_date', [$monthStart, $monthEnd])
+            ->sum('credit_amount') ?? 0);
+
+        $gratuityEligible = SafeSchema::modelCount(Employee::class, fn ($q) => $q
+            ->whereIn('status', ['active', 'on_leave'])
+            ->whereNotNull('joining_date')
+            ->whereDate('joining_date', '<=', $fiveYearsAgo));
+
+        $gratuityRecords = SafeSchema::modelCount(EmployeeGratuityPayment::class);
+        $gratuityPending = SafeSchema::modelCount(EmployeeGratuityPayment::class, fn ($q) => $q
+            ->whereIn('status', ['calculated', 'approved']));
+
+        return Inertia::render('sections/staff-fund/dashboard', [
+            'stats' => [
+                'pfEnrolledEmployees' => $pfEnrolled,
+                'totalPfBalance' => round($totalPfBalance, 2),
+                'pfPayrollCreditsThisMonth' => round($pfCreditsMonth, 2),
+                'gratuityEligibleEmployees' => $gratuityEligible,
+                'gratuityPaymentRecords' => $gratuityRecords,
+                'gratuityPendingApproval' => $gratuityPending,
             ],
             'userRole' => $role?->name ?? 'User',
         ]);

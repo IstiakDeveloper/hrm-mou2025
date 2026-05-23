@@ -16,16 +16,13 @@
             </p>
         @endif
 
-        <header class="report-header">
-            <div class="company-name">{{ $companyName }}</div>
-            <div class="report-title">{{ $title }}</div>
-            <div class="report-meta">
-                Period: {{ $periodLabel }} | Generated: {{ $generatedAt }}
-                @if (!empty($payload['meta']['row_count']))
-                    | Records: {{ $payload['meta']['row_count'] }}
-                @endif
-            </div>
-        </header>
+        @include('reports.partials.header', [
+            'companyName' => $companyName,
+            'title' => $title,
+            'periodLabel' => $periodLabel,
+            'generatedAt' => $generatedAt,
+            'payload' => $payload,
+        ])
 
         @if (!empty($payload['meta']['message']))
             <p>{{ $payload['meta']['message'] }}</p>

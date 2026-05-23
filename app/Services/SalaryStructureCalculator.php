@@ -25,7 +25,7 @@ class SalaryStructureCalculator
 
         $heads = SalaryHead::query()->whereIn('id', array_unique($headIds))->get()->keyBy('id');
 
-        $totalAddition = round($basicSalary, 2);
+        $totalAddition = self::roundTaka($basicSalary);
         $totalDeduction = 0.0;
 
         foreach ($lines as $line) {
@@ -52,18 +52,24 @@ class SalaryStructureCalculator
         }
 
         return [
-            'total_addition' => round($totalAddition, 2),
-            'total_deduction' => round($totalDeduction, 2),
-            'net_payable' => round($totalAddition - $totalDeduction, 2),
+            'total_addition' => self::roundTaka($totalAddition),
+            'total_deduction' => self::roundTaka($totalDeduction),
+            'net_payable' => self::roundTaka($totalAddition - $totalDeduction),
         ];
     }
 
     public static function computeLineAmount(SalaryHead $head, string $amountType, float $amount, float $basicSalary): float
     {
         if ($amountType === 'percentage') {
-            return round($basicSalary * ($amount / 100), 2);
+            return self::roundTaka($basicSalary * ($amount / 100));
         }
 
-        return round($amount, 2);
+        return self::roundTaka($amount);
+    }
+
+    /** Whole taka (no paisa) — matches salary sheet amounts. */
+    public static function roundTaka(float $amount): float
+    {
+        return (float) (int) round($amount, 0);
     }
 }

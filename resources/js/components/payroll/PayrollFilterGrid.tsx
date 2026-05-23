@@ -4,7 +4,13 @@ import { Label } from '@/components/ui/label';
 import { formatPayrollBranchLabel, sortPayrollBranches, type PayrollBranchOption } from '@/lib/payroll-branches';
 
 type Option = { id: number; name: string | null };
-type EmpOption = { id: number; pin?: string | null; name_en?: string | null; employee_id?: string | null };
+type EmpOption = {
+    id: number;
+    pin?: string | null;
+    name_en?: string | null;
+    employee_id?: string | null;
+    pf_balance?: number;
+};
 
 const ALL_VALUE = '';
 
@@ -130,6 +136,9 @@ export function PayrollEmployeeSelect({
     allowAll = true,
     allLabel = 'All employees',
     disabled,
+    showPfBalance = false,
+    disableZeroPfBalance = false,
+    comboPortal = true,
 }: {
     label?: string;
     value: string;
@@ -139,6 +148,9 @@ export function PayrollEmployeeSelect({
     allowAll?: boolean;
     allLabel?: string;
     disabled?: boolean;
+    showPfBalance?: boolean;
+    disableZeroPfBalance?: boolean;
+    comboPortal?: boolean;
 }) {
     const items = useMemo(() => {
         const list: ComboSelectItem<string>[] = [];
@@ -150,14 +162,23 @@ export function PayrollEmployeeSelect({
         for (const e of employees) {
             const pin = e.pin || e.employee_id || '';
             const name = e.name_en || '';
+            const base = [pin, name].filter(Boolean).join(' — ') || `Employee #${e.id}`;
+            const balance = Number(e.pf_balance ?? 0);
+            const balanceSuffix =
+                showPfBalance && balance > 0
+                    ? ` · Balance ${balance.toLocaleString('en-BD', { maximumFractionDigits: 0 })}`
+                    : showPfBalance && balance <= 0
+                      ? ' · No PF balance'
+                      : '';
             list.push({
                 value: String(e.id),
-                label: [pin, name].filter(Boolean).join(' — ') || `Employee #${e.id}`,
-                keywords: [pin, name, String(e.id)].filter(Boolean).join(' '),
+                label: base + balanceSuffix,
+                keywords: [pin, name, String(e.id), String(balance)].filter(Boolean).join(' '),
+                disabled: disableZeroPfBalance && balance <= 0,
             });
         }
         return list;
-    }, [allLabel, allowAll, employees, required]);
+    }, [allLabel, allowAll, disableZeroPfBalance, employees, required, showPfBalance]);
 
     return (
         <PayrollField label={label} required={required}>
@@ -167,6 +188,7 @@ export function PayrollEmployeeSelect({
                 items={items}
                 placeholder={required ? 'Search employee…' : allLabel}
                 disabled={disabled}
+                portal={comboPortal}
                 className="h-10 bg-white"
             />
         </PayrollField>

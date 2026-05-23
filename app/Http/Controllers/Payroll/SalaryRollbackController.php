@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
+use App\Models\Employee;
+use App\Models\EmployeePfTransaction;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
+use App\Services\SalaryStructureCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -98,7 +101,26 @@ class SalaryRollbackController extends Controller
             }
 
             foreach ($runs as $run) {
-                $run->payslips()->each(fn (Payslip $p) => $p->lines()->delete());
+                $run->load('payslips');
+                foreach ($run->payslips as $payslip) {
+                    $pfTx = EmployeePfTransaction::query()
+                        ->where('payslip_id', $payslip->id)
+                        ->first();
+                    if ($pfTx) {
+                        $credit = (float) ($pfTx->credit_amount ?? 0);
+                        $debit = (float) ($pfTx->debit_amount ?? 0);
+                        $reversal = $credit > 0 || $debit > 0
+                            ? SalaryStructureCalculator::roundTaka($credit - $debit)
+                            : SalaryStructureCalculator::roundTaka(
+                                (float) $pfTx->employee_contribution + (float) $pfTx->employer_contribution
+                            );
+                        Employee::query()
+                            ->whereKey($payslip->employee_id)
+                            ->decrement('pf_balance', $reversal);
+                        $pfTx->delete();
+                    }
+                    $payslip->lines()->delete();
+                }
                 $run->payslips()->delete();
                 $run->update([
                     'status' => 'rolled_back',

@@ -33,7 +33,8 @@ export default function PayscaleEdit({ payscale }: { payscale: Payscale }) {
         transform((payload) => ({
             ...payload,
             effective_from: displayDateToServer(payload.effective_from),
-        })).put(route('payscales.update', payscale.id));
+        }));
+        put(route('payscales.update', payscale.id));
     };
 
     return (

@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
+use App\Services\EmployeeProvidentFundService;
 use App\Services\PayrollCalculationService;
 use App\Support\PayrollFormHelper;
 use Carbon\Carbon;
@@ -23,7 +24,8 @@ class SalaryProcessController extends Controller
     use ProvidesPayrollFilters;
 
     public function __construct(
-        protected PayrollCalculationService $calculator
+        protected PayrollCalculationService $calculator,
+        protected EmployeeProvidentFundService $pfService,
     ) {}
 
     public function index(Request $request)
@@ -339,6 +341,20 @@ class SalaryProcessController extends Controller
                     'payslip_id' => $payslip->id,
                     ...$line,
                 ]);
+            }
+
+            if (
+                $validated['salary_type'] === 'salary'
+                && $this->pfService->isEligible($employee)
+                && ($calc['pf_employee_contribution'] ?? 0) > 0
+            ) {
+                $this->pfService->recordForPayslip(
+                    $employee,
+                    $payslip,
+                    (float) $calc['pf_employee_contribution'],
+                    (float) $calc['pf_employer_contribution'],
+                    $processCarbon
+                );
             }
 
             $totalGross += $calc['gross_salary'];

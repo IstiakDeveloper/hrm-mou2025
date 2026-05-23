@@ -25,7 +25,8 @@ export default function PayscaleCreate() {
         transform((payload) => ({
             ...payload,
             effective_from: displayDateToServer(payload.effective_from),
-        })).post(route('payscales.store'));
+        }));
+        post(route('payscales.store'));
     };
 
     return (

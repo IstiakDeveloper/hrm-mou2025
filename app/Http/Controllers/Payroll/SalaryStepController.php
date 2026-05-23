@@ -60,7 +60,7 @@ class SalaryStepController extends Controller
     {
         $validated = $request->validate([
             'salary_grade_id' => 'required|exists:salary_grades,id',
-            'step_number' => 'required|integer|min:1|max:99',
+            'step_number' => 'required|integer|min:0|max:99',
             'basic_salary' => 'required|numeric|min:0',
             'is_active' => 'boolean',
         ]);
@@ -101,7 +101,7 @@ class SalaryStepController extends Controller
     {
         $validated = $request->validate([
             'salary_grade_id' => 'required|exists:salary_grades,id',
-            'step_number' => 'required|integer|min:1|max:99',
+            'step_number' => 'required|integer|min:0|max:99',
             'basic_salary' => 'required|numeric|min:0',
             'is_active' => 'boolean',
         ]);

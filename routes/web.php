@@ -24,8 +24,8 @@ use App\Http\Controllers\FixedAsset\AssetAssignmentController;
 use App\Http\Controllers\FixedAsset\AssetCategoryController;
 use App\Http\Controllers\FixedAsset\AssetDepreciationController;
 use App\Http\Controllers\FixedAsset\AssetDisposalController;
-use App\Http\Controllers\FixedAsset\AssetRevaluationController;
 use App\Http\Controllers\FixedAsset\AssetMaintenanceController;
+use App\Http\Controllers\FixedAsset\AssetRevaluationController;
 use App\Http\Controllers\FixedAsset\AssetTransferController;
 use App\Http\Controllers\FixedAsset\FixedAssetController;
 use App\Http\Controllers\FixedAsset\FixedAssetDashboardController;
@@ -213,6 +213,9 @@ Route::middleware(['auth'])->group(function () {
     // Payroll - setup dashboard & master data
     Route::get('/sections/payroll', [DashboardController::class, 'payrollSection'])
         ->name('sections.payroll');
+
+    Route::get('/sections/staff-fund', [DashboardController::class, 'staffFundSection'])
+        ->name('sections.staff-fund');
 
     Route::get('/sections/fixed-asset', FixedAssetDashboardController::class)
         ->middleware('permission:fixed-assets.view')
@@ -743,6 +746,36 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'index'])->name('salary-rollback.index');
         Route::post('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'rollback'])->name('salary-rollback.rollback')->middleware('permission:payroll.edit');
+
+        Route::prefix('provident-fund')->name('provident-fund.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'index'])->name('index');
+            Route::get('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestIndex'])->name('interest.index');
+            Route::post('/interest/preview', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestPreview'])->name('interest.preview')->middleware('permission:payroll.edit');
+            Route::post('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestStore'])->name('interest.store')->middleware('permission:payroll.edit');
+            Route::get('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'withdrawalsIndex'])->name('withdrawals.index');
+            Route::post('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeWithdrawal'])->name('withdrawals.store')->middleware('permission:payroll.edit');
+            Route::get('/{employee}/ledger', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'ledger'])->name('ledger');
+            Route::post('/opening-balance', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeOpening'])->name('opening.store')->middleware('permission:payroll.edit');
+            Route::post('/manual', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeManual'])->name('manual.store')->middleware('permission:payroll.edit');
+            Route::put('/transactions/{transaction}', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'updateTransaction'])->name('transactions.update')->middleware('permission:payroll.edit');
+            Route::delete('/transactions/{transaction}', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'destroyTransaction'])->name('transactions.destroy')->middleware('permission:payroll.edit');
+        });
+
+        Route::prefix('gratuity')->name('gratuity.')->group(function () {
+            Route::prefix('reports')->name('reports.')->group(function () {
+                Route::get('/{report}', [\App\Http\Controllers\Payroll\GratuityReportController::class, 'show'])->name('show');
+                Route::get('/{report}/print', [\App\Http\Controllers\Payroll\GratuityReportController::class, 'print'])->name('print');
+                Route::middleware(['permission:reports.export'])->group(function () {
+                    Route::get('/{report}/pdf', [\App\Http\Controllers\Payroll\GratuityReportController::class, 'pdf'])->name('pdf');
+                    Route::get('/{report}/excel', [\App\Http\Controllers\Payroll\GratuityReportController::class, 'excel'])->name('excel');
+                });
+            });
+            Route::get('/', [\App\Http\Controllers\Payroll\GratuityController::class, 'index'])->name('index');
+            Route::get('/rules', [\App\Http\Controllers\Payroll\GratuityController::class, 'rules'])->name('rules');
+            Route::get('/payments', [\App\Http\Controllers\Payroll\GratuityController::class, 'payments'])->name('payments');
+            Route::get('/{employee}', [\App\Http\Controllers\Payroll\GratuityController::class, 'show'])->name('show');
+            Route::post('/{employee}/payments', [\App\Http\Controllers\Payroll\GratuityController::class, 'storePayment'])->name('payments.store')->middleware('permission:payroll.edit');
+        });
 
         Route::prefix('payroll/reports')->name('payroll.reports.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'index'])->name('index');

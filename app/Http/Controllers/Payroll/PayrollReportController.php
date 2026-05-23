@@ -57,6 +57,7 @@ class PayrollReportController extends Controller
         }
 
         return Inertia::render('payroll/reports/show', [
+            'companyName' => config('payroll_reports.company_name'),
             'report' => [
                 'slug' => $report,
                 'title' => $config['title'],

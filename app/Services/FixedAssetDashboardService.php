@@ -8,6 +8,7 @@ use App\Models\AssetDisposal;
 use App\Models\AssetMaintenance;
 use App\Models\Branch;
 use App\Models\FixedAsset;
+use App\Support\SafeSchema;
 use Illuminate\Support\Facades\DB;
 
 class FixedAssetDashboardService
@@ -17,6 +18,10 @@ class FixedAssetDashboardService
      */
     public function stats(?int $branchId = null): array
     {
+        if (! SafeSchema::hasTable('fixed_assets')) {
+            return $this->emptyStats();
+        }
+
         $assetQuery = FixedAsset::query();
         if ($branchId) {
             $assetQuery->where('branch_id', $branchId);
@@ -88,6 +93,29 @@ class FixedAssetDashboardService
             'openMaintenance' => $maintenanceOpen,
             'depreciableAssets' => $depreciable,
             'topBranches' => $topBranches,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyStats(): array
+    {
+        return [
+            'totalAssets' => 0,
+            'purchaseValue' => 0.0,
+            'bookValue' => 0.0,
+            'active' => 0,
+            'inTransit' => 0,
+            'underMaintenance' => 0,
+            'disposed' => 0,
+            'categories' => 0,
+            'branches' => 0,
+            'pendingDisposals' => 0,
+            'activeAssignments' => 0,
+            'openMaintenance' => 0,
+            'depreciableAssets' => 0,
+            'topBranches' => [],
         ];
     }
 }

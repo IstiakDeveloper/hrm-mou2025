@@ -1,7 +1,7 @@
-import React, { Fragment, useMemo, useState } from 'react';
-import { Combobox, Transition } from '@headlessui/react';
-import { Check, ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Combobox, ComboboxButton, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react';
+import { Check, ChevronDown, Search, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 export type ComboSelectItem<TValue extends string | number = string> = {
     value: TValue;
@@ -17,6 +17,10 @@ type Props<TValue extends string | number = string> = {
     placeholder?: string;
     disabled?: boolean;
     className?: string;
+    /** Set false inside modals so the list stays clickable (Radix focus trap). */
+    portal?: boolean;
+    /** Whether the selection can be cleared. Defaults to true. */
+    clearable?: boolean;
 };
 
 export function ComboSelect<TValue extends string | number = string>({
@@ -26,6 +30,8 @@ export function ComboSelect<TValue extends string | number = string>({
     placeholder = 'Select…',
     disabled,
     className,
+    portal = true,
+    clearable = true,
 }: Props<TValue>) {
     const [query, setQuery] = useState('');
 
@@ -56,67 +62,90 @@ export function ComboSelect<TValue extends string | number = string>({
             disabled={disabled}
             onClose={() => setQuery('')}
         >
-            <div className={cn('relative w-full min-w-[9.5rem]', className)}>
-                <div
-                    className={cn(
-                        'border-input focus-within:border-ring focus-within:ring-ring/50 flex h-9 w-full min-w-0 items-center gap-2 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
-                        disabled && 'opacity-50'
-                    )}
-                >
-                    <Search className="h-4 w-4 text-muted-foreground" />
-                    <Combobox.Input
-                        className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
-                        displayValue={(item) => (item as ComboSelectItem<TValue> | null)?.label ?? ''}
-                        autoComplete="off"
-                        onChange={(event) => setQuery(event.target.value)}
-                        onInput={(event) => setQuery((event.target as HTMLInputElement).value)}
-                        placeholder={placeholder}
-                    />
-                    <Combobox.Button className="ml-auto">
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    </Combobox.Button>
-                </div>
+            {({ open }) => (
+                <div className={cn('relative w-full min-w-[9.5rem]', className)}>
+                    <div
+                        className={cn(
+                            'bg-card border-input flex h-9 w-full min-w-0 items-center gap-2 rounded-md border px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+                            open
+                                ? 'border-emerald-600 ring-[3px] ring-emerald-600/15 dark:border-emerald-500 dark:ring-emerald-500/20'
+                                : 'focus-within:border-emerald-600 focus-within:ring-[3px] focus-within:ring-emerald-600/15 dark:focus-within:border-emerald-500 dark:focus-within:ring-emerald-500/20',
+                            disabled && 'bg-muted/20 pointer-events-none opacity-50',
+                        )}
+                    >
+                        <Search className="text-muted-foreground/60 h-3.5 w-3.5 shrink-0" />
+                        <ComboboxInput
+                            className="placeholder:text-muted-foreground/50 w-full min-w-0 bg-transparent py-0.5 text-xs outline-none md:text-sm"
+                            displayValue={(item) => (item as ComboSelectItem<TValue> | null)?.label ?? ''}
+                            autoComplete="off"
+                            onChange={(event) => setQuery(event.target.value)}
+                            onFocus={(event) => event.target.select()}
+                            placeholder={placeholder}
+                        />
+                        <div className="ml-auto flex shrink-0 items-center gap-1">
+                            {clearable && value !== null && value !== undefined && value !== '' && !disabled && (
+                                <button
+                                    type="button"
+                                    tabIndex={-1}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onChange(null);
+                                        setQuery('');
+                                    }}
+                                    className="text-muted-foreground/50 hover:bg-muted hover:text-foreground flex h-5 w-5 cursor-pointer items-center justify-center rounded-full transition-colors focus:outline-none"
+                                    title="Clear selection"
+                                >
+                                    <X className="h-3 w-3 stroke-[2.5]" />
+                                </button>
+                            )}
+                            <ComboboxButton className="hover:bg-muted/50 flex cursor-pointer items-center justify-center rounded-sm p-0.5 transition-colors">
+                                <ChevronDown
+                                    className={cn(
+                                        'text-muted-foreground/60 h-3.5 w-3.5 transition-transform duration-200',
+                                        open && 'rotate-180 text-emerald-600 dark:text-emerald-500',
+                                    )}
+                                />
+                            </ComboboxButton>
+                        </div>
+                    </div>
 
-                <Transition as={Fragment} leave="transition ease-in duration-100" leaveFrom="opacity-100" leaveTo="opacity-0">
-                    <Combobox.Options
-                        portal
-                        anchor="bottom start"
-                        modal={false}
-                        className="bg-popover text-popover-foreground z-[100] max-h-72 max-w-[min(24rem,calc(100vw-1.5rem))] overflow-x-hidden overflow-y-auto rounded-md border p-1 text-sm shadow-md focus:outline-none [width:max(10rem,var(--input-width,10rem))] [min-width:max(10rem,var(--input-width,10rem))]"
+                    <ComboboxOptions
+                        portal={portal}
+                        anchor={portal ? { to: 'bottom start', gap: 4 } : undefined}
+                        transition
+                        className={cn(
+                            'bg-popover text-popover-foreground scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent max-h-60 overflow-y-auto rounded-md border p-1 text-sm shadow-md focus:outline-none',
+                            portal ? 'z-[200] w-[var(--anchor-width)] min-w-[10rem]' : 'absolute left-0 z-50 mt-1 w-full',
+                            'transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0',
+                        )}
                     >
                         {filtered.length === 0 ? (
-                            <div className="px-2 py-2 text-xs text-muted-foreground">No results.</div>
+                            <div className="text-muted-foreground px-2 py-3 text-center text-xs italic">No results found.</div>
                         ) : (
                             filtered.map((item) => (
-                                <Combobox.Option
+                                <ComboboxOption
                                     key={String(item.value)}
                                     value={item}
                                     disabled={item.disabled}
-                                    className={({ active, disabled }) =>
-                                        cn(
-                                            'relative flex cursor-default select-none items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 outline-none',
-                                            active && 'bg-accent text-accent-foreground',
-                                            disabled && 'opacity-50'
-                                        )
-                                    }
-                                >
-                                    {({ selected }) => (
-                                        <>
-                                            <span className={cn('block min-w-0 break-words pr-1', selected && 'font-medium')}>{item.label}</span>
-                                            {selected ? (
-                                                <span className="absolute right-2 flex items-center">
-                                                    <Check className="h-4 w-4" />
-                                                </span>
-                                            ) : null}
-                                        </>
+                                    className={cn(
+                                        'group relative flex cursor-default items-center rounded-sm py-1.5 pr-8 pl-2.5 text-xs transition-colors duration-100 outline-none select-none md:text-sm',
+                                        'data-[focus]:bg-emerald-50 data-[focus]:text-emerald-900 dark:data-[focus]:bg-emerald-950/40 dark:data-[focus]:text-emerald-50',
+                                        'data-[selected]:bg-emerald-500/10 data-[selected]:text-emerald-800 dark:data-[selected]:bg-emerald-500/20 dark:data-[selected]:text-emerald-200',
+                                        'data-[focus]:data-[selected]:bg-emerald-500/20 data-[focus]:data-[selected]:text-emerald-900 dark:data-[focus]:data-[selected]:bg-emerald-500/30 dark:data-[focus]:data-[selected]:text-emerald-100',
+                                        'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
                                     )}
-                                </Combobox.Option>
+                                >
+                                    <span className="block min-w-0 truncate pr-1 font-normal group-data-[selected]:font-semibold">{item.label}</span>
+                                    <span className="absolute right-2.5 hidden items-center text-emerald-600 group-data-[selected]:flex dark:text-emerald-400">
+                                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                                    </span>
+                                </ComboboxOption>
                             ))
                         )}
-                    </Combobox.Options>
-                </Transition>
-            </div>
+                    </ComboboxOptions>
+                </div>
+            )}
         </Combobox>
     );
 }
-

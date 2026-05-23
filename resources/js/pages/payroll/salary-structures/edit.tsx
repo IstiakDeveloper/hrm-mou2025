@@ -108,7 +108,8 @@ export default function SalaryStructureEdit({
                         transform((payload) => ({
                             ...payload,
                             effective_from: displayDateToServer(payload.effective_from),
-                        })).put(route('salary-structures.update', structure.id));
+                        }));
+                        put(route('salary-structures.update', structure.id));
                     }}
                 >
                     <Card className="mb-4">

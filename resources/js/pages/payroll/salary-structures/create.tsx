@@ -87,7 +87,8 @@ export default function SalaryStructureCreate({
                         transform((payload) => ({
                             ...payload,
                             effective_from: displayDateToServer(payload.effective_from),
-                        })).post(route('salary-structures.store'));
+                        }));
+                        post(route('salary-structures.store'));
                     }}
                 >
                     <Card className="mb-4">

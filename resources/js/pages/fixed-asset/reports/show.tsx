@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ComboSelect } from '@/components/ComboSelect';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
+import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
 import { PayrollField, PayrollMonthSelect, PayrollYearSelect } from '@/components/payroll/PayrollFilterGrid';
 import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
@@ -374,6 +375,12 @@ export default function FixedAssetReportShow({
                                 </Button>
                             </div>
                         )}
+                        <ReportDocumentHeader
+                            companyName={companyName}
+                            title={report.title}
+                            periodLabel={periodLabel}
+                            rowCount={(payload.meta as { row_count?: number } | undefined)?.row_count}
+                        />
                         <ReportPreview payload={payload} />
                     </PayrollSectionCard>
                 )}

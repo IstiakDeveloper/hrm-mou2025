@@ -21,16 +21,13 @@
             </p>
         @endif
 
-        <header class="report-header">
-            <div class="company-name">{{ $companyName }}</div>
-            <div class="report-title">{{ $title }}</div>
-            <div class="report-meta">
-                Period: {{ $periodLabel }} &nbsp;|&nbsp; Generated: {{ $generatedAt }}
-                @if (!empty($payload['meta']['row_count']))
-                    &nbsp;|&nbsp; Records: {{ $payload['meta']['row_count'] }}
-                @endif
-            </div>
-        </header>
+        @include('reports.partials.header', [
+            'companyName' => $companyName,
+            'title' => $title,
+            'periodLabel' => $periodLabel,
+            'generatedAt' => $generatedAt,
+            'payload' => $payload,
+        ])
 
         @php $template = $payload['template'] ?? 'generic'; @endphp
 
