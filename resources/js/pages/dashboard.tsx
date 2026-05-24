@@ -21,13 +21,11 @@ import {
   FileText,
   ChevronRight
 } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface LeaveApplication {
   id: number;
-  employee: {
-    first_name: string;
-    last_name: string;
-  };
+  employee: EmployeeNameFields;
   leave_type: {
     name: string;
   };
@@ -38,10 +36,7 @@ interface LeaveApplication {
 
 interface Movement {
   id: number;
-  employee: {
-    first_name: string;
-    last_name: string;
-  };
+  employee: EmployeeNameFields;
   purpose: string;
   from_datetime: string;
   status: string;
@@ -49,10 +44,7 @@ interface Movement {
 
 interface Transfer {
   id: number;
-  employee: {
-    first_name: string;
-    last_name: string;
-  };
+  employee: EmployeeNameFields;
   from_branch: {
     name: string;
   };
@@ -369,7 +361,7 @@ export default function Dashboard({
                           {recentLeaves.map((leave) => (
                             <ActivityCard
                               key={leave.id}
-                              title={`${leave.employee.first_name} ${leave.employee.last_name}`}
+                              title={employeeDisplayName(leave.employee)}
                               description={`${leave.leave_type.name} (${new Date(leave.start_date).toLocaleDateString()} - ${new Date(leave.end_date).toLocaleDateString()})`}
                               status={leave.status}
                               icon={<User className="h-5 w-5 text-indigo-500" />}
@@ -390,7 +382,7 @@ export default function Dashboard({
                           {recentMovements.map((movement) => (
                             <ActivityCard
                               key={movement.id}
-                              title={`${movement.employee.first_name} ${movement.employee.last_name}`}
+                              title={employeeDisplayName(movement.employee)}
                               description={`${movement.purpose} (${new Date(movement.from_datetime).toLocaleDateString()})`}
                               status={movement.status}
                               icon={<MapPin className="h-5 w-5 text-purple-500" />}
@@ -411,7 +403,7 @@ export default function Dashboard({
                           {recentTransfers.map((transfer) => (
                             <ActivityCard
                               key={transfer.id}
-                              title={`${transfer.employee.first_name} ${transfer.employee.last_name}`}
+                              title={employeeDisplayName(transfer.employee)}
                               description={`${transfer.from_branch.name} → ${transfer.to_branch.name} (${new Date(transfer.effective_date).toLocaleDateString()})`}
                               status={transfer.status}
                               icon={<ArrowLeftRight className="h-5 w-5 text-blue-500" />}

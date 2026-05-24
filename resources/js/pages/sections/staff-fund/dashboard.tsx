@@ -132,18 +132,18 @@ export default function StaffFundDashboard({ stats, userRole }: Props) {
                 {/* Dashboard Subheader */}
                 <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-emerald-100 pb-3">
                     <div className="flex items-center gap-2">
-                        <span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-600 text-white shadow-sm">
-                            <Coins className="h-5 w-5" />
+                        <span className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-lg bg-emerald-600 text-white shadow-sm">
+                            <Coins className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                         </span>
                         <div>
-                            <h1 className="text-base font-bold text-zinc-800 tracking-tight leading-tight">Staff Fund Module</h1>
-                            <p className="text-[11px] text-zinc-400 mt-0.5">
+                            <h1 className="text-sm sm:text-base font-bold text-zinc-800 tracking-tight leading-tight">Staff Fund Module</h1>
+                            <p className="text-[10px] sm:text-[11px] text-zinc-400 mt-0.5">
                                 {userRole} · Central hub for Employee Provident Fund (PF) & Gratuity ledger management.
                             </p>
                         </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                        <Button asChild variant="outline" size="sm" className="h-7 border-zinc-200 bg-white text-xs text-zinc-600 hover:text-emerald-700 hover:bg-emerald-50">
+                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white text-zinc-600 hover:text-emerald-700 hover:bg-emerald-50">
                             <Link href="/sections">Sections</Link>
                         </Button>
                     </div>
@@ -155,7 +155,7 @@ export default function StaffFundDashboard({ stats, userRole }: Props) {
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                         <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Module Overview</h2>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                    <div className="grid grid-cols-1 min-[340px]:grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                         <KpiCard
                             label="PF Enrolled"
                             value={stats.pfEnrolledEmployees}

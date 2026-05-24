@@ -15,10 +15,10 @@ use App\Models\LocationVillage;
 use App\Models\Payscale;
 use App\Models\Program;
 use App\Models\Project;
-use App\Models\SalaryGrade;
-use App\Models\SalaryStep;
 use App\Models\RegionalOffice;
 use App\Models\Role;
+use App\Models\SalaryGrade;
+use App\Models\SalaryStep;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\OrganogramAccessService;
@@ -1104,7 +1104,7 @@ class EmployeeController extends Controller
                 ];
             }),
             'managers' => $managers,
-            'statuses' => ['active', 'inactive', 'on_leave', 'terminated'],
+            'statuses' => ['active', 'inactive'],
             'employeeTypes' => $employeeTypes,
             'programs' => $programs,
             'projects' => $projects,
@@ -1650,7 +1650,7 @@ class EmployeeController extends Controller
                 ];
             }),
             'managers' => $managers,
-            'statuses' => ['active', 'inactive', 'on_leave', 'terminated'],
+            'statuses' => ['active', 'inactive'],
             'employeeTypes' => $employeeTypes,
             'programs' => $programs,
             'projects' => $projects,
@@ -2517,7 +2517,7 @@ class EmployeeController extends Controller
             'departments' => $departments,
             'designations' => $designations,
             'branches' => $branches,
-            'statuses' => ['active', 'inactive', 'on_leave', 'terminated'],
+            'statuses' => ['active', 'inactive'],
         ]);
     }
 
@@ -2535,7 +2535,7 @@ class EmployeeController extends Controller
             'rows.*.last_designation_id' => 'required|integer|exists:designations,id',
             'rows.*.current_branch_id' => 'required|integer|exists:branches,id',
             'rows.*.last_branch_id' => 'nullable|integer|exists:branches,id',
-            'rows.*.status' => 'required|in:active,inactive,on_leave,terminated',
+            'rows.*.status' => 'required|in:active,inactive',
             'rows.*.source_row' => 'nullable|integer',
         ]);
 
@@ -2674,7 +2674,7 @@ class EmployeeController extends Controller
             'branch', // id OR exact name (current branch)
             'last_branch', // id OR exact name (optional)
             'reporting_to', // manager employee pin OR employee_id OR numeric employee table id (optional)
-            'status', // active|inactive|on_leave|terminated
+            'status', // active|inactive
             // Address
             'address',
             'village',

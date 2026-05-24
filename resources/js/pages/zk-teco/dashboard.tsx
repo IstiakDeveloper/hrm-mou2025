@@ -52,6 +52,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/components/ui/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface AttendanceDevice {
   id: number;
@@ -361,7 +362,7 @@ export default function ZKTecoDashboard({ devices, flash }: ZKTecoDashboardProps
                       htmlFor={`employee-${employee.id}`}
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                     >
-                      {employee.employee_id} - {employee.first_name} {employee.last_name}
+                      {employee.employee_id} - {employeeDisplayName(employee)}
                     </label>
                   </div>
                 ))

@@ -54,10 +54,14 @@ type EmployeeLite = {
     department?: { name?: string } | null;
 };
 
-type Props = {
+export type LeaveEmployeeDashboardProps = {
     employee: EmployeeLite;
     leaveBalances: LeaveBalanceRow[];
     recentLeaves: LeaveApplication[];
+};
+
+type LeaveEmployeeDashboardViewProps = LeaveEmployeeDashboardProps & {
+    embedded?: boolean;
 };
 
 function num(v: unknown): number {
@@ -84,7 +88,12 @@ function applicationStatusClass(status: string): string {
     return 'border-zinc-200 bg-zinc-50 text-zinc-800';
 }
 
-export default function LeaveEmployeeDashboard({ employee, leaveBalances, recentLeaves }: Props) {
+export function LeaveEmployeeDashboardView({
+    employee,
+    leaveBalances,
+    recentLeaves,
+    embedded = false,
+}: LeaveEmployeeDashboardViewProps) {
     const { auth } = usePage().props as { auth?: { user?: { name?: string } } };
 
     const totals = useMemo(() => {
@@ -106,26 +115,23 @@ export default function LeaveEmployeeDashboard({ employee, leaveBalances, recent
         );
     }, [leaveBalances]);
 
-    return (
-        <Layout>
-            <Head title="My leave" />
-
-            <PageSurface className="px-3 sm:px-0">
+    const dashboardBody = (
+            <>
                 <Card className="overflow-hidden border-zinc-200/90 border-t-4 border-t-emerald-500 bg-gradient-to-b from-white to-emerald-50/30 shadow-sm">
                     <CardContent className="space-y-4 p-4 sm:p-5">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
-                                <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-emerald-700/90">
+                                <p className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-emerald-700/90">
                                     <Leaf className="h-3.5 w-3.5" />
                                     Leave · {new Date().getFullYear()}
                                 </p>
-                                <h1 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+                                <h1 className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-zinc-900 md:text-2xl">
                                     My leave
                                 </h1>
                                 <p className="mt-1 line-clamp-2 text-xs text-zinc-600 sm:text-sm">
                                     Totals and balances match HR records; applications open in one tap.
                                 </p>
-                                <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-zinc-500">
+                                <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[10px] sm:text-[11px] text-zinc-500">
                                     <UserRound className="inline h-3.5 w-3.5 text-zinc-400" />
                                     <span className="font-medium text-zinc-700">{auth?.user?.name ?? '—'}</span>
                                     <span className="text-zinc-300">·</span>
@@ -133,12 +139,12 @@ export default function LeaveEmployeeDashboard({ employee, leaveBalances, recent
                                 </p>
                             </div>
                             <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                                <Button asChild variant="outline" size="sm" className="h-9 text-xs">
+                                <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs">
                                     <Link href="/sections">Sections</Link>
                                 </Button>
-                                <Button asChild size="sm" className="h-9 bg-emerald-600 text-xs hover:bg-emerald-700">
+                                <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs bg-emerald-600 hover:bg-emerald-700">
                                     <Link href="/leave/applications/create?section=leave">
-                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                        <Plus className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-3.5 sm:w-3.5" />
                                         Apply
                                     </Link>
                                 </Button>
@@ -194,7 +200,7 @@ export default function LeaveEmployeeDashboard({ employee, leaveBalances, recent
                             <CardTitle className="text-base font-semibold text-zinc-900">By leave type</CardTitle>
                             <CardDescription className="text-xs">Remaining / allocated · used %</CardDescription>
                         </CardHeader>
-                        <CardContent className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4">
+                        <CardContent className="grid grid-cols-1 min-[450px]:grid-cols-2 gap-2 p-3 sm:p-4">
                             {sortedBalances.map((b) => {
                                 const alloc = num(b.allocated_days);
                                 const used = num(b.used_days);
@@ -331,7 +337,21 @@ export default function LeaveEmployeeDashboard({ employee, leaveBalances, recent
                         </Card>
                     </div>
                 </div>
-            </PageSurface>
+            </>
+    );
+
+    if (embedded) {
+        return dashboardBody;
+    }
+
+    return (
+        <Layout>
+            <Head title="My leave" />
+            <PageSurface className="px-3 sm:px-4">{dashboardBody}</PageSurface>
         </Layout>
     );
+}
+
+export default function LeaveEmployeeDashboard(props: LeaveEmployeeDashboardProps) {
+    return <LeaveEmployeeDashboardView {...props} />;
 }

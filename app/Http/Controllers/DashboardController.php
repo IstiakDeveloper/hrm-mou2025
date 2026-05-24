@@ -61,36 +61,17 @@ class DashboardController extends Controller
             || $hasPermission($user, 'employees.admin');
 
         if (! $seesOperationalAttendanceMovementDashboard) {
-            $employee = $user->employee()->with(['department', 'branch'])->first();
-            if (! $employee) {
+            $employeeDashboard = $this->buildAttendanceMovementEmployeeDashboardProps($user, $today);
+            if ($employeeDashboard === null) {
                 return redirect()->route('sections.index');
             }
 
-            $todayAttendance = Attendance::where('employee_id', $employee->id)
-                ->where('date', $today)
-                ->first();
-
-            $recentAttendance = Attendance::where('employee_id', $employee->id)
-                ->orderBy('date', 'desc')
-                ->take(10)
-                ->get();
-
-            $recentMovements = Movement::where('employee_id', $employee->id)
-                ->orderBy('created_at', 'desc')
-                ->take(8)
-                ->get();
-
-            return Inertia::render('sections/attendance-movement/employee-dashboard', [
-                'employee' => $employee,
-                'todayAttendance' => $todayAttendance,
-                'recentAttendance' => $recentAttendance,
-                'recentMovements' => $recentMovements,
-            ]);
+            return Inertia::render('sections/attendance-movement/employee-dashboard', $employeeDashboard);
         }
 
         $attendanceStats = $hasPermission($user, 'attendance.view')
             ? $this->getAttendanceStats($user, $today)
-            : ['present' => 0, 'absent' => 0, 'late' => 0];
+            : ['present' => 0, 'absent' => 0, 'late' => 0, 'totalActive' => 0];
 
         $movementStats = $hasPermission($user, 'movements.view')
             ? $this->getMovementStats($user, $today)
@@ -103,11 +84,16 @@ class DashboardController extends Controller
         $roles = $user->roles;
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
 
+        $employeeDashboard = $this->buildAttendanceMovementEmployeeDashboardProps($user, $today);
+        $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
+
         return Inertia::render('sections/attendance-movement/dashboard', [
             'attendanceStats' => $attendanceStats,
             'movementStats' => $movementStats,
             'recentMovements' => $recentMovements,
             'userRole' => $role?->name ?? 'User',
+            'showEmployeeTab' => $showEmployeeTab,
+            'employeeDashboard' => $employeeDashboard,
         ]);
     }
 
@@ -138,24 +124,12 @@ class DashboardController extends Controller
             || $hasPermission($user, 'leave-applications.approve');
 
         if (! $seesOperationalLeaveDashboard) {
-            // Employee leave-focused dashboard
-            $employee = $user->employee()->with(['department', 'branch'])->first();
-            if (! $employee) {
+            $employeeDashboard = $this->buildLeaveEmployeeDashboardProps($user);
+            if ($employeeDashboard === null) {
                 return redirect()->route('sections.index');
             }
 
-            $leaveBalance = $this->getEmployeeLeaveBalance($employee->id);
-            $recentLeaves = LeaveApplication::with('leaveType')
-                ->where('employee_id', $employee->id)
-                ->orderBy('created_at', 'desc')
-                ->take(8)
-                ->get();
-
-            return Inertia::render('sections/leave/employee-dashboard', [
-                'employee' => $employee,
-                'leaveBalances' => $leaveBalance,
-                'recentLeaves' => $recentLeaves,
-            ]);
+            return Inertia::render('sections/leave/employee-dashboard', $employeeDashboard);
         }
 
         // Admin/HR leave overview (reuse existing logic)
@@ -170,10 +144,15 @@ class DashboardController extends Controller
         $roles = $user->roles;
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
 
+        $employeeDashboard = $this->buildLeaveEmployeeDashboardProps($user);
+        $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
+
         return Inertia::render('sections/leave/dashboard', [
             'leaveStats' => $leaveStats,
             'recentLeaves' => $recentLeaves,
             'userRole' => $role?->name ?? 'User',
+            'showEmployeeTab' => $showEmployeeTab,
+            'employeeDashboard' => $employeeDashboard,
         ]);
     }
 
@@ -343,7 +322,7 @@ class DashboardController extends Controller
             abort(403);
         }
         /** @var User $user */
-        $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
+        $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
         $today = Carbon::today();
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
@@ -394,6 +373,9 @@ class DashboardController extends Controller
         $roles = $user->roles;
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
 
+        $employeeDashboard = $this->buildEmployeeDashboardProps($user, $today);
+        $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
+
         return Inertia::render('sections/human-resources/dashboard', [
             'stats' => $stats,
             'organizationHierarchy' => $organizationHierarchy,
@@ -401,6 +383,8 @@ class DashboardController extends Controller
             'transferStats' => $transferStats,
             'recentTransfers' => $recentTransfers,
             'userRole' => $role?->name ?? 'User',
+            'showEmployeeTab' => $showEmployeeTab,
+            'employeeDashboard' => $employeeDashboard,
         ]);
     }
 
@@ -435,7 +419,7 @@ class DashboardController extends Controller
         // Get attendance stats if user has attendance.view permission
         $attendanceStats = $hasPermission($user, 'attendance.view')
             ? $this->getAttendanceStats($user, $today)
-            : ['present' => 0, 'absent' => 0, 'late' => 0];
+            : ['present' => 0, 'absent' => 0, 'late' => 0, 'totalActive' => 0];
 
         // Get leave stats if user has leaves.view permission
         $leaveStats = $hasPermission($user, 'leaves.view')
@@ -483,7 +467,20 @@ class DashboardController extends Controller
      */
     private function employeeDashboard($user, $today)
     {
-        // Get the employee record for the user
+        $props = $this->buildEmployeeDashboardProps($user, $today);
+
+        if ($props === null) {
+            return redirect()->route('sections.index');
+        }
+
+        return Inertia::render('employee-dashboard', $props);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildEmployeeDashboardProps(User $user, Carbon $today): ?array
+    {
         $employee = $user->employee()->with([
             'department',
             'branch',
@@ -494,7 +491,7 @@ class DashboardController extends Controller
         ])->first();
 
         if (! $employee) {
-            return redirect()->route('sections.index');
+            return null;
         }
 
         // Get today's attendance
@@ -574,7 +571,7 @@ class DashboardController extends Controller
         if ($manager) {
             $reportingName = trim((string) ($manager->name_en ?? ''));
             if ($reportingName === '') {
-                $reportingName = trim(($manager->first_name ?? '').' '.($manager->last_name ?? ''));
+                $reportingName = trim((string) ($manager->first_name ?? ''));
             }
         }
 
@@ -600,7 +597,7 @@ class DashboardController extends Controller
                 : null,
         ];
 
-        return Inertia::render('employee-dashboard', [
+        return [
             'employee' => $employee,
             'todayAttendance' => $todayAttendance,
             'recentAttendance' => $recentAttendance,
@@ -612,7 +609,87 @@ class DashboardController extends Controller
             'weekendDaySummary' => $this->weekendDaysLabel($weekendDays),
             'upcomingHolidays' => $upcomingHolidays,
             'hrProfile' => $hrProfile,
-        ]);
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildAttendanceMovementEmployeeDashboardProps(User $user, Carbon $today): ?array
+    {
+        $employee = $user->employee()->with(['department', 'branch'])->first();
+        if (! $employee) {
+            return null;
+        }
+
+        $todayAttendance = Attendance::where('employee_id', $employee->id)
+            ->where('date', $today)
+            ->first();
+
+        $recentAttendance = Attendance::where('employee_id', $employee->id)
+            ->orderBy('date', 'desc')
+            ->take(10)
+            ->get();
+
+        $recentMovements = Movement::where('employee_id', $employee->id)
+            ->orderBy('created_at', 'desc')
+            ->take(8)
+            ->get();
+
+        return [
+            'employee' => $employee,
+            'todayAttendance' => $todayAttendance,
+            'recentAttendance' => $recentAttendance,
+            'recentMovements' => $recentMovements,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildLeaveEmployeeDashboardProps(User $user): ?array
+    {
+        $employee = $user->employee()->with(['department', 'branch'])->first();
+        if (! $employee) {
+            return null;
+        }
+
+        $leaveBalance = $this->getEmployeeLeaveBalance($employee->id);
+        $recentLeaves = LeaveApplication::with('leaveType')
+            ->where('employee_id', $employee->id)
+            ->orderBy('created_at', 'desc')
+            ->take(8)
+            ->get();
+
+        return [
+            'employee' => $employee,
+            'leaveBalances' => $leaveBalance,
+            'recentLeaves' => $recentLeaves,
+        ];
+    }
+
+    /**
+     * User has admin/HR access and a linked employee profile (dual admin + employee context).
+     */
+    private function userHasDualAdminAndEmployeeContext(User $user): bool
+    {
+        if (! $user->employee_id) {
+            return false;
+        }
+
+        $user->loadMissing(['role', 'roles']);
+
+        $roleNames = collect([$user->role?->name])
+            ->merge($user->roles->pluck('name'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($roleNames->count() > 1) {
+            return true;
+        }
+
+        return $roleNames->contains(static fn ($name) => strcasecmp((string) $name, 'Employee') === 0);
     }
 
     /**
@@ -818,7 +895,8 @@ class DashboardController extends Controller
         return $query->take(8)->get()->map(fn (Employee $e) => [
             'id' => $e->id,
             'first_name' => $e->first_name,
-            'last_name' => $e->last_name,
+            'name_en' => $e->name_en,
+            'full_name_en' => $e->full_name_en,
             'employee_id' => $e->employee_id,
             'department' => $e->department?->name,
             'branch' => $e->branch?->name,
@@ -828,26 +906,65 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get attendance statistics, filtered by branch if applicable
+     * Active employees scoped for dashboard (branch managers see their branch only).
      */
-    private function getAttendanceStats($user, $today)
+    private function activeEmployeesQueryForDashboard(User $user)
     {
+        $query = Employee::query()->where('status', 'active');
+
         $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
 
-        $query = Attendance::where('date', $today);
-
-        // Filter by branch if user is a branch manager
         if ($isBranchManager && $branchId) {
-            $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('current_branch_id', $branchId);
-            });
+            $query->where('current_branch_id', $branchId);
         }
 
+        return $query;
+    }
+
+    /**
+     * Live attendance KPIs: based on all active employees, not only rows already in attendances.
+     *
+     * Present = punched in / marked present (incl. half day). Late is separate.
+     * Absent = everyone else (no row yet, explicit absent, or not yet synced by ZKTeco).
+     * Leave, holiday, and on-duty are excluded from absent.
+     */
+    private function getAttendanceStats($user, $today): array
+    {
+        $date = $today instanceof Carbon
+            ? $today->toDateString()
+            : Carbon::parse($today)->toDateString();
+
+        $employees = $this->activeEmployeesQueryForDashboard($user);
+        $totalActive = (clone $employees)->count();
+
+        $present = (clone $employees)->whereHas('attendances', function ($q) use ($date) {
+            $q->whereDate('date', $date)
+                ->where(function ($sq) {
+                    $sq->whereIn('status', ['present', 'half_day'])
+                        ->orWhere(function ($inner) {
+                            $inner->whereNotNull('check_in')
+                                ->whereNotIn('status', ['late', 'leave', 'holiday', 'on_duty', 'absent']);
+                        });
+                });
+        })->count();
+
+        $late = (clone $employees)->whereHas('attendances', function ($q) use ($date) {
+            $q->whereDate('date', $date)->where('status', 'late');
+        })->count();
+
+        $exempt = (clone $employees)->whereHas('attendances', function ($q) use ($date) {
+            $q->whereDate('date', $date)->whereIn('status', ['leave', 'holiday', 'on_duty']);
+        })->count();
+
+        $absent = max(0, $totalActive - $present - $late - $exempt);
+
         return [
-            'present' => (clone $query)->where('status', 'present')->count(),
-            'absent' => (clone $query)->where('status', 'absent')->count(),
-            'late' => (clone $query)->where('status', 'late')->count(),
+            'totalActive' => $totalActive,
+            'present' => $present,
+            'absent' => $absent,
+            'late' => $late,
+            'onLeave' => $exempt,
         ];
     }
 

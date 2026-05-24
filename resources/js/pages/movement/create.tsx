@@ -520,24 +520,30 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
 
                                     <TabsContent value="details">
                                         <form onSubmit={handleSubmit} className="space-y-6">
-                                            {isAdmin && (
+                                            {(isAdmin || currentEmployee) && (
                                                 <div className="space-y-2">
                                                     <Label htmlFor="employee">Employee</Label>
                                                     <Select
                                                         value={employeeId}
                                                         onValueChange={setEmployeeId}
+                                                        disabled={!isAdmin}
                                                     >
                                                         <SelectTrigger id="employee">
                                                             <SelectValue placeholder="Select Employee" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {employees.map((employee) => (
+                                                            {(isAdmin ? employees : currentEmployee ? [currentEmployee] : []).map((employee) => (
                                                                 <SelectItem key={employee.id} value={employee.id.toString()}>
                                                                     {employee.first_name} {employee.last_name} ({employee.employee_id})
                                                                 </SelectItem>
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
+                                                    {!isAdmin && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Movement requests are created for your own employee record only.
+                                                        </p>
+                                                    )}
                                                     {errors.employee_id && (
                                                         <p className="text-sm font-medium text-red-500">{errors.employee_id}</p>
                                                     )}

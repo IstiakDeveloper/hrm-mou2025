@@ -32,24 +32,24 @@ export default function SectionsIndex() {
 
             {/* Top Bar */}
             <header className="bg-white/90 backdrop-blur border-b border-gray-200 shadow-sm">
-                <div className="w-full px-4">
-                    <div className="h-14 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <img src="/logo.png" alt="Logo" className="h-9 w-9 rounded-xl" />
+                <div className="w-full px-3 sm:px-4">
+                    <div className="h-12 sm:h-14 flex items-center justify-between gap-2.5 sm:gap-4">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <img src="/logo.png" alt="Logo" className="h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl shrink-0" />
                             <div className="min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 leading-tight">Mousumi ERP</p>
-                                <p className="text-[11px] text-gray-600 leading-tight">Select a section to continue</p>
+                                <p className="text-xs sm:text-sm font-semibold text-gray-900 leading-tight">Mousumi ERP</p>
+                                <p className="hidden min-[360px]:block text-[9px] sm:text-[11px] text-gray-600 leading-tight">Select a section to continue</p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
                             <NotificationDropdown />
                             <TooltipProvider delayDuration={150}>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Avatar className="h-9 w-9 border border-green-200">
+                                        <Avatar className="h-7 w-7 sm:h-9 sm:w-9 border border-green-200">
                                             <AvatarImage src={photoUrl || ''} alt={name} />
-                                            <AvatarFallback className="bg-green-600 text-white text-xs font-semibold">
+                                            <AvatarFallback className="bg-green-600 text-white text-[10px] sm:text-xs font-semibold">
                                                 {getInitials(name)}
                                             </AvatarFallback>
                                         </Avatar>
@@ -65,7 +65,7 @@ export default function SectionsIndex() {
                                 href="/logout"
                                 method="post"
                                 as="button"
-                                className="cursor-pointer inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/40 active:translate-y-[1px]"
+                                className="cursor-pointer inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/40 active:translate-y-[1px]"
                             >
                                 Logout
                             </Link>
@@ -75,8 +75,8 @@ export default function SectionsIndex() {
             </header>
 
             {/* Centered Grid */}
-            <main className="flex-1 flex items-center justify-center px-4 py-8">
-                <div className="w-full max-w-5xl grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-5 place-items-center">
+            <main className="flex-1 flex items-center justify-center px-3 py-6 sm:px-4 sm:py-8">
+                <div className="w-full max-w-5xl grid grid-cols-2 min-[360px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4 md:gap-5 place-items-center">
                     {ADMIN_SECTIONS.map((section) => {
                         const Icon = section.icon;
                         const moduleActive = Boolean(section.href);
@@ -130,7 +130,7 @@ export default function SectionsIndex() {
                         })();
                         const enabled = moduleActive && hasAccess;
                         const commonClasses =
-                            'group relative select-none rounded-2xl border bg-white/90 p-3 sm:p-4 shadow-sm transition-all will-change-transform';
+                            'group relative select-none rounded-xl sm:rounded-2xl border bg-white/90 p-2 min-[360px]:p-3 sm:p-4 shadow-sm transition-all will-change-transform w-full max-w-[125px] sm:max-w-none';
 
                         return enabled ? (
                             <Link
@@ -139,16 +139,16 @@ export default function SectionsIndex() {
                                 onClick={() => handleSelect(section.id)}
                                 className={`${commonClasses} border-gray-200 hover:shadow-lg hover:-translate-y-0.5 hover:border-green-200 focus:outline-none focus:ring-2 focus:ring-green-500/40 active:translate-y-0`}
                             >
-                                <div className="absolute -top-2 -right-2">
+                                <div className="absolute -top-1 -right-1 z-10">
                                     <span className="inline-flex items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-green-200">
-                                        <CheckCircle2 className="h-6 w-6 text-green-600" />
+                                        <CheckCircle2 className="h-4 w-4 min-[360px]:h-5 min-[360px]:w-5 text-green-600" />
                                     </span>
                                 </div>
-                                <div className="flex flex-col items-center justify-center text-center gap-2">
-                                    <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-3xl bg-gradient-to-b from-green-50 to-white text-green-700 grid place-items-center border border-green-100 group-hover:from-green-100/70 transition-colors">
-                                        <Icon className="h-11 w-11 sm:h-14 sm:w-14" />
+                                <div className="flex flex-col items-center justify-center text-center gap-1 sm:gap-2">
+                                    <div className="h-12 w-12 min-[360px]:h-16 min-[360px]:w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 rounded-xl sm:rounded-2xl md:rounded-3xl bg-gradient-to-b from-green-50 to-white text-green-700 grid place-items-center border border-green-100 group-hover:from-green-100/70 transition-colors mx-auto">
+                                        <Icon className="h-5 w-5 min-[360px]:h-7 min-[360px]:w-7 sm:h-10 sm:w-10 md:h-14 md:w-14" />
                                     </div>
-                                    <p className="text-[11px] sm:text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
+                                    <p className="text-[8px] min-[360px]:text-[10px] sm:text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
                                         {section.title}
                                     </p>
                                 </div>
@@ -162,19 +162,19 @@ export default function SectionsIndex() {
                                             className={`${commonClasses} border-green-200 opacity-85 cursor-not-allowed`}
                                             aria-disabled="true"
                                         >
-                                            <div className="absolute -top-2 -right-2">
+                                            <div className="absolute -top-1 -right-1 z-10">
                                                 <span className="inline-flex items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-amber-200">
-                                                    <Lock className="h-6 w-6 text-amber-600" />
+                                                    <Lock className="h-4 w-4 min-[360px]:h-5 min-[360px]:w-5 text-amber-600" />
                                                 </span>
                                             </div>
-                                            <div className="flex flex-col items-center justify-center text-center gap-2">
-                                                <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-3xl bg-gradient-to-b from-green-50 to-white text-green-700 grid place-items-center border border-green-100">
-                                                    <Icon className="h-11 w-11 sm:h-14 sm:w-14 opacity-90" />
+                                            <div className="flex flex-col items-center justify-center text-center gap-1 sm:gap-2">
+                                                <div className="h-12 w-12 min-[360px]:h-16 min-[360px]:w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 rounded-xl sm:rounded-2xl md:rounded-3xl bg-gradient-to-b from-green-50 to-white text-green-700 grid place-items-center border border-green-100 mx-auto">
+                                                    <Icon className="h-5 w-5 min-[360px]:h-7 min-[360px]:w-7 sm:h-10 sm:w-10 md:h-14 md:w-14 opacity-90" />
                                                 </div>
-                                                <p className="text-[11px] sm:text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
+                                                <p className="text-[8px] min-[360px]:text-[10px] sm:text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
                                                     {section.title}
                                                 </p>
-                                                <p className="text-[10px] text-amber-700 font-semibold">No access</p>
+                                                <p className="text-[7px] min-[360px]:text-[9px] text-amber-700 font-semibold leading-none">No access</p>
                                             </div>
                                         </div>
                                     </TooltipTrigger>
@@ -190,16 +190,16 @@ export default function SectionsIndex() {
                                 className={`${commonClasses} border-gray-200 opacity-80`}
                                 aria-disabled="true"
                             >
-                                <div className="absolute -top-2 -right-2">
+                                <div className="absolute -top-1 -right-1 z-10">
                                     <span className="inline-flex items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-red-200">
-                                        <XCircle className="h-6 w-6 text-red-500" />
+                                        <XCircle className="h-4 w-4 min-[360px]:h-5 min-[360px]:w-5 text-red-500" />
                                     </span>
                                 </div>
-                                <div className="flex flex-col items-center justify-center text-center gap-2">
-                                    <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-3xl bg-gray-50 text-gray-600 grid place-items-center border border-gray-200">
-                                        <Icon className="h-11 w-11 sm:h-14 sm:w-14" />
+                                <div className="flex flex-col items-center justify-center text-center gap-1 sm:gap-2">
+                                    <div className="h-12 w-12 min-[360px]:h-16 min-[360px]:w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 rounded-xl sm:rounded-2xl md:rounded-3xl bg-gray-50 text-gray-600 grid place-items-center border border-gray-200 mx-auto">
+                                        <Icon className="h-5 w-5 min-[360px]:h-7 min-[360px]:w-7 sm:h-10 sm:w-10 md:h-14 md:w-14" />
                                     </div>
-                                    <p className="text-[11px] sm:text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
+                                    <p className="text-[8px] min-[360px]:text-[10px] sm:text-xs font-semibold text-gray-900 leading-tight line-clamp-2">
                                         {section.title}
                                     </p>
                                 </div>

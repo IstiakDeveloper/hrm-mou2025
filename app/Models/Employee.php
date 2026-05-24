@@ -116,7 +116,7 @@ class Employee extends Model
      */
     public static function statusesReservingUniqueIdentifiers(): array
     {
-        return ['active', 'on_leave'];
+        return ['active'];
     }
 
     protected $appends = [

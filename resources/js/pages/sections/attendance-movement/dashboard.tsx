@@ -1,31 +1,45 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowUpRight, BarChart3, Clock, MapPin, MonitorSmartphone, Timer, UserX, Users } from 'lucide-react';
+import { ArrowUpRight, BarChart3, Clock, MapPin, MonitorSmartphone, Timer, User, UserX, Users } from 'lucide-react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
 import { type SharedData } from '@/types';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    AttendanceMovementEmployeeDashboardView,
+    type AttendanceMovementEmployeeDashboardProps,
+} from '@/pages/sections/attendance-movement/employee-dashboard';
 
 type Movement = {
     id: number;
-    employee: { first_name: string; last_name: string };
+    employee: EmployeeNameFields;
     purpose: string;
     from_datetime: string;
     status: string;
 };
 
 type Props = {
-    attendanceStats: { present: number; absent: number; late: number };
+    attendanceStats: {
+        present: number;
+        absent: number;
+        late: number;
+        totalActive: number;
+        onLeave?: number;
+    };
     movementStats: { pending: number; ongoing: number };
     recentMovements: Movement[];
     userRole: string;
+    showEmployeeTab?: boolean;
+    employeeDashboard?: AttendanceMovementEmployeeDashboardProps | null;
 };
 
-const kpiGrid = 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 function KpiCard({
     label,
@@ -116,64 +130,132 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function AttendanceMovementDashboard(props: Props) {
     const { auth } = usePage<SharedData>().props;
-    const shortcutGrid = 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+    const showEmployeeTab = Boolean(props.showEmployeeTab && props.employeeDashboard);
+    const [dashboardMode, setDashboardMode] = useState<'admin' | 'employee'>('admin');
 
     return (
         <Layout>
             <Head title="Attendance & Movement" />
 
-            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6">
+            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 px-3 sm:px-4">
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Attendance &amp; movement</h1>
+                        <h1 className="text-sm sm:text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Attendance &amp; movement</h1>
                         <p className="text-xs text-zinc-500">
                             {props.userRole || 'User'} · {auth?.user?.name}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" size="sm" className="h-8 border-zinc-200 bg-white text-xs">
+                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white">
                             <Link href="/sections">Sections</Link>
                         </Button>
-                        <Button asChild size="sm" className="h-8 bg-sky-600 text-xs hover:bg-sky-700">
+                        <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-sky-600 hover:bg-sky-700">
                             <Link href="/attendance?section=attendance-movement">Attendance</Link>
                         </Button>
                     </div>
                 </div>
 
+                {showEmployeeTab ? (
+                    <Tabs
+                        value={dashboardMode}
+                        onValueChange={(v) => setDashboardMode(v as 'admin' | 'employee')}
+                        className="w-full"
+                    >
+                        <TabsList className="mb-4 h-9 w-fit min-w-0 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
+                            <TabsTrigger
+                                value="admin"
+                                className="h-8 min-w-[5.5rem] flex-none rounded-md px-3 text-xs data-[state=active]:bg-zinc-900 data-[state=active]:text-white"
+                            >
+                                Admin
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="employee"
+                                className="h-8 min-w-[5.5rem] flex-none gap-1.5 rounded-md px-3 text-xs data-[state=active]:bg-sky-600 data-[state=active]:text-white"
+                            >
+                                <User className="h-3.5 w-3.5" />
+                                Employee
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="employee" className="mt-0 outline-none">
+                            {props.employeeDashboard ? (
+                                <AttendanceMovementEmployeeDashboardView embedded {...props.employeeDashboard} />
+                            ) : null}
+                        </TabsContent>
+
+                        <TabsContent value="admin" className="mt-0 outline-none">
+                            <AttendanceMovementAdminBody {...props} />
+                        </TabsContent>
+                    </Tabs>
+                ) : (
+                    <AttendanceMovementAdminBody {...props} />
+                )}
+            </PageSurface>
+        </Layout>
+    );
+}
+
+function AttendanceMovementAdminBody({
+    attendanceStats,
+    movementStats,
+    recentMovements,
+}: Props) {
+    const shortcutGrid = 'grid grid-cols-1 min-[320px]:grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+    const totalActive = attendanceStats.totalActive ?? 0;
+    const activeSub =
+        totalActive > 0 ? `of ${totalActive.toLocaleString()} active staff` : undefined;
+
+    return (
+        <>
                 <section className="mb-6">
                     <SectionLabel>Today&apos;s snapshot</SectionLabel>
                     <div className={kpiGrid}>
                         <KpiCard
+                            label="Active staff"
+                            value={totalActive}
+                            sub="Roster for today"
+                            href="/employees?section=attendance-movement"
+                            icon={Users}
+                            accent="violet"
+                        />
+                        <KpiCard
                             label="Present"
-                            value={props.attendanceStats.present}
+                            value={attendanceStats.present}
+                            sub={activeSub}
                             href="/attendance?section=attendance-movement"
                             icon={Users}
                             accent="emerald"
                         />
                         <KpiCard
                             label="Absent"
-                            value={props.attendanceStats.absent}
+                            value={attendanceStats.absent}
+                            sub={
+                                activeSub
+                                    ? `${activeSub} · incl. no punch yet`
+                                    : 'Incl. no punch yet'
+                            }
                             href="/attendance?section=attendance-movement"
                             icon={UserX}
                             accent="rose"
                         />
                         <KpiCard
                             label="Late"
-                            value={props.attendanceStats.late}
+                            value={attendanceStats.late}
+                            sub={activeSub}
                             href="/attendance?section=attendance-movement"
                             icon={Timer}
                             accent="amber"
                         />
                         <KpiCard
                             label="Movements pending"
-                            value={props.movementStats.pending}
+                            value={movementStats.pending}
                             href="/movements?section=attendance-movement"
                             icon={Clock}
                             accent="sky"
                         />
                         <KpiCard
                             label="Movements ongoing"
-                            value={props.movementStats.ongoing}
+                            value={movementStats.ongoing}
                             href="/movements?section=attendance-movement"
                             icon={MapPin}
                             accent="sky"
@@ -199,9 +281,9 @@ export default function AttendanceMovementDashboard(props: Props) {
                             <CardDescription className="text-xs text-zinc-500">Field visits and travel requests</CardDescription>
                         </CardHeader>
                         <CardContent className="p-0">
-                            {props.recentMovements?.length ? (
+                            {recentMovements?.length ? (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
+                                    <table className="w-full min-w-[550px] text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-zinc-100 bg-zinc-50/80 text-[10px] uppercase tracking-wide text-zinc-500">
                                                 <th className="px-3 py-2 font-medium">Employee</th>
@@ -212,14 +294,14 @@ export default function AttendanceMovementDashboard(props: Props) {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {props.recentMovements.map((x) => (
+                                            {recentMovements.map((x) => (
                                                 <tr key={x.id} className="border-b border-zinc-50 last:border-0 hover:bg-zinc-50/60">
                                                     <td className="px-3 py-2">
                                                         <Link
                                                             href={`/movements/${x.id}?section=attendance-movement`}
                                                             className="font-medium text-zinc-900 hover:text-sky-700"
                                                         >
-                                                            {x.employee.first_name} {x.employee.last_name}
+                                                            {employeeDisplayName(x.employee)}
                                                         </Link>
                                                         <p className="truncate text-[10px] text-zinc-500 sm:hidden">{x.purpose}</p>
                                                     </td>
@@ -255,7 +337,6 @@ export default function AttendanceMovementDashboard(props: Props) {
                         </CardContent>
                     </Card>
                 </section>
-            </PageSurface>
-        </Layout>
+        </>
     );
 }

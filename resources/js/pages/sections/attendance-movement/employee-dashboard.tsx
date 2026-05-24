@@ -43,11 +43,15 @@ type EmployeeLite = {
     department?: { name?: string } | null;
 };
 
-type Props = {
+export type AttendanceMovementEmployeeDashboardProps = {
     employee: EmployeeLite;
     todayAttendance: AttendanceRow | null;
     recentAttendance: AttendanceRow[];
     recentMovements: MovementRow[];
+};
+
+type AttendanceMovementEmployeeDashboardViewProps = AttendanceMovementEmployeeDashboardProps & {
+    embedded?: boolean;
 };
 
 function formatDay(iso?: string | null): string {
@@ -103,12 +107,13 @@ function listStatusBadgeClass(status?: string | null): string {
     return 'border-zinc-200 bg-zinc-50 text-zinc-800';
 }
 
-export default function AttendanceMovementEmployeeDashboard({
+export function AttendanceMovementEmployeeDashboardView({
     employee,
     todayAttendance,
     recentAttendance,
     recentMovements,
-}: Props) {
+    embedded = false,
+}: AttendanceMovementEmployeeDashboardViewProps) {
     const { auth } = usePage().props as { auth?: { user?: { name?: string } } };
 
     const {
@@ -126,11 +131,8 @@ export default function AttendanceMovementEmployeeDashboard({
     const checkOut = formatClock(todayAttendance?.check_out ?? null);
     const topBorder = useMemo(() => statusTopBorder(todayAttendance?.status), [todayAttendance?.status]);
 
-    return (
-        <Layout>
-            <Head title="My attendance & movements" />
-
-            <PageSurface className="px-3 sm:px-0">
+    const dashboardBody = (
+            <div className={embedded ? '' : 'contents'}>
                 {(attendanceError || locationStatus) && (
                     <Alert
                         className={`mb-4 ${attendanceError ? 'border-rose-200 bg-rose-50' : 'border-sky-200 bg-sky-50'}`}
@@ -160,17 +162,17 @@ export default function AttendanceMovementEmployeeDashboard({
                     <CardContent className="space-y-4 p-4 sm:p-5">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
-                                <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-zinc-500">
                                     Attendance & movement · {format(new Date(), 'EEE d MMM yyyy')}
                                 </p>
-                                <h1 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+                                <h1 className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-zinc-900 md:text-2xl">
                                     My overview
                                 </h1>
                                 <p className="mt-1 line-clamp-2 text-xs text-zinc-600 sm:text-sm">
                                     Today&apos;s punches and your latest records — same light theme as the rest of the
                                     app.
                                 </p>
-                                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-zinc-500">
+                                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-zinc-500">
                                     <UserRound className="inline h-3.5 w-3.5 text-zinc-400" />
                                     <span className="font-medium text-zinc-700">{auth?.user?.name ?? '—'}</span>
                                     <span className="text-zinc-300">·</span>
@@ -178,12 +180,12 @@ export default function AttendanceMovementEmployeeDashboard({
                                 </p>
                             </div>
                             <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                                <Button asChild variant="outline" size="sm" className="h-9 min-h-0 text-xs">
+                                <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs min-h-0">
                                     <Link href="/sections">Sections</Link>
                                 </Button>
-                                <Button asChild size="sm" className="h-9 min-h-0 bg-indigo-600 text-xs hover:bg-indigo-700">
+                                <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs min-h-0 bg-indigo-600 hover:bg-indigo-700">
                                     <Link href="/movements/create?section=attendance-movement">
-                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                        <Plus className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-3.5 sm:w-3.5" />
                                         Movement
                                     </Link>
                                 </Button>
@@ -444,7 +446,21 @@ export default function AttendanceMovementEmployeeDashboard({
                         </Card>
                     </div>
                 </div>
-            </PageSurface>
+            </div>
+    );
+
+    if (embedded) {
+        return dashboardBody;
+    }
+
+    return (
+        <Layout>
+            <Head title="My attendance & movements" />
+            <PageSurface className="px-3 sm:px-4">{dashboardBody}</PageSurface>
         </Layout>
     );
+}
+
+export default function AttendanceMovementEmployeeDashboard(props: AttendanceMovementEmployeeDashboardProps) {
+    return <AttendanceMovementEmployeeDashboardView {...props} />;
 }

@@ -129,6 +129,26 @@ class PermissionRegistry
     }
 
     /**
+     * Normalize permissions from DB / model (JSON string or array).
+     *
+     * @return list<string>
+     */
+    public static function permissionsFromStorage(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values($value);
+        }
+
+        if (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? array_values($decoded) : [];
+        }
+
+        return [];
+    }
+
+    /**
      * @return array<string, \App\Models\Role>
      */
     public static function syncDefaultRoles(): array

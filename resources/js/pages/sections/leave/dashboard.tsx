@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -11,6 +11,7 @@ import {
     Layers,
     ListChecks,
     Settings2,
+    User,
     Wallet,
 } from 'lucide-react';
 import Layout from '@/layouts/AdminLayout';
@@ -18,13 +19,16 @@ import { PageSurface } from '@/components/page-surface';
 import { hasAppPermission } from '@/lib/permissions';
 import { type SharedData } from '@/types';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LeaveEmployeeDashboardView, type LeaveEmployeeDashboardProps } from '@/pages/sections/leave/employee-dashboard';
 
 type LeaveApplication = {
     id: number;
-    employee: { first_name: string; last_name: string };
+    employee: EmployeeNameFields;
     leave_type?: { name: string };
     leaveType?: { name: string };
     start_date: string;
@@ -36,10 +40,12 @@ type Props = {
     leaveStats: { pending: number; approved: number; todayOnLeave: number };
     recentLeaves: LeaveApplication[];
     userRole: string;
+    showEmployeeTab?: boolean;
+    employeeDashboard?: LeaveEmployeeDashboardProps | null;
 };
 
-const kpiGrid = 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
-const shortcutGrid = 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+const shortcutGrid = 'grid grid-cols-1 min-[320px]:grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 function leaveTypeLabel(x: LeaveApplication): string {
     return x.leave_type?.name ?? x.leaveType?.name ?? '—';
@@ -132,34 +138,84 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     return <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{children}</h2>;
 }
 
-export default function LeaveDashboard({ leaveStats, recentLeaves, userRole }: Props) {
+export default function LeaveDashboard(props: Props) {
     const { auth } = usePage<SharedData>().props;
+    const { userRole, showEmployeeTab: showEmployeeTabProp, employeeDashboard } = props;
+    const showEmployeeTab = Boolean(showEmployeeTabProp && employeeDashboard);
+    const [dashboardMode, setDashboardMode] = useState<'admin' | 'employee'>('admin');
     const hasPermission = (permission?: string): boolean => hasAppPermission(auth, permission);
 
     return (
         <Layout>
             <Head title="Leave" />
 
-            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6">
+            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 px-3 sm:px-4">
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Leave</h1>
+                        <h1 className="text-sm sm:text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Leave</h1>
                         <p className="text-xs text-zinc-500">
                             {userRole || 'User'} · {auth?.user?.name}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" size="sm" className="h-8 border-zinc-200 bg-white text-xs">
+                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white">
                             <Link href="/sections">Sections</Link>
                         </Button>
                         {hasPermission('leave-applications.create') && (
-                            <Button asChild size="sm" className="h-8 bg-amber-600 text-xs text-white hover:bg-amber-700">
+                            <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-amber-600 text-white hover:bg-amber-700">
                                 <Link href="/leave/applications/create?section=leave">Apply leave</Link>
                             </Button>
                         )}
                     </div>
                 </div>
 
+                {showEmployeeTab ? (
+                    <Tabs
+                        value={dashboardMode}
+                        onValueChange={(v) => setDashboardMode(v as 'admin' | 'employee')}
+                        className="w-full"
+                    >
+                        <TabsList className="mb-4 h-9 w-fit min-w-0 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
+                            <TabsTrigger
+                                value="admin"
+                                className="h-8 min-w-[5.5rem] flex-none rounded-md px-3 text-xs data-[state=active]:bg-zinc-900 data-[state=active]:text-white"
+                            >
+                                Admin
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="employee"
+                                className="h-8 min-w-[5.5rem] flex-none gap-1.5 rounded-md px-3 text-xs data-[state=active]:bg-amber-600 data-[state=active]:text-white"
+                            >
+                                <User className="h-3.5 w-3.5" />
+                                Employee
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="employee" className="mt-0 outline-none">
+                            {employeeDashboard ? (
+                                <LeaveEmployeeDashboardView embedded {...employeeDashboard} />
+                            ) : null}
+                        </TabsContent>
+
+                        <TabsContent value="admin" className="mt-0 outline-none">
+                            <LeaveAdminBody {...props} hasPermission={hasPermission} />
+                        </TabsContent>
+                    </Tabs>
+                ) : (
+                    <LeaveAdminBody {...props} hasPermission={hasPermission} />
+                )}
+            </PageSurface>
+        </Layout>
+    );
+}
+
+function LeaveAdminBody({
+    leaveStats,
+    recentLeaves,
+    hasPermission,
+}: Props & { hasPermission: (permission?: string) => boolean }) {
+    return (
+        <>
                 <section className="mb-6">
                     <SectionLabel>Today &amp; pipeline</SectionLabel>
                     <div className={kpiGrid}>
@@ -222,7 +278,7 @@ export default function LeaveDashboard({ leaveStats, recentLeaves, userRole }: P
                         <CardContent className="p-0">
                             {recentLeaves?.length ? (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
+                                    <table className="w-full min-w-[550px] text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-zinc-100 bg-zinc-50/80 text-[10px] uppercase tracking-wide text-zinc-500">
                                                 <th className="px-3 py-2 font-medium">Employee</th>
@@ -240,7 +296,7 @@ export default function LeaveDashboard({ leaveStats, recentLeaves, userRole }: P
                                                             href={`/leave/applications/${x.id}?section=leave`}
                                                             className="font-medium text-zinc-900 hover:text-amber-700"
                                                         >
-                                                            {x.employee.first_name} {x.employee.last_name}
+                                                            {employeeDisplayName(x.employee)}
                                                         </Link>
                                                         <p className="truncate text-[10px] text-zinc-500 sm:hidden">{leaveTypeLabel(x)}</p>
                                                     </td>
@@ -272,7 +328,6 @@ export default function LeaveDashboard({ leaveStats, recentLeaves, userRole }: P
                         </CardContent>
                     </Card>
                 </section>
-            </PageSurface>
-        </Layout>
+        </>
     );
 }

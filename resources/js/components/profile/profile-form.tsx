@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { employeeDisplayName, employeeInitials } from '@/lib/employee-name';
 import {
   User,
   UserIcon,
@@ -55,7 +56,7 @@ export default function ProfileForm({ user, errors }: ProfileFormProps) {
   // Get user's initials for avatar
   const getInitials = () => {
     if (user.employee) {
-      return `${user.employee.first_name.charAt(0)}${user.employee.last_name.charAt(0)}`;
+      return employeeInitials(user.employee);
     }
     return user.name.charAt(0);
   };
@@ -170,7 +171,7 @@ export default function ProfileForm({ user, errors }: ProfileFormProps) {
                   </Label>
                   <Input
                     id="full_name"
-                    value={`${user.employee.first_name} ${user.employee.last_name}`}
+                    value={employeeDisplayName(user.employee)}
                     disabled
                     className="mt-1.5 bg-gray-50 text-gray-600"
                   />

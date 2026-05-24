@@ -18,14 +18,14 @@ class RoleController extends Controller
     {
         $roles = Role::when($request->search, function ($query, $search) {
             $query->where('name', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                ->orWhere('description', 'like', "%{$search}%");
         })
             ->orderBy('id')
             ->paginate(10)
             ->withQueryString();
 
         $roles->getCollection()->transform(function ($role) {
-            $permissions = json_decode($role->permissions, true) ?? [];
+            $permissions = PermissionRegistry::permissionsFromStorage($role->permissions);
             $role->permission_count = count($permissions);
             $role->permissions_array = $permissions;
 
@@ -67,7 +67,7 @@ class RoleController extends Controller
         $role = Role::create([
             'name' => $request->name,
             'description' => $request->description,
-            'permissions' => PermissionRegistry::encodePermissions($permissions),
+            'permissions' => $permissions,
         ]);
 
         return redirect()->route('admin.roles.index')
@@ -79,7 +79,7 @@ class RoleController extends Controller
      */
     public function show(Role $role)
     {
-        $permissions = json_decode($role->permissions, true) ?? [];
+        $permissions = $role->permissionList();
         $permissionCategories = PermissionRegistry::categories();
         $availablePermissions = PermissionRegistry::labels();
 
@@ -105,8 +105,7 @@ class RoleController extends Controller
      */
     public function edit(Role $role)
     {
-        $rolePermissions = json_decode($role->permissions, true) ?? [];
-        $role->permissions = PermissionRegistry::normalizeRolePermissions($rolePermissions);
+        $role->permissions = PermissionRegistry::normalizeRolePermissions($role->permissionList());
 
         return Inertia::render('admin/roles/edit', [
             'role' => $role,
@@ -125,12 +124,12 @@ class RoleController extends Controller
         $results = [];
 
         foreach ($roles as $role) {
-            $currentPermissions = json_decode($role->permissions, true) ?? [];
+            $currentPermissions = $role->permissionList();
             $validPermissions = PermissionRegistry::normalizeRolePermissions($currentPermissions);
 
-            if (json_encode($currentPermissions) !== json_encode($validPermissions)) {
+            if ($currentPermissions !== $validPermissions) {
                 $role->update([
-                    'permissions' => PermissionRegistry::encodePermissions($validPermissions),
+                    'permissions' => $validPermissions,
                 ]);
                 $fixedCount++;
 
@@ -165,14 +164,14 @@ class RoleController extends Controller
             'permissions.*' => ['string', Rule::in(PermissionRegistry::keys())],
         ]);
 
-        $oldPermissionCount = count(json_decode($role->permissions, true) ?? []);
+        $oldPermissionCount = count($role->permissionList());
         $permissions = PermissionRegistry::filterValid($request->permissions ?? []);
         $newPermissionCount = count($permissions);
 
         $role->update([
             'name' => $request->name,
             'description' => $request->description,
-            'permissions' => PermissionRegistry::encodePermissions($permissions),
+            'permissions' => $permissions,
         ]);
 
         return redirect()->route('admin.roles.index')
@@ -248,7 +247,7 @@ class RoleController extends Controller
                 $role = Role::find($update['role_id']);
                 $permissions = PermissionRegistry::filterValid($update['permissions']);
                 $role->update([
-                    'permissions' => PermissionRegistry::encodePermissions($permissions),
+                    'permissions' => $permissions,
                 ]);
                 $updated++;
             } catch (\Exception $e) {

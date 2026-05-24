@@ -1547,16 +1547,16 @@ class EmployeeDashboardController extends Controller
     private function employeesForDashboardDropdown(User $user)
     {
         $q = Employee::query()
-            ->select('id', 'employee_id', 'first_name', 'last_name')
+            ->select('id', 'employee_id', 'first_name', 'name_en')
             ->with(['department', 'designation'])
             ->where('status', 'active')
-            ->orderBy('first_name')
-            ->orderBy('last_name');
+            ->orderBy('name_en')
+            ->orderBy('first_name');
 
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->get()->map(function ($employee) {
-            $fullName = $employee->first_name.($employee->last_name ? ' '.$employee->last_name : '');
+            $fullName = trim((string) ($employee->name_en ?? '')) ?: trim((string) ($employee->first_name ?? ''));
 
             return [
                 'id' => $employee->id,

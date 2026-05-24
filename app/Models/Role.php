@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PermissionRegistry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -34,15 +35,25 @@ class Role extends Model
         return $this->belongsTo(Role::class, 'parent_id');
     }
 
-    public function getAllPermissions()
+    /**
+     * @return list<string>
+     */
+    public function permissionList(): array
     {
-        $permissions = json_decode($this->permissions, true) ?? [];
+        return PermissionRegistry::permissionsFromStorage($this->permissions);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getAllPermissions(): array
+    {
+        $permissions = $this->permissionList();
 
         if ($this->parent) {
-            $parentPermissions = $this->parent->getAllPermissions();
-            $permissions = array_merge($permissions, $parentPermissions);
+            $permissions = array_merge($permissions, $this->parent->getAllPermissions());
         }
 
-        return array_unique($permissions);
+        return array_values(array_unique($permissions));
     }
 }

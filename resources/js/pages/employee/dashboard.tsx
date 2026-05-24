@@ -36,6 +36,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import LeavePdfExport from '@/pages/employee/LeavePdfExport';
+import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 // Enhanced type definitions
 interface AttendanceRecord {
@@ -87,11 +89,9 @@ interface Designation {
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string;
     email: string;
     department: Department | null;
     designation: Designation | null;
@@ -223,7 +223,7 @@ export default function EmployeeDashboard({
             return;
         }
         const opt = employees.find((e) => e.id === selectedEmployee.id);
-        setSearchQuery(opt?.name ?? `${selectedEmployee.first_name} ${selectedEmployee.last_name}`.trim());
+        setSearchQuery(opt?.name ?? employeeDisplayName(selectedEmployee));
         setFilters((prev) => ({
             ...prev,
             employeeId: selectedEmployee.id,
@@ -454,33 +454,32 @@ export default function EmployeeDashboard({
                 </div>
 
                 {/* Filter Card */}
-                <Card className="mb-8 shadow-sm">
-                    <CardHeader className="bg-gray-50 border-b">
-                        <div className="flex items-center justify-between">
+                <Card className="mb-6 border-slate-200 bg-white shadow-sm overflow-visible">
+                    <CardHeader className="bg-slate-50/55 border-b border-slate-100 py-4 px-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
-                                <CardTitle>Select Employee & Date Range</CardTitle>
-                                <CardDescription>View attendance, leave, and movement data for an employee</CardDescription>
+                                <CardTitle className="text-lg font-semibold text-slate-800">Select Employee & Date Range</CardTitle>
+                                <CardDescription className="text-xs text-slate-500">View attendance, leave, and movement data for an employee</CardDescription>
                             </div>
                             {selectedEmployee && (
-                                <Button onClick={downloadPdf} variant="outline" size="sm" className="flex items-center">
-                                    <Download className="mr-1 h-4 w-4" />
+                                <Button onClick={downloadPdf} variant="outline" size="sm" className="w-full sm:w-auto flex items-center justify-center border-emerald-600/30 text-emerald-700 hover:bg-emerald-50">
+                                    <Download className="mr-1.5 h-4 w-4" />
                                     Export PDF
                                 </Button>
                             )}
                         </div>
                     </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-
-                            <div className="space-y-2">
-                                <Label htmlFor="employee_search">Employee</Label>
+                    <CardContent className="p-5">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                            <div className="space-y-1.5 relative">
+                                <Label htmlFor="employee_search" className="text-xs font-semibold text-slate-600">Employee</Label>
                                 <div id="search-container" className="relative">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                     <Input
                                         id="employee_search"
                                         type="text"
                                         placeholder="Search by name or employee ID…"
-                                        className="pl-8"
+                                        className="pl-9 h-9 text-sm border-slate-200 focus-visible:ring-emerald-500"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         onFocus={() => searchQuery && setShowSearchResults(true)}
@@ -489,28 +488,28 @@ export default function EmployeeDashboard({
 
                                     {/* Search results dropdown */}
                                     {showSearchResults && filteredEmployees.length > 0 && (
-                                        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-white shadow-lg">
+                                        <div className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
                                             {filteredEmployees.map((employee) => (
                                                 <div
                                                     key={employee.id}
-                                                    className="flex cursor-pointer items-center justify-between border-b px-4 py-2 last:border-0 hover:bg-zinc-50"
+                                                    className="flex cursor-pointer items-center justify-between border-b border-slate-50 px-4 py-2.5 last:border-0 hover:bg-emerald-50/50 transition-colors"
                                                     onClick={() => handleEmployeeSelect(employee.id.toString())}
                                                 >
-                                                    <div>
-                                                        <div className="font-medium text-zinc-900">{employee.name}</div>
-                                                        <div className="text-sm text-zinc-500">{employee.department}</div>
+                                                    <div className="min-w-0 pr-4">
+                                                        <div className="font-semibold text-sm text-slate-800 truncate">{employee.name}</div>
+                                                        <div className="text-xs text-slate-500 truncate">{employee.department}</div>
                                                     </div>
-                                                    <div className="text-xs text-zinc-400">{employee.designation}</div>
+                                                    <div className="text-xs font-medium text-slate-400 shrink-0 text-right">{employee.designation}</div>
                                                 </div>
                                             ))}
                                         </div>
                                     )}
                                 </div>
-                                <p className="text-xs text-zinc-500">Pick a row above, then set the period and click Apply.</p>
+                                <p className="text-[10px] text-slate-400">Pick an employee from the dropdown list, then apply dates.</p>
                             </div>
 
-                            <div>
-                                <Label htmlFor="filter_type">Filter Type</Label>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="filter_type" className="text-xs font-semibold text-slate-600">Filter Type</Label>
                                 <Select
                                     value={filters.filterType}
                                     onValueChange={(value) => setFilters({
@@ -518,56 +517,58 @@ export default function EmployeeDashboard({
                                         filterType: value as 'custom' | 'year' | 'all'
                                     })}
                                 >
-                                    <SelectTrigger id="filter_type">
+                                    <SelectTrigger id="filter_type" className="h-9 border-slate-200 text-sm focus:ring-emerald-500">
                                         <SelectValue placeholder="Select filter type" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="custom">Custom Date Range</SelectItem>
-                                        <SelectItem value="year">Yearly</SelectItem>
-                                        <SelectItem value="all">All Time</SelectItem>
+                                        <SelectItem value="custom" className="text-sm">Custom Date Range</SelectItem>
+                                        <SelectItem value="year" className="text-sm">Yearly</SelectItem>
+                                        <SelectItem value="all" className="text-sm">All Time</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
 
                         {filters.filterType === 'custom' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div>
-                                    <Label htmlFor="from_date">From Date</Label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="from_date" className="text-xs font-semibold text-slate-600">From Date</Label>
                                     <DatePicker
                                         id="from_date"
                                         selected={filters.fromDate}
                                         onSelect={(date) => setFilters({ ...filters, fromDate: date })}
                                         placeholderText="Select start date"
+                                        className="w-full h-9 border-slate-200 rounded-md"
                                     />
                                 </div>
-                                <div>
-                                    <Label htmlFor="to_date">To Date</Label>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="to_date" className="text-xs font-semibold text-slate-600">To Date</Label>
                                     <DatePicker
                                         id="to_date"
                                         selected={filters.toDate}
                                         onSelect={(date) => setFilters({ ...filters, toDate: date })}
                                         placeholderText="Select end date"
                                         minDate={filters.fromDate || undefined}
+                                        className="w-full h-9 border-slate-200 rounded-md"
                                     />
                                 </div>
                             </div>
                         )}
 
                         {filters.filterType === 'year' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div>
-                                    <Label htmlFor="year">Select Year</Label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="year" className="text-xs font-semibold text-slate-600">Select Year</Label>
                                     <Select
                                         value={filters.year}
                                         onValueChange={(value) => setFilters({ ...filters, year: value })}
                                     >
-                                        <SelectTrigger id="year">
+                                        <SelectTrigger id="year" className="h-9 border-slate-200 text-sm focus:ring-emerald-500">
                                             <SelectValue placeholder="Select year" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {years.map((year) => (
-                                                <SelectItem key={year} value={year.toString()}>
+                                                <SelectItem key={year} value={year.toString()} className="text-sm">
                                                     {year}
                                                 </SelectItem>
                                             ))}
@@ -577,8 +578,10 @@ export default function EmployeeDashboard({
                             </div>
                         )}
 
-                        <div className="flex justify-end">
-                            <Button onClick={applyFilters}>Apply Filters</Button>
+                        <div className="flex justify-end pt-2 border-t border-slate-50">
+                            <Button onClick={applyFilters} className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6">
+                                Apply Filters
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
@@ -587,28 +590,32 @@ export default function EmployeeDashboard({
                 {selectedEmployee && (
                     <>
                         {/* Employee Header */}
-                        <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
-                            <div className="bg-gray-50 p-6 border-b">
-                                <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                                    <div className="flex items-center">
-                                        <div className="rounded-full bg-blue-100 p-3 mr-4">
-                                            <User className="h-6 w-6 text-blue-600" />
+                        <div className="bg-gradient-to-r from-emerald-800 to-emerald-950 rounded-xl shadow-md overflow-hidden mb-6 text-white border border-emerald-900/20">
+                            <div className="p-5 sm:p-6">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="rounded-xl bg-white/10 p-3 text-emerald-100 ring-1 ring-white/20 shrink-0">
+                                            <User className="h-6 w-6" />
                                         </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">
-                                                {selectedEmployee.first_name} {selectedEmployee.last_name}
+                                        <div className="min-w-0">
+                                            <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white truncate font-sans">
+                                                {employeeDisplayName(selectedEmployee)}
                                             </h2>
-                                            <div className="text-sm text-gray-500">
+                                            <div className="text-xs sm:text-sm text-emerald-100/90 font-medium truncate mt-0.5">
                                                 {selectedEmployee.designation?.name ?? '—'} · {selectedEmployee.department?.name ?? '—'}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="mt-4 md:mt-0">
-                                        <div className="text-sm text-gray-600">
-                                            <span className="font-medium">Employee ID:</span> {selectedEmployee.employee_id}
+                                    <div className="grid grid-cols-2 sm:flex sm:flex-col gap-x-6 gap-y-1 sm:text-right border-t border-white/10 sm:border-0 pt-3 sm:pt-0 w-full sm:w-auto text-xs">
+                                        <div>
+                                            <span className="text-emerald-200/70 block sm:inline font-medium">Employee ID:</span>{' '}
+                                            <span className="font-semibold text-white">{selectedEmployee.employee_id}</span>
                                         </div>
-                                        <div className="text-sm text-gray-600">
-                                            <span className="font-medium">Period:</span> {dateRange.from ? format(new Date(dateRange.from), 'MMM dd, yyyy') : ''} - {dateRange.to ? format(new Date(dateRange.to), 'MMM dd, yyyy') : ''}
+                                        <div className="sm:mt-0.5">
+                                            <span className="text-emerald-200/70 block sm:inline font-medium">Period:</span>{' '}
+                                            <span className="font-semibold text-white">
+                                                {dateRange.from ? format(new Date(dateRange.from), 'MMM dd, yyyy') : ''} - {dateRange.to ? format(new Date(dateRange.to), 'MMM dd, yyyy') : ''}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -617,78 +624,78 @@ export default function EmployeeDashboard({
 
                         {/* Dashboard Tabs */}
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                            <TabsList>
-                                <TabsTrigger value="summary">Summary</TabsTrigger>
-                                <TabsTrigger value="attendance">Attendance</TabsTrigger>
-                                <TabsTrigger value="leave">Leave</TabsTrigger>
-                                <TabsTrigger value="movement">Movement</TabsTrigger>
+                            <TabsList className="grid grid-cols-4 w-full h-auto p-1 bg-slate-100 border border-slate-200 rounded-lg">
+                                <TabsTrigger value="summary" className="text-xs sm:text-sm py-2 px-1 sm:px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm">Summary</TabsTrigger>
+                                <TabsTrigger value="attendance" className="text-xs sm:text-sm py-2 px-1 sm:px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm">Attendance</TabsTrigger>
+                                <TabsTrigger value="leave" className="text-xs sm:text-sm py-2 px-1 sm:px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm">Leave</TabsTrigger>
+                                <TabsTrigger value="movement" className="text-xs sm:text-sm py-2 px-1 sm:px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm">Movement</TabsTrigger>
                             </TabsList>
 
                             {/* Summary Tab */}
                             <TabsContent value="summary">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                                     {/* Attendance Summary Card */}
-                                    <Card className="shadow-sm">
-                                        <CardHeader className="bg-gray-50 border-b">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="rounded-full bg-blue-100 p-1.5">
-                                                    <CalendarDays className="h-5 w-5 text-blue-600" />
+                                    <Card className="border-slate-200/80 bg-white shadow-sm">
+                                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-3.5 px-4">
+                                            <div className="flex items-center space-x-2.5">
+                                                <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600 ring-1 ring-emerald-100">
+                                                    <CalendarDays className="h-4.5 w-4.5" />
                                                 </div>
-                                                <CardTitle>Attendance Overview</CardTitle>
+                                                <CardTitle className="text-sm font-bold text-slate-800">Attendance Overview</CardTitle>
                                             </div>
                                         </CardHeader>
-                                        <CardContent className="pt-6">
+                                        <CardContent className="p-4">
                                             {attendanceSummary && (
                                                 <div className="space-y-4">
-                                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                                        <div className="bg-gray-50 rounded p-3 text-center">
-                                                            <div className="text-sm text-gray-500">Total Days</div>
-                                                            <div className="text-2xl font-bold">{attendanceSummary.total_days}</div>
+                                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                                        <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100/60">
+                                                            <div className="text-[10px] text-slate-500 font-medium truncate">Total Days</div>
+                                                            <div className="text-lg font-bold text-slate-800 mt-0.5">{attendanceSummary.total_days}</div>
                                                         </div>
-                                                        <div className="bg-green-50 rounded p-3 text-center">
-                                                            <div className="text-sm text-gray-500">Present</div>
-                                                            <div className="text-2xl font-bold text-green-700">{attendanceSummary.present}</div>
+                                                        <div className="bg-emerald-50/50 rounded-lg p-2.5 border border-emerald-100/40">
+                                                            <div className="text-[10px] text-emerald-600 font-medium truncate">Present</div>
+                                                            <div className="text-lg font-bold text-emerald-700 mt-0.5">{attendanceSummary.present}</div>
                                                         </div>
-                                                        <div className="bg-red-50 rounded p-3 text-center">
-                                                            <div className="text-sm text-gray-500">Absent</div>
-                                                            <div className="text-2xl font-bold text-red-700">{attendanceSummary.absent}</div>
+                                                        <div className="bg-rose-50/50 rounded-lg p-2.5 border border-rose-100/40">
+                                                            <div className="text-[10px] text-rose-600 font-medium truncate">Absent</div>
+                                                            <div className="text-lg font-bold text-rose-700 mt-0.5">{attendanceSummary.absent}</div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="mt-6">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <span className="text-sm font-medium">Attendance Rate</span>
-                                                            <span className="text-sm font-medium">{attendanceSummary.attendance_percentage}%</span>
+                                                    <div className="pt-2">
+                                                        <div className="flex justify-between items-center mb-1.5 text-xs">
+                                                            <span className="font-semibold text-slate-600">Attendance Rate</span>
+                                                            <span className="font-bold text-emerald-700">{attendanceSummary.attendance_percentage}%</span>
                                                         </div>
                                                         <Progress value={attendanceSummary.attendance_percentage} className="h-2" />
                                                     </div>
 
-                                                    <Separator className="my-4" />
+                                                    <Separator className="bg-slate-100 my-3" />
 
-                                                    <div className="grid grid-cols-2 gap-2 text-sm">
-                                                        <div className="flex justify-between">
-                                                            <span className="text-gray-500">On Leave:</span>
-                                                            <span className="font-medium">{attendanceSummary.leave}</span>
+                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs text-slate-600">
+                                                        <div className="flex justify-between border-b border-slate-50 pb-1">
+                                                            <span className="text-slate-400">On Leave:</span>
+                                                            <span className="font-semibold text-slate-800">{attendanceSummary.leave}</span>
                                                         </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-gray-500">On Duty:</span>
-                                                            <span className="font-medium">{attendanceSummary.on_duty}</span>
+                                                        <div className="flex justify-between border-b border-slate-50 pb-1">
+                                                            <span className="text-slate-400">On Duty:</span>
+                                                            <span className="font-semibold text-slate-800">{attendanceSummary.on_duty}</span>
                                                         </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-gray-500">Weekend:</span>
-                                                            <span className="font-medium">{attendanceSummary.weekend}</span>
+                                                        <div className="flex justify-between border-b border-slate-50 pb-1">
+                                                            <span className="text-slate-400">Weekend:</span>
+                                                            <span className="font-semibold text-slate-800">{attendanceSummary.weekend}</span>
                                                         </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-gray-500">Holiday:</span>
-                                                            <span className="font-medium">{attendanceSummary.holiday}</span>
+                                                        <div className="flex justify-between border-b border-slate-50 pb-1">
+                                                            <span className="text-slate-400">Holiday:</span>
+                                                            <span className="font-semibold text-slate-800">{attendanceSummary.holiday}</span>
                                                         </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-gray-500">Late Arrivals:</span>
-                                                            <span className="font-medium">{attendanceSummary.late}</span>
+                                                        <div className="flex justify-between pb-0.5">
+                                                            <span className="text-slate-400">Late Arrivals:</span>
+                                                            <span className="font-semibold text-amber-700">{attendanceSummary.late}</span>
                                                         </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-gray-500">Early Departures:</span>
-                                                            <span className="font-medium">{attendanceSummary.early_departure}</span>
+                                                        <div className="flex justify-between pb-0.5">
+                                                            <span className="text-slate-400">Early Out:</span>
+                                                            <span className="font-semibold text-amber-700">{attendanceSummary.early_departure}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -697,69 +704,73 @@ export default function EmployeeDashboard({
                                     </Card>
 
                                     {/* Leave Summary Card */}
-                                    <Card className="shadow-sm">
-                                        <CardHeader className="bg-gray-50 border-b">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="rounded-full bg-yellow-100 p-1.5">
-                                                    <Calendar className="h-5 w-5 text-yellow-600" />
+                                    <Card className="border-slate-200/80 bg-white shadow-sm">
+                                        <CardHeader className="bg-slate-50/55 border-b border-slate-100 py-3.5 px-4">
+                                            <div className="flex items-center space-x-2.5">
+                                                <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600 ring-1 ring-emerald-100">
+                                                    <Calendar className="h-4.5 w-4.5" />
                                                 </div>
-                                                <CardTitle>Leave Overview</CardTitle>
+                                                <CardTitle className="text-sm font-bold text-slate-800">Leave Overview</CardTitle>
                                             </div>
                                         </CardHeader>
-                                        <CardContent className="pt-6">
+                                        <CardContent className="p-4">
                                             {leaveSummary && (
                                                 <div className="space-y-4">
-                                                    <div className="text-sm font-medium text-gray-600 mb-2">Leave Balances ({leaveSummary.year})</div>
+                                                    <div className="text-xs font-bold text-slate-600">Leave Balances ({leaveSummary.year})</div>
 
-                                                    {leaveSummary.balances.filter(balance => balance.allocated_days > 0).map((balance, index) => (
-                                                        <div key={index} className="space-y-1">
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-sm">{balance.type} {balance.is_paid ? '(Paid)' : '(Unpaid)'}</span>
-                                                                <span className="text-sm font-medium">
-                                                                    {balance.remaining_days} / {balance.allocated_days}
-                                                                </span>
-                                                            </div>
-                                                            <Progress
-                                                                value={
-                                                                    balance.allocated_days > 0
-                                                                        ? Math.min(
-                                                                              100,
-                                                                              (balance.used_days / balance.allocated_days) * 100,
-                                                                          )
-                                                                        : 0
-                                                                }
-                                                                className="h-2"
-                                                            />
-                                                            <div className="flex justify-between text-xs text-gray-500">
-                                                                <span>Used: {balance.used_days}</span>
-                                                                <span>Remaining: {balance.remaining_days}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-
-                                                    <Separator className="my-4" />
-
-                                                    <div className="space-y-2">
-                                                        <div className="text-sm font-medium text-gray-600">Recent Leave Applications</div>
-                                                        {leaveData.slice(0, 3).map((leave, index) => (
-                                                            <div key={index} className="bg-gray-50 p-3 rounded">
-                                                                <div className="flex justify-between items-start">
-                                                                    <div className="text-sm font-medium">{leave.type}</div>
-                                                                    {getLeaveStatusBadge(leave.status)}
+                                                    <div className="space-y-3">
+                                                        {leaveSummary.balances.filter(balance => balance.allocated_days > 0).map((balance, index) => (
+                                                            <div key={index} className="space-y-1">
+                                                                <div className="flex justify-between items-center text-xs">
+                                                                    <span className="font-medium text-slate-700">{balance.type} {balance.is_paid ? '(Paid)' : '(Unpaid)'}</span>
+                                                                    <span className="font-bold text-slate-900">
+                                                                        {balance.remaining_days} / {balance.allocated_days}
+                                                                    </span>
                                                                 </div>
-                                                                <div className="text-xs text-gray-500 mt-1">
-                                                                    {leave.date_range} • {leave.days} {leave.days > 1 ? 'days' : 'day'}
+                                                                <Progress
+                                                                    value={
+                                                                        balance.allocated_days > 0
+                                                                            ? Math.min(
+                                                                                  100,
+                                                                                  (balance.used_days / balance.allocated_days) * 100,
+                                                                              )
+                                                                            : 0
+                                                                    }
+                                                                    className="h-1.5"
+                                                                />
+                                                                <div className="flex justify-between text-[10px] text-slate-400">
+                                                                    <span>Used: {balance.used_days}d</span>
+                                                                    <span>Remaining: {balance.remaining_days}d</span>
                                                                 </div>
                                                             </div>
                                                         ))}
+                                                    </div>
 
-                                                        {leaveData.length === 0 && (
-                                                            <div className="text-sm text-gray-500 italic">No leave applications in this period</div>
-                                                        )}
+                                                    <Separator className="bg-slate-100 my-3" />
+
+                                                    <div className="space-y-2">
+                                                        <div className="text-xs font-bold text-slate-600">Recent Leave Applications</div>
+                                                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                            {leaveData.slice(0, 3).map((leave, index) => (
+                                                                <div key={index} className="bg-slate-50/50 p-2.5 rounded-lg border border-slate-100/60 text-xs">
+                                                                    <div className="flex justify-between items-start gap-2">
+                                                                        <div className="font-semibold text-slate-700 truncate">{leave.type}</div>
+                                                                        <div className="shrink-0">{getLeaveStatusBadge(leave.status)}</div>
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-400 mt-1">
+                                                                        {leave.date_range} • {leave.days} {leave.days > 1 ? 'days' : 'day'}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+
+                                                            {leaveData.length === 0 && (
+                                                                <div className="text-xs text-slate-400 italic py-2">No leave applications found</div>
+                                                            )}
+                                                        </div>
 
                                                         {leaveData.length > 3 && (
-                                                            <div className="text-center mt-2">
-                                                                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setActiveTab('leave')}>
+                                                            <div className="text-center pt-1">
+                                                                <Button variant="ghost" size="sm" className="text-xs h-7 text-emerald-700 hover:text-emerald-800" onClick={() => setActiveTab('leave')}>
                                                                     View all ({leaveData.length})
                                                                 </Button>
                                                             </div>
@@ -771,61 +782,63 @@ export default function EmployeeDashboard({
                                     </Card>
 
                                     {/* Movement Summary Card */}
-                                    <Card className="shadow-sm">
-                                        <CardHeader className="bg-gray-50 border-b">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="rounded-full bg-purple-100 p-1.5">
-                                                    <Briefcase className="h-5 w-5 text-purple-600" />
+                                    <Card className="border-slate-200/80 bg-white shadow-sm">
+                                        <CardHeader className="bg-slate-50/55 border-b border-slate-100 py-3.5 px-4">
+                                            <div className="flex items-center space-x-2.5">
+                                                <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600 ring-1 ring-emerald-100">
+                                                    <Briefcase className="h-4.5 w-4.5" />
                                                 </div>
-                                                <CardTitle>Movement Overview</CardTitle>
+                                                <CardTitle className="text-sm font-bold text-slate-800">Movement Overview</CardTitle>
                                             </div>
                                         </CardHeader>
-                                        <CardContent className="pt-6">
+                                        <CardContent className="p-4">
                                             <div className="space-y-4">
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div className="bg-blue-50 rounded p-3 text-center">
-                                                        <div className="text-sm text-gray-500">Official</div>
-                                                        <div className="text-2xl font-bold text-blue-700">
+                                                <div className="grid grid-cols-2 gap-3 text-center">
+                                                    <div className="bg-sky-50/40 rounded-lg p-2.5 border border-sky-100/50">
+                                                        <div className="text-[10px] text-sky-600 font-medium">Official</div>
+                                                        <div className="text-lg font-bold text-sky-700 mt-0.5">
                                                             {movementData.filter(m => m.type === 'official').length}
                                                         </div>
                                                     </div>
-                                                    <div className="bg-purple-50 rounded p-3 text-center">
-                                                        <div className="text-sm text-gray-500">Personal</div>
-                                                        <div className="text-2xl font-bold text-purple-700">
+                                                    <div className="bg-purple-50/40 rounded-lg p-2.5 border border-purple-100/50">
+                                                        <div className="text-[10px] text-purple-600 font-medium font-sans">Personal</div>
+                                                        <div className="text-lg font-bold text-purple-700 mt-0.5">
                                                             {movementData.filter(m => m.type === 'personal').length}
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <Separator className="my-4" />
+                                                <Separator className="bg-slate-100 my-3" />
 
                                                 <div className="space-y-2">
-                                                    <div className="text-sm font-medium text-gray-600">Recent Movements</div>
-                                                    {movementData.slice(0, 3).map((movement, index) => (
-                                                        <div key={index} className="bg-gray-50 p-3 rounded">
-                                                            <div className="flex justify-between items-start">
-                                                                <div className="text-sm font-medium">{movement.purpose}</div>
-                                                                {getMovementTypeBadge(movement.type)}
-                                                            </div>
-                                                            <div className="text-xs text-gray-500 mt-1">
-                                                                {movement.formatted_time_range} • {movement.duration_hours} hours
-                                                            </div>
-                                                            {movement.destination && (
-                                                                <div className="flex items-center text-xs text-gray-500 mt-1">
-                                                                    <MapPin className="h-3 w-3 mr-1 text-gray-400" />
-                                                                    {movement.destination}
+                                                    <div className="text-xs font-bold text-slate-600 font-sans">Recent Movements</div>
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                        {movementData.slice(0, 3).map((movement, index) => (
+                                                            <div key={index} className="bg-slate-50/50 p-2.5 rounded-lg border border-slate-100/60 text-xs">
+                                                                <div className="flex justify-between items-start gap-2">
+                                                                    <div className="font-semibold text-slate-700 truncate">{movement.purpose}</div>
+                                                                    <div className="shrink-0">{getMovementTypeBadge(movement.type)}</div>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                                <div className="text-[10px] text-slate-400 mt-1">
+                                                                    {movement.formatted_time_range} • {movement.duration_hours}h
+                                                                </div>
+                                                                {movement.destination && (
+                                                                    <div className="flex items-center text-[10px] text-slate-400 mt-1">
+                                                                        <MapPin className="h-3 w-3 mr-1 text-slate-400 shrink-0" />
+                                                                        <span className="truncate">{movement.destination}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
 
-                                                    {movementData.length === 0 && (
-                                                        <div className="text-sm text-gray-500 italic">No movements in this period</div>
-                                                    )}
+                                                        {movementData.length === 0 && (
+                                                            <div className="text-xs text-slate-400 italic py-2">No movements found</div>
+                                                        )}
+                                                    </div>
 
                                                     {movementData.length > 3 && (
-                                                        <div className="text-center mt-2">
-                                                            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setActiveTab('movement')}>
+                                                        <div className="text-center pt-1">
+                                                            <Button variant="ghost" size="sm" className="text-xs h-7 text-emerald-700 hover:text-emerald-800" onClick={() => setActiveTab('movement')}>
                                                                 View all ({movementData.length})
                                                             </Button>
                                                         </div>
@@ -840,41 +853,43 @@ export default function EmployeeDashboard({
 
                             {/* Enhanced Attendance Tab with Movement Integration */}
                             <TabsContent value="attendance">
-                                <Card className="shadow-sm">
-                                    <CardHeader className="bg-gray-50 border-b">
-                                        <div className="flex items-center justify-between">
+                                <Card className="border-slate-200/80 bg-white shadow-sm overflow-hidden">
+                                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-5">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="flex items-center space-x-3">
-                                                <div className="rounded-full bg-blue-100 p-1.5">
-                                                    <CalendarDays className="h-5 w-5 text-blue-600" />
+                                                <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600 ring-1 ring-emerald-100">
+                                                    <CalendarDays className="h-5 w-5" />
                                                 </div>
                                                 <div>
-                                                    <CardTitle>Attendance Records</CardTitle>
-                                                    <CardDescription>Daily attendance for the selected period</CardDescription>
+                                                    <CardTitle className="text-base font-bold text-slate-800">Attendance Records</CardTitle>
+                                                    <CardDescription className="text-xs text-slate-500">Daily attendance for the selected period</CardDescription>
                                                 </div>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                <Badge variant="secondary" className="bg-slate-100 text-slate-700 font-semibold px-2.5 py-1 text-xs shrink-0">
+                                                    {attendanceSummary?.total_days || 0} Days · {attendanceSummary?.attendance_percentage || 0}% Attendance Rate
+                                                </Badge>
                                                 {attendanceData.length > 0 && (
-                                                    <Button onClick={downloadAttendancePdf} variant="outline" size="sm" className="flex items-center">
-                                                        <Download className="mr-1 h-4 w-4" />
+                                                    <Button onClick={downloadAttendancePdf} variant="outline" size="sm" className="h-8 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 text-xs py-1">
+                                                        <Download className="mr-1 h-3.5 w-3.5" />
                                                         Export PDF
                                                     </Button>
                                                 )}
-                                            </div>
-                                            <div className="text-sm text-gray-500">
-                                                {attendanceSummary?.total_days || 0} Days • {attendanceSummary?.attendance_percentage || 0}% Attendance Rate
                                             </div>
                                         </div>
                                     </CardHeader>
                                     <CardContent className="p-0">
                                         <div className="overflow-x-auto">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Date</TableHead>
-                                                        <TableHead>Day</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                        <TableHead>Check In</TableHead>
-                                                        <TableHead>Check Out</TableHead>
-                                                        <TableHead>Movement</TableHead>
-                                                        <TableHead>Remarks</TableHead>
+                                            <Table className="min-w-[800px]">
+                                                <TableHeader className="bg-slate-50/75">
+                                                    <TableRow className="border-b border-slate-100">
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Date</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Day</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Status</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Check In</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Check Out</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Movement</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Remarks</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
@@ -882,89 +897,90 @@ export default function EmployeeDashboard({
                                                         attendanceData.map((record, index) => (
                                                                 <TableRow
                                                                     key={index}
-                                                                    className={record.has_movement ?
-                                                                        "hover:bg-blue-50/50 border-l-2 border-l-blue-200" :
-                                                                        "hover:bg-gray-50"
-                                                                    }
+                                                                    className={cn(
+                                                                        "border-b border-slate-100 transition-colors",
+                                                                        record.has_movement
+                                                                            ? "bg-emerald-50/10 hover:bg-emerald-50/20 border-l-2 border-l-emerald-500"
+                                                                            : "hover:bg-slate-50/50"
+                                                                    )}
                                                                 >
-                                                                    <TableCell>{format(new Date(record.date), 'dd MMM yyyy')}</TableCell>
-                                                                    <TableCell>{record.day}</TableCell>
-                                                                    <TableCell>{getAttendanceStatusBadge(record.status)}</TableCell>
-                                                                    <TableCell>{record.check_in || '-'}</TableCell>
-                                                                    <TableCell>{record.check_out || '-'}</TableCell>
+                                                                    <TableCell className="text-xs sm:text-sm font-semibold text-slate-700 py-3 px-4">
+                                                                        {format(new Date(record.date), 'dd MMM yyyy')}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs sm:text-sm text-slate-600 py-3 px-4">{record.day}</TableCell>
+                                                                    <TableCell className="text-xs sm:text-sm py-3 px-4">{getAttendanceStatusBadge(record.status)}</TableCell>
+                                                                    <TableCell className="text-xs sm:text-sm font-mono text-slate-700 py-3 px-4">{record.check_in || '-'}</TableCell>
+                                                                    <TableCell className="text-xs sm:text-sm font-mono text-slate-700 py-3 px-4">{record.check_out || '-'}</TableCell>
 
                                                                     {/* Enhanced Movement Column */}
-                                                                    <TableCell>
+                                                                    <TableCell className="py-2.5 px-4">
                                                                         {record.has_movement ? (
-                                                                            <div className="space-y-2">
+                                                                            <div className="space-y-1.5">
                                                                                 {record.multiple_movements ? (
                                                                                     <Popover>
                                                                                         <PopoverTrigger asChild>
-                                                                                            <div className="cursor-pointer hover:bg-blue-50 p-2 rounded-md border border-blue-200 transition-all duration-200">
-                                                                                                <div className="flex items-center justify-between">
-                                                                                                    <div className="flex items-center space-x-2">
-                                                                                                        <Badge variant="outline" className="bg-red-100 text-red-800 border-red-200">
-                                                                                                            <Navigation className="mr-1 h-3 w-3" />
-                                                                                                            {record.total_movements} Movements
-                                                                                                        </Badge>
-                                                                                                    </div>
-                                                                                                    <Info className="h-4 w-4 text-blue-500" />
+                                                                                            <div className="cursor-pointer hover:bg-emerald-50/80 p-2 rounded-lg border border-emerald-100 bg-emerald-50/30 transition-all duration-200">
+                                                                                                <div className="flex items-center justify-between gap-2">
+                                                                                                    <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px] py-0.5 px-1.5">
+                                                                                                        <Navigation className="mr-1 h-2.5 w-2.5" />
+                                                                                                        {record.total_movements} Movements
+                                                                                                    </Badge>
+                                                                                                    <Info className="h-3.5 w-3.5 text-emerald-600" />
                                                                                                 </div>
-                                                                                                <div className="text-xs text-gray-600 mt-1">
-                                                                                                    Multiple movements on this day
+                                                                                                <div className="text-[10px] text-emerald-800 font-medium mt-1">
+                                                                                                    Multiple movements today
                                                                                                 </div>
                                                                                             </div>
                                                                                         </PopoverTrigger>
-                                                                                        <PopoverContent className="w-96" sideOffset={5} align="start">
-                                                                                            <div className="space-y-4">
-                                                                                                <h4 className="font-semibold text-lg flex items-center">
-                                                                                                    <Navigation className="mr-2 h-5 w-5 text-red-500" />
+                                                                                        <PopoverContent className="w-[calc(100vw-32px)] sm:w-96 p-4 rounded-xl shadow-xl border border-slate-100" sideOffset={5} align="start">
+                                                                                            <div className="space-y-3">
+                                                                                                <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                                                                                                    <Navigation className="h-4.5 w-4.5 text-emerald-600" />
                                                                                                     {record.total_movements} Movements Today
                                                                                                 </h4>
 
-                                                                                                <div className="max-h-64 overflow-y-auto space-y-3">
+                                                                                                <div className="max-h-60 overflow-y-auto space-y-3 pr-1">
                                                                                                     {Array.isArray(record.movements) && record.movements.map((movement, movIndex) => (
-                                                                                                        <div key={movement.id} className="border-b pb-3 last:border-b-0">
-                                                                                                            <div className="flex items-center justify-between mb-2">
-                                                                                                                <Badge variant="outline" className={movement.movement_type === 'official' ?
-                                                                                                                    'bg-blue-100 text-blue-800 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-200'}>
-                                                                                                                    <Building2 className="mr-1 h-3 w-3" />
+                                                                                                        <div key={movement.id} className="border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+                                                                                                            <div className="flex items-center justify-between mb-1.5">
+                                                                                                                <Badge variant="outline" className={cn(
+                                                                                                                    "text-[10px] py-0.5 px-1.5 font-semibold",
+                                                                                                                    movement.movement_type === 'official'
+                                                                                                                        ? 'bg-sky-50 text-sky-700 border-sky-100'
+                                                                                                                        : 'bg-purple-50 text-purple-700 border-purple-100'
+                                                                                                                )}>
                                                                                                                     {movIndex + 1}. {movement.movement_type}
                                                                                                                 </Badge>
-                                                                                                                <Badge variant="outline" className={
+                                                                                                                <Badge variant="outline" className={cn(
+                                                                                                                    "text-[10px] py-0.5 px-1.5 font-semibold",
                                                                                                                     movement.status === 'completed'
-                                                                                                                        ? 'bg-green-100 text-green-800 border-green-200'
-                                                                                                                        : 'bg-blue-100 text-blue-800 border-blue-200'
-                                                                                                                }>
-                                                                                                                    {movement.status === 'completed' ? (
-                                                                                                                        <CheckCircle className="mr-1 h-3 w-3" />
-                                                                                                                    ) : (
-                                                                                                                        <Clock className="mr-1 h-3 w-3" />
-                                                                                                                    )}
+                                                                                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                                                                                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                                                                                                                )}>
                                                                                                                     {movement.status}
                                                                                                                 </Badge>
                                                                                                             </div>
 
-                                                                                                            <div className="text-sm space-y-1">
+                                                                                                            <div className="text-xs space-y-1.5">
                                                                                                                 <div>
-                                                                                                                    <span className="text-gray-500 font-medium">Purpose:</span>
-                                                                                                                    <div className="mt-1 whitespace-pre-wrap break-words rounded bg-gray-50 p-2 text-xs text-gray-800">
+                                                                                                                    <span className="text-slate-400 font-medium">Purpose:</span>
+                                                                                                                    <div className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-2 text-xs text-slate-700 font-sans border border-slate-100">
                                                                                                                         {movement.purpose || '—'}
                                                                                                                     </div>
                                                                                                                 </div>
 
-                                                                                                                <div className="grid grid-cols-2 gap-2">
+                                                                                                                <div className="grid grid-cols-2 gap-2 text-[11px]">
                                                                                                                     <div>
-                                                                                                                        <span className="text-gray-500">Destination:</span>
-                                                                                                                        <div className="font-medium flex items-center">
-                                                                                                                            <MapPin className="mr-1 h-3 w-3 text-gray-400" />
+                                                                                                                        <span className="text-slate-400">Destination:</span>
+                                                                                                                        <div className="font-semibold text-slate-700 flex items-center mt-0.5 truncate">
+                                                                                                                            <MapPin className="mr-1 h-3 w-3 text-slate-400 shrink-0" />
                                                                                                                             {movement.destination}
                                                                                                                         </div>
                                                                                                                     </div>
                                                                                                                     <div>
-                                                                                                                        <span className="text-gray-500">Time:</span>
-                                                                                                                        <div className="font-medium flex items-center">
-                                                                                                                            <Clock className="mr-1 h-3 w-3 text-gray-400" />
+                                                                                                                        <span className="text-slate-400">Time Range:</span>
+                                                                                                                        <div className="font-semibold text-slate-700 flex items-center mt-0.5">
+                                                                                                                            <Clock className="mr-1 h-3 w-3 text-slate-400 shrink-0" />
                                                                                                                             {new Date(movement.from_datetime).toLocaleTimeString('en-US', {
                                                                                                                                 hour: '2-digit',
                                                                                                                                 minute: '2-digit',
@@ -982,13 +998,9 @@ export default function EmployeeDashboard({
                                                                                                     ))}
                                                                                                 </div>
 
-                                                                                                <div className="pt-3 border-t flex justify-between">
-                                                                                                    <span className="text-xs text-gray-400">
-                                                                                                        {record.total_movements} movements total
-                                                                                                    </span>
-                                                                                                    <span className="text-xs text-gray-400">
-                                                                                                        Click outside to close
-                                                                                                    </span>
+                                                                                                <div className="pt-2 border-t border-slate-100 flex justify-between text-[10px] text-slate-400">
+                                                                                                    <span>{record.total_movements} movements</span>
+                                                                                                    <span>Click outside to close</span>
                                                                                                 </div>
                                                                                             </div>
                                                                                         </PopoverContent>
@@ -997,69 +1009,71 @@ export default function EmployeeDashboard({
                                                                                     // Single movement display
                                                                                     <Popover>
                                                                                         <PopoverTrigger asChild>
-                                                                                            <div className="cursor-pointer hover:bg-blue-50 p-2 rounded-md border border-transparent hover:border-blue-200 transition-all duration-200">
-                                                                                                <div className="flex items-center justify-between">
-                                                                                                    <div className="flex items-center space-x-2">
-                                                                                                        <Badge variant="outline" className={record.movement_type === 'official' ?
-                                                                                                            'bg-blue-100 text-blue-800 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-200'}>
-                                                                                                            <Building2 className="mr-1 h-3 w-3" />
+                                                                                            <div className="cursor-pointer hover:bg-emerald-50/80 p-2 rounded-lg border border-transparent hover:border-emerald-100 transition-all duration-200">
+                                                                                                <div className="flex items-center justify-between gap-2">
+                                                                                                    <div className="flex items-center space-x-1.5 min-w-0">
+                                                                                                        <Badge variant="outline" className={cn(
+                                                                                                            "text-[9px] py-0 px-1 font-semibold",
+                                                                                                            record.movement_type === 'official'
+                                                                                                                ? 'bg-sky-50 text-sky-700 border-sky-100'
+                                                                                                                : 'bg-purple-50 text-purple-700 border-purple-100'
+                                                                                                        )}>
                                                                                                             {record.movement_type}
                                                                                                         </Badge>
-                                                                                                        <span className="text-sm font-medium">Movement</span>
+                                                                                                        <span className="text-xs font-semibold text-slate-700 truncate">Movement</span>
                                                                                                     </div>
-                                                                                                    <Info className="h-4 w-4 text-blue-500" />
+                                                                                                    <Info className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                                                                                                 </div>
-                                                                                                <div className="text-xs text-gray-600 mt-1">
-                                                                                                    <Navigation className="inline mr-1 h-3 w-3" />
+                                                                                                <div className="text-[10px] text-slate-500 truncate mt-1">
+                                                                                                    <Navigation className="inline mr-1 h-2.5 w-2.5 text-slate-400" />
                                                                                                     {record.movement_purpose?.length > 30
                                                                                                         ? `${record.movement_purpose.substring(0, 30)}...`
                                                                                                         : record.movement_purpose
                                                                                                     }
                                                                                                 </div>
-                                                                                                <div className="text-xs text-gray-500 mt-1">
-                                                                                                    <Clock className="inline mr-1 h-3 w-3" />
+                                                                                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                                                                                    <Clock className="inline mr-1 h-2.5 w-2.5 text-slate-400" />
                                                                                                     {record.movement_from} - {record.movement_to}
                                                                                                 </div>
                                                                                             </div>
                                                                                         </PopoverTrigger>
-                                                                                        <PopoverContent className="w-80" sideOffset={5} align="start">
-                                                                                            <div className="space-y-4">
-                                                                                                <div className="flex items-center justify-between">
-                                                                                                    <h4 className="font-semibold text-lg flex items-center">
-                                                                                                        <Navigation className="mr-2 h-5 w-5 text-blue-500" />
+                                                                                        <PopoverContent className="w-[calc(100vw-32px)] sm:w-80 p-4 rounded-xl shadow-xl border border-slate-100" sideOffset={5} align="start">
+                                                                                            <div className="space-y-3">
+                                                                                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                                                                                    <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                                                                                                        <Navigation className="h-4.5 w-4.5 text-emerald-600" />
                                                                                                         Movement Details
                                                                                                     </h4>
-                                                                                                    <Badge variant="outline" className={
+                                                                                                    <Badge variant="outline" className={cn(
+                                                                                                        "text-[10px] py-0.5 px-1.5 font-semibold",
                                                                                                         record.movement_status === 'completed'
-                                                                                                            ? 'bg-green-100 text-green-800 border-green-200'
-                                                                                                            : 'bg-blue-100 text-blue-800 border-blue-200'
-                                                                                                    }>
-                                                                                                        {record.movement_status === 'completed' ? (
-                                                                                                            <CheckCircle className="mr-1 h-3 w-3" />
-                                                                                                        ) : (
-                                                                                                            <Clock className="mr-1 h-3 w-3" />
-                                                                                                        )}
+                                                                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                                                                            : 'bg-amber-50 text-amber-700 border-amber-100'
+                                                                                                    )}>
                                                                                                         {record.movement_status}
                                                                                                     </Badge>
                                                                                                 </div>
 
-                                                                                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                                                                                <div className="grid grid-cols-2 gap-3 text-xs">
                                                                                                     <div className="space-y-2">
                                                                                                         <div>
-                                                                                                            <span className="text-gray-500 font-medium">Type:</span>
-                                                                                                            <div className="mt-1">
-                                                                                                                <Badge variant="outline" className={record.movement_type === 'official' ?
-                                                                                                                    'bg-blue-100 text-blue-800 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-200'}>
-                                                                                                                    <Building2 className="mr-1 h-3 w-3" />
+                                                                                                            <span className="text-slate-400">Type:</span>
+                                                                                                            <div className="mt-0.5">
+                                                                                                                <Badge variant="outline" className={cn(
+                                                                                                                    "text-[9px] py-0 px-1 font-semibold",
+                                                                                                                    record.movement_type === 'official'
+                                                                                                                        ? 'bg-sky-50 text-sky-700 border-sky-100'
+                                                                                                                        : 'bg-purple-50 text-purple-700 border-purple-100'
+                                                                                                                )}>
                                                                                                                     {record.movement_type}
                                                                                                                 </Badge>
                                                                                                             </div>
                                                                                                         </div>
 
                                                                                                         <div>
-                                                                                                            <span className="text-gray-500 font-medium">Duration:</span>
-                                                                                                            <div className="mt-1 flex items-center text-gray-700">
-                                                                                                                <Clock className="mr-1 h-4 w-4" />
+                                                                                                            <span className="text-slate-400">Time Range:</span>
+                                                                                                            <div className="mt-0.5 flex items-center text-slate-700 font-semibold text-[11px]">
+                                                                                                                <Clock className="mr-1 h-3 w-3 text-slate-400 shrink-0" />
                                                                                                                 {record.movement_from} - {record.movement_to}
                                                                                                             </div>
                                                                                                         </div>
@@ -1067,54 +1081,33 @@ export default function EmployeeDashboard({
 
                                                                                                     <div className="space-y-2">
                                                                                                         <div>
-                                                                                                            <span className="text-gray-500 font-medium">Destination:</span>
-                                                                                                            <div className="mt-1 flex items-center text-gray-700">
-                                                                                                                <MapPin className="mr-1 h-4 w-4" />
+                                                                                                            <span className="text-slate-400">Destination:</span>
+                                                                                                            <div className="mt-0.5 flex items-center text-slate-700 font-semibold text-[11px] truncate">
+                                                                                                                <MapPin className="mr-1 h-3.5 w-3.5 text-slate-400 shrink-0" />
                                                                                                                 {record.movement_destination}
-                                                                                                            </div>
-                                                                                                        </div>
-
-                                                                                                        <div>
-                                                                                                            <span className="text-gray-500 font-medium">Status:</span>
-                                                                                                            <div className="mt-1">
-                                                                                                                <Badge variant="outline" className={
-                                                                                                                    record.movement_status === 'completed'
-                                                                                                                        ? 'bg-green-100 text-green-800 border-green-200'
-                                                                                                                        : 'bg-blue-100 text-blue-800 border-blue-200'
-                                                                                                                }>
-                                                                                                                    {record.movement_status === 'completed' ? (
-                                                                                                                        <CheckCircle className="mr-1 h-3 w-3" />
-                                                                                                                    ) : (
-                                                                                                                        <Clock className="mr-1 h-3 w-3" />
-                                                                                                                    )}
-                                                                                                                    {record.movement_status}
-                                                                                                                </Badge>
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     </div>
                                                                                                 </div>
 
                                                                                                 <div>
-                                                                                                    <span className="text-gray-500 font-medium">Purpose:</span>
-                                                                                                    <div className="mt-1 p-2 bg-gray-50 rounded-md text-sm text-gray-700">
+                                                                                                    <span className="text-slate-400 text-xs">Purpose:</span>
+                                                                                                    <div className="mt-1 p-2 bg-slate-50 rounded-lg text-xs text-slate-700 font-sans border border-slate-100 whitespace-pre-wrap">
                                                                                                         {record.movement_purpose}
                                                                                                     </div>
                                                                                                 </div>
 
-                                                                                                <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
+                                                                                                <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
                                                                                                     <button
-                                                                                                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center"
+                                                                                                        className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1.5 transition-colors"
                                                                                                         onClick={() =>
                                                                                                             record.movement_id &&
                                                                                                             window.open(route('movements.show', record.movement_id), '_blank')
                                                                                                         }
                                                                                                     >
-                                                                                                        <FileText className="mr-1 h-4 w-4" />
+                                                                                                        <FileText className="h-3.5 w-3.5" />
                                                                                                         View Full Movement Record
                                                                                                     </button>
-                                                                                                    <span className="text-xs text-gray-400">
-                                                                                                        Click outside to close
-                                                                                                    </span>
                                                                                                 </div>
                                                                                             </div>
                                                                                         </PopoverContent>
@@ -1123,22 +1116,22 @@ export default function EmployeeDashboard({
 
                                                                                 {/* Auto Remarks for movement records */}
                                                                                 {record.auto_remarks && (
-                                                                                    <div className="flex items-center text-xs text-gray-500 bg-gray-50 p-1 rounded">
-                                                                                        <MessageSquare className="mr-1 h-3 w-3" />
-                                                                                        <span className="ml-1">{record.auto_remarks}</span>
+                                                                                    <div className="flex items-center text-[10px] text-slate-500 bg-slate-50 p-1.5 rounded-md border border-slate-100/60 font-sans">
+                                                                                        <MessageSquare className="mr-1 h-3 w-3 text-slate-400 shrink-0" />
+                                                                                        <span className="truncate">{record.auto_remarks}</span>
                                                                                     </div>
                                                                                 )}
                                                                             </div>
                                                                         ) : (
-                                                                            <div className="flex items-center text-sm text-gray-400">
-                                                                                <Navigation className="mr-2 h-4 w-4" />
+                                                                            <div className="flex items-center text-xs text-slate-400 gap-1.5">
+                                                                                <Navigation className="h-3.5 w-3.5 shrink-0" />
                                                                                 <span>No movement</span>
                                                                             </div>
                                                                         )}
                                                                     </TableCell>
 
-                                                                    <TableCell>
-                                                                        <div className="max-w-xs truncate" title={record.remarks || ''}>
+                                                                    <TableCell className="text-xs text-slate-500 py-3 px-4">
+                                                                        <div className="max-w-[150px] sm:max-w-xs truncate" title={record.remarks || ''}>
                                                                             {record.remarks || '-'}
                                                                         </div>
                                                                     </TableCell>
@@ -1146,7 +1139,7 @@ export default function EmployeeDashboard({
                                                         ))
                                                     ) : (
                                                         <TableRow>
-                                                            <TableCell colSpan={7} className="text-center py-6 text-gray-500">
+                                                            <TableCell colSpan={7} className="text-center py-8 text-slate-400 text-xs">
                                                                 No attendance records found for the selected period
                                                             </TableCell>
                                                         </TableRow>
@@ -1158,49 +1151,50 @@ export default function EmployeeDashboard({
                                 </Card>
                             </TabsContent>
 
-                            {/* Leave Tab - Fixed Version */}
                             <TabsContent value="leave">
                                 <div className="space-y-6">
                                     {/* Leave Balances */}
-                                    <Card className="shadow-sm">
-                                        <CardHeader className="bg-gray-50 border-b">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="rounded-full bg-yellow-100 p-1.5">
-                                                    <BarChart3 className="h-5 w-5 text-yellow-600" />
-                                                </div>
-                                                <div>
-                                                    <CardTitle>Leave Balances ({leaveSummary?.year || new Date().getFullYear()})</CardTitle>
-                                                    <CardDescription>Available leave balance for the current year</CardDescription>
+                                    <Card className="border-slate-200/80 bg-white shadow-sm overflow-hidden">
+                                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-5">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600 ring-1 ring-emerald-100">
+                                                        <BarChart3 className="h-5 w-5" />
+                                                    </div>
+                                                    <div>
+                                                        <CardTitle className="text-base font-bold text-slate-800">Leave Balances ({leaveSummary?.year || new Date().getFullYear()})</CardTitle>
+                                                        <CardDescription className="text-xs text-slate-500">Available leave balance for the current year</CardDescription>
+                                                    </div>
                                                 </div>
                                                 {(leaveData.length > 0 || leaveSummary?.balances?.length > 0) && (
                                                     <LeavePdfExport
                                                         leaveData={leaveData}
                                                         leaveSummary={leaveSummary}
                                                         employee={{
-                                                            id: selectedEmployee?.id || 0,  // ✅ Fixed: Use selectedEmployee instead of employee
-                                                            report_from_date: dateRange.from || '',  // ✅ Fixed: Use dateRange instead of fromDate
-                                                            report_to_date: dateRange.to || ''  // ✅ Fixed: Use dateRange instead of toDate
+                                                            id: selectedEmployee?.id || 0,
+                                                            report_from_date: dateRange.from || '',
+                                                            report_to_date: dateRange.to || ''
                                                         }}
                                                     />
                                                 )}
                                             </div>
                                         </CardHeader>
-                                        <CardContent className="pt-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        <CardContent className="p-5">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                                 {leaveSummary?.balances.map((balance, index) => (
-                                                    <div key={index} className="bg-white rounded-lg border p-4">
-                                                        <div className="flex justify-between items-center mb-3">
+                                                    <div key={index} className="bg-slate-50/45 rounded-xl border border-slate-200/60 p-4 hover:shadow-sm transition-shadow">
+                                                        <div className="flex justify-between items-start mb-3">
                                                             <div>
-                                                                <h3 className="font-medium text-gray-900">{balance.type}</h3>
-                                                                <p className="text-xs text-gray-500">
+                                                                <h3 className="font-bold text-sm text-slate-800">{balance.type}</h3>
+                                                                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
                                                                     {balance.is_paid ? 'Paid Leave' : 'Unpaid Leave'}
                                                                 </p>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <span className="text-sm font-medium">
+                                                            <div className="text-right shrink-0">
+                                                                <span className="text-sm font-bold text-slate-800">
                                                                     {balance.remaining_days} / {balance.allocated_days}
                                                                 </span>
-                                                                <p className="text-xs text-gray-500">Days Available</p>
+                                                                <p className="text-[10px] text-slate-400 mt-0.5">Days Available</p>
                                                             </div>
                                                         </div>
                                                         <Progress
@@ -1209,9 +1203,9 @@ export default function EmployeeDashboard({
                                                                     ? Math.min(100, (balance.used_days / balance.allocated_days) * 100)
                                                                     : 0
                                                             }
-                                                            className="h-2"
+                                                            className="h-1.5"
                                                         />
-                                                        <div className="flex justify-between mt-2 text-xs text-gray-500">
+                                                        <div className="flex justify-between mt-2.5 text-[11px] text-slate-500 font-medium">
                                                             <span>Used: {balance.used_days} day{balance.used_days !== 1 ? 's' : ''}</span>
                                                             <span>Remaining: {balance.remaining_days} day{balance.remaining_days !== 1 ? 's' : ''}</span>
                                                         </div>
@@ -1219,7 +1213,7 @@ export default function EmployeeDashboard({
                                                 ))}
 
                                                 {leaveSummary?.balances.length === 0 && (
-                                                    <div className="col-span-full text-center py-6 text-gray-500">
+                                                    <div className="col-span-full text-center py-8 text-slate-400 text-xs">
                                                         No leave balances found for the current year
                                                     </div>
                                                 )}
@@ -1228,40 +1222,40 @@ export default function EmployeeDashboard({
                                     </Card>
 
                                     {/* Leave Applications */}
-                                    <Card className="shadow-sm">
-                                        <CardHeader className="bg-gray-50 border-b">
+                                    <Card className="border-slate-200/80 bg-white shadow-sm overflow-hidden">
+                                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-5">
                                             <div className="flex items-center space-x-3">
-                                                <div className="rounded-full bg-blue-100 p-1.5">
-                                                    <FileText className="h-5 w-5 text-blue-600" />
+                                                <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600 ring-1 ring-emerald-100">
+                                                    <FileText className="h-5 w-5" />
                                                 </div>
                                                 <div>
-                                                    <CardTitle>Leave Applications</CardTitle>
-                                                    <CardDescription>History of leave requests in the selected period</CardDescription>
+                                                    <CardTitle className="text-base font-bold text-slate-800">Leave Applications</CardTitle>
+                                                    <CardDescription className="text-xs text-slate-500">History of leave requests in the selected period</CardDescription>
                                                 </div>
                                             </div>
                                         </CardHeader>
                                         <CardContent className="p-0">
                                             <div className="overflow-x-auto">
-                                                <Table>
-                                                    <TableHeader>
-                                                        <TableRow>
-                                                            <TableHead>Leave Type</TableHead>
-                                                            <TableHead>Period</TableHead>
-                                                            <TableHead>Days</TableHead>
-                                                            <TableHead>Status</TableHead>
-                                                            <TableHead>Reason</TableHead>
+                                                <Table className="min-w-[700px]">
+                                                    <TableHeader className="bg-slate-50/75">
+                                                        <TableRow className="border-b border-slate-100">
+                                                            <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Leave Type</TableHead>
+                                                            <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Period</TableHead>
+                                                            <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Days</TableHead>
+                                                            <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Status</TableHead>
+                                                            <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Reason</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
                                                         {leaveData.length > 0 ? (
                                                             leaveData.map((leave, index) => (
-                                                                <TableRow key={index}>
-                                                                    <TableCell className="font-medium">{leave.type}</TableCell>
-                                                                    <TableCell>{leave.date_range}</TableCell>
-                                                                    <TableCell>{leave.days} day{leave.days !== 1 ? 's' : ''}</TableCell>
-                                                                    <TableCell>{getLeaveStatusBadge(leave.status)}</TableCell>
-                                                                    <TableCell>
-                                                                        <div className="max-w-xs truncate" title={leave.reason || ''}>
+                                                                <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                                                    <TableCell className="font-semibold text-xs sm:text-sm text-slate-700 py-3 px-4">{leave.type}</TableCell>
+                                                                    <TableCell className="text-xs sm:text-sm text-slate-600 py-3 px-4">{leave.date_range}</TableCell>
+                                                                    <TableCell className="text-xs sm:text-sm text-slate-700 font-medium py-3 px-4">{leave.days} day{leave.days !== 1 ? 's' : ''}</TableCell>
+                                                                    <TableCell className="py-3 px-4">{getLeaveStatusBadge(leave.status)}</TableCell>
+                                                                    <TableCell className="text-xs text-slate-500 py-3 px-4">
+                                                                        <div className="max-w-[200px] sm:max-w-xs truncate" title={leave.reason || ''}>
                                                                             {leave.reason || '-'}
                                                                         </div>
                                                                     </TableCell>
@@ -1269,7 +1263,7 @@ export default function EmployeeDashboard({
                                                             ))
                                                         ) : (
                                                             <TableRow>
-                                                                <TableCell colSpan={5} className="text-center py-6 text-gray-500">
+                                                                <TableCell colSpan={5} className="text-center py-8 text-slate-400 text-xs">
                                                                     No leave applications found for the selected period
                                                                 </TableCell>
                                                             </TableRow>
@@ -1284,20 +1278,21 @@ export default function EmployeeDashboard({
 
                             {/* Movement Tab */}
                             <TabsContent value="movement">
-                                <Card className="shadow-sm">
-                                    <CardHeader className="bg-gray-50 border-b">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="rounded-full bg-purple-100 p-1.5">
-                                                <Briefcase className="h-5 w-5 text-purple-600" />
+                                <Card className="border-slate-200/80 bg-white shadow-sm overflow-hidden">
+                                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-5">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600 ring-1 ring-emerald-100">
+                                                    <Briefcase className="h-5 w-5" />
+                                                </div>
+                                                <div>
+                                                    <CardTitle className="text-base font-bold text-slate-800">Movement Records</CardTitle>
+                                                    <CardDescription className="text-xs text-slate-500">Official and personal movements during the selected period</CardDescription>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <CardTitle>Movement Records</CardTitle>
-                                                <CardDescription>Official and personal movements during the selected period</CardDescription>
-                                            </div>
-
                                             {movementData.length > 0 && (
-                                                <Button onClick={downloadMovementPdf} variant="outline" size="sm" className="flex items-center">
-                                                    <Download className="mr-1 h-4 w-4" />
+                                                <Button onClick={downloadMovementPdf} variant="outline" size="sm" className="h-8 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 text-xs py-1">
+                                                    <Download className="mr-1 h-3.5 w-3.5" />
                                                     Export PDF
                                                 </Button>
                                             )}
@@ -1305,55 +1300,55 @@ export default function EmployeeDashboard({
                                     </CardHeader>
                                     <CardContent className="p-0">
                                         <div className="overflow-x-auto">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Type</TableHead>
-                                                        <TableHead>Purpose</TableHead>
-                                                        <TableHead>Time Period</TableHead>
-                                                        <TableHead>Duration</TableHead>
-                                                        <TableHead>Destination</TableHead>
-                                                        <TableHead>Status</TableHead>
+                                            <Table className="min-w-[800px]">
+                                                <TableHeader className="bg-slate-50/75">
+                                                    <TableRow className="border-b border-slate-100">
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Type</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Purpose</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Time Period</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Duration</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Destination</TableHead>
+                                                        <TableHead className="text-xs font-bold text-slate-500 py-3 px-4">Status</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
                                                     {movementData.length > 0 ? (
                                                         movementData.map((movement, index) => (
-                                                            <TableRow key={index}>
-                                                                <TableCell>{getMovementTypeBadge(movement.type)}</TableCell>
-                                                                <TableCell className="font-medium">
-                                                                    <div className="max-w-xs truncate" title={movement.purpose}>
+                                                            <TableRow key={index} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                                                <TableCell className="py-3 px-4">{getMovementTypeBadge(movement.type)}</TableCell>
+                                                                <TableCell className="font-semibold text-xs sm:text-sm text-slate-700 py-3 px-4">
+                                                                    <div className="max-w-[200px] sm:max-w-xs truncate" title={movement.purpose}>
                                                                         {movement.purpose}
                                                                     </div>
                                                                 </TableCell>
-                                                                <TableCell>
-                                                                    <div className="flex items-center text-sm">
-                                                                        <Timer className="h-4 w-4 mr-1.5 text-gray-400 flex-shrink-0" />
+                                                                <TableCell className="py-3 px-4">
+                                                                    <div className="flex items-center text-xs text-slate-600 gap-1.5">
+                                                                        <Timer className="h-4 w-4 text-slate-400 shrink-0" />
                                                                         <div>
                                                                             <span className="truncate">{movement.formatted_time_range}</span>
                                                                             {movement.status === 'active' && (
-                                                                                <div className="text-xs text-blue-600 mt-0.5">
+                                                                                <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
                                                                                     (In Progress)
                                                                                 </div>
                                                                             )}
                                                                         </div>
                                                                     </div>
                                                                 </TableCell>
-                                                                <TableCell>
+                                                                <TableCell className="text-xs sm:text-sm text-slate-700 py-3 px-4">
                                                                     <div>
                                                                         {movement.duration_hours} hours
                                                                         {movement.status === 'completed' && movement.actual_return_datetime && (
-                                                                            <div className="text-xs text-green-600 mt-0.5">
+                                                                            <div className="text-[10px] text-emerald-600 font-medium mt-0.5">
                                                                                 (Actual duration)
                                                                             </div>
                                                                         )}
                                                                     </div>
                                                                 </TableCell>
-                                                                <TableCell>
-                                                                    <div className="flex items-center text-sm">
+                                                                <TableCell className="py-3 px-4">
+                                                                    <div className="flex items-center text-xs text-slate-600 gap-1.5">
                                                                         {movement.destination ? (
                                                                             <>
-                                                                                <MapPin className="h-4 w-4 mr-1.5 text-gray-400 flex-shrink-0" />
+                                                                                <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
                                                                                 <span className="truncate">{movement.destination}</span>
                                                                             </>
                                                                         ) : (
@@ -1361,12 +1356,12 @@ export default function EmployeeDashboard({
                                                                         )}
                                                                     </div>
                                                                 </TableCell>
-                                                                <TableCell>{getMovementStatusBadge(movement.status)}</TableCell>
+                                                                <TableCell className="py-3 px-4">{getMovementStatusBadge(movement.status)}</TableCell>
                                                             </TableRow>
                                                         ))
                                                     ) : (
                                                         <TableRow>
-                                                            <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+                                                            <TableCell colSpan={6} className="text-center py-8 text-slate-400 text-xs">
                                                                 No movement records found for the selected period
                                                             </TableCell>
                                                         </TableRow>
@@ -1383,13 +1378,13 @@ export default function EmployeeDashboard({
 
                 {/* Empty State */}
                 {!selectedEmployee && (
-                    <div className="flex flex-col items-center justify-center bg-white rounded-lg shadow-sm p-12 text-center">
-                        <div className="rounded-full bg-blue-100 p-4 mb-4">
-                            <User className="h-10 w-10 text-blue-600" />
+                    <div className="flex flex-col items-center justify-center bg-white border border-slate-100 rounded-2xl shadow-sm p-12 text-center">
+                        <div className="rounded-2xl bg-emerald-50 p-4 mb-4 ring-1 ring-emerald-100/50 shrink-0">
+                            <User className="h-10 w-10 text-emerald-600" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 mb-2">Select an Employee</h2>
-                        <p className="text-gray-500 mb-6 max-w-md">
-                            Choose an employee and date range to view their attendance, leave, and movement data.
+                        <h2 className="text-lg font-bold text-slate-800 mb-2">Select an Employee</h2>
+                        <p className="text-xs text-slate-500 mb-6 max-w-sm leading-relaxed">
+                            Choose an employee and a date range to load their comprehensive attendance, leave, and movement data.
                         </p>
                     </div>
                 )}

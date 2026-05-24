@@ -7,12 +7,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Ensures employees.pin / nid / employee_id uniqueness for active & on_leave only,
+ * Ensures employees.pin / nid / employee_id uniqueness for active employees only,
  * using virtual generated columns (MySQL + MariaDB + phpMyAdmin import safe).
  */
 final class EmployeeScopeIndexRepair
 {
-    private const EMPLOYED = "('active', 'on_leave')";
+    private const EMPLOYED = "('active')";
 
     /** @var list<string> */
     private const SCOPE_INDEX_NAMES = [

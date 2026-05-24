@@ -234,6 +234,15 @@ class MovementController extends Controller
     /**
      * Show form to create a new movement.
      */
+    /**
+     * Whether the user may pick any employee when creating a movement (HR/desk).
+     * Regular employees have movements.create but not employees.view — they may only create for themselves.
+     */
+    private function canSelectEmployeeForMovement($user): bool
+    {
+        return $user->hasPermission('movements.create') && $user->hasPermission('employees.view');
+    }
+
     public function create()
     {
         $user = Auth::user();
@@ -244,14 +253,16 @@ class MovementController extends Controller
                 ->with('error', 'You do not have permission to create movement requests.');
         }
 
-        $employees = $user->hasPermission('movements.create')
+        $canSelectEmployee = $this->canSelectEmployeeForMovement($user);
+
+        $employees = $canSelectEmployee
             ? Employee::where('status', 'active')->with(['department', 'designation'])->get()
-            : collect([$employee]);
+            : ($employee ? collect([$employee->load(['department', 'designation'])]) : collect());
 
         return Inertia::render('movement/create', [
             'employees' => $employees,
             'currentEmployee' => $employee,
-            'isAdmin' => $user->hasPermission('movements.create'),
+            'isAdmin' => $canSelectEmployee,
             'movementTypes' => ['official', 'personal'],
         ]);
     }
@@ -264,9 +275,11 @@ class MovementController extends Controller
         $user = Auth::user();
         $employee = $user->employee;
 
+        $canSelectEmployee = $this->canSelectEmployeeForMovement($user);
+
         // Validate request
         $request->validate([
-            'employee_id' => $user->hasPermission('movements.create') ? 'required|exists:employees,id' : 'nullable',
+            'employee_id' => $canSelectEmployee ? 'required|exists:employees,id' : 'nullable',
             'movement_type' => 'required|in:official,personal',
             'from_datetime' => 'required|date',
             'to_datetime' => 'required|date|after:from_datetime',
@@ -286,10 +299,27 @@ class MovementController extends Controller
         }
 
         // Determine which employee ID to use
-        $employeeId = $user->hasPermission('movements.create') ? $request->employee_id : $employee->id;
+        if ($canSelectEmployee) {
+            $employeeId = (int) $request->employee_id;
+        } else {
+            if (! $employee) {
+                return redirect()->route('movements.index')
+                    ->with('error', 'You must be associated with an employee record to create a movement.');
+            }
+
+            if ($request->filled('employee_id') && (int) $request->employee_id !== (int) $employee->id) {
+                return redirect()->back()
+                    ->with('error', 'You can only create movements for yourself.')
+                    ->withInput();
+            }
+
+            $employeeId = (int) $employee->id;
+        }
 
         // Get the actual employee object (might be different from current user's employee)
-        $targetEmployee = $employeeId == $employee->id ? $employee : \App\Models\Employee::find($employeeId);
+        $targetEmployee = $employee && (int) $employeeId === (int) $employee->id
+            ? $employee
+            : Employee::findOrFail($employeeId);
 
         // Create movement
         $movement = Movement::create([

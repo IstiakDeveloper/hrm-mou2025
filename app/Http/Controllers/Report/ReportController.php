@@ -545,8 +545,8 @@ class ReportController extends Controller
             'total' => (clone $query)->count(),
             'active' => (clone $query)->where('status', 'active')->count(),
             'inactive' => (clone $query)->where('status', 'inactive')->count(),
-            'onLeave' => (clone $query)->where('status', 'on_leave')->count(),
-            'terminated' => (clone $query)->where('status', 'terminated')->count(),
+            'onLeave' => 0,
+            'terminated' => 0,
             'male' => (clone $query)->where('gender', 'male')->count(),
             'female' => (clone $query)->where('gender', 'female')->count(),
         ];
@@ -584,7 +584,7 @@ class ReportController extends Controller
                 'join_end_date',
                 'search',
             ]),
-            'statuses' => ['active', 'inactive', 'on_leave', 'terminated'],
+            'statuses' => ['active', 'inactive'],
             'genders' => ['male', 'female', 'other'],
             'summary' => $summary,
         ]);

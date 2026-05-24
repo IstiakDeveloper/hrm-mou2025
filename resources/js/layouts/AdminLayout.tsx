@@ -31,6 +31,7 @@ import {
     Gift,
     Landmark,
     Coins,
+    Home,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -1098,15 +1099,28 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     {/* Top Header */}
                         <header className="h-16 bg-white/90 backdrop-blur-md border-b border-emerald-900/15 shadow-sm px-4 lg:px-6 z-10 sticky top-0">
                         <div className="h-full flex items-center justify-between gap-4">
-                            {/* Left: Mobile Menu Button */}
-                            <div className="flex items-center gap-3 md:hidden">
+                            {/* Left: Mobile Menu Button & Home Icon */}
+                            <div className="flex items-center gap-2">
+                                <div className="md:hidden">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={toggleMobileSidebar}
+                                        className="text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
+                                    >
+                                        <Menu className="w-5 h-5" />
+                                    </Button>
+                                </div>
                                 <Button
+                                    asChild
                                     variant="ghost"
                                     size="icon"
-                                    onClick={toggleMobileSidebar}
-                                        className="text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
+                                    className="text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
+                                    title="Go to Home (Sections)"
                                 >
-                                    <Menu className="w-5 h-5" />
+                                    <Link href="/sections">
+                                        <Home className="w-5.5 h-5.5" />
+                                    </Link>
                                 </Button>
                             </div>
 

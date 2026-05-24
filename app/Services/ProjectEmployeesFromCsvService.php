@@ -1047,7 +1047,7 @@ class ProjectEmployeesFromCsvService
             return 'active';
         }
         if (str_contains($s, 'resign')) {
-            return 'terminated';
+            return 'inactive';
         }
         if (str_contains($s, 'closs') || str_contains($s, 'close')) {
             return 'inactive';

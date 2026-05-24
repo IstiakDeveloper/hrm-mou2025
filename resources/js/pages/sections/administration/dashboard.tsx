@@ -36,8 +36,8 @@ type Props = {
     userRole: string;
 };
 
-const kpiGrid = 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
-const shortcutGrid = 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+const shortcutGrid = 'grid grid-cols-1 min-[320px]:grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 function KpiCard({
     label,
@@ -130,20 +130,20 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
         <Layout>
             <Head title="Administration" />
 
-            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6">
+            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 px-3 sm:px-4">
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Administration</h1>
+                        <h1 className="text-sm sm:text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Administration</h1>
                         <p className="text-xs text-zinc-500">
                             {userRole || 'User'} · {auth?.user?.name}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" size="sm" className="h-8 border-zinc-200 bg-white text-xs">
+                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white">
                             <Link href="/sections">Sections</Link>
                         </Button>
                         {hasPermission('users.create') && (
-                            <Button asChild size="sm" className="h-8 bg-violet-600 text-xs text-white hover:bg-violet-700">
+                            <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-violet-600 text-white hover:bg-violet-700">
                                 <Link href="/admin/users/create?section=administration">
                                     <UserPlus className="mr-1 h-3.5 w-3.5" />
                                     Add user
@@ -216,7 +216,7 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
                                 </p>
                             ) : recentUsers?.length ? (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
+                                    <table className="w-full min-w-[550px] text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-zinc-100 bg-zinc-50/80 text-[10px] uppercase tracking-wide text-zinc-500">
                                                 <th className="px-3 py-2 font-medium">Name</th>

@@ -47,8 +47,8 @@ type Props = {
 };
 
 const section = '?section=fixed-asset';
-const kpiGrid = 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4';
-const shortcutGrid = 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4';
+const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4';
+const shortcutGrid = 'grid grid-cols-1 min-[320px]:grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4';
 
 function fmtMoney(n: number) {
     return Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -112,13 +112,13 @@ export default function FixedAssetDashboard({ stats, branchScoped }: Props) {
     return (
         <Layout>
             <Head title="Fixed Asset" />
-            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6">
+            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 px-3 sm:px-4">
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Fixed Asset</h1>
+                        <h1 className="text-sm sm:text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Fixed Asset</h1>
                         <p className="text-xs text-zinc-500">Overview across branches and categories</p>
                     </div>
-                    <Button asChild variant="outline" size="sm" className="h-8 border-zinc-200 bg-white text-xs">
+                    <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white">
                         <Link href="/sections">Sections</Link>
                     </Button>
                 </div>

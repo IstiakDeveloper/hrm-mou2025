@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -21,12 +21,15 @@ import {
     Users,
     UserX,
     UserCheck,
+    User,
 } from 'lucide-react';
 import Layout from '@/layouts/AdminLayout';
+import { EmployeeDashboardView, type EmployeeDashboardProps } from '@/pages/employee-dashboard';
 import { PageSurface } from '@/components/page-surface';
 import { hasAppPermission } from '@/lib/permissions';
 import { type SharedData } from '@/types';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,7 +62,7 @@ type OrganizationHierarchy = {
 
 type HrTransferRow = {
     id: number;
-    employee: { first_name: string; last_name: string };
+    employee: EmployeeNameFields;
     from_branch?: { name: string };
     to_branch?: { name: string };
     fromBranch?: { name: string };
@@ -68,10 +71,8 @@ type HrTransferRow = {
     status: string;
 };
 
-type RecentEmployeeRow = {
+type RecentEmployeeRow = EmployeeNameFields & {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department?: string;
     branch?: string;
@@ -104,13 +105,15 @@ type Props = {
     transferStats: { pending: number; approved: number };
     recentTransfers: HrTransferRow[];
     userRole: string;
+    showEmployeeTab?: boolean;
+    employeeDashboard?: EmployeeDashboardProps | null;
 };
 
 function num(n: number | undefined): number {
     return Number(n ?? 0);
 }
 
-const kpiGrid = 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 function KpiCard({
     label,
@@ -209,10 +212,90 @@ function formatShortDate(iso?: string | null): string {
 
 export default function HumanResourcesDashboard(props: Props) {
     const { auth } = usePage<SharedData>().props;
+    const showEmployeeTab = Boolean(props.showEmployeeTab && props.employeeDashboard);
+    const [dashboardMode, setDashboardMode] = useState<'admin' | 'employee'>('admin');
     const hasPermission = (permission?: string): boolean => hasAppPermission(auth, permission);
-    const s = props.stats;
-    const zones = props.organizationHierarchy?.zones ?? [];
-    const recentEmployees = (props.recentEmployees ?? []) as RecentEmployeeRow[];
+
+    return (
+        <Layout>
+            <Head title="Human Resources" />
+
+            <PageSurface className="max-w-7xl py-4 md:py-5 px-3 sm:px-4">
+                {/* Header */}
+                <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-zinc-200/90 bg-gradient-to-br from-white via-white to-emerald-50/30 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700/80">Human resources</p>
+                        <h1 className="mt-0.5 text-base sm:text-lg font-bold tracking-tight text-zinc-900 sm:text-xl">HR dashboard</h1>
+                        <p className="mt-1 text-xs text-zinc-600">
+                            {props.userRole || 'User'} · {auth?.user?.name}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs border-zinc-200 bg-white">
+                            <Link href="/sections">Sections</Link>
+                        </Button>
+                        {hasPermission('employees.create') && (
+                            <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs bg-emerald-600 hover:bg-emerald-700">
+                                <Link href="/employees/create?section=human-resources">
+                                    <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                                    Add employee
+                                </Link>
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                {showEmployeeTab ? (
+                    <Tabs
+                        value={dashboardMode}
+                        onValueChange={(v) => setDashboardMode(v as 'admin' | 'employee')}
+                        className="w-full"
+                    >
+                        <TabsList className="mb-4 h-9 w-fit min-w-0 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
+                            <TabsTrigger
+                                value="admin"
+                                className="h-8 min-w-[5.5rem] flex-none rounded-md px-3 text-xs data-[state=active]:bg-zinc-900 data-[state=active]:text-white"
+                            >
+                                Admin
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="employee"
+                                className="h-8 min-w-[5.5rem] flex-none gap-1.5 rounded-md px-3 text-xs data-[state=active]:bg-emerald-600 data-[state=active]:text-white"
+                            >
+                                <User className="h-3.5 w-3.5" />
+                                Employee
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="employee" className="mt-0 outline-none">
+                            {props.employeeDashboard ? (
+                                <EmployeeDashboardView embedded {...props.employeeDashboard} />
+                            ) : null}
+                        </TabsContent>
+
+                        <TabsContent value="admin" className="mt-0 outline-none">
+                            <HrAdminDashboardBody {...props} hasPermission={hasPermission} />
+                        </TabsContent>
+                    </Tabs>
+                ) : (
+                    <HrAdminDashboardBody {...props} hasPermission={hasPermission} />
+                )}
+            </PageSurface>
+        </Layout>
+    );
+}
+
+function HrAdminDashboardBody({
+    stats,
+    organizationHierarchy,
+    recentEmployees: recentEmployeesProp,
+    transferStats,
+    recentTransfers,
+    hasPermission,
+}: Props & { hasPermission: (permission?: string) => boolean }) {
+    const s = stats;
+    const zones = organizationHierarchy?.zones ?? [];
+    const recentEmployees = (recentEmployeesProp ?? []) as RecentEmployeeRow[];
 
     const transferFromName = (x: HrTransferRow) => x.from_branch?.name ?? x.fromBranch?.name ?? '—';
     const transferToName = (x: HrTransferRow) => x.to_branch?.name ?? x.toBranch?.name ?? '—';
@@ -227,7 +310,7 @@ export default function HumanResourcesDashboard(props: Props) {
     const inactiveTerminated = inactiveEmp + terminatedEmp;
 
     const structureLines = useMemo(() => {
-        const list = props.organizationHierarchy?.zones ?? [];
+        const list = organizationHierarchy?.zones ?? [];
         const lines: string[] = [];
         for (const z of list) {
             lines.push(`▸ ${z.name}${z.code ? ` (${z.code})` : ''}`);
@@ -248,7 +331,7 @@ export default function HumanResourcesDashboard(props: Props) {
             }
         }
         return lines.join('\n');
-    }, [props.organizationHierarchy]);
+    }, [organizationHierarchy]);
 
     const showStructure =
         zones.length > 0 &&
@@ -256,67 +339,9 @@ export default function HumanResourcesDashboard(props: Props) {
 
     const structureText = showStructure ? structureLines : '';
 
-    const shortcutGrid = 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
-
-    const hrSummaryLines = useMemo(() => {
-        const lines: string[] = [];
-        if (hasPermission('employees.view') && totalEmp > 0) {
-            lines.push(
-                `${activeEmp.toLocaleString()} active of ${totalEmp.toLocaleString()} total employees${onLeaveEmp ? `; ${onLeaveEmp.toLocaleString()} currently on leave` : ''}.`,
-            );
-        }
-        if (hasPermission('branches.view') && branchesOp > 0) {
-            lines.push(`${branchesOp.toLocaleString()} operational branches in your scope (excluding head office where applicable).`);
-        }
-        if (hasPermission('transfers.view')) {
-            const p = num(props.transferStats?.pending);
-            if (p > 0) {
-                lines.push(`${p} transfer request${p === 1 ? '' : 's'} awaiting attention.`);
-            }
-        }
-        if (lines.length === 0) {
-            lines.push('Use the metrics and shortcuts below to manage employees, structure, and transfers.');
-        }
-        return lines;
-    }, [
-        activeEmp,
-        branchesOp,
-        hasPermission,
-        onLeaveEmp,
-        props.transferStats?.pending,
-        totalEmp,
-    ]);
+    const shortcutGrid = 'grid grid-cols-1 min-[320px]:grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
     return (
-        <Layout>
-            <Head title="Human Resources" />
-
-            <PageSurface className="max-w-7xl py-4 md:py-5">
-                {/* Header */}
-                <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-zinc-200/90 bg-gradient-to-br from-white via-white to-emerald-50/30 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700/80">Human resources</p>
-                        <h1 className="mt-0.5 text-lg font-bold tracking-tight text-zinc-900 sm:text-xl">HR dashboard</h1>
-                        <p className="mt-1 text-xs text-zinc-600">
-                            {props.userRole || 'User'} · {auth?.user?.name}
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" size="sm" className="h-9 border-zinc-200 bg-white text-xs">
-                            <Link href="/sections">Sections</Link>
-                        </Button>
-                        {hasPermission('employees.create') && (
-                            <Button asChild size="sm" className="h-9 bg-emerald-600 text-xs hover:bg-emerald-700">
-                                <Link href="/employees/create?section=human-resources">
-                                    <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                                    Add employee
-                                </Link>
-                            </Button>
-                        )}
-                    </div>
-                </div>
-
-
                 <Tabs defaultValue="overview" className="w-full">
                     <TabsList className="mb-3 h-9 w-fit min-w-0 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
                         <TabsTrigger
@@ -380,21 +405,21 @@ export default function HumanResourcesDashboard(props: Props) {
                                 <div className={kpiGrid}>
                                     <KpiCard
                                         label="Pending"
-                                        value={num(props.transferStats?.pending).toLocaleString()}
+                                        value={num(transferStats?.pending).toLocaleString()}
                                         href="/transfers?section=human-resources"
                                         icon={ArrowLeftRight}
                                         accent="violet"
                                     />
                                     <KpiCard
                                         label="Approved (month)"
-                                        value={num(props.transferStats?.approved).toLocaleString()}
+                                        value={num(transferStats?.approved).toLocaleString()}
                                         sub="This calendar month"
                                         href="/transfers?section=human-resources"
                                         icon={CheckCircle2}
                                         accent="zinc"
                                     />
                                 </div>
-                                {props.recentTransfers?.length ? (
+                                {recentTransfers?.length ? (
                                     <Card className="mt-3 border-zinc-200/90 shadow-sm">
                                         <CardHeader className="border-b border-zinc-100 py-3">
                                             <CardTitle className="text-sm font-semibold text-zinc-900">Recent transfers</CardTitle>
@@ -404,7 +429,7 @@ export default function HumanResourcesDashboard(props: Props) {
                                         </CardHeader>
                                         <CardContent className="p-0">
                                             <div className="overflow-x-auto">
-                                                <table className="w-full text-left text-xs">
+                                                <table className="w-full min-w-[600px] text-left text-xs">
                                                     <thead>
                                                         <tr className="border-b border-zinc-100 bg-zinc-50/80 text-[10px] uppercase tracking-wide text-zinc-500">
                                                             <th className="px-3 py-2 font-medium">Employee</th>
@@ -415,14 +440,14 @@ export default function HumanResourcesDashboard(props: Props) {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {props.recentTransfers.map((x) => (
+                                                        {recentTransfers.map((x) => (
                                                             <tr key={x.id} className="border-b border-zinc-50 last:border-0 hover:bg-zinc-50/60">
                                                                 <td className="px-3 py-2">
                                                                     <Link
                                                                         href={`/transfers/${x.id}?section=human-resources`}
                                                                         className="font-medium text-zinc-900 hover:text-emerald-700"
                                                                     >
-                                                                        {x.employee.first_name} {x.employee.last_name}
+                                                                        {employeeDisplayName(x.employee)}
                                                                     </Link>
                                                                     <p className="truncate text-[10px] text-zinc-500 md:hidden">
                                                                         {transferFromName(x)} → {transferToName(x)}
@@ -550,7 +575,7 @@ export default function HumanResourcesDashboard(props: Props) {
                         </Card>
 
                         {showStructure && zones.length > 0 && (
-                            <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                            <div className="mt-3 grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                                 {zones.map((z) => {
                                     const roCount = z.regionalOffices.length;
                                     const branchCount = z.regionalOffices.reduce((a, ro) => a + ro.branchTotal, 0);
@@ -571,7 +596,5 @@ export default function HumanResourcesDashboard(props: Props) {
                         )}
                     </TabsContent>
                 </Tabs>
-            </PageSurface>
-        </Layout>
     );
 }

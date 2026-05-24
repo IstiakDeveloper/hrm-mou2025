@@ -30,13 +30,12 @@ import { format, differenceInMinutes, differenceInHours } from "date-fns";
 import AdminLayout from "@/layouts/AdminLayout";
 import { PageSurface } from "@/components/page-surface";
 import { cn } from "@/lib/utils";
+import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from "@/lib/employee-name";
 import { useSelfAttendanceCheck } from "@/hooks/use-self-attendance-check";
 
 // Types for better code organization
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: string;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     photo?: string;
     department?: { name: string };
@@ -103,7 +102,7 @@ interface HolidayRow {
     description?: string | null;
 }
 
-interface DashboardProps {
+export interface EmployeeDashboardProps {
     employee: Employee;
     todayAttendance?: Attendance;
     recentAttendance: Attendance[];
@@ -115,7 +114,12 @@ interface DashboardProps {
     weekendDaySummary?: string | null;
 }
 
-export default function EmployeeDashboard({
+type EmployeeDashboardViewProps = EmployeeDashboardProps & {
+    /** When true, renders only dashboard body (no layout/head) for embedding in admin section tabs. */
+    embedded?: boolean;
+};
+
+export function EmployeeDashboardView({
     employee,
     todayAttendance,
     recentAttendance,
@@ -125,7 +129,8 @@ export default function EmployeeDashboard({
     hrProfile,
     upcomingHolidays,
     weekendDaySummary,
-}: DashboardProps) {
+    embedded = false,
+}: EmployeeDashboardViewProps) {
     // State management
     const [clockTime, setClockTime] = useState("");
     const [activeMovements, setActiveMovements] = useState<Movement[]>([]);
@@ -232,11 +237,6 @@ export default function EmployeeDashboard({
         return () => clearInterval(timer);
     }, []);
 
-    // Utility functions
-    const getInitials = (firstName: string) => {
-        return firstName?.charAt(0).toUpperCase() || "N";
-    };
-
     const formatTime = (timeString?: string) => {
         if (!timeString) return "N/A";
 
@@ -306,12 +306,10 @@ export default function EmployeeDashboard({
     };
 
     // Data preparation
-    const fullName = employee ? `${employee.first_name} ${employee.last_name}`.trim() : "Employee";
+    const fullName = employeeDisplayName(employee);
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
-    return (
-        <AdminLayout>
-            <Head title="Human resources" />
-            <PageSurface className="px-4 md:px-6">
+
+    const dashboardBody = (
             <div className="flex flex-col gap-6">
                 {(attendanceError || locationStatus) && (
                     <Alert className={attendanceError ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50"}>
@@ -384,49 +382,49 @@ export default function EmployeeDashboard({
                 )}
 
                 {/* Header Section */}
-                <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <Avatar className="h-16 w-16">
+                <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between border-b border-slate-100 pb-5">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
+                        <Avatar className="h-16 w-16 sm:h-20 sm:w-20 shrink-0 shadow-xs border-2 border-white ring-1 ring-zinc-200/60">
                             <AvatarImage src={photoUrl || undefined} alt={fullName} />
-                            <AvatarFallback className="text-lg font-semibold">
-                                {getInitials(employee?.first_name)}
+                            <AvatarFallback className="text-xl font-bold bg-emerald-50 text-emerald-800">
+                                {employeeInitials(employee)}
                             </AvatarFallback>
                         </Avatar>
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Human resources</h1>
-                            <p className="mt-0.5 text-lg font-semibold text-gray-800">{fullName}</p>
-                            <div className="flex flex-wrap items-center gap-2 text-gray-600 text-sm">
-                                <div className="flex items-center gap-1">
-                                    <UserCircle className="h-4 w-4" />
-                                    <span>{employee?.employee_id || "N/A"}</span>
+                        <div className="min-w-0 flex-1">
+                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight leading-tight">Human resources</h1>
+                            <p className="mt-1 text-base sm:text-lg font-semibold text-gray-800 leading-normal">{fullName}</p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-gray-500 text-xs sm:text-sm mt-2">
+                                <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100/80">
+                                    <UserCircle className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                    <span className="font-medium text-slate-700">{employee?.employee_id || "N/A"}</span>
                                 </div>
-                                <span className="text-gray-400">•</span>
-                                <div className="flex items-center gap-1">
-                                    <Building2 className="h-4 w-4" />
-                                    <span>{employee?.department?.name || "N/A"}</span>
+                                <span className="text-gray-300 hidden sm:inline">•</span>
+                                <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100/80">
+                                    <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                    <span className="font-medium text-slate-700">{employee?.department?.name || "N/A"}</span>
                                 </div>
-                                <span className="text-gray-400">•</span>
-                                <div className="flex items-center gap-1">
-                                    <MapPin className="h-4 w-4" />
-                                    <span>{employee?.branch?.name || "N/A"}</span>
+                                <span className="text-gray-300 hidden sm:inline">•</span>
+                                <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100/80">
+                                    <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                    <span className="font-medium text-slate-700">{employee?.branch?.name || "N/A"}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-col items-start lg:items-end gap-3">
+                    <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end gap-4 w-full lg:w-auto justify-between shrink-0">
                         {/* Action Buttons */}
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             <Button
                                 onClick={goToCreateLeave}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-xs"
                             >
                                 <CalendarDays className="h-4 w-4 mr-2" />
                                 Apply Leave
                             </Button>
                             <Button
                                 onClick={goToCreateMovement}
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Movement
@@ -434,11 +432,11 @@ export default function EmployeeDashboard({
                         </div>
 
                         {/* Date and Time */}
-                        <div className="text-right">
-                            <div className="text-sm text-gray-500">
+                        <div className="text-left lg:text-right">
+                            <div className="text-xs sm:text-sm text-gray-500 font-medium">
                                 {format(new Date(), "EEEE, MMMM d, yyyy")}
                             </div>
-                            <div className="text-xl font-mono text-gray-900">{clockTime}</div>
+                            <div className="text-lg sm:text-xl font-mono text-gray-900 mt-0.5">{clockTime}</div>
                         </div>
                     </div>
                 </div>
@@ -517,33 +515,35 @@ export default function EmployeeDashboard({
                             </div>
                         )}
 
-                        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
                                 <Badge
-                                    className={`${todayAttendance
+                                    className={cn(
+                                        "px-2.5 py-1 text-xs font-semibold w-fit",
+                                        todayAttendance
                                             ? "bg-green-100 text-green-800 border-green-300"
                                             : "bg-yellow-100 text-yellow-800 border-yellow-300"
-                                        }`}
+                                    )}
                                 >
                                     {getAttendanceStatus(todayAttendance)}
                                 </Badge>
                                 {todayAttendance && (
-                                    <div className="flex flex-wrap items-center gap-4">
-                                        <div className="flex items-center gap-2">
-                                            <LogIn className="h-4 w-4 text-green-600" />
-                                            <span className="font-medium">In: {formatTime(todayAttendance.check_in)}</span>
+                                    <div className="flex flex-wrap items-center gap-4 mt-2 sm:mt-0">
+                                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 text-xs sm:text-sm">
+                                            <LogIn className="h-4 w-4 text-emerald-600" />
+                                            <span className="font-medium text-slate-700">In: {formatTime(todayAttendance.check_in)}</span>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <LogOut className="h-4 w-4 text-red-600" />
-                                            <span className="font-medium">Out: {formatTime(todayAttendance.check_out)}</span>
+                                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 text-xs sm:text-sm">
+                                            <LogOut className="h-4 w-4 text-rose-600" />
+                                            <span className="font-medium text-slate-700">Out: {formatTime(todayAttendance.check_out)}</span>
                                         </div>
                                     </div>
                                 )}
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                                 {(!todayAttendance || !todayAttendance.check_in) && (
                                     <Button
-                                        className="bg-green-600 hover:bg-green-700"
+                                        className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
                                         onClick={handleCheckIn}
                                         disabled={isSubmitting}
                                     >
@@ -553,7 +553,7 @@ export default function EmployeeDashboard({
                                 )}
                                 {todayAttendance?.check_in && !todayAttendance.check_out && (
                                     <Button
-                                        className="bg-red-600 hover:bg-red-700"
+                                        className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white font-medium"
                                         onClick={handleCheckOut}
                                         disabled={isSubmitting}
                                     >
@@ -567,9 +567,9 @@ export default function EmployeeDashboard({
                 </Card>
 
                 {/* Main dashboard */}
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:gap-5">
-                    {/* Left — HR profile */}
-                    <div className="flex flex-col gap-4 xl:w-[380px] xl:shrink-0">
+                <div className="flex flex-col xl:flex-row gap-4 xl:items-start xl:gap-5">
+                    {/* Left — HR profile (rendered first on xl, but ordered second on smaller screens) */}
+                    <div className="flex flex-col gap-4 xl:w-[380px] xl:shrink-0 order-2 xl:order-1">
                         <Card className="overflow-hidden border-emerald-200/70 bg-white/90 shadow-sm">
                             <CardHeader className="border-b border-emerald-100 bg-gradient-to-r from-emerald-50/80 to-white py-3">
                                 <CardTitle className="flex items-center gap-2 text-base font-semibold text-zinc-900">
@@ -589,10 +589,10 @@ export default function EmployeeDashboard({
                                     hrDisplayRows.map(([label, val]) => (
                                         <div
                                             key={label}
-                                            className="flex items-start justify-between gap-3 border-b border-zinc-50 py-2 last:border-b-0"
+                                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 border-b border-zinc-50 py-2.5 last:border-b-0 text-xs sm:text-sm"
                                         >
-                                            <span className="shrink-0 text-zinc-500">{label}</span>
-                                            <span className="max-w-[58%] text-right font-medium text-zinc-900 break-words">
+                                            <span className="text-zinc-500 shrink-0">{label}</span>
+                                            <span className="font-medium text-zinc-900 text-left sm:text-right break-all sm:break-normal sm:max-w-[65%]">
                                                 {String(val)}
                                             </span>
                                         </div>
@@ -615,7 +615,7 @@ export default function EmployeeDashboard({
                     </div>
 
                     {/* Right — main content */}
-                    <div className="flex min-w-0 flex-1 flex-col gap-4">
+                    <div className="flex min-w-0 flex-1 flex-col gap-4 order-1 xl:order-2">
                         {/* Primary — leave & movements (always stays at top) */}
                         <Tabs defaultValue="leaves" className="w-full">
                             <TabsList className="grid grid-cols-3 mb-6 h-auto p-1 bg-white/80 border border-emerald-100">
@@ -915,7 +915,22 @@ export default function EmployeeDashboard({
                     </div>
                 </div>
             </div>
+    );
+
+    if (embedded) {
+        return dashboardBody;
+    }
+
+    return (
+        <AdminLayout>
+            <Head title="Human resources" />
+            <PageSurface className="px-0 py-0 md:py-2">
+                {dashboardBody}
             </PageSurface>
         </AdminLayout>
     );
+}
+
+export default function EmployeeDashboard(props: EmployeeDashboardProps) {
+    return <EmployeeDashboardView {...props} />;
 }
