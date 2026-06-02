@@ -22,6 +22,8 @@ import {
 import { PageSurface } from '@/components/page-surface';
 import {
     CalendarIcon,
+    ChevronLeft,
+    ChevronRight,
     CheckCircle2,
     ClipboardCheck,
     Eye,

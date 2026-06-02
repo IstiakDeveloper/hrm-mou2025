@@ -12,24 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from '@/components/ui/select';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
+import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays } from 'date-fns';
-import { cn } from '@/lib/utils';
 import {
     ArrowLeft,
     ArrowRight,
-    Calendar,
     Building,
     Briefcase,
     User,
@@ -40,18 +27,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-
-// Create a safe calendar component to avoid SVG props issues
-const SafeCalendar = ({ disabledDates, ...props }: any) => {
-    return (
-        <Calendar
-            {...props}
-            modifiers={{
-                disabled: disabledDates ? (date: Date) => disabledDates(date) : undefined,
-            }}
-        />
-    );
-};
+import { ComboSelect } from '@/components/ComboSelect';
 
 interface Employee {
     id: number;
@@ -130,7 +106,6 @@ export default function EditTransfer({
     const [reason, setReason] = useState(transfer.reason);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
-    const [effectiveDateOpen, setEffectiveDateOpen] = useState(false);
 
     // Selected employee details
     const selectedEmployee = employees.find(emp => emp.id.toString() === employeeId);
@@ -213,22 +188,21 @@ export default function EditTransfer({
                                 <form onSubmit={handleSubmit} className="space-y-6">
                                     <div className="space-y-2">
                                         <Label htmlFor="employee">Employee</Label>
-                                        <Select
-                                            value={employeeId}
-                                            onValueChange={setEmployeeId}
-                                            disabled={true} // Cannot change employee on edit
-                                        >
-                                            <SelectTrigger id="employee">
-                                                <SelectValue placeholder="Select Employee" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {employees.map((employee) => (
-                                                    <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                        {employee.first_name} {employee.last_name} ({employee.employee_id})
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <ComboSelect<number>
+                                            value={employeeId ? Number(employeeId) : null}
+                                            onChange={(v) => {
+                                                // Transfer employee cannot be changed on edit; keep consistent UI.
+                                                if (!v) return;
+                                                setEmployeeId(String(v));
+                                            }}
+                                            placeholder="Employee"
+                                            disabled
+                                            items={employees.map((e) => ({
+                                                value: e.id,
+                                                label: `${e.employee_id} — ${e.first_name} ${e.last_name ?? ''}`.trim(),
+                                                keywords: `${e.employee_id} ${e.first_name} ${e.last_name ?? ''}`,
+                                            }))}
+                                        />
                                         {errors.employee_id && (
                                             <p className="text-sm font-medium text-red-500">{errors.employee_id}</p>
                                         )}
@@ -246,21 +220,16 @@ export default function EditTransfer({
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromBranch">Current Branch</Label>
-                                                <Select
-                                                    value={fromBranchId}
-                                                    onValueChange={setFromBranchId}
-                                                >
-                                                    <SelectTrigger id="fromBranch">
-                                                        <SelectValue placeholder="Select Branch" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {branches.map((branch) => (
-                                                            <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                                {branch.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <ComboSelect<string>
+                                                    value={fromBranchId || null}
+                                                    onChange={(v) => setFromBranchId(v ?? '')}
+                                                    placeholder="Select branch…"
+                                                    items={branches.map((b) => ({
+                                                        value: String(b.id),
+                                                        label: b.name,
+                                                        keywords: b.name,
+                                                    }))}
+                                                />
                                                 {errors.from_branch_id && (
                                                     <p className="text-sm font-medium text-red-500">{errors.from_branch_id}</p>
                                                 )}
@@ -268,42 +237,36 @@ export default function EditTransfer({
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromDepartment">Current Department</Label>
-                                                <Select
-                                                    value={fromDepartmentId}
-                                                    onValueChange={setFromDepartmentId}
-                                                >
-                                                    <SelectTrigger id="fromDepartment">
-                                                        <SelectValue placeholder="Select Department" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="">None</SelectItem>
-                                                        {departments.map((department) => (
-                                                            <SelectItem key={department.id} value={department.id.toString()}>
-                                                                {department.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <ComboSelect<string>
+                                                    value={fromDepartmentId || null}
+                                                    onChange={(v) => setFromDepartmentId(v ?? '')}
+                                                    placeholder="Select department…"
+                                                    items={[
+                                                        { value: '', label: 'None' },
+                                                        ...departments.map((d) => ({
+                                                            value: String(d.id),
+                                                            label: d.name,
+                                                            keywords: d.name,
+                                                        })),
+                                                    ]}
+                                                />
                                             </div>
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="fromDesignation">Current Designation</Label>
-                                                <Select
-                                                    value={fromDesignationId}
-                                                    onValueChange={setFromDesignationId}
-                                                >
-                                                    <SelectTrigger id="fromDesignation">
-                                                        <SelectValue placeholder="Select Designation" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="">None</SelectItem>
-                                                        {designations.map((designation) => (
-                                                            <SelectItem key={designation.id} value={designation.id.toString()}>
-                                                                {designation.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <ComboSelect<string>
+                                                    value={fromDesignationId || null}
+                                                    onChange={(v) => setFromDesignationId(v ?? '')}
+                                                    placeholder="Select designation…"
+                                                    items={[
+                                                        { value: '', label: 'None' },
+                                                        ...designations.map((d) => ({
+                                                            value: String(d.id),
+                                                            label: d.name,
+                                                            keywords: d.name,
+                                                        })),
+                                                    ]}
+                                                />
                                             </div>
                                         </div>
 
@@ -316,21 +279,16 @@ export default function EditTransfer({
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toBranch">Destination Branch</Label>
-                                                <Select
-                                                    value={toBranchId}
-                                                    onValueChange={setToBranchId}
-                                                >
-                                                    <SelectTrigger id="toBranch">
-                                                        <SelectValue placeholder="Select Branch" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {branches.map((branch) => (
-                                                            <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                                {branch.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <ComboSelect<string>
+                                                    value={toBranchId || null}
+                                                    onChange={(v) => setToBranchId(v ?? '')}
+                                                    placeholder="Select destination branch…"
+                                                    items={branches.map((b) => ({
+                                                        value: String(b.id),
+                                                        label: b.name,
+                                                        keywords: b.name,
+                                                    }))}
+                                                />
                                                 {errors.to_branch_id && (
                                                     <p className="text-sm font-medium text-red-500">{errors.to_branch_id}</p>
                                                 )}
@@ -338,42 +296,36 @@ export default function EditTransfer({
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toDepartment">Destination Department</Label>
-                                                <Select
-                                                    value={toDepartmentId}
-                                                    onValueChange={setToDepartmentId}
-                                                >
-                                                    <SelectTrigger id="toDepartment">
-                                                        <SelectValue placeholder="Select Department" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="">Same as Current</SelectItem>
-                                                        {departments.map((department) => (
-                                                            <SelectItem key={department.id} value={department.id.toString()}>
-                                                                {department.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <ComboSelect<string>
+                                                    value={toDepartmentId || null}
+                                                    onChange={(v) => setToDepartmentId(v ?? '')}
+                                                    placeholder="Select destination department…"
+                                                    items={[
+                                                        { value: '', label: 'Same as current' },
+                                                        ...departments.map((d) => ({
+                                                            value: String(d.id),
+                                                            label: d.name,
+                                                            keywords: d.name,
+                                                        })),
+                                                    ]}
+                                                />
                                             </div>
 
                                             <div className="space-y-2">
                                                 <Label htmlFor="toDesignation">Destination Designation</Label>
-                                                <Select
-                                                    value={toDesignationId}
-                                                    onValueChange={setToDesignationId}
-                                                >
-                                                    <SelectTrigger id="toDesignation">
-                                                        <SelectValue placeholder="Select Designation" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="">Same as Current</SelectItem>
-                                                        {designations.map((designation) => (
-                                                            <SelectItem key={designation.id} value={designation.id.toString()}>
-                                                                {designation.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <ComboSelect<string>
+                                                    value={toDesignationId || null}
+                                                    onChange={(v) => setToDesignationId(v ?? '')}
+                                                    placeholder="Select destination designation…"
+                                                    items={[
+                                                        { value: '', label: 'Same as current' },
+                                                        ...designations.map((d) => ({
+                                                            value: String(d.id),
+                                                            label: d.name,
+                                                            keywords: d.name,
+                                                        })),
+                                                    ]}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -383,35 +335,11 @@ export default function EditTransfer({
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
                                             <Label>Effective Date</Label>
-                                            <Popover open={effectiveDateOpen} onOpenChange={setEffectiveDateOpen}>
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        className={cn(
-                                                            "w-full justify-start text-left font-normal",
-                                                            !effectiveDate && "text-muted-foreground"
-                                                        )}
-                                                    >
-                                                        <Calendar className="mr-2 h-4 w-4" />
-                                                        {effectiveDate ? format(effectiveDate, 'PPP') : <span>Select date</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0">
-                                                    <SafeCalendar
-                                                        mode="single"
-                                                        selected={effectiveDate}
-                                                        onSelect={(date: Date | undefined) => {
-                                                            setEffectiveDate(date);
-                                                            setEffectiveDateOpen(false);
-                                                        }}
-                                                        disabledDates={(date: Date) => {
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            return date < today;
-                                                        }}
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
+                                            <DatePicker
+                                                selected={effectiveDate ?? null}
+                                                onSelect={(d) => setEffectiveDate(d ?? undefined)}
+                                                placeholderText="DD/MM/YYYY"
+                                            />
                                             {errors.effective_date && (
                                                 <p className="text-sm font-medium text-red-500">{errors.effective_date}</p>
                                             )}

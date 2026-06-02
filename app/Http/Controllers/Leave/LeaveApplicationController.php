@@ -441,7 +441,9 @@ class LeaveApplicationController extends Controller
         $perPage = $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
 
-        $applications = $query->orderBy('id')
+        $applications = $query
+            ->orderByDesc('applied_at')
+            ->orderByDesc('id')
             ->paginate($perPage)
             ->withQueryString();
 
@@ -461,7 +463,25 @@ class LeaveApplicationController extends Controller
         $canApproveAny = $hasApprovePermission;
 
         return Inertia::render('leave/applications/index', [
-            'applications' => $applications,
+            'applications' => [
+                'data' => $applications->getCollection()->values()->all(),
+                'meta' => [
+                    'current_page' => $applications->currentPage(),
+                    'from' => $applications->firstItem(),
+                    'last_page' => $applications->lastPage(),
+                    'links' => $applications->linkCollection()->toArray(),
+                    'path' => $applications->path(),
+                    'per_page' => $applications->perPage(),
+                    'to' => $applications->lastItem(),
+                    'total' => $applications->total(),
+                ],
+                'links' => [
+                    'first' => $applications->url(1),
+                    'last' => $applications->url($applications->lastPage()),
+                    'prev' => $applications->previousPageUrl(),
+                    'next' => $applications->nextPageUrl(),
+                ],
+            ],
             'departments' => $departments,
             'employees' => $employees,
             'filters' => $request->only(['status', 'department_id', 'employee_id', 'from_date', 'to_date', 'search', 'per_page']),

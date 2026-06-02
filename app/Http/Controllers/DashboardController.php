@@ -33,6 +33,7 @@ use App\Support\SafeSchema;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -357,6 +358,45 @@ class DashboardController extends Controller
             ? $this->getRecentEmployeesForHr($user)
             : [];
 
+        // Workforce breakdown: Active Core vs Active Project employees (active projects only).
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
+        $branchId = $user->branch_id;
+
+        $activeEmployeeBase = Employee::query()->where('status', 'active');
+        if ($isBranchManager && $branchId) {
+            $activeEmployeeBase->where('current_branch_id', $branchId);
+        }
+
+        $activeCoreEmployees = (clone $activeEmployeeBase)
+            ->where(function ($q) {
+                $q->whereNull('is_project_employee')->orWhere('is_project_employee', false);
+            })
+            ->count();
+
+        $activeProjectCounts = Employee::query()
+            ->join('projects', 'employees.project_id', '=', 'projects.id')
+            ->where('employees.status', 'active')
+            ->where('employees.is_project_employee', true)
+            ->whereNotNull('employees.project_id')
+            ->where('projects.is_active', true)
+            ->when($isBranchManager && $branchId, fn ($q) => $q->where('employees.current_branch_id', $branchId))
+            ->groupBy('projects.id', 'projects.name')
+            ->orderBy('projects.name')
+            ->get([
+                DB::raw('projects.id as id'),
+                DB::raw('projects.name as name'),
+                DB::raw('COUNT(*) as activeEmployees'),
+            ])
+            ->map(fn ($r) => [
+                'id' => (int) $r->id,
+                'name' => (string) $r->name,
+                'activeEmployees' => (int) $r->activeEmployees,
+            ])
+            ->values()
+            ->all();
+
+        $activeProjectEmployeesTotal = array_sum(array_map(fn ($x) => (int) ($x['activeEmployees'] ?? 0), $activeProjectCounts));
+
         $organizationHierarchy = ['zones' => []];
         if ($hasPermission($user, 'zones.view') || $hasPermission($user, 'regional-offices.view') || $hasPermission($user, 'branches.view')) {
             $organizationHierarchy = $this->getHrOrganizationZonesTree($user);
@@ -378,6 +418,11 @@ class DashboardController extends Controller
 
         return Inertia::render('sections/human-resources/dashboard', [
             'stats' => $stats,
+            'workforce' => [
+                'coreActive' => $activeCoreEmployees,
+                'projectActiveTotal' => $activeProjectEmployeesTotal,
+                'projectCounts' => $activeProjectCounts,
+            ],
             'organizationHierarchy' => $organizationHierarchy,
             'recentEmployees' => $recentEmployees,
             'transferStats' => $transferStats,

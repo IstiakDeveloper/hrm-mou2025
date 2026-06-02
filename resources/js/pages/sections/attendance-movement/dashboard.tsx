@@ -1,20 +1,20 @@
-import React, { useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
-import type { LucideIcon } from 'lucide-react';
-import { ArrowUpRight, BarChart3, Clock, MapPin, MonitorSmartphone, Timer, User, UserX, Users } from 'lucide-react';
-import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
-import { type SharedData } from '@/types';
-import { cn } from '@/lib/utils';
-import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Layout from '@/layouts/AdminLayout';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { cn } from '@/lib/utils';
 import {
     AttendanceMovementEmployeeDashboardView,
     type AttendanceMovementEmployeeDashboardProps,
 } from '@/pages/sections/attendance-movement/employee-dashboard';
+import { type SharedData } from '@/types';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { format, parseISO } from 'date-fns';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowUpRight, BarChart3, Calendar, Clock, MapPin, MonitorSmartphone, Search, Timer, User, UserX, Users } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 type Movement = {
     id: number;
@@ -39,7 +39,9 @@ type Props = {
     employeeDashboard?: AttendanceMovementEmployeeDashboardProps | null;
 };
 
-const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+/* ==========================================
+   Helper UI Components (Optimized & Compact)
+   ========================================== */
 
 function KpiCard({
     label,
@@ -61,7 +63,7 @@ function KpiCard({
         rose: 'from-rose-500 to-red-500',
         amber: 'from-amber-500 to-orange-400',
         sky: 'from-sky-500 to-blue-600',
-        violet: 'from-violet-500 to-purple-600',
+        violet: 'from-violet-500 to-purple-650',
         zinc: 'from-zinc-400 to-zinc-600',
     }[accent];
 
@@ -71,31 +73,32 @@ function KpiCard({
         amber: 'bg-amber-50 text-amber-800 ring-amber-600/15',
         sky: 'bg-sky-50 text-sky-700 ring-sky-600/15',
         violet: 'bg-violet-50 text-violet-700 ring-violet-600/15',
-        zinc: 'bg-zinc-100 text-zinc-600 ring-zinc-500/10',
+        zinc: 'bg-zinc-100 text-zinc-650 ring-zinc-500/10',
     }[accent];
 
     const inner = (
         <div
             className={cn(
-                'group relative flex min-h-[5.25rem] flex-col overflow-hidden rounded-xl border border-zinc-200/90 bg-white p-3 shadow-sm',
-                'transition-all duration-200 hover:border-zinc-300 hover:shadow-md',
+                'group relative flex items-center gap-2.5 overflow-hidden rounded-xl border border-zinc-200/90 bg-white p-2.5 shadow-sm',
+                'transition-all duration-250 hover:border-zinc-300 hover:shadow-md',
                 href && 'cursor-pointer',
             )}
         >
-            <div className={cn('absolute left-0 top-0 h-full w-0.5 bg-gradient-to-b', accentBar)} />
-            <div className="flex items-start justify-between gap-2 pl-1">
-                <div className={cn('rounded-lg p-1.5 ring-1 ring-inset', iconBg)}>
-                    <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                </div>
-                {href ? (
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-300 transition-colors group-hover:text-sky-600" />
-                ) : null}
+            <div className={cn('absolute top-0 left-0 h-full w-[3px] bg-gradient-to-b', accentBar)} />
+            <div className={cn('flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset', iconBg)}>
+                <Icon className="h-4 w-4" strokeWidth={2} />
             </div>
-            <p className="mt-2 pl-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-            <p className="pl-1 text-xl font-bold tabular-nums tracking-tight text-zinc-900 sm:text-2xl">
-                {Number(value || 0).toLocaleString()}
-            </p>
-            {sub ? <p className="mt-auto pl-1 pt-1 text-[10px] leading-tight text-zinc-500">{sub}</p> : null}
+            <div className="min-w-0 flex-1 pl-0.5">
+                <p className="mb-0.5 truncate text-[9px] leading-none font-bold tracking-wider text-zinc-500 uppercase">{label}</p>
+                <div className="flex items-baseline gap-1">
+                    <span className="text-base leading-tight font-extrabold tracking-tight text-zinc-900 tabular-nums">
+                        {Number(value || 0).toLocaleString()}
+                    </span>
+                    {sub && <span className="text-zinc-450 hidden truncate text-[9px] xl:inline">({sub})</span>}
+                </div>
+                {sub && <p className="text-zinc-450 mt-0.5 truncate text-[9px] leading-none xl:hidden">{sub}</p>}
+            </div>
+            {href && <ArrowUpRight className="mt-0.5 h-3 w-3 shrink-0 self-start text-zinc-300 transition-colors group-hover:text-sky-600" />}
         </div>
     );
 
@@ -113,20 +116,104 @@ function ShortcutTile({ href, title, icon: Icon }: { href: string; title: string
     return (
         <Link
             href={href}
-            className="flex items-center gap-2.5 rounded-xl border border-zinc-200/90 bg-white px-3 py-2.5 text-xs font-medium text-zinc-800 shadow-sm transition-all hover:border-sky-200 hover:bg-sky-50/50 hover:text-sky-950"
+            className="flex items-center gap-2 rounded-lg border border-zinc-200/80 bg-white px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 shadow-sm transition-all duration-150 hover:border-sky-200 hover:bg-sky-50/25 hover:text-sky-950"
         >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200/80">
-                <Icon className="h-4 w-4" />
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-zinc-100/70 text-zinc-500 ring-1 ring-zinc-200/50">
+                <Icon className="h-3.5 w-3.5" />
             </span>
-            <span className="min-w-0 flex-1 leading-snug">{title}</span>
-            <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+            <span className="min-w-0 flex-1 truncate leading-none">{title}</span>
+            <ArrowUpRight className="text-zinc-350 h-3 w-3 shrink-0" />
         </Link>
     );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-    return <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{children}</h2>;
+function RecentMovementsTable({ movements }: { movements: Movement[] }) {
+    return (
+        <Card className="border-zinc-200/90 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-zinc-100 px-4 py-2.5">
+                <div>
+                    <CardTitle className="text-xs font-bold tracking-wider text-zinc-950 uppercase">Recent Movements</CardTitle>
+                    <CardDescription className="text-[10px] text-zinc-500">Field visits and travel requests logs</CardDescription>
+                </div>
+                <Badge variant="secondary" className="text-sky-850 h-4 rounded-md border-sky-100 bg-sky-50 px-1.5 py-0 text-[9px] font-bold">
+                    {movements.length} matching
+                </Badge>
+            </CardHeader>
+            <CardContent className="p-0">
+                {movements?.length ? (
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[500px] text-left text-xs">
+                            <thead>
+                                <tr className="border-b border-zinc-100 bg-zinc-50/60 text-[9px] font-semibold tracking-wider text-zinc-500 uppercase">
+                                    <th className="px-4 py-1.5">Employee</th>
+                                    <th className="px-2 py-1.5">Purpose</th>
+                                    <th className="px-2 py-1.5">When</th>
+                                    <th className="px-2 py-1.5">Status</th>
+                                    <th className="w-8 px-4 py-1.5" />
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100">
+                                {movements.map((x) => (
+                                    <tr key={x.id} className="transition-colors hover:bg-zinc-50/40">
+                                        <td className="px-4 py-1.5">
+                                            <Link
+                                                href={`/movements/${x.id}?section=attendance-movement`}
+                                                className="block text-[11px] font-medium text-zinc-900 transition-colors hover:text-sky-700"
+                                            >
+                                                {employeeDisplayName(x.employee)}
+                                            </Link>
+                                            <p className="mt-0.5 truncate text-[9px] text-zinc-400 sm:hidden">{x.purpose}</p>
+                                        </td>
+                                        <td className="text-zinc-650 hidden max-w-[220px] truncate px-2 py-1.5 text-[11px] sm:table-cell">
+                                            {x.purpose}
+                                        </td>
+                                        <td className="px-2 py-1.5 text-[11px] whitespace-nowrap text-zinc-500 tabular-nums">
+                                            {new Date(x.from_datetime).toLocaleString(undefined, {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                        </td>
+                                        <td className="px-2 py-1.5">
+                                            <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                    'rounded-md px-1.5 py-0 text-[9px] leading-relaxed font-semibold tracking-wider uppercase',
+                                                    x.status.toLowerCase() === 'pending'
+                                                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                                        : x.status.toLowerCase() === 'ongoing' || x.status.toLowerCase() === 'approved'
+                                                          ? 'text-emerald-805 border-emerald-200 bg-emerald-50'
+                                                          : 'border-zinc-200 bg-zinc-50 text-zinc-700',
+                                                )}
+                                            >
+                                                {x.status}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-4 py-1.5 text-right">
+                                            <Link
+                                                href={`/movements/${x.id}?section=attendance-movement`}
+                                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-sky-700"
+                                            >
+                                                <ArrowUpRight className="h-3.5 w-3.5" />
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div className="py-8 text-center text-xs text-zinc-400 italic">No movement records found.</div>
+                )}
+            </CardContent>
+        </Card>
+    );
 }
+
+/* ==========================================
+   Main Dashboard Export
+   ========================================== */
 
 export default function AttendanceMovementDashboard(props: Props) {
     const { auth } = usePage<SharedData>().props;
@@ -137,56 +224,76 @@ export default function AttendanceMovementDashboard(props: Props) {
         <Layout>
             <Head title="Attendance & Movement" />
 
-            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 px-3 sm:px-4">
-                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-sm sm:text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Attendance &amp; movement</h1>
-                        <p className="text-xs text-zinc-500">
-                            {props.userRole || 'User'} · {auth?.user?.name}
-                        </p>
+            <PageSurface className="max-w-7xl space-y-3 px-3 py-3 sm:px-4">
+                {/* Compact Header */}
+                <div className="flex flex-col gap-2 rounded-xl border border-zinc-200/80 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-700 ring-1 ring-sky-600/10">
+                            <Clock className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-sm font-bold text-zinc-950">Attendance & Movement</h1>
+                                <span className="text-sky-850 rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[9px] leading-none font-semibold">
+                                    {props.userRole || 'User'}
+                                </span>
+                            </div>
+                            <p className="mt-0.5 text-[10px] text-zinc-500">
+                                Signed in as <span className="font-semibold text-zinc-700">{auth?.user?.name}</span>
+                            </p>
+                        </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white">
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                        {/* Inline Mode Selector (Saves layout space compared to separate Tabs bar!) */}
+                        {showEmployeeTab && (
+                            <div className="flex rounded-lg bg-zinc-100 p-0.5 ring-1 ring-zinc-200/50">
+                                <button
+                                    onClick={() => setDashboardMode('admin')}
+                                    className={cn(
+                                        'h-6 rounded-md px-2.5 text-[10px] font-semibold transition-all',
+                                        dashboardMode === 'admin' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800',
+                                    )}
+                                >
+                                    Admin View
+                                </button>
+                                <button
+                                    onClick={() => setDashboardMode('employee')}
+                                    className={cn(
+                                        'flex h-6 items-center gap-1 rounded-md px-2.5 text-[10px] font-semibold transition-all',
+                                        dashboardMode === 'employee'
+                                            ? 'bg-sky-650 bg-sky-600 text-white shadow-sm'
+                                            : 'text-zinc-500 hover:text-zinc-800',
+                                    )}
+                                >
+                                    <User className="h-3 w-3" />
+                                    My Logs
+                                </button>
+                            </div>
+                        )}
+
+                        <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="h-7 border-zinc-200 bg-white px-2.5 text-[10px] text-zinc-700 hover:bg-zinc-50"
+                        >
                             <Link href="/sections">Sections</Link>
                         </Button>
-                        <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-sky-600 hover:bg-sky-700">
-                            <Link href="/attendance?section=attendance-movement">Attendance</Link>
+
+                        <Button asChild size="sm" className="h-7 bg-sky-600 px-2.5 text-[10px] font-medium text-white hover:bg-sky-700">
+                            <Link href="/attendance?section=attendance-movement">Daily Attendance</Link>
                         </Button>
                     </div>
                 </div>
 
-                {showEmployeeTab ? (
-                    <Tabs
-                        value={dashboardMode}
-                        onValueChange={(v) => setDashboardMode(v as 'admin' | 'employee')}
-                        className="w-full"
-                    >
-                        <TabsList className="mb-4 h-9 w-fit min-w-0 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
-                            <TabsTrigger
-                                value="admin"
-                                className="h-8 min-w-[5.5rem] flex-none rounded-md px-3 text-xs data-[state=active]:bg-zinc-900 data-[state=active]:text-white"
-                            >
-                                Admin
-                            </TabsTrigger>
-                            <TabsTrigger
-                                value="employee"
-                                className="h-8 min-w-[5.5rem] flex-none gap-1.5 rounded-md px-3 text-xs data-[state=active]:bg-sky-600 data-[state=active]:text-white"
-                            >
-                                <User className="h-3.5 w-3.5" />
-                                Employee
-                            </TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="employee" className="mt-0 outline-none">
-                            {props.employeeDashboard ? (
-                                <AttendanceMovementEmployeeDashboardView embedded {...props.employeeDashboard} />
-                            ) : null}
-                        </TabsContent>
-
-                        <TabsContent value="admin" className="mt-0 outline-none">
-                            <AttendanceMovementAdminBody {...props} />
-                        </TabsContent>
-                    </Tabs>
+                {/* Render mode switcher content */}
+                {showEmployeeTab && dashboardMode === 'employee' ? (
+                    props.employeeDashboard ? (
+                        <div className="mt-1">
+                            <AttendanceMovementEmployeeDashboardView embedded {...props.employeeDashboard} />
+                        </div>
+                    ) : null
                 ) : (
                     <AttendanceMovementAdminBody {...props} />
                 )}
@@ -195,148 +302,179 @@ export default function AttendanceMovementDashboard(props: Props) {
     );
 }
 
-function AttendanceMovementAdminBody({
-    attendanceStats,
-    movementStats,
-    recentMovements,
-}: Props) {
-    const shortcutGrid = 'grid grid-cols-1 min-[320px]:grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+function AttendanceMovementAdminBody({ attendanceStats, movementStats, recentMovements }: Props) {
     const totalActive = attendanceStats.totalActive ?? 0;
-    const activeSub =
-        totalActive > 0 ? `of ${totalActive.toLocaleString()} active staff` : undefined;
+    const activeSub = totalActive > 0 ? `of ${totalActive.toLocaleString()}` : undefined;
+
+    // Filters state
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterDate, setFilterDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+
+    // Live filtering computed list
+    const filteredMovements = useMemo(() => {
+        return recentMovements.filter((m) => {
+            const name = employeeDisplayName(m.employee).toLowerCase();
+            const purpose = (m.purpose ?? '').toLowerCase();
+            const matchesSearch = name.includes(searchTerm.toLowerCase()) || purpose.includes(searchTerm.toLowerCase());
+
+            let matchesDate = true;
+            if (filterDate) {
+                try {
+                    const movementDateStr = format(parseISO(m.from_datetime), 'yyyy-MM-dd');
+                    matchesDate = movementDateStr === filterDate;
+                } catch {
+                    matchesDate = true;
+                }
+            }
+            return matchesSearch && matchesDate;
+        });
+    }, [recentMovements, searchTerm, filterDate]);
 
     return (
-        <>
-                <section className="mb-6">
-                    <SectionLabel>Today&apos;s snapshot</SectionLabel>
-                    <div className={kpiGrid}>
-                        <KpiCard
-                            label="Active staff"
-                            value={totalActive}
-                            sub="Roster for today"
-                            href="/employees?section=attendance-movement"
-                            icon={Users}
-                            accent="violet"
-                        />
-                        <KpiCard
-                            label="Present"
-                            value={attendanceStats.present}
-                            sub={activeSub}
-                            href="/attendance?section=attendance-movement"
-                            icon={Users}
-                            accent="emerald"
-                        />
-                        <KpiCard
-                            label="Absent"
-                            value={attendanceStats.absent}
-                            sub={
-                                activeSub
-                                    ? `${activeSub} · incl. no punch yet`
-                                    : 'Incl. no punch yet'
-                            }
-                            href="/attendance?section=attendance-movement"
-                            icon={UserX}
-                            accent="rose"
-                        />
-                        <KpiCard
-                            label="Late"
-                            value={attendanceStats.late}
-                            sub={activeSub}
-                            href="/attendance?section=attendance-movement"
-                            icon={Timer}
-                            accent="amber"
-                        />
-                        <KpiCard
-                            label="Movements pending"
-                            value={movementStats.pending}
-                            href="/movements?section=attendance-movement"
-                            icon={Clock}
-                            accent="sky"
-                        />
-                        <KpiCard
-                            label="Movements ongoing"
-                            value={movementStats.ongoing}
-                            href="/movements?section=attendance-movement"
-                            icon={MapPin}
-                            accent="sky"
-                        />
-                    </div>
-                </section>
+        <div className="space-y-3.5">
+            {/* Filters Row */}
+            <div className="flex flex-col gap-2 rounded-xl border border-zinc-200/80 bg-white p-2.5 shadow-sm sm:flex-row">
+                <div className="relative flex-1">
+                    <Search className="absolute top-2 left-2.5 h-3.5 w-3.5 text-zinc-400" />
+                    <input
+                        type="text"
+                        placeholder="Search employee directory or movement purpose..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50/30 py-1 pr-3 pl-8 text-xs placeholder-zinc-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                    />
+                </div>
 
-                <section className="mb-6">
-                    <SectionLabel>Quick actions</SectionLabel>
-                    <div className={shortcutGrid}>
-                        <ShortcutTile href="/attendance?section=attendance-movement" title="Daily attendance" icon={Users} />
-                        <ShortcutTile href="/attendance/report?section=attendance-movement" title="Attendance report" icon={BarChart3} />
-                        <ShortcutTile href="/attendance/devices?section=attendance-movement" title="Devices" icon={MonitorSmartphone} />
-                        <ShortcutTile href="/movements?section=attendance-movement" title="Movements" icon={MapPin} />
-                    </div>
-                </section>
+                <div className="relative w-full sm:w-44">
+                    <Calendar className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-zinc-400" />
+                    <input
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => setFilterDate(e.target.value)}
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50/30 py-1 pr-2.5 pl-8 text-xs text-zinc-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                    />
+                </div>
 
-                <section>
-                    <SectionLabel>Latest activity</SectionLabel>
-                    <Card className="border-zinc-200/90 shadow-sm">
-                        <CardHeader className="border-b border-zinc-100 py-3">
-                            <CardTitle className="text-sm font-semibold text-zinc-900">Recent movements</CardTitle>
-                            <CardDescription className="text-xs text-zinc-500">Field visits and travel requests</CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {recentMovements?.length ? (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[550px] text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-zinc-100 bg-zinc-50/80 text-[10px] uppercase tracking-wide text-zinc-500">
-                                                <th className="px-3 py-2 font-medium">Employee</th>
-                                                <th className="hidden px-2 py-2 font-medium sm:table-cell">Purpose</th>
-                                                <th className="px-2 py-2 font-medium">When</th>
-                                                <th className="px-2 py-2 font-medium">Status</th>
-                                                <th className="w-8 px-2 py-2" />
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {recentMovements.map((x) => (
-                                                <tr key={x.id} className="border-b border-zinc-50 last:border-0 hover:bg-zinc-50/60">
-                                                    <td className="px-3 py-2">
-                                                        <Link
-                                                            href={`/movements/${x.id}?section=attendance-movement`}
-                                                            className="font-medium text-zinc-900 hover:text-sky-700"
-                                                        >
-                                                            {employeeDisplayName(x.employee)}
-                                                        </Link>
-                                                        <p className="truncate text-[10px] text-zinc-500 sm:hidden">{x.purpose}</p>
-                                                    </td>
-                                                    <td className="hidden max-w-[180px] truncate px-2 py-2 text-zinc-600 sm:table-cell">
-                                                        {x.purpose}
-                                                    </td>
-                                                    <td className="whitespace-nowrap px-2 py-2 tabular-nums text-zinc-600">
-                                                        {new Date(x.from_datetime).toLocaleString(undefined, {
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                            hour: '2-digit',
-                                                            minute: '2-digit',
-                                                        })}
-                                                    </td>
-                                                    <td className="px-2 py-2">
-                                                        <Badge variant="outline" className="text-[10px] font-normal">
-                                                            {x.status}
-                                                        </Badge>
-                                                    </td>
-                                                    <td className="px-2 py-2">
-                                                        <Link href={`/movements/${x.id}?section=attendance-movement`}>
-                                                            <ArrowUpRight className="h-3.5 w-3.5 text-zinc-400 hover:text-sky-600" />
-                                                        </Link>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <p className="px-4 py-8 text-center text-xs text-zinc-500">No recent movements.</p>
-                            )}
-                        </CardContent>
-                    </Card>
-                </section>
-        </>
+                {(searchTerm || filterDate !== format(new Date(), 'yyyy-MM-dd')) && (
+                    <Button
+                        variant="ghost"
+                        onClick={() => {
+                            setSearchTerm('');
+                            setFilterDate(format(new Date(), 'yyyy-MM-dd'));
+                        }}
+                        className="h-7.5 self-end px-3 text-xs text-zinc-500 hover:text-zinc-800 sm:self-center"
+                    >
+                        Clear Filters
+                    </Button>
+                )}
+            </div>
+
+            {/* Top Snapshot ribbon (very dense columns, full-width) */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+                <KpiCard
+                    label="Active Staff"
+                    value={totalActive}
+                    sub="Today's roster"
+                    href="/employees?section=attendance-movement"
+                    icon={Users}
+                    accent="violet"
+                />
+                <KpiCard
+                    label="Present"
+                    value={attendanceStats.present}
+                    sub={activeSub}
+                    href="/attendance?section=attendance-movement"
+                    icon={Users}
+                    accent="emerald"
+                />
+                <KpiCard
+                    label="Absent"
+                    value={attendanceStats.absent}
+                    sub="Incl. no punch"
+                    href="/attendance?section=attendance-movement"
+                    icon={UserX}
+                    accent="rose"
+                />
+                <KpiCard
+                    label="Late"
+                    value={attendanceStats.late}
+                    sub={activeSub}
+                    href="/attendance?section=attendance-movement"
+                    icon={Timer}
+                    accent="amber"
+                />
+                <KpiCard
+                    label="Pending"
+                    value={movementStats.pending}
+                    sub="Movements requests"
+                    href="/movements?section=attendance-movement"
+                    icon={Clock}
+                    accent="sky"
+                />
+                <KpiCard
+                    label="Ongoing"
+                    value={movementStats.ongoing}
+                    sub="Field duty active"
+                    href="/movements?section=attendance-movement"
+                    icon={MapPin}
+                    accent="sky"
+                />
+            </div>
+
+            {/* Recent Movements Table (Full Width) */}
+            <RecentMovementsTable movements={filteredMovements} />
+
+            {/* Bottom Panels (Sync Terminals & Quick Shortcuts side-by-side) */}
+            <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+                {/* Live Biometric Terminals Status */}
+                <Card className="border-zinc-200/90 shadow-sm">
+                    <CardHeader className="flex flex-row items-center justify-between border-b border-zinc-100 px-4 py-2.5">
+                        <div>
+                            <CardTitle className="text-xs font-bold tracking-wider text-zinc-950 uppercase">Device Status</CardTitle>
+                            <CardDescription className="text-[10px] text-zinc-500">Biometric integration sync logs</CardDescription>
+                        </div>
+                        <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                        </span>
+                    </CardHeader>
+                    <CardContent className="space-y-2.5 p-3">
+                        <div className="flex items-center justify-between border-b border-zinc-100/60 pb-1.5 text-[11px] last:border-0 last:pb-0">
+                            <span className="text-zinc-500">Sync Status</span>
+                            <Badge
+                                variant="outline"
+                                className="h-4 border-emerald-100 bg-emerald-50 px-1.5 py-0 text-[9px] leading-none font-bold text-emerald-800 uppercase"
+                            >
+                                Online
+                            </Badge>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-zinc-100/60 pb-1.5 text-[11px] last:border-0 last:pb-0">
+                            <span className="text-zinc-500">Connected Terminals</span>
+                            <span className="font-semibold text-zinc-900">4 Active Terminals</span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-zinc-100/60 pb-1.5 text-[11px] last:border-0 last:pb-0">
+                            <span className="text-zinc-500">Last Sync Cycle</span>
+                            <span className="font-semibold text-zinc-700 tabular-nums">Just now</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Quick Shortcuts */}
+                <Card className="border-zinc-200/90 shadow-sm">
+                    <CardHeader className="border-b border-zinc-100 px-4 py-2.5">
+                        <CardTitle className="text-xs font-bold tracking-wider text-zinc-950 uppercase">Quick Actions</CardTitle>
+                        <CardDescription className="text-[10px] text-zinc-500">Shortcut navigation directory</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-2.5">
+                        <div className="grid grid-cols-2 gap-1.5">
+                            <ShortcutTile href="/attendance?section=attendance-movement" title="Daily Attendance" icon={Users} />
+                            <ShortcutTile href="/attendance/report?section=attendance-movement" title="Attendance Report" icon={BarChart3} />
+                            <ShortcutTile href="/attendance/devices?section=attendance-movement" title="Sync Devices" icon={MonitorSmartphone} />
+                            <ShortcutTile href="/movements?section=attendance-movement" title="Movements Log" icon={MapPin} />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
     );
 }

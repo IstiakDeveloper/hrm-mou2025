@@ -19,9 +19,11 @@ import {
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
     ChevronLeft,
     ChevronRight,
+    ArrowUpDown,
     Search,
     UserPlus,
     Upload,
@@ -138,6 +140,8 @@ interface EmployeeIndexProps {
         status?: string;
         employee_type_id?: string;
         per_page?: string;
+        sort_by?: string;
+        sort_dir?: string;
     };
     success?: string;
 }
@@ -156,7 +160,9 @@ export default function EmployeeIndex({
         branch_id: filters.branch_id || '',
         status: filters.status || '',
         employee_type_id: filters.employee_type_id || '',
-        per_page: filters.per_page || '10',
+        per_page: filters.per_page || '100',
+        sort_by: filters.sort_by || 'id',
+        sort_dir: filters.sort_dir || 'asc',
     });
 
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
@@ -192,9 +198,21 @@ export default function EmployeeIndex({
         if (merged.branch_id) params.branch_id = merged.branch_id;
         if (merged.status) params.status = merged.status;
         if (merged.employee_type_id) params.employee_type_id = merged.employee_type_id;
-        if (merged.per_page && merged.per_page !== '10') params.per_page = merged.per_page;
+        if (merged.per_page && merged.per_page !== '100') params.per_page = merged.per_page;
+        if (merged.sort_by && merged.sort_by !== 'id') params.sort_by = merged.sort_by;
+        if (merged.sort_dir && merged.sort_dir !== 'asc') params.sort_dir = merged.sort_dir;
 
         router.get(route('employees.index'), params, { preserveState: true, replace: true });
+    };
+
+    const toggleSort = (sortBy: 'id' | 'pin' | 'name' | 'status') => {
+        const currentBy = (data as any).sort_by as string;
+        const currentDir = (data as any).sort_dir as string;
+
+        const nextDir =
+            currentBy === sortBy ? (currentDir === 'asc' ? 'desc' : 'asc') : 'asc';
+
+        applyFilters({ sort_by: sortBy, sort_dir: nextDir } as any);
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -226,6 +244,17 @@ export default function EmployeeIndex({
             status: '',
             employee_type_id: '',
         });
+    };
+
+    const handleStatusChange = (employee: Employee, active: boolean) => {
+        router.patch(
+            route('employees.update-status', employee.id),
+            { active },
+            {
+                preserveScroll: true,
+                preserveState: true,
+            }
+        );
     };
 
     const getStatusBadge = (status: string) => {
@@ -536,12 +565,36 @@ export default function EmployeeIndex({
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/80 border-b border-slate-200">
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Employee</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">ID</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort('name')}
+                                                className="inline-flex items-center gap-1 hover:text-slate-900"
+                                            >
+                                                Employee <ArrowUpDown className="h-3.5 w-3.5" />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort('pin')}
+                                                className="inline-flex items-center gap-1 hover:text-slate-900"
+                                            >
+                                                PIN <ArrowUpDown className="h-3.5 w-3.5" />
+                                            </button>
+                                        </TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Department</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Contact</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSort('status')}
+                                                className="inline-flex items-center gap-1 hover:text-slate-900"
+                                            >
+                                                Status <ArrowUpDown className="h-3.5 w-3.5" />
+                                            </button>
+                                        </TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -593,7 +646,32 @@ export default function EmployeeIndex({
                                                         {employee.phone && <div className="text-slate-500 mt-0.5">{employee.phone}</div>}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{getStatusBadge(employee.status)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        <Switch
+                                                            checked={employee.status === 'active'}
+                                                            onCheckedChange={(checked) =>
+                                                                handleStatusChange(employee, checked)
+                                                            }
+                                                            aria-label="Toggle employee active status"
+                                                        />
+                                                        <span
+                                                            className={
+                                                                employee.status === 'active'
+                                                                    ? 'text-[13px] font-medium text-emerald-600'
+                                                                    : 'text-[13px] text-slate-500'
+                                                            }
+                                                        >
+                                                            {employee.status === 'active' ? 'Active' : 'Inactive'}
+                                                        </span>
+                                                        {employee.status !== 'active' &&
+                                                            employee.status !== 'inactive' && (
+                                                                <span className="ml-1">
+                                                                    {getStatusBadge(employee.status)}
+                                                                </span>
+                                                            )}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className="text-right pr-6">
                                                     <div className="flex items-center justify-end gap-2 transition-opacity duration-200">
                                                         <Link href={route('employees.show', employee.id)}>

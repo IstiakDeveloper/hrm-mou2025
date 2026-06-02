@@ -19,6 +19,8 @@ use App\Models\RegionalOffice;
 use App\Models\Role;
 use App\Models\SalaryGrade;
 use App\Models\SalaryStep;
+use App\Models\TransferHistory;
+use App\Models\PromotionHistory;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\OrganogramAccessService;
@@ -1022,12 +1024,33 @@ class EmployeeController extends Controller
                 $query->where('employee_type_id', $employeeTypeId);
             });
 
-        $perPage = (int) $request->get('per_page', 10);
+        $perPage = (int) $request->get('per_page', 100);
         if (! in_array($perPage, [10, 25, 50, 100, 200, 500])) {
-            $perPage = 10;
+            $perPage = 100;
         }
 
-        $employees = $query->orderBy('id')
+        $allowedSortBy = ['id', 'pin', 'name', 'status'];
+        $sortBy = (string) $request->get('sort_by', 'id');
+        if (! in_array($sortBy, $allowedSortBy, true)) {
+            $sortBy = 'id';
+        }
+
+        $sortDir = strtolower((string) $request->get('sort_dir', 'asc'));
+        if (! in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'asc';
+        }
+
+        if ($sortBy === 'pin') {
+            $query->orderByRaw('COALESCE(pin, employee_id) '.$sortDir);
+        } elseif ($sortBy === 'name') {
+            $query->orderBy('name_en', $sortDir)->orderBy('first_name', $sortDir)->orderBy('last_name', $sortDir);
+        } elseif ($sortBy === 'status') {
+            $query->orderBy('status', $sortDir)->orderBy('id', 'asc');
+        } else {
+            $query->orderBy('id', $sortDir);
+        }
+
+        $employees = $query
             ->paginate($perPage)
             ->withQueryString();
 
@@ -1048,8 +1071,28 @@ class EmployeeController extends Controller
             'departments' => $departments,
             'branches' => $branches,
             'employee_types' => $employeeTypes,
-            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status', 'employee_type_id', 'per_page']),
+            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status', 'employee_type_id', 'per_page', 'sort_by', 'sort_dir']),
         ]);
+    }
+
+    /**
+     * Toggle employee active/inactive status from the directory listing.
+     */
+    public function updateStatus(Request $request, Employee $employee)
+    {
+        $validated = $request->validate([
+            'active' => 'required|boolean',
+        ]);
+
+        $newStatus = $validated['active'] ? 'active' : 'inactive';
+        $employee->status = $newStatus;
+        $employee->save();
+
+        User::query()
+            ->where('employee_id', $employee->id)
+            ->update(['active_status' => $newStatus === 'active']);
+
+        return back()->with('success', 'Employee status updated successfully.');
     }
 
     /**
@@ -2155,11 +2198,33 @@ class EmployeeController extends Controller
         $employee->experiences = \Illuminate\Support\Facades\DB::table('employee_experiences')->where('employee_id', $employee->id)->get()->all();
         $employee->trainings = \Illuminate\Support\Facades\DB::table('employee_trainings')->where('employee_id', $employee->id)->get()->all();
 
+        $transferHistories = TransferHistory::query()
+            ->with(['fromBranch:id,name', 'toBranch:id,name', 'transfer:id,transfer_order_no,effective_date,status'])
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('transfer_date')
+            ->limit(50)
+            ->get();
+
+        $promotionHistories = PromotionHistory::query()
+            ->with([
+                'fromDesignation:id,name',
+                'toDesignation:id,name',
+                'fromSalaryGrade:id,name',
+                'toSalaryGrade:id,name',
+                'promotion:id,promotion_order_no,effective_date,status',
+            ])
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('promotion_date')
+            ->limit(50)
+            ->get();
+
         return Inertia::render('employee/show', [
             'employee' => $employee,
             'currentYearLeaveBalances' => $currentYearLeaveBalances,
             'recentLeaveApplications' => $recentLeaveApplications,
             'recentMovements' => $recentMovements,
+            'transferHistories' => $transferHistories,
+            'promotionHistories' => $promotionHistories,
         ]);
     }
 

@@ -149,10 +149,6 @@ class SelfAttendanceController extends Controller
             return back()->withErrors(['attendance' => 'You need to check in first.']);
         }
 
-        if ($attendance->check_out) {
-            return back()->withErrors(['attendance' => 'Already checked out for today.']);
-        }
-
         $nowTime = Carbon::now()->format('H:i:s');
 
         $location = [
@@ -170,7 +166,15 @@ class SelfAttendanceController extends Controller
             ],
         ];
 
-        $attendance->check_out = $nowTime;
+        // Always keep the latest check-out time (employee may check out multiple times; last one wins).
+        if (! $attendance->check_out) {
+            $attendance->check_out = $nowTime;
+        } else {
+            $existing = Carbon::parse($attendance->check_out)->format('H:i:s');
+            if ($nowTime > $existing) {
+                $attendance->check_out = $nowTime;
+            }
+        }
         $attendance->status = 'present';
         $attendance->location_coordinates = array_merge((array) ($attendance->location_coordinates ?? []), $location);
         $attendance->save();

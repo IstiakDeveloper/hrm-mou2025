@@ -166,6 +166,14 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
   };
 
   const effectiveDate = new Date(transfer.effective_date);
+  const fromBranchName =
+    (transfer as any).fromBranch?.name ??
+    (transfer as any).from_branch?.name ??
+    '—';
+  const toBranchName =
+    (transfer as any).toBranch?.name ??
+    (transfer as any).to_branch?.name ??
+    '—';
 
   return (
     <Layout>
@@ -295,7 +303,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                     <div className="space-y-3">
                       <div>
                         <p className="text-sm text-gray-500">Branch</p>
-                        <p className="font-medium">{transfer.fromBranch?.name}</p>
+                        <p className="font-medium">{fromBranchName}</p>
                       </div>
 
                       {transfer.fromDepartment && (
@@ -323,7 +331,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                     <div className="space-y-3">
                       <div>
                         <p className="text-sm text-gray-500">Branch</p>
-                        <p className="font-medium">{transfer.toBranch?.name}</p>
+                        <p className="font-medium">{toBranchName}</p>
                       </div>
 
                       <div>

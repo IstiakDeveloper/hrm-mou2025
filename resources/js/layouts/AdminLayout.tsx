@@ -135,6 +135,7 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
         case 'attendance-movement':
             return [
                 { title: 'Monthly View', path: '/attendance/monthly', permission: 'attendance.view' },
+                { title: 'Daily branch summary', path: '/attendance/daily-branch-summary', permission: 'attendance.view' },
                 { title: 'Attendance Report', path: '/attendance/report', permission: 'attendance.view' },
                 { title: 'Attendance sheet report', path: '/attendance/sheet-report', permission: 'reports.view' },
             ];
@@ -421,13 +422,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             ]
         },
         {
-            title: 'Transfers',
+            title: 'Transfer & Promotion',
             icon: <ArrowLeftRight className="w-5 h-5" />,
             path: '/transfers',
             hasSubmenu: true,
-            permission: 'transfers.view',
             submenu: [
-                { title: 'All Transfers', path: '/transfers', permission: 'transfers.view' },
+                { title: 'Transfers', path: '/transfers', permission: 'transfers.view' },
+                { title: 'Promotions', path: '/promotions', permission: 'promotions.view' },
             ]
         },
         {

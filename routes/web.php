@@ -55,6 +55,7 @@ use App\Http\Controllers\Payroll\SalaryStructureController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RegionalOffice\RegionalOfficeController;
 use App\Http\Controllers\Report\ReportController;
+use App\Http\Controllers\Promotion\PromotionController;
 use App\Http\Controllers\Transfer\TransferController;
 use App\Http\Controllers\ZKTeco\ZKDeviceController;
 use App\Http\Controllers\Zone\ZoneController;
@@ -409,6 +410,10 @@ Route::middleware(['auth'])->group(function () {
     // ====================
     Route::middleware(['permission:employees.view'])->group(function () {
         Route::resource('employees', EmployeeController::class)->parameters(['employees' => 'employee']);
+
+        Route::patch('employees/{employee}/status', [EmployeeController::class, 'updateStatus'])
+            ->name('employees.update-status')
+            ->middleware('permission:employees.edit');
 
         Route::get('employees/pin-suggestion', [EmployeeController::class, 'pinSuggestion'])
             ->name('employees.pin-suggestion')
@@ -872,6 +877,7 @@ Route::middleware(['auth'])->group(function () {
         // Basic Attendance Operations
         Route::get('/', [AttendanceController::class, 'index'])->name('index');
         Route::get('/monthly', [AttendanceController::class, 'monthly'])->name('monthly');
+        Route::get('/daily-branch-summary', [AttendanceController::class, 'dailyBranchSummary'])->name('daily-branch-summary');
         Route::get('/report', [AttendanceController::class, 'report'])->name('report');
         Route::get('/sheet-report', [AttendanceController::class, 'sheetReport'])->name('sheet-report');
         Route::get('/pdf', [AttendanceController::class, 'generatePdf'])->name('pdf');
@@ -1136,6 +1142,30 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['permission:transfers.approve'])->group(function () {
             Route::post('/{transfer}/approve', [TransferController::class, 'approve'])->name('approve');
             Route::post('/{transfer}/reject', [TransferController::class, 'reject'])->name('reject');
+        });
+    });
+
+    // ====================
+    // PROMOTION MANAGEMENT
+    // ====================
+    Route::middleware(['permission:promotions.view'])->prefix('promotions')->name('promotions.')->group(function () {
+        Route::get('/', [PromotionController::class, 'index'])->name('index');
+
+        Route::middleware(['permission:promotions.create'])->group(function () {
+            Route::get('/create', [PromotionController::class, 'create'])->name('create');
+            Route::post('/', [PromotionController::class, 'store'])->name('store');
+        });
+
+        Route::get('/{promotion}', [PromotionController::class, 'show'])->name('show');
+
+        Route::middleware(['permission:promotions.edit'])->group(function () {
+            Route::post('/{promotion}/cancel', [PromotionController::class, 'cancel'])->name('cancel');
+            Route::post('/{promotion}/complete', [PromotionController::class, 'complete'])->name('complete');
+        });
+
+        Route::middleware(['permission:promotions.approve'])->group(function () {
+            Route::post('/{promotion}/approve', [PromotionController::class, 'approve'])->name('approve');
+            Route::post('/{promotion}/reject', [PromotionController::class, 'reject'])->name('reject');
         });
     });
 

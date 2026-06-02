@@ -384,9 +384,12 @@ class MovementController extends Controller
                 }
             }
 
-            // Decide in/out candidates for this specific date.
-            // Rule: In = earliest of (device punch in OR movement creates/starts time OR office start for full-day on duty),
-            // Out = latest of (device punch out OR movement close/planned end time OR office end for full-day on duty).
+            // Movement may justify "on_duty" + set/adjust check-in (earliest).
+            // Check-out rule:
+            // - If the movement covers the day until (or beyond) office end, we can auto-set check_out to office end
+            //   so that "on_duty" days have both times.
+            // - If the movement ends before office end (employee may return), do NOT auto-set check_out so the employee
+            //   can check out later and the button stays visible.
             $isStartDay = $movementStart->format('Y-m-d') === $dateStr;
             $isEndDay = $movementPlannedEnd->format('Y-m-d') === $dateStr;
 
@@ -400,10 +403,11 @@ class MovementController extends Controller
                 $inCandidate = $workTimes['work_start_time'];
             }
 
-            if ($isEndDay) {
-                $outCandidate = $movementPlannedEnd->format('H:i:s');
-            } else {
-                // For intermediate days (and start day if movement ends later), use office end time
+            // Only auto-set check_out for full-day on_duty coverage (movement ends at/after office end).
+            // Keep it null if the movement ends earlier.
+            $officeEnd = Carbon::parse($dateStr.' '.$workTimes['work_end_time']);
+            $coversOfficeEnd = $movementPlannedEnd->greaterThanOrEqualTo($officeEnd);
+            if ($coversOfficeEnd && (! $isEndDay || $movementPlannedEnd->format('H:i:s') >= $workTimes['work_end_time'])) {
                 $outCandidate = $workTimes['work_end_time'];
             }
 
@@ -986,10 +990,7 @@ class MovementController extends Controller
                     if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
                         $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
                     }
-
-                    if ($currentDate->isSameDay(Carbon::parse($movement->to_datetime))) {
-                        $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
-                    }
+                    // Do not auto-set check-out from movement; check-out must reflect final punch/action.
 
                     // Create a simple prefix for the remarks to avoid encoding issues
                     $remarks = 'On official movement';
@@ -1279,12 +1280,12 @@ class MovementController extends Controller
                 }
             }
 
-            // Merge times with min/max rule using actual return time on return day.
+            // Movement completion indicates return, not end-of-day checkout.
+            // Do not auto-set check-out here; keep check-out for actual punch/action.
             $isStartDay = $movementStart->format('Y-m-d') === $date;
-            $isReturnDay = $return->format('Y-m-d') === $date;
 
             $inCandidate = $isStartDay ? $movementStart->format('H:i:s') : $workTimes['work_start_time'];
-            $outCandidate = $isReturnDay ? $return->format('H:i:s') : $workTimes['work_end_time'];
+            $outCandidate = null;
 
             $this->mergeAttendanceTimes($attendance, $inCandidate, $outCandidate);
 

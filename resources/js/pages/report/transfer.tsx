@@ -164,6 +164,12 @@ function approverLabel(t: Transfer): string {
     return full || '—';
 }
 
+function branchName(obj: any, kind: 'from' | 'to'): string {
+    const camel = kind === 'from' ? obj?.fromBranch : obj?.toBranch;
+    const snake = kind === 'from' ? obj?.from_branch : obj?.to_branch;
+    return camel?.name ?? snake?.name ?? '—';
+}
+
 export default function TransferReport({
     transfers,
     departments,
@@ -248,15 +254,37 @@ export default function TransferReport({
             <Head title="Branch transfer register" />
 
             <style>{`
+                @page {
+                    size: A4 landscape;
+                    margin: 12mm;
+                }
                 @media print {
+                    html, body { background: #fff !important; }
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                     .no-print { display: none !important; }
                     .print-only { display: block !important; }
                     .print-break { break-inside: avoid; }
+                    /* Make the report look like a document */
+                    .print-doc {
+                        max-width: none !important;
+                        padding: 0 !important;
+                        background: #fff !important;
+                    }
+                    .print-card {
+                        border: 1px solid #e5e7eb !important;
+                        box-shadow: none !important;
+                        border-radius: 0 !important;
+                    }
+                    table { border-collapse: collapse !important; width: 100% !important; }
+                    th, td { border: 1px solid #e5e7eb !important; padding: 6px 8px !important; vertical-align: top; }
+                    th { background: #f8fafc !important; color: #111827 !important; }
+                    td { color: #111827 !important; }
+                    a { color: #111827 !important; text-decoration: none !important; }
                 }
                 .print-only { display: none; }
             `}</style>
 
-            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6">
+            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 print-doc">
                 <div className="print-only mb-4 text-sm text-zinc-700">
                     <p className="font-semibold">Branch transfer register</p>
                     <p>
@@ -525,7 +553,7 @@ export default function TransferReport({
                 </Card>
 
                 {/* Table */}
-                <Card id="transfer-report-print" className="border-zinc-200/90 shadow-sm print:border-0 print:shadow-none">
+                <Card id="transfer-report-print" className="border-zinc-200/90 shadow-sm print-card print:border-0 print:shadow-none">
                     <CardHeader className="border-b border-zinc-100 py-3 print:border-zinc-200">
                         <CardTitle className="text-sm font-semibold text-zinc-900">Transfer lines</CardTitle>
                         <CardDescription className="text-xs text-zinc-500">
@@ -566,9 +594,9 @@ export default function TransferReport({
                                                 <TableCell className="align-top">
                                                     <div className="flex flex-wrap items-center gap-1 text-zinc-800">
                                                         <Building2 className="h-3 w-3 shrink-0 text-zinc-400" />
-                                                        <span>{t.fromBranch?.name ?? '—'}</span>
+                                                        <span>{branchName(t, 'from')}</span>
                                                         <ArrowRight className="h-3 w-3 shrink-0 text-zinc-400" />
-                                                        <span>{t.toBranch?.name ?? '—'}</span>
+                                                        <span>{branchName(t, 'to')}</span>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="align-top text-zinc-600">

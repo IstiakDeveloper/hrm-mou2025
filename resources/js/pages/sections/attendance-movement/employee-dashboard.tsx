@@ -286,7 +286,7 @@ export function AttendanceMovementEmployeeDashboardView({
                                         {isSubmitting ? 'Processing…' : 'Check in'}
                                     </Button>
                                 )}
-                                {todayAttendance?.check_in && !todayAttendance.check_out && (
+                                {todayAttendance?.check_in && (
                                     <Button
                                         type="button"
                                         className="bg-sky-600 text-white hover:bg-sky-700"

@@ -8,12 +8,31 @@ use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\Transfer;
+use App\Models\TransferHistory;
+use App\Models\AdminNotice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\AdminNoticeNotification;
 use Inertia\Inertia;
 
 class TransferController extends Controller
 {
+    private function generateTransferOrderNo(): string
+    {
+        $prefix = 'TRF-'.now()->format('Ymd').'-';
+        for ($i = 0; $i < 20; $i++) {
+            $candidate = $prefix.str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+            $exists = Transfer::query()->where('transfer_order_no', $candidate)->exists();
+            if (! $exists) {
+                return $candidate;
+            }
+        }
+
+        return $prefix.now()->format('His');
+    }
     /**
      * Display a listing of transfers.
      */
@@ -115,6 +134,7 @@ class TransferController extends Controller
             'branches' => $branches,
             'departments' => $departments,
             'designations' => $designations,
+            'suggestedOrderNo' => $this->generateTransferOrderNo(),
         ]);
     }
 
@@ -138,13 +158,19 @@ class TransferController extends Controller
             'to_department_id' => 'nullable|exists:departments,id',
             'from_designation_id' => 'nullable|exists:designations,id',
             'to_designation_id' => 'nullable|exists:designations,id',
-            'effective_date' => 'required|date|after_or_equal:today',
+            // HR may record back-dated transfers; approval applies immediately in our workflow.
+            'effective_date' => 'required|date',
             'transfer_order_no' => 'nullable|string|max:50',
             'reason' => 'required|string',
         ]);
 
         // Get current employee details
         $employee = Employee::findOrFail($request->employee_id);
+
+        $orderNo = trim((string) $request->input('transfer_order_no', ''));
+        if ($orderNo === '') {
+            $orderNo = $this->generateTransferOrderNo();
+        }
 
         // Create transfer
         Transfer::create([
@@ -156,7 +182,7 @@ class TransferController extends Controller
             'from_designation_id' => $request->from_designation_id ?? $employee->designation_id,
             'to_designation_id' => $request->to_designation_id,
             'effective_date' => $request->effective_date,
-            'transfer_order_no' => $request->transfer_order_no,
+            'transfer_order_no' => $orderNo,
             'reason' => $request->reason,
             'status' => 'pending',
         ]);
@@ -247,7 +273,7 @@ class TransferController extends Controller
             'to_department_id' => 'nullable|exists:departments,id',
             'from_designation_id' => 'nullable|exists:designations,id',
             'to_designation_id' => 'nullable|exists:designations,id',
-            'effective_date' => 'required|date|after_or_equal:today',
+            'effective_date' => 'required|date',
             'transfer_order_no' => 'nullable|string|max:50',
             'reason' => 'required|string',
         ]);
@@ -300,10 +326,14 @@ class TransferController extends Controller
                 ->with('error', 'This transfer request is not pending approval.');
         }
 
-        // Update transfer
-        $transfer->status = 'approved';
-        $transfer->approved_by = $user->id;
-        $transfer->save();
+        DB::transaction(function () use ($transfer, $user) {
+            $transfer->status = 'approved';
+            $transfer->approved_by = $user->id;
+            $transfer->save();
+
+            // Business rule: approval applies transfer immediately (employee branch changes on approve).
+            $this->applyTransferAndLogHistory($transfer, $user->id);
+        });
 
         return redirect()->route('transfers.index')
             ->with('success', 'Transfer request approved successfully.');
@@ -357,8 +387,29 @@ class TransferController extends Controller
                 ->with('error', 'Only approved transfer requests can be completed.');
         }
 
-        // Update employee record
+        DB::transaction(function () use ($transfer, $user) {
+            $this->applyTransferAndLogHistory($transfer, $user->id);
+        });
+
+        return redirect()->route('transfers.index')
+            ->with('success', 'Transfer completed successfully.');
+    }
+
+    private function applyTransferAndLogHistory(Transfer $transfer, ?int $actorUserId): void
+    {
+        // Always refresh relations inside transaction to avoid stale branch values.
+        $transfer->loadMissing(['employee.user', 'fromBranch', 'toBranch']);
         $employee = $transfer->employee;
+
+        // Prevent double-completion / double-history lines.
+        if ($transfer->status === 'completed') {
+            return;
+        }
+
+        $previousBranchId = $employee->current_branch_id;
+
+        // Update employee's active assignment
+        $employee->last_branch_id = $previousBranchId;
         $employee->current_branch_id = $transfer->to_branch_id;
 
         if ($transfer->to_department_id) {
@@ -371,11 +422,41 @@ class TransferController extends Controller
 
         $employee->save();
 
-        // Update transfer status
+        // Log history (append-only)
+        TransferHistory::create([
+            'transfer_id' => $transfer->id,
+            'employee_id' => $employee->id,
+            'from_branch_id' => $transfer->from_branch_id ?? $previousBranchId,
+            'to_branch_id' => $transfer->to_branch_id,
+            'transfer_date' => $transfer->effective_date ? Carbon::parse($transfer->effective_date)->toDateString() : now()->toDateString(),
+            'created_by' => $actorUserId,
+        ]);
+
         $transfer->status = 'completed';
         $transfer->save();
 
-        return redirect()->route('transfers.index')
-            ->with('success', 'Transfer completed successfully.');
+        // Notify the employee (in-app notice) if they have a user account.
+        $employeeUser = $employee->user;
+        if ($employeeUser) {
+            $fromName = $transfer->fromBranch?->name ?? '—';
+            $toName = $transfer->toBranch?->name ?? '—';
+            $effective = $transfer->effective_date
+                ? Carbon::parse($transfer->effective_date)->toDateString()
+                : now()->toDateString();
+
+            $notice = AdminNotice::create([
+                'sender_id' => $actorUserId,
+                'title' => 'Transfer update',
+                'message' => "You have been transferred from {$fromName} to {$toName}. Effective date: {$effective}.",
+                'type' => 'info',
+                'link' => url('/transfers/'.$transfer->id),
+                'audience' => 'users',
+                'user_ids' => [$employeeUser->id],
+                'recipient_count' => 1,
+                'push_sent' => false,
+            ]);
+
+            Notification::send([$employeeUser], new AdminNoticeNotification($notice));
+        }
     }
 }

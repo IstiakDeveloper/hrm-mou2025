@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,30 @@ interface LeaveType { id: number; name: string; days_allowed: number; is_paid: b
 interface LeaveBalance { id: number; employee_id: number; leave_type_id: number; year: number; allocated_days: number; used_days: number; remaining_days: number; leave_type: LeaveType; }
 interface LeaveApplication { id: number; employee_id: number; leave_type_id: number; start_date: string; end_date: string; days: number; reason: string | null; status: 'pending' | 'approved' | 'rejected'; approved_by: number | null; applied_at: string; documents: string[] | null; rejection_reason: string | null; leave_type: LeaveType; created_at: string; }
 interface Movement { id: number; employee_id: number; movement_type: 'official' | 'personal'; from_datetime: string; actual_return_datetime: string; purpose: string; destination: string | null; remarks: string | null; approved_by: number | null; status: 'pending' | 'approved' | 'rejected' | 'completed'; created_at: string; }
+
+type TransferHistory = {
+    id: number;
+    transfer_id: number;
+    employee_id: number;
+    transfer_date: string;
+    fromBranch: { id: number; name: string } | null;
+    toBranch: { id: number; name: string } | null;
+    transfer: { id: number; transfer_order_no: string | null; effective_date: string; status: string } | null;
+};
+
+type PromotionHistory = {
+    id: number;
+    promotion_id: number;
+    employee_id: number;
+    promotion_date: string;
+    fromDesignation: { id: number; name: string } | null;
+    toDesignation: { id: number; name: string } | null;
+    fromSalaryGrade: { id: number; name: string } | null;
+    toSalaryGrade: { id: number; name: string } | null;
+    from_basic_salary: string | number | null;
+    to_basic_salary: string | number | null;
+    promotion: { id: number; promotion_order_no: string | null; effective_date: string; status: string } | null;
+};
 
 type Address = { type: 'present' | 'permanent'; division: string; district: string; upazila: string; union: string; village: string; address_details: string; };
 type Education = { degree: string; institute: string; group_name: string; board: string; subject: string; result_type: string; result_value: string; };
@@ -65,6 +89,8 @@ interface EmployeeShowProps {
     currentYearLeaveBalances: LeaveBalance[];
     recentLeaveApplications: LeaveApplication[];
     recentMovements: Movement[];
+    transferHistories: TransferHistory[];
+    promotionHistories: PromotionHistory[];
 }
 
 const getLeaveStatusBadge = (status: string) => {
@@ -177,7 +203,14 @@ const StatCard = ({ title, value, icon, subtitle }: { title: string, value: stri
     </div>
 );
 
-export default function EmployeeShow({ employee, currentYearLeaveBalances, recentLeaveApplications, recentMovements }: EmployeeShowProps) {
+export default function EmployeeShow({
+    employee,
+    currentYearLeaveBalances,
+    recentLeaveApplications,
+    recentMovements,
+    transferHistories = [],
+    promotionHistories = [],
+}: EmployeeShowProps) {
     const isDropout = !!employee.dropout_date;
 
     const getEmployeeDisplayName = (): string => {
@@ -230,6 +263,26 @@ export default function EmployeeShow({ employee, currentYearLeaveBalances, recen
     };
 
     const hasSalaryGrade = !!employee.salary_grade_id;
+
+    const careerTimeline = useMemo(() => {
+        const transfers = (transferHistories || []).map((h) => ({
+            type: 'transfer' as const,
+            id: h.id,
+            date: h.transfer_date,
+            meta: h,
+        }));
+        const promotions = (promotionHistories || []).map((h) => ({
+            type: 'promotion' as const,
+            id: h.id,
+            date: h.promotion_date,
+            meta: h,
+        }));
+        return [...transfers, ...promotions].sort((a, b) => {
+            const ad = new Date(a.date).getTime();
+            const bd = new Date(b.date).getTime();
+            return bd - ad;
+        });
+    }, [promotionHistories, transferHistories]);
 
     const handlePrintIdCard = () => {
         document.body.classList.add('print-id-card');
@@ -374,6 +427,7 @@ export default function EmployeeShow({ employee, currentYearLeaveBalances, recen
                         <TabsList className="bg-transparent h-auto p-0 flex gap-1 min-w-max">
                             <TabsTrigger value="personal" className="data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm rounded-lg py-2.5 px-5 font-medium transition-all"><User className="w-4 h-4 mr-2" /> Personal Info</TabsTrigger>
                             <TabsTrigger value="employment" className="data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm rounded-lg py-2.5 px-5 font-medium transition-all"><Briefcase className="w-4 h-4 mr-2" /> Employment Info</TabsTrigger>
+                            <TabsTrigger value="career" className="data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm rounded-lg py-2.5 px-5 font-medium transition-all"><Activity className="w-4 h-4 mr-2" /> Career Timeline</TabsTrigger>
                             <TabsTrigger value="education" className="data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm rounded-lg py-2.5 px-5 font-medium transition-all"><GraduationCap className="w-4 h-4 mr-2" /> Edu & Experience</TabsTrigger>
                             {hasSalaryGrade && (
                                 <TabsTrigger value="financial" className="data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm rounded-lg py-2.5 px-5 font-medium transition-all"><CreditCard className="w-4 h-4 mr-2" /> Financial & Assets</TabsTrigger>
@@ -525,6 +579,91 @@ export default function EmployeeShow({ employee, currentYearLeaveBalances, recen
                                 </div>
                             </Section>
                         )}
+                    </TabsContent>
+
+                    {/* CAREER MOVEMENT TIMELINE TAB */}
+                    <TabsContent value="career" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0">
+                        <Section title="Career Movement Timeline" icon={<Activity className="w-5 h-5" />}>
+                            {careerTimeline.length === 0 ? (
+                                <div className="text-center py-10 text-gray-500 italic bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                    No transfer / promotion history found yet.
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {careerTimeline.map((item) => {
+                                        if (item.type === 'transfer') {
+                                            const h = item.meta as TransferHistory;
+                                            const from = (h as any).fromBranch?.name ?? (h as any).from_branch?.name ?? '—';
+                                            const to = (h as any).toBranch?.name ?? (h as any).to_branch?.name ?? '—';
+                                            const orderNo = h.transfer?.transfer_order_no ?? '—';
+                                            return (
+                                                <div
+                                                    key={`t-${h.id}`}
+                                                    className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                                                >
+                                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                        <div>
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <Badge className="bg-violet-50 text-violet-700 border border-violet-100">Transfer</Badge>
+                                                                <span className="text-sm font-semibold text-gray-900">{from} → {to}</span>
+                                                            </div>
+                                                            <div className="mt-1 text-xs text-gray-500">
+                                                                Effective: {h.transfer_date ? format(new Date(h.transfer_date), 'PPP') : '—'} · Order: <span className="font-mono">{orderNo}</span>
+                                                            </div>
+                                                        </div>
+                                                        {h.transfer_id ? (
+                                                            <Link href={route('transfers.show', h.transfer_id)} className="shrink-0">
+                                                                <Button variant="outline" size="sm" className="h-8 text-xs">
+                                                                    View
+                                                                </Button>
+                                                            </Link>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        const h = item.meta as PromotionHistory;
+                                        const from = (h as any).fromDesignation?.name ?? (h as any).from_designation?.name ?? '—';
+                                        const to = (h as any).toDesignation?.name ?? (h as any).to_designation?.name ?? '—';
+                                        const orderNo = h.promotion?.promotion_order_no ?? '—';
+                                        const gradeFrom = (h as any).fromSalaryGrade?.name ?? (h as any).from_salary_grade?.name ?? '—';
+                                        const gradeTo = (h as any).toSalaryGrade?.name ?? (h as any).to_salary_grade?.name ?? '—';
+
+                                        return (
+                                            <div
+                                                key={`p-${h.id}`}
+                                                className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                                            >
+                                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                    <div>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-100">Promotion</Badge>
+                                                            <span className="text-sm font-semibold text-gray-900">{from} → {to}</span>
+                                                        </div>
+                                                        <div className="mt-1 text-xs text-gray-500">
+                                                            Effective: {h.promotion_date ? format(new Date(h.promotion_date), 'PPP') : '—'} · Order: <span className="font-mono">{orderNo}</span>
+                                                        </div>
+                                                        <div className="mt-1 text-xs text-gray-600">
+                                                            Grade: {gradeFrom} → {gradeTo}
+                                                            {' · '}
+                                                            Basic: {h.from_basic_salary ?? '—'} → {h.to_basic_salary ?? '—'}
+                                                        </div>
+                                                    </div>
+                                                    {h.promotion_id ? (
+                                                        <Link href={route('promotions.show', h.promotion_id)} className="shrink-0">
+                                                            <Button variant="outline" size="sm" className="h-8 text-xs">
+                                                                View
+                                                            </Button>
+                                                        </Link>
+                                                    ) : null}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </Section>
                     </TabsContent>
 
                     {/* EDUCATION & EXPERIENCE TAB */}

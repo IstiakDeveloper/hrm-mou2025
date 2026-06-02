@@ -835,6 +835,218 @@ class AttendanceController extends Controller
     }
 
     /**
+     * Daily branch-wise attendance summary with expandable details.
+     *
+     * Shows, for a single date, counts of Present/Late/Half day/Absent/Leave/On duty/Holiday/Weekend per branch,
+     * and lists employees under each status.
+     */
+    public function dailyBranchSummary(Request $request)
+    {
+        $user = Auth::user();
+        $date = $request->date ? Carbon::parse($request->date)->startOfDay() : Carbon::today()->startOfDay();
+        $ymd = $date->format('Y-m-d');
+
+        $employeesQuery = Employee::with(['department', 'designation', 'branch'])
+            ->where('status', 'active');
+
+        // Organogram visibility constraints
+        if (! OrganogramAccessService::hasUnrestrictedAttendanceScope($user)) {
+            OrganogramAccessService::constrainVisibleEmployees($employeesQuery, $user);
+        }
+
+        if ($request->branch_id) {
+            $employeesQuery->where('current_branch_id', $request->branch_id);
+        }
+        if ($request->department_id) {
+            $employeesQuery->where('department_id', $request->department_id);
+        }
+        if ($request->search) {
+            $search = (string) $request->search;
+            $employeesQuery->where(function ($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%");
+            });
+        }
+
+        $employees = $employeesQuery
+            ->orderBy('current_branch_id')
+            ->orderBy('department_id')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get();
+
+        $employeeIds = $employees->pluck('id')->map(fn ($x) => (int) $x)->values()->all();
+
+        // Lookups used to determine day status (leave/movement/holiday/weekend/attendance)
+        $attendanceRows = Attendance::whereIn('employee_id', $employeeIds)
+            ->whereDate('date', $ymd)
+            ->get()
+            ->keyBy('employee_id');
+
+        $leaveApps = LeaveApplication::with('leaveType')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $ymd)
+            ->whereDate('end_date', '>=', $ymd)
+            ->get();
+
+        $leaveTypeByEmployee = [];
+        foreach ($leaveApps as $app) {
+            $empId = (int) $app->employee_id;
+            if (! method_exists($app, 'coversCalendarDate') || $app->coversCalendarDate($ymd)) {
+                $leaveTypeByEmployee[$empId] = $app->leaveType?->name ?? 'Leave';
+            }
+        }
+
+        $movementsByEmployee = Movement::whereIn('employee_id', $employeeIds)
+            ->whereIn('status', ['active', 'completed'])
+            ->where('movement_type', 'official')
+            ->whereDate('from_datetime', '<=', $ymd)
+            ->whereDate(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $ymd)
+            ->get()
+            ->groupBy('employee_id');
+
+        // Holidays applicable for the date (including recurring, and per-branch applicability)
+        $holidayApplicable = [];
+        $holidays = Holiday::where(function ($query) use ($date, $ymd) {
+            $query->whereDate('date', $ymd)
+                ->orWhere(function ($q) use ($date) {
+                    $q->where('is_recurring', true)
+                        ->whereRaw('MONTH(date) = ? AND DAY(date) = ?', [$date->month, $date->day]);
+                });
+        })->get()->map(function ($holiday) use ($ymd) {
+            return [
+                'id' => $holiday->id,
+                'title' => $holiday->title,
+                'date' => $ymd,
+                'description' => $holiday->description,
+                'is_recurring' => $holiday->is_recurring,
+                'applicable_branches' => $holiday->applicable_branches,
+            ];
+        })->toArray();
+
+        foreach ($holidays as $h) {
+            $branchesRaw = $h['applicable_branches'];
+            $applicable = is_array($branchesRaw) ? $branchesRaw : (is_string($branchesRaw) ? (json_decode($branchesRaw, true) ?: []) : []);
+            if (empty($applicable)) {
+                $holidayApplicable['*'][$ymd] = true;
+                continue;
+            }
+            foreach ($applicable as $bid) {
+                $holidayApplicable[(string) $bid][$ymd] = true;
+            }
+        }
+
+        $branchIds = $employees
+            ->pluck('current_branch_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $attendanceSettings = AttendanceSetting::whereIn('branch_id', $branchIds)
+            ->get()
+            ->mapWithKeys(function ($setting) {
+                return [
+                    (int) $setting->branch_id => [
+                        'weekend_days' => $this->normalizeJsonArray($setting->weekend_days),
+                    ],
+                ];
+            })->toArray();
+
+        $statuses = ['present', 'late', 'half_day', 'absent', 'leave', 'on_duty', 'holiday', 'weekend'];
+
+        $branchesOut = [];
+        foreach ($employees as $e) {
+            $empId = (int) $e->id;
+            $branchIdInt = (int) ($e->current_branch_id ?? ($e->branch?->id ?? 0));
+            $branchIdStr = $branchIdInt > 0 ? (string) $branchIdInt : '';
+            $branchName = $e->branch?->name ?? 'Unknown Branch';
+
+            if (! isset($branchesOut[$branchIdInt])) {
+                $branchesOut[$branchIdInt] = [
+                    'id' => $branchIdInt,
+                    'name' => $branchName,
+                    'counts' => array_fill_keys($statuses, 0),
+                    'employeesByStatus' => array_fill_keys($statuses, []),
+                ];
+            }
+
+            $weekendDays = $attendanceSettings[$branchIdInt]['weekend_days'] ?? [];
+            $isHoliday = ! empty($holidayApplicable['*'][$ymd]) || ($branchIdStr !== '' && ! empty($holidayApplicable[$branchIdStr][$ymd]));
+            $isOnLeave = isset($leaveTypeByEmployee[$empId]);
+            $hasMovement = ! empty($movementsByEmployee[$empId]) && $movementsByEmployee[$empId]->count() > 0;
+
+            $att = $attendanceRows->get($empId);
+            $hasValidAttendance = $att && $att->check_in;
+            $attendanceRowStatus = $att ? (is_string($att->status) ? $att->status : null) : null;
+
+            $status = $this->determineDateStatusEnhanced(
+                $ymd,
+                is_array($weekendDays) ? $weekendDays : [],
+                (bool) $isHoliday,
+                (bool) $isOnLeave,
+                (bool) $hasMovement,
+                (bool) $hasValidAttendance,
+                $attendanceRowStatus
+            );
+
+            // Preserve late / half_day when there is a valid punch.
+            if ($hasValidAttendance && in_array($attendanceRowStatus, ['late', 'half_day'], true)) {
+                $status = $attendanceRowStatus;
+            }
+
+            if (! in_array($status, $statuses, true)) {
+                $status = 'absent';
+            }
+
+            $checkIn = $att && $att->check_in ? date('h:i A', strtotime($att->check_in)) : null;
+            $checkOut = $att && $att->check_out ? date('h:i A', strtotime($att->check_out)) : null;
+
+            $branchesOut[$branchIdInt]['counts'][$status]++;
+            $branchesOut[$branchIdInt]['employeesByStatus'][$status][] = [
+                'id' => $empId,
+                'employee_id' => (string) $e->employee_id,
+                'name' => trim(($e->first_name ?? '').' '.($e->last_name ?? '')),
+                'department' => $e->department?->name,
+                'designation' => $e->designation?->name,
+                'status' => $status,
+                'check_in' => $checkIn,
+                'check_out' => $checkOut,
+                'leave_type' => $leaveTypeByEmployee[$empId] ?? null,
+            ];
+        }
+
+        // Sort branches by name; sort employees by name within each status
+        $branchesList = collect($branchesOut)
+            ->values()
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->map(function ($b) use ($statuses) {
+                foreach ($statuses as $s) {
+                    $b['employeesByStatus'][$s] = collect($b['employeesByStatus'][$s] ?? [])
+                        ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+                        ->values()
+                        ->all();
+                }
+                return $b;
+            })
+            ->values()
+            ->all();
+
+        return Inertia::render('attendance/daily-branch-summary', [
+            'date' => $ymd,
+            'readableDate' => $date->format('l, F j, Y'),
+            'branchesSummary' => $branchesList,
+            'branches' => $this->getAccessibleBranches($user),
+            'departments' => $this->getAccessibleDepartments($user),
+            'filters' => $request->only(['date', 'branch_id', 'department_id', 'search']),
+            'statuses' => $statuses,
+            'holidays' => $holidays,
+        ]);
+    }
+
+    /**
      * Get attendance preview data for the sheet report with complete movement support
      */
     private function getAttendancePreviewData($request, $user, $startDate, $endDate)

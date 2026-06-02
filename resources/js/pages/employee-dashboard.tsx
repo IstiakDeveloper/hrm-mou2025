@@ -551,7 +551,7 @@ export function EmployeeDashboardView({
                                         {isSubmitting ? "Processing..." : "Check In"}
                                     </Button>
                                 )}
-                                {todayAttendance?.check_in && !todayAttendance.check_out && (
+                                {todayAttendance?.check_in && (
                                     <Button
                                         className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white font-medium"
                                         onClick={handleCheckOut}
