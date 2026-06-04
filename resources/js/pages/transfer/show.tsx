@@ -196,7 +196,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
           </div>
 
           <div className="flex space-x-2">
-            {transfer.status === 'pending' && (
+            {(transfer.status === 'pending' || transfer.status === 'approved') && (
               <Link href={route('transfers.edit', transfer.id)}>
                 <Button variant="outline">Edit Request</Button>
               </Link>
@@ -259,7 +259,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
               </Button>
             )}
 
-            {transfer.status === 'pending' && (
+            {(transfer.status === 'pending' || transfer.status === 'approved') && (
               <Button
                 variant="destructive"
                 onClick={handleCancel}
@@ -515,7 +515,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                   <Alert className="mt-6 bg-blue-50 border-blue-200">
                     <AlertTriangle className="h-4 w-4 text-blue-700" />
                     <AlertDescription className="text-blue-700">
-                      This transfer has been approved but not yet completed. The employee's records will be updated when the transfer is completed.
+                      This transfer is scheduled. The employee's records will be updated automatically on the effective date ({format(effectiveDate, 'MMMM d, yyyy')}).
                     </AlertDescription>
                   </Alert>
                 )}

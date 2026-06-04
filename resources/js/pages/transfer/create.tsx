@@ -519,10 +519,10 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                         </>
                                     )}
 
-                                    <Alert className="mt-6 bg-amber-50 border-amber-200">
-                                        <AlertTriangle className="h-4 w-4 text-amber-700" />
-                                        <AlertDescription className="text-amber-700">
-                                            Transfer requests need approval before they take effect. The employee's records will be updated only after the transfer is completed.
+                                    <Alert className="mt-6 bg-blue-50 border-blue-200">
+                                        <AlertTriangle className="h-4 w-4 text-blue-700" />
+                                        <AlertDescription className="text-blue-700">
+                                            Transfers are approved on creation. If the effective date is today or earlier, the employee record updates immediately. Future effective dates are completed automatically on that date.
                                         </AlertDescription>
                                     </Alert>
                                 </CardContent>

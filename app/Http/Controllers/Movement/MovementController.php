@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Movement;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Mail\NewMovementNotification;
 use App\Models\Attendance;
 use App\Models\Branch;
@@ -21,6 +22,8 @@ use Inertia\Inertia;
 
 class MovementController extends Controller
 {
+    use PaginatesForInertia;
+
     /**
      * Parse datetime from the client (ISO 8601 with offset or naive) into app timezone for DB storage.
      */
@@ -147,19 +150,19 @@ class MovementController extends Controller
         }
 
         // Apply user-selected filters
-        $query->when($request->status, function ($query, $status) {
-            $query->where('status', $status);
+        $query->when($request->filled('status') && $request->status !== 'all', function ($query) use ($request) {
+            $query->where('status', $request->status);
         })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
+            ->when($request->filled('department_id') && $request->department_id !== 'all', function ($query) use ($request) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('department_id', $request->department_id);
                 });
             })
-            ->when($request->employee_id, function ($query, $employeeId) {
-                $query->where('employee_id', $employeeId);
+            ->when($request->filled('employee_id') && $request->employee_id !== 'all', function ($query) use ($request) {
+                $query->where('employee_id', $request->employee_id);
             })
-            ->when($request->movement_type, function ($query, $movementType) {
-                $query->where('movement_type', $movementType);
+            ->when($request->filled('movement_type') && $request->movement_type !== 'all', function ($query) use ($request) {
+                $query->where('movement_type', $request->movement_type);
             })
             ->when($request->from_date, function ($query, $fromDate) {
                 $query->where('from_datetime', '>=', $fromDate);
@@ -175,8 +178,10 @@ class MovementController extends Controller
                 });
             });
 
-        $movements = $query->orderBy('id')
-            ->paginate(10)
+        $perPage = $this->resolvePerPage($request->get('per_page'), 10);
+
+        $movements = $query->orderByDesc('id')
+            ->paginate($perPage)
             ->withQueryString();
 
         // Get accessible departments and employees
@@ -184,10 +189,10 @@ class MovementController extends Controller
         $employees = $this->getAccessibleEmployees($user);
 
         return Inertia::render('movement/index', [
-            'movements' => $movements,
+            'movements' => $this->inertiaPagination($movements),
             'departments' => $departments,
             'employees' => $employees,
-            'filters' => $request->only(['status', 'department_id', 'employee_id', 'movement_type', 'from_date', 'to_date', 'search']),
+            'filters' => $request->only(['status', 'department_id', 'employee_id', 'movement_type', 'from_date', 'to_date', 'search', 'per_page']),
             'userPermissions' => [
                 'canView' => $hasViewPermission,
                 'canCreate' => $user->hasPermission('movements.create'),
@@ -243,6 +248,25 @@ class MovementController extends Controller
         return $user->hasPermission('movements.create') && $user->hasPermission('employees.view');
     }
 
+    private function getActiveMovementForEmployee(int $employeeId): ?Movement
+    {
+        return Movement::query()
+            ->where('employee_id', $employeeId)
+            ->where('status', 'active')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function redirectForActiveMovement(Movement $activeMovement)
+    {
+        return redirect()
+            ->route('movements.show', $activeMovement->id)
+            ->with(
+                'warning',
+                'This employee already has an active movement. Please close the existing movement before creating a new one.'
+            );
+    }
+
     public function create()
     {
         $user = Auth::user();
@@ -254,6 +278,13 @@ class MovementController extends Controller
         }
 
         $canSelectEmployee = $this->canSelectEmployeeForMovement($user);
+
+        if (! $canSelectEmployee && $employee) {
+            $activeMovement = $this->getActiveMovementForEmployee((int) $employee->id);
+            if ($activeMovement) {
+                return $this->redirectForActiveMovement($activeMovement);
+            }
+        }
 
         $employees = $canSelectEmployee
             ? Employee::where('status', 'active')->with(['department', 'designation'])->get()
@@ -320,6 +351,11 @@ class MovementController extends Controller
         $targetEmployee = $employee && (int) $employeeId === (int) $employee->id
             ? $employee
             : Employee::findOrFail($employeeId);
+
+        $activeMovement = $this->getActiveMovementForEmployee($employeeId);
+        if ($activeMovement) {
+            return $this->redirectForActiveMovement($activeMovement);
+        }
 
         // Create movement
         $movement = Movement::create([

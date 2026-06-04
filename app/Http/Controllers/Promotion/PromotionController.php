@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Promotion;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\Promotion;
@@ -19,6 +20,8 @@ use Inertia\Inertia;
 
 class PromotionController extends Controller
 {
+    use PaginatesForInertia;
+
     private function generatePromotionOrderNo(): string
     {
         $prefix = 'PRO-'.now()->format('Ymd').'-';
@@ -62,16 +65,18 @@ class PromotionController extends Controller
                 });
             });
 
-        $promotions = $query->orderByDesc('id')
-            ->paginate(10)
-            ->withQueryString();
+        $perPage = $this->resolvePerPage($request->get('per_page'), 10);
+
+        $promotions = $this->inertiaPagination(
+            $query->orderByDesc('id')->paginate($perPage)->withQueryString()
+        );
 
         return Inertia::render('promotion/index', [
             'promotions' => $promotions,
             'employees' => Employee::where('status', 'active')->get(),
             'designations' => Designation::all(),
             'salaryGrades' => SalaryGrade::all(),
-            'filters' => $request->only(['status', 'employee_id', 'from_date', 'to_date', 'search']),
+            'filters' => $request->only(['status', 'employee_id', 'from_date', 'to_date', 'search', 'per_page']),
             'canApprove' => $user->hasPermission('promotions.approve'),
         ]);
     }

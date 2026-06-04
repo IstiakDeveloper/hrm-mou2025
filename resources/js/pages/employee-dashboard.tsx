@@ -323,64 +323,6 @@ export function EmployeeDashboardView({
                     </Alert>
                 )}
 
-                {/* Active Movements Alert Section */}
-                {activeMovements.length > 0 && (
-                    <div className="space-y-3">
-                        {activeMovements.map(movement => (
-                            <Alert key={movement.id} className="border-amber-200 bg-amber-50">
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                                    <div className="flex-1">
-                                        <AlertTitle className="text-amber-800 flex items-center flex-wrap gap-2">
-                                            <MapPin className="h-4 w-4" />
-                                            <span>{movement.destination}</span>
-                                            <Badge
-                                                variant="outline"
-                                                className={`${movement.movement_type === 'official'
-                                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                                                        : 'bg-purple-50 text-purple-700 border-purple-200'
-                                                    }`}
-                                            >
-                                                {movement.movement_type.charAt(0).toUpperCase() + movement.movement_type.slice(1)}
-                                            </Badge>
-                                        </AlertTitle>
-                                        <AlertDescription className="text-amber-700 mt-1">
-                                            <div className="text-sm">
-                                                From: {format(new Date(movement.from_datetime), "MMM d, h:mm a")} •
-                                                Expected return: {format(new Date(movement.to_datetime), "MMM d, h:mm a")}
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                                                <div className="flex items-center bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs">
-                                                    <Clock className="h-3.5 w-3.5 mr-1" />
-                                                    Elapsed: {elapsedTimes[movement.id] || "Calculating..."}
-                                                </div>
-                                                <div className="flex items-center bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">
-                                                    <AlertCircle className="h-3.5 w-3.5 mr-1" />
-                                                    {countdownTimes[movement.id] || "Calculating..."}
-                                                </div>
-                                            </div>
-                                        </AlertDescription>
-                                    </div>
-                                    <Button
-                                        className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
-                                        onClick={() => openGlobalCloseMovement(movement.id)}
-                                        disabled={isSubmitting}
-                                    >
-                                        {isSubmitting ? (
-                                            "Processing..."
-                                        ) : (
-                                            <>
-                                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                                Close Movement
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-                            </Alert>
-                        ))}
-                    </div>
-                )}
-
                 {/* Header Section */}
                 <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between border-b border-slate-100 pb-5">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">

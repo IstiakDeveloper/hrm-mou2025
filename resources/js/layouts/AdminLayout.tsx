@@ -16,7 +16,6 @@ import {
     Award,
     BriefcaseBusiness,
     CalendarDays,
-    MapPin,
     Building2,
     ChevronsLeft,
     ArrowLeftRight,
@@ -61,6 +60,7 @@ import {
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import ActiveMovementBanner from '@/components/active-movement-banner';
 import NotificationDropdown from '@/components/notification-dropdown';
 import { hasAppPermission } from '@/lib/permissions';
 import { getActiveSectionId, getMenuTitlesForSection, getSectionById, type AdminSectionId } from '@/lib/admin-sections';
@@ -245,10 +245,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'admin.access',
     ].some((p) => hasPermission(p));
 
-    const canCloseOwnMovement = Boolean(
+    const hasOwnActiveMovement = Boolean(
         activeMovement?.id
         && auth?.employee?.id
         && activeMovement.employee_id === auth.employee.id
+    );
+
+    const canCloseOwnMovement = Boolean(
+        hasOwnActiveMovement
         && hasPermission('movements.complete')
     );
 
@@ -1127,18 +1131,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                             {/* Right: User Menu & Notifications */}
                             <div className="flex items-center gap-4 ml-auto">
-                                {canCloseOwnMovement && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="hidden sm:inline-flex border-emerald-500/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-500/50 shadow-sm transition-all text-xs font-semibold tracking-wide h-8"
-                                        onClick={() => openCloseMovementDialog()}
-                                    >
-                                        <MapPin className="w-3.5 h-3.5 mr-1.5" />
-                                        Close Movement
-                                    </Button>
-                                )}
-
                                 <NotificationDropdown />
 
                                 <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
@@ -1186,6 +1178,17 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </div>
                         </div>
                     </header>
+
+                    {hasOwnActiveMovement && activeMovement && (
+                        <div className="flex justify-center border-b border-slate-200/70 bg-white/60 px-4 py-2.5 backdrop-blur-sm">
+                            <ActiveMovementBanner
+                                movement={activeMovement}
+                                canClose={canCloseOwnMovement}
+                                onClose={() => openCloseMovementDialog()}
+                                closing={closing}
+                            />
+                        </div>
+                    )}
 
                     {/* Main Content */}
                     <main className="flex-1 overflow-auto bg-transparent px-4 lg:px-6 py-6 lg:py-8">

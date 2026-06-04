@@ -29,7 +29,8 @@ import {
     Info,
     ChevronRight,
     Sparkles,
-    RefreshCw
+    RefreshCw,
+    Printer
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -323,7 +324,7 @@ export default function DailyBranchSummary({
         <Layout>
             <Head title="Daily Branch Attendance Summary" />
 
-            <div className="container mx-auto py-5 px-4 max-w-7xl animate-in fade-in duration-300">
+            <div className="container mx-auto py-5 px-4 max-w-7xl animate-in fade-in duration-300 print:hidden">
                 {/* Back Link */}
                 <div className="mb-4">
                     <Link
@@ -347,18 +348,28 @@ export default function DailyBranchSummary({
                         </p>
                     </div>
 
-                    {/* Quick Legend Badges */}
-                    <div className="flex flex-wrap items-center gap-2 text-xs bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-lg select-none">
-                        <span className="font-medium text-slate-550 mr-1 text-[10px] uppercase tracking-wider">Legend:</span>
-                        <span className="flex items-center gap-1 font-semibold text-slate-700">
-                            <span className="h-2 w-2 rounded-full bg-emerald-500" /> Healthy (90%+)
-                        </span>
-                        <span className="flex items-center gap-1 font-semibold text-slate-700">
-                            <span className="h-2 w-2 rounded-full bg-amber-500" /> Watch (75-90%)
-                        </span>
-                        <span className="flex items-center gap-1 font-semibold text-slate-700">
-                            <span className="h-2 w-2 rounded-full bg-rose-500" /> Critical (&lt;75%)
-                        </span>
+                    {/* Quick Legend Badges & Print Summary */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            onClick={() => window.print()}
+                            className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs h-8.5 px-3 inline-flex items-center gap-1.5 shadow-sm rounded-lg transition-all duration-200"
+                        >
+                            <Printer className="h-3.5 w-3.5" /> Print Summary
+                        </Button>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-lg select-none">
+                            <span className="font-medium text-slate-550 mr-1 text-[10px] uppercase tracking-wider">Legend:</span>
+                            <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Healthy (90%+)
+                            </span>
+                            <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                <span className="h-2 w-2 rounded-full bg-amber-500" /> Watch (75-90%)
+                            </span>
+                            <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                <span className="h-2 w-2 rounded-full bg-rose-500" /> Critical (&lt;75%)
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -923,6 +934,183 @@ export default function DailyBranchSummary({
                             </div>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* Print Only Executive Layout */}
+            <div id="print-root-container" className="hidden print:block print-color-exact w-full bg-white p-2">
+                {/* Print Stylesheet */}
+                <style dangerouslySetInnerHTML={{ __html: `
+                    @media print {
+                        /* Reset height and overflow of layout scrollable containers to allow printing */
+                        html, body, #app, main, .flex, div {
+                            height: auto !important;
+                            overflow: visible !important;
+                        }
+
+                        /* Hide sidebars, headers, and navigation menus */
+                        header,
+                        nav,
+                        aside,
+                        [role="navigation"],
+                        .print-hide {
+                            display: none !important;
+                        }
+                        
+                        /* Reset layout main padding and backgrounds */
+                        main {
+                            padding: 0 !important;
+                            margin: 0 !important;
+                            background: transparent !important;
+                        }
+                        
+                        main > div {
+                            border: none !important;
+                            background: transparent !important;
+                            box-shadow: none !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                        }
+                        
+                        /* Force position the report at the very top of the page */
+                        #print-root-container {
+                            display: block !important;
+                            position: absolute !important;
+                            left: 0 !important;
+                            top: 0 !important;
+                            width: 100% !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            background: white !important;
+                            color: black !important;
+                            z-index: 99999 !important;
+                        }
+                        
+                        @page {
+                            size: A4 portrait;
+                            margin: 8mm 12mm 8mm 12mm;
+                        }
+                        
+                        .print-color-exact {
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                    }
+                `}} />
+
+                {/* Print Header */}
+                <div className="border-b-2 border-slate-950 pb-2.5 mb-3 flex items-end justify-between">
+                    <div>
+                        <div className="flex items-center gap-1">
+                            <Building2 className="h-4.5 w-4.5 text-slate-900" />
+                            <span className="text-[10px] font-black tracking-wider text-slate-800 uppercase">HRM System Portal</span>
+                        </div>
+                        <h1 className="text-base font-black text-slate-900 mt-0.5 uppercase tracking-tight">
+                            Daily Branch Attendance Report
+                        </h1>
+                        <p className="text-[9px] text-slate-500 font-medium">
+                            Status evaluation of all operational branch offices
+                        </p>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-[10px] font-bold text-slate-855">Date: <span className="underline font-extrabold text-slate-950">{readableDate}</span></div>
+                        <div className="text-[8px] text-slate-400 font-medium mt-0.5">Printed: {format(new Date(), 'yyyy-MM-dd HH:mm:ss')}</div>
+                    </div>
+                </div>
+
+                {/* Print KPIs Ribbon */}
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                    <div className="border border-slate-300 p-2 rounded-lg bg-slate-50 print-color-exact">
+                        <span className="text-[8px] font-bold uppercase tracking-wider text-slate-450 block leading-none">Avg Attendance</span>
+                        <div className="text-base font-black text-slate-850 mt-1 leading-none">{formatPct(overallAttendancePct)}</div>
+                    </div>
+                    <div className="border border-slate-300 p-2 rounded-lg bg-slate-50 print-color-exact">
+                        <span className="text-[8px] font-bold uppercase tracking-wider text-slate-455 block leading-none">Active Present</span>
+                        <div className="text-base font-black text-slate-850 mt-1 leading-none">
+                            {overallPresentCount} <span className="text-[9px] font-normal text-slate-500">/ {overallWorkingTotal}</span>
+                        </div>
+                    </div>
+                    <div className="border border-slate-300 p-2 rounded-lg bg-slate-50 print-color-exact">
+                        <span className="text-[8px] font-bold uppercase tracking-wider text-slate-455 block leading-none">Total Absences</span>
+                        <div className="text-base font-black text-rose-650 mt-1 leading-none">{overallAbsentCount}</div>
+                    </div>
+                    <div className="border border-slate-300 p-2 rounded-lg bg-slate-50 print-color-exact">
+                        <span className="text-[8px] font-bold uppercase tracking-wider text-slate-455 block leading-none">Leaves & Duty</span>
+                        <div className="text-base font-black text-blue-650 mt-1 leading-none">{overallLeaveCount}</div>
+                    </div>
+                </div>
+
+                {/* Print Instruction / Subtitle */}
+                <div className="text-[9px] text-slate-655 mb-3 bg-slate-50 p-2 rounded border border-slate-200 print-color-exact leading-tight flex justify-between items-center">
+                    <div>
+                        <strong>Report Details:</strong> Total of <strong>{branchesSummary.length} branches</strong> analyzed, sorted by <strong>{sortMode === 'attention' ? 'Attention Priority' : sortMode === 'name_asc' ? 'Name (A-Z)' : 'Name (Z-A)'}</strong>. Attendance rates under <strong>75%</strong> are color-coded in <span className="text-rose-650 font-bold">Red</span>, and under <strong>90%</strong> in <span className="text-amber-650 font-bold">Amber</span>.
+                    </div>
+                    <div className="flex items-center gap-3 border-l border-slate-200 pl-3 shrink-0 text-[8px] font-bold text-slate-500">
+                        <span>Bar Legend:</span>
+                        <span className="flex items-center gap-1">
+                            <svg width="12" height="6" viewBox="0 0 12 6" className="shrink-0" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="12" height="6" rx="1.5" ry="1.5" fill="#00c58d" />
+                            </svg>
+                            Present
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <svg width="12" height="6" viewBox="0 0 12 6" className="shrink-0" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="12" height="6" rx="1.5" ry="1.5" fill="#f43f5e" />
+                            </svg>
+                            Absent / Other
+                        </span>
+                    </div>
+                </div>
+
+                {/* Print Multi-column List */}
+                <div className="columns-3 gap-6 gap-y-0 text-[10px]">
+                    {sorted.map((row) => {
+                        const b = row.branch;
+                        const presentPct = pct(row.present, row.workingTotal);
+                        const dotColor = row.presentRate < 0.75 ? "#ef4444" : row.presentRate < 0.9 ? "#f59e0b" : "#10b981";
+
+                        return (
+                            <div 
+                                key={b.id} 
+                                className="break-inside-avoid flex items-center justify-between py-1.5 border-b border-slate-200 text-[10px] leading-tight"
+                            >
+                                <div className="min-w-0 flex items-center gap-1.5 pr-1">
+                                    {/* Circle dot as SVG to guarantee printing in all settings */}
+                                    <svg width="6" height="6" viewBox="0 0 6 6" className="shrink-0" xmlns="http://www.w3.org/2000/svg">
+                                        <circle cx="3" cy="3" r="3" fill={dotColor} />
+                                    </svg>
+                                    <span className="font-bold text-slate-800 truncate" title={b.name}>{b.name}</span>
+                                </div>
+                                <div className="text-right shrink-0 flex items-center gap-1.5">
+                                    {/* SVG Progress Bar: Guaranteed to print regardless of 'background graphics' checkbox */}
+                                    <svg width="48" height="6" viewBox="0 0 48 6" className="shrink-0" xmlns="http://www.w3.org/2000/svg">
+                                        <defs>
+                                            <clipPath id={`pill-clip-${b.id}`}>
+                                                <rect width="48" height="6" rx="3" ry="3" />
+                                            </clipPath>
+                                        </defs>
+                                        <g clipPath={`url(#pill-clip-${b.id})`}>
+                                            <rect width="48" height="6" fill="#f43f5e" />
+                                            <rect width={Math.max(0, Math.min(48, (presentPct / 100) * 48))} height="6" fill="#00c58d" />
+                                        </g>
+                                    </svg>
+                                    <span className="text-[8px] text-slate-500 font-mono tracking-tighter w-[30px] text-left shrink-0">
+                                        P:{row.present} A:{row.absent}
+                                    </span>
+                                    <span className={cn("font-black font-mono w-[30px] text-right shrink-0", scoreTextClass(row.presentRate))}>
+                                        {formatPct(presentPct)}
+                                    </span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Print Footer */}
+                <div className="border-t border-slate-300 mt-5 pt-1.5 flex items-center justify-between text-[8px] text-slate-400 font-medium">
+                    <span>Confidential - For Internal Use Only</span>
+                    <span>Daily Branch Summary Report</span>
+                    <span>Page 1 of 1</span>
                 </div>
             </div>
         </Layout>
