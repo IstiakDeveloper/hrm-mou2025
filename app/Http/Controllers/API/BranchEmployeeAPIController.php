@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\AttendanceDevice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class BranchEmployeeAPIController extends Controller
@@ -26,31 +27,8 @@ class BranchEmployeeAPIController extends Controller
             ], 404);
         }
 
-        // Get active employees for the branch
-        $employees = Employee::where('current_branch_id', $branchId)
-            ->where('status', 'active')
-            ->with(['department:id,name', 'designation:id,name'])
-            ->select(
-                'id',
-                'employee_id',
-                'biometric_id',
-                'first_name',
-                'last_name',
-                'department_id',
-                'designation_id'
-            )
-            ->get();
-
-        // Transform data for ZKTeco device
-        $employeeData = $employees->map(function($employee) {
-            return [
-                'id' => $employee->employee_id,
-                'name' => $employee->first_name . ' ' . $employee->last_name,
-                'user_id' => $employee->biometric_id,
-                'department' => $employee->department ? $employee->department->name : '',
-                'position' => $employee->designation ? $employee->designation->name : ''
-            ];
-        });
+        $employees = $this->getActiveBranchEmployees($branchId);
+        $employeeData = $employees->map(fn ($employee) => $this->formatEmployeeForDevice($employee));
 
         return response()->json([
             'status' => true,
@@ -86,31 +64,8 @@ class BranchEmployeeAPIController extends Controller
             ], 400);
         }
 
-        // Get active employees for the branch
-        $employees = Employee::where('current_branch_id', $branch->id)
-            ->where('status', 'active')
-            ->with(['department:id,name', 'designation:id,name'])
-            ->select(
-                'id',
-                'employee_id',
-                'biometric_id',
-                'first_name',
-                'last_name',
-                'department_id',
-                'designation_id'
-            )
-            ->get();
-
-        // Transform data for ZKTeco device
-        $employeeData = $employees->map(function($employee) {
-            return [
-                'id' => $employee->employee_id,
-                'name' => $employee->first_name . ' ' . $employee->last_name,
-                'user_id' => $employee->biometric_id,
-                'department' => $employee->department ? $employee->department->name : '',
-                'position' => $employee->designation ? $employee->designation->name : ''
-            ];
-        });
+        $employees = $this->getActiveBranchEmployees($branch->id);
+        $employeeData = $employees->map(fn ($employee) => $this->formatEmployeeForDevice($employee));
 
         return response()->json([
             'status' => true,
@@ -127,6 +82,47 @@ class BranchEmployeeAPIController extends Controller
             'employees' => $employeeData,
             'total' => $employeeData->count()
         ]);
+    }
+
+    private function employeeSelectColumns(): array
+    {
+        $columns = [
+            'id',
+            'employee_id',
+            'biometric_id',
+            'name_en',
+            'department_id',
+            'designation_id',
+        ];
+
+        if (Schema::hasColumn('employees', 'device_user_id')) {
+            $columns[] = 'device_user_id';
+        }
+
+        return $columns;
+    }
+
+    private function getActiveBranchEmployees($branchId)
+    {
+        return Employee::where('current_branch_id', $branchId)
+            ->where('status', 'active')
+            ->with(['department:id,name', 'designation:id,name'])
+            ->select($this->employeeSelectColumns())
+            ->get();
+    }
+
+    private function formatEmployeeForDevice(Employee $employee): array
+    {
+        return [
+            'id' => $employee->employee_id,
+            'name' => $employee->name_en ?? $employee->full_name_en ?? '',
+            'user_id' => $employee->biometric_id,
+            'device_user_id' => Schema::hasColumn('employees', 'device_user_id')
+                ? $employee->device_user_id
+                : null,
+            'department' => $employee->department ? $employee->department->name : '',
+            'position' => $employee->designation ? $employee->designation->name : '',
+        ];
     }
 
     /**

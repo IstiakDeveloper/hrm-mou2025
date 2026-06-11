@@ -265,8 +265,7 @@ class LeaveBalanceController extends Controller
             ->select([
                 'id',
                 'employee_id',
-                'first_name',
-                'last_name',
+                'name_en',
                 'pin',
                 'name_en',
                 'gender',
@@ -289,8 +288,8 @@ class LeaveBalanceController extends Controller
             })
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($qq) use ($search) {
-                    $qq->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
+                    $qq->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%")
                         ->orWhere('pin', 'like', "%{$search}%")
                         ->orWhere('name_en', 'like', "%{$search}%");

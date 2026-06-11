@@ -64,6 +64,8 @@ import ActiveMovementBanner from '@/components/active-movement-banner';
 import NotificationDropdown from '@/components/notification-dropdown';
 import { hasAppPermission } from '@/lib/permissions';
 import { getActiveSectionId, getMenuTitlesForSection, getSectionById, type AdminSectionId } from '@/lib/admin-sections';
+import { EMPLOYEE_LOAN_NAV_GROUPS, employeeLoanPath } from '@/lib/employee-loan-nav';
+import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee-loan-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { FIXED_ASSET_REPORT_NAV, fixedAssetReportPath } from '@/lib/fixed-asset-reports';
 import {
@@ -146,6 +148,12 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
             ];
         case 'administration':
             return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
+        case 'employee-loan':
+            return EMPLOYEE_LOAN_REPORT_NAV.map((r) => ({
+                    title: r.title,
+                    path: employeeLoanReportPath(r.slug),
+                    permission: 'payroll.view',
+                }));
         case 'staff-fund':
             return [
                 { title: 'Entitlements register', path: '/gratuity/reports/entitlements-register', permission: 'payroll.view' },
@@ -368,6 +376,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             submenu: [
                 { title: 'All Employees', path: '/employees', permission: 'employees.view', hrOnly: true },
                 { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view', hrOnly: true },
+                { title: 'Confirmations', path: '/confirmations', permission: 'confirmations.view', hrOnly: true },
+                { title: 'Separations', path: '/separations', permission: 'separations.view', hrOnly: true },
             ]
         },
         {
@@ -460,6 +470,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 { title: 'Salary Components', path: '/salary-heads', permission: 'payroll.view' },
                 { title: 'Salary Structure', path: '/salary-structures/manual', permission: 'payroll.view' },
                 { title: 'Branch Wise Bank', path: '/branch-payroll-banks', permission: 'payroll.view' },
+                { title: 'Probation Salary', path: '/probation-salary', permission: 'payroll.view' },
+                { title: 'Fixed Salary', path: '/fixed-salary', permission: 'payroll.view' },
             ],
         },
         {
@@ -487,12 +499,46 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             hrOnly: true,
             submenu: [
                 { title: 'Head Modification', path: '/salary-head-modifications', permission: 'payroll.view' },
+                { title: 'Probation Salary', path: '/probation-salary', permission: 'payroll.view' },
+                { title: 'Fixed Salary', path: '/fixed-salary', permission: 'payroll.view' },
                 { title: 'Salary Withheld', path: '/salary-withheld', permission: 'payroll.view' },
                 { title: 'Salary Process', path: '/salary-process', permission: 'payroll.view' },
                 { title: 'Salary Post', path: '/salary-post', permission: 'payroll.view' },
                 { title: 'Salary Rollback', path: '/salary-rollback', permission: 'payroll.view' },
             ],
         },
+        ...EMPLOYEE_LOAN_NAV_GROUPS.flatMap((group) => {
+            const GroupIcon = group.icon;
+            if (group.items.length === 1) {
+                const item = group.items[0];
+                return [
+                    {
+                        title: item.title,
+                        icon: <GroupIcon className="w-5 h-5" />,
+                        path: employeeLoanPath(item.path),
+                        hasSubmenu: false as const,
+                        permission: item.permission ?? 'payroll.view',
+                        hrOnly: true,
+                    },
+                ];
+            }
+
+            return [
+                {
+                    title: group.title,
+                    icon: <GroupIcon className="w-5 h-5" />,
+                    path: employeeLoanPath(group.defaultPath),
+                    hasSubmenu: true as const,
+                    permission: 'payroll.view',
+                    hrOnly: true,
+                    submenu: group.items.map((item) => ({
+                        title: item.title,
+                        path: employeeLoanPath(item.path),
+                        permission: item.permission ?? 'payroll.view',
+                    })),
+                },
+            ];
+        }),
         ...STAFF_FUND_NAV_GROUPS.flatMap((group) => {
             const GroupIcon = group.icon;
             if (group.items.length === 1) {
@@ -725,6 +771,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             case 'staff-fund':
                 return hasAnyDashboardPerm(staffFundSectionDashboardAny)
                     ? [{ title: 'Staff Fund', path: '/sections/staff-fund' }]
+                    : [];
+            case 'employee-loan':
+                return hasPermission('payroll.view')
+                    ? [{ title: 'Employee Loan', path: '/sections/employee-loan' }]
                     : [];
             case 'fixed-asset':
                 return hasAnyDashboardPerm(fixedAssetSectionDashboardAny)

@@ -4,19 +4,20 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
-use App\Models\Employee;
-use App\Models\EmployeePfTransaction;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
-use App\Services\SalaryStructureCalculator;
+use App\Services\PayrollRunRollbackService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class SalaryRollbackController extends Controller
 {
     use ProvidesPayrollFilters;
+
+    public function __construct(
+        protected PayrollRunRollbackService $rollbackService,
+    ) {}
 
     public function index(Request $request)
     {
@@ -88,51 +89,12 @@ class SalaryRollbackController extends Controller
             'payroll_run_ids.*' => 'integer|exists:payroll_runs,id',
         ]);
 
-        DB::transaction(function () use ($validated) {
-            $runs = PayrollRun::query()
-                ->whereIn('id', $validated['payroll_run_ids'])
-                ->whereIn('status', ['processed', 'posted'])
-                ->get();
+        $runs = PayrollRun::query()
+            ->whereIn('id', $validated['payroll_run_ids'])
+            ->whereIn('status', ['processed', 'posted'])
+            ->get();
 
-            if ($runs->isEmpty()) {
-                throw ValidationException::withMessages([
-                    'payroll_run_ids' => 'No eligible payroll runs to rollback.',
-                ]);
-            }
-
-            foreach ($runs as $run) {
-                $run->load('payslips');
-                foreach ($run->payslips as $payslip) {
-                    $pfTx = EmployeePfTransaction::query()
-                        ->where('payslip_id', $payslip->id)
-                        ->first();
-                    if ($pfTx) {
-                        $credit = (float) ($pfTx->credit_amount ?? 0);
-                        $debit = (float) ($pfTx->debit_amount ?? 0);
-                        $reversal = $credit > 0 || $debit > 0
-                            ? SalaryStructureCalculator::roundTaka($credit - $debit)
-                            : SalaryStructureCalculator::roundTaka(
-                                (float) $pfTx->employee_contribution + (float) $pfTx->employer_contribution
-                            );
-                        Employee::query()
-                            ->whereKey($payslip->employee_id)
-                            ->decrement('pf_balance', $reversal);
-                        $pfTx->delete();
-                    }
-                    $payslip->lines()->delete();
-                }
-                $run->payslips()->delete();
-                $run->update([
-                    'status' => 'rolled_back',
-                    'rolled_back_by' => auth()->id(),
-                    'rolled_back_at' => now(),
-                    'employee_count' => 0,
-                    'total_gross' => 0,
-                    'total_deduction' => 0,
-                    'total_net' => 0,
-                ]);
-            }
-        });
+        $this->rollbackService->rollback($runs);
 
         return redirect()
             ->route('salary-rollback.index', $request->only(['year', 'month', 'branch_id', 'salary_type']))

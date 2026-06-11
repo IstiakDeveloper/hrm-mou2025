@@ -1,0 +1,111 @@
+import React, { useState } from 'react';
+import { Link, useForm } from '@inertiajs/react';
+import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
+import { LoanCollectionFormFields } from './LoanCollectionFormFields';
+import { employeeLoanPath } from '@/lib/employee-loan-nav';
+import { fmt, type LoanOption } from './types';
+import { ArrowLeft, Save } from 'lucide-react';
+
+type Props = {
+    filters: Record<string, string>;
+    branches: { id: number; name: string }[];
+    employees: { id: number; pin?: string; name_en?: string }[];
+    loans: LoanOption[];
+    defaultCollectionDate: string;
+};
+
+export default function LoanCollectionAdvance({ filters, branches, employees, loans, defaultCollectionDate }: Props) {
+    const [branchId, setBranchId] = useState(filters.branch_id || '');
+    const [employeeId, setEmployeeId] = useState(filters.employee_id || '');
+    const [loanId, setLoanId] = useState('');
+
+    const form = useForm({
+        collection_date: defaultCollectionDate,
+        reference_no: '',
+        notes: '',
+        employee_loan_id: '',
+        installment_count: '1',
+    });
+
+    const selectedLoan = loans.find((l) => String(l.id) === loanId);
+    const estimated = selectedLoan ? selectedLoan.installment_amount * (parseInt(form.data.installment_count, 10) || 1) : 0;
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        form.transform((data) => ({
+            ...data,
+            employee_loan_id: parseInt(loanId, 10),
+            installment_count: parseInt(data.installment_count, 10) || 1,
+        }));
+        form.post(route('loan-collection.advance.store'));
+    };
+
+    return (
+        <EmployeeLoanLayout
+            title="Advance collection"
+            activeTab="collection-advance"
+            description="Collect multiple future installments in advance before their due month."
+        >
+            <div className="mb-4">
+                <Link href={employeeLoanPath(route('loan-collection.index'))} className="inline-flex items-center text-xs text-zinc-600 hover:text-zinc-900">
+                    <ArrowLeft className="mr-1.5 h-4 w-4" /> Collection list
+                </Link>
+            </div>
+
+            <form onSubmit={submit}>
+                <Card className="border-zinc-200/90 shadow-sm">
+                    <CardHeader className="border-b border-zinc-100 py-3">
+                        <CardTitle className="text-sm font-semibold">Advance payment</CardTitle>
+                        <CardDescription className="text-xs">
+                            Marks the next pending installments as paid even if due date is in the future.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                        <LoanCollectionFormFields
+                            branches={branches}
+                            employees={employees}
+                            loans={loans}
+                            branchId={branchId}
+                            employeeId={employeeId}
+                            loanId={loanId}
+                            onBranchChange={setBranchId}
+                            onEmployeeChange={setEmployeeId}
+                            onLoanChange={setLoanId}
+                            collectionDate={form.data.collection_date}
+                            onCollectionDateChange={(v) => form.setData('collection_date', v)}
+                            referenceNo={form.data.reference_no}
+                            onReferenceNoChange={(v) => form.setData('reference_no', v)}
+                            notes={form.data.notes}
+                            onNotesChange={(v) => form.setData('notes', v)}
+                            errors={form.errors as Record<string, string>}
+                        />
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                            <PayrollField label="Advance installments" error={form.errors.installment_count}>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    className="h-9 text-xs"
+                                    value={form.data.installment_count}
+                                    onChange={(e) => form.setData('installment_count', e.target.value)}
+                                />
+                            </PayrollField>
+                            <PayrollField label="Total advance (৳)">
+                                <Input readOnly className="h-9 bg-zinc-50 text-xs tabular-nums" value={estimated ? fmt(estimated) : ''} />
+                            </PayrollField>
+                        </div>
+                        {form.errors.collection && <p className="mt-3 text-xs text-rose-600">{form.errors.collection}</p>}
+                        <div className="mt-5 flex justify-end">
+                            <Button type="submit" disabled={form.processing || !loanId} className="bg-emerald-600 hover:bg-emerald-700">
+                                <Save className="mr-2 h-4 w-4" /> Save advance
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </form>
+        </EmployeeLoanLayout>
+    );
+}

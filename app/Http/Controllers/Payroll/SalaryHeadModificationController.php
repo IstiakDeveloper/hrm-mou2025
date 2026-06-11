@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\SalaryHead;
 use App\Models\SalaryHeadModification;
 use App\Services\PayrollCalculationService;
+use App\Services\ProbationSalaryService;
 use App\Support\PayrollFormHelper;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -20,7 +21,8 @@ class SalaryHeadModificationController extends Controller
     use ProvidesPayrollFilters;
 
     public function __construct(
-        protected PayrollCalculationService $calculator
+        protected PayrollCalculationService $calculator,
+        protected ProbationSalaryService $probationSalaryService,
     ) {}
 
     public function index(Request $request)
@@ -38,13 +40,17 @@ class SalaryHeadModificationController extends Controller
             }
 
             $head = SalaryHead::findOrFail($request->integer('salary_head_id'));
-            $asOf = PayrollFormHelper::parseDisplayDate($request->input('effective_from'))
-                ?? throw ValidationException::withMessages(['effective_from' => 'Invalid date. Use dd-mm-yyyy.']);
+            $asOf = Carbon::parse(
+                PayrollFormHelper::parseDisplayDate($request->input('effective_from'))
+                    ?? throw ValidationException::withMessages(['effective_from' => 'Invalid date. Use dd-mm-yyyy.'])
+            );
 
             $employees = $this->applyPayrollEmployeeFilters(Employee::query(), $request, payrollReadyOnly: true)
                 ->with(['department', 'designation', 'branch', 'project', 'payscale', 'salaryGrade', 'salaryStep'])
                 ->orderBy('pin')
-                ->get();
+                ->get()
+                ->filter(fn (Employee $employee) => ! $this->probationSalaryService->isOnProbation($employee, $asOf))
+                ->values();
 
             $mods = SalaryHeadModification::query()
                 ->where('salary_head_id', $head->id)

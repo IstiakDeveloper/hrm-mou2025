@@ -9,6 +9,7 @@ import {
     CardTitle
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -212,9 +213,9 @@ export default function Create({ branches, statuses }: CreateProps) {
                                         </SelectTrigger>
                                         <SelectContent>
                                             {branches && branches.length > 0 ? (
-                                                branches.map((branch) => (
+                                                sortPayrollBranches(branches).map((branch) => (
                                                     <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                        {branch.name}
+                                                        {formatBranchSelectLabel(branch)}
                                                     </SelectItem>
                                                 ))
                                             ) : (

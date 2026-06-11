@@ -49,16 +49,15 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department {
   id: number;
   name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
   department: Department;
   designation: {
@@ -403,7 +402,7 @@ export default function Report({
                     <SelectItem value="all">All Employees</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employee.first_name} {employee.last_name}
+                        {employeeDisplayName(employee)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -550,7 +549,7 @@ export default function Report({
                     <TableRow key={application.id}>
                       <TableCell>
                         <div className="font-medium">
-                          {application.employee.first_name} {application.employee.last_name}
+                          {employeeDisplayName(application.employee)}
                         </div>
                         <div className="text-xs text-gray-500">
                           {application.employee.employee_id}

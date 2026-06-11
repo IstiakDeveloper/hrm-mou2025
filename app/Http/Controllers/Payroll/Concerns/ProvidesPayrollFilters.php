@@ -19,14 +19,6 @@ trait ProvidesPayrollFilters
      */
     protected function payrollFilterOptions(bool $payrollReadyEmployeesOnly = false): array
     {
-        $employeeQuery = Employee::query()->where('status', 'active');
-        if ($payrollReadyEmployeesOnly) {
-            $employeeQuery
-                ->whereNotNull('payscale_id')
-                ->whereNotNull('salary_grade_id')
-                ->whereNotNull('salary_step_id');
-        }
-
         return [
             'branches' => Branch::query()
                 ->orderBy('branch_code')
@@ -36,9 +28,8 @@ trait ProvidesPayrollFilters
             'designations' => Designation::query()->orderBy('name')->get(['id', 'name']),
             'programs' => Program::query()->orderBy('name')->get(['id', 'name']),
             'projects' => Project::query()->orderBy('name')->get(['id', 'name']),
-            'employees' => $employeeQuery
-                ->orderBy('pin')
-                ->get(['id', 'pin', 'name_en', 'employee_id']),
+            'employees' => [],
+            'employeeLookupUrl' => route('employees.lookup'),
             'salaryHeads' => SalaryHead::query()
                 ->where('is_active', true)
                 ->where('is_basic_head', false)
@@ -70,6 +61,7 @@ trait ProvidesPayrollFilters
             'program_id' => $request->input('program_id', ''),
             'project_id' => $request->input('project_id', ''),
             'employee_id' => $request->input('employee_id', ''),
+            'employee_type_id' => $request->input('employee_type_id', ''),
             'salary_head_id' => $request->input('salary_head_id', ''),
             'salary_type' => $request->input('salary_type', 'salary'),
             'year' => $request->input('year', (string) date('Y')),
@@ -88,15 +80,18 @@ trait ProvidesPayrollFilters
             ->when($request->filled('designation_id'), fn ($q) => $q->where('designation_id', $request->integer('designation_id')))
             ->when($request->filled('program_id'), fn ($q) => $q->where('program_id', $request->integer('program_id')))
             ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
-            ->when($request->filled('employee_id'), fn ($q) => $q->where('id', $request->integer('employee_id')));
+            ->when($request->filled('employee_id'), fn ($q) => $q->where('id', $request->integer('employee_id')))
+            ->when($request->filled('employee_type_id'), fn ($q) => $q->where('employee_type_id', $request->integer('employee_type_id')));
 
         if ($payrollReadyOnly) {
-            $query
-                ->whereNotNull('payscale_id')
-                ->whereNotNull('salary_grade_id')
-                ->whereNotNull('salary_step_id');
+            $this->applyPayrollReadyScope($query);
         }
 
         return $query;
+    }
+
+    protected function applyPayrollReadyScope(Builder $query): Builder
+    {
+        return $query->payrollReady();
     }
 }

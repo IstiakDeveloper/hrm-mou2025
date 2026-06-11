@@ -3,6 +3,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -270,9 +271,9 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="none">None</SelectItem>
-                                                {branches.map(branch => (
+                                                {sortPayrollBranches(branches).map((branch) => (
                                                     <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                        {branch.name}
+                                                        {formatBranchSelectLabel(branch)}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>

@@ -3,7 +3,7 @@
 
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>Employee Report - {{ $employee->first_name }} {{ $employee->last_name }}</title>
+    <title>Employee Report - {{ $employee->name_en ?? $employee->full_name_en }}</title>
     <style>
         body {
             font-family: 'DejaVu Sans', Arial, sans-serif;
@@ -253,14 +253,14 @@
         <h3>Employee Details</h3>
         <table>
             <tr>
-                <td width="25%"><strong>Name:</strong> {{ $employee->first_name }} {{ $employee->last_name }}</td>
+                <td width="25%"><strong>Name:</strong> {{ $employee->name_en ?? $employee->full_name_en }}</td>
                 <td width="25%"><strong>ID:</strong> {{ $employee->employee_id }}</td>
                 <td width="25%"><strong>Department:</strong> {{ $employee->department->name ?? 'N/A' }}</td>
                 <td width="25%"><strong>Position:</strong> {{ $employee->designation->name ?? 'N/A' }}</td>
             </tr>
             <tr>
                 <td width="25%"><strong>Email:</strong> {{ $employee->email ?? 'N/A' }}</td>
-                <td width="25%"><strong>Phone:</strong> {{ $employee->phone ?? 'N/A' }}</td>
+                <td width="25%"><strong>Phone:</strong> {{ $employee->mobile_personal ?? $employee->mobile_official ?? 'N/A' }}</td>
                 <td width="25%"><strong>Join Date:</strong>
                     {{ $employee->hire_date ? Carbon\Carbon::parse($employee->hire_date)->format('M d, Y') : 'N/A' }}
                 </td>

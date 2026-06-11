@@ -24,12 +24,7 @@ class UserController extends Controller
             return $name;
         }
 
-        $name = trim(implode(' ', array_filter([
-            $employee->first_name,
-            $employee->last_name,
-        ], fn ($part) => trim((string) $part) !== '')));
-
-        return $name !== '' ? $name : 'Employee '.$employee->employee_id;
+        return 'Employee '.$employee->employee_id;
     }
 
     /**
@@ -83,7 +78,7 @@ class UserController extends Controller
      */
     public function create()
     {
-        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'first_name', 'last_name', 'name_en', 'email')->get();
+        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'name_en', 'email')->get();
         $roles = Role::all();
         $branches = Branch::all();
 
@@ -177,7 +172,7 @@ class UserController extends Controller
     public function edit(User $user)
     {
         $roles = Role::all();
-        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'first_name', 'last_name', 'name_en', 'email')->get();
+        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'name_en', 'email')->get();
         $branches = Branch::all();
 
         $user->load('roles');

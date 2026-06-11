@@ -36,12 +36,11 @@ import {
     XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-type Employee = {
+type Employee = EmployeeNameFields & {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string | null;
 };
 
 type Designation = { id: number; name: string };
@@ -224,7 +223,7 @@ export default function PromotionIndex({ promotions, employees, filters, canAppr
                                         <SelectItem value="all">All Employees</SelectItem>
                                         {employees.map((e) => (
                                             <SelectItem key={e.id} value={String(e.id)}>
-                                                {e.employee_id} — {e.first_name} {e.last_name ?? ''}
+                                                {e.employee_id} — {employeeDisplayName(e)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -270,7 +269,7 @@ export default function PromotionIndex({ promotions, employees, filters, canAppr
                                                                 href={route('promotions.show', p.id)}
                                                                 className="font-semibold text-[13px] text-slate-800 hover:text-emerald-600 transition-colors"
                                                             >
-                                                                {p.employee.first_name} {p.employee.last_name}
+                                                                {employeeDisplayName(p.employee)}
                                                             </Link>
                                                             <div className="text-xs text-slate-500 font-mono">
                                                                 ID: {p.employee.employee_id}

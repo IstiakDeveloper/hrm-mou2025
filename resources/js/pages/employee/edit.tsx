@@ -1,12 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,96 +24,239 @@ import {
     newEmployeeDocumentFormRow,
     saveEmployeeDraft,
     toSerializableEmployeeForm,
+    type EmployeeDocumentFormRow,
 } from '@/lib/employee-v2-form-persist';
-import {
-    ArrowLeft,
-    Plus,
-    Trash2,
-    Upload,
-} from 'lucide-react';
-import { format, isValid, parse, parseISO } from 'date-fns';
+import { useLocationCascade, usePrefetchLocationCascade, type LocationUnion } from '@/lib/location-cascade';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
+import { cn } from '@/lib/utils';
 import {
     EmployeeSalaryAssignment,
     type PayrollGradeOption,
     type PayrollPayscaleOption,
     type PayrollStepOption,
 } from '@/components/employee/EmployeeSalaryAssignment';
+import { format } from 'date-fns';
+import {
+    ArrowLeft,
+    Plus,
+    Trash2,
+    Upload,
+    User,
+    GraduationCap,
+    DollarSign,
+    Building2,
+    Users,
+    ShieldCheck,
+    Shield,
+    Package,
+    Briefcase,
+    Award,
+    FileText,
+    Check,
+    AlertCircle,
+    Info,
+    Sparkles,
+    RotateCcw,
+} from 'lucide-react';
 
-const DISPLAY_DATE_FMT = 'dd-MM-yyyy';
 const SERVER_DATE_FMT = 'yyyy-MM-dd';
 
-/** Values from API/drafts may be ISO, `Y-m-d`, or already `dd-MM-yyyy`. */
-function toFormDisplayDate(value: unknown): string {
-    if (value == null || value === '') return '';
-    const s = String(value).trim();
-    if (!s) return '';
-    if (/^\d{2}-\d{2}-\d{4}$/.test(s)) return s;
-    const datePart = s.includes('T') ? (s.split('T')[0] ?? s) : s;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-        const d = parse(datePart, SERVER_DATE_FMT, new Date());
-        return isValid(d) ? format(d, DISPLAY_DATE_FMT) : '';
-    }
-    const iso = parseISO(s);
-    if (isValid(iso)) return format(iso, DISPLAY_DATE_FMT);
-    const slash = parse(s, 'dd/MM/yyyy', new Date());
-    if (isValid(slash)) return format(slash, DISPLAY_DATE_FMT);
-    return '';
-}
-
-function displayDateToServer(value: unknown): string {
+function toYmdDate(value: unknown): string {
     if (value == null || value === '') return '';
     const s = String(value).trim();
     if (!s) return '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    const d = parse(s, DISPLAY_DATE_FMT, new Date());
-    return isValid(d) ? format(d, SERVER_DATE_FMT) : '';
+    const datePart = s.includes('T') ? (s.split('T')[0] ?? s) : s;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+    return '';
 }
 
-function parseFormDateValue(raw: unknown): Date | null {
-    if (raw == null) return null;
-    const s = String(raw).trim();
-    if (!s) return null;
-    if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
-        const d = parse(s, DISPLAY_DATE_FMT, new Date());
-        return isValid(d) ? d : null;
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-        const d = parse(s, SERVER_DATE_FMT, new Date());
-        return isValid(d) ? d : null;
-    }
-    const iso = parseISO(s.includes('T') ? s : `${s}T00:00:00`);
-    return isValid(iso) ? iso : null;
+function SignatureDemoGraphic({ className }: { className?: string }) {
+    return (
+        <svg className={cn('pointer-events-none text-zinc-300', className)} viewBox="0 0 200 80" fill="none" aria-hidden stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M20 50 Q40 20 60 50 T100 50 T140 30 T180 40" />
+            <path d="M50 45 Q90 30 130 45" />
+        </svg>
+    );
 }
-
-/** Repeatable “multiple add” rows: stacked on small screens, one horizontal row on large screens */
-const RF_ROW = 'flex flex-col gap-2 lg:flex-row lg:flex-nowrap lg:items-end lg:gap-2 lg:overflow-x-auto lg:pb-0.5';
-const RF_ROW_TOP = 'flex flex-col gap-2 lg:flex-row lg:flex-nowrap lg:items-start lg:gap-2 lg:overflow-x-auto lg:pb-0.5';
-const RF_ROW_CTR = 'flex flex-col gap-2 lg:flex-row lg:flex-nowrap lg:items-center lg:gap-2 lg:overflow-x-auto lg:pb-0.5';
-const RF_CELL = 'min-w-0 flex-1 space-y-1';
 
 function getCsrfTokenFromPage(): string {
     const el = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
     return el?.content?.trim() ?? '';
 }
 
-type LocationUnion = { name: string; type: string; villages: string[] };
-
-interface Department {
-    id: number;
-    name: string;
+interface Address {
+    type: 'present' | 'permanent';
+    division: string;
+    district: string;
+    upazila: string;
+    union: string;
+    village: string;
+    address_details: string;
 }
 
-interface Designation {
-    id: number;
-    name: string;
+interface Education {
+    degree: string;
+    institute: string;
+    board: string;
+    group_name: string;
+    subject: string;
+    result_type: 'gpa' | 'cgpa' | 'other' | '';
+    result_value: string;
 }
 
-interface Branch {
-    id: number;
+interface Nominee {
     name: string;
-    branch_code?: string;
+    relation: string;
+    mobile: string;
+    date_of_birth: string;
+    share_percentage: string | number;
 }
 
+interface Guarantor {
+    name: string;
+    father_name: string;
+    mobile: string;
+    address: string;
+    profession: string;
+    organization: string;
+    designation: string;
+    nid: string;
+}
+
+interface Cheque {
+    bank_name: string;
+    cheque_no: string;
+    amount: string | number;
+}
+
+interface Asset {
+    serial_no: string;
+    asset_no: string;
+    asset_name: string;
+    provided_qty: string | number;
+    asset_price: string | number;
+    asset_details: string;
+}
+
+interface Experience {
+    organization: string;
+    from_date: string;
+    to_date: string;
+    designation: string;
+    department: string;
+    responsibility: string;
+}
+
+interface Training {
+    training_title: string;
+    institute: string;
+    duration: string;
+    address: string;
+    remarks: string;
+}
+
+interface EmployeeEditFormData {
+    _method: string;
+    current_branch_id: string;
+    employee_type_id: string;
+    pin: string;
+    name_en: string;
+    name_bn: string;
+    gender: string;
+    religion: string;
+    marital_status: string;
+    spouse_name: string;
+    spouse_mobile: string;
+    date_of_birth: string;
+    blood_group: string;
+    joining_date: string;
+    confirmation_date: string;
+    fathers_name: string;
+    fathers_mobile: string;
+    mothers_name: string;
+    mothers_mobile: string;
+    department_id: string;
+    joining_designation_id: string;
+    last_designation_id: string;
+    program_id: string;
+    project_id: string;
+    payscale_id: string;
+    salary_grade_id: string;
+    salary_step_id: string;
+    basic_salary: string;
+    nid: string;
+    nid_number: string;
+    smart_card_number: string;
+    tin_certificate_no: string;
+    driving_license_no: string;
+    passport_no: string;
+    is_project_employee: boolean;
+    is_custodian: boolean;
+    identification_mark: string;
+    email: string;
+    mobile_personal: string;
+    mobile_official: string;
+    photo: File | null;
+    signature: File | null;
+    addresses: [Address, Address];
+    educations: Education[];
+    bank: {
+        bank_name: string;
+        branch_name: string;
+        account_no: string;
+        account_type: string;
+        bank_address: string;
+        remark: string;
+    };
+    nominees: Nominee[];
+    guarantors: Guarantor[];
+    guarantor_cheques: Cheque[];
+    collateral: {
+        has_certificate: boolean;
+        certificate_levels: string[];
+        security_amount: string;
+        collateral_interest: string;
+        collateral_date: string;
+        notes: string;
+    };
+    collateral_receive_cheques: Cheque[];
+    assets: Asset[];
+    experiences: Experience[];
+    trainings: Training[];
+    documents: EmployeeDocumentFormRow[];
+}
+
+function emptyFormAddress(type: 'present' | 'permanent'): Address {
+    return { type, division: '', district: '', upazila: '', union: '', village: '', address_details: '' };
+}
+
+function normalizeEmployeeFormAddresses(raw: unknown): [Address, Address] {
+    const list = Array.isArray(raw) ? raw : [];
+    const pick = (type: 'present' | 'permanent'): Address => {
+        const found = list.find((a) => (a as Address)?.type === type) as Partial<Address> | undefined;
+        if (!found) return emptyFormAddress(type);
+        return {
+            type,
+            division: found.division ?? '',
+            district: found.district ?? '',
+            upazila: found.upazila ?? '',
+            union: found.union ?? '',
+            village: found.village ?? '',
+            address_details: found.address_details ?? '',
+        };
+    };
+    return [pick('present'), pick('permanent')];
+}
+
+function buildAddressDetails(a: Address): string {
+    const parts = [a.village, a.union, a.upazila, a.district, a.division].filter((s) => s?.trim());
+    return parts.length > 0 ? parts.join(', ') : '';
+}
+
+interface Department { id: number; name: string }
+interface Designation { id: number; name: string }
+interface Branch { id: number; name: string; branch_code?: string }
 interface Employee {
     id: number;
     pin?: string;
@@ -127,8 +269,6 @@ interface Employee {
     marital_status?: string;
     spouse_name?: string;
     spouse_mobile?: string;
-    birth_date_certificate?: string;
-    birth_date_original?: string;
     date_of_birth?: string;
     blood_group?: string;
     joining_date?: string;
@@ -148,7 +288,6 @@ interface Employee {
     basic_salary?: string | number | null;
     nid?: string;
     smart_card_number?: string;
-    birth_registration_number?: string;
     tin_certificate_no?: string;
     driving_license_no?: string;
     passport_no?: string;
@@ -156,8 +295,6 @@ interface Employee {
     is_custodian?: boolean;
     identification_mark?: string;
     email?: string;
-    email_id?: string;
-    phone?: string;
     mobile_personal?: string;
     mobile_official?: string;
     photo?: string | null;
@@ -177,72 +314,29 @@ interface Employee {
     documents?: any[];
 }
 
-type EmployeeEditFormData = any;
-
 function withHydratedEditDocuments(form: EmployeeEditFormData): EmployeeEditFormData {
     return { ...form, documents: hydrateEmployeeDocumentRowsForForm(form.documents ?? []) };
 }
 
-function normalizeEditFormDisplayDates(form: EmployeeEditFormData): EmployeeEditFormData {
+function normalizeEditFormDates(form: EmployeeEditFormData): EmployeeEditFormData {
     const out = { ...form };
-    out.birth_date_certificate = toFormDisplayDate(form.birth_date_certificate);
-    out.birth_date_original = toFormDisplayDate(form.birth_date_original);
-    out.date_of_birth = toFormDisplayDate(form.date_of_birth);
-    out.joining_date = toFormDisplayDate(form.joining_date);
-    out.confirmation_date = toFormDisplayDate(form.confirmation_date);
-    out.nominees = (form.nominees ?? []).map((n: any) => ({
-        ...n,
-        date_of_birth: toFormDisplayDate(n.date_of_birth),
-    }));
-    out.collateral = {
-        ...(form.collateral ?? {}),
-        collateral_date: toFormDisplayDate(form.collateral?.collateral_date),
-    };
-    out.experiences = (form.experiences ?? []).map((ex: any) => ({
-        ...ex,
-        from_date: toFormDisplayDate(ex.from_date),
-        to_date: toFormDisplayDate(ex.to_date),
-    }));
-    out.documents = (form.documents ?? []).map((doc: any) => ({
-        ...doc,
-        expiry_date: toFormDisplayDate(doc.expiry_date),
-    }));
-    return out;
-}
-
-function transformSubmitDates(form: EmployeeEditFormData): EmployeeEditFormData {
-    const out = { ...form };
-    out.birth_date_certificate = displayDateToServer(form.birth_date_certificate);
-    out.birth_date_original = displayDateToServer(form.birth_date_original);
-    out.date_of_birth = displayDateToServer(form.date_of_birth);
-    out.joining_date = displayDateToServer(form.joining_date);
-    out.confirmation_date = displayDateToServer(form.confirmation_date);
-    out.nominees = (form.nominees ?? []).map((n: any) => ({
-        ...n,
-        date_of_birth: displayDateToServer(n.date_of_birth),
-    }));
-    out.collateral = {
-        ...(form.collateral ?? {}),
-        collateral_date: displayDateToServer(form.collateral?.collateral_date),
-    };
-    out.experiences = (form.experiences ?? []).map((ex: any) => ({
-        ...ex,
-        from_date: displayDateToServer(ex.from_date),
-        to_date: displayDateToServer(ex.to_date),
-    }));
-    out.documents = (form.documents ?? []).map((doc: any) => ({
-        ...doc,
-        expiry_date: displayDateToServer(doc.expiry_date),
-    }));
+    out.date_of_birth = toYmdDate(form.date_of_birth);
+    out.joining_date = toYmdDate(form.joining_date) || format(new Date(), SERVER_DATE_FMT);
+    out.confirmation_date = toYmdDate(form.confirmation_date);
+    out.nominees = (form.nominees ?? []).map((n) => ({ ...n, date_of_birth: toYmdDate(n.date_of_birth) }));
+    out.collateral = { ...(form.collateral ?? {}), collateral_date: toYmdDate(form.collateral?.collateral_date) };
+    out.experiences = (form.experiences ?? []).map((ex) => ({ ...ex, from_date: toYmdDate(ex.from_date), to_date: toYmdDate(ex.to_date) }));
+    out.documents = (form.documents ?? []).map((doc) => ({ ...doc, expiry_date: toYmdDate(doc.expiry_date) }));
     return out;
 }
 
 function finalizeEmployeeEditForm(form: EmployeeEditFormData): EmployeeEditFormData {
-    return normalizeEditFormDisplayDates(withHydratedEditDocuments(form));
+    const hydrated = normalizeEditFormDates(withHydratedEditDocuments(form));
+    return { ...hydrated, addresses: normalizeEmployeeFormAddresses(hydrated.addresses) };
 }
 
 function employeeToFormBase(employee: Employee): EmployeeEditFormData {
-    const base = {
+    return {
         _method: 'PUT',
         current_branch_id: employee.current_branch_id ? String(employee.current_branch_id) : '',
         employee_type_id: employee.employee_type_id ? String(employee.employee_type_id) : '',
@@ -254,11 +348,9 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         marital_status: employee.marital_status || '',
         spouse_name: employee.spouse_name || '',
         spouse_mobile: employee.spouse_mobile || '',
-        birth_date_certificate: (employee.birth_date_certificate as any) || '',
-        birth_date_original: (employee.birth_date_original as any) || '',
-        date_of_birth: (employee.date_of_birth as any) || '',
+        date_of_birth: employee.date_of_birth || '',
         blood_group: employee.blood_group || '',
-        joining_date: employee.joining_date || format(new Date(), DISPLAY_DATE_FMT),
+        joining_date: employee.joining_date || format(new Date(), SERVER_DATE_FMT),
         confirmation_date: employee.confirmation_date || '',
         fathers_name: employee.fathers_name || '',
         fathers_mobile: employee.fathers_mobile || '',
@@ -272,15 +364,10 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         payscale_id: employee.payscale_id ? String(employee.payscale_id) : '',
         salary_grade_id: employee.salary_grade_id ? String(employee.salary_grade_id) : '',
         salary_step_id: employee.salary_step_id ? String(employee.salary_step_id) : '',
-        basic_salary:
-            employee.basic_salary != null && employee.basic_salary !== ''
-                ? String(employee.basic_salary)
-                : '',
-        nid: combinedNidOrSmartCardDisplay(employee.nid, employee.smart_card_number)
-            .replace(/\D/g, '')
-            .slice(0, 17),
+        basic_salary: employee.basic_salary != null && employee.basic_salary !== '' ? String(employee.basic_salary) : '',
+        nid: combinedNidOrSmartCardDisplay(employee.nid, employee.smart_card_number).replace(/\D/g, '').slice(0, 17),
+        nid_number: '',
         smart_card_number: '',
-        birth_registration_number: employee.birth_registration_number || '',
         tin_certificate_no: employee.tin_certificate_no || '',
         driving_license_no: employee.driving_license_no || '',
         passport_no: employee.passport_no || '',
@@ -288,27 +375,11 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         is_custodian: !!employee.is_custodian,
         identification_mark: employee.identification_mark || '',
         email: employee.email || '',
-        email_id: employee.email_id || '',
-        phone: employee.phone || '',
         mobile_personal: employee.mobile_personal || '',
         mobile_official: employee.mobile_official || '',
         photo: null,
         signature: null,
-        addresses:
-            (employee.addresses as any[])?.length > 0
-                ? (employee.addresses as any[]).map((a) => ({
-                      type: a.type,
-                      division: a.division ?? '',
-                      district: a.district ?? '',
-                      upazila: a.upazila ?? '',
-                      union: a.union ?? '',
-                      village: a.village ?? '',
-                      address_details: a.address_details ?? '',
-                  }))
-                : [
-                      { type: 'present', division: '', district: '', upazila: '', union: '', village: '', address_details: '' },
-                      { type: 'permanent', division: '', district: '', upazila: '', union: '', village: '', address_details: '' },
-                  ],
+        addresses: normalizeEmployeeFormAddresses(employee.addresses),
         educations: (employee.educations as any[]) ?? [],
         bank: employee.bank ?? { bank_name: '', branch_name: '', account_no: '', account_type: '', bank_address: '', remark: '' },
         nominees: (employee.nominees as any[]) ?? [],
@@ -319,25 +390,124 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         assets: (employee.assets as any[]) ?? [],
         experiences: (employee.experiences as any[]) ?? [],
         trainings: (employee.trainings as any[]) ?? [],
-        documents: hydrateEmployeeDocumentRowsForForm((employee as any).documents ?? []),
+        documents: hydrateEmployeeDocumentRowsForForm(employee.documents ?? []),
     };
-    return base;
 }
 
 function flattenEmployeeFormErrors(err: Record<string, string | undefined>): string[] {
     const out: string[] = [];
     for (const [k, v] of Object.entries(err)) {
         if (!v || k === 'submit') continue;
-        const label = k.replace(/\./g, ' › ');
-        out.push(`${label}: ${v}`);
+        out.push(v);
     }
     return out;
 }
 
-function errorFieldKeyToEmployeeEditTab(key: string): string {
-    if (key === 'payscale_id' || key === 'salary_grade_id' || key === 'salary_step_id' || key === 'basic_salary') {
-        return 'salary';
+const EMPLOYEE_EDIT_TAB_ORDER = [
+    'general',
+    'education',
+    'salary',
+    'bank',
+    'nominee',
+    'guarantor',
+    'collateral',
+    'asset',
+    'experience',
+    'training',
+    'documents',
+] as const;
+
+type EmployeeEditTabId = (typeof EMPLOYEE_EDIT_TAB_ORDER)[number];
+
+function isEmployeeEditTabId(v: string): v is EmployeeEditTabId {
+    return (EMPLOYEE_EDIT_TAB_ORDER as readonly string[]).includes(v);
+}
+
+function formatProbationPeriodFromDates(joiningDate: string, confirmationDate: string): string {
+    const join = joiningDate?.trim();
+    const confirm = confirmationDate?.trim();
+    if (!join || !confirm) return '';
+    const start = new Date(`${join}T00:00:00`);
+    const end = new Date(`${confirm}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+    if (end < start) return 'Invalid (confirmation before joining)';
+    const totalDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    if (totalDays === 0) return '0 days';
+    let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+    if (end.getDate() < start.getDate()) months -= 1;
+    if (months > 0) return `${months} month${months === 1 ? '' : 's'} (${totalDays} days)`;
+    return `${totalDays} day${totalDays === 1 ? '' : 's'}`;
+}
+
+function validateEmployeeEditTab(tab: EmployeeEditTabId, data: EmployeeEditFormData, isSpouseRequired: boolean): string[] {
+    const msg: string[] = [];
+    switch (tab) {
+        case 'general': {
+            if (!String(data.current_branch_id ?? '').trim()) msg.push('Branch is required.');
+            if (!String(data.employee_type_id ?? '').trim()) msg.push('Employment type is required.');
+            if (!String(data.pin ?? '').trim()) msg.push('Employee PIN is required.');
+            if (!String(data.name_en ?? '').trim()) msg.push('Employee name (English) is required.');
+            if (!String(data.joining_date ?? '').trim()) msg.push('Joining date is required.');
+            if (!String(data.department_id ?? '').trim()) msg.push('Department is required.');
+            if (!String(data.joining_designation_id ?? '').trim()) msg.push('Designation is required.');
+            if (!String(data.mobile_personal ?? '').trim()) msg.push('Personal mobile number is required.');
+            if (isSpouseRequired) {
+                if (!String(data.spouse_name ?? '').trim()) msg.push('Spouse name is required.');
+                if (!String(data.spouse_mobile ?? '').trim()) msg.push('Spouse contact is required.');
+            }
+            break;
+        }
+        case 'education': {
+            (data.educations ?? []).forEach((ed, i) => {
+                if (!String(ed.degree ?? '').trim()) msg.push(`Education row ${i + 1}: Degree is required.`);
+            });
+            break;
+        }
+        case 'nominee': {
+            (data.nominees ?? []).forEach((n, i) => {
+                if (!String(n.name ?? '').trim()) msg.push(`Nominee ${i + 1}: Name is required.`);
+            });
+            break;
+        }
+        case 'guarantor': {
+            (data.guarantors ?? []).forEach((g, i) => {
+                if (!String(g.name ?? '').trim()) msg.push(`Guarantor ${i + 1}: Name is required.`);
+            });
+            break;
+        }
+        case 'collateral': {
+            const levels = data.collateral?.certificate_levels;
+            if (data.collateral?.has_certificate && (!Array.isArray(levels) || levels.length === 0)) {
+                msg.push('Select at least one Certificate level (SSC, HSC, etc.).');
+            }
+            break;
+        }
+        case 'asset': {
+            (data.assets ?? []).forEach((a, i) => {
+                if (!String(a.asset_name ?? '').trim()) msg.push(`Asset ${i + 1}: Name is required.`);
+            });
+            break;
+        }
+        case 'experience': {
+            (data.experiences ?? []).forEach((ex, i) => {
+                if (!String(ex.organization ?? '').trim()) msg.push(`Experience ${i + 1}: Organization is required.`);
+            });
+            break;
+        }
+        case 'training': {
+            (data.trainings ?? []).forEach((t, i) => {
+                if (!String(t.training_title ?? '').trim()) msg.push(`Training ${i + 1}: Title is required.`);
+            });
+            break;
+        }
+        default:
+            break;
     }
+    return msg;
+}
+
+function errorFieldKeyToEmployeeEditTab(key: string): EmployeeEditTabId {
+    if (['payscale_id', 'salary_grade_id', 'salary_step_id', 'basic_salary'].includes(key)) return 'salary';
     if (key.startsWith('educations')) return 'education';
     if (key.startsWith('bank')) return 'bank';
     if (key.startsWith('nominees')) return 'nominee';
@@ -350,15 +520,14 @@ function errorFieldKeyToEmployeeEditTab(key: string): string {
     return 'general';
 }
 
-function inferFirstTabFromEmployeeErrors(err: Record<string, string | undefined>): string | null {
+function inferFirstTabFromEmployeeErrors(err: Record<string, string | undefined>): EmployeeEditTabId | null {
     const keys = Object.keys(err).filter((k) => err[k] && k !== 'submit');
     if (keys.length === 0) return null;
-    const tabOrder = ['general', 'education', 'salary', 'bank', 'nominee', 'guarantor', 'collateral', 'asset', 'experience', 'training', 'documents'];
-    let best: string | null = null;
+    let best: EmployeeEditTabId | null = null;
     let bestIdx = Infinity;
     for (const k of keys) {
         const tab = errorFieldKeyToEmployeeEditTab(k);
-        const idx = tabOrder.indexOf(tab);
+        const idx = EMPLOYEE_EDIT_TAB_ORDER.indexOf(tab);
         if (idx >= 0 && idx < bestIdx) {
             bestIdx = idx;
             best = tab;
@@ -367,16 +536,41 @@ function inferFirstTabFromEmployeeErrors(err: Record<string, string | undefined>
     return best;
 }
 
+const FormField = ({ label, required, error, children, className }: { label?: string; required?: boolean; error?: string; children: React.ReactNode; className?: string }) => (
+    <div className={cn("space-y-1.5", className)}>
+        {label && (
+            <Label className="text-xs font-semibold text-zinc-700 flex items-center gap-0.5">
+                {label} {required && <span className="text-emerald-600 font-bold">*</span>}
+            </Label>
+        )}
+        {children}
+        {error && (
+            <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5 animate-slide-in mt-1">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>{error}</span>
+            </p>
+        )}
+    </div>
+);
+
+const SectionHeading = ({ children, desc }: { children: string; desc?: string }) => (
+    <div className="border-b border-zinc-100 pb-3 mb-5">
+        <h3 className="text-sm font-bold text-zinc-900 tracking-tight">{children}</h3>
+        {desc && <p className="text-xs text-zinc-400 mt-0.5">{desc}</p>}
+    </div>
+);
+
 function buildInitialEditForm(employee: Employee, oldInput: unknown, allowDraft: boolean): EmployeeEditFormData {
     const base = employeeToFormBase(employee);
     const fromServer = asInputPatch(oldInput);
+    const editDraftKey = `${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`;
     if (hasPatchKeys(fromServer)) {
         return finalizeEmployeeEditForm(
             applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromServer) as unknown as Record<string, unknown>) as EmployeeEditFormData
         );
     }
     if (allowDraft) {
-        const fromDraft = loadEmployeeDraft(`${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`);
+        const fromDraft = loadEmployeeDraft(editDraftKey);
         if (fromDraft) {
             return finalizeEmployeeEditForm(
                 applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromDraft as Record<string, unknown>) as unknown as Record<string, unknown>) as EmployeeEditFormData
@@ -391,8 +585,6 @@ interface EmployeeEditProps {
     departments: Department[];
     designations: Designation[];
     branches: Branch[];
-    managers: Employee[];
-    statuses: string[];
     employeeTypes: { id: number; name: string; probation_months: number }[];
     programs: { id: number; name: string; type: 'core' | 'project' }[];
     projects: { id: number; name: string }[];
@@ -406,9 +598,7 @@ interface EmployeeEditProps {
     payrollGrades: PayrollGradeOption[];
     payrollSteps: PayrollStepOption[];
     oldInput?: Record<string, unknown>;
-    errors?: {
-        [key: string]: string;
-    };
+    errors?: Record<string, string>;
 }
 
 export default function EmployeeEdit({
@@ -416,8 +606,6 @@ export default function EmployeeEdit({
     departments,
     designations,
     branches,
-    managers,
-    statuses,
     employeeTypes,
     programs,
     projects,
@@ -437,18 +625,13 @@ export default function EmployeeEdit({
     const editDraftKey = `${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`;
     const initialForm = useMemo(
         () => buildInitialEditForm(employee, oldInput, !flash?.success),
-        [employee, oldInput, flash?.success],
+        [employee, oldInput, flash?.success]
     );
-    const { data, setData, post, transform, processing, errors: formErrors } = useForm(initialForm);
-
-    useEffect(() => {
-        transform((payload) => transformSubmitDates(payload as EmployeeEditFormData));
-    }, [transform]);
+    const { data, setData, post, processing, errors: formErrors } = useForm(initialForm);
 
     const errors = { ...errorsProp, ...formErrors } as Record<string, string | undefined>;
     const submitError = errors['submit'];
-    const validationMessages = useMemo(() => flattenEmployeeFormErrors(errors), [errors]);
-
+    const serverFieldErrors = useMemo(() => flattenEmployeeFormErrors(errors), [errors]);
     const nidOrSmartClientError = useMemo(() => getNidOrSmartCardClientError(data.nid), [data.nid]);
 
     useEffect(() => {
@@ -456,7 +639,7 @@ export default function EmployeeEdit({
         clearEmployeeDraft(editDraftKey);
         const next = finalizeEmployeeEditForm(employeeToFormBase(employee));
         setData({ ...next, photo: null, signature: null });
-    }, [flash?.success, employee.id, employee.payscale_id, employee.salary_grade_id, employee.salary_step_id, employee.basic_salary, editDraftKey, setData]);
+    }, [flash?.success, employee.id, editDraftKey, setData]);
 
     const lastServerOldJson = useRef<string | null>(null);
     useEffect(() => {
@@ -479,22 +662,46 @@ export default function EmployeeEdit({
         return () => window.clearTimeout(handle);
     }, [data, editDraftKey]);
 
-    const [activeTab, setActiveTab] = useState('general');
-    const [photoPreview, setPhotoPreview] = useState<string | null>(employee.photo ? `/storage/${employee.photo}` : null);
-    const [signaturePreview, setSignaturePreview] = useState<string | null>(employee.signature ? `/storage/${employee.signature}` : null);
-    const [addVillageModal, setAddVillageModal] = useState<{
-        open: boolean;
-        target: 'present' | 'permanent';
-        name: string;
-        error: string;
-        saving: boolean;
-    }>({
-        open: false,
-        target: 'present',
-        name: '',
-        error: '',
-        saving: false,
-    });
+    const existingPhotoUrl = employee.photo ? `/storage/${employee.photo}` : null;
+    const existingSignatureUrl = employee.signature ? `/storage/${employee.signature}` : null;
+
+    const [activeTab, setActiveTab] = useState<string>('general');
+    const [tabStepBlockMessages, setTabStepBlockMessages] = useState<string[] | null>(null);
+    const [photoPreview, setPhotoPreview] = useState<string | null>(existingPhotoUrl);
+    const [signaturePreview, setSignaturePreview] = useState<string | null>(existingSignatureUrl);
+    const photoFileInputRef = useRef<HTMLInputElement>(null);
+    const signatureFileInputRef = useRef<HTMLInputElement>(null);
+
+    const applyPhotoFile = useCallback((file: File | null) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        setData('photo', file);
+        const reader = new FileReader();
+        reader.onload = (ev) => setPhotoPreview((ev.target?.result as string) ?? null);
+        reader.readAsDataURL(file);
+    }, [setData]);
+
+    const applySignatureFile = useCallback((file: File | null) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        setData('signature', file);
+        const reader = new FileReader();
+        reader.onload = (ev) => setSignaturePreview((ev.target?.result as string) ?? null);
+        reader.readAsDataURL(file);
+    }, [setData]);
+
+    const clearPhotoUpload = useCallback(() => {
+        setData('photo', null);
+        setPhotoPreview(existingPhotoUrl);
+        if (photoFileInputRef.current) photoFileInputRef.current.value = '';
+    }, [setData, existingPhotoUrl]);
+
+    const clearSignatureUpload = useCallback(() => {
+        setData('signature', null);
+        setSignaturePreview(existingSignatureUrl);
+        if (signatureFileInputRef.current) signatureFileInputRef.current.value = '';
+    }, [setData, existingSignatureUrl]);
+
+    const [addVillageModal, setAddVillageModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string; error: string; saving: boolean }>({ open: false, target: 'present', name: '', error: '', saving: false });
+    const [addUnionModal, setAddUnionModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string; error: string; saving: boolean }>({ open: false, target: 'present', name: '', error: '', saving: false });
 
     useEffect(() => {
         if (!data.bank?.bank_name) {
@@ -503,207 +710,259 @@ export default function EmployeeEdit({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const branchItems: ComboSelectItem<string>[] = branches.map((b) => {
-        const code = (b.branch_code ?? '').trim();
-        const label = code ? `${b.name} (${code})` : b.name;
-        return { value: String(b.id), label, keywords: `${b.name} ${code}`.trim() };
-    });
-    const bankBranchItems: ComboSelectItem<string>[] = useMemo(
-        () =>
-            branches.map((b) => {
-                const code = (b.branch_code ?? '').trim();
-                const label = code ? `${b.name} (${code})` : b.name;
-                return { value: label, label, keywords: `${b.name} ${code}`.trim() };
-            }),
-        [branches],
-    );
+    const branchItems: ComboSelectItem<string>[] = useMemo(() => branchComboSelectItems(branches), [branches]);
     const deptItems: ComboSelectItem<string>[] = departments.map((d) => ({ value: String(d.id), label: d.name }));
     const desigItems: ComboSelectItem<string>[] = designations.map((d) => ({ value: String(d.id), label: d.name }));
-    const employeeTypeItems: ComboSelectItem<string>[] = employeeTypes.map((t) => ({ value: String(t.id), label: t.name, keywords: `probation ${t.probation_months}` }));
-    const programItems: ComboSelectItem<string>[] = programs.map((p) => ({ value: String(p.id), label: p.name, keywords: p.type }));
+    const employeeTypeItems: ComboSelectItem<string>[] = employeeTypes.map((t) => ({ value: String(t.id), label: t.name }));
+    const programItems: ComboSelectItem<string>[] = programs.map((p) => ({ value: String(p.id), label: p.name }));
     const projectItems: ComboSelectItem<string>[] = projects.map((p) => ({ value: String(p.id), label: p.name }));
-    const religionItems: ComboSelectItem<string>[] = [
-        { value: 'Islam', label: 'Islam' },
-        { value: 'Hindu', label: 'Hindu' },
-        { value: 'Christian', label: 'Christian' },
-        { value: 'Buddhist', label: 'Buddhist' },
-        { value: 'Sikh', label: 'Sikh' },
-        { value: 'Jain', label: 'Jain' },
-        { value: 'Other', label: 'Other' },
-    ];
+
+    const locationCascade = useLocationCascade();
+    const presentDistrict = data.addresses[0]?.district ?? '';
+    const presentUpazila = data.addresses[0]?.upazila ?? '';
+    const permanentDistrict = data.addresses[1]?.district ?? '';
+    const permanentUpazila = data.addresses[1]?.upazila ?? '';
+
+    usePrefetchLocationCascade(locationCascade, data.addresses);
+
+    useEffect(() => {
+        if (presentDistrict.trim()) {
+            void locationCascade.loadUpazilas(presentDistrict);
+        }
+    }, [presentDistrict, locationCascade.loadUpazilas]);
+
+    useEffect(() => {
+        if (presentUpazila.trim()) {
+            void locationCascade.loadUnions(presentUpazila);
+        }
+    }, [presentUpazila, locationCascade.loadUnions]);
+
+    useEffect(() => {
+        if (permanentDistrict.trim()) {
+            void locationCascade.loadUpazilas(permanentDistrict);
+        }
+    }, [permanentDistrict, locationCascade.loadUpazilas]);
+
+    useEffect(() => {
+        if (permanentUpazila.trim()) {
+            void locationCascade.loadUnions(permanentUpazila);
+        }
+    }, [permanentUpazila, locationCascade.loadUnions]);
 
     const divisionItems: ComboSelectItem<string>[] = (locations?.divisions ?? []).map((d: string) => ({ value: d, label: d }));
-    const districtItems: ComboSelectItem<string>[] = ((locations?.districts?.[data.addresses?.[0]?.division] ?? []) as string[]).map((d) => ({ value: d, label: d }));
-    const upazilaItems: ComboSelectItem<string>[] = ((locations?.upazilas?.[data.addresses?.[0]?.district] ?? []) as string[]).map((u) => ({ value: u, label: u }));
+    const districtItems: ComboSelectItem<string>[] = ((locations?.districts?.[data.addresses[0]?.division] ?? []) as string[]).map((d) => ({ value: d, label: d }));
+    const upazilaItems: ComboSelectItem<string>[] = (locationCascade.upazilas[presentDistrict] ?? []).map((u) => ({ value: u, label: u }));
     const [extraVillages, setExtraVillages] = useState<Record<string, string[]>>({});
-    const presentUnions = useMemo(() => {
-        return ((locations?.unions?.[data.addresses?.[0]?.upazila] ?? []) as LocationUnion[]) || [];
-    }, [locations, data.addresses]);
-    const presentUnionItems: ComboSelectItem<string>[] = useMemo(
-        () => presentUnions.map((u) => ({ value: u.name, label: u.name, keywords: u.type })),
-        [presentUnions]
-    );
-    const presentSelectedUnion = useMemo(() => {
-        const name = data.addresses?.[0]?.union || '';
-        return presentUnions.find((u) => u.name === name) ?? null;
-    }, [data.addresses, presentUnions]);
+    const [extraUnions, setExtraUnions] = useState<Record<string, LocationUnion[]>>({});
+
+    const presentUnions = useMemo(() => locationCascade.unions[presentUpazila] ?? [], [locationCascade.unions, presentUpazila]);
+    const presentUnionItems: ComboSelectItem<string>[] = useMemo(() => {
+        const key = `p:${data.addresses[0]?.upazila || ''}`;
+        const extra = extraUnions[key] ?? [];
+        const merged = [...presentUnions];
+        for (const u of extra) {
+            if (!merged.some((m) => m.name === u.name)) merged.push(u);
+        }
+        return merged.map((u) => ({ value: u.name, label: u.name }));
+    }, [presentUnions, extraUnions, data.addresses]);
+    const presentSelectedUnion = useMemo(() => presentUnions.find((u) => u.name === data.addresses[0]?.union) ?? null, [data.addresses, presentUnions]);
     const presentVillageItems: ComboSelectItem<string>[] = useMemo(() => {
         const base = presentSelectedUnion?.villages ?? [];
-        const key = `p:${data.addresses?.[0]?.upazila || ''}:${data.addresses?.[0]?.union || ''}`;
-        const extra = extraVillages[key] ?? [];
-        const merged = Array.from(new Set([...base, ...extra]));
-        const selected = (data.addresses?.[0]?.village ?? '').trim();
-        if (selected && !merged.includes(selected)) merged.push(selected);
-        return merged.map((v) => ({ value: v, label: v }));
+        const key = `p:${data.addresses[0]?.upazila || ''}:${data.addresses[0]?.union || ''}`;
+        return Array.from(new Set([...base, ...(extraVillages[key] ?? [])])).map((v) => ({ value: v, label: v }));
     }, [presentSelectedUnion, extraVillages, data.addresses]);
 
-    const permDistrictItems: ComboSelectItem<string>[] = ((locations?.districts?.[data.addresses?.[1]?.division] ?? []) as string[]).map((d) => ({ value: d, label: d }));
-    const permUpazilaItems: ComboSelectItem<string>[] = ((locations?.upazilas?.[data.addresses?.[1]?.district] ?? []) as string[]).map((u) => ({ value: u, label: u }));
-    const permUnions = useMemo(() => {
-        return ((locations?.unions?.[data.addresses?.[1]?.upazila] ?? []) as LocationUnion[]) || [];
-    }, [locations, data.addresses]);
-    const permUnionItems: ComboSelectItem<string>[] = useMemo(
-        () => permUnions.map((u) => ({ value: u.name, label: u.name, keywords: u.type })),
-        [permUnions]
-    );
-    const permSelectedUnion = useMemo(() => {
-        const name = data.addresses?.[1]?.union || '';
-        return permUnions.find((u) => u.name === name) ?? null;
-    }, [data.addresses, permUnions]);
+    const permDistrictItems: ComboSelectItem<string>[] = ((locations?.districts?.[data.addresses[1]?.division] ?? []) as string[]).map((d) => ({ value: d, label: d }));
+    const permUpazilaItems: ComboSelectItem<string>[] = (locationCascade.upazilas[permanentDistrict] ?? []).map((u) => ({ value: u, label: u }));
+    const permUnions = useMemo(() => locationCascade.unions[permanentUpazila] ?? [], [locationCascade.unions, permanentUpazila]);
+    const permUnionItems: ComboSelectItem<string>[] = useMemo(() => {
+        const key = `r:${data.addresses[1]?.upazila || ''}`;
+        const extra = extraUnions[key] ?? [];
+        const merged = [...permUnions];
+        for (const u of extra) {
+            if (!merged.some((m) => m.name === u.name)) merged.push(u);
+        }
+        return merged.map((u) => ({ value: u.name, label: u.name }));
+    }, [permUnions, extraUnions, data.addresses]);
+    const permSelectedUnion = useMemo(() => permUnions.find((u) => u.name === data.addresses[1]?.union) ?? null, [data.addresses, permUnions]);
     const permVillageItems: ComboSelectItem<string>[] = useMemo(() => {
         const base = permSelectedUnion?.villages ?? [];
-        const key = `r:${data.addresses?.[1]?.upazila || ''}:${data.addresses?.[1]?.union || ''}`;
-        const extra = extraVillages[key] ?? [];
-        const merged = Array.from(new Set([...base, ...extra]));
-        const selected = (data.addresses?.[1]?.village ?? '').trim();
-        if (selected && !merged.includes(selected)) merged.push(selected);
-        return merged.map((v) => ({ value: v, label: v }));
+        const key = `r:${data.addresses[1]?.upazila || ''}:${data.addresses[1]?.union || ''}`;
+        return Array.from(new Set([...base, ...(extraVillages[key] ?? [])])).map((v) => ({ value: v, label: v }));
     }, [permSelectedUnion, extraVillages, data.addresses]);
 
     const isSpouseRequired = ['Married', 'Widowed', 'Separated'].includes(data.marital_status);
+
+    const setOpeningDesignation = useCallback((value: string) => {
+        setData((prev) => ({ ...prev, joining_designation_id: value, last_designation_id: value }));
+    }, [setData]);
+
+    const setLastDesignation = useCallback((value: string) => {
+        setData((prev) => {
+            if (!prev.joining_designation_id) {
+                return { ...prev, joining_designation_id: value, last_designation_id: value };
+            }
+            return { ...prev, last_designation_id: value };
+        });
+    }, [setData]);
+
+    const requestTabChange = useCallback((nextTab: string) => {
+        if (!isEmployeeEditTabId(nextTab)) return;
+        const spouseRequired = ['Married', 'Widowed', 'Separated'].includes(data.marital_status);
+        const curIdx = Math.max(0, EMPLOYEE_EDIT_TAB_ORDER.indexOf(activeTab as EmployeeEditTabId));
+        const nextIdx = EMPLOYEE_EDIT_TAB_ORDER.indexOf(nextTab);
+        if (nextIdx === -1) return;
+        if (nextIdx <= curIdx) {
+            setActiveTab(nextTab);
+            setTabStepBlockMessages(null);
+            return;
+        }
+        for (let i = curIdx; i < nextIdx; i++) {
+            const t = EMPLOYEE_EDIT_TAB_ORDER[i];
+            const problems = validateEmployeeEditTab(t, data, spouseRequired);
+            if (problems.length > 0) {
+                setActiveTab(t);
+                setTabStepBlockMessages(problems);
+                return;
+            }
+        }
+        setActiveTab(nextTab);
+        setTabStepBlockMessages(null);
+    }, [activeTab, data]);
+
+    useEffect(() => {
+        if (!tabStepBlockMessages?.length) return;
+        const spouseRequired = ['Married', 'Widowed', 'Separated'].includes(data.marital_status);
+        const still = validateEmployeeEditTab(activeTab as EmployeeEditTabId, data, spouseRequired);
+        if (still.length === 0) setTabStepBlockMessages(null);
+    }, [data, activeTab, tabStepBlockMessages]);
 
     const selectedEmployeeType = useMemo(() => {
         const id = Number(data.employee_type_id || 0);
         return employeeTypes.find((t) => t.id === id) ?? null;
     }, [data.employee_type_id, employeeTypes]);
 
-    const derivedProbationMonths = selectedEmployeeType?.probation_months ?? 0;
+    const derivedProbationLabel = useMemo(() => {
+        const fromDates = formatProbationPeriodFromDates(data.joining_date, data.confirmation_date);
+        if (fromDates) return fromDates;
+        const months = selectedEmployeeType?.probation_months ?? 0;
+        return months > 0 ? `${months} month${months === 1 ? '' : 's'}` : '';
+    }, [data.joining_date, data.confirmation_date, selectedEmployeeType]);
 
     const derivedAge = useMemo(() => {
-        const raw = data.birth_date_original || data.birth_date_certificate;
-        const d = parseFormDateValue(raw);
-        if (!d) return '';
+        const raw = data.date_of_birth;
+        if (!raw) return '';
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) return '';
         const today = new Date();
         let years = today.getFullYear() - d.getFullYear();
         const m = today.getMonth() - d.getMonth();
         if (m < 0 || (m === 0 && today.getDate() < d.getDate())) years -= 1;
         return years >= 0 ? String(years) : '';
-    }, [data.birth_date_certificate, data.birth_date_original]);
+    }, [data.date_of_birth]);
 
     const [sameAsPermanent, setSameAsPermanent] = useState(false);
     const sameAsPermanentRef = useRef(false);
     sameAsPermanentRef.current = sameAsPermanent;
 
+    const canOpenUnionModal = (target: 'present' | 'permanent') => {
+        const idx = target === 'present' ? 0 : 1;
+        const a = data.addresses[idx];
+        return !!(a?.division && a?.district && a?.upazila);
+    };
+
     const canOpenVillageModal = (target: 'present' | 'permanent') => {
         const idx = target === 'present' ? 0 : 1;
-        const a = data.addresses?.[idx];
+        const a = data.addresses[idx];
         return !!(a?.division && a?.district && a?.upazila && a?.union);
     };
 
-    const buildAddressDetails = (a: any) => {
-        const parts = [a?.village, a?.union, a?.upazila, a?.district, a?.division].filter(Boolean);
-        return parts.join(', ');
-    };
-
-    const setPresentAddress = (patch: Record<string, any>) => {
-        const next = [...data.addresses];
-        next[0] = { ...next[0], ...patch };
-        next[0] = { ...next[0], address_details: buildAddressDetails(next[0]) };
-        setData('addresses', next);
-    };
-
-    const setPermanentAddress = (patch: Record<string, any>) => {
-        const next = [...data.addresses];
-        next[1] = { ...next[1], ...patch };
-        next[1] = { ...next[1], address_details: buildAddressDetails(next[1]) };
-        if (sameAsPermanentRef.current) {
-            next[0] = { ...next[0], ...next[1], type: 'present' };
-            next[0] = { ...next[0], address_details: buildAddressDetails(next[0]) };
+    const persistUnion = async (target: 'present' | 'permanent', nameRaw: string): Promise<{ ok: boolean; error?: string }> => {
+        const idx = target === 'present' ? 0 : 1;
+        const division = data.addresses[idx]?.division || '';
+        const district = data.addresses[idx]?.district || '';
+        const upazila = data.addresses[idx]?.upazila || '';
+        const name = nameRaw.trim();
+        if (!division || !district || !upazila || !name) return { ok: false, error: 'All fields are required.' };
+        const csrf = getCsrfTokenFromPage();
+        if (!csrf) return { ok: false, error: 'Security token missing.' };
+        try {
+            const res = await fetch(route('employees.unions.store'), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+                body: JSON.stringify({ _token: csrf, division, district, upazila, name }),
+            });
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) return { ok: false, error: j.message || 'Error occurred.' };
+            const createdName = j.name || name;
+            const key = `${target === 'present' ? 'p' : 'r'}:${upazila}`;
+            setExtraUnions((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { name: createdName, type: 'union', villages: [] }] }));
+            if (target === 'present') setPresentAddress({ union: createdName, village: '' });
+            else setPermanentAddress({ union: createdName, village: '' });
+            return { ok: true };
+        } catch {
+            return { ok: false, error: 'Network error.' };
         }
-        setData('addresses', next);
     };
 
     const persistVillage = async (target: 'present' | 'permanent', nameRaw: string): Promise<{ ok: boolean; error?: string }> => {
         const idx = target === 'present' ? 0 : 1;
-        const division = data.addresses?.[idx]?.division || '';
-        const district = data.addresses?.[idx]?.district || '';
-        const upazila = data.addresses?.[idx]?.upazila || '';
-        const union = data.addresses?.[idx]?.union || '';
+        const division = data.addresses[idx]?.division || '';
+        const district = data.addresses[idx]?.district || '';
+        const upazila = data.addresses[idx]?.upazila || '';
+        const union = data.addresses[idx]?.union || '';
         const name = nameRaw.trim();
-        if (!division || !district || !upazila || !union || !name) {
-            return { ok: false, error: 'Division, district, upazila, union, and village name are required.' };
-        }
+        if (!division || !district || !upazila || !union || !name) return { ok: false, error: 'All fields are required.' };
         const csrf = getCsrfTokenFromPage();
-        if (!csrf) {
-            return { ok: false, error: 'Security token missing. Refresh the page and try again.' };
-        }
+        if (!csrf) return { ok: false, error: 'Security token missing.' };
         try {
             const res = await fetch(route('employees.villages.store'), {
                 method: 'POST',
                 credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': csrf,
-                },
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
                 body: JSON.stringify({ _token: csrf, division, district, upazila, union, name }),
             });
-            const raw = await res.text();
-            let j: Record<string, unknown> = {};
-            try {
-                j = JSON.parse(raw) as Record<string, unknown>;
-            } catch {
-                j = {};
-            }
-            if (!res.ok) {
-                const msgFromServer =
-                    (typeof j.message === 'string' && j.message) ||
-                    (j.errors && typeof j.errors === 'object'
-                        ? Object.values(j.errors as Record<string, string[]>)
-                              .flat()
-                              .filter(Boolean)
-                              .join(' ')
-                        : '') ||
-                    (res.status === 419 ? 'Session expired (CSRF). Refresh the page and try again.' : '') ||
-                    (res.status === 403 ? 'You do not have permission to add villages.' : '') ||
-                    `Request failed (${res.status}).`;
-                return { ok: false, error: msgFromServer };
-            }
-            const createdName = (typeof j.name === 'string' && j.name) || name;
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) return { ok: false, error: j.message || 'Error occurred.' };
+            const createdName = j.name || name;
             const key = `${target === 'present' ? 'p' : 'r'}:${upazila}:${union}`;
-            setExtraVillages((prev) => {
-                const arr = prev[key] ?? [];
-                return { ...prev, [key]: Array.from(new Set([...arr, createdName])) };
-            });
+            setExtraVillages((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), createdName] }));
             if (target === 'present') setPresentAddress({ village: createdName });
             else setPermanentAddress({ village: createdName });
             return { ok: true };
         } catch {
-            return { ok: false, error: 'Network error. Check your connection and try again.' };
+            return { ok: false, error: 'Network error.' };
         }
     };
 
-    const openAddVillageModal = (target: 'present' | 'permanent') => {
-        if (!canOpenVillageModal(target)) return;
-        setAddVillageModal({ open: true, target, name: '', error: '', saving: false });
+    const setPresentAddress = (patch: Partial<Address>) => {
+        const [present, permanent] = normalizeEmployeeFormAddresses(data.addresses);
+        const updated: Address = { ...present, ...patch, type: 'present' };
+        updated.address_details = buildAddressDetails(updated);
+        setData('addresses', [updated, permanent]);
+    };
+
+    const setPermanentAddress = (patch: Partial<Address>) => {
+        const [present, permanent] = normalizeEmployeeFormAddresses(data.addresses);
+        const updated: Address = { ...permanent, ...patch, type: 'permanent' };
+        updated.address_details = buildAddressDetails(updated);
+        if (sameAsPermanentRef.current) {
+            const synced: Address = { ...present, ...updated, type: 'present' };
+            synced.address_details = buildAddressDetails(synced);
+            setData('addresses', [synced, updated]);
+            return;
+        }
+        setData('addresses', [present, updated]);
     };
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+        setTabStepBlockMessages(null);
         const nidErr = getNidOrSmartCardClientError(data.nid);
         if (nidErr) {
             setActiveTab('general');
+            setTabStepBlockMessages([nidErr]);
             return;
         }
         post(route('employees.update', employee.id), {
@@ -711,6 +970,7 @@ export default function EmployeeEdit({
             forceFormData: true,
             onSuccess: () => {
                 clearEmployeeDraft(editDraftKey);
+                setTabStepBlockMessages(null);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             },
             onError: (errs) => {
@@ -721,1271 +981,1049 @@ export default function EmployeeEdit({
         });
     };
 
+    const handleClearDraft = () => {
+        if (window.confirm('Are you sure you want to discard your draft changes and restore original profile values?')) {
+            clearEmployeeDraft(editDraftKey);
+            const original = finalizeEmployeeEditForm(employeeToFormBase(employee));
+            setData({ ...original, photo: null, signature: null } as any);
+            setPhotoPreview(employee.photo ? `/storage/${employee.photo}` : null);
+            setSignaturePreview(employee.signature ? `/storage/${employee.signature}` : null);
+            setActiveTab('general');
+            setTabStepBlockMessages(null);
+        }
+    };
+
+    const tabLabels: Record<EmployeeEditTabId, { title: string; desc: string; icon: any }> = {
+        general: { title: 'General Info', desc: 'Identity & contact', icon: User },
+        education: { title: 'Education', desc: 'Degrees & boards', icon: GraduationCap },
+        salary: { title: 'Salary Details', desc: 'Payscale & grade', icon: DollarSign },
+        bank: { title: 'Bank Account', desc: 'Payment routing', icon: Building2 },
+        nominee: { title: 'Nominees', desc: 'Beneficiaries', icon: Users },
+        guarantor: { title: 'Guarantor', desc: 'References & cheques', icon: ShieldCheck },
+        collateral: { title: 'Collateral', desc: 'Security documents', icon: Shield },
+        asset: { title: 'Assets', desc: 'Company devices', icon: Package },
+        experience: { title: 'Experience', desc: 'Employment history', icon: Briefcase },
+        training: { title: 'Trainings', desc: 'Courses & skills', icon: Award },
+        documents: { title: 'Documents', desc: 'Attachments & scans', icon: FileText },
+    };
+
+    const getTabStepState = (tabId: EmployeeEditTabId) => {
+        const isTabActive = activeTab === tabId;
+        const clientProblems = validateEmployeeEditTab(tabId, data, isSpouseRequired);
+        const hasServerErrors = Object.keys(errors).some(
+            (k) => errors[k] && errorFieldKeyToEmployeeEditTab(k) === tabId
+        );
+        const hasProblems = clientProblems.length > 0 || hasServerErrors;
+        const activeIdx = EMPLOYEE_EDIT_TAB_ORDER.indexOf(activeTab as EmployeeEditTabId);
+        const tabIdx = EMPLOYEE_EDIT_TAB_ORDER.indexOf(tabId);
+        const isCompleted = tabIdx < activeIdx && !hasProblems;
+
+        return {
+            isActive: isTabActive,
+            isCompleted,
+            isInvalid: hasProblems && (tabIdx <= activeIdx),
+            hasProblems,
+        };
+    };
+
     return (
         <Layout>
             <Head title={`Edit Employee: ${employee.name_en || employee.pin || employee.id}`} />
-            <div className="container mx-auto py-8">
-                <div className="mb-6">
-                    <Link href={route('employees.index')} className="flex w-fit items-center text-gray-500 hover:text-gray-700">
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        <span>Back to Employees</span>
-                    </Link>
+
+            <div className="max-w-[1300px] mx-auto py-8 px-4 sm:px-6 lg:px-8">
+                {/* Minimal Header */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-100 pb-6 mb-8">
+                    <div className="space-y-1.5">
+                        <Link href={route('employees.index')} className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-emerald-600 transition-colors uppercase tracking-wider mb-1">
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                            <span>Back to Directory</span>
+                        </Link>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900">Edit Employee Profile</h1>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
+                                <Sparkles className="h-3.5 w-3.5 animate-pulse" /> PIN: {employee.pin || 'N/A'}
+                            </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-zinc-500 max-w-2xl">
+                            Updating record for <strong className="text-zinc-800">{employee.name_en}</strong>. Form progress will auto-draft.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap self-start sm:self-center">
+                        <div className="flex items-center gap-1.5 text-zinc-500 text-xs font-semibold bg-zinc-50 px-3 py-1.5 rounded-xl border border-zinc-200/60 shadow-sm">
+                            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>Draft Saved</span>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={handleClearDraft}
+                            className="h-8 px-2.5 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl flex items-center gap-1.5 transition-colors"
+                            title="Discard draft and reset form"
+                        >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            <span>Reset Form</span>
+                        </Button>
+                    </div>
                 </div>
 
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Edit Employee</h1>
-                    <p className="mt-1 text-gray-500">Update employee details</p>
-                </div>
-
-                {flash?.success && (
-                    <Alert className="mb-6 border-emerald-200 bg-emerald-50 text-emerald-950">
-                        <AlertTitle>Saved</AlertTitle>
-                        <AlertDescription>{flash.success}</AlertDescription>
-                    </Alert>
-                )}
-
-                {flash?.error && (
-                    <Alert variant="destructive" className="mb-6">
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>{flash.error}</AlertDescription>
-                    </Alert>
-                )}
-
-                {submitError && (
-                    <Alert variant="destructive" className="mb-6">
-                        <AlertTitle>Could not save</AlertTitle>
-                        <AlertDescription>{submitError}</AlertDescription>
-                    </Alert>
-                )}
-
-                {validationMessages.length > 0 && (
-                    <Alert variant="destructive" className="mb-6">
-                        <AlertTitle>Please fix the following</AlertTitle>
-                        <AlertDescription>
-                            <ul className="mt-2 list-disc space-y-1 pl-4 text-sm">
-                                {validationMessages.map((msg) => (
-                                    <li key={msg}>{msg}</li>
-                                ))}
-                            </ul>
+                {/* Validation Banner */}
+                {(tabStepBlockMessages?.length || serverFieldErrors.length > 0 || submitError) ? (
+                    <Alert variant="destructive" className="mb-6 rounded-2xl border-red-200 bg-red-50/50 shadow-sm">
+                        <AlertTitle className="font-bold flex items-center gap-2 text-red-800">
+                            <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+                            {serverFieldErrors.length > 0 || submitError ? 'Submission Failed' : 'Action Required'}
+                        </AlertTitle>
+                        <AlertDescription className="space-y-2 text-xs text-red-700 mt-2">
+                            {tabStepBlockMessages && tabStepBlockMessages.length > 0 && (
+                                <div>
+                                    <p className="font-bold">Please complete or correct the following fields in this section:</p>
+                                    <ul className="mt-1 list-disc pl-5 space-y-0.5 font-medium">
+                                        {tabStepBlockMessages.map((m, i) => <li key={i}>{m}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                            {serverFieldErrors.length > 0 && (
+                                <div>
+                                    <p className="font-bold">Errors returned from server:</p>
+                                    <ul className="mt-1 list-disc pl-5 space-y-0.5 font-medium max-h-40 overflow-y-auto">
+                                        {serverFieldErrors.map((m, i) => <li key={i}>{m}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                            {submitError && <p className="font-semibold">{submitError}</p>}
                         </AlertDescription>
                     </Alert>
-                )}
+                ) : null}
 
+                {/* Main Setup Layout */}
                 <form onSubmit={submit}>
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="mb-6 grid w-full grid-cols-2 gap-1 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-11">
-                            <TabsTrigger value="general">General Setup</TabsTrigger>
-                            <TabsTrigger value="education">Educational</TabsTrigger>
-                            <TabsTrigger value="salary">Salary</TabsTrigger>
-                            <TabsTrigger value="bank">Bank</TabsTrigger>
-                            <TabsTrigger value="nominee">Nominee</TabsTrigger>
-                            <TabsTrigger value="guarantor">Guarantor</TabsTrigger>
-                            <TabsTrigger value="collateral">Collateral</TabsTrigger>
-                            <TabsTrigger value="asset">Org. Asset</TabsTrigger>
-                            <TabsTrigger value="experience">Experience</TabsTrigger>
-                            <TabsTrigger value="training">Training</TabsTrigger>
-                            <TabsTrigger value="documents">Documents</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="general">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">General Setup</CardTitle>
-                                    <CardDescription className="text-xs">Edit identity, org, address and uploads</CardDescription>
-                                </CardHeader>
-                                <CardContent className="pt-6 text-sm">
-                                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                                        {/* Left column */}
-                                        <div className="space-y-2">
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Branch Name *</Label>
-                                                <ComboSelect value={data.current_branch_id || null} onChange={(v) => setData('current_branch_id', v ?? '')} items={branchItems} placeholder="Select branch" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Employment Type</Label>
-                                                <ComboSelect value={data.employee_type_id || null} onChange={(v) => setData('employee_type_id', v ?? '')} items={employeeTypeItems} placeholder="Select employment type" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Employee Pin *</Label>
-                                                <Input value={data.pin} onChange={(e) => setData('pin', e.target.value)} />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Employee Name *</Label>
-                                                <Input value={data.name_en} onChange={(e) => setData('name_en', e.target.value)} />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Bengali Name</Label>
-                                                <Input value={data.name_bn} onChange={(e) => setData('name_bn', e.target.value)} />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Gender</Label>
-                                                <ComboSelect value={data.gender || null} onChange={(v) => setData('gender', v ?? '')} items={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }, { value: 'other', label: 'Other' }]} placeholder="Select gender" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Religion</Label>
-                                                <ComboSelect value={data.religion || null} onChange={(v) => setData('religion', v ?? '')} items={religionItems} placeholder="Select religion" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Marital Status</Label>
-                                                <ComboSelect
-                                                    value={data.marital_status || null}
-                                                    onChange={(v) => setData('marital_status', v ?? '')}
-                                                    items={[
-                                                        { value: 'Single', label: 'Single' },
-                                                        { value: 'Never Married', label: 'Never Married' },
-                                                        { value: 'Unmarried', label: 'Unmarried' },
-                                                        { value: 'Separated', label: 'Separated' },
-                                                        { value: 'Divorced', label: 'Divorced' },
-                                                        { value: 'Widowed', label: 'Widowed' },
-                                                        { value: 'Married', label: 'Married' },
-                                                    ]}
-                                                    placeholder="Select Status"
-                                                />
-                                            </div>
-                                            {isSpouseRequired && (
-                                                <>
-                                                    <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                        <Label className="pt-2 text-xs">Spouse Name *</Label>
-                                                        <Input value={data.spouse_name} onChange={(e) => setData('spouse_name', e.target.value)} />
-                                                    </div>
-                                                    <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                        <Label className="pt-2 text-xs">Spouse Contact *</Label>
-                                                        <Input value={data.spouse_mobile} onChange={(e) => setData('spouse_mobile', e.target.value)} />
-                                                    </div>
-                                                </>
-                                            )}
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Birth Date (Certificate)</Label>
-                                                <Input
-                                                    placeholder={DISPLAY_DATE_FMT}
-                                                    autoComplete="off"
-                                                    value={data.birth_date_certificate}
-                                                    onChange={(e) => setData('birth_date_certificate', e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Birth Date (Original)</Label>
-                                                <Input
-                                                    placeholder={DISPLAY_DATE_FMT}
-                                                    autoComplete="off"
-                                                    value={data.birth_date_original}
-                                                    onChange={(e) => setData('birth_date_original', e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Age</Label>
-                                                <Input value={derivedAge} readOnly className="bg-gray-100" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Blood Group</Label>
-                                                <ComboSelect value={data.blood_group || null} onChange={(v) => setData('blood_group', v ?? '')} items={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((b) => ({ value: b, label: b }))} placeholder="Select blood group" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Joining Date *</Label>
-                                                <Input
-                                                    placeholder={DISPLAY_DATE_FMT}
-                                                    autoComplete="off"
-                                                    value={data.joining_date}
-                                                    onChange={(e) => setData('joining_date', e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Probation Period</Label>
-                                                <Input value={derivedProbationMonths ? `${derivedProbationMonths} months` : ''} readOnly className="bg-gray-100" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Confirmation Date</Label>
-                                                <Input
-                                                    placeholder={DISPLAY_DATE_FMT}
-                                                    autoComplete="off"
-                                                    value={data.confirmation_date}
-                                                    onChange={(e) => setData('confirmation_date', e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Department *</Label>
-                                                <ComboSelect value={data.department_id || null} onChange={(v) => setData('department_id', v ?? '')} items={deptItems} placeholder="Select department" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Designation *</Label>
-                                                <ComboSelect value={data.joining_designation_id || null} onChange={(v) => setData('joining_designation_id', v ?? '')} items={desigItems} placeholder="Select designation" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Program</Label>
-                                                <ComboSelect value={data.program_id || null} onChange={(v) => setData('program_id', v ?? '')} items={programItems} placeholder="Core" />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Project</Label>
-                                                <ComboSelect value={data.project_id || null} onChange={(v) => setData('project_id', v ?? '')} items={projectItems} placeholder="Project" />
-                                            </div>
-                                        </div>
-
-                                        {/* Middle column */}
-                                        <div className="space-y-2">
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">National ID or Smart Card</Label>
-                                                <div className="space-y-1">
-                                                    <Input
-                                                        inputMode="numeric"
-                                                        autoComplete="off"
-                                                        maxLength={17}
-                                                        aria-invalid={!!(errors.nid || errors.smart_card_number || nidOrSmartClientError)}
-                                                        value={data.nid || ''}
-                                                        onChange={(e) => {
-                                                            const digits = e.target.value.replace(/\D/g, '').slice(0, 17);
-                                                            setData('nid', digits);
-                                                        }}
-                                                        placeholder="10, 13, or 17 digits"
-                                                        className={
-                                                            errors.nid || errors.smart_card_number || nidOrSmartClientError
-                                                                ? 'border-destructive focus-visible:ring-destructive/25'
-                                                                : undefined
-                                                        }
-                                                    />
-                                                    <p className="text-[11px] text-muted-foreground">Digits only: 10, 13, or 17 characters.</p>
-                                                    {(errors.nid || errors.smart_card_number || nidOrSmartClientError) && (
-                                                        <p className="text-xs text-destructive" role="alert">
-                                                            {errors.nid || errors.smart_card_number || nidOrSmartClientError}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <Label className="flex cursor-pointer flex-row flex-nowrap items-center gap-2 py-1 text-xs leading-none">
-                                                <span className="select-none">Is Project Employee</span>
-                                                <input
-                                                    type="checkbox"
-                                                    className="h-4 w-4 shrink-0"
-                                                    checked={!!data.is_project_employee}
-                                                    onChange={(e) => setData('is_project_employee', e.target.checked)}
-                                                />
-                                            </Label>
-                                            <Label className="flex cursor-pointer flex-row flex-nowrap items-center gap-2 py-1 text-xs leading-none">
-                                                <span className="select-none">Is Custodian</span>
-                                                <input type="checkbox" className="h-4 w-4 shrink-0" checked={!!data.is_custodian} onChange={(e) => setData('is_custodian', e.target.checked)} />
-                                            </Label>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Identification Mark</Label>
-                                                <Input value={data.identification_mark || ''} onChange={(e) => setData('identification_mark', e.target.value)} />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Email Address</Label>
-                                                <Input type="email" value={data.email || ''} onChange={(e) => setData('email', e.target.value)} />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Mobile No(Personal) *</Label>
-                                                <Input value={data.mobile_personal || ''} onChange={(e) => setData('mobile_personal', e.target.value)} />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Mobile No(Official)</Label>
-                                                <Input value={data.mobile_official || ''} onChange={(e) => setData('mobile_official', e.target.value)} />
-                                            </div>
-                                            <div className="pt-2 text-xs font-medium text-muted-foreground">Permanent Address</div>
-
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Division</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[1]?.division || null}
-                                                    onChange={(v) => setPermanentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' })}
-                                                    items={divisionItems}
-                                                    placeholder="Division"
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">District</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[1]?.district || null}
-                                                    onChange={(v) => setPermanentAddress({ district: v ?? '', upazila: '', union: '', village: '' })}
-                                                    items={permDistrictItems}
-                                                    placeholder="District"
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Thana/Upazilla</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[1]?.upazila || null}
-                                                    onChange={(v) => setPermanentAddress({ upazila: v ?? '', union: '', village: '' })}
-                                                    items={permUpazilaItems}
-                                                    placeholder="Upazila"
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Union</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[1]?.union || null}
-                                                    onChange={(v) => setPermanentAddress({ union: v ?? '', village: '' })}
-                                                    items={permUnionItems}
-                                                    placeholder="Union"
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Village</Label>
-                                                <div className="flex gap-2">
-                                                    <div className="flex-1">
-                                                        <ComboSelect
-                                                            value={data.addresses?.[1]?.village || null}
-                                                            onChange={(v) => setPermanentAddress({ village: v ?? '' })}
-                                                            items={permVillageItems}
-                                                            placeholder="Select Village"
-                                                        />
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        onClick={() => openAddVillageModal('permanent')}
-                                                        title="Add village"
-                                                        disabled={!canOpenVillageModal('permanent')}
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-
-                                            <Label className="flex cursor-pointer flex-row flex-nowrap items-center gap-2 py-1 text-xs leading-none">
-                                                <span className="select-none">Same as Permanent Address</span>
-                                                <input
-                                                    type="checkbox"
-                                                    className="h-4 w-4 shrink-0"
-                                                    checked={sameAsPermanent}
-                                                    onChange={(e) => {
-                                                        const checked = e.target.checked;
-                                                        setSameAsPermanent(checked);
-                                                        if (!checked) return;
-                                                        const next = [...data.addresses];
-                                                        next[0] = { ...next[0], ...next[1], type: 'present' };
-                                                        next[0] = { ...next[0], address_details: buildAddressDetails(next[0]) };
-                                                        setData('addresses', next);
-                                                    }}
-                                                />
-                                            </Label>
-
-                                            <div className="pt-2 text-xs font-medium text-muted-foreground">Present Address</div>
-
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Division</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[0]?.division || null}
-                                                    onChange={(v) => {
-                                                        setPresentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' });
-                                                    }}
-                                                    items={divisionItems}
-                                                    placeholder="Division"
-                                                    disabled={sameAsPermanent}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">District</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[0]?.district || null}
-                                                    onChange={(v) => {
-                                                        setPresentAddress({ district: v ?? '', upazila: '', union: '', village: '' });
-                                                    }}
-                                                    items={districtItems}
-                                                    placeholder="District"
-                                                    disabled={sameAsPermanent}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Thana/Upazilla</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[0]?.upazila || null}
-                                                    onChange={(v) => {
-                                                        setPresentAddress({ upazila: v ?? '', union: '', village: '' });
-                                                    }}
-                                                    items={upazilaItems}
-                                                    placeholder="Upazila"
-                                                    disabled={sameAsPermanent}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Union</Label>
-                                                <ComboSelect
-                                                    value={data.addresses?.[0]?.union || null}
-                                                    onChange={(v) => {
-                                                        setPresentAddress({ union: v ?? '', village: '' });
-                                                    }}
-                                                    items={presentUnionItems}
-                                                    placeholder="Union"
-                                                    disabled={sameAsPermanent}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-[150px,1fr] items-start gap-2">
-                                                <Label className="pt-2 text-xs">Village</Label>
-                                                <div className="flex gap-2">
-                                                    <div className="flex-1">
-                                                        <ComboSelect
-                                                            value={data.addresses?.[0]?.village || null}
-                                                            onChange={(v) => {
-                                                                setPresentAddress({ village: v ?? '' });
-                                                            }}
-                                                            items={presentVillageItems}
-                                                            placeholder="Select Village"
-                                                            disabled={sameAsPermanent}
-                                                        />
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        onClick={() => openAddVillageModal('present')}
-                                                        title="Add village"
-                                                        disabled={sameAsPermanent || !canOpenVillageModal('present')}
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Right column */}
-                                        <div className="space-y-4">
-                                            <div className="rounded-md border p-3">
-                                                <div className="mb-2 text-xs font-medium">Picture</div>
-                                                {photoPreview ? (
-                                                    <img src={photoPreview} className="h-36 w-36 rounded object-cover" alt="Preview" />
-                                                ) : (
-                                                    <div className="flex h-36 w-36 items-center justify-center rounded bg-gray-100 text-xs text-muted-foreground">
-                                                        No photo
-                                                    </div>
-                                                )}
-                                                <div className="mt-3 space-y-2">
-                                                    <Label className="text-xs">Photo Upload</Label>
-                                                    <Input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        onChange={(e) => {
-                                                            const file = e.target.files?.[0] ?? null;
-                                                            setData('photo', file);
-                                                            if (!file) return setPhotoPreview(null);
-                                                            const reader = new FileReader();
-                                                            reader.onload = (ev) => setPhotoPreview((ev.target?.result as string) ?? null);
-                                                            reader.readAsDataURL(file);
-                                                        }}
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="rounded-md border p-3">
-                                                <div className="mb-2 text-xs font-medium">Signature</div>
-                                                {signaturePreview ? (
-                                                    <img src={signaturePreview} className="h-20 w-full rounded object-cover" alt="Signature preview" />
-                                                ) : (
-                                                    <div className="flex h-20 w-full items-center justify-center rounded bg-gray-100 text-xs text-muted-foreground">
-                                                        No signature
-                                                    </div>
-                                                )}
-                                                <div className="mt-3 space-y-2">
-                                                    <Label className="text-xs">Employee Signature</Label>
-                                                    <Input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        onChange={(e) => {
-                                                            const file = e.target.files?.[0] ?? null;
-                                                            setData('signature', file);
-                                                            if (!file) return setSignaturePreview(null);
-                                                            const reader = new FileReader();
-                                                            reader.onload = (ev) => setSignaturePreview((ev.target?.result as string) ?? null);
-                                                            reader.readAsDataURL(file);
-                                                        }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('education')}>
-                                        Next: Educational Setup
-                                    </Button>
-                                    <Button type="submit" disabled={processing} className="bg-green-600 hover:bg-green-700">
-                                        {processing ? 'Updating...' : 'Update Employee'}
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="education">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Educational Setup</CardTitle>
-                                    <CardDescription className="text-xs">Edit education items</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
-                                    <div className="flex justify-end">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                                setData('educations', [
-                                                    ...data.educations,
-                                                    { degree: '', institute: '', group_name: '', board: '', subject: '', result_type: '', result_value: '' },
-                                                ])
-                                            }
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" /> Add Education
-                                        </Button>
-                                    </div>
-                                    {data.educations.map((ed: any, idx: number) => (
-                                        <div key={idx} className="rounded-md border p-3">
-                                            <div className="mb-2 flex items-center justify-between">
-                                                <div className="text-sm font-medium">Item {idx + 1}</div>
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('educations', data.educations.filter((_: any, i: number) => i !== idx))}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className={RF_ROW}>
-                                                <div className={RF_CELL}>
-                                                    <Label className="text-xs">Degree</Label>
-                                                    <Input value={ed.degree || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, degree: e.target.value } : x)))} placeholder="e.g. SSC" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Label className="text-xs">Institute</Label>
-                                                    <Input value={ed.institute || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, institute: e.target.value } : x)))} />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Label className="text-xs">Board</Label>
-                                                    <ComboSelect value={ed.board || null} onChange={(v) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, board: v ?? '' } : x)))} items={educationBoards.map((b: string) => ({ value: b, label: b }))} placeholder="Select board" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Label className="text-xs">Group</Label>
-                                                    <Input value={ed.group_name || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, group_name: e.target.value } : x)))} />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Label className="text-xs">Subject</Label>
-                                                    <Input value={ed.subject || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, subject: e.target.value } : x)))} />
-                                                </div>
-                                                <div className={`${RF_CELL} min-w-[17rem] shrink-0 lg:min-w-[19rem]`}>
-                                                    <Label className="text-xs">Result</Label>
-                                                    <div className="flex gap-2">
-                                                        <div className="w-[9.75rem] shrink-0">
-                                                            <ComboSelect
-                                                                value={ed.result_type || null}
-                                                                onChange={(v) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, result_type: (v ?? '') as any } : x)))}
-                                                                items={[
-                                                                    { value: 'gpa', label: 'GPA' },
-                                                                    { value: 'cgpa', label: 'CGPA' },
-                                                                    { value: 'other', label: 'Other' },
-                                                                ]}
-                                                                placeholder="Type"
-                                                            />
-                                                        </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <Input value={ed.result_value || ''} onChange={(e) => setData('educations', data.educations.map((x: any, i: number) => (i === idx ? { ...x, result_value: e.target.value } : x)))} placeholder="Value" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('general')}>
-                                        Back
-                                    </Button>
-                                    <Button type="submit" disabled={processing}>
-                                        Save
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        {/* For brevity: other tabs mirror create.tsx behavior and persist into same fields */}
-                        <TabsContent value="salary">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Salary</CardTitle>
-                                    <CardDescription className="text-xs">Payscale, grade, and step for payroll</CardDescription>
-                                </CardHeader>
-                                <CardContent className="pt-6">
-                                    <EmployeeSalaryAssignment
-                                        payscales={payscales}
-                                        grades={payrollGrades}
-                                        steps={payrollSteps}
-                                        payscaleId={data.payscale_id}
-                                        salaryGradeId={data.salary_grade_id}
-                                        salaryStepId={data.salary_step_id}
-                                        basicSalary={data.basic_salary}
-                                        onPayscaleIdChange={(v) => setData('payscale_id', v)}
-                                        onSalaryGradeIdChange={(v) => setData('salary_grade_id', v)}
-                                        onSalaryStepIdChange={(v) => setData('salary_step_id', v)}
-                                        onBasicSalaryChange={(v) => setData('basic_salary', v)}
-                                        errors={errors}
-                                    />
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('education')}>Back</Button>
-                                    <Button type="button" onClick={() => setActiveTab('bank')}>Next: Bank</Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="bank">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Bank Setup</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">Bank Name</Label>
-                                            <ComboSelect
-                                                value={data.bank.bank_name || null}
-                                                onChange={(v) => setData('bank', { ...data.bank, bank_name: v ?? '' })}
-                                                items={banks.map((b: string) => ({ value: b, label: b }))}
-                                                placeholder="Select bank"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">Branch Name</Label>
-                                            <ComboSelect
-                                                value={data.bank.branch_name || null}
-                                                onChange={(v) => setData('bank', { ...data.bank, branch_name: v ?? '' })}
-                                                items={bankBranchItems}
-                                                placeholder="e.g. Naogaon Sadar (0001)"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">Account No</Label>
-                                            <Input value={data.bank.account_no} onChange={(e) => setData('bank', { ...data.bank, account_no: e.target.value })} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">Account Type</Label>
-                                            <ComboSelect
-                                                value={data.bank.account_type || null}
-                                                onChange={(v) => setData('bank', { ...data.bank, account_type: (v ?? '') as any })}
-                                                items={[
-                                                    { value: 'current', label: 'Current' },
-                                                    { value: 'savings', label: 'Savings' },
-                                                ]}
-                                                placeholder="Select type"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs">Bank Address</Label>
-                                        <Textarea rows={2} value={data.bank.bank_address} onChange={(e) => setData('bank', { ...data.bank, bank_address: e.target.value })} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs">Remark</Label>
-                                        <Textarea rows={2} value={data.bank.remark} onChange={(e) => setData('bank', { ...data.bank, remark: e.target.value })} />
-                                    </div>
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('salary')}>
-                                        Back
-                                    </Button>
-                                    <Button type="button" onClick={() => setActiveTab('nominee')}>
-                                        Next: Nominee
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="nominee">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Nominee</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
-                                    <div className="flex justify-end">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setData('nominees', [...data.nominees, { name: '', relation: '', date_of_birth: '', share: '', contact: '' }])}
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" /> Add Nominee
-                                        </Button>
-                                    </div>
-                                    {data.nominees.map((n: any, idx: number) => (
-                                        <div key={idx} className="rounded-md border p-3">
-                                            <div className="mb-2 flex items-center justify-between">
-                                                <div className="text-sm font-medium">Nominee {idx + 1}</div>
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('nominees', data.nominees.filter((_: any, i: number) => i !== idx))}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className={RF_ROW}>
-                                                <div className={RF_CELL}>
-                                                    <Input value={n.name || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <ComboSelect
-                                                        value={n.relation || null}
-                                                        onChange={(v) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, relation: v ?? '' } : x)))}
-                                                        items={relations.map((r: string) => ({ value: r, label: r }))}
-                                                        placeholder="Relation"
-                                                    />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={n.contact || ''} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, contact: e.target.value } : x)))} placeholder="Contact" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input
-                                                        placeholder={DISPLAY_DATE_FMT}
-                                                        autoComplete="off"
-                                                        value={n.date_of_birth || ''}
-                                                        onChange={(e) =>
-                                                            setData(
-                                                                'nominees',
-                                                                data.nominees.map((x: any, i: number) => (i === idx ? { ...x, date_of_birth: e.target.value } : x))
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={String(n.share ?? '')} onChange={(e) => setData('nominees', data.nominees.map((x: any, i: number) => (i === idx ? { ...x, share: e.target.value } : x)))} placeholder="Share" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('bank')}>
-                                        Back
-                                    </Button>
-                                    <Button type="button" onClick={() => setActiveTab('guarantor')}>
-                                        Next: Guarantor
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="guarantor">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Guarantor & Cheque Info</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-6 pt-6">
-                                    <div className="flex justify-end">
-                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('guarantors', [...data.guarantors, { name: '', age: '', occupation: '', relation: '', phone: '', email: '' }])}>
-                                            <Plus className="mr-2 h-4 w-4" /> Add Guarantor
-                                        </Button>
-                                    </div>
-                                    {data.guarantors.map((g: any, idx: number) => (
-                                        <div key={idx} className="rounded-md border p-3">
-                                            <div className="mb-2 flex items-center justify-between">
-                                                <div className="text-sm font-medium">Guarantor {idx + 1}</div>
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('guarantors', data.guarantors.filter((_: any, i: number) => i !== idx))}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className={RF_ROW}>
-                                                <div className={RF_CELL}>
-                                                    <Input value={g.name || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={String(g.age ?? '')} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, age: e.target.value } : x)))} placeholder="Age" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={g.occupation || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, occupation: e.target.value } : x)))} placeholder="Occupation" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <ComboSelect value={g.relation || null} onChange={(v) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, relation: v ?? '' } : x)))} items={relations.map((r: string) => ({ value: r, label: r }))} placeholder="Relation" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={g.phone || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, phone: e.target.value } : x)))} placeholder="Phone" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={g.email || ''} onChange={(e) => setData('guarantors', data.guarantors.map((x: any, i: number) => (i === idx ? { ...x, email: e.target.value } : x)))} placeholder="Email" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    <div className="flex justify-end">
-                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('guarantor_cheques', [...data.guarantor_cheques, { bank_name: '', branch_name: '', cheque_no: '' }])}>
-                                            <Plus className="mr-2 h-4 w-4" /> Add Cheque
-                                        </Button>
-                                    </div>
-                                    {data.guarantor_cheques.map((c: any, idx: number) => (
-                                        <div key={idx} className="rounded-md border p-3">
-                                            <div className={RF_ROW_CTR}>
-                                                <div className={RF_CELL}>
-                                                    <ComboSelect value={c.bank_name || null} onChange={(v) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, bank_name: v ?? '' } : x)))} items={banks.map((b: string) => ({ value: b, label: b }))} placeholder="Bank" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={c.branch_name || ''} onChange={(e) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, branch_name: e.target.value } : x)))} placeholder="Branch" />
-                                                </div>
-                                                <div className="flex min-w-0 flex-1 items-center gap-2">
-                                                    <Input className="min-w-0 flex-1" value={c.cheque_no || ''} onChange={(e) => setData('guarantor_cheques', data.guarantor_cheques.map((x: any, i: number) => (i === idx ? { ...x, cheque_no: e.target.value } : x)))} placeholder="Cheque No" />
-                                                    <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => setData('guarantor_cheques', data.guarantor_cheques.filter((_: any, i: number) => i !== idx))}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('nominee')}>
-                                        Back
-                                    </Button>
-                                    <Button type="button" onClick={() => setActiveTab('collateral')}>
-                                        Next: Collateral
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="collateral">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Collateral</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" className="h-4 w-4" checked={!!data.collateral?.has_certificate} onChange={(e) => setData('collateral', { ...data.collateral, has_certificate: e.target.checked })} />
-                                        Certificate
-                                    </label>
-                                    {data.collateral?.has_certificate && (
-                                        <div className="flex flex-wrap gap-3">
-                                            {['ssc', 'hsc', 'honors', 'masters'].map((lvl) => (
-                                                <label key={lvl} className="flex items-center gap-2 text-sm">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={(data.collateral.certificate_levels ?? []).includes(lvl)}
-                                                        onChange={(e) => {
-                                                            const next = new Set(data.collateral.certificate_levels ?? []);
-                                                            if (e.target.checked) next.add(lvl);
-                                                            else next.delete(lvl);
-                                                            setData('collateral', { ...data.collateral, certificate_levels: Array.from(next) });
-                                                        }}
-                                                    />
-                                                    {lvl.toUpperCase()}
-                                                </label>
-                                            ))}
-                                        </div>
-                                    )}
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                        <Input value={String(data.collateral?.security_amount ?? '')} onChange={(e) => setData('collateral', { ...data.collateral, security_amount: e.target.value })} placeholder="Security Amount" />
-                                        <Input value={String(data.collateral?.collateral_interest ?? '')} onChange={(e) => setData('collateral', { ...data.collateral, collateral_interest: e.target.value })} placeholder="Collateral Interest" />
-                                        <Input
-                                            placeholder={DISPLAY_DATE_FMT}
-                                            autoComplete="off"
-                                            value={data.collateral?.collateral_date ?? ''}
-                                            onChange={(e) => setData('collateral', { ...data.collateral, collateral_date: e.target.value })}
-                                        />
-                                    </div>
-                                    <Textarea rows={2} value={data.collateral?.notes ?? ''} onChange={(e) => setData('collateral', { ...data.collateral, notes: e.target.value })} placeholder="Notes" />
-
-                                    <div className="flex justify-end">
-                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('collateral_receive_cheques', [...data.collateral_receive_cheques, { bank_name: '', branch_name: '', cheque_no: '', notes: '' }])}>
-                                            <Plus className="mr-2 h-4 w-4" /> Receive Cheque
-                                        </Button>
-                                    </div>
-                                    {data.collateral_receive_cheques.map((c: any, idx: number) => (
-                                        <div key={idx} className="rounded-md border p-3">
-                                            <div className={RF_ROW_CTR}>
-                                                <div className={RF_CELL}>
-                                                    <ComboSelect value={c.bank_name || null} onChange={(v) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, bank_name: v ?? '' } : x)))} items={banks.map((b: string) => ({ value: b, label: b }))} placeholder="Bank" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={c.branch_name || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, branch_name: e.target.value } : x)))} placeholder="Branch" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={c.cheque_no || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, cheque_no: e.target.value } : x)))} placeholder="Cheque No" />
-                                                </div>
-                                                <div className="flex min-w-0 flex-1 items-center gap-2">
-                                                    <Input className="min-w-0 flex-1" value={c.notes || ''} onChange={(e) => setData('collateral_receive_cheques', data.collateral_receive_cheques.map((x: any, i: number) => (i === idx ? { ...x, notes: e.target.value } : x)))} placeholder="Notes" />
-                                                    <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => setData('collateral_receive_cheques', data.collateral_receive_cheques.filter((_: any, i: number) => i !== idx))}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('guarantor')}>
-                                        Back
-                                    </Button>
-                                    <Button type="button" onClick={() => setActiveTab('asset')}>
-                                        Next: Org. Asset
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="asset">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Org. Asset</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
-                                    <div className="flex justify-end">
-                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('assets', [...data.assets, { serial: '', asset_no: '', name: '', details: '', provided_quality: '', asset_price: '' }])}>
-                                            <Plus className="mr-2 h-4 w-4" /> Add Asset
-                                        </Button>
-                                    </div>
-                                    {data.assets.map((a: any, idx: number) => (
-                                        <div key={idx} className="rounded-md border p-3">
-                                            <div className="mb-2 flex items-center justify-between">
-                                                <div className="text-sm font-medium">Asset {idx + 1}</div>
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('assets', data.assets.filter((_: any, i: number) => i !== idx))}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className={RF_ROW}>
-                                                <div className={RF_CELL}>
-                                                    <Input value={String(a.serial ?? '')} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, serial: e.target.value } : x)))} placeholder="Serial" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={a.asset_no || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, asset_no: e.target.value } : x)))} placeholder="Asset No" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={a.name || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, name: e.target.value } : x)))} placeholder="Name" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={a.provided_quality || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, provided_quality: e.target.value } : x)))} placeholder="Provided Quality" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={String(a.asset_price ?? '')} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, asset_price: e.target.value } : x)))} placeholder="Asset Price" />
-                                                </div>
-                                            </div>
-                                            <Textarea className="mt-3" rows={2} value={a.details || ''} onChange={(e) => setData('assets', data.assets.map((x: any, i: number) => (i === idx ? { ...x, details: e.target.value } : x)))} placeholder="Details" />
-                                        </div>
-                                    ))}
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('collateral')}>
-                                        Back
-                                    </Button>
-                                    <Button type="button" onClick={() => setActiveTab('experience')}>
-                                        Next: Experience
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="experience">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Experience</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
-                                    <div className="flex justify-end">
-                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('experiences', [...data.experiences, { organization: '', from_date: '', to_date: '', designation: '', department: '', address: '' }])}>
-                                            <Plus className="mr-2 h-4 w-4" /> Add Experience
-                                        </Button>
-                                    </div>
-                                    {data.experiences.map((ex: any, idx: number) => (
-                                        <div key={idx} className="rounded-md border p-3">
-                                            <div className="mb-2 flex items-center justify-between">
-                                                <div className="text-sm font-medium">Experience {idx + 1}</div>
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('experiences', data.experiences.filter((_: any, i: number) => i !== idx))}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className={RF_ROW}>
-                                                <div className={RF_CELL}>
-                                                    <Input value={ex.organization || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, organization: e.target.value } : x)))} placeholder="Organization" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input
-                                                        placeholder={DISPLAY_DATE_FMT}
-                                                        autoComplete="off"
-                                                        value={ex.from_date || ''}
-                                                        onChange={(e) =>
-                                                            setData(
-                                                                'experiences',
-                                                                data.experiences.map((x: any, i: number) => (i === idx ? { ...x, from_date: e.target.value } : x))
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input
-                                                        placeholder={DISPLAY_DATE_FMT}
-                                                        autoComplete="off"
-                                                        value={ex.to_date || ''}
-                                                        onChange={(e) =>
-                                                            setData(
-                                                                'experiences',
-                                                                data.experiences.map((x: any, i: number) => (i === idx ? { ...x, to_date: e.target.value } : x))
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={ex.designation || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, designation: e.target.value } : x)))} placeholder="Designation" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={ex.department || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, department: e.target.value } : x)))} placeholder="Department" />
-                                                </div>
-                                            </div>
-                                            <Textarea className="mt-3" rows={2} value={ex.address || ''} onChange={(e) => setData('experiences', data.experiences.map((x: any, i: number) => (i === idx ? { ...x, address: e.target.value } : x)))} placeholder="Address" />
-                                        </div>
-                                    ))}
-                                </CardContent>
-                                <CardFooter className="border-t bg-gray-50 px-6 py-4 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('asset')}>
-                                        Back
-                                    </Button>
-                                    <Button type="button" onClick={() => setActiveTab('training')}>
-                                        Next: Training
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="training">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Training History</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
-                                    <div className="flex justify-end">
-                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('trainings', [...data.trainings, { training_title: '', institute: '', address: '', duration: '', remarks: '' }])}>
-                                            <Plus className="mr-2 h-4 w-4" /> Add Training
-                                        </Button>
-                                    </div>
-                                    {data.trainings.map((t: any, idx: number) => (
-                                        <div key={idx} className="rounded-md border p-3">
-                                            <div className="mb-2 flex items-center justify-between">
-                                                <div className="text-sm font-medium">Training {idx + 1}</div>
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('trainings', data.trainings.filter((_: any, i: number) => i !== idx))}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className={RF_ROW}>
-                                                <div className={RF_CELL}>
-                                                    <Input value={t.training_title || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, training_title: e.target.value } : x)))} placeholder="Training Title" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={t.institute || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, institute: e.target.value } : x)))} placeholder="Institute" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={t.duration || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, duration: e.target.value } : x)))} placeholder="Duration" />
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Input value={t.address || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, address: e.target.value } : x)))} placeholder="Address" />
-                                                </div>
-                                            </div>
-                                            <Textarea className="mt-3" rows={2} value={t.remarks || ''} onChange={(e) => setData('trainings', data.trainings.map((x: any, i: number) => (i === idx ? { ...x, remarks: e.target.value } : x)))} placeholder="Remarks" />
-                                        </div>
-                                    ))}
-                                </CardContent>
-                                <CardFooter className="flex justify-between border-t bg-gray-50 px-6 py-4">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('experience')}>
-                                        Back
-                                    </Button>
-                                    <Button type="button" onClick={() => setActiveTab('documents')}>
-                                        Next: Documents
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="documents">
-                            <Card className="shadow-sm">
-                                <CardHeader className="border-b bg-gray-50">
-                                    <CardTitle className="text-base">Documents</CardTitle>
-                                    <CardDescription className="text-xs">
-                                        Add or replace files. Removing a row here deletes that document. Max 5MB each — PDF, images, DOC/DOCX.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
-                                    <div className="flex justify-end">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setData('documents', [...(data.documents || []), newEmployeeDocumentFormRow()])}
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" /> Add document
-                                        </Button>
-                                    </div>
-                                    {!(data.documents || []).length ? (
-                                        <p className="text-center text-sm text-muted-foreground">No documents. Click &quot;Add document&quot; to upload.</p>
-                                    ) : null}
-                                    {(data.documents || []).map((doc: any, idx: number) => (
-                                        <div key={doc.clientKey} className="space-y-3 rounded-md border p-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="text-sm font-medium">Document {idx + 1}</div>
-                                                <Button
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        {/* Sidebar Stepper */}
+                        <div className="lg:col-span-3">
+                            <div className="sticky top-6 space-y-4">
+                                <div className="hidden lg:block rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm">
+                                    <h2 className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-4 px-1">Progress</h2>
+                                    <nav className="relative flex flex-col justify-start">
+                                        <div className="absolute left-[17px] top-4 bottom-4 w-0.5 bg-zinc-100" />
+                                        {EMPLOYEE_EDIT_TAB_ORDER.map((tabId, idx) => {
+                                            const label = tabLabels[tabId];
+                                            const state = getTabStepState(tabId);
+                                            const Icon = label.icon;
+                                            return (
+                                                <button
+                                                    key={tabId}
                                                     type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => setData('documents', (data.documents || []).filter((_: any, i: number) => i !== idx))}
+                                                    onClick={() => requestTabChange(tabId)}
+                                                    className={cn(
+                                                        "relative flex items-start text-left gap-3.5 py-3.5 px-2 rounded-xl transition-all duration-200 outline-none w-full",
+                                                        state.isActive ? "bg-emerald-50/40 text-emerald-950 font-medium" : "hover:bg-zinc-50/40 text-zinc-500 hover:text-zinc-900"
+                                                    )}
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className={RF_ROW_TOP}>
-                                                <div className={`${RF_CELL} min-w-[8.5rem]`}>
-                                                    <Label className="text-xs">Document type</Label>
-                                                    <select
-                                                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                                        value={doc.document_type || ''}
-                                                        onChange={(e) =>
-                                                            setData(
-                                                                'documents',
-                                                                (data.documents || []).map((d: any, i: number) =>
-                                                                    i === idx ? { ...d, document_type: e.target.value } : d
-                                                                )
-                                                            )
-                                                        }
-                                                    >
-                                                        <option value="">Select type</option>
-                                                        {documentTypes.map((t) => (
-                                                            <option key={t} value={t}>
-                                                                {formatEmployeeDocumentTypeLabel(t)}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {errors[`documents.${idx}.document_type`] && (
-                                                        <p className="text-xs text-destructive">{errors[`documents.${idx}.document_type`]}</p>
-                                                    )}
-                                                </div>
-                                                <div className={RF_CELL}>
-                                                    <Label className="text-xs">Title</Label>
-                                                    <Input
-                                                        value={doc.title || ''}
-                                                        onChange={(e) =>
-                                                            setData(
-                                                                'documents',
-                                                                (data.documents || []).map((d: any, i: number) => (i === idx ? { ...d, title: e.target.value } : d))
-                                                            )
-                                                        }
-                                                        placeholder="e.g. NID scan"
-                                                    />
-                                                    {errors[`documents.${idx}.title`] && (
-                                                        <p className="text-xs text-destructive">{errors[`documents.${idx}.title`]}</p>
-                                                    )}
-                                                </div>
-                                                <div className={`${RF_CELL} shrink-0 lg:max-w-[9.5rem]`}>
-                                                    <Label className="text-xs">Expiry date (optional)</Label>
-                                                    <Input
-                                                        placeholder={DISPLAY_DATE_FMT}
-                                                        autoComplete="off"
-                                                        value={doc.expiry_date || ''}
-                                                        onChange={(e) =>
-                                                            setData(
-                                                                'documents',
-                                                                (data.documents || []).map((d: any, i: number) => (i === idx ? { ...d, expiry_date: e.target.value } : d))
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className={`${RF_CELL} min-w-[7rem] shrink-0`}>
-                                                    <Label className="text-xs">File {!doc.id ? <span className="text-destructive">*</span> : null}</Label>
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-xs hover:bg-muted/50">
-                                                            <Upload className="h-3.5 w-3.5" />
-                                                            <span>{doc.file ? doc.file.name : doc.existing_file_path ? 'Replace file' : 'Choose file'}</span>
-                                                            <input
-                                                                type="file"
-                                                                className="hidden"
-                                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                                                onChange={(e) => {
-                                                                    const f = e.target.files?.[0] ?? null;
-                                                                    setData(
-                                                                        'documents',
-                                                                        (data.documents || []).map((d: any, i: number) => (i === idx ? { ...d, file: f } : d))
-                                                                    );
-                                                                }}
-                                                            />
-                                                        </label>
+                                                    <div className="relative z-10 flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full transition-all duration-300">
+                                                        {state.isInvalid ? (
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-red-50 text-red-600 ring-2 ring-red-100/50">
+                                                                <AlertCircle className="h-4 w-4" />
+                                                            </div>
+                                                        ) : state.isCompleted ? (
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-2 ring-emerald-50">
+                                                                <Check className="h-4 w-4" strokeWidth={3} />
+                                                            </div>
+                                                        ) : state.isActive ? (
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white ring-4 ring-emerald-100">
+                                                                <Icon className="h-3.5 w-3.5" />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-50 text-zinc-400 border border-zinc-200">
+                                                                <span className="text-[10px] font-semibold">{idx + 1}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    {doc.existing_file_path && !doc.file ? (
-                                                        <p className="text-[11px] text-muted-foreground">Current: {String(doc.existing_file_path).split('/').pop()}</p>
-                                                    ) : null}
-                                                    {errors[`documents.${idx}.file`] && (
-                                                        <p className="text-xs text-destructive">{errors[`documents.${idx}.file`]}</p>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className={cn("text-xs font-semibold leading-tight", state.isActive ? "text-emerald-900" : "text-zinc-700")}>
+                                                            {label.title}
+                                                        </div>
+                                                        <span className={cn("text-[10px] leading-tight block mt-0.5", state.isActive ? "text-emerald-700/80" : "text-zinc-400")}>
+                                                            {label.desc}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </nav>
+                                </div>
+
+                                {/* Mobile horizontal stepper */}
+                                <div className="lg:hidden rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div>
+                                            <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest">Active Step</span>
+                                            <h3 className="text-sm font-bold text-zinc-800 mt-0.5">{tabLabels[activeTab as EmployeeEditTabId]?.title}</h3>
+                                        </div>
+                                        <div className="text-right text-xs font-bold text-emerald-600">
+                                            {EMPLOYEE_EDIT_TAB_ORDER.indexOf(activeTab as EmployeeEditTabId) + 1} / {EMPLOYEE_EDIT_TAB_ORDER.length}
+                                        </div>
+                                    </div>
+                                    <div className="w-full bg-zinc-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                                        <div className="bg-emerald-600 h-full rounded-full transition-all duration-300" style={{ width: `${((EMPLOYEE_EDIT_TAB_ORDER.indexOf(activeTab as EmployeeEditTabId) + 1) / EMPLOYEE_EDIT_TAB_ORDER.length) * 100}%` }} />
+                                    </div>
+                                    <div className="flex gap-2 overflow-x-auto pb-1 mt-4 scrollbar-none border-t border-zinc-100 pt-3">
+                                        {EMPLOYEE_EDIT_TAB_ORDER.map((tabId, idx) => {
+                                            const label = tabLabels[tabId];
+                                            const state = getTabStepState(tabId);
+                                            return (
+                                                <button
+                                                    key={tabId}
+                                                    type="button"
+                                                    onClick={() => requestTabChange(tabId)}
+                                                    className={cn(
+                                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 border transition-all duration-150",
+                                                        state.isActive ? "bg-emerald-600 border-emerald-600 text-white" : state.isInvalid ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-zinc-200 text-zinc-600"
                                                     )}
+                                                >
+                                                    <span>{idx + 1}. {label.title}</span>
+                                                    {state.isCompleted && <Check className="h-3 w-3 shrink-0" strokeWidth={3} />}
+                                                    {state.isInvalid && <AlertCircle className="h-3 w-3 shrink-0 text-red-500" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Main Work Area */}
+                        <div className="lg:col-span-9">
+                            <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
+                                <Tabs value={activeTab} onValueChange={requestTabChange} className="w-full">
+                                    
+                                    {/* GENERAL TAB */}
+                                    <TabsContent value="general" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8">
+                                            <h2 className="text-lg font-bold text-zinc-900">General Setup</h2>
+                                            <p className="text-xs text-zinc-500 mt-1">Provide employee organization, identity, address details, and uploads.</p>
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-8">
+                                            {/* Photo & Signature Upload Banner */}
+                                            <div className="bg-zinc-50/40 rounded-xl p-5 border border-zinc-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <FormField label="Employee Photo" error={errors.photo}>
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-inner flex items-center justify-center">
+                                                            {photoPreview ? (
+                                                                <img src={photoPreview} className="h-full w-full object-cover" alt="Preview" />
+                                                            ) : (
+                                                                <User className="h-8 w-8 text-zinc-300 animate-pulse" strokeWidth={1.5} />
+                                                            )}
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <input ref={photoFileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { applyPhotoFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+                                                            <div className="flex gap-2">
+                                                                <Button type="button" variant="outline" size="sm" className="h-8.5 text-xs font-semibold rounded-lg shadow-sm" onClick={() => photoFileInputRef.current?.click()}>
+                                                                    <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload File
+                                                                </Button>
+                                                                {photoPreview && <Button type="button" variant="ghost" size="sm" className="h-8.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg" onClick={clearPhotoUpload}>Remove</Button>}
+                                                            </div>
+                                                            <p className="text-[10px] text-zinc-400">JPG, PNG or WebP. Max 5MB.</p>
+                                                        </div>
+                                                    </div>
+                                                </FormField>
+
+                                                <FormField label="Signature Scan" error={errors.signature}>
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="relative h-24 w-44 shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-inner flex items-center justify-center p-2">
+                                                            {signaturePreview ? (
+                                                                <img src={signaturePreview} className="h-full w-full object-contain" alt="Preview" />
+                                                            ) : (
+                                                                <SignatureDemoGraphic className="h-full w-full opacity-35" />
+                                                            )}
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <input ref={signatureFileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { applySignatureFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+                                                            <div className="flex gap-2">
+                                                                <Button type="button" variant="outline" size="sm" className="h-8.5 text-xs font-semibold rounded-lg shadow-sm" onClick={() => signatureFileInputRef.current?.click()}>
+                                                                    <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload File
+                                                                </Button>
+                                                                {signaturePreview && <Button type="button" variant="ghost" size="sm" className="h-8.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg" onClick={clearSignatureUpload}>Remove</Button>}
+                                                            </div>
+                                                            <p className="text-[10px] text-zinc-400">Dark ink on white paper.</p>
+                                                        </div>
+                                                    </div>
+                                                </FormField>
+                                            </div>
+
+                                            {/* Organization Group */}
+                                            <div>
+                                                <SectionHeading>Employment Information</SectionHeading>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                                                    <FormField label="Branch Name" required error={errors.current_branch_id}>
+                                                        <ComboSelect value={data.current_branch_id || null} onChange={(v) => setData('current_branch_id', v ?? '')} items={branchItems} placeholder="Select Branch" />
+                                                    </FormField>
+                                                    <FormField label="Employment Type" required error={errors.employee_type_id}>
+                                                        <ComboSelect value={data.employee_type_id || null} onChange={(v) => setData('employee_type_id', v ?? '')} items={employeeTypeItems} placeholder="Select Type" />
+                                                    </FormField>
+                                                    <FormField label="Department" required error={errors.department_id}>
+                                                        <ComboSelect value={data.department_id || null} onChange={(v) => setData('department_id', v ?? '')} items={deptItems} placeholder="Select Department" />
+                                                    </FormField>
+                                                    <FormField label="Opening Designation" required error={errors.joining_designation_id}>
+                                                        <ComboSelect value={data.joining_designation_id || null} onChange={(v) => setOpeningDesignation(v ?? '')} items={desigItems} placeholder="Select Designation" />
+                                                    </FormField>
+                                                    <FormField label="Last Designation" error={errors.last_designation_id}>
+                                                        <ComboSelect value={data.last_designation_id || null} onChange={(v) => setLastDesignation(v ?? '')} items={desigItems} placeholder="Select Designation" />
+                                                    </FormField>
+                                                    <FormField label="Program">
+                                                        <ComboSelect value={data.program_id || null} onChange={(v) => setData('program_id', v ?? '')} items={programItems} placeholder="Select Program" />
+                                                    </FormField>
+                                                    <FormField label="Project">
+                                                        <ComboSelect value={data.project_id || null} onChange={(v) => setData('project_id', v ?? '')} items={projectItems} placeholder="Select Project" />
+                                                    </FormField>
+                                                    <FormField label="Employee PIN" required error={errors.pin}>
+                                                        <Input value={data.pin} onChange={(e) => setData('pin', e.target.value)} placeholder="e.g. PIN-001" />
+                                                    </FormField>
+                                                    <FormField label="Joining Date" required error={errors.joining_date}>
+                                                        <Input type="date" value={data.joining_date} onChange={(e) => setData('joining_date', e.target.value)} />
+                                                    </FormField>
+                                                    <FormField label="Confirmation Date">
+                                                        <Input type="date" value={data.confirmation_date} onChange={(e) => setData('confirmation_date', e.target.value)} />
+                                                    </FormField>
+                                                    <FormField label="Probation Period">
+                                                        <Input value={derivedProbationLabel} readOnly className="bg-zinc-50 border-zinc-200 text-zinc-500 cursor-not-allowed" placeholder="Calculated automatically" />
+                                                    </FormField>
                                                 </div>
-                                                <div className={`${RF_CELL} min-w-[10rem]`}>
-                                                    <Label className="text-xs">Description (optional)</Label>
-                                                    <Textarea
-                                                        rows={2}
-                                                        className="text-xs"
-                                                        value={doc.description || ''}
-                                                        onChange={(e) =>
-                                                            setData(
-                                                                'documents',
-                                                                (data.documents || []).map((d: any, i: number) => (i === idx ? { ...d, description: e.target.value } : d))
-                                                            )
-                                                        }
-                                                        placeholder="Notes"
-                                                    />
+                                            </div>
+
+                                            {/* Personal Identity Group */}
+                                            <div>
+                                                <SectionHeading>Personal Details</SectionHeading>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                                                    <FormField label="Employee Name (English)" required error={errors.name_en}>
+                                                        <Input value={data.name_en} onChange={(e) => setData('name_en', e.target.value)} placeholder="Full Name (English)" />
+                                                    </FormField>
+                                                    <FormField label="Employee Name (Bengali)" error={errors.name_bn}>
+                                                        <Input value={data.name_bn} onChange={(e) => setData('name_bn', e.target.value)} placeholder="পূর্ণ নাম (বাংলা)" />
+                                                    </FormField>
+                                                    <FormField label="Gender">
+                                                        <ComboSelect value={data.gender || null} onChange={(v) => setData('gender', v ?? '')} items={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }, { value: 'other', label: 'Other' }]} placeholder="Select Gender" />
+                                                    </FormField>
+                                                    <FormField label="Religion">
+                                                        <ComboSelect value={data.religion || null} onChange={(v) => setData('religion', v ?? '')} items={['Islam', 'Hindu', 'Christian', 'Buddhist', 'Sikh', 'Other'].map(r => ({ value: r, label: r }))} placeholder="Select Religion" />
+                                                    </FormField>
+                                                    <FormField label="Marital Status">
+                                                        <ComboSelect value={data.marital_status || null} onChange={(v) => setData('marital_status', v ?? '')} items={['Single', 'Married', 'Separated', 'Divorced', 'Widowed'].map(m => ({ value: m, label: m }))} placeholder="Select Status" />
+                                                    </FormField>
+                                                    <FormField label="Date of Birth">
+                                                        <Input type="date" value={data.date_of_birth} onChange={(e) => setData('date_of_birth', e.target.value)} />
+                                                    </FormField>
+                                                    <FormField label="Age">
+                                                        <Input value={derivedAge} readOnly className="bg-zinc-50 border-zinc-200 text-zinc-500 cursor-not-allowed" placeholder="Calculated age" />
+                                                    </FormField>
+                                                    <FormField label="Blood Group">
+                                                        <ComboSelect value={data.blood_group || null} onChange={(v) => setData('blood_group', v ?? '')} items={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(b => ({ value: b, label: b }))} placeholder="Select Blood Group" />
+                                                    </FormField>
+                                                </div>
+                                                
+                                                {isSpouseRequired && (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 mt-5 animate-slide-down">
+                                                        <FormField label="Spouse Name" required error={errors.spouse_name}>
+                                                            <Input value={data.spouse_name} onChange={(e) => setData('spouse_name', e.target.value)} placeholder="Spouse Full Name" />
+                                                        </FormField>
+                                                        <FormField label="Spouse Contact Mobile" required error={errors.spouse_mobile}>
+                                                            <Input value={data.spouse_mobile} onChange={(e) => setData('spouse_mobile', e.target.value)} placeholder="Spouse Contact" />
+                                                        </FormField>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Identity & Contacts */}
+                                            <div>
+                                                <SectionHeading>Identity & Contact Details</SectionHeading>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                                                    <FormField label="NID / Smart Card Number" error={errors.nid_number || errors.smart_card_number || nidOrSmartClientError}>
+                                                        <Input inputMode="numeric" maxLength={17} value={data.nid} onChange={(e) => setData('nid', e.target.value.replace(/\D/g, '').slice(0, 17))} placeholder="10, 13 or 17 digit NID" />
+                                                    </FormField>
+                                                    <FormField label="TIN Number" error={errors.tin_certificate_no}>
+                                                        <Input value={data.tin_certificate_no} onChange={(e) => setData('tin_certificate_no', e.target.value)} placeholder="TIN Number" />
+                                                    </FormField>
+                                                    <FormField label="Driving License" error={errors.driving_license_no}>
+                                                        <Input value={data.driving_license_no} onChange={(e) => setData('driving_license_no', e.target.value)} placeholder="Driving License No" />
+                                                    </FormField>
+                                                    <FormField label="Passport Number" error={errors.passport_no}>
+                                                        <Input value={data.passport_no} onChange={(e) => setData('passport_no', e.target.value)} placeholder="Passport No" />
+                                                    </FormField>
+                                                    <FormField label="Identification Mark" error={errors.identification_mark}>
+                                                        <Input value={data.identification_mark} onChange={(e) => setData('identification_mark', e.target.value)} placeholder="e.g. scar on wrist" />
+                                                    </FormField>
+                                                    <FormField label="Email Address" error={errors.email}>
+                                                        <Input type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} placeholder="name@company.com" />
+                                                    </FormField>
+                                                    <FormField label="Mobile (Personal)" required error={errors.mobile_personal}>
+                                                        <Input value={data.mobile_personal} onChange={(e) => setData('mobile_personal', e.target.value)} placeholder="Personal Mobile No" />
+                                                    </FormField>
+                                                    <FormField label="Mobile (Official)" error={errors.mobile_official}>
+                                                        <Input value={data.mobile_official} onChange={(e) => setData('mobile_official', e.target.value)} placeholder="Official Mobile No" />
+                                                    </FormField>
+                                                </div>
+                                            </div>
+
+                                            {/* Parents Info */}
+                                            <div>
+                                                <SectionHeading>Family Information</SectionHeading>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                                                    <FormField label="Father's Name" error={errors.fathers_name}><Input value={data.fathers_name} onChange={(e) => setData('fathers_name', e.target.value)} placeholder="Father's Full Name" /></FormField>
+                                                    <FormField label="Father's Mobile" error={errors.fathers_mobile}><Input value={data.fathers_mobile} onChange={(e) => setData('fathers_mobile', e.target.value)} placeholder="Father's Mobile" /></FormField>
+                                                    <FormField label="Mother's Name" error={errors.mothers_name}><Input value={data.mothers_name} onChange={(e) => setData('mothers_name', e.target.value)} placeholder="Mother's Full Name" /></FormField>
+                                                    <FormField label="Mother's Mobile" error={errors.mothers_mobile}><Input value={data.mothers_mobile} onChange={(e) => setData('mothers_mobile', e.target.value)} placeholder="Mother's Mobile" /></FormField>
+                                                </div>
+                                            </div>
+
+                                            {/* Addresses */}
+                                            <div>
+                                                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 pb-3 mb-5">
+                                                    <div>
+                                                        <h3 className="text-sm font-bold text-zinc-900 tracking-tight">Addresses</h3>
+                                                    </div>
+                                                    <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-500 select-none">
+                                                        <input type="checkbox" className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" checked={sameAsPermanent} onChange={(e) => {
+                                                            const ch = e.target.checked;
+                                                            setSameAsPermanent(ch);
+                                                            if (ch) {
+                                                                const [present, permanent] = normalizeEmployeeFormAddresses(data.addresses);
+                                                                const synced = { ...present, ...permanent, type: 'present' as const };
+                                                                synced.address_details = buildAddressDetails(synced);
+                                                                setData('addresses', [synced, permanent]);
+                                                            }
+                                                        }} />
+                                                        <span>Present Address same as Permanent</span>
+                                                    </label>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                                                    {/* Permanent */}
+                                                    <div className="space-y-4 bg-zinc-50/40 p-5 rounded-2xl border border-zinc-100">
+                                                        <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-wide">Permanent Address</h4>
+                                                        <div className="space-y-4">
+                                                            <FormField label="Division">
+                                                                <ComboSelect value={data.addresses[1]?.division || null} onChange={(v) => setPermanentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' })} items={divisionItems} placeholder="Select Division" />
+                                                            </FormField>
+                                                            <FormField label="District">
+                                                                <ComboSelect value={data.addresses[1]?.district || null} onChange={(v) => setPermanentAddress({ district: v ?? '', upazila: '', union: '', village: '' })} items={permDistrictItems} placeholder="Select District" disabled={!data.addresses[1]?.division} />
+                                                            </FormField>
+                                                            <FormField label="Upazila / Thana">
+                                                                <ComboSelect value={data.addresses[1]?.upazila || null} onChange={(v) => setPermanentAddress({ upazila: v ?? '', union: '', village: '' })} items={permUpazilaItems} placeholder="Select Upazila" disabled={!data.addresses[1]?.district} />
+                                                            </FormField>
+                                                            <FormField label="Union">
+                                                                <div className="flex gap-2">
+                                                                    <div className="flex-1">
+                                                                        <ComboSelect value={data.addresses[1]?.union || null} onChange={(v) => setPermanentAddress({ union: v ?? '', village: '' })} items={permUnionItems} placeholder="Select Union" disabled={!data.addresses[1]?.upazila} />
+                                                                    </div>
+                                                                    <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-lg shrink-0" onClick={() => setAddUnionModal({ open: true, target: 'permanent', name: '', error: '', saving: false })} disabled={!canOpenUnionModal('permanent')}><Plus className="h-4 w-4" /></Button>
+                                                                </div>
+                                                            </FormField>
+                                                            <FormField label="Village">
+                                                                <div className="flex gap-2">
+                                                                    <div className="flex-1">
+                                                                        <ComboSelect value={data.addresses[1]?.village || null} onChange={(v) => setPermanentAddress({ village: v ?? '' })} items={permVillageItems} placeholder="Select Village" disabled={!data.addresses[1]?.union} />
+                                                                    </div>
+                                                                    <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-lg shrink-0" onClick={() => setAddVillageModal({ open: true, target: 'permanent', name: '', error: '', saving: false })} disabled={!canOpenVillageModal('permanent')}><Plus className="h-4 w-4" /></Button>
+                                                                </div>
+                                                            </FormField>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Present */}
+                                                    <div className={cn("space-y-4 p-5 rounded-2xl border transition-all duration-300", sameAsPermanent ? "bg-zinc-50/10 border-zinc-100 opacity-60 pointer-events-none" : "bg-zinc-50/40 border-zinc-100")}>
+                                                        <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-wide">Present Address</h4>
+                                                        <div className="space-y-4">
+                                                            <FormField label="Division">
+                                                                <ComboSelect value={data.addresses[0]?.division || null} onChange={(v) => setPresentAddress({ division: v ?? '', district: '', upazila: '', union: '', village: '' })} items={divisionItems} placeholder="Select Division" disabled={sameAsPermanent} />
+                                                            </FormField>
+                                                            <FormField label="District">
+                                                                <ComboSelect value={data.addresses[0]?.district || null} onChange={(v) => setPresentAddress({ district: v ?? '', upazila: '', union: '', village: '' })} items={districtItems} placeholder="Select District" disabled={sameAsPermanent || !data.addresses[0]?.division} />
+                                                            </FormField>
+                                                            <FormField label="Upazila / Thana">
+                                                                <ComboSelect value={data.addresses[0]?.upazila || null} onChange={(v) => setPresentAddress({ upazila: v ?? '', union: '', village: '' })} items={upazilaItems} placeholder="Select Upazila" disabled={sameAsPermanent || !data.addresses[0]?.district} />
+                                                            </FormField>
+                                                            <FormField label="Union">
+                                                                <div className="flex gap-2">
+                                                                    <div className="flex-1">
+                                                                        <ComboSelect value={data.addresses[0]?.union || null} onChange={(v) => setPresentAddress({ union: v ?? '', village: '' })} items={presentUnionItems} placeholder="Select Union" disabled={sameAsPermanent || !data.addresses[0]?.upazila} />
+                                                                    </div>
+                                                                    <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-lg shrink-0" onClick={() => setAddUnionModal({ open: true, target: 'present', name: '', error: '', saving: false })} disabled={sameAsPermanent || !canOpenUnionModal('present')}><Plus className="h-4 w-4" /></Button>
+                                                                </div>
+                                                            </FormField>
+                                                            <FormField label="Village">
+                                                                <div className="flex gap-2">
+                                                                    <div className="flex-1">
+                                                                        <ComboSelect value={data.addresses[0]?.village || null} onChange={(v) => setPresentAddress({ village: v ?? '' })} items={presentVillageItems} placeholder="Select Village" disabled={sameAsPermanent || !data.addresses[0]?.union} />
+                                                                    </div>
+                                                                    <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-lg shrink-0" onClick={() => setAddVillageModal({ open: true, target: 'present', name: '', error: '', saving: false })} disabled={sameAsPermanent || !canOpenVillageModal('present')}><Plus className="h-4 w-4" /></Button>
+                                                                </div>
+                                                            </FormField>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
-                                </CardContent>
-                                <CardFooter className="flex justify-between border-t bg-gray-50 px-6 py-4">
-                                    <Button type="button" variant="outline" onClick={() => setActiveTab('training')}>
-                                        Back
-                                    </Button>
-                                    <Button type="submit" disabled={processing} className="bg-green-600 hover:bg-green-700">
-                                        {processing ? 'Updating...' : 'Update Employee'}
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        </TabsContent>
-                    </Tabs>
+                                        
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 1 of 11: General Setup</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('education')}>Next: Educational History</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* EDUCATION TAB */}
+                                    <TabsContent value="education" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8 flex items-center justify-between">
+                                            <div>
+                                                <h2 className="text-lg font-bold text-zinc-900">Academic Background</h2>
+                                                <p className="text-xs text-zinc-500 mt-1">Add details regarding completed academic degrees and qualifications.</p>
+                                            </div>
+                                            {data.educations.length > 0 && (
+                                                <Button type="button" variant="outline" size="sm" className="h-9 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('educations', [...data.educations, { degree: '', institute: '', board: '', group_name: '', subject: '', result_type: '', result_value: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Row</Button>
+                                            )}
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-6">
+                                            {data.educations.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center border border-dashed border-zinc-200 rounded-2xl py-12 px-4 text-center bg-zinc-50/25">
+                                                    <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ring-8 ring-emerald-50/30 mb-4"><GraduationCap className="h-6 w-6" strokeWidth={1.5} /></div>
+                                                    <h3 className="text-sm font-bold text-zinc-900">No Education Records</h3>
+                                                    <p className="text-xs text-zinc-500 mt-1 max-w-xs">Academic history details are empty. Click the button below to add details.</p>
+                                                    <Button type="button" variant="outline" size="sm" className="mt-4 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 rounded-lg font-semibold h-9" onClick={() => setData('educations', [{ degree: '', institute: '', board: '', group_name: '', subject: '', result_type: '', result_value: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Academic Record</Button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-5">
+                                                    {data.educations.map((ed, idx) => (
+                                                        <div key={idx} className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 hover:border-zinc-300 transition-all duration-150 shadow-sm relative">
+                                                            <div className="flex items-center justify-between border-b border-zinc-50 pb-3">
+                                                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Education #{idx + 1}</span>
+                                                                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => setData('educations', data.educations.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 mr-1.5" /> Remove</Button>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                                <FormField label="Degree Title" required><Input value={ed.degree} onChange={(e) => { const next = [...data.educations]; next[idx] = { ...next[idx], degree: e.target.value }; setData('educations', next); }} placeholder="e.g. SSC, B.Sc" /></FormField>
+                                                                <FormField label="Institute Name"><Input value={ed.institute} onChange={(e) => { const next = [...data.educations]; next[idx] = { ...next[idx], institute: e.target.value }; setData('educations', next); }} placeholder="College / University" /></FormField>
+                                                                <FormField label="Board"><ComboSelect value={ed.board || null} onChange={(v) => { const next = [...data.educations]; next[idx] = { ...next[idx], board: v ?? '' }; setData('educations', next); }} items={educationBoards.map(b => ({ value: b, label: b }))} placeholder="Select Board" /></FormField>
+                                                                <FormField label="Group / Discipline"><Input value={ed.group_name} onChange={(e) => { const next = [...data.educations]; next[idx] = { ...next[idx], group_name: e.target.value }; setData('educations', next); }} placeholder="e.g. Science" /></FormField>
+                                                                <FormField label="Subject"><Input value={ed.subject} onChange={(e) => { const next = [...data.educations]; next[idx] = { ...next[idx], subject: e.target.value }; setData('educations', next); }} placeholder="e.g. Physics" /></FormField>
+                                                                <FormField label="Result Type">
+                                                                    <ComboSelect value={ed.result_type || null} onChange={(v) => { const next = [...data.educations]; next[idx] = { ...next[idx], result_type: (v ?? '') as any }; setData('educations', next); }} items={[{ value: 'gpa', label: 'GPA' }, { value: 'cgpa', label: 'CGPA' }, { value: 'other', label: 'Other' }]} placeholder="Select Type" />
+                                                                </FormField>
+                                                                <FormField label="Result / GPA Value"><Input value={ed.result_value} onChange={(e) => { const next = [...data.educations]; next[idx] = { ...next[idx], result_value: e.target.value }; setData('educations', next); }} placeholder="e.g. 5.00" /></FormField>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('general')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 2 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('salary')}>Next: Salary Grade</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* SALARY TAB */}
+                                    <TabsContent value="salary" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8">
+                                            <h2 className="text-lg font-bold text-zinc-900">Salary Assignment</h2>
+                                            <p className="text-xs text-zinc-500 mt-1">Configure the employee's payroll profile, including payscale, salary grade, and step.</p>
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-6">
+                                            <EmployeeSalaryAssignment
+                                                payscales={payscales}
+                                                grades={payrollGrades}
+                                                steps={payrollSteps}
+                                                payscaleId={data.payscale_id}
+                                                salaryGradeId={data.salary_grade_id}
+                                                salaryStepId={data.salary_step_id}
+                                                basicSalary={data.basic_salary}
+                                                onPayscaleIdChange={(v) => setData('payscale_id', v)}
+                                                onSalaryGradeIdChange={(v) => setData('salary_grade_id', v)}
+                                                onSalaryStepIdChange={(v) => setData('salary_step_id', v)}
+                                                onBasicSalaryChange={(v) => setData('basic_salary', v)}
+                                                errors={errors}
+                                            />
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('education')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 3 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('bank')}>Next: Bank Account</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* BANK TAB */}
+                                    <TabsContent value="bank" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8">
+                                            <h2 className="text-lg font-bold text-zinc-900">Bank Routing Settings</h2>
+                                            <p className="text-xs text-zinc-500 mt-1">Manage bank account information for payroll deposits.</p>
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-5">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                                <FormField label="Bank Name" error={errors['bank.bank_name']}>
+                                                    <ComboSelect value={data.bank.bank_name || null} onChange={(v) => setData('bank', { ...data.bank, bank_name: v ?? '' })} items={banks.map(b => ({ value: b, label: b }))} placeholder="Select Bank" />
+                                                </FormField>
+                                                <FormField label="Branch Name" error={errors['bank.branch_name']}><Input value={data.bank.branch_name} onChange={(e) => setData('bank', { ...data.bank, branch_name: e.target.value })} placeholder="Branch Name" /></FormField>
+                                                <FormField label="Account Number" error={errors['bank.account_no']}><Input value={data.bank.account_no} onChange={(e) => setData('bank', { ...data.bank, account_no: e.target.value })} placeholder="Account No" /></FormField>
+                                                <FormField label="Account Type" error={errors['bank.account_type']}>
+                                                    <ComboSelect value={data.bank.account_type || null} onChange={(v) => setData('bank', { ...data.bank, account_type: v ?? '' })} items={['Savings', 'Current', 'Salary', 'Joint'].map(t => ({ value: t, label: t }))} placeholder="Select Type" />
+                                                </FormField>
+                                                <FormField label="Bank Address" className="sm:col-span-2" error={errors['bank.bank_address']}><Input value={data.bank.bank_address} onChange={(e) => setData('bank', { ...data.bank, bank_address: e.target.value })} placeholder="Branch Address" /></FormField>
+                                                <FormField label="Remarks" className="sm:col-span-2" error={errors['bank.remark']}><Textarea value={data.bank.remark} onChange={(e) => setData('bank', { ...data.bank, remark: e.target.value })} placeholder="Additional routing information..." /></FormField>
+                                            </div>
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('salary')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 4 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('nominee')}>Next: Nominees</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* NOMINEE TAB */}
+                                    <TabsContent value="nominee" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8 flex items-center justify-between">
+                                            <div>
+                                                <h2 className="text-lg font-bold text-zinc-900">Nominee Details</h2>
+                                                <p className="text-xs text-zinc-500 mt-1">Designate profile beneficiaries and allocation shares.</p>
+                                            </div>
+                                            {data.nominees.length > 0 && (
+                                                <Button type="button" variant="outline" size="sm" className="h-9 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('nominees', [...data.nominees, { name: '', relation: '', mobile: '', date_of_birth: '', share_percentage: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Row</Button>
+                                            )}
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-6">
+                                            {data.nominees.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center border border-dashed border-zinc-200 rounded-2xl py-12 px-4 text-center bg-zinc-50/25">
+                                                    <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ring-8 ring-emerald-50/30 mb-4"><Users className="h-6 w-6" strokeWidth={1.5} /></div>
+                                                    <h3 className="text-sm font-bold text-zinc-900">No Nominees Assigned</h3>
+                                                    <p className="text-xs text-zinc-500 mt-1 max-w-xs">You have not added any nominees to this employee yet.</p>
+                                                    <Button type="button" variant="outline" size="sm" className="mt-4 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 rounded-lg font-semibold h-9" onClick={() => setData('nominees', [{ name: '', relation: '', mobile: '', date_of_birth: '', share_percentage: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Nominee</Button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-5">
+                                                    {data.nominees.map((nom, idx) => (
+                                                        <div key={idx} className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 hover:border-zinc-300 transition-all duration-150 shadow-sm">
+                                                            <div className="flex items-center justify-between border-b border-zinc-50 pb-3">
+                                                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nominee #{idx + 1}</span>
+                                                                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => setData('nominees', data.nominees.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 mr-1.5" /> Remove</Button>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                                                                <FormField label="Nominee Name" required><Input value={nom.name} onChange={(e) => { const next = [...data.nominees]; next[idx] = { ...next[idx], name: e.target.value }; setData('nominees', next); }} placeholder="Full Name" /></FormField>
+                                                                <FormField label="Relationship">
+                                                                    <ComboSelect value={nom.relation || null} onChange={(v) => { const next = [...data.nominees]; next[idx] = { ...next[idx], relation: v ?? '' }; setData('nominees', next); }} items={relations.map(r => ({ value: r, label: r }))} placeholder="Select Relation" />
+                                                                </FormField>
+                                                                <FormField label="Contact Mobile"><Input value={nom.mobile} onChange={(e) => { const next = [...data.nominees]; next[idx] = { ...next[idx], mobile: e.target.value }; setData('nominees', next); }} placeholder="Mobile No" /></FormField>
+                                                                <FormField label="Date of Birth"><Input type="date" value={nom.date_of_birth} onChange={(e) => { const next = [...data.nominees]; next[idx] = { ...next[idx], date_of_birth: e.target.value }; setData('nominees', next); }} /></FormField>
+                                                                <FormField label="Share Percentage (%)"><Input type="number" min={0} max={100} value={nom.share_percentage} onChange={(e) => { const next = [...data.nominees]; next[idx] = { ...next[idx], share_percentage: e.target.value }; setData('nominees', next); }} placeholder="e.g. 50" /></FormField>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('bank')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 5 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('guarantor')}>Next: Guarantor Info</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* GUARANTOR TAB */}
+                                    <TabsContent value="guarantor" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8">
+                                            <h2 className="text-lg font-bold text-zinc-900">Guarantor & Security Details</h2>
+                                            <p className="text-xs text-zinc-500 mt-1">Provide reference guarantors and security/guarantor cheque details.</p>
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-8">
+                                            {/* Guarantors */}
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between items-center">
+                                                    <h3 className="text-sm font-bold text-zinc-800">1. References / Guarantors</h3>
+                                                    <Button type="button" variant="outline" size="sm" className="h-8.5 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('guarantors', [...data.guarantors, { name: '', father_name: '', mobile: '', address: '', profession: '', organization: '', designation: '', nid: '' }])}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Guarantor</Button>
+                                                </div>
+
+                                                {data.guarantors.length === 0 ? (
+                                                    <p className="text-xs text-zinc-400 bg-zinc-50/30 border border-zinc-100 p-4 rounded-xl italic">No reference guarantors listed yet. Add one above.</p>
+                                                ) : (
+                                                    <div className="space-y-4">
+                                                        {data.guarantors.map((g, idx) => (
+                                                            <div key={idx} className="rounded-2xl border border-zinc-200 p-4 space-y-4 bg-white hover:border-zinc-300 transition-colors shadow-sm">
+                                                                <div className="flex items-center justify-between border-b border-zinc-50 pb-2">
+                                                                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Guarantor #{idx + 1}</span>
+                                                                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg px-2" onClick={() => setData('guarantors', data.guarantors.filter((_, i) => i !== idx))}><Trash2 className="h-3.5 w-3.5 mr-1" /> Remove</Button>
+                                                                </div>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                                    <FormField label="Full Name" required><Input value={g.name} onChange={(e) => { const next = [...data.guarantors]; next[idx] = { ...next[idx], name: e.target.value }; setData('guarantors', next); }} placeholder="Full Name" /></FormField>
+                                                                    <FormField label="Father's Name"><Input value={g.father_name} onChange={(e) => { const next = [...data.guarantors]; next[idx] = { ...next[idx], father_name: e.target.value }; setData('guarantors', next); }} placeholder="Father's Name" /></FormField>
+                                                                    <FormField label="Mobile Number"><Input value={g.mobile} onChange={(e) => { const next = [...data.guarantors]; next[idx] = { ...next[idx], mobile: e.target.value }; setData('guarantors', next); }} placeholder="Mobile No" /></FormField>
+                                                                    <FormField label="NID Card Number"><Input value={g.nid} onChange={(e) => { const next = [...data.guarantors]; next[idx] = { ...next[idx], nid: e.target.value }; setData('guarantors', next); }} placeholder="NID Number" /></FormField>
+                                                                    <FormField label="Profession"><Input value={g.profession} onChange={(e) => { const next = [...data.guarantors]; next[idx] = { ...next[idx], profession: e.target.value }; setData('guarantors', next); }} placeholder="Profession" /></FormField>
+                                                                    <FormField label="Organization"><Input value={g.organization} onChange={(e) => { const next = [...data.guarantors]; next[idx] = { ...next[idx], organization: e.target.value }; setData('guarantors', next); }} placeholder="Company" /></FormField>
+                                                                    <FormField label="Designation"><Input value={g.designation} onChange={(e) => { const next = [...data.guarantors]; next[idx] = { ...next[idx], designation: e.target.value }; setData('guarantors', next); }} placeholder="Designation" /></FormField>
+                                                                    <FormField label="Address Details"><Input value={g.address} onChange={(e) => { const next = [...data.guarantors]; next[idx] = { ...next[idx], address: e.target.value }; setData('guarantors', next); }} placeholder="Full Address" /></FormField>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Cheques */}
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between items-center">
+                                                    <h3 className="text-sm font-bold text-zinc-800">2. Security Cheques</h3>
+                                                    <Button type="button" variant="outline" size="sm" className="h-8.5 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('guarantor_cheques', [...data.guarantor_cheques, { bank_name: '', cheque_no: '', amount: '' }])}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Cheque</Button>
+                                                </div>
+
+                                                {data.guarantor_cheques.length === 0 ? (
+                                                    <p className="text-xs text-zinc-400 bg-zinc-50/30 border border-zinc-100 p-4 rounded-xl italic">No cheques registered. Add security details if required.</p>
+                                                ) : (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {data.guarantor_cheques.map((ch, idx) => (
+                                                            <div key={idx} className="rounded-2xl border border-zinc-200 p-4 bg-white space-y-3 relative hover:border-zinc-300 transition-colors shadow-sm">
+                                                                <div className="flex items-center justify-between border-b border-zinc-50 pb-1.5">
+                                                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Cheque #{idx + 1}</span>
+                                                                    <Button type="button" variant="ghost" size="sm" className="h-6.5 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg px-2" onClick={() => setData('guarantor_cheques', data.guarantor_cheques.filter((_, i) => i !== idx))}><Trash2 className="h-3.5 w-3.5 mr-1" /> Remove</Button>
+                                                                </div>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                                    <FormField label="Bank Name"><Input value={ch.bank_name} onChange={(e) => { const next = [...data.guarantor_cheques]; next[idx] = { ...next[idx], bank_name: e.target.value }; setData('guarantor_cheques', next); }} placeholder="Bank Name" /></FormField>
+                                                                    <FormField label="Cheque No"><Input value={ch.cheque_no} onChange={(e) => { const next = [...data.guarantor_cheques]; next[idx] = { ...next[idx], cheque_no: e.target.value }; setData('guarantor_cheques', next); }} placeholder="Cheque No" /></FormField>
+                                                                    <FormField label="Amount"><Input type="number" min={0} value={ch.amount} onChange={(e) => { const next = [...data.guarantor_cheques]; next[idx] = { ...next[idx], amount: e.target.value }; setData('guarantor_cheques', next); }} placeholder="Amount" /></FormField>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('nominee')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 6 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('collateral')}>Next: Collateral Info</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* COLLATERAL TAB */}
+                                    <TabsContent value="collateral" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8">
+                                            <h2 className="text-lg font-bold text-zinc-900">Collateral / Security Deposits</h2>
+                                            <p className="text-xs text-zinc-500 mt-1">Specify employee security deposits, certificates and collateral details.</p>
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-6">
+                                            <div className="space-y-4 bg-zinc-50/30 p-5 rounded-xl border border-zinc-100">
+                                                <label className="flex cursor-pointer items-center gap-2.5 text-xs font-bold text-zinc-700 select-none">
+                                                    <input type="checkbox" className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" checked={data.collateral.has_certificate} onChange={(e) => setData('collateral', { ...data.collateral, has_certificate: e.target.checked })} />
+                                                    <span>Has Certificate Deposit</span>
+                                                </label>
+
+                                                {data.collateral.has_certificate && (
+                                                    <div className="space-y-3 pt-3 border-t border-zinc-100 animate-slide-down">
+                                                        <Label className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-2">Select Level(s)</Label>
+                                                        <div className="flex flex-wrap gap-4">
+                                                            {['SSC', 'HSC', 'Honors', 'Masters'].map((lvl) => (
+                                                                <label key={lvl} className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-600">
+                                                                    <input type="checkbox" className="h-3.5 w-3.5 rounded border-zinc-300 text-emerald-600" checked={data.collateral.certificate_levels?.includes(lvl)} onChange={(e) => {
+                                                                        const levels = data.collateral.certificate_levels ?? [];
+                                                                        const next = e.target.checked ? [...levels, lvl] : levels.filter(l => l !== lvl);
+                                                                        setData('collateral', { ...data.collateral, certificate_levels: next });
+                                                                    }} />
+                                                                    <span>{lvl}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                        {errors.certificate_levels && <p className="text-xs text-red-500 font-semibold">{errors.certificate_levels}</p>}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                <FormField label="Security Amount"><Input type="number" min={0} value={data.collateral.security_amount} onChange={(e) => setData('collateral', { ...data.collateral, security_amount: e.target.value })} placeholder="Deposit amount" /></FormField>
+                                                <FormField label="Collateral Interest"><Input value={data.collateral.collateral_interest} onChange={(e) => setData('collateral', { ...data.collateral, collateral_interest: e.target.value })} placeholder="e.g. 5%" /></FormField>
+                                                <FormField label="Collateral Date"><Input type="date" value={data.collateral.collateral_date} onChange={(e) => setData('collateral', { ...data.collateral, collateral_date: e.target.value })} /></FormField>
+                                                <FormField label="Security Notes" className="sm:col-span-2 lg:col-span-4"><Input value={data.collateral.notes} onChange={(e) => setData('collateral', { ...data.collateral, notes: e.target.value })} placeholder="e.g. details of collateral document" /></FormField>
+                                            </div>
+
+                                            {/* Collateral Cheques */}
+                                            <div className="space-y-4 pt-4 border-t border-zinc-100">
+                                                <div className="flex justify-between items-center">
+                                                    <h3 className="text-sm font-bold text-zinc-800">Collateral Receive Cheques</h3>
+                                                    <Button type="button" variant="outline" size="sm" className="h-8.5 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('collateral_receive_cheques', [...data.collateral_receive_cheques, { bank_name: '', cheque_no: '', amount: '' }])}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Cheque</Button>
+                                                </div>
+
+                                                {data.collateral_receive_cheques.length === 0 ? (
+                                                    <p className="text-xs text-zinc-400 bg-zinc-50/30 border border-zinc-100 p-4 rounded-xl italic">No collateral receive cheques added.</p>
+                                                ) : (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {data.collateral_receive_cheques.map((ch, idx) => (
+                                                            <div key={idx} className="rounded-2xl border border-zinc-200 p-4 bg-white space-y-3 relative hover:border-zinc-300 transition-colors shadow-sm">
+                                                                <div className="flex items-center justify-between border-b border-zinc-50 pb-1.5">
+                                                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Cheque #{idx + 1}</span>
+                                                                    <Button type="button" variant="ghost" size="sm" className="h-6.5 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg px-2" onClick={() => setData('collateral_receive_cheques', data.collateral_receive_cheques.filter((_, i) => i !== idx))}><Trash2 className="h-3 w-3 mr-1" /> Remove</Button>
+                                                                </div>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                                    <FormField label="Bank Name"><Input value={ch.bank_name} onChange={(e) => { const next = [...data.collateral_receive_cheques]; next[idx] = { ...next[idx], bank_name: e.target.value }; setData('collateral_receive_cheques', next); }} placeholder="Bank Name" /></FormField>
+                                                                    <FormField label="Cheque No"><Input value={ch.cheque_no} onChange={(e) => { const next = [...data.collateral_receive_cheques]; next[idx] = { ...next[idx], cheque_no: e.target.value }; setData('collateral_receive_cheques', next); }} placeholder="Cheque No" /></FormField>
+                                                                    <FormField label="Amount"><Input type="number" min={0} value={ch.amount} onChange={(e) => { const next = [...data.collateral_receive_cheques]; next[idx] = { ...next[idx], amount: e.target.value }; setData('collateral_receive_cheques', next); }} placeholder="Amount" /></FormField>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('guarantor')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 7 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('asset')}>Next: Assets</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* ASSET TAB */}
+                                    <TabsContent value="asset" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8 flex items-center justify-between">
+                                            <div>
+                                                <h2 className="text-lg font-bold text-zinc-900">Assigned Assets</h2>
+                                                <p className="text-xs text-zinc-500 mt-1">Manage physical hardware or equipment assigned to this employee.</p>
+                                            </div>
+                                            {data.assets.length > 0 && (
+                                                <Button type="button" variant="outline" size="sm" className="h-9 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('assets', [...data.assets, { serial_no: '', asset_no: '', asset_name: '', provided_qty: '', asset_price: '', asset_details: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Row</Button>
+                                            )}
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-6">
+                                            {data.assets.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center border border-dashed border-zinc-200 rounded-2xl py-12 px-4 text-center bg-zinc-50/25">
+                                                    <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ring-8 ring-emerald-50/30 mb-4"><Package className="h-6 w-6" strokeWidth={1.5} /></div>
+                                                    <h3 className="text-sm font-bold text-zinc-900">No Assets Assigned</h3>
+                                                    <p className="text-xs text-zinc-500 mt-1 max-w-xs">There are no hardware or company assets currently linked to this employee profile.</p>
+                                                    <Button type="button" variant="outline" size="sm" className="mt-4 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 rounded-lg font-semibold h-9" onClick={() => setData('assets', [{ serial_no: '', asset_no: '', asset_name: '', provided_qty: '', asset_price: '', asset_details: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Link Asset</Button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-5">
+                                                    {data.assets.map((as, idx) => (
+                                                        <div key={idx} className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 hover:border-zinc-300 transition-all duration-150 shadow-sm">
+                                                            <div className="flex items-center justify-between border-b border-zinc-50 pb-3">
+                                                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Asset #{idx + 1}</span>
+                                                                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => setData('assets', data.assets.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 mr-1.5" /> Remove</Button>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                                                                <FormField label="Serial Number"><Input value={as.serial_no} onChange={(e) => { const next = [...data.assets]; next[idx] = { ...next[idx], serial_no: e.target.value }; setData('assets', next); }} placeholder="Serial No" /></FormField>
+                                                                <FormField label="Asset Number"><Input value={as.asset_no} onChange={(e) => { const next = [...data.assets]; next[idx] = { ...next[idx], asset_no: e.target.value }; setData('assets', next); }} placeholder="Asset Code" /></FormField>
+                                                                <FormField label="Asset Name" required><Input value={as.asset_name} onChange={(e) => { const next = [...data.assets]; next[idx] = { ...next[idx], asset_name: e.target.value }; setData('assets', next); }} placeholder="Item Name" /></FormField>
+                                                                <FormField label="Provided Qty"><Input type="number" min={0} value={as.provided_qty} onChange={(e) => { const next = [...data.assets]; next[idx] = { ...next[idx], provided_qty: e.target.value }; setData('assets', next); }} placeholder="Quantity" /></FormField>
+                                                                <FormField label="Asset Price"><Input type="number" min={0} value={as.asset_price} onChange={(e) => { const next = [...data.assets]; next[idx] = { ...next[idx], asset_price: e.target.value }; setData('assets', next); }} placeholder="Price (৳)" /></FormField>
+                                                                <FormField label="Assignment Details" className="sm:col-span-2 lg:col-span-5"><Input value={as.asset_details} onChange={(e) => { const next = [...data.assets]; next[idx] = { ...next[idx], asset_details: e.target.value }; setData('assets', next); }} placeholder="Describe condition or assignment details..." /></FormField>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('collateral')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 8 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('experience')}>Next: Work Experience</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* EXPERIENCE TAB */}
+                                    <TabsContent value="experience" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8 flex items-center justify-between">
+                                            <div>
+                                                <h2 className="text-lg font-bold text-zinc-900">Work Experience</h2>
+                                                <p className="text-xs text-zinc-500 mt-1">Details of previous professional employment history.</p>
+                                            </div>
+                                            {data.experiences.length > 0 && (
+                                                <Button type="button" variant="outline" size="sm" className="h-9 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('experiences', [...data.experiences, { organization: '', from_date: '', to_date: '', designation: '', department: '', responsibility: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Row</Button>
+                                            )}
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-6">
+                                            {data.experiences.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center border border-dashed border-zinc-200 rounded-2xl py-12 px-4 text-center bg-zinc-50/25">
+                                                    <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ring-8 ring-emerald-50/30 mb-4"><Briefcase className="h-6 w-6" strokeWidth={1.5} /></div>
+                                                    <h3 className="text-sm font-bold text-zinc-900">No Employment History</h3>
+                                                    <p className="text-xs text-zinc-500 mt-1 max-w-xs">No prior work experience has been recorded for this employee profile yet.</p>
+                                                    <Button type="button" variant="outline" size="sm" className="mt-4 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 rounded-lg font-semibold h-9" onClick={() => setData('experiences', [{ organization: '', from_date: '', to_date: '', designation: '', department: '', responsibility: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Experience</Button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-5">
+                                                    {data.experiences.map((exp, idx) => (
+                                                        <div key={idx} className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 hover:border-zinc-300 transition-all duration-150 shadow-sm">
+                                                            <div className="flex items-center justify-between border-b border-zinc-50 pb-3">
+                                                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Experience #{idx + 1}</span>
+                                                                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => setData('experiences', data.experiences.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 mr-1.5" /> Remove</Button>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                                                                <FormField label="Organization" required><Input value={exp.organization} onChange={(e) => { const next = [...data.experiences]; next[idx] = { ...next[idx], organization: e.target.value }; setData('experiences', next); }} placeholder="Company Name" /></FormField>
+                                                                <FormField label="Designation"><Input value={exp.designation} onChange={(e) => { const next = [...data.experiences]; next[idx] = { ...next[idx], designation: e.target.value }; setData('experiences', next); }} placeholder="e.g. Executive" /></FormField>
+                                                                <FormField label="Department"><Input value={exp.department} onChange={(e) => { const next = [...data.experiences]; next[idx] = { ...next[idx], department: e.target.value }; setData('experiences', next); }} placeholder="e.g. Sales" /></FormField>
+                                                                <FormField label="From Date"><Input type="date" value={exp.from_date} onChange={(e) => { const next = [...data.experiences]; next[idx] = { ...next[idx], from_date: e.target.value }; setData('experiences', next); }} /></FormField>
+                                                                <FormField label="To Date"><Input type="date" value={exp.to_date} onChange={(e) => { const next = [...data.experiences]; next[idx] = { ...next[idx], to_date: e.target.value }; setData('experiences', next); }} /></FormField>
+                                                                <FormField label="Job Responsibilities" className="sm:col-span-2 lg:col-span-5"><Input value={exp.responsibility} onChange={(e) => { const next = [...data.experiences]; next[idx] = { ...next[idx], responsibility: e.target.value }; setData('experiences', next); }} placeholder="Describe job duties..." /></FormField>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('asset')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 9 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('training')}>Next: Trainings</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* TRAINING TAB */}
+                                    <TabsContent value="training" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8 flex items-center justify-between">
+                                            <div>
+                                                <h2 className="text-lg font-bold text-zinc-900">Training & Certifications</h2>
+                                                <p className="text-xs text-zinc-500 mt-1">Add employee professional training programs or courses.</p>
+                                            </div>
+                                            {data.trainings.length > 0 && (
+                                                <Button type="button" variant="outline" size="sm" className="h-9 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('trainings', [...data.trainings, { training_title: '', institute: '', duration: '', address: '', remarks: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Row</Button>
+                                            )}
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-6">
+                                            {data.trainings.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center border border-dashed border-zinc-200 rounded-2xl py-12 px-4 text-center bg-zinc-50/25">
+                                                    <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ring-8 ring-emerald-50/30 mb-4"><Award className="h-6 w-6" strokeWidth={1.5} /></div>
+                                                    <h3 className="text-sm font-bold text-zinc-900">No Trainings Recorded</h3>
+                                                    <p className="text-xs text-zinc-500 mt-1 max-w-xs">No professional training records have been added to this profile yet.</p>
+                                                    <Button type="button" variant="outline" size="sm" className="mt-4 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 rounded-lg font-semibold h-9" onClick={() => setData('trainings', [{ training_title: '', institute: '', duration: '', address: '', remarks: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Training</Button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-5">
+                                                    {data.trainings.map((tr, idx) => (
+                                                        <div key={idx} className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 hover:border-zinc-300 transition-all duration-150 shadow-sm">
+                                                            <div className="flex items-center justify-between border-b border-zinc-50 pb-3">
+                                                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Training #{idx + 1}</span>
+                                                                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => setData('trainings', data.trainings.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 mr-1.5" /> Remove</Button>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                                                                <FormField label="Training Title" required><Input value={tr.training_title} onChange={(e) => { const next = [...data.trainings]; next[idx] = { ...next[idx], training_title: e.target.value }; setData('trainings', next); }} placeholder="Course Name" /></FormField>
+                                                                <FormField label="Institute"><Input value={tr.institute} onChange={(e) => { const next = [...data.trainings]; next[idx] = { ...next[idx], institute: e.target.value }; setData('trainings', next); }} placeholder="Institution Name" /></FormField>
+                                                                <FormField label="Duration"><Input value={tr.duration} onChange={(e) => { const next = [...data.trainings]; next[idx] = { ...next[idx], duration: e.target.value }; setData('trainings', next); }} placeholder="e.g. 3 Months" /></FormField>
+                                                                <FormField label="Address"><Input value={tr.address} onChange={(e) => { const next = [...data.trainings]; next[idx] = { ...next[idx], address: e.target.value }; setData('trainings', next); }} placeholder="Location" /></FormField>
+                                                                <FormField label="Remarks"><Input value={tr.remarks} onChange={(e) => { const next = [...data.trainings]; next[idx] = { ...next[idx], remarks: e.target.value }; setData('trainings', next); }} placeholder="Remarks" /></FormField>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('experience')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 10 of 11</span>
+                                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 rounded-lg shadow-sm h-10" onClick={() => requestTabChange('documents')}>Next: Attach Documents</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* DOCUMENTS TAB */}
+                                    <TabsContent value="documents" className="mt-0 focus-visible:outline-none">
+                                        <div className="border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8 flex items-center justify-between">
+                                            <div>
+                                                <h2 className="text-lg font-bold text-zinc-900">Attachments & Documents</h2>
+                                                <p className="text-xs text-zinc-500 mt-1">Upload verified files, identity scans, or academic transcripts.</p>
+                                            </div>
+                                            <Button type="button" variant="outline" size="sm" className="h-9 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('documents', [...data.documents, newEmployeeDocumentFormRow('')])}><Plus className="mr-1.5 h-4 w-4" /> Add Doc Row</Button>
+                                        </div>
+                                        <div className="p-6 md:p-8 space-y-6">
+                                            {data.documents.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center border border-dashed border-zinc-200 rounded-2xl py-12 px-4 text-center bg-zinc-50/25">
+                                                    <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ring-8 ring-emerald-50/30 mb-4"><FileText className="h-6 w-6" strokeWidth={1.5} /></div>
+                                                    <h3 className="text-sm font-bold text-zinc-900">No Documents Uploaded</h3>
+                                                    <p className="text-xs text-zinc-500 mt-1 max-w-xs">There are no files or attachments currently linked to this profile.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-5">
+                                                    {data.documents.map((doc, idx) => (
+                                                        <div key={idx} className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 hover:border-zinc-300 transition-all duration-150 shadow-sm relative">
+                                                            <div className="flex items-center justify-between border-b border-zinc-50 pb-3">
+                                                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">{formatEmployeeDocumentTypeLabel(doc.document_type) || `Document #${idx + 1}`}</span>
+                                                                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => setData('documents', data.documents.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 mr-1.5" /> Remove</Button>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                                <FormField label="Document Type">
+                                                                    <ComboSelect value={doc.document_type || null} onChange={(v) => { const next = [...data.documents]; next[idx] = { ...next[idx], document_type: v ?? '' }; setData('documents', next); }} items={documentTypes.map(t => ({ value: t, label: formatEmployeeDocumentTypeLabel(t) }))} placeholder="Select Type" />
+                                                                </FormField>
+                                                                <FormField label="Document Title"><Input value={doc.document_title} onChange={(e) => { const next = [...data.documents]; next[idx] = { ...next[idx], document_title: e.target.value }; setData('documents', next); }} placeholder="Custom name / description" /></FormField>
+                                                                <FormField label="Expiry Date"><Input type="date" value={doc.expiry_date} onChange={(e) => { const next = [...data.documents]; next[idx] = { ...next[idx], expiry_date: e.target.value }; setData('documents', next); }} /></FormField>
+                                                                <FormField label="Document File" error={errors[`documents.${idx}.file`]}>
+                                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                                        <label className="inline-flex cursor-pointer items-center justify-center gap-1.5 h-10 px-3.5 border border-zinc-200 rounded-lg text-xs font-bold hover:bg-zinc-50 transition-colors w-full text-zinc-600 shadow-sm">
+                                                                            <Upload className="h-4.5 w-4.5 shrink-0" />
+                                                                            {/* If edit mode, display existing doc name if available */}
+                                                                            <span className="truncate max-w-[120px]">{doc.file ? doc.file.name : doc.document_path ? 'Existing File' : 'Choose File'}</span>
+                                                                            <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={(e) => {
+                                                                                const f = e.target.files?.[0] ?? null;
+                                                                                setData('documents', data.documents.map((d, i) => i === idx ? { ...d, file: f } : d));
+                                                                            }} />
+                                                                        </label>
+                                                                    </div>
+                                                                </FormField>
+                                                                <FormField label="Description" className="sm:col-span-2 lg:col-span-4"><Input value={doc.description} onChange={(e) => { const next = [...data.documents]; next[idx] = { ...next[idx], description: e.target.value }; setData('documents', next); }} placeholder="Optional document comments..." /></FormField>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="border-t border-zinc-100 bg-zinc-50/50 p-6 flex justify-between items-center rounded-b-2xl">
+                                            <Button type="button" variant="outline" className="h-10 px-4 rounded-lg font-semibold" onClick={() => requestTabChange('training')}>Back</Button>
+                                            <span className="text-xs text-zinc-400 font-semibold">Step 11 of 11</span>
+                                            <Button type="submit" disabled={processing} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 rounded-lg shadow-sm h-10">{processing ? 'Saving Changes…' : 'Save Changes'}</Button>
+                                        </div>
+                                    </TabsContent>
+
+                                </Tabs>
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
 
-            <Dialog
-                open={addVillageModal.open}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false });
-                    } else {
-                        setAddVillageModal((s) => ({ ...s, open: true }));
-                    }
-                }}
-            >
-                <DialogContent className="sm:max-w-md">
+            {/* Custom Modals */}
+            {/* Add Union Modal */}
+            <Dialog open={addUnionModal.open} onOpenChange={(op) => !op && setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false })}>
+                <DialogContent className="sm:max-w-md rounded-2xl p-6">
                     <DialogHeader>
-                        <DialogTitle className="text-sm">Add Village</DialogTitle>
+                        <DialogTitle className="text-sm font-bold text-zinc-900">Add New Union</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-2">
-                        <Label className="text-xs">Village Name</Label>
-                        <Input
-                            value={addVillageModal.name}
-                            onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value, error: '' }))}
-                            placeholder="Type village name"
-                            autoFocus
-                        />
-                        {addVillageModal.error ? <p className="text-xs text-red-600">{addVillageModal.error}</p> : null}
-                        <p className="text-[11px] text-muted-foreground">
-                            This will be saved and available for future selection.
-                        </p>
+                    <div className="space-y-4 my-2">
+                        <FormField label="Union Name" error={addUnionModal.error}>
+                            <Input value={addUnionModal.name} onChange={(e) => setAddUnionModal(s => ({ ...s, name: e.target.value, error: '' }))} placeholder="Type union name" autoFocus />
+                        </FormField>
                     </div>
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })}
-                            disabled={addVillageModal.saving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            onClick={async () => {
-                                const target = addVillageModal.target;
-                                const name = addVillageModal.name;
-                                setAddVillageModal((s) => ({ ...s, saving: true, error: '' }));
-                                const result = await persistVillage(target, name);
-                                if (result.ok) {
-                                    setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false });
-                                } else {
-                                    setAddVillageModal((s) => ({ ...s, saving: false, error: result.error ?? 'Could not save village.' }));
-                                }
-                            }}
-                            disabled={!addVillageModal.name.trim() || addVillageModal.saving}
-                        >
-                            {addVillageModal.saving ? 'Saving…' : 'Save'}
-                        </Button>
+                    <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-zinc-50 mt-4">
+                        <Button type="button" variant="outline" className="rounded-lg h-9 text-xs" onClick={() => setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false })} disabled={addUnionModal.saving}>Cancel</Button>
+                        <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-9 text-xs" disabled={!addUnionModal.name.trim() || addUnionModal.saving} onClick={async () => {
+                            setAddUnionModal(s => ({ ...s, saving: true, error: '' }));
+                            const res = await persistUnion(addUnionModal.target, addUnionModal.name);
+                            if (res.ok) setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false });
+                            else setAddUnionModal(s => ({ ...s, saving: false, error: res.error || 'Failed to save union.' }));
+                        }}>{addUnionModal.saving ? 'Saving…' : 'Save Union'}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Add Village Modal */}
+            <Dialog open={addVillageModal.open} onOpenChange={(op) => !op && setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })}>
+                <DialogContent className="sm:max-w-md rounded-2xl p-6">
+                    <DialogHeader>
+                        <DialogTitle className="text-sm font-bold text-zinc-900">Add New Village</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 my-2">
+                        <FormField label="Village Name" error={addVillageModal.error}>
+                            <Input value={addVillageModal.name} onChange={(e) => setAddVillageModal(s => ({ ...s, name: e.target.value, error: '' }))} placeholder="Type village name" autoFocus />
+                        </FormField>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-zinc-50 mt-4">
+                        <Button type="button" variant="outline" className="rounded-lg h-9 text-xs" onClick={() => setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })} disabled={addVillageModal.saving}>Cancel</Button>
+                        <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-9 text-xs" disabled={!addVillageModal.name.trim() || addVillageModal.saving} onClick={async () => {
+                            setAddVillageModal(s => ({ ...s, saving: true, error: '' }));
+                            const res = await persistVillage(addVillageModal.target, addVillageModal.name);
+                            if (res.ok) setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false });
+                            else setAddVillageModal(s => ({ ...s, saving: false, error: res.error || 'Failed to save village.' }));
+                        }}>{addVillageModal.saving ? 'Saving…' : 'Save Village'}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </Layout>
     );
 }

@@ -8,12 +8,15 @@ use App\Models\AttendanceDevice;
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\Holiday;
+use App\Support\EmployeeNameMatcher;
 use App\Support\EmployeePinLookup;
+use App\Support\ZktecoEmployeeResolver;
 use App\Models\LeaveApplication;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
@@ -386,17 +389,17 @@ class ZKTecoAPIController extends Controller
     /**
      * Process a record from agent push
      */
-    private function processAgentRecord($record, $device)
+    private function processAgentRecord($record, $device, ?ZktecoEmployeeResolver $resolver = null)
     {
-        // Match device PIN to DB pin/employee_id (leading zeros ignored, e.g. device "95" → "0095")
-        $employee = EmployeePinLookup::findEmployee((string) $record['id']);
+        $resolver ??= new ZktecoEmployeeResolver([], $device->branch_id);
+        $employee = $resolver->resolve((string) $record['id'], $device->branch_id);
 
-        // Log the employee lookup details for debugging
         Log::info('ZKTeco sync: Employee lookup details', [
             'record_id' => $record['id'],
             'record_id_type' => gettype($record['id']),
             'pin_variants' => EmployeePinLookup::variants((string) $record['id']),
-            'employee_found' => ($employee !== null)
+            'employee_found' => ($employee !== null),
+            'resolved_pin' => $employee?->pin ?? $employee?->employee_id,
         ]);
 
         if (!$employee) {
@@ -514,14 +517,26 @@ class ZKTecoAPIController extends Controller
             }
         }
 
-        // Process attendance records
+        if (isset($request->device_pin_mappings) && is_array($request->device_pin_mappings)) {
+            $this->processDevicePinMappings($request->device_pin_mappings);
+        }
+
+        if (isset($request->user_data) && is_array($request->user_data)) {
+            $this->processUserData($request->user_data, $device);
+        }
+
+        $resolver = new ZktecoEmployeeResolver(
+            $request->user_data ?? [],
+            $device->branch_id
+        );
+
         $processed = 0;
         $skipped = 0;
         $errors = 0;
 
         foreach ($request->attendance_data as $record) {
             try {
-                $result = $this->processAgentRecord($record, $device);
+                $result = $this->processAgentRecord($record, $device, $resolver);
                 if ($result === true) {
                     $processed++;
                 } else {
@@ -536,18 +551,11 @@ class ZKTecoAPIController extends Controller
             }
         }
 
-        // Update device last sync time
         $device->last_sync_at = now();
         $device->last_sync_status = $errors === 0 ? 'success' : 'partial';
         $device->save();
 
-        // Process absent employees
         $this->processAbsentEmployees($device);
-
-        // Process user data if provided (to sync employee biometric IDs)
-        if (isset($request->user_data) && is_array($request->user_data)) {
-            $this->processUserData($request->user_data, $device);
-        }
 
         return response()->json([
             'status' => true,
@@ -1360,6 +1368,102 @@ class ZKTecoAPIController extends Controller
     }
 
     /**
+     * Store numeric device badge IDs for special HRM pins (SMART-1, CSO-2, etc.).
+     */
+    public function syncDevicePinMappings(Request $request)
+    {
+        if ($request->header('Authorization') !== 'Bearer ' . config('app.zkteco_api_key')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized access',
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'mappings' => 'required|array',
+            'mappings.*.hrm_pin' => 'required|string',
+            'mappings.*.device_user_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Invalid mapping data',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $summary = $this->processDevicePinMappings($request->input('mappings', []));
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Device pin mappings saved',
+            'summary' => $summary,
+        ]);
+    }
+
+    private function processDevicePinMappings(array $mappings): array
+    {
+        if (! Schema::hasColumn('employees', 'device_user_id')) {
+            Log::warning('ZKTeco sync: device_user_id column missing, skipping pin mappings');
+
+            return [
+                'updated' => 0,
+                'skipped' => count($mappings),
+                'missing' => 0,
+                'total' => count($mappings),
+            ];
+        }
+
+        $updated = 0;
+        $skipped = 0;
+        $missing = 0;
+
+        foreach ($mappings as $mapping) {
+            $hrmPin = trim((string) ($mapping['hrm_pin'] ?? ''));
+            $deviceUserId = trim((string) ($mapping['device_user_id'] ?? ''));
+
+            if ($hrmPin === '' || $deviceUserId === '') {
+                $skipped++;
+                continue;
+            }
+
+            $employee = Employee::query()
+                ->where('employee_id', $hrmPin)
+                ->orWhere('pin', $hrmPin)
+                ->first();
+
+            if (! $employee) {
+                $missing++;
+                continue;
+            }
+
+            if ($employee->device_user_id === $deviceUserId) {
+                $skipped++;
+                continue;
+            }
+
+            $employee->device_user_id = $deviceUserId;
+            $employee->save();
+            $updated++;
+        }
+
+        Log::info('ZKTeco sync: Device pin mappings processed', [
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'missing' => $missing,
+            'total' => count($mappings),
+        ]);
+
+        return [
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'missing' => $missing,
+            'total' => count($mappings),
+        ];
+    }
+
+    /**
      * Process user data from the device to sync biometric IDs
      */
     private function processUserData($userData, $device)
@@ -1368,18 +1472,40 @@ class ZKTecoAPIController extends Controller
         $skipped = 0;
 
         foreach ($userData as $user) {
-            if (!isset($user['uid']) || !isset($user['id'])) {
+            if (! is_array($user) || ! isset($user['uid'])) {
                 $skipped++;
                 continue;
             }
 
-            $employee = EmployeePinLookup::findEmployee((string) $user['id']);
-            if (!$employee) {
+            $deviceUserId = trim((string) ($user['id'] ?? $user['userid'] ?? ''));
+            if ($deviceUserId === '') {
                 $skipped++;
                 continue;
             }
 
-            // Update biometric ID if different
+            $employee = EmployeePinLookup::findEmployee($deviceUserId);
+
+            if (! $employee && ! empty($user['name'])) {
+                $employee = EmployeeNameMatcher::findTextPinEmployeeByDeviceName(
+                    (string) $user['name'],
+                    $device->branch_id
+                ) ?? EmployeeNameMatcher::findByDeviceName((string) $user['name'], $device->branch_id);
+            }
+
+            if (! $employee) {
+                $skipped++;
+                continue;
+            }
+
+            if (
+                Schema::hasColumn('employees', 'device_user_id')
+                && preg_match('/^\d+$/', $deviceUserId)
+                && $employee->device_user_id !== $deviceUserId
+            ) {
+                $employee->device_user_id = $deviceUserId;
+                $employee->save();
+            }
+
             if ($employee->biometric_id != $user['uid']) {
                 $employee->biometric_id = $user['uid'];
                 $employee->save();

@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
-import { formatPayrollBranchLabel, sortPayrollBranches } from '@/lib/payroll-branches';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { ArrowLeft } from 'lucide-react';
 
 type BranchOption = { id: number; name: string; branch_code: string | null };
@@ -36,18 +36,7 @@ export default function BranchPayrollBankCreate({
         [banks],
     );
 
-    const branchItems: ComboSelectItem<string>[] = useMemo(
-        () =>
-            sortPayrollBranches(branches).map((b) => {
-                const code = (b.branch_code ?? '').trim();
-                return {
-                    value: String(b.id),
-                    label: formatPayrollBranchLabel(b),
-                    keywords: `${b.name} ${code}`.trim(),
-                };
-            }),
-        [branches],
-    );
+    const branchItems: ComboSelectItem<string>[] = useMemo(() => branchComboSelectItems(branches), [branches]);
 
     return (
         <Layout>

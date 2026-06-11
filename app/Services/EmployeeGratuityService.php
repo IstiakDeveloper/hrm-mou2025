@@ -96,7 +96,7 @@ class EmployeeGratuityService
             }
         }
 
-        return (float) ($employee->basic_salary ?? 0);
+        return $employee->resolveBasicSalary();
     }
 
     protected function labelFor(int $years, int $multiplier): string

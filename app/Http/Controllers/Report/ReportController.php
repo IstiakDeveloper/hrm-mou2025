@@ -64,26 +64,29 @@ class ReportController extends Controller
                 $query->where('employee_id', $employeeId);
             });
 
+        $summaryQuery = clone $query;
+
         $attendances = $query->orderBy('date', 'desc')
             ->paginate(20)
             ->withQueryString();
 
-        $branches = Branch::all();
-        $departments = Department::all();
-        $employees = Employee::where('status', 'active')->get();
+        $branches = Branch::query()->orderBy('name')->get(['id', 'name']);
+        $departments = Department::query()->orderBy('name')->get(['id', 'name']);
 
-        // Summary statistics
+        $statusCounts = $summaryQuery
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
         $summary = [
             'totalDays' => $startDate->diffInDays($endDate) + 1,
-            'present' => $query->where('status', 'present')->count(),
-            'absent' => $query->where('status', 'absent')->count(),
-            'late' => $query->where('status', 'late')->count(),
-            'halfDay' => $query->where('status', 'half_day')->count(),
-            'onLeave' => $query->where('status', 'leave')->count(),
+            'present' => (int) ($statusCounts['present'] ?? 0),
+            'absent' => (int) ($statusCounts['absent'] ?? 0),
+            'late' => (int) ($statusCounts['late'] ?? 0),
+            'halfDay' => (int) ($statusCounts['half_day'] ?? 0),
+            'onLeave' => (int) ($statusCounts['leave'] ?? 0),
         ];
 
-        // Chart data
-        $chartData = [];
         $statusColors = [
             'present' => '#22c55e', // green
             'absent' => '#ef4444',  // red
@@ -92,15 +95,16 @@ class ReportController extends Controller
             'leave' => '#3b82f6',   // blue
         ];
 
-        $dateRange = [];
-        $current = $startDate->copy();
-        while ($current <= $endDate) {
-            $dateRange[] = $current->format('Y-m-d');
-            $current->addDay();
-        }
+        $chartRows = (clone $summaryQuery)
+            ->selectRaw('date, status, COUNT(*) as total')
+            ->groupBy('date', 'status')
+            ->orderBy('date')
+            ->get();
 
-        foreach ($dateRange as $date) {
-            $dayData = [
+        $chartByDate = [];
+        foreach ($chartRows as $row) {
+            $date = Carbon::parse($row->date)->format('Y-m-d');
+            $chartByDate[$date] ??= [
                 'date' => $date,
                 'present' => 0,
                 'absent' => 0,
@@ -108,24 +112,17 @@ class ReportController extends Controller
                 'half_day' => 0,
                 'leave' => 0,
             ];
-
-            foreach (array_keys($dayData) as $status) {
-                if ($status !== 'date') {
-                    $count = Attendance::where('date', $date)
-                        ->where('status', $status)
-                        ->count();
-                    $dayData[$status] = $count;
-                }
-            }
-
-            $chartData[] = $dayData;
+            $chartByDate[$date][$row->status] = (int) $row->total;
         }
+
+        $chartData = array_values($chartByDate);
 
         return Inertia::render('report/attendance', [
             'attendances' => $attendances,
             'branches' => $branches,
             'departments' => $departments,
-            'employees' => $employees,
+            'employees' => [],
+            'employeeLookupUrl' => route('employees.lookup'),
             'filters' => $request->only(['start_date', 'end_date', 'branch_id', 'department_id', 'status', 'employee_id']),
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
@@ -185,13 +182,13 @@ class ReportController extends Controller
         // Get filter data
         $departments = Department::select('id', 'name')->orderBy('name')->get();
 
-        $employees = Employee::select('id', 'first_name', 'last_name', 'employee_id', 'department_id')
+        $employees = Employee::select('id', 'name_en', 'employee_id', 'department_id')
             ->with('department:id,name')
             ->where('status', 'active')
-            ->orderBy('first_name')
+            ->orderBy('name_en')
             ->get()
             ->map(function ($employee) {
-                $employee->full_name = trim($employee->first_name.' '.($employee->last_name ?? ''));
+                $employee->full_name = trim((string) ($employee->name_en ?? $employee->full_name_en ?? ''));
 
                 return $employee;
             });
@@ -261,11 +258,11 @@ class ReportController extends Controller
 
         // Get filter data for display
         $departments = Department::select('id', 'name')->get()->keyBy('id');
-        $employees = Employee::select('id', 'first_name', 'last_name', 'employee_id')
+        $employees = Employee::select('id', 'name_en', 'employee_id')
             ->get()
             ->keyBy('id')
             ->map(function ($employee) {
-                $employee->full_name = trim($employee->first_name.' '.($employee->last_name ?? ''));
+                $employee->full_name = trim((string) ($employee->name_en ?? $employee->full_name_en ?? ''));
 
                 return $employee;
             });
@@ -409,11 +406,9 @@ class ReportController extends Controller
                     $inner->where('transfer_order_no', 'like', '%'.$s.'%')
                         ->orWhere('reason', 'like', '%'.$s.'%')
                         ->orWhereHas('employee', function ($eq) use ($s) {
-                            $eq->where('first_name', 'like', '%'.$s.'%')
-                                ->orWhere('last_name', 'like', '%'.$s.'%')
-                                ->orWhere('employee_id', 'like', '%'.$s.'%')
-                                ->orWhere('name_en', 'like', '%'.$s.'%')
-                                ->orWhere('name_bn', 'like', '%'.$s.'%');
+                            $eq->where('name_en', 'like', '%'.$s.'%')
+                                ->orWhere('name_bn', 'like', '%'.$s.'%')
+                                ->orWhere('employee_id', 'like', '%'.$s.'%');
                         });
                 });
             });
@@ -432,7 +427,7 @@ class ReportController extends Controller
 
         $branches = Branch::orderBy('name')->get(['id', 'name']);
         $departments = Department::orderBy('name')->get(['id', 'name']);
-        $employees = Employee::where('status', 'active')->orderBy('first_name')->get(['id', 'employee_id', 'first_name', 'last_name']);
+        $employees = Employee::where('status', 'active')->orderBy('name_en')->get(['id', 'employee_id', 'name_en']);
 
         $branchFlow = $this->transferBranchFlowStats(clone $query, $branches);
 
@@ -529,8 +524,8 @@ class ReportController extends Controller
             })
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
+                    $q->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%");
                 });

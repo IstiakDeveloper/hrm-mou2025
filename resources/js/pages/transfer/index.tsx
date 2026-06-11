@@ -10,6 +10,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, formatPayrollBranchLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
@@ -47,11 +48,10 @@ import {
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
   department: { id: number; name: string } | null;
   designation: { id: number; name: string } | null;
@@ -65,6 +65,7 @@ interface Department {
 interface Branch {
   id: number;
   name: string;
+  branch_code?: string;
 }
 
 interface Designation {
@@ -373,7 +374,7 @@ export default function TransferIndex({
                   <SelectItem value="all">All Employees</SelectItem>
                   {employees.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id.toString()}>
-                      {employee.first_name} {employee.last_name} ({employee.employee_id})
+                      {employeeDisplayName(employee)} ({employee.employee_id})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -385,9 +386,9 @@ export default function TransferIndex({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Branches</SelectItem>
-                  {branches.map((branch) => (
+                  {sortPayrollBranches(branches).map((branch) => (
                     <SelectItem key={branch.id} value={branch.id.toString()}>
-                      {branch.name}
+                      {formatBranchSelectLabel(branch)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -399,9 +400,9 @@ export default function TransferIndex({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Branches</SelectItem>
-                  {branches.map((branch) => (
+                  {sortPayrollBranches(branches).map((branch) => (
                     <SelectItem key={branch.id} value={branch.id.toString()}>
-                      {branch.name}
+                      {formatBranchSelectLabel(branch)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -435,48 +436,59 @@ export default function TransferIndex({
                 </TableHeader>
                 <TableBody>
                   {transfers.data.length > 0 ? (
-                    transfers.data.map((transfer) => (
-                      <TableRow key={transfer.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
-                        <TableCell className="pl-6">
-                          <div className="flex items-center space-x-3">
-                            <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-                              <User className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <Link
-                                href={route('transfers.show', transfer.id)}
-                                className="font-semibold text-[13px] text-slate-800 hover:text-emerald-600 transition-colors"
-                              >
-                                {transfer.employee.first_name} {transfer.employee.last_name}
-                              </Link>
-                              <div className="text-xs text-slate-500 font-mono">
-                                ID: {transfer.employee.employee_id}
+                    transfers.data.map((transfer) => {
+                      const fBranch = transfer.fromBranch ?? (transfer as any).from_branch;
+                      const tBranch = transfer.toBranch ?? (transfer as any).to_branch;
+                      const fDept = transfer.fromDepartment ?? (transfer as any).from_department;
+                      const tDept = transfer.toDepartment ?? (transfer as any).to_department;
+                      const fDesig = transfer.fromDesignation ?? (transfer as any).from_designation;
+                      const tDesig = transfer.toDesignation ?? (transfer as any).to_designation;
+
+                      const formatBranch = (b: { name?: string; branch_code?: string | null } | null | undefined) =>
+                        b ? formatPayrollBranchLabel(b) : 'N/A';
+
+                      return (
+                        <TableRow key={transfer.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
+                          <TableCell className="pl-6">
+                            <div className="flex items-center space-x-3">
+                              <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                <User className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <Link
+                                  href={route('transfers.show', transfer.id)}
+                                  className="font-semibold text-[13px] text-slate-800 hover:text-emerald-600 transition-colors"
+                                >
+                                  {employeeDisplayName(transfer.employee)}
+                                </Link>
+                                <div className="text-xs text-slate-500 font-mono">
+                                  ID: {transfer.employee.employee_id}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-[13px] text-slate-700">
-                            <div className="font-medium flex items-center gap-1">
-                              <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                              {transfer.fromBranch?.name}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-[13px] text-slate-700">
+                              <div className="font-medium flex items-center gap-1">
+                                <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                                {formatBranch(fBranch)}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {fDept?.name || 'Same Department'} • {fDesig?.name || 'Same Designation'}
+                              </div>
                             </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              {transfer.fromDepartment?.name || 'Same Department'} • {transfer.fromDesignation?.name || 'Same Designation'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-[13px] text-slate-700">
+                              <div className="font-medium flex items-center gap-1">
+                                <ArrowRight className="h-3.5 w-3.5 text-emerald-500" />
+                                {formatBranch(tBranch)}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {tDept?.name || 'Same Department'} • {tDesig?.name || 'Same Designation'}
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-[13px] text-slate-700">
-                            <div className="font-medium flex items-center gap-1">
-                              <ArrowRight className="h-3.5 w-3.5 text-emerald-500" />
-                              {transfer.toBranch?.name}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              {transfer.toDepartment?.name || 'Same Department'} • {transfer.toDesignation?.name || 'Same Designation'}
-                            </div>
-                          </div>
-                        </TableCell>
+                          </TableCell>
                         <TableCell>
                           <span className="text-[13px] text-slate-600 font-medium">
                             {format(new Date(transfer.effective_date), 'dd MMM yyyy')}
@@ -572,7 +584,8 @@ export default function TransferIndex({
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))
+                    );
+                    })
                   ) : (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center">

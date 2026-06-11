@@ -39,11 +39,10 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
   department: {
     id: number;
@@ -166,14 +165,17 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
   };
 
   const effectiveDate = new Date(transfer.effective_date);
-  const fromBranchName =
-    (transfer as any).fromBranch?.name ??
-    (transfer as any).from_branch?.name ??
-    '—';
-  const toBranchName =
-    (transfer as any).toBranch?.name ??
-    (transfer as any).to_branch?.name ??
-    '—';
+  const fromBranch = (transfer as any).fromBranch ?? (transfer as any).from_branch;
+  const toBranch = (transfer as any).toBranch ?? (transfer as any).to_branch;
+
+  const formatBranch = (b: any) => {
+    if (!b) return '—';
+    const code = (b.branch_code ?? '').trim();
+    return code ? `${b.name} (${code})` : b.name;
+  };
+
+  const fromBranchName = formatBranch(fromBranch);
+  const toBranchName = formatBranch(toBranch);
 
   return (
     <Layout>
@@ -390,7 +392,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                       <div>
                         <p className="font-medium">Request Created</p>
                         <p className="text-sm text-gray-500">
-                          Created by admin for {transfer.employee.first_name} {transfer.employee.last_name}
+                          Created by admin for {employeeDisplayName(transfer.employee)}
                         </p>
                       </div>
                     </div>
@@ -461,7 +463,7 @@ export default function ShowTransfer({ transfer, canApprove }: ShowTransferProps
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm font-medium text-gray-500">Name</p>
-                    <p className="font-medium">{transfer.employee.first_name} {transfer.employee.last_name}</p>
+                    <p className="font-medium">{employeeDisplayName(transfer.employee)}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Employee ID</p>

@@ -165,7 +165,7 @@
             @foreach($movements as $movement)
                 <tr>
                     <td>
-                        {{ $movement->employee->first_name }} {{ $movement->employee->last_name }}
+                        {{ $movement->employee->name_en ?? $movement->employee->full_name_en }}
                         <span class="department">({{ $movement->employee->designation->name ?? 'No Designation' }}, {{ $movement->employee->department->name ?? 'No Department' }})</span>
                     </td>
                     <td>

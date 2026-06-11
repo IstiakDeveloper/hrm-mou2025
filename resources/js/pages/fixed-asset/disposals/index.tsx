@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { hasAppPermission } from '@/lib/permissions';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
@@ -102,7 +103,7 @@ export default function AssetDisposalIndex({
                 <PayrollSectionCard title="Filters" className="mb-4">
                     <div className="flex flex-wrap gap-2">
                         <Input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyFilters()} placeholder="Asset tag…" className="max-w-xs" />
-                        <ComboSelect value={branchId} onChange={(v) => setBranchId(v)} items={branches.map((b) => ({ value: b.id, label: b.name }))} placeholder="All branches" className="min-w-[160px]" />
+                        <ComboSelect value={branchId} onChange={(v) => setBranchId(v)} items={branchComboSelectItems(branches, { numericValue: true })} placeholder="All branches" className="min-w-[160px]" />
                         <ComboSelect value={status || null} onChange={(v) => setStatus(v ? String(v) : '')} items={statusOptions.map((s) => ({ value: s.value, label: s.label }))} placeholder="All statuses" />
                         <Button variant="outline" onClick={applyFilters}><Search className="h-4 w-4" /></Button>
                     </div>

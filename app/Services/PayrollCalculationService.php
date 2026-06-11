@@ -19,9 +19,23 @@ class PayrollCalculationService
 
     protected ?SalaryHead $taxHead = null;
 
+    /** @var Collection<int, Collection<int, SalaryHeadModification>>|null */
+    protected ?Collection $batchModificationsByEmployee = null;
+
+    /** @var Collection<string, SalaryStructure>|null */
+    protected ?Collection $batchStructures = null;
+
+    /** @var array<int, true> */
+    protected array $batchWithheldEmployeeIds = [];
+
+    protected bool $batchMode = false;
+
     public function __construct(
         protected TaxSlabService $taxSlabService,
         protected EmployeeProvidentFundService $pfService,
+        protected EmployeeLoanService $loanService,
+        protected ProbationSalaryService $probationSalaryService,
+        protected FixedSalaryService $fixedSalaryService,
     ) {}
 
     /**
@@ -33,14 +47,20 @@ class PayrollCalculationService
      *   pf_employee_contribution: float,
      *   pf_employer_contribution: float,
      *   income_tax: float,
+     *   loan_deductions: list<array{installment: \App\Models\EmployeeLoanInstallment, loan: \App\Models\EmployeeLoan, amount: float, salary_head_id: int, head_name: string}>,
      *   lines: list<array{salary_head_id: ?int, head_name: string, type: string, amount_type: string, input_value: float, computed_amount: float, sort_order: int}>,
      *   grade_label: ?string,
      *   step_number: ?int,
      *   warnings: list<string>
      * }
      */
-    public function calculateForEmployee(Employee $employee, Carbon $processDate, string $salaryType = 'salary'): array
-    {
+    public function calculateForEmployee(
+        Employee $employee,
+        Carbon $processDate,
+        string $salaryType = 'salary',
+        ?int $payrollYear = null,
+        ?int $payrollMonth = null,
+    ): array {
         if ($salaryType !== 'salary') {
             return $this->calculateWithoutStatutory($employee, $processDate, $salaryType);
         }
@@ -49,8 +69,42 @@ class PayrollCalculationService
         $lines = [];
         $sort = 0;
 
+        if ($this->probationSalaryService->isOnProbation($employee, $processDate)) {
+            $probationAmount = (float) ($this->probationSalaryService->resolveAmount($employee, $processDate) ?? 0);
+            $result = $this->calculateProbationSalary(
+                $employee,
+                $processDate,
+                $probationAmount,
+                $salaryType,
+                $payrollYear,
+                $payrollMonth,
+            );
+
+            if ($probationAmount <= 0) {
+                $result['warnings'][] = 'Employee is on probation but no probation salary matched (configure rules or override in Payroll → Probation Salary).';
+            }
+
+            return $result;
+        }
+
+        if ($this->fixedSalaryService->applies($employee, $processDate)) {
+            $fixedAmount = (float) ($this->fixedSalaryService->resolveAmount($employee) ?? 0);
+            $result = $this->calculateFixedSalary(
+                $employee,
+                $processDate,
+                $fixedAmount,
+                $salaryType,
+            );
+
+            if ($fixedAmount <= 0) {
+                $result['warnings'][] = 'Employee has no grade assignment and no fixed salary (configure in Payroll → Fixed Salary).';
+            }
+
+            return $result;
+        }
+
         $structure = null;
-        $basic = (float) ($employee->basic_salary ?? 0);
+        $basic = $employee->resolveBasicSalary();
         $gradeLabel = null;
         $stepNumber = null;
         $hasPayrollAssignment = $employee->payscale_id
@@ -58,12 +112,7 @@ class PayrollCalculationService
             && $employee->salary_step_id;
 
         if ($hasPayrollAssignment) {
-            $structure = SalaryStructure::query()
-                ->where('payscale_id', $employee->payscale_id)
-                ->where('salary_grade_id', $employee->salary_grade_id)
-                ->where('salary_step_id', $employee->salary_step_id)
-                ->with(['lines.head', 'grade', 'step'])
-                ->first();
+            $structure = $this->resolveSalaryStructure($employee);
 
             $gradeLabel = $structure?->grade?->name ?? $employee->salaryGrade?->name;
             $stepNumber = $structure?->step?->step_number ?? $employee->salaryStep?->step_number;
@@ -159,6 +208,26 @@ class PayrollCalculationService
             ];
         }
 
+        $loanYear = $payrollYear ?? (int) $processDate->year;
+        $loanMonth = $payrollMonth ?? (int) $processDate->month;
+
+        $loanDeductions = $this->loanService->deductionsForPayroll(
+            $employee,
+            $loanYear,
+            $loanMonth
+        );
+        foreach ($loanDeductions as $loanRow) {
+            $lines[] = [
+                'salary_head_id' => $loanRow['salary_head_id'],
+                'head_name' => $loanRow['head_name'],
+                'type' => 'deduction',
+                'amount_type' => 'fixed',
+                'input_value' => $loanRow['amount'],
+                'computed_amount' => $loanRow['amount'],
+                'sort_order' => $sort++,
+            ];
+        }
+
         $deduction = 0.0;
         foreach ($lines as $line) {
             if ($line['type'] === 'deduction') {
@@ -166,12 +235,7 @@ class PayrollCalculationService
             }
         }
 
-        $isWithheld = SalaryWithheld::query()
-            ->where('employee_id', $employee->id)
-            ->where('year', $processDate->year)
-            ->where('month', $processDate->month)
-            ->where('salary_type', $salaryType)
-            ->exists();
+        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType);
 
         $net = $isWithheld ? 0.0 : SalaryStructureCalculator::roundTaka($gross - $deduction);
 
@@ -183,9 +247,241 @@ class PayrollCalculationService
             'pf_employee_contribution' => $pf['employee'],
             'pf_employer_contribution' => $pf['employer'],
             'income_tax' => $incomeTax,
+            'loan_deductions' => $loanDeductions,
             'lines' => $lines,
             'grade_label' => $gradeLabel,
             'step_number' => $stepNumber,
+            'is_withheld' => $isWithheld,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * Preload shared payroll data for a branch run to avoid per-employee query storms.
+     *
+     * @param  Collection<int, Employee>  $employees
+     */
+    public function preloadBatch(
+        Collection $employees,
+        Carbon $processDate,
+        string $salaryType,
+        int $year,
+        int $month,
+    ): void {
+        $this->clearBatch();
+        $this->batchMode = true;
+
+        $employeeIds = $employees->pluck('id')->filter()->values();
+        if ($employeeIds->isEmpty()) {
+            return;
+        }
+
+        $this->batchModificationsByEmployee = SalaryHeadModification::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->where('is_active', true)
+            ->whereDate('effective_from', '<=', $processDate)
+            ->orderByDesc('effective_from')
+            ->get()
+            ->groupBy('employee_id')
+            ->map(fn (Collection $rows) => $rows->unique('salary_head_id')->keyBy('salary_head_id'));
+
+        $structureKeys = $employees
+            ->filter(fn (Employee $employee) => $employee->payscale_id && $employee->salary_grade_id && $employee->salary_step_id)
+            ->map(fn (Employee $employee) => [
+                'payscale_id' => $employee->payscale_id,
+                'salary_grade_id' => $employee->salary_grade_id,
+                'salary_step_id' => $employee->salary_step_id,
+            ])
+            ->unique(fn (array $key) => "{$key['payscale_id']}-{$key['salary_grade_id']}-{$key['salary_step_id']}")
+            ->values();
+
+        if ($structureKeys->isNotEmpty()) {
+            $this->batchStructures = SalaryStructure::query()
+                ->with(['lines.head', 'grade', 'step'])
+                ->where(function ($query) use ($structureKeys) {
+                    foreach ($structureKeys as $key) {
+                        $query->orWhere(function ($inner) use ($key) {
+                            $inner->where('payscale_id', $key['payscale_id'])
+                                ->where('salary_grade_id', $key['salary_grade_id'])
+                                ->where('salary_step_id', $key['salary_step_id']);
+                        });
+                    }
+                })
+                ->get()
+                ->keyBy(fn (SalaryStructure $structure) => "{$structure->payscale_id}-{$structure->salary_grade_id}-{$structure->salary_step_id}");
+        } else {
+            $this->batchStructures = collect();
+        }
+
+        $this->batchWithheldEmployeeIds = SalaryWithheld::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->where('year', $processDate->year)
+            ->where('month', $processDate->month)
+            ->where('salary_type', $salaryType)
+            ->pluck('employee_id')
+            ->mapWithKeys(fn ($id) => [(int) $id => true])
+            ->all();
+
+        $this->loanService->preloadDeductionsForPayroll($employeeIds, $year, $month);
+    }
+
+    public function clearBatch(): void
+    {
+        $this->batchMode = false;
+        $this->batchModificationsByEmployee = null;
+        $this->batchStructures = null;
+        $this->batchWithheldEmployeeIds = [];
+        $this->loanService->clearDeductionsBatch();
+    }
+
+    protected function resolveSalaryStructure(Employee $employee): ?SalaryStructure
+    {
+        if (! $employee->payscale_id || ! $employee->salary_grade_id || ! $employee->salary_step_id) {
+            return null;
+        }
+
+        $key = "{$employee->payscale_id}-{$employee->salary_grade_id}-{$employee->salary_step_id}";
+
+        if ($this->batchStructures !== null) {
+            return $this->batchStructures->get($key);
+        }
+
+        return SalaryStructure::query()
+            ->where('payscale_id', $employee->payscale_id)
+            ->where('salary_grade_id', $employee->salary_grade_id)
+            ->where('salary_step_id', $employee->salary_step_id)
+            ->with(['lines.head', 'grade', 'step'])
+            ->first();
+    }
+
+    protected function isSalaryWithheld(int $employeeId, Carbon $processDate, string $salaryType): bool
+    {
+        if ($this->batchMode) {
+            return isset($this->batchWithheldEmployeeIds[$employeeId]);
+        }
+
+        return SalaryWithheld::query()
+            ->where('employee_id', $employeeId)
+            ->where('year', $processDate->year)
+            ->where('month', $processDate->month)
+            ->where('salary_type', $salaryType)
+            ->exists();
+    }
+
+    /**
+     * Fixed probation salary — flat gross only; no salary components, PF, tax, or loans.
+     *
+     * @return array{
+     *   basic_salary: float,
+     *   gross_salary: float,
+     *   total_deduction: float,
+     *   net_payable: float,
+     *   pf_employee_contribution: float,
+     *   pf_employer_contribution: float,
+     *   income_tax: float,
+     *   loan_deductions: list<array{installment: \App\Models\EmployeeLoanInstallment, loan: \App\Models\EmployeeLoan, amount: float, salary_head_id: int, head_name: string}>,
+     *   lines: list<array{salary_head_id: ?int, head_name: string, type: string, amount_type: string, input_value: float, computed_amount: float, sort_order: int}>,
+     *   grade_label: ?string,
+     *   step_number: ?int,
+     *   is_withheld: bool,
+     *   warnings: list<string>
+     * }
+     */
+    protected function calculateProbationSalary(
+        Employee $employee,
+        Carbon $processDate,
+        float $probationAmount,
+        string $salaryType,
+        ?int $payrollYear,
+        ?int $payrollMonth,
+    ): array {
+        return $this->calculateFlatMonthlySalary(
+            $employee,
+            $processDate,
+            $probationAmount,
+            $salaryType,
+            'Probation Salary',
+            $probationAmount > 0 ? 'Probation salary only — no salary components or deductions.' : null,
+        );
+    }
+
+    protected function calculateFixedSalary(
+        Employee $employee,
+        Carbon $processDate,
+        float $fixedAmount,
+        string $salaryType,
+    ): array {
+        return $this->calculateFlatMonthlySalary(
+            $employee,
+            $processDate,
+            $fixedAmount,
+            $salaryType,
+            'Fixed Salary',
+            $fixedAmount > 0 ? 'Fixed salary only — no grade structure, components, or deductions.' : null,
+        );
+    }
+
+    /**
+     * @return array{
+     *   basic_salary: float,
+     *   gross_salary: float,
+     *   total_deduction: float,
+     *   net_payable: float,
+     *   pf_employee_contribution: float,
+     *   pf_employer_contribution: float,
+     *   income_tax: float,
+     *   loan_deductions: list<array{installment: \App\Models\EmployeeLoanInstallment, loan: \App\Models\EmployeeLoan, amount: float, salary_head_id: int, head_name: string}>,
+     *   lines: list<array{salary_head_id: ?int, head_name: string, type: string, amount_type: string, input_value: float, computed_amount: float, sort_order: int}>,
+     *   grade_label: ?string,
+     *   step_number: ?int,
+     *   is_withheld: bool,
+     *   warnings: list<string>
+     * }
+     */
+    protected function calculateFlatMonthlySalary(
+        Employee $employee,
+        Carbon $processDate,
+        float $amount,
+        string $salaryType,
+        string $headLabel,
+        ?string $warningNote,
+    ): array {
+        $warnings = $warningNote ? [$warningNote] : [];
+        $sort = 0;
+        $basic = SalaryStructureCalculator::roundTaka($amount);
+        $gross = $basic;
+
+        $lines = [[
+            'salary_head_id' => null,
+            'head_name' => $headLabel,
+            'type' => 'earning',
+            'amount_type' => 'fixed',
+            'input_value' => $basic,
+            'computed_amount' => $basic,
+            'sort_order' => $sort++,
+        ]];
+
+        $pf = ['employee' => 0.0, 'employer' => 0.0];
+        $incomeTax = 0.0;
+        $loanDeductions = [];
+        $deduction = 0.0;
+
+        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType);
+
+        $employee->loadMissing(['salaryGrade', 'salaryStep']);
+
+        return [
+            'basic_salary' => $basic,
+            'gross_salary' => $gross,
+            'total_deduction' => SalaryStructureCalculator::roundTaka($deduction),
+            'net_payable' => $isWithheld ? 0.0 : SalaryStructureCalculator::roundTaka($gross - $deduction),
+            'pf_employee_contribution' => $pf['employee'],
+            'pf_employer_contribution' => $pf['employer'],
+            'income_tax' => $incomeTax,
+            'loan_deductions' => $loanDeductions,
+            'lines' => $lines,
+            'grade_label' => $employee->salaryGrade?->name,
+            'step_number' => $employee->salaryStep?->step_number,
             'is_withheld' => $isWithheld,
             'warnings' => $warnings,
         ];
@@ -218,12 +514,7 @@ class PayrollCalculationService
         ));
 
         $gross = SalaryStructureCalculator::roundTaka(array_sum(array_column($earningLines, 'computed_amount')));
-        $isWithheld = SalaryWithheld::query()
-            ->where('employee_id', $employee->id)
-            ->where('year', $processDate->year)
-            ->where('month', $processDate->month)
-            ->where('salary_type', $salaryType)
-            ->exists();
+        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType);
 
         return [
             'basic_salary' => $result['basic_salary'],
@@ -233,6 +524,7 @@ class PayrollCalculationService
             'pf_employee_contribution' => 0.0,
             'pf_employer_contribution' => 0.0,
             'income_tax' => 0.0,
+            'loan_deductions' => [],
             'lines' => $earningLines,
             'grade_label' => $result['grade_label'],
             'step_number' => $result['step_number'],
@@ -252,6 +544,7 @@ class PayrollCalculationService
                 ->where('is_basic_head', false)
                 ->where('is_pf_head', false)
                 ->where('is_income_tax_head', false)
+                ->where('is_loan_head', false)
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get();
@@ -298,7 +591,7 @@ class PayrollCalculationService
 
     protected function isStatutoryHead(SalaryHead $head): bool
     {
-        return $head->is_pf_head || $head->is_income_tax_head;
+        return $head->is_pf_head || $head->is_income_tax_head || $head->is_loan_head;
     }
 
     /**
@@ -365,6 +658,10 @@ class PayrollCalculationService
      */
     protected function activeModifications(int $employeeId, Carbon $asOfDate): Collection
     {
+        if ($this->batchModificationsByEmployee !== null) {
+            return $this->batchModificationsByEmployee->get($employeeId, collect());
+        }
+
         return SalaryHeadModification::query()
             ->where('employee_id', $employeeId)
             ->where('is_active', true)

@@ -13,11 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, User, FileText, CalendarDays } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
   department?: {
     id: number;
@@ -146,7 +145,7 @@ export default function Edit({ leaveBalance, employees, leaveTypes, years }: Edi
                   <div className="flex items-center p-2 border rounded-md bg-gray-50">
                     <User className="mr-2 h-4 w-4 text-gray-500" />
                     <span className="font-medium">
-                      {leaveBalance.employee && `${leaveBalance.employee.first_name} ${leaveBalance.employee.last_name}`}
+                      {leaveBalance.employee && employeeDisplayName(leaveBalance.employee)}
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">

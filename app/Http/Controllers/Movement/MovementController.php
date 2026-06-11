@@ -172,8 +172,8 @@ class MovementController extends Controller
             })
             ->when($request->search, function ($query, $search) {
                 $query->whereHas('employee', function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
+                    $q->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%");
                 });
             });
@@ -479,7 +479,7 @@ class MovementController extends Controller
         \Log::info('Starting sendNotificationsToManagers', [
             'movement_id' => $movement->id,
             'employee_id' => $employee->id,
-            'employee_name' => $employee->first_name.' '.$employee->last_name,
+            'employee_name' => $employee->name_en ?? $employee->full_name_en ?? '',
         ]);
 
         try {
@@ -514,7 +514,7 @@ class MovementController extends Controller
             $toDate = Carbon::parse($movement->to_datetime)->format('M d, Y h:i A');
 
             // Construct full employee name
-            $employeeName = $employee->first_name.' '.$employee->last_name;
+            $employeeName = $employee->name_en ?? $employee->full_name_en ?? '';
 
             // Notification details
             $title = 'New Movement Created';
@@ -1380,7 +1380,7 @@ class MovementController extends Controller
             $returnDate = $returnDateTime->format('M d, Y h:i A');
 
             // Prepare employee name
-            $employeeName = $movement->employee->first_name.' '.$movement->employee->last_name;
+            $employeeName = $movement->employee->name_en ?? $movement->employee->full_name_en ?? '';
 
             // Create notification content
             $title = 'Movement Completed';

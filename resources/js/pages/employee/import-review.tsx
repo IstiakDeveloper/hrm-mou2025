@@ -1,682 +1,597 @@
-import React, { useMemo, useState } from "react";
-import { Head, Link, useForm } from "@inertiajs/react";
-import Layout from "@/layouts/AdminLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import Layout from '@/layouts/AdminLayout';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Check, AlertCircle } from "lucide-react";
-import InputError from "@/components/input-error";
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ArrowLeft, Check, AlertCircle, ChevronDown } from 'lucide-react';
+import InputError from '@/components/input-error';
+import { isValidImportDate, parseImportDate } from '@/lib/import-date';
 
-type Status = "active" | "inactive" | "on_leave" | "terminated";
+type Status = 'active' | 'inactive';
 
 interface Option {
-  id: number;
-  name: string;
+    id: number;
+    name: string;
 }
 
 interface PreviewRow {
-  source_row: number;
-  pin: string;
-  name_en: string;
-  last_name?: string;
-  email: string;
-  joining_date: string;
-  department: string;
-  joining_designation: string;
-  last_designation: string;
-  current_branch: string;
-  last_branch: string;
-  status: string;
+    source_row: number;
+    pin: string;
+    name_en: string;
+    name_bn?: string;
+    employee_type: string;
+    email: string;
+    mobile_personal: string;
+    joining_date: string;
+    department: string;
+    joining_designation: string;
+    last_designation: string;
+    current_branch: string;
+    last_branch: string;
+    status: string;
+}
+
+interface FormRow {
+    source_row: number;
+    pin: string;
+    name_en: string;
+    email: string;
+    mobile_personal: string;
+    employee_type_id: string;
+    joining_date: string;
+    department_id: string;
+    joining_designation_id: string;
+    last_designation_id: string;
+    current_branch_id: string;
+    last_branch_id: string;
+    status: Status;
 }
 
 interface ImportReviewProps {
-  importId: string;
-  rows: PreviewRow[];
-  issuesByRow?: Record<string, string[]>;
-  debug?: Record<string, any> | null;
-  departments: Option[];
-  designations: Option[];
-  branches: Option[];
-  statuses: Status[];
-  errors?: Record<string, string>;
+    importId: string;
+    rows: PreviewRow[];
+    existingPins?: string[];
+    existingEmails?: string[];
+    existingMobiles?: string[];
+    commitErrorsByRow?: Record<string, string[]>;
+    departments: Option[];
+    designations: Option[];
+    branches: Option[];
+    employeeTypes: Option[];
+    statuses: Status[];
+    errors?: Record<string, string>;
 }
 
 function asIdOrEmpty(raw: string): string {
-  const v = (raw || "").trim();
-  return /^\d+$/.test(v) ? v : "";
+    const v = (raw || '').trim();
+    return /^\d+$/.test(v) ? v : '';
 }
 
 function resolveOptionId(raw: string, options: Option[]): string {
-  const v = (raw || "").trim();
-  if (!v) return "";
-  if (/^\d+$/.test(v)) return v;
-  const lower = v.toLowerCase();
-  const match = options.find((o) => o.name.trim().toLowerCase() === lower);
-  return match ? String(match.id) : "";
+    const v = (raw || '').trim();
+    if (!v) return '';
+    if (/^\d+$/.test(v)) return v;
+    const lower = v.toLowerCase();
+    const match = options.find((o) => o.name.trim().toLowerCase() === lower);
+    return match ? String(match.id) : '';
 }
+
+function isValidEmail(email: string): boolean {
+    if (!email) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function computeIssuesByRow(
+    rows: FormRow[],
+    existing: { pins: Set<string>; emails: Set<string>; mobiles: Set<string> },
+): Record<number, string[]> {
+    const pinCounts = new Map<string, number>();
+    const emailCounts = new Map<string, number>();
+    const mobileCounts = new Map<string, number>();
+
+    for (const r of rows) {
+        const pin = r.pin.trim().toLowerCase();
+        const email = r.email.trim().toLowerCase();
+        const mobile = r.mobile_personal.trim();
+        if (pin) pinCounts.set(pin, (pinCounts.get(pin) ?? 0) + 1);
+        if (email) emailCounts.set(email, (emailCounts.get(email) ?? 0) + 1);
+        if (mobile) mobileCounts.set(mobile, (mobileCounts.get(mobile) ?? 0) + 1);
+    }
+
+    const issuesByRow: Record<number, string[]> = {};
+
+    for (const r of rows) {
+        const issues: string[] = [];
+        const pin = r.pin.trim();
+        const pinKey = pin.toLowerCase();
+        const email = r.email.trim();
+        const emailKey = email.toLowerCase();
+        const mobile = r.mobile_personal.trim();
+
+        if (!pin) issues.push('PIN');
+        if (!r.name_en.trim()) issues.push('Name');
+        if (!mobile) issues.push('Mobile');
+        if (!r.joining_date.trim()) issues.push('Join date');
+        if (!r.employee_type_id) issues.push('Emp. type');
+        if (!r.department_id) issues.push('Dept');
+        if (!r.joining_designation_id) issues.push('Open desig.');
+        if (!r.last_designation_id) issues.push('Last desig.');
+        if (!r.current_branch_id) issues.push('Branch');
+        if (!r.status) issues.push('Status');
+        if (email && !isValidEmail(email)) issues.push('Bad email');
+        if (r.joining_date.trim() && !isValidImportDate(r.joining_date)) issues.push('Bad date');
+        if (pin && existing.pins.has(pin)) issues.push('PIN in system');
+        if (email && existing.emails.has(emailKey)) issues.push('Email in system');
+        if (mobile && existing.mobiles.has(mobile)) issues.push('Mobile in system');
+        if (pin && (pinCounts.get(pinKey) ?? 0) > 1) issues.push('Dup PIN');
+        if (email && (emailCounts.get(emailKey) ?? 0) > 1) issues.push('Dup email');
+        if (mobile && (mobileCounts.get(mobile) ?? 0) > 1) issues.push('Dup mobile');
+
+        issuesByRow[r.source_row] = issues;
+    }
+
+    return issuesByRow;
+}
+
+const compactInput = 'h-8 text-xs';
+const compactSelect = 'h-8 text-xs';
 
 export default function ImportReview({
-  importId,
-  rows,
-  issuesByRow,
-  debug,
-  departments,
-  designations,
-  branches,
-  statuses,
-}: ImportReviewProps) {
-  const initial = useMemo(() => {
-    return rows.map((r) => {
-      const deptId = resolveOptionId(r.department, departments);
-      const joinDesigId = resolveOptionId(r.joining_designation, designations);
-      const lastDesigId = resolveOptionId(r.last_designation, designations) || joinDesigId;
-      const currentBranchId = resolveOptionId(r.current_branch, branches);
-      const lastBranchId = resolveOptionId(r.last_branch, branches);
-
-      return {
-        source_row: r.source_row,
-        pin: r.pin || "",
-        name_en: r.name_en || "",
-        last_name: r.last_name || "",
-        email: r.email || "",
-        joining_date: r.joining_date || "",
-        department_id: deptId || asIdOrEmpty(r.department),
-        joining_designation_id: joinDesigId || asIdOrEmpty(r.joining_designation),
-        last_designation_id: lastDesigId || asIdOrEmpty(r.last_designation) || asIdOrEmpty(r.joining_designation),
-        current_branch_id: currentBranchId || asIdOrEmpty(r.current_branch),
-        last_branch_id: lastBranchId || asIdOrEmpty(r.last_branch),
-        status: (r.status || "active").toLowerCase() as Status,
-      };
-    });
-  }, [rows, departments, designations, branches]);
-
-  const form = useForm<{
-    importId: string;
-    rows: Array<{
-      source_row: number;
-      pin: string;
-      name_en: string;
-      last_name: string;
-      email: string;
-      joining_date: string;
-      department_id: string;
-      joining_designation_id: string;
-      last_designation_id: string;
-      current_branch_id: string;
-      last_branch_id: string;
-      status: Status;
-    }>;
-  }>({
     importId,
-    rows: initial,
-  });
+    rows,
+    existingPins = [],
+    existingEmails = [],
+    existingMobiles = [],
+    commitErrorsByRow = {},
+    departments,
+    designations,
+    branches,
+    employeeTypes,
+    statuses,
+}: ImportReviewProps) {
+    const sortedBranches = useMemo(() => sortPayrollBranches(branches), [branches]);
 
-  const [onlyIncomplete, setOnlyIncomplete] = useState(false);
-  const [page, setPage] = useState(1);
-  const pageSize = 50;
-
-  const isRowComplete = (r: (typeof form.data.rows)[number]) => {
-    return (
-      r.pin.trim() &&
-      r.name_en.trim() &&
-      r.email.trim() &&
-      r.joining_date.trim() &&
-      r.department_id &&
-      r.joining_designation_id &&
-      r.last_designation_id &&
-      r.current_branch_id &&
-      r.status
+    const existing = useMemo(
+        () => ({
+            pins: new Set(existingPins),
+            emails: new Set(existingEmails.map((e) => e.toLowerCase())),
+            mobiles: new Set(existingMobiles),
+        }),
+        [existingPins, existingEmails, existingMobiles],
     );
-  };
 
-  const visibleRows = useMemo(() => {
-    if (!onlyIncomplete) return form.data.rows;
-    return form.data.rows.filter((r) => !isRowComplete(r));
-  }, [form.data.rows, onlyIncomplete]);
+    const initial = useMemo(() => {
+        return rows.map((r) => {
+            const deptId = resolveOptionId(r.department, departments);
+            const joinDesigId = resolveOptionId(r.joining_designation, designations);
+            const lastDesigId = resolveOptionId(r.last_designation, designations) || joinDesigId;
+            const currentBranchId = resolveOptionId(r.current_branch, branches);
+            const lastBranchId = resolveOptionId(r.last_branch, branches);
+            const employeeTypeId = resolveOptionId(r.employee_type, employeeTypes);
 
-  const totalPages = useMemo(() => {
-    return Math.max(1, Math.ceil(visibleRows.length / pageSize));
-  }, [visibleRows.length]);
+            return {
+                source_row: r.source_row,
+                pin: r.pin || '',
+                name_en: r.name_en || '',
+                email: r.email || '',
+                mobile_personal: r.mobile_personal || '',
+                employee_type_id: employeeTypeId || asIdOrEmpty(r.employee_type),
+                joining_date: parseImportDate(r.joining_date),
+                department_id: deptId || asIdOrEmpty(r.department),
+                joining_designation_id: joinDesigId || asIdOrEmpty(r.joining_designation),
+                last_designation_id: lastDesigId || asIdOrEmpty(r.last_designation) || asIdOrEmpty(r.joining_designation),
+                current_branch_id: currentBranchId || asIdOrEmpty(r.current_branch),
+                last_branch_id: lastBranchId || asIdOrEmpty(r.last_branch),
+                status: ((r.status || 'active').toLowerCase() as Status) || 'active',
+            };
+        });
+    }, [rows, departments, designations, branches, employeeTypes]);
 
-  const currentPage = Math.min(page, totalPages);
+    const form = useForm<{ importId: string; rows: FormRow[] }>({
+        importId,
+        rows: initial,
+    });
 
-  const pagedRows = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    const end = start + pageSize;
-    return visibleRows.slice(start, end);
-  }, [visibleRows, currentPage]);
+    useEffect(() => {
+        form.setData({ importId, rows: initial });
+    }, [importId, initial]);
 
-  const bulk = {
-    department_id: "",
-    joining_designation_id: "",
-    last_designation_id: "",
-    current_branch_id: "",
-    last_branch_id: "",
-    status: "" as "" | Status,
-  };
+    const inertiaPage = usePage() as { props?: { flash?: { error?: string } } };
+    const flashError = inertiaPage?.props?.flash?.error;
 
-  const [bulkState, setBulkState] = useState(bulk);
+    const liveIssuesByRow = useMemo(
+        () => computeIssuesByRow(form.data.rows, existing),
+        [form.data.rows, existing],
+    );
 
-  const applyBulk = () => {
-    const next = form.data.rows.map((r) => ({
-      ...r,
-      department_id: bulkState.department_id || r.department_id,
-      joining_designation_id: bulkState.joining_designation_id || r.joining_designation_id,
-      last_designation_id: bulkState.last_designation_id || r.last_designation_id,
-      current_branch_id: bulkState.current_branch_id || r.current_branch_id,
-      last_branch_id: bulkState.last_branch_id || r.last_branch_id,
-      status: (bulkState.status || r.status) as Status,
-    }));
-    form.setData("rows", next);
-  };
+    const [clearedCommitRows, setClearedCommitRows] = useState<Set<number>>(() => new Set());
 
-  const incompleteCount = useMemo(() => {
-    return form.data.rows.filter((r) => !isRowComplete(r)).length;
-  }, [form.data.rows]);
+    const displayIssuesByRow = useMemo(() => {
+        const merged: Record<number, string[]> = { ...liveIssuesByRow };
+        for (const [rowKey, errs] of Object.entries(commitErrorsByRow)) {
+            const sr = Number(rowKey);
+            if (clearedCommitRows.has(sr)) {
+                continue;
+            }
+            const existingIssues = merged[sr] ?? [];
+            const combined = [...existingIssues];
+            for (const err of errs) {
+                if (!combined.includes(err)) {
+                    combined.push(err);
+                }
+            }
+            merged[sr] = combined;
+        }
+        return merged;
+    }, [liveIssuesByRow, commitErrorsByRow, clearedCommitRows]);
 
-  const issueCount = useMemo(() => {
-    if (!issuesByRow) return 0;
-    return Object.values(issuesByRow).filter((arr) => (arr || []).length > 0).length;
-  }, [issuesByRow]);
+    const validationMessages = useMemo(() => {
+        const msgs: string[] = [];
+        for (const [key, value] of Object.entries(form.errors)) {
+            if (!value) continue;
+            if (key === 'importId' || key === 'rows') {
+                msgs.push(String(value));
+            } else if (key.startsWith('rows.')) {
+                msgs.push(String(value));
+            }
+        }
+        return msgs;
+    }, [form.errors]);
 
-  return (
-    <Layout>
-      <Head title="Import Employees - Review" />
+    const rowStats = useMemo(() => {
+        let ready = 0;
+        let needsFix = 0;
+        for (const r of form.data.rows) {
+            const issues = liveIssuesByRow[r.source_row] ?? [];
+            if (issues.length === 0) ready++;
+            else needsFix++;
+        }
+        return { total: form.data.rows.length, ready, needsFix };
+    }, [form.data.rows, liveIssuesByRow]);
 
-      <div className="container mx-auto py-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Review & Confirm Import</h1>
-            <p className="mt-1 text-gray-500">
-              Upload complete. Now select required fields per employee and confirm.
-            </p>
-          </div>
-          <Link href={route("employees.index")} className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Employees
-          </Link>
-        </div>
+    const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [pageNum, setPageNum] = useState(1);
+    const pageSize = 50;
 
-        {incompleteCount > 0 ? (
-          <Alert className="border-yellow-200 bg-yellow-50">
-            <AlertCircle className="h-4 w-4 text-yellow-700" />
-            <AlertDescription className="text-yellow-800">
-              {incompleteCount} row(s) are incomplete. Fill required selections before confirming.
-            </AlertDescription>
-          </Alert>
-        ) : issueCount > 0 ? (
-          <Alert className="border-yellow-200 bg-yellow-50">
-            <AlertCircle className="h-4 w-4 text-yellow-700" />
-            <AlertDescription className="text-yellow-800">
-              {issueCount} row(s) have detected issues (example: invalid email/date, duplicate PIN/email). Fix them before confirming.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <Alert className="border-green-200 bg-green-50">
-            <Check className="h-4 w-4 text-green-700" />
-            <AlertDescription className="text-green-800">
-              All rows look complete. You can confirm import.
-            </AlertDescription>
-          </Alert>
-        )}
+    const visibleRows = useMemo(() => {
+        if (!onlyIncomplete) return form.data.rows;
+        return form.data.rows.filter((r) => (displayIssuesByRow[r.source_row] ?? []).length > 0);
+    }, [form.data.rows, onlyIncomplete, displayIssuesByRow]);
 
-        <Card className="shadow-sm">
-          <CardHeader className="bg-gray-50 border-b">
-            <CardTitle>Bulk defaults (optional)</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            {debug && (
-              <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
-                <div className="font-medium text-gray-800">Processing log (debug)</div>
-                <pre className="mt-2 whitespace-pre-wrap break-words">
-                  {JSON.stringify(debug, null, 2)}
-                </pre>
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Department</Label>
-                <Select
-                  value={bulkState.department_id || "none"}
-                  onValueChange={(v) => setBulkState((s) => ({ ...s, department_id: v === "none" ? "" : v }))}
+    const totalPages = useMemo(() => Math.max(1, Math.ceil(visibleRows.length / pageSize)), [visibleRows.length]);
+    const currentPage = Math.min(pageNum, totalPages);
+
+    const pagedRows = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return visibleRows.slice(start, start + pageSize);
+    }, [visibleRows, currentPage]);
+
+    const [bulkState, setBulkState] = useState({
+        employee_type_id: '',
+        department_id: '',
+        joining_designation_id: '',
+        last_designation_id: '',
+        current_branch_id: '',
+        last_branch_id: '',
+        status: '' as '' | Status,
+    });
+
+    const applyBulk = () => {
+        const next = form.data.rows.map((r) => ({
+            ...r,
+            employee_type_id: bulkState.employee_type_id || r.employee_type_id,
+            department_id: bulkState.department_id || r.department_id,
+            joining_designation_id: bulkState.joining_designation_id || r.joining_designation_id,
+            last_designation_id: bulkState.last_designation_id || r.last_designation_id,
+            current_branch_id: bulkState.current_branch_id || r.current_branch_id,
+            last_branch_id: bulkState.last_branch_id || r.last_branch_id,
+            status: (bulkState.status || r.status) as Status,
+        }));
+        form.setData('rows', next);
+    };
+
+    const updateRow = (sourceRow: number, patch: Partial<FormRow>) => {
+        setClearedCommitRows((prev) => new Set(prev).add(sourceRow));
+        const next = form.data.rows.map((r) => (r.source_row === sourceRow ? { ...r, ...patch } : r));
+        form.setData('rows', next);
+    };
+
+    const canConfirm = rowStats.needsFix === 0 && !form.processing;
+
+    return (
+        <Layout>
+            <Head title="Import Review" />
+
+            <div className="container mx-auto max-w-[1600px] space-y-3 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-lg font-semibold">Import Review</h1>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{rowStats.total} rows</span>
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">{rowStats.ready} ready</span>
+                        {rowStats.needsFix > 0 && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">{rowStats.needsFix} to fix</span>
+                        )}
+                    </div>
+                    <Link href={route('employees.index')} className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground">
+                        <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                        Back
+                    </Link>
+                </div>
+
+                {(flashError || validationMessages.length > 0) && (
+                    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                        {flashError && <p>{flashError}</p>}
+                        {validationMessages.map((msg) => (
+                            <p key={msg}>{msg}</p>
+                        ))}
+                    </div>
+                )}
+
+                <div
+                    className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${
+                        canConfirm ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-900'
+                    }`}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">—</SelectItem>
-                    {departments.map((d) => (
-                      <SelectItem key={d.id} value={d.id.toString()}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                    {canConfirm ? <Check className="h-3.5 w-3.5 shrink-0" /> : <AlertCircle className="h-3.5 w-3.5 shrink-0" />}
+                    <span>
+                        {canConfirm
+                            ? 'All rows are valid. You can confirm import.'
+                            : 'Fix highlighted rows below — issues update as you edit.'}
+                    </span>
+                </div>
 
-              <div className="space-y-2">
-                <Label>Current Branch</Label>
-                <Select
-                  value={bulkState.current_branch_id || "none"}
-                  onValueChange={(v) => setBulkState((s) => ({ ...s, current_branch_id: v === "none" ? "" : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">—</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <Collapsible open={bulkOpen} onOpenChange={setBulkOpen}>
+                    <Card className="shadow-none">
+                        <CollapsibleTrigger asChild>
+                            <button
+                                type="button"
+                                className="flex w-full items-center justify-between px-4 py-2 text-left text-sm font-medium hover:bg-muted/40"
+                            >
+                                Bulk defaults (optional)
+                                <ChevronDown className={`h-4 w-4 transition-transform ${bulkOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                            <CardContent className="space-y-3 border-t px-4 pb-4 pt-3">
+                                <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-7">
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Emp. Type</Label>
+                                        <Select value={bulkState.employee_type_id || 'none'} onValueChange={(v) => setBulkState((s) => ({ ...s, employee_type_id: v === 'none' ? '' : v }))}>
+                                            <SelectTrigger className={compactSelect}><SelectValue placeholder="—" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">—</SelectItem>
+                                                {employeeTypes.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Department</Label>
+                                        <Select value={bulkState.department_id || 'none'} onValueChange={(v) => setBulkState((s) => ({ ...s, department_id: v === 'none' ? '' : v }))}>
+                                            <SelectTrigger className={compactSelect}><SelectValue placeholder="—" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">—</SelectItem>
+                                                {departments.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Branch</Label>
+                                        <Select value={bulkState.current_branch_id || 'none'} onValueChange={(v) => setBulkState((s) => ({ ...s, current_branch_id: v === 'none' ? '' : v }))}>
+                                            <SelectTrigger className={compactSelect}><SelectValue placeholder="—" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">—</SelectItem>
+                                                {sortedBranches.map((b) => <SelectItem key={b.id} value={String(b.id)}>{formatBranchSelectLabel(b)}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Open Desig.</Label>
+                                        <Select value={bulkState.joining_designation_id || 'none'} onValueChange={(v) => setBulkState((s) => ({ ...s, joining_designation_id: v === 'none' ? '' : v }))}>
+                                            <SelectTrigger className={compactSelect}><SelectValue placeholder="—" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">—</SelectItem>
+                                                {designations.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Last Desig.</Label>
+                                        <Select value={bulkState.last_designation_id || 'none'} onValueChange={(v) => setBulkState((s) => ({ ...s, last_designation_id: v === 'none' ? '' : v }))}>
+                                            <SelectTrigger className={compactSelect}><SelectValue placeholder="—" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">—</SelectItem>
+                                                {designations.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Status</Label>
+                                        <Select value={bulkState.status || 'none'} onValueChange={(v) => setBulkState((s) => ({ ...s, status: v === 'none' ? '' : (v as Status) }))}>
+                                            <SelectTrigger className={compactSelect}><SelectValue placeholder="—" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">—</SelectItem>
+                                                {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex items-end">
+                                        <Button type="button" variant="outline" size="sm" className="h-8 w-full text-xs" onClick={applyBulk}>
+                                            Apply all
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
 
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select
-                  value={bulkState.status || "none"}
-                  onValueChange={(v) =>
-                    setBulkState((s) => ({ ...s, status: v === "none" ? "" : (v as Status) }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">—</SelectItem>
-                    {statuses.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s.replace("_", " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Joining Designation</Label>
-                <Select
-                  value={bulkState.joining_designation_id || "none"}
-                  onValueChange={(v) => setBulkState((s) => ({ ...s, joining_designation_id: v === "none" ? "" : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select designation" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">—</SelectItem>
-                    {designations.map((d) => (
-                      <SelectItem key={d.id} value={d.id.toString()}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Last Designation</Label>
-                <Select
-                  value={bulkState.last_designation_id || "none"}
-                  onValueChange={(v) => setBulkState((s) => ({ ...s, last_designation_id: v === "none" ? "" : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select designation" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">—</SelectItem>
-                    {designations.map((d) => (
-                      <SelectItem key={d.id} value={d.id.toString()}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Last Branch</Label>
-                <Select
-                  value={bulkState.last_branch_id || "none"}
-                  onValueChange={(v) => setBulkState((s) => ({ ...s, last_branch_id: v === "none" ? "" : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select last branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">—</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={onlyIncomplete}
-                  onChange={(e) => setOnlyIncomplete(e.target.checked)}
-                />
-                Show only incomplete rows
-              </label>
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" onClick={applyBulk}>
-                  Apply bulk to all rows
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader className="bg-gray-50 border-b">
-            <CardTitle>Employees ({visibleRows.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <div>
-                Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleRows.length)} of{" "}
-                {visibleRows.length}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                >
-                  Prev
-                </Button>
-                <span className="text-xs">
-                  Page {currentPage} / {totalPages}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b">
-                    <th className="py-2 pr-3">Row</th>
-                    <th className="py-2 pr-3">Issues</th>
-                    <th className="py-2 pr-3">PIN</th>
-                    <th className="py-2 pr-3">Name</th>
-                    <th className="py-2 pr-3">Email</th>
-                    <th className="py-2 pr-3">Joining</th>
-                    <th className="py-2 pr-3">Dept</th>
-                    <th className="py-2 pr-3">Join Desig</th>
-                    <th className="py-2 pr-3">Last Desig</th>
-                    <th className="py-2 pr-3">Current Branch</th>
-                    <th className="py-2 pr-3">Last Branch</th>
-                    <th className="py-2 pr-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedRows.map((r) => {
-                    const idx = form.data.rows.findIndex((x) => x.source_row === r.source_row && x.pin === r.pin && x.email === r.email);
-                    const realIndex = idx >= 0 ? idx : 0;
-                    const row = form.data.rows[realIndex];
-                    const complete = isRowComplete(row);
-                    const issues = issuesByRow?.[String(row.source_row)] ?? [];
-
-                    return (
-                      <tr
-                        key={`${r.source_row}-${r.pin}-${r.email}`}
-                        className={`border-b ${complete && issues.length === 0 ? "" : "bg-yellow-50/40"}`}
-                      >
-                        <td className="py-2 pr-3 font-medium">{row.source_row}</td>
-                        <td className="py-2 pr-3">
-                          {issues.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          ) : (
-                            <div className="max-w-[260px] text-xs text-red-700">
-                              {issues.slice(0, 3).join("; ")}
-                              {issues.length > 3 ? ` (+${issues.length - 3} more)` : ""}
+                <Card className="shadow-none">
+                    <CardContent className="p-0">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-xs text-muted-foreground">
+                            <label className="flex items-center gap-1.5">
+                                <input type="checkbox" className="rounded" checked={onlyIncomplete} onChange={(e) => { setOnlyIncomplete(e.target.checked); setPageNum(1); }} />
+                                Only rows with issues
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <span>{(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, visibleRows.length)} of {visibleRows.length}</span>
+                                <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setPageNum((p) => Math.max(1, p - 1))} disabled={currentPage <= 1}>Prev</Button>
+                                <span>{currentPage}/{totalPages}</span>
+                                <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setPageNum((p) => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>Next</Button>
                             </div>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Input
-                            value={row.pin}
-                            onChange={(e) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, pin: e.target.value };
-                              form.setData("rows", next);
-                            }}
-                            className="w-28"
-                          />
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Input
-                            value={row.name_en}
-                            onChange={(e) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, name_en: e.target.value };
-                              form.setData("rows", next);
-                            }}
-                            className="w-48"
-                          />
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Input
-                            value={row.email}
-                            onChange={(e) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, email: e.target.value };
-                              form.setData("rows", next);
-                            }}
-                            className="w-56"
-                          />
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Input
-                            type="date"
-                            value={row.joining_date}
-                            onChange={(e) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, joining_date: e.target.value };
-                              form.setData("rows", next);
-                            }}
-                            className="w-40"
-                          />
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Select
-                            value={row.department_id || "none"}
-                            onValueChange={(v) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, department_id: v === "none" ? "" : v };
-                              form.setData("rows", next);
-                            }}
-                          >
-                            <SelectTrigger className="w-44">
-                              <SelectValue placeholder="Dept" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Select</SelectItem>
-                              {departments.map((d) => (
-                                <SelectItem key={d.id} value={d.id.toString()}>
-                                  {d.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Select
-                            value={row.joining_designation_id || "none"}
-                            onValueChange={(v) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, joining_designation_id: v === "none" ? "" : v };
-                              // if last empty, set to joining
-                              if (!next[realIndex].last_designation_id && v !== "none") {
-                                next[realIndex].last_designation_id = v;
-                              }
-                              form.setData("rows", next);
-                            }}
-                          >
-                            <SelectTrigger className="w-44">
-                              <SelectValue placeholder="Joining" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Select</SelectItem>
-                              {designations.map((d) => (
-                                <SelectItem key={d.id} value={d.id.toString()}>
-                                  {d.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Select
-                            value={row.last_designation_id || "none"}
-                            onValueChange={(v) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, last_designation_id: v === "none" ? "" : v };
-                              form.setData("rows", next);
-                            }}
-                          >
-                            <SelectTrigger className="w-44">
-                              <SelectValue placeholder="Last" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Select</SelectItem>
-                              {designations.map((d) => (
-                                <SelectItem key={d.id} value={d.id.toString()}>
-                                  {d.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Select
-                            value={row.current_branch_id || "none"}
-                            onValueChange={(v) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, current_branch_id: v === "none" ? "" : v };
-                              form.setData("rows", next);
-                            }}
-                          >
-                            <SelectTrigger className="w-44">
-                              <SelectValue placeholder="Branch" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Select</SelectItem>
-                              {branches.map((b) => (
-                                <SelectItem key={b.id} value={b.id.toString()}>
-                                  {b.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Select
-                            value={row.last_branch_id || "none"}
-                            onValueChange={(v) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, last_branch_id: v === "none" ? "" : v };
-                              form.setData("rows", next);
-                            }}
-                          >
-                            <SelectTrigger className="w-44">
-                              <SelectValue placeholder="Last Branch" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">—</SelectItem>
-                              {branches.map((b) => (
-                                <SelectItem key={b.id} value={b.id.toString()}>
-                                  {b.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Select
-                            value={row.status || "active"}
-                            onValueChange={(v) => {
-                              const next = [...form.data.rows];
-                              next[realIndex] = { ...row, status: v as Status };
-                              form.setData("rows", next);
-                            }}
-                          >
-                            <SelectTrigger className="w-36">
-                              <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {statuses.map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  {s.replace("_", " ")}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
 
-            <InputError message={form.errors.importId as any} />
-            <InputError message={form.errors.rows as any} />
+                        <div className="max-h-[calc(100vh-280px)] overflow-auto">
+                            <table className="w-full min-w-[1100px] text-xs">
+                                <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
+                                    <tr className="border-b text-left">
+                                        <th className="px-2 py-1.5 font-medium">#</th>
+                                        <th className="px-2 py-1.5 font-medium">Issues</th>
+                                        <th className="px-2 py-1.5 font-medium">PIN</th>
+                                        <th className="px-2 py-1.5 font-medium">Name</th>
+                                        <th className="px-2 py-1.5 font-medium">Mobile</th>
+                                        <th className="px-2 py-1.5 font-medium">Join</th>
+                                        <th className="px-2 py-1.5 font-medium">Type</th>
+                                        <th className="px-2 py-1.5 font-medium">Dept</th>
+                                        <th className="px-2 py-1.5 font-medium">Open</th>
+                                        <th className="px-2 py-1.5 font-medium">Last</th>
+                                        <th className="px-2 py-1.5 font-medium">Branch</th>
+                                        <th className="px-2 py-1.5 font-medium">St</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pagedRows.map((row) => {
+                                        const issues = displayIssuesByRow[row.source_row] ?? [];
+                                        const hasIssues = issues.length > 0;
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  window.location.href = route("employees.index");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={form.processing || incompleteCount > 0 || issueCount > 0}
-                onClick={() => {
-                  form.post(route("employees.import.commit"), { preserveScroll: true });
-                }}
-              >
-                {form.processing ? "Confirming..." : "Confirm Import"}
-              </Button>
+                                        return (
+                                            <tr key={row.source_row} className={`border-b ${hasIssues ? 'bg-amber-50/60' : 'hover:bg-muted/30'}`}>
+                                                <td className="px-2 py-1 font-medium text-muted-foreground">{row.source_row}</td>
+                                                <td className="px-2 py-1">
+                                                    {hasIssues ? (
+                                                        <div className="flex max-w-[140px] flex-wrap gap-0.5">
+                                                            {issues.map((issue) => (
+                                                                <span key={issue} className="rounded bg-red-100 px-1 py-0.5 text-[10px] leading-tight text-red-800">
+                                                                    {issue}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <Check className="h-3.5 w-3.5 text-green-600" />
+                                                    )}
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Input value={row.pin} onChange={(e) => updateRow(row.source_row, { pin: e.target.value })} className={`${compactInput} w-[72px]`} />
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Input value={row.name_en} onChange={(e) => updateRow(row.source_row, { name_en: e.target.value })} className={`${compactInput} w-[120px]`} />
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Input value={row.mobile_personal} onChange={(e) => updateRow(row.source_row, { mobile_personal: e.target.value })} className={`${compactInput} w-[100px]`} />
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Input type="date" value={row.joining_date} onChange={(e) => updateRow(row.source_row, { joining_date: e.target.value })} className={`${compactInput} w-[118px]`} />
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Select value={row.employee_type_id || 'none'} onValueChange={(v) => updateRow(row.source_row, { employee_type_id: v === 'none' ? '' : v })}>
+                                                        <SelectTrigger className={`${compactSelect} w-[100px]`}><SelectValue placeholder="—" /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">—</SelectItem>
+                                                            {employeeTypes.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Select value={row.department_id || 'none'} onValueChange={(v) => updateRow(row.source_row, { department_id: v === 'none' ? '' : v })}>
+                                                        <SelectTrigger className={`${compactSelect} w-[100px]`}><SelectValue placeholder="—" /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">—</SelectItem>
+                                                            {departments.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Select
+                                                        value={row.joining_designation_id || 'none'}
+                                                        onValueChange={(v) => {
+                                                            const val = v === 'none' ? '' : v;
+                                                            updateRow(row.source_row, {
+                                                                joining_designation_id: val,
+                                                                last_designation_id: row.last_designation_id || val,
+                                                            });
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className={`${compactSelect} w-[100px]`}><SelectValue placeholder="—" /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">—</SelectItem>
+                                                            {designations.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Select value={row.last_designation_id || 'none'} onValueChange={(v) => updateRow(row.source_row, { last_designation_id: v === 'none' ? '' : v })}>
+                                                        <SelectTrigger className={`${compactSelect} w-[100px]`}><SelectValue placeholder="—" /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">—</SelectItem>
+                                                            {designations.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Select value={row.current_branch_id || 'none'} onValueChange={(v) => updateRow(row.source_row, { current_branch_id: v === 'none' ? '' : v })}>
+                                                        <SelectTrigger className={`${compactSelect} w-[110px]`}><SelectValue placeholder="—" /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">—</SelectItem>
+                                                            {sortedBranches.map((b) => <SelectItem key={b.id} value={String(b.id)}>{formatBranchSelectLabel(b)}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <Select value={row.status || 'active'} onValueChange={(v) => updateRow(row.source_row, { status: v as Status })}>
+                                                        <SelectTrigger className={`${compactSelect} w-[76px]`}><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
+                            <InputError message={form.errors.importId as string} />
+                            <InputError message={form.errors.rows as string} />
+                            <div className="ml-auto flex items-center gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => { window.location.href = route('employees.index'); }}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={!canConfirm}
+                                    onClick={() => form.post(route('employees.import.commit'), { preserveScroll: true })}
+                                >
+                                    {form.processing ? 'Importing…' : `Confirm (${rowStats.ready})`}
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    </Layout>
-  );
+        </Layout>
+    );
 }
-

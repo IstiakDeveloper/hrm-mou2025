@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { hasAppPermission } from '@/lib/permissions';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
@@ -121,7 +122,7 @@ export default function AssetDepreciationIndex({
                                 <Label>Month</Label>
                                 <ComboSelect value={month} onChange={(v) => v && setMonth(Number(v))} items={MONTHS} className="min-w-[140px]" />
                             </div>
-                            <ComboSelect value={branchId} onChange={(v) => setBranchId(v)} items={branches.map((b) => ({ value: b.id, label: b.name }))} placeholder="All branches" className="min-w-[160px]" />
+                            <ComboSelect value={branchId} onChange={(v) => setBranchId(v)} items={branchComboSelectItems(branches, { numericValue: true })} placeholder="All branches" className="min-w-[160px]" />
                             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Asset tag…" className="max-w-xs" />
                             <Button variant="outline" onClick={applyFilters}><Search className="h-4 w-4" /></Button>
                         </div>

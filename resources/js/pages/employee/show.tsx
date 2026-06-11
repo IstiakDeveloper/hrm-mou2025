@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
+import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department { id: number; name: string; }
 interface Designation { id: number; name: string; }
 interface Branch { id: number; name: string; }
-interface Manager { id: number; first_name: string; last_name: string; employee_id: string; pin?: string; name_en?: string; }
+interface Manager extends EmployeeNameFields { id: number; employee_id: string; pin?: string; }
 
 interface LeaveType { id: number; name: string; days_allowed: number; is_paid: boolean; description: string | null; carry_forward: boolean; }
 interface LeaveBalance { id: number; employee_id: number; leave_type_id: number; year: number; allocated_days: number; used_days: number; remaining_days: number; leave_type: LeaveType; }
@@ -60,8 +61,8 @@ type Training = { training_title: string; institute: string; address: string; du
 
 interface EmployeeType { id: number; name: string; probation_months: number; }
 
-interface Employee {
-    id: number; employee_id: string; first_name: string | null; last_name: string | null; email: string; phone: string; gender: string; blood_group: string; date_of_birth: string; joining_date: string; confirmation_date?: string; address: string; photo: string | null; nid: string; nid_number?: string; smart_card_number?: string; birth_registration_number?: string; emergency_contact: string;
+interface Employee extends EmployeeNameFields {
+    id: number; employee_id: string; email: string; phone: string; gender: string; blood_group: string; date_of_birth: string; joining_date: string; confirmation_date?: string; address: string; photo: string | null; nid: string; nid_number?: string; smart_card_number?: string; birth_registration_number?: string; emergency_contact: string;
     employee_type?: EmployeeType | null;
     employeeType?: EmployeeType | null;
     department: Department; designation: Designation; branch: Branch; manager: Manager | null; status: string; resignation_date?: string; dropout_date?: string; dropout_reason?: string; final_payment_date?: string; last_promotion_date?: string; probation_period_days?: number | null; total_service_length_days?: number | null; service_length_from_confirmation_days?: number | null; staff_age_years?: number | null; length_of_service_on_last_promotion_days?: number | null; joining_designation_name?: string; last_designation_name?: string; last_branch_name?: string; pin?: string; name_en?: string; full_name_en?: string | null; name_bn?: string; email_id?: string;
@@ -213,20 +214,11 @@ export default function EmployeeShow({
 }: EmployeeShowProps) {
     const isDropout = !!employee.dropout_date;
 
-    const getEmployeeDisplayName = (): string => {
-        const fromEn = (employee.full_name_en || employee.name_en || '').trim();
-        if (fromEn) return fromEn;
-        const parts = [employee.first_name, employee.last_name].filter(p => p != null && String(p).trim() !== '');
-        if (parts.length) return parts.join(' ');
-        return String(employee.pin || employee.employee_id || 'Employee');
-    };
+    const displayName = employeeDisplayName(employee, String(employee.pin || employee.employee_id || 'Employee'));
 
     const getInitials = (): string => {
-        const name = getEmployeeDisplayName().trim();
-        const tokens = name.split(/\s+/).filter(Boolean);
-        if (tokens.length >= 2) return `${tokens[0].charAt(0)}${tokens[tokens.length - 1].charAt(0)}`.toUpperCase();
-        if (tokens.length === 1 && tokens[0].length >= 2) return tokens[0].slice(0, 2).toUpperCase();
-        if (tokens.length === 1 && tokens[0].length === 1) return tokens[0].toUpperCase();
+        const fromName = employeeInitials(employee, '');
+        if (fromName) return fromName;
         const id = String(employee.pin || employee.employee_id || '?').replace(/\s+/g, '');
         return id.length >= 2 ? id.slice(0, 2).toUpperCase() : (id.charAt(0) || '?').toUpperCase();
     };
@@ -294,7 +286,7 @@ export default function EmployeeShow({
 
     return (
         <Layout>
-            <Head title={`Employee: ${getEmployeeDisplayName()}`} />
+            <Head title={`Employee: ${displayName}`} />
 
             {/* Print Styles */}
             <style>{`
@@ -360,7 +352,7 @@ export default function EmployeeShow({
                         <div className="absolute -top-16 md:-top-20 left-1/2 transform -translate-x-1/2 md:left-10 md:translate-x-0">
                             <Avatar className="h-32 w-32 md:h-44 md:w-44 border-[6px] border-white shadow-xl bg-white shrink-0">
                                 {employee.photo ? (
-                                    <AvatarImage src={`/storage/${employee.photo}`} alt={getEmployeeDisplayName()} className="object-cover" />
+                                    <AvatarImage src={`/storage/${employee.photo}`} alt={displayName} className="object-cover" />
                                 ) : (
                                     <AvatarFallback className="text-4xl md:text-5xl font-bold bg-emerald-50 text-emerald-600">
                                         {getInitials()}
@@ -376,7 +368,7 @@ export default function EmployeeShow({
                             <div className="text-center md:text-left space-y-4 w-full">
                                 <div>
                                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight flex flex-col sm:flex-row items-center md:items-baseline gap-1 sm:gap-3 justify-center md:justify-start">
-                                        <span>{getEmployeeDisplayName()}</span>
+                                        <span>{displayName}</span>
                                         {employee.name_bn && <span className="text-lg sm:text-xl text-gray-500 font-medium">({employee.name_bn})</span>}
                                     </h1>
                                 </div>
@@ -441,7 +433,7 @@ export default function EmployeeShow({
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <Section title="Basic Details" icon={<User className="w-5 h-5" />}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                    <DataItem label="Name (English)" value={employee.full_name_en || employee.name_en || `${employee.first_name || ''} ${employee.last_name || ''}`} />
+                                    <DataItem label="Name (English)" value={displayName} />
                                     <DataItem label="Name (Bangla)" value={employee.name_bn} />
                                     <DataItem label="Gender" value={employee.gender} />
                                     <DataItem label="Blood Group" value={employee.blood_group} />
@@ -554,7 +546,7 @@ export default function EmployeeShow({
                                 <DataItem label="Last Designation" value={employee.last_designation_name} />
                                 <DataItem label="Current Branch" value={employee.branch?.name} />
                                 <DataItem label="Last Branch" value={employee.last_branch_name} />
-                                <DataItem label="Reports To (Manager)" value={employee.manager ? `${employee.manager.name_en || employee.manager.first_name} (${employee.manager.pin || employee.manager.employee_id})` : ''} />
+                                <DataItem label="Reports To (Manager)" value={employee.manager ? `${employeeDisplayName(employee.manager)} (${employee.manager.pin || employee.manager.employee_id})` : ''} />
                             </div>
                         </Section>
 
@@ -1025,7 +1017,7 @@ export default function EmployeeShow({
 
                     {/* Details */}
                     <div style={{ position: 'absolute', top: '50mm', left: '3mm', right: '3mm', textAlign: 'center' }}>
-                        <div style={{ fontSize: '11px', fontWeight: '800', color: '#1f2937', lineHeight: '1.2' }}>{employee.full_name_en || employee.name_en || `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || 'Employee'}</div>
+                        <div style={{ fontSize: '11px', fontWeight: '800', color: '#1f2937', lineHeight: '1.2' }}>{displayName}</div>
                         <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#117559', marginTop: '2px' }}>{employee.designation?.name || 'Designation N/A'}</div>
                         <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>{employee.department?.name || 'Department N/A'}</div>
 

@@ -32,7 +32,7 @@ class AssetAssignmentController extends Controller
             ->with([
                 'fixedAsset:id,asset_tag,name,branch_id',
                 'fixedAsset.branch:id,name',
-                'employee:id,employee_id,first_name,last_name,current_branch_id',
+                'employee:id,employee_id,name_en,current_branch_id',
                 'assignedByUser:id,name',
             ])
             ->when($request->filled('active_only'), fn ($q) => $q->whereNull('released_date'));
@@ -48,8 +48,8 @@ class AssetAssignmentController extends Controller
                     $q->whereHas('fixedAsset', fn ($q) => $q->where('asset_tag', 'like', "%{$search}%")
                         ->orWhere('name', 'like', "%{$search}%"))
                         ->orWhereHas('employee', fn ($q) => $q->where('employee_id', 'like', "%{$search}%")
-                            ->orWhere('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%"));
+                            ->orWhere('name_en', 'like', "%{$search}%")
+                            ->orWhere('name_bn', 'like', "%{$search}%"));
                 });
             })
             ->orderByDesc('assigned_date')
@@ -68,7 +68,7 @@ class AssetAssignmentController extends Controller
     {
         $prefillAsset = null;
         if ($request->filled('fixed_asset_id')) {
-            $asset = FixedAsset::query()->with('custodian:id,employee_id,first_name,last_name')->find($request->integer('fixed_asset_id'));
+            $asset = FixedAsset::query()->with('custodian:id,employee_id,name_en')->find($request->integer('fixed_asset_id'));
             if ($asset) {
                 $prefillAsset = [
                     'id' => $asset->id,
@@ -147,9 +147,9 @@ class AssetAssignmentController extends Controller
         $employees = Employee::query()
             ->where('status', 'active')
             ->where('current_branch_id', $request->integer('branch_id'))
-            ->orderBy('first_name')
+            ->orderBy('name_en')
             ->limit(500)
-            ->get(['id', 'employee_id', 'first_name', 'last_name']);
+            ->get(['id', 'employee_id', 'name_en']);
 
         return response()->json(['employees' => $employees]);
     }

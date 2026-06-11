@@ -36,4 +36,34 @@ export default defineConfig({
     esbuild: {
         jsx: 'automatic',
     },
+    build: {
+        chunkSizeWarningLimit: 900,
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (!id.includes('node_modules')) {
+                        return;
+                    }
+                    if (id.includes('react-dom') || id.includes('/react/')) {
+                        return 'vendor-react';
+                    }
+                    if (id.includes('@inertiajs')) {
+                        return 'vendor-inertia';
+                    }
+                    if (id.includes('date-fns')) {
+                        return 'vendor-date-fns';
+                    }
+                    if (id.includes('lucide-react')) {
+                        return 'vendor-icons';
+                    }
+                    if (id.includes('@radix-ui')) {
+                        return 'vendor-radix';
+                    }
+                    if (id.includes('@headlessui')) {
+                        return 'vendor-headlessui';
+                    }
+                },
+            },
+        },
+    },
 });

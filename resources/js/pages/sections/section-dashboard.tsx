@@ -81,6 +81,8 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     { label: 'Gratuity entitlements', href: '/gratuity' },
                     { label: 'Gratuity payments', href: '/gratuity/payments' },
                 ];
+            case 'employee-loan':
+                return [];
             case 'payroll':
                 return [
                     { label: 'Payroll dashboard', href: '/sections/payroll' },
@@ -90,6 +92,10 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     { label: 'Salary Heads', href: '/salary-heads' },
                     { label: 'Salary Structure (manual)', href: '/salary-structures/manual' },
                     { label: 'Branch Wise Bank', href: '/branch-payroll-banks' },
+                    { label: 'Probation Salary', href: '/probation-salary' },
+                    { label: 'Fixed Salary', href: '/fixed-salary' },
+                    { label: 'Head Modification', href: '/salary-head-modifications' },
+                    { label: 'Salary Process', href: '/salary-process' },
                 ];
             case 'fixed-asset':
                 return [

@@ -172,7 +172,10 @@ class SimpleXlsxReader
         }
 
         $python = self::pythonBinary();
-        $command = escapeshellarg($python).' '.escapeshellarg($script).' '.escapeshellarg($absolutePath);
+        $envPrefix = PHP_OS_FAMILY === 'Windows'
+            ? 'set PYTHONIOENCODING=utf-8&& '
+            : 'PYTHONIOENCODING=utf-8 ';
+        $command = $envPrefix.escapeshellarg($python).' '.escapeshellarg($script).' '.escapeshellarg($absolutePath);
         $output = shell_exec($command);
 
         if (! is_string($output) || trim($output) === '') {

@@ -32,11 +32,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { PageSurface } from '@/components/page-surface';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
 }
 
@@ -95,7 +94,7 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
 
   return (
     <Layout>
-      <Head title={`${employee.first_name} ${employee.last_name} - Documents`} />
+      <Head title={`${employeeDisplayName(employee)} - Documents`} />
 
       <PageSurface>
         <div className="mb-6">
@@ -112,7 +111,7 @@ export default function EmployeeDocumentsIndex({ employee, documents }: Employee
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Employee Documents</h1>
             <p className="mt-1 text-gray-500">
-              Manage documents for {employee.first_name} {employee.last_name} ({employee.employee_id})
+              Manage documents for {employeeDisplayName(employee)} ({employee.employee_id})
             </p>
           </div>
 

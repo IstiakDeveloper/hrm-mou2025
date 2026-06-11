@@ -42,6 +42,7 @@ interface DatePickerProps {
   minDate?: Date;
   maxDate?: Date;
   id?: string;
+  className?: string;
 }
 
 export function DatePicker({
@@ -51,6 +52,7 @@ export function DatePicker({
   minDate,
   maxDate,
   id,
+  className,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState(() =>
@@ -121,7 +123,7 @@ export function DatePicker({
           value={inputValue}
           placeholder={placeholderText}
           aria-invalid={invalid}
-          className={cn("pr-10", invalid && "border-destructive")}
+          className={cn("pr-10 h-8.5 text-xs bg-white", invalid && "border-destructive", className)}
           onChange={(e) => {
             setInputValue(e.target.value);
             setInvalid(false);
@@ -138,7 +140,7 @@ export function DatePicker({
           <Button
             type="button"
             variant="ghost"
-            className="absolute right-0 top-0 h-9 w-9 shrink-0 px-0 text-muted-foreground hover:text-foreground"
+            className="absolute right-0 top-0 h-8.5 w-8.5 shrink-0 px-0 text-muted-foreground hover:text-foreground"
             aria-label="Open calendar"
             onMouseDown={(e) => e.preventDefault()}
           >

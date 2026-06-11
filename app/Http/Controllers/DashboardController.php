@@ -29,10 +29,12 @@ use App\Models\SalaryStructure;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Zone;
+use App\Services\EmployeeLoanDashboardService;
 use App\Support\SafeSchema;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -313,6 +315,34 @@ class DashboardController extends Controller
     }
 
     /**
+     * Employee Loan section dashboard — portfolio & recovery overview.
+     */
+    public function employeeLoanSection(Request $request, EmployeeLoanDashboardService $dashboard)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+
+        /** @var User $user */
+        $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        if (! $hasPermission($user, 'payroll.view') && ! $hasPermission($user, 'admin.access')) {
+            abort(403);
+        }
+
+        $roles = $user->roles;
+        $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
+
+        return Inertia::render('sections/employee-loan/dashboard', [
+            'stats' => $dashboard->stats(),
+            'userRole' => $role?->name ?? 'User',
+        ]);
+    }
+
+    /**
      * Human Resources section dashboard (new UI, existing data).
      * Shows admin dashboard for HR/admin-like users; otherwise shows employee dashboard.
      */
@@ -399,7 +429,8 @@ class DashboardController extends Controller
 
         $organizationHierarchy = ['zones' => []];
         if ($hasPermission($user, 'zones.view') || $hasPermission($user, 'regional-offices.view') || $hasPermission($user, 'branches.view')) {
-            $organizationHierarchy = $this->getHrOrganizationZonesTree($user);
+            $cacheKey = 'dashboard.hr_org_tree.'.$user->id.'.'.($isBranchManager && $branchId ? $branchId : 'all');
+            $organizationHierarchy = Cache::remember($cacheKey, now()->addMinutes(10), fn () => $this->getHrOrganizationZonesTree($user));
         }
 
         $transferStats = $hasPermission($user, 'transfers.view')
@@ -413,8 +444,8 @@ class DashboardController extends Controller
         $roles = $user->roles;
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
 
-        $employeeDashboard = $this->buildEmployeeDashboardProps($user, $today);
-        $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
+        $showEmployeeTab = $this->userHasDualAdminAndEmployeeContext($user);
+        $employeeDashboard = $showEmployeeTab ? $this->buildEmployeeDashboardProps($user, $today) : null;
 
         return Inertia::render('sections/human-resources/dashboard', [
             'stats' => $stats,
@@ -531,7 +562,7 @@ class DashboardController extends Controller
             'branch',
             'designation',
             'manager' => function ($query) {
-                $query->select('id', 'first_name', 'last_name', 'employee_id', 'name_en');
+                $query->select('id', 'employee_id', 'name_en');
             },
         ])->first();
 
@@ -614,10 +645,7 @@ class DashboardController extends Controller
         $manager = $employee->manager;
         $reportingName = null;
         if ($manager) {
-            $reportingName = trim((string) ($manager->name_en ?? ''));
-            if ($reportingName === '') {
-                $reportingName = trim((string) ($manager->first_name ?? ''));
-            }
+            $reportingName = trim((string) ($manager->name_en ?? $manager->full_name_en ?? ''));
         }
 
         $hrProfile = [
@@ -628,7 +656,7 @@ class DashboardController extends Controller
             'confirmation_date' => $employee->confirmation_date?->format('Y-m-d'),
             'employment_status' => $employee->status,
             'work_email' => $employee->email,
-            'phone' => $employee->phone ?? $employee->mobile_official ?? $employee->mobile_personal,
+            'phone' => $employee->mobile_personal ?? $employee->mobile_official,
             'reporting_manager' => $reportingName,
             'reporting_employee_id' => $manager?->employee_id,
             'employee_type' => $employee->employee_type_id
@@ -783,56 +811,55 @@ class DashboardController extends Controller
      */
     private function getFilteredStats($user)
     {
-        // If user is a branch manager, filter by their branch
         $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
         $branchId = $user->branch_id;
 
-        $employeeQuery = Employee::query();
-        $branchQuery = Branch::query();
-        $departmentQuery = Department::query();
+        $employeeStats = Employee::query()
+            ->when($isBranchManager && $branchId, fn ($q) => $q->where('current_branch_id', $branchId))
+            ->selectRaw("
+                COUNT(*) as total_employees,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as employee_active,
+                SUM(CASE WHEN status = 'terminated' THEN 1 ELSE 0 END) as employee_terminated,
+                SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as employee_inactive,
+                SUM(CASE WHEN status = 'on_leave' THEN 1 ELSE 0 END) as employee_on_leave,
+                SUM(CASE WHEN last_branch_id IS NOT NULL AND last_branch_id != current_branch_id THEN 1 ELSE 0 END) as employees_transferred_posting
+            ")
+            ->first();
 
-        // Filter by branch if user is a branch manager
-        if ($isBranchManager && $branchId) {
-            $employeeQuery->where('current_branch_id', $branchId);
-            $branchQuery->where('id', $branchId);
-            $departmentQuery->whereHas('employees', function ($q) use ($branchId) {
-                $q->where('current_branch_id', $branchId);
-            });
-        }
+        $branchStats = Branch::query()
+            ->when($isBranchManager && $branchId, fn ($q) => $q->where('id', $branchId))
+            ->selectRaw("
+                COUNT(*) as branches_total,
+                SUM(CASE WHEN is_head_office = 1 THEN 1 ELSE 0 END) as branches_head_office,
+                SUM(CASE WHEN is_head_office = 0 OR is_head_office IS NULL THEN 1 ELSE 0 END) as branches_operational
+            ")
+            ->first();
 
-        $branchesTotal = (clone $branchQuery)->count();
-        $branchesOperational = (clone $branchQuery)->where(function ($q) {
-            $q->whereNull('is_head_office')->orWhere('is_head_office', false);
-        })->count();
-        $branchesHeadOffice = (clone $branchQuery)->where('is_head_office', true)->count();
-
-        $totalEmployees = (clone $employeeQuery)->count();
-        $employeeActive = (clone $employeeQuery)->where('status', 'active')->count();
-        $employeeTerminated = (clone $employeeQuery)->where('status', 'terminated')->count();
-        $employeeInactive = (clone $employeeQuery)->where('status', 'inactive')->count();
-        $employeeOnLeave = (clone $employeeQuery)->where('status', 'on_leave')->count();
-        $employeesNonActive = max(0, $totalEmployees - $employeeActive);
-        $employeesTransferredPosting = (clone $employeeQuery)
-            ->whereNotNull('last_branch_id')
-            ->whereColumn('last_branch_id', '!=', 'current_branch_id')
+        $departmentCount = Department::query()
+            ->when($isBranchManager && $branchId, function ($q) use ($branchId) {
+                $q->whereHas('employees', fn ($inner) => $inner->where('current_branch_id', $branchId));
+            })
             ->count();
+
+        $totalEmployees = (int) ($employeeStats->total_employees ?? 0);
+        $employeeActive = (int) ($employeeStats->employee_active ?? 0);
 
         return [
             'totalEmployees' => $totalEmployees,
-            'totalBranches' => $branchesTotal,
-            'branchesTotal' => $branchesTotal,
-            'branchesOperational' => $branchesOperational,
-            'branchesHeadOffice' => $branchesHeadOffice,
-            'totalDepartments' => $departmentQuery->count(),
+            'totalBranches' => (int) ($branchStats->branches_total ?? 0),
+            'branchesTotal' => (int) ($branchStats->branches_total ?? 0),
+            'branchesOperational' => (int) ($branchStats->branches_operational ?? 0),
+            'branchesHeadOffice' => (int) ($branchStats->branches_head_office ?? 0),
+            'totalDepartments' => $departmentCount,
             'totalDesignations' => Designation::query()->count(),
-            'totalZones' => Zone::query()->count(),
-            'totalRegionalOffices' => RegionalOffice::query()->count(),
+            'totalZones' => $isBranchManager && $branchId ? 0 : Zone::query()->count(),
+            'totalRegionalOffices' => $isBranchManager && $branchId ? 0 : RegionalOffice::query()->count(),
             'employeeActive' => $employeeActive,
-            'employeeTerminated' => $employeeTerminated,
-            'employeeInactive' => $employeeInactive,
-            'employeeOnLeave' => $employeeOnLeave,
-            'employeesNonActive' => $employeesNonActive,
-            'employeesTransferredPosting' => $employeesTransferredPosting,
+            'employeeTerminated' => (int) ($employeeStats->employee_terminated ?? 0),
+            'employeeInactive' => (int) ($employeeStats->employee_inactive ?? 0),
+            'employeeOnLeave' => (int) ($employeeStats->employee_on_leave ?? 0),
+            'employeesNonActive' => max(0, $totalEmployees - $employeeActive),
+            'employeesTransferredPosting' => (int) ($employeeStats->employees_transferred_posting ?? 0),
         ];
     }
 
@@ -939,7 +966,6 @@ class DashboardController extends Controller
 
         return $query->take(8)->get()->map(fn (Employee $e) => [
             'id' => $e->id,
-            'first_name' => $e->first_name,
             'name_en' => $e->name_en,
             'full_name_en' => $e->full_name_en,
             'employee_id' => $e->employee_id,
@@ -980,28 +1006,32 @@ class DashboardController extends Controller
             ? $today->toDateString()
             : Carbon::parse($today)->toDateString();
 
-        $employees = $this->activeEmployeesQueryForDashboard($user);
-        $totalActive = (clone $employees)->count();
+        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
+        $branchId = $user->branch_id;
 
-        $present = (clone $employees)->whereHas('attendances', function ($q) use ($date) {
-            $q->whereDate('date', $date)
-                ->where(function ($sq) {
-                    $sq->whereIn('status', ['present', 'half_day'])
-                        ->orWhere(function ($inner) {
-                            $inner->whereNotNull('check_in')
-                                ->whereNotIn('status', ['late', 'leave', 'holiday', 'on_duty', 'absent']);
-                        });
-                });
-        })->count();
+        $row = DB::table('employees as e')
+            ->leftJoin('attendances as a', function ($join) use ($date) {
+                $join->on('a.employee_id', '=', 'e.id')
+                    ->whereDate('a.date', $date);
+            })
+            ->where('e.status', 'active')
+            ->when($isBranchManager && $branchId, fn ($q) => $q->where('e.current_branch_id', $branchId))
+            ->selectRaw("
+                COUNT(*) as total_active,
+                SUM(CASE
+                    WHEN a.id IS NOT NULL AND (
+                        a.status IN ('present', 'half_day')
+                        OR (a.check_in IS NOT NULL AND a.status NOT IN ('late', 'leave', 'holiday', 'on_duty', 'absent'))
+                    ) THEN 1 ELSE 0 END) as present_count,
+                SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) as late_count,
+                SUM(CASE WHEN a.status IN ('leave', 'holiday', 'on_duty') THEN 1 ELSE 0 END) as exempt_count
+            ")
+            ->first();
 
-        $late = (clone $employees)->whereHas('attendances', function ($q) use ($date) {
-            $q->whereDate('date', $date)->where('status', 'late');
-        })->count();
-
-        $exempt = (clone $employees)->whereHas('attendances', function ($q) use ($date) {
-            $q->whereDate('date', $date)->whereIn('status', ['leave', 'holiday', 'on_duty']);
-        })->count();
-
+        $totalActive = (int) ($row->total_active ?? 0);
+        $present = (int) ($row->present_count ?? 0);
+        $late = (int) ($row->late_count ?? 0);
+        $exempt = (int) ($row->exempt_count ?? 0);
         $absent = max(0, $totalActive - $present - $late - $exempt);
 
         return [

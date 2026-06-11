@@ -25,16 +25,15 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { Separator } from '@/components/ui/separator';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department {
     id: number;
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department: Department;
     designation: {
@@ -407,7 +406,7 @@ export default function Show({ application, canApprove }: ShowProps) {
                                 <div className="space-y-4">
                                     <div>
                                         <p className="text-sm font-medium text-gray-500">Name</p>
-                                        <p className="font-medium">{application.employee.first_name} {application.employee.last_name}</p>
+                                        <p className="font-medium">{employeeDisplayName(application.employee)}</p>
                                     </div>
                                     <div>
                                         <p className="text-sm font-medium text-gray-500">Employee ID</p>

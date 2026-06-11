@@ -23,11 +23,10 @@ import {
 } from '@/components/ui/checkbox';
 import { ArrowLeft, CalendarDays, Search, Users, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
   department: {
     id: number;
@@ -80,17 +79,16 @@ export default function AllocateBulk({
   // Safely filter employees based on department and search with null checks
   const filteredEmployees = employees?.filter(employee => {
     // Skip employees with missing properties
-    if (!employee || !employee.department || !employee.first_name ||
-        !employee.last_name || !employee.employee_id) {
+    if (!employee || !employee.department || !employee.employee_id) {
       return false;
     }
 
     const matchesDepartment = departmentFilter === 'all' ||
       (employee.department?.id?.toString() === departmentFilter);
 
+    const displayName = employeeDisplayName(employee, '').toLowerCase();
     const matchesSearch = search === '' ||
-      employee.first_name.toLowerCase().includes(search.toLowerCase()) ||
-      employee.last_name.toLowerCase().includes(search.toLowerCase()) ||
+      displayName.includes(search.toLowerCase()) ||
       employee.employee_id.toLowerCase().includes(search.toLowerCase());
 
     return matchesDepartment && matchesSearch;
@@ -421,7 +419,7 @@ export default function AllocateBulk({
                               className="cursor-pointer"
                             >
                               <div className="font-medium">
-                                {employee.first_name} {employee.last_name}
+                                {employeeDisplayName(employee)}
                               </div>
                               <div className="text-sm text-gray-500 flex items-center space-x-2">
                                 <span>{employee.employee_id}</span>

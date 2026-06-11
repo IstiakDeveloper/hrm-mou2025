@@ -31,4 +31,19 @@ class BonusPostController extends SalaryPostController
     {
         return parent::post($request, $payroll_run);
     }
+
+    public function postPeriod(Request $request, int $year, int $month)
+    {
+        return parent::postPeriod($request, $year, $month);
+    }
+
+    public function cancelPeriod(Request $request, int $year, int $month)
+    {
+        return parent::cancelPeriod($request, $year, $month);
+    }
+
+    public function cancel(Request $request, PayrollRun $payroll_run)
+    {
+        return parent::cancel($request, $payroll_run);
+    }
 }

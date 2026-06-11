@@ -18,7 +18,7 @@ class ZoneController extends Controller
         }
 
         $zones = Zone::query()
-            ->with('zoneManager:id,employee_id,first_name,last_name')
+            ->with('zoneManager:id,employee_id,name_en')
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('code', 'like', "%{$search}%");
@@ -37,8 +37,8 @@ class ZoneController extends Controller
     {
         $employees = Employee::query()
             ->where('status', 'active')
-            ->orderBy('first_name')
-            ->get(['id', 'employee_id', 'first_name', 'last_name']);
+            ->orderBy('name_en')
+            ->get(['id', 'employee_id', 'name_en']);
 
         return Inertia::render('zone/create', [
             'employees' => $employees,
@@ -64,8 +64,8 @@ class ZoneController extends Controller
     {
         $employees = Employee::query()
             ->where('status', 'active')
-            ->orderBy('first_name')
-            ->get(['id', 'employee_id', 'first_name', 'last_name']);
+            ->orderBy('name_en')
+            ->get(['id', 'employee_id', 'name_en']);
 
         return Inertia::render('zone/edit', [
             'zone' => $zone,

@@ -57,7 +57,7 @@ class AttendanceReportController extends Controller
 
             // Get employee full name
             $employee = Employee::findOrFail($employeeId);
-            $employeeName = $employee->first_name . ($employee->last_name ? ' ' . $employee->last_name : '');
+            $employeeName = $employee->name_en ?? $employee->full_name_en ?? '';
 
             // Generate the attendance report
             $reports = $this->generateAttendanceReport($employeeId, $fromDate, $toDate);
@@ -90,15 +90,14 @@ class AttendanceReportController extends Controller
     private function employeesForReportDropdown(User $user)
     {
         $q = Employee::query()
-            ->select('id', 'employee_id', 'first_name', 'last_name')
+            ->select('id', 'employee_id', 'name_en')
             ->where('status', 'active')
-            ->orderBy('first_name')
-            ->orderBy('last_name');
+            ->orderBy('name_en');
 
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->get()->map(function ($employee) {
-            $fullName = $employee->first_name . ($employee->last_name ? ' ' . $employee->last_name : '');
+            $fullName = $employee->name_en ?? $employee->full_name_en ?? '';
 
             return [
                 'id' => $employee->id,
@@ -542,7 +541,7 @@ class AttendanceReportController extends Controller
 
         // Get employee full name
         $employee = Employee::findOrFail($employeeId);
-        $employeeName = $employee->first_name . ($employee->last_name ? ' ' . $employee->last_name : '');
+        $employeeName = $employee->name_en ?? $employee->full_name_en ?? '';
 
         // Generate the attendance report
         $reports = $this->generateAttendanceReport($employeeId, $fromDate, $toDate);

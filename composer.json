@@ -17,6 +17,7 @@
         "laravel/tinker": "^2.10.1",
         "minishlink/web-push": "^10.0",
         "mpdf/mpdf": "^8.2",
+        "shuchkin/simplexlsxgen": "^1.5",
         "tightenco/ziggy": "^2.4"
     },
     "require-dev": {

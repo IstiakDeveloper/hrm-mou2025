@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ArrowLeft, ArrowRightLeft } from 'lucide-react';
 
@@ -81,10 +82,7 @@ export default function AssetTransferForm({
                                 <ComboSelect
                                     value={Number(data.to_branch_id) || null}
                                     onChange={(v) => v && setData('to_branch_id', v)}
-                                    items={destinationBranches.map((b) => ({
-                                        value: b.id,
-                                        label: b.is_head_office ? `${b.name} (HO)` : b.name,
-                                    }))}
+                                    items={branchComboSelectItems(destinationBranches, { numericValue: true })}
                                 />
                                 {errors.to_branch_id && <p className="text-sm text-red-500">{errors.to_branch_id}</p>}
                             </div>

@@ -10,14 +10,10 @@ export type ReportColumn = {
 type TablePayload = {
     template?: string;
     columns?: ReportColumn[];
+    group_columns?: ReportColumn[];
     rows?: Record<string, unknown>[];
     totals?: Record<string, unknown>;
-    sections?: {
-        title?: string;
-        employee_count?: number;
-        total_basic?: number;
-        total_gratuity?: number;
-    }[];
+    sections?: Record<string, unknown>[];
     meta?: { message?: string };
 };
 
@@ -67,6 +63,47 @@ export function WordTableReport({ payload }: { payload: TablePayload }) {
                                 <td className="p-1">{row.description ?? ''}</td>
                             </tr>
                         ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+
+    if (template === 'loan-grouped') {
+        const columns = payload.group_columns ?? [];
+        const sections = payload.sections ?? [];
+        const totals = payload.totals;
+        return (
+            <div className="overflow-x-auto border border-black bg-white">
+                <table className="w-full border-collapse text-[11px] text-black">
+                    <thead>
+                        <tr className="border-b border-black bg-emerald-50/80">
+                            {columns.map((col) => (
+                                <th key={col.key} className={`border-r border-black p-1 last:border-r-0 ${cellAlign(col.align)}`}>
+                                    {col.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sections.map((s, i) => (
+                            <tr key={i} className="border-b border-black">
+                                {columns.map((col) => (
+                                    <td key={col.key} className={`border-r border-black p-1 last:border-r-0 ${cellAlign(col.align)}`}>
+                                        {renderCell(s[col.key], col.numeric)}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                        {totals && (
+                            <tr className="border-t-2 border-black font-bold bg-emerald-50/50">
+                                {columns.map((col) => (
+                                    <td key={col.key} className={`border-r border-black p-1 last:border-r-0 ${cellAlign(col.align)}`}>
+                                        {renderCell(totals[col.key], col.numeric)}
+                                    </td>
+                                ))}
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>

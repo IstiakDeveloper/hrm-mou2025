@@ -1,15 +1,14 @@
 import React, { useEffect } from 'react';
 import { Head } from '@inertiajs/react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department {
     id: number;
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     phone?: string;
     department: Department;
@@ -428,7 +427,7 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
                                 <div className="detail-item">
                                     <span className="detail-label">Name:</span>
                                     <span className="detail-value">
-                                        {application.employee?.first_name || ''} {application.employee?.last_name || ''}
+                                        {employeeDisplayName(application.employee)}
                                     </span>
                                 </div>
                                 <div className="detail-item">

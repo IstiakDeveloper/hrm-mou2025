@@ -10,7 +10,7 @@ import { ComboSelect } from '@/components/ComboSelect';
 import { PayrollComboField } from '@/components/payroll/PayrollFilterGrid';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FolderOpen, Search, Save } from 'lucide-react';
+import { FolderOpen, Search, Save, SlidersHorizontal, Scale, Calculator } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type SavedStructure = {
@@ -48,14 +48,13 @@ type Props = {
 };
 
 const amountInputClass =
-    'h-10 w-full min-w-0 text-right text-sm tabular-nums sm:h-11 sm:text-base';
-const typeSelectClass = 'h-10 w-full min-w-0 sm:h-11';
+    'h-8.5 w-full min-w-0 text-right text-xs font-mono border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20';
 
 function sumComponentRows(rows: Row[], basicSalary: number): number {
     return rows.reduce((sum, row) => {
         const amt = parseFloat(row.amount) || 0;
-        if (row.amount_type === 'percentage') return sum + (basicSalary * amt) / 100;
-        return sum + amt;
+        if (row.amount_type === 'percentage') return sum + Math.round((basicSalary * amt) / 100);
+        return sum + Math.round(amt);
     }, 0);
 }
 
@@ -75,21 +74,19 @@ function StructureRowGrid({
     return (
         <div
             className={cn(
-                'grid w-full grid-cols-1 gap-3 border-b px-3 py-3 last:border-b-0',
-                'sm:grid-cols-12 sm:items-center sm:gap-x-4 sm:px-4',
-                highlight && 'bg-amber-50/60',
+                'grid w-full grid-cols-1 gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0',
+                'sm:grid-cols-12 sm:items-center sm:gap-x-4 sm:px-5',
+                highlight && 'bg-amber-50/40 border-l-2 border-l-amber-500',
             )}
         >
             <div className="min-w-0 sm:col-span-5">
-                <div className="text-sm font-medium leading-snug">{headLabel}</div>
-                {headSub && <div className="mt-0.5 text-xs text-muted-foreground">{headSub}</div>}
+                <div className="text-xs font-bold text-slate-800 leading-snug">{headLabel}</div>
+                {headSub && <div className="mt-0.5 text-[10px] text-slate-400 font-medium leading-none">{headSub}</div>}
             </div>
             <div className="min-w-0 sm:col-span-3">
-                <Label className="mb-1.5 block text-xs text-muted-foreground sm:sr-only">Amount type</Label>
                 {amountType}
             </div>
             <div className="min-w-0 sm:col-span-4">
-                <Label className="mb-1.5 block text-xs text-muted-foreground sm:sr-only">Amount</Label>
                 {amountNode}
             </div>
         </div>
@@ -121,80 +118,126 @@ function StructureTable({
     }, [rows, basicSalary, includeBasicRow]);
 
     return (
-        <Card className="flex w-full min-w-0 flex-1 flex-col">
-            <CardHeader className="border-b bg-slate-100 py-3">
-                <CardTitle className="text-center text-sm font-semibold">{title}</CardTitle>
+        <Card className="flex w-full min-w-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all duration-300">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 px-5 py-3">
+                <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider">{title} Components</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col p-0">
-                <div className="hidden border-b bg-slate-50 px-4 py-2.5 text-xs font-semibold text-muted-foreground sm:grid sm:grid-cols-12 sm:gap-x-4">
+                <div className="hidden border-b border-slate-100 bg-slate-50/20 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:grid sm:grid-cols-12 sm:gap-x-4">
                     <div className="sm:col-span-5">Salary Head</div>
                     <div className="sm:col-span-3">Amount Type</div>
                     <div className="sm:col-span-4 text-right">Amount</div>
                 </div>
 
-                <div className="w-full min-w-0 flex-1">
+                <div className="w-full min-w-0 flex-1 divide-y divide-slate-100">
                     {includeBasicRow && onBasicChange && (
                         <StructureRowGrid
                             highlight
-                            headLabel="Basic"
+                            headLabel="Basic Salary"
                             headSub={
                                 stepBasicSalary > 0 ? (
-                                    <>Step default: {stepBasicSalary.toLocaleString()}</>
+                                    <>Step default: ৳{Math.round(stepBasicSalary).toLocaleString('en-BD')}</>
                                 ) : undefined
                             }
-                            amountType={<span className="inline-flex h-10 items-center text-xs text-muted-foreground sm:h-11">FIXED</span>}
+                            amountType={
+                                <span className="inline-flex h-8.5 items-center px-2.5 text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-50 border border-amber-250/50 rounded-md">
+                                    Fixed
+                                </span>
+                            }
                             amountNode={
-                                <Input
-                                    className={amountInputClass}
-                                    type="number"
-                                    min={0}
-                                    step="any"
-                                    value={basicAmount}
-                                    onChange={(e) => onBasicChange(e.target.value)}
-                                />
+                                <div className="relative flex items-center">
+                                    <span className="absolute left-2.5 text-xs text-slate-400 font-medium">৳</span>
+                                    <Input
+                                        className={cn(amountInputClass, "pl-6 text-right")}
+                                        type="number"
+                                        min={0}
+                                        step="1"
+                                        value={basicAmount}
+                                        onChange={(e) => onBasicChange(e.target.value)}
+                                    />
+                                </div>
                             }
                         />
                     )}
-                    {rows.map((row) => (
-                        <StructureRowGrid
-                            key={row.salary_head_id}
-                            headLabel={row.short_name}
-                            headSub={row.name}
-                            amountType={
-                                <ComboSelect
-                                    value={row.amount_type}
-                                    onChange={(v) => onChange(row.salary_head_id, { amount_type: v ?? 'fixed' })}
-                                    items={[
-                                        { value: 'percentage', label: 'PERCENTAGE' },
-                                        { value: 'fixed', label: 'FIXED' },
-                                    ]}
-                                    className={typeSelectClass}
-                                />
-                            }
-                            amountNode={
-                                <Input
-                                    className={amountInputClass}
-                                    type="number"
-                                    min={0}
-                                    step="any"
-                                    value={row.amount}
-                                    onChange={(e) => onChange(row.salary_head_id, { amount: e.target.value })}
-                                />
-                            }
-                        />
-                    ))}
+                    {rows.map((row) => {
+                        const isPercentage = row.amount_type === 'percentage';
+                        const evaluated = isPercentage 
+                            ? Math.round((basicSalary * (parseFloat(row.amount) || 0)) / 100) 
+                            : Math.round(parseFloat(row.amount) || 0);
+
+                        return (
+                            <StructureRowGrid
+                                key={row.salary_head_id}
+                                headLabel={row.short_name}
+                                headSub={row.name}
+                                amountType={
+                                    <ComboSelect
+                                        value={row.amount_type}
+                                        onChange={(v) => onChange(row.salary_head_id, { amount_type: v ?? 'fixed' })}
+                                        items={[
+                                            { value: 'percentage', label: '%' },
+                                            { value: 'fixed', label: '৳ FIXED' },
+                                        ]}
+                                        className="h-8.5 text-xs border-slate-205"
+                                    />
+                                }
+                                amountNode={
+                                    <div className="space-y-1">
+                                        <div className="relative flex items-center">
+                                            {row.amount_type === 'fixed' && (
+                                                <span className="absolute left-2.5 text-xs text-slate-400 font-medium">৳</span>
+                                            )}
+                                            <Input
+                                                className={cn(
+                                                    amountInputClass,
+                                                    row.amount_type === 'fixed' ? 'pl-6' : 'pr-3'
+                                                )}
+                                                type="number"
+                                                min={0}
+                                                step="1"
+                                                value={row.amount}
+                                                onChange={(e) => onChange(row.salary_head_id, { amount: e.target.value })}
+                                            />
+                                            {row.amount_type === 'percentage' && (
+                                                <span className="absolute right-2.5 text-xs text-slate-400 font-medium">%</span>
+                                            )}
+                                        </div>
+                                        {isPercentage && (
+                                            <div className="text-[10px] text-right font-bold text-indigo-500 font-mono mt-0.5">
+                                                ≈ ৳{evaluated.toLocaleString('en-BD')}
+                                            </div>
+                                        )}
+                                    </div>
+                                }
+                            />
+                        );
+                    })}
                 </div>
 
-                <div className="mt-auto flex flex-col gap-1 bg-slate-700 px-4 py-3 text-sm font-semibold text-white sm:flex-row sm:items-center sm:justify-between">
-                    <span>Total {title}</span>
-                    <span className="tabular-nums text-base sm:text-lg">
-                        {total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                <div className="mt-auto flex flex-row items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold text-slate-700">
+                    <span className="uppercase tracking-wider">Total {title}</span>
+                    <span className="font-mono text-sm">
+                        ৳{Math.round(total).toLocaleString('en-BD')}
                     </span>
                 </div>
             </CardContent>
         </Card>
     );
 }
+
+function formatInitialAmount(amount: string, type: string): string {
+    const parsed = parseFloat(amount);
+    if (isNaN(parsed)) return '';
+    if (type === 'percentage') {
+        return String(Number(parsed.toFixed(2))); 
+    }
+    return String(Math.round(parsed));
+}
+
+const cleanRows = (rows: Row[]) => rows.map(r => ({
+    ...r,
+    amount: formatInitialAmount(r.amount, r.amount_type)
+}));
 
 export default function SalaryStructureManual({
     filters,
@@ -208,17 +251,17 @@ export default function SalaryStructureManual({
     hasStructure,
     savedStructures,
 }: Props) {
-    const [additionRows, setAdditionRows] = useState(initialAddition);
-    const [deductionRows, setDeductionRows] = useState(initialDeduction);
-    const [basicAmount, setBasicAmount] = useState(String(initialBasicSalary || ''));
+    const [additionRows, setAdditionRows] = useState(() => cleanRows(initialAddition));
+    const [deductionRows, setDeductionRows] = useState(() => cleanRows(initialDeduction));
+    const [basicAmount, setBasicAmount] = useState(String(Math.round(initialBasicSalary) || ''));
 
     React.useEffect(() => {
-        setAdditionRows(initialAddition);
-        setDeductionRows(initialDeduction);
-        setBasicAmount(String(initialBasicSalary || ''));
+        setAdditionRows(cleanRows(initialAddition));
+        setDeductionRows(cleanRows(initialDeduction));
+        setBasicAmount(String(Math.round(initialBasicSalary) || ''));
     }, [initialAddition, initialDeduction, initialBasicSalary]);
 
-    const basicNum = parseFloat(basicAmount) || 0;
+    const basicNum = Math.round(parseFloat(basicAmount) || 0);
 
     const [payscaleId, setPayscaleId] = useState(filters.payscale_id || '');
     const [gradeId, setGradeId] = useState(filters.salary_grade_id || '');
@@ -256,8 +299,9 @@ export default function SalaryStructureManual({
     };
 
     const liveTotals = useMemo(() => {
-        const totalAddition = basicNum + sumComponentRows(additionRows, basicNum);
-        const totalDeduction = sumComponentRows(deductionRows, basicNum);
+        const roundedBasic = Math.round(basicNum);
+        const totalAddition = roundedBasic + sumComponentRows(additionRows, roundedBasic);
+        const totalDeduction = sumComponentRows(deductionRows, roundedBasic);
         return {
             total_addition: totalAddition,
             total_deduction: totalDeduction,
@@ -270,7 +314,9 @@ export default function SalaryStructureManual({
         const lines = [...additionRows, ...deductionRows].map((r) => ({
             salary_head_id: r.salary_head_id,
             amount_type: r.amount_type,
-            amount: parseFloat(r.amount) || 0,
+            amount: r.amount_type === 'percentage' 
+                ? parseFloat(r.amount) || 0 
+                : Math.round(parseFloat(r.amount) || 0),
         }));
         setSaving(true);
         router.post(
@@ -290,52 +336,60 @@ export default function SalaryStructureManual({
         <Layout>
             <Head title="Salary Structure (Manual)" />
             <PageSurface className="w-full max-w-full">
-                <div className="mb-4 w-full">
-                    <h1 className="text-lg font-bold text-gray-900 sm:text-xl">Salary Structure (Manual)</h1>
-                    <p className="mt-1 text-sm text-gray-500">
-                        Select Scale + Grade + Step, then <strong>SEARCH</strong> to load or edit. SAVE stores data in
-                        the database — it does not show until you search that same combination (or use Load below).
-                    </p>
+                {/* Header */}
+                <div className="mb-5 flex flex-col justify-between gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                                <Scale className="h-4 w-4" />
+                            </div>
+                            <h1 className="text-base font-bold text-slate-800 sm:text-lg">Salary Structure (Manual)</h1>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">
+                            Configure base formulas and additions/deductions for scale grades and steps.
+                        </p>
+                    </div>
                 </div>
 
+                {/* Saved Structures */}
                 {savedStructures.length > 0 && (
-                    <Card className="mb-4 w-full border-sky-200 bg-sky-50/40">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <FolderOpen className="h-4 w-4 text-sky-700" />
-                                Saved structures ({savedStructures.length})
+                    <Card className="mb-5 w-full rounded-2xl border border-sky-100 bg-sky-50/20 shadow-2xs overflow-hidden transition-all duration-350">
+                        <CardHeader className="pb-2 border-b border-sky-100/40 bg-sky-50/10 px-5 py-3">
+                            <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sky-800">
+                                <FolderOpen className="h-4 w-4 text-sky-600" />
+                                Saved Structures ({savedStructures.length})
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="overflow-x-auto p-0 pb-2 sm:px-6">
+                        <CardContent className="p-0 overflow-x-auto">
                             <Table>
                                 <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead className="text-right">Basic</TableHead>
-                                        <TableHead className="text-right">Net</TableHead>
-                                        <TableHead className="text-center">Lines</TableHead>
-                                        <TableHead>Updated</TableHead>
-                                        <TableHead className="w-24" />
+                                    <TableRow className="border-b border-sky-100/40 bg-sky-50/5 hover:bg-sky-50/5">
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-sky-700 py-3 pl-6">Name</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-sky-700 py-3 text-right">Basic (৳)</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-sky-700 py-3 text-right">Net Payable (৳)</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-sky-700 py-3 text-center">Lines</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-sky-700 py-3">Updated</TableHead>
+                                        <TableHead className="w-24 py-3 pr-6" />
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {savedStructures.map((s) => (
-                                        <TableRow key={s.id}>
-                                            <TableCell className="text-sm font-medium">{s.name}</TableCell>
-                                            <TableCell className="text-right tabular-nums text-sm">
-                                                {s.basic_salary.toLocaleString()}
+                                        <TableRow key={s.id} className="border-b border-sky-100/30 hover:bg-sky-50/30 transition-colors">
+                                            <TableCell className="text-xs font-semibold text-slate-800 py-2.5 pl-6">{s.name}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs font-bold text-slate-700 py-2.5">
+                                                ৳{Math.round(s.basic_salary).toLocaleString('en-BD')}
                                             </TableCell>
-                                            <TableCell className="text-right tabular-nums text-sm">
-                                                {s.net_payable.toLocaleString()}
+                                            <TableCell className="text-right font-mono text-xs font-bold text-emerald-800 py-2.5">
+                                                ৳{Math.round(s.net_payable).toLocaleString('en-BD')}
                                             </TableCell>
-                                            <TableCell className="text-center text-sm">{s.lines_count}</TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">{s.updated_at ?? '—'}</TableCell>
-                                            <TableCell>
+                                            <TableCell className="text-center text-xs text-slate-500 font-medium py-2.5">{s.lines_count}</TableCell>
+                                            <TableCell className="text-[10px] text-slate-400 py-2.5">{s.updated_at ?? '—'}</TableCell>
+                                            <TableCell className="py-2.5 pr-6 text-right">
                                                 <Button
                                                     type="button"
                                                     size="sm"
                                                     variant="outline"
-                                                    className="h-8"
+                                                    className="h-7 text-xs border-sky-200 text-sky-700 hover:bg-sky-50 cursor-pointer shadow-3xs transition-all"
                                                     onClick={() => loadSaved(s)}
                                                 >
                                                     Load
@@ -349,9 +403,14 @@ export default function SalaryStructureManual({
                     </Card>
                 )}
 
-                <Card className="mb-4 w-full bg-slate-50">
-                    <CardContent className="pt-4">
-                        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+                {/* Filter Deck */}
+                <Card className="rounded-2xl border border-slate-200/60 bg-white/70 backdrop-blur-md p-4 mb-5 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100/80">
+                        <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-xs font-semibold text-slate-600">Select Grade & Step</span>
+                    </div>
+                    <CardContent className="p-0">
+                        <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 items-end">
                             <PayrollComboField
                                 label="Salary Scale"
                                 value={payscaleId}
@@ -402,36 +461,40 @@ export default function SalaryStructureManual({
                                 required
                                 placeholder="Search step…"
                             />
-                            <div className="flex min-w-0 flex-col justify-end gap-2 sm:col-span-2 lg:col-span-1">
+                            <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
                                 <Button
                                     type="button"
                                     onClick={search}
                                     disabled={!canSearch}
-                                    className="h-10 w-full bg-sky-600 hover:bg-sky-700 sm:w-auto lg:w-full"
+                                    className="h-8.5 w-full cursor-pointer text-xs bg-slate-900 hover:bg-slate-800 text-white font-medium shadow-2xs rounded-lg transition-all duration-200"
                                 >
-                                    <Search className="mr-1 h-4 w-4" /> SEARCH
+                                    <Search className="mr-1.5 h-3.5 w-3.5" /> Search
                                 </Button>
-                                {searched && stepBasicSalary > 0 && (
-                                    <p className="text-center text-xs text-muted-foreground lg:text-left">
-                                        Step basic: <strong>{stepBasicSalary.toLocaleString()}</strong>
-                                    </p>
-                                )}
                             </div>
+                            {searched && stepBasicSalary > 0 && (
+                                <div className="text-center sm:text-left sm:col-span-2 lg:col-span-1 pb-1">
+                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
+                                        Step Basic: <strong className="font-mono text-slate-700">৳{Math.round(stepBasicSalary).toLocaleString('en-BD')}</strong>
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
 
+                {/* Status Badges */}
                 {searched && hasStructure && (
-                    <div className="mb-3">
-                        <Badge className="bg-emerald-600 hover:bg-emerald-600">
-                            Saved structure loaded — edit and SAVE to update
+                    <div className="mb-4">
+                        <Badge className="bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-50 font-bold uppercase tracking-wider text-[9px] px-3 py-1 rounded-full flex items-center gap-1.5 w-fit shadow-3xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Saved structure loaded · edit and save to update
                         </Badge>
                     </div>
                 )}
 
                 {searched ? (
                     <>
-                        <div className="mb-4 grid w-full grid-cols-1 gap-4 xl:grid-cols-2">
+                        <div className="mb-5 grid w-full grid-cols-1 gap-5 xl:grid-cols-2">
                             <StructureTable
                                 title="Addition"
                                 rows={additionRows}
@@ -449,42 +512,58 @@ export default function SalaryStructureManual({
                                 onChange={patchDeduction}
                             />
                         </div>
-                        <Card className="w-full">
-                            <CardContent className="flex flex-col gap-4 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="grid w-full grid-cols-1 gap-2 text-sm sm:grid-cols-3 lg:flex lg:flex-wrap lg:gap-6">
-                                    <span className="flex justify-between gap-2 sm:block">
-                                        Total Addition:{' '}
-                                        <strong className="tabular-nums">
-                                            {liveTotals.total_addition.toLocaleString()}
-                                        </strong>
-                                    </span>
-                                    <span className="flex justify-between gap-2 sm:block">
-                                        Total Deduction:{' '}
-                                        <strong className="tabular-nums">
-                                            {liveTotals.total_deduction.toLocaleString()}
-                                        </strong>
-                                    </span>
-                                    <span className="flex justify-between gap-2 sm:block">
-                                        Net Payable:{' '}
-                                        <strong className="tabular-nums text-green-700">
-                                            {liveTotals.net_payable.toLocaleString()}
-                                        </strong>
-                                    </span>
+                        
+                        {/* Summary Totals & Save Panel */}
+                        <Card className="w-full rounded-2xl border border-slate-200 bg-white/85 backdrop-blur-md shadow-sm overflow-hidden transition-all duration-300">
+                            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="grid w-full grid-cols-1 gap-3 text-xs sm:grid-cols-3 lg:flex lg:flex-wrap lg:gap-8">
+                                    <div className="flex justify-between items-center gap-3 sm:block">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Addition</div>
+                                        <div className="font-mono text-sm font-extrabold text-slate-800 mt-0.5">
+                                            ৳{Math.round(liveTotals.total_addition).toLocaleString('en-BD')}
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center gap-3 sm:block">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Deduction</div>
+                                        <div className="font-mono text-sm font-extrabold text-slate-800 mt-0.5">
+                                            ৳{Math.round(liveTotals.total_deduction).toLocaleString('en-BD')}
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center gap-3 sm:block">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Net Payable</div>
+                                        <div className="font-mono text-base font-extrabold text-emerald-700 mt-0.5 flex items-center gap-1.5">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                            ৳{Math.round(liveTotals.net_payable).toLocaleString('en-BD')}
+                                        </div>
+                                    </div>
                                 </div>
                                 <Button
                                     onClick={save}
                                     disabled={saving}
-                                    className="h-11 w-full shrink-0 bg-emerald-600 hover:bg-emerald-700 sm:w-auto sm:min-w-[140px]"
+                                    className="h-9 w-full shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold cursor-pointer shadow-sm rounded-lg transition-all duration-200 sm:w-auto sm:min-w-[120px]"
                                 >
-                                    <Save className="mr-2 h-4 w-4" /> SAVE
+                                    {saving ? (
+                                        <span className="flex items-center gap-1.5 justify-center">
+                                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                            Saving...
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center gap-1.5 justify-center">
+                                            <Save className="h-3.5 w-3.5" /> Save Formula
+                                        </span>
+                                    )}
                                 </Button>
                             </CardContent>
                         </Card>
                     </>
                 ) : (
-                    <p className="py-12 text-center text-sm text-muted-foreground">
-                        Select payscale, grade and step, then click SEARCH.
-                    </p>
+                    <div className="rounded-2xl border border-dashed border-slate-250 p-12 text-center">
+                        <Calculator className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+                        <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">No Step Loaded</h3>
+                        <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-normal">
+                            Select a payscale, grade, and step above, then click search to configure the salary structure formula.
+                        </p>
+                    </div>
                 )}
             </PageSurface>
         </Layout>

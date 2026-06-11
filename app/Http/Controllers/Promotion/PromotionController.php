@@ -58,8 +58,8 @@ class PromotionController extends Controller
             ->when($request->to_date, fn ($q, $toDate) => $q->where('effective_date', '<=', $toDate))
             ->when($request->search, function ($q, $search) {
                 $q->whereHas('employee', function ($eq) use ($search) {
-                    $eq->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
+                    $eq->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%")
                         ->orWhere('pin', 'like', "%{$search}%");
                 });
@@ -149,7 +149,7 @@ class PromotionController extends Controller
             'to_salary_grade_id' => $request->to_salary_grade_id,
             'from_salary_step_id' => $employee->salary_step_id,
             'to_salary_step_id' => $request->to_salary_step_id,
-            'from_basic_salary' => $employee->basic_salary,
+            'from_basic_salary' => $employee->resolveBasicSalary(),
             'to_basic_salary' => $request->to_basic_salary,
             'effective_date' => $request->effective_date,
             'promotion_order_no' => $orderNo,
@@ -287,10 +287,6 @@ class PromotionController extends Controller
 
         if ($promotion->to_salary_step_id) {
             $employee->salary_step_id = $promotion->to_salary_step_id;
-        }
-
-        if ($promotion->to_basic_salary !== null) {
-            $employee->basic_salary = $promotion->to_basic_salary;
         }
 
         /** @var mixed $lastPromotionDate */

@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface ZoneLite {
   id: number;
@@ -36,12 +37,10 @@ interface RegionalOffice {
   code: string;
   is_active: boolean;
   zone?: ZoneLite;
-  regional_manager?: {
+  regional_manager?: (EmployeeNameFields & {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string | null;
-  } | null;
+  }) | null;
 }
 
 interface PaginationLinks {
@@ -218,7 +217,7 @@ export default function RegionalOfficeIndex({ regionalOffices, zones, filters }:
                             <div className="flex items-center text-[13px] text-slate-600 font-medium">
                               <User className="h-4 w-4 mr-1.5 text-slate-400" />
                               <span>
-                                {ro.regional_manager.first_name} {ro.regional_manager.last_name || ''} ({ro.regional_manager.employee_id})
+                                {employeeDisplayName(ro.regional_manager)} ({ro.regional_manager.employee_id})
                               </span>
                             </div>
                           ) : (

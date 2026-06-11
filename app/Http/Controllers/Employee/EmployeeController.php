@@ -11,6 +11,7 @@ use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\EmployeeType;
+use App\Models\LocationUnion;
 use App\Models\LocationVillage;
 use App\Models\Payscale;
 use App\Models\Program;
@@ -24,6 +25,10 @@ use App\Models\PromotionHistory;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\OrganogramAccessService;
+use App\Support\EmployeeImportCsv;
+use App\Support\EmployeeImportTemplateExporter;
+use App\Support\ImportDateParser;
+use App\Support\SimpleXlsxReader;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -326,12 +331,176 @@ class EmployeeController extends Controller
             $unionsByUpazila[$k] = $arr;
         }
 
+        $customUnionRows = $this->readJsonArrayFile($folder.'/unions_custom.json');
+        if (is_array($customUnionRows)) {
+            foreach ($customUnionRows as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $upazilaName = trim((string) ($row['upazila'] ?? ''));
+                $unionName = trim((string) ($row['name'] ?? ''));
+                if ($upazilaName === '' || $unionName === '') {
+                    continue;
+                }
+                $alreadyListed = false;
+                foreach ($unionsByUpazila[$upazilaName] ?? [] as $existing) {
+                    if (trim((string) ($existing['name'] ?? '')) === $unionName) {
+                        $alreadyListed = true;
+                        break;
+                    }
+                }
+                if ($alreadyListed) {
+                    continue;
+                }
+                $unionsByUpazila[$upazilaName] = $unionsByUpazila[$upazilaName] ?? [];
+                $unionsByUpazila[$upazilaName][] = [
+                    'name' => $unionName,
+                    'type' => 'union',
+                    'villages' => [],
+                ];
+            }
+        }
+
+        foreach ($unionsByUpazila as $k => $arr) {
+            usort($arr, fn ($a, $b) => strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+            $unionsByUpazila[$k] = $arr;
+        }
+
         return [
             'divisions' => $divisions,
             'districts' => $districtsByDivision,
             'upazilas' => $upazilasByDistrict,
             'unions' => $unionsByUpazila,
         ];
+    }
+
+    /**
+     * @return array{divisions: list<string>, districts: array<string, list<string>>}
+     */
+    private function buildLocationsBasePayload(): array
+    {
+        $payload = $this->cachedLocationsPayload();
+
+        return [
+            'divisions' => $payload['divisions'],
+            'districts' => $payload['districts'],
+        ];
+    }
+
+    /**
+     * @return array{divisions: list<string>, districts: array<string, list<string>>, upazilas: array<string, list<string>>, unions: array<string, list<array<string, mixed>>>}
+     */
+    private function cachedLocationsPayload(): array
+    {
+        return Cache::remember('locations.payload.v1', now()->addDay(), fn () => $this->buildLocationsPayload());
+    }
+
+    private function forgetLocationsPayloadCache(): void
+    {
+        Cache::forget('locations.payload.v1');
+    }
+
+    private function authorizeEmployeeDirectoryAccess(Request $request): void
+    {
+        $user = $request->user();
+        if (! $user) {
+            abort(403);
+        }
+
+        $permissions = [
+            'employees.view',
+            'employees.create',
+            'employees.edit',
+            'payroll.view',
+            'reports.view',
+            'loan-applications.view',
+            'loan-committees.view',
+        ];
+
+        foreach ($permissions as $permission) {
+            if ($user->hasPermission($permission)) {
+                return;
+            }
+        }
+
+        abort(403);
+    }
+
+    public function locationsUpazilas(Request $request)
+    {
+        $this->authorizeEmployeeDirectoryAccess($request);
+
+        $district = trim((string) $request->query('district', ''));
+        if ($district === '') {
+            return response()->json([]);
+        }
+
+        $payload = $this->cachedLocationsPayload();
+
+        return response()->json($payload['upazilas'][$district] ?? []);
+    }
+
+    public function locationsUnions(Request $request)
+    {
+        $this->authorizeEmployeeDirectoryAccess($request);
+
+        $upazila = trim((string) $request->query('upazila', ''));
+        if ($upazila === '') {
+            return response()->json([]);
+        }
+
+        $payload = $this->cachedLocationsPayload();
+
+        return response()->json($payload['unions'][$upazila] ?? []);
+    }
+
+    /**
+     * Lightweight employee search for dropdowns (payroll, reports, forms).
+     */
+    public function lookup(Request $request)
+    {
+        $this->authorizeEmployeeDirectoryAccess($request);
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'payroll_ready' => ['nullable', 'boolean'],
+        ]);
+
+        $search = trim((string) ($validated['q'] ?? ''));
+        $limit = (int) ($validated['limit'] ?? 25);
+
+        $query = Employee::query()
+            ->select(['id', 'pin', 'name_en', 'employee_id', 'pf_balance'])
+            ->where('status', 'active')
+            ->when($validated['branch_id'] ?? null, fn ($q, $branchId) => $q->where('current_branch_id', $branchId))
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($inner) use ($search) {
+                    $inner->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
+                        ->orWhere('pin', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('pin')
+            ->limit($limit);
+
+        if ($request->boolean('payroll_ready')) {
+            $query->payrollReady();
+        }
+
+        OrganogramAccessService::constrainVisibleEmployees($query, $request->user());
+
+        return response()->json(
+            $query->get()->map(fn (Employee $employee) => [
+                'id' => $employee->id,
+                'pin' => $employee->pin,
+                'name_en' => $employee->name_en,
+                'employee_id' => $employee->employee_id,
+                'pf_balance' => $employee->pf_balance,
+            ])
+        );
     }
 
     /**
@@ -396,23 +565,20 @@ class EmployeeController extends Controller
             ]);
         }
 
-        if (empty($validated['basic_salary']) && $step->basic_salary !== null) {
-            $validated['basic_salary'] = $step->basic_salary;
-        }
     }
 
     private function normalizeEmployeeRequestPayload(Request $request): void
     {
         $nullableEmptiesToNull = [
-            'nid', 'nid_number', 'smart_card_number', 'birth_registration_number',
-            'email_id', 'phone', 'name_bn', 'gender', 'blood_group', 'date_of_birth',
+            'nid_number', 'smart_card_number',
+            'name_bn', 'gender', 'blood_group', 'date_of_birth',
             'confirmation_date', 'address', 'village', 'post_office', 'union_pouroshova',
             'ward_no', 'upazila', 'district', 'educational_qualification', 'emergency_contact',
             'fathers_name', 'fathers_mobile', 'mothers_name', 'mothers_mobile',
             'marital_status', 'spouse_name', 'spouse_mobile',
             'dropout_date', 'dropout_reason', 'final_payment_date', 'last_promotion_date',
             'reporting_to', 'last_branch_id',
-            'payscale_id', 'salary_grade_id', 'salary_step_id', 'basic_salary',
+            'payscale_id', 'salary_grade_id', 'salary_step_id',
         ];
 
         foreach ($nullableEmptiesToNull as $field) {
@@ -783,6 +949,7 @@ class EmployeeController extends Controller
             if (! $existsAlready) {
                 $existing[] = $newEntry;
                 @file_put_contents($villagesPath, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+                $this->forgetLocationsPayloadCache();
             }
         } catch (\Throwable) {
             // ignore file persistence errors
@@ -795,6 +962,75 @@ class EmployeeController extends Controller
             'upazila' => $village->upazila,
             'union' => $village->union,
             'name' => $village->name,
+        ]);
+    }
+
+    public function storeUnion(Request $request)
+    {
+        $validated = $request->validate([
+            'division' => 'required|string|max:100',
+            'district' => 'required|string|max:100',
+            'upazila' => 'required|string|max:120',
+            'name' => 'required|string|max:120',
+        ]);
+
+        $validated = array_map(fn ($v) => is_string($v) ? trim($v) : $v, $validated);
+        $validated['created_by'] = $request->user()?->id;
+
+        $union = LocationUnion::query()->firstOrCreate(
+            Arr::only($validated, ['division', 'district', 'upazila', 'name']),
+            Arr::only($validated, ['created_by'])
+        );
+
+        try {
+            $unionsPath = base_path('data/locations/unions_custom.json');
+            if (! file_exists($unionsPath)) {
+                @file_put_contents($unionsPath, json_encode([], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+            }
+
+            $existing = $this->readJsonArrayFile($unionsPath);
+            if (! is_array($existing)) {
+                $existing = [];
+            }
+
+            $newEntry = [
+                'division' => (string) $union->division,
+                'district' => (string) $union->district,
+                'upazila' => (string) $union->upazila,
+                'name' => (string) $union->name,
+            ];
+
+            $existsAlready = false;
+            foreach ($existing as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                if (
+                    trim((string) ($row['name'] ?? '')) === $newEntry['name']
+                    && trim((string) ($row['upazila'] ?? '')) === $newEntry['upazila']
+                    && trim((string) ($row['district'] ?? '')) === $newEntry['district']
+                    && trim((string) ($row['division'] ?? '')) === $newEntry['division']
+                ) {
+                    $existsAlready = true;
+                    break;
+                }
+            }
+
+            if (! $existsAlready) {
+                $existing[] = $newEntry;
+                @file_put_contents($unionsPath, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+                $this->forgetLocationsPayloadCache();
+            }
+        } catch (\Throwable) {
+            // ignore file persistence errors
+        }
+
+        return response()->json([
+            'id' => $union->id,
+            'division' => $union->division,
+            'district' => $union->district,
+            'upazila' => $union->upazila,
+            'name' => $union->name,
         ]);
     }
 
@@ -964,7 +1200,7 @@ class EmployeeController extends Controller
 
         $name = trim((string) ($employee->getRawOriginal('name_en') ?? ''));
         if ($name === '') {
-            $name = trim((string) ($employee->getRawOriginal('first_name') ?? 'User'));
+            $name = 'User';
         }
 
         $payload = [
@@ -1004,8 +1240,6 @@ class EmployeeController extends Controller
                 $query->where(function ($query) use ($search) {
                     $query->where('name_en', 'like', "%{$search}%")
                         ->orWhere('name_bn', 'like', "%{$search}%")
-                        ->orWhere('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
                         ->orWhere('pin', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%");
@@ -1024,9 +1258,9 @@ class EmployeeController extends Controller
                 $query->where('employee_type_id', $employeeTypeId);
             });
 
-        $perPage = (int) $request->get('per_page', 100);
-        if (! in_array($perPage, [10, 25, 50, 100, 200, 500])) {
-            $perPage = 100;
+        $perPage = (int) $request->get('per_page', 25);
+        if (! in_array($perPage, [10, 25, 50, 100, 200, 500], true)) {
+            $perPage = 25;
         }
 
         $allowedSortBy = ['id', 'pin', 'name', 'status'];
@@ -1043,7 +1277,7 @@ class EmployeeController extends Controller
         if ($sortBy === 'pin') {
             $query->orderByRaw('COALESCE(pin, employee_id) '.$sortDir);
         } elseif ($sortBy === 'name') {
-            $query->orderBy('name_en', $sortDir)->orderBy('first_name', $sortDir)->orderBy('last_name', $sortDir);
+            $query->orderBy('name_en', $sortDir);
         } elseif ($sortBy === 'status') {
             $query->orderBy('status', $sortDir)->orderBy('id', 'asc');
         } else {
@@ -1053,6 +1287,12 @@ class EmployeeController extends Controller
         $employees = $query
             ->paginate($perPage)
             ->withQueryString();
+
+        $employees->getCollection()->transform(function (Employee $employee) {
+            $employee->setAppends(array_diff($employee->getAppends(), Employee::detailAppends()));
+
+            return $employee;
+        });
 
         $deptIds = OrganogramAccessService::accessibleDepartmentIdList($user);
         $departments = $deptIds === null
@@ -1104,13 +1344,11 @@ class EmployeeController extends Controller
         $designations = Designation::all();
         $branches = Branch::query()
             ->with([
-                'regionalOffice.zone.zoneManager:id,employee_id,first_name,last_name',
-                'regionalOffice.regionalManager:id,employee_id,first_name,last_name',
+                'regionalOffice.zone.zoneManager:id,employee_id,name_en',
+                'regionalOffice.regionalManager:id,employee_id,name_en',
             ])
             ->orderBy('name')
             ->get(['id', 'name', 'branch_code', 'regional_office_id']);
-        $managers = Employee::where('status', 'active')->get();
-
         $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get();
         $programs = Program::query()->where('is_active', true)->orderBy('name')->get();
         $projects = Project::query()->where('is_active', true)->orderBy('name')->get();
@@ -1118,7 +1356,7 @@ class EmployeeController extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
-        $locations = $this->buildLocationsPayload();
+        $locations = $this->buildLocationsBasePayload();
 
         return Inertia::render('employee/create', [
             'oldInput' => old(),
@@ -1135,18 +1373,15 @@ class EmployeeController extends Controller
                     'regionalManager' => $regionalManager ? [
                         'id' => $regionalManager->id,
                         'employee_id' => $regionalManager->employee_id,
-                        'first_name' => $regionalManager->first_name,
-                        'last_name' => $regionalManager->last_name,
+                        'name_en' => $regionalManager->name_en,
                     ] : null,
                     'zoneManager' => $zoneManager ? [
                         'id' => $zoneManager->id,
                         'employee_id' => $zoneManager->employee_id,
-                        'first_name' => $zoneManager->first_name,
-                        'last_name' => $zoneManager->last_name,
+                        'name_en' => $zoneManager->name_en,
                     ] : null,
                 ];
             }),
-            'managers' => $managers,
             'statuses' => ['active', 'inactive'],
             'employeeTypes' => $employeeTypes,
             'programs' => $programs,
@@ -1185,7 +1420,7 @@ class EmployeeController extends Controller
             $validated = $request->validate([
                 // Tab 1
                 'current_branch_id' => 'required|exists:branches,id',
-                'employee_type_id' => 'nullable|exists:employee_types,id',
+                'employee_type_id' => 'required|exists:employee_types,id',
                 'pin' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('pin')],
 
                 'name_en' => 'required|string|max:255',
@@ -1197,8 +1432,6 @@ class EmployeeController extends Controller
                 'spouse_name' => 'nullable|string|max:255',
                 'spouse_mobile' => 'nullable|string|max:20',
 
-                'birth_date_certificate' => 'nullable|date',
-                'birth_date_original' => 'nullable|date',
                 'date_of_birth' => 'nullable|date',
                 'blood_group' => 'nullable|string|max:10',
 
@@ -1217,10 +1450,8 @@ class EmployeeController extends Controller
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
 
-                'nid' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid')],
-                'nid_number' => 'nullable|string|max:50',
+                'nid_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid_number')],
                 'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number')],
-                'birth_registration_number' => 'nullable|string|max:50',
                 'tin_certificate_no' => 'nullable|string|max:50',
                 'driving_license_no' => 'nullable|string|max:50',
                 'passport_no' => 'nullable|string|max:50',
@@ -1231,15 +1462,12 @@ class EmployeeController extends Controller
 
                 // Contact
                 'email' => 'nullable|email',
-                'email_id' => 'nullable|email',
-                'phone' => 'nullable|string|max:20',
                 'mobile_personal' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('mobile_personal')],
                 'mobile_official' => 'nullable|string|max:20',
 
                 'payscale_id' => 'nullable|exists:payscales,id',
                 'salary_grade_id' => 'nullable|exists:salary_grades,id',
                 'salary_step_id' => 'nullable|exists:salary_steps,id',
-                'basic_salary' => 'nullable|numeric|min:0',
 
                 // Nested tab payloads
                 'addresses' => 'nullable|array',
@@ -1370,7 +1598,6 @@ class EmployeeController extends Controller
             ]);
 
             $employeeData['employee_id'] = $employeeData['pin'];
-            $employeeData['first_name'] = $employeeData['name_en'];
             $employeeData['designation_id'] = $employeeData['last_designation_id'];
 
             // Ensure employees.email is always filled (DB column is NOT NULL)
@@ -1619,15 +1846,11 @@ class EmployeeController extends Controller
         $designations = Designation::all();
         $branches = Branch::query()
             ->with([
-                'regionalOffice.zone.zoneManager:id,employee_id,first_name,last_name',
-                'regionalOffice.regionalManager:id,employee_id,first_name,last_name',
+                'regionalOffice.zone.zoneManager:id,employee_id,name_en',
+                'regionalOffice.regionalManager:id,employee_id,name_en',
             ])
             ->orderBy('name')
             ->get(['id', 'name', 'branch_code', 'regional_office_id']);
-        $managers = Employee::where('status', 'active')
-            ->where('id', '!=', $employee->id)
-            ->get();
-
         $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get();
         $programs = Program::query()->where('is_active', true)->orderBy('name')->get();
         $projects = Project::query()->where('is_active', true)->orderBy('name')->get();
@@ -1635,7 +1858,7 @@ class EmployeeController extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
-        $locations = $this->buildLocationsPayload();
+        $locations = $this->buildLocationsBasePayload();
 
         // Load new tabbed relational data (so edit does not wipe on update)
         $employeePayload = $employee->toArray();
@@ -1681,18 +1904,15 @@ class EmployeeController extends Controller
                     'regionalManager' => $regionalManager ? [
                         'id' => $regionalManager->id,
                         'employee_id' => $regionalManager->employee_id,
-                        'first_name' => $regionalManager->first_name,
-                        'last_name' => $regionalManager->last_name,
+                        'name_en' => $regionalManager->name_en,
                     ] : null,
                     'zoneManager' => $zoneManager ? [
                         'id' => $zoneManager->id,
                         'employee_id' => $zoneManager->employee_id,
-                        'first_name' => $zoneManager->first_name,
-                        'last_name' => $zoneManager->last_name,
+                        'name_en' => $zoneManager->name_en,
                     ] : null,
                 ];
             }),
-            'managers' => $managers,
             'statuses' => ['active', 'inactive'],
             'employeeTypes' => $employeeTypes,
             'programs' => $programs,
@@ -1731,8 +1951,6 @@ class EmployeeController extends Controller
                 'spouse_name' => 'nullable|string|max:255',
                 'spouse_mobile' => 'nullable|string|max:20',
 
-                'birth_date_certificate' => 'nullable|date',
-                'birth_date_original' => 'nullable|date',
                 'date_of_birth' => 'nullable|date',
                 'blood_group' => 'nullable|string|max:10',
 
@@ -1751,10 +1969,8 @@ class EmployeeController extends Controller
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
 
-                'nid' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid', $employee->id)],
-                'nid_number' => 'nullable|string|max:50',
+                'nid_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid_number', $employee->id)],
                 'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number', $employee->id)],
-                'birth_registration_number' => 'nullable|string|max:50',
                 'tin_certificate_no' => 'nullable|string|max:50',
                 'driving_license_no' => 'nullable|string|max:50',
                 'passport_no' => 'nullable|string|max:50',
@@ -1765,15 +1981,12 @@ class EmployeeController extends Controller
 
                 // Contact
                 'email' => 'nullable|email',
-                'email_id' => 'nullable|email',
-                'phone' => 'nullable|string|max:20',
                 'mobile_personal' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('mobile_personal', $employee->id)],
                 'mobile_official' => 'nullable|string|max:20',
 
                 'payscale_id' => 'nullable|exists:payscales,id',
                 'salary_grade_id' => 'nullable|exists:salary_grades,id',
                 'salary_step_id' => 'nullable|exists:salary_steps,id',
-                'basic_salary' => 'nullable|numeric|min:0',
 
                 // Nested tab payloads
                 'addresses' => 'nullable|array',
@@ -1899,7 +2112,6 @@ class EmployeeController extends Controller
             ]);
 
             $employeeData['employee_id'] = $employeeData['pin'];
-            $employeeData['first_name'] = $employeeData['name_en'];
             $employeeData['designation_id'] = $employeeData['last_designation_id'];
 
             $email = trim((string) ($employeeData['email'] ?? ''));
@@ -2166,6 +2378,7 @@ class EmployeeController extends Controller
             'leaveBalances.leaveType',
             'movements',
         ]);
+        $employee->append(Employee::detailAppends());
 
         // Get current year leave balances
         $currentYearLeaveBalances = $employee->leaveBalances()
@@ -2354,19 +2567,13 @@ class EmployeeController extends Controller
         ];
         Log::info('Employee import preview started', $debug);
 
-        if ($ext === 'xlsx') {
-            Log::warning('Employee import preview blocked: xlsx requires ext-zip', $debug);
-
-            return back()->withErrors([
-                'file' => 'XLSX import requires PHP zip extension (ext-zip). Please upload CSV for now, or enable ext-zip to support XLSX.',
-            ]);
-        }
-
         $path = $file->store('imports/employees', 'local');
-        $absPath = storage_path('app/'.$path);
+        $absPath = Storage::disk('local')->path($path);
 
         try {
-            $rows = $this->readCsvRows($absPath, $path);
+            $rows = $ext === 'xlsx'
+                ? $this->readXlsxRows($absPath, $path)
+                : $this->readCsvRows($absPath, $path);
             if (count($rows) === 0) {
                 Log::warning('Employee import preview failed: empty file', $debug + ['stored_path' => $path]);
 
@@ -2381,30 +2588,18 @@ class EmployeeController extends Controller
                 ]);
             }
 
+            $headerIdx = $this->detectHeaderRow($rows);
             [$header, $dataRows] = $this->splitHeaderRows($rows);
             $headerMap = $this->normalizeHeaderMap($header);
 
             $previewRows = [];
             foreach ($dataRows as $i => $row) {
-                $rowNumber = $i + 2;
+                $rowNumber = $headerIdx + $i + 2;
                 $rowAssoc = $this->rowToAssoc($row, $headerMap);
 
                 unset($rowAssoc['sl'], $rowAssoc['serial'], $rowAssoc['ক্রমিক'], $rowAssoc['ক্রমিক_no'], $rowAssoc['ক্রমিকনং']);
 
-                $previewRows[] = [
-                    'source_row' => $rowNumber,
-                    'pin' => $this->firstNonEmpty($rowAssoc, ['pin', 'employee_id', 'id', 'emp_id']) ?? '',
-                    'name_en' => $this->firstNonEmpty($rowAssoc, ['name_en', 'name', 'full_name', 'employee_name', 'first_name']) ?? '',
-                    'last_name' => $this->valueOrNull($rowAssoc, ['last_name']) ?? '',
-                    'email' => $this->firstNonEmpty($rowAssoc, ['email', 'mail']) ?? '',
-                    'joining_date' => $this->firstNonEmpty($rowAssoc, ['joining_date', 'join_date', 'date_of_joining', 'doj']) ?? '',
-                    'department' => $this->firstNonEmpty($rowAssoc, ['department_id', 'dept_id', 'department']) ?? '',
-                    'joining_designation' => $this->firstNonEmpty($rowAssoc, ['joining_designation_id', 'joining_designation', 'designation_id', 'desig_id', 'designation']) ?? '',
-                    'last_designation' => $this->firstNonEmpty($rowAssoc, ['last_designation_id', 'last_designation']) ?? '',
-                    'current_branch' => $this->firstNonEmpty($rowAssoc, ['current_branch_id', 'branch_id', 'branch', 'current_branch']) ?? '',
-                    'last_branch' => $this->firstNonEmpty($rowAssoc, ['last_branch_id', 'last_branch', 'previous_branch']) ?? '',
-                    'status' => $this->firstNonEmpty($rowAssoc, ['status']) ?? '',
-                ];
+                $previewRows[] = EmployeeImportCsv::mapAssocToPreviewRow($rowNumber, $rowAssoc);
             }
 
             $importId = (string) Str::uuid();
@@ -2457,19 +2652,25 @@ class EmployeeController extends Controller
 
         $pins = [];
         $emails = [];
+        $mobiles = [];
         foreach ($rows as $r) {
             $pin = trim((string) ($r['pin'] ?? ''));
             $email = trim((string) ($r['email'] ?? ''));
+            $mobile = trim((string) ($r['mobile_personal'] ?? ''));
             if ($pin !== '') {
                 $pins[] = $pin;
             }
             if ($email !== '') {
                 $emails[] = $email;
             }
+            if ($mobile !== '') {
+                $mobiles[] = $mobile;
+            }
         }
 
         $pins = array_values(array_unique($pins));
         $emails = array_values(array_unique($emails));
+        $mobiles = array_values(array_unique($mobiles));
 
         $employedStatuses = Employee::statusesReservingUniqueIdentifiers();
 
@@ -2503,6 +2704,16 @@ class EmployeeController extends Controller
             $existingEmailSet = array_fill_keys(array_map('strtolower', $existingEmails), true);
         }
 
+        $existingMobileSet = [];
+        if (count($mobiles) > 0) {
+            $existingMobiles = Employee::query()
+                ->whereIn('status', $employedStatuses)
+                ->whereIn('mobile_personal', $mobiles)
+                ->pluck('mobile_personal')
+                ->all();
+            $existingMobileSet = array_fill_keys($existingMobiles, true);
+        }
+
         $dupInFilePins = [];
         $pinCounts = array_count_values(array_map('strtolower', $pins));
         foreach ($pinCounts as $p => $c) {
@@ -2519,6 +2730,14 @@ class EmployeeController extends Controller
             }
         }
 
+        $dupInFileMobiles = [];
+        $mobileCounts = array_count_values($mobiles);
+        foreach ($mobileCounts as $m => $c) {
+            if ($c > 1) {
+                $dupInFileMobiles[$m] = true;
+            }
+        }
+
         $issuesByRow = [];
         foreach ($rows as $idx => $r) {
             $sourceRow = (int) ($r['source_row'] ?? ($idx + 2));
@@ -2527,7 +2746,9 @@ class EmployeeController extends Controller
             $pin = trim((string) ($r['pin'] ?? ''));
             $nameEn = trim((string) ($r['name_en'] ?? ''));
             $email = trim((string) ($r['email'] ?? ''));
+            $mobile = trim((string) ($r['mobile_personal'] ?? ''));
             $joiningDate = trim((string) ($r['joining_date'] ?? ''));
+            $employeeType = trim((string) ($r['employee_type'] ?? ''));
 
             if ($pin === '') {
                 $issues[] = 'Missing PIN';
@@ -2535,11 +2756,14 @@ class EmployeeController extends Controller
             if ($nameEn === '') {
                 $issues[] = 'Missing name';
             }
-            if ($email === '') {
-                $issues[] = 'Missing email';
+            if ($mobile === '') {
+                $issues[] = 'Missing mobile_personal';
             }
             if ($joiningDate === '') {
                 $issues[] = 'Missing joining_date';
+            }
+            if ($employeeType === '') {
+                $issues[] = 'Missing employee_type';
             }
 
             if ($pin !== '' && isset($existingPinSet[$pin])) {
@@ -2548,23 +2772,29 @@ class EmployeeController extends Controller
             if ($email !== '' && isset($existingEmailSet[strtolower($email)])) {
                 $issues[] = 'Duplicate email exists in system';
             }
+            if ($mobile !== '' && isset($existingMobileSet[$mobile])) {
+                $issues[] = 'Duplicate mobile exists in system';
+            }
             if ($pin !== '' && isset($dupInFilePins[strtolower($pin)])) {
                 $issues[] = 'Duplicate PIN inside file';
             }
             if ($email !== '' && isset($dupInFileEmails[strtolower($email)])) {
                 $issues[] = 'Duplicate email inside file';
             }
+            if ($mobile !== '' && isset($dupInFileMobiles[$mobile])) {
+                $issues[] = 'Duplicate mobile inside file';
+            }
 
             if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
                 $issues[] = 'Invalid email format';
             }
 
-            if ($joiningDate !== '') {
-                try {
-                    Carbon::parse($joiningDate);
-                } catch (\Throwable $e) {
-                    $issues[] = 'Invalid joining_date';
-                }
+            if ($joiningDate !== '' && ImportDateParser::parse($joiningDate) === null) {
+                $issues[] = 'Invalid joining_date';
+            }
+
+            if ($employeeType !== '' && $this->resolveImportModelId($employeeType, EmployeeType::class, 'name') === null) {
+                $issues[] = 'Unknown employee_type (use name or ID)';
             }
 
             $issuesByRow[$sourceRow] = $issues;
@@ -2573,49 +2803,81 @@ class EmployeeController extends Controller
         $departments = Department::orderBy('name')->get(['id', 'name']);
         $designations = Designation::orderBy('name')->get(['id', 'name']);
         $branches = Branch::orderBy('name')->get(['id', 'name']);
+        $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('employee/import-review', [
             'importId' => $importId,
             'rows' => $rows,
-            'issuesByRow' => $issuesByRow,
-            'debug' => $debug,
+            'existingPins' => array_values(array_keys($existingPinSet)),
+            'existingEmails' => array_values(array_keys($existingEmailSet)),
+            'existingMobiles' => array_values(array_keys($existingMobileSet)),
+            'commitErrorsByRow' => session()->pull('import_commit_errors_by_row', []),
             'departments' => $departments,
             'designations' => $designations,
             'branches' => $branches,
+            'employeeTypes' => $employeeTypes,
             'statuses' => ['active', 'inactive'],
         ]);
     }
 
     public function importCommit(Request $request)
     {
-        $validated = $request->validate([
-            'importId' => 'required|string',
-            'rows' => 'required|array|max:'.self::EMPLOYEE_IMPORT_MAX_ROWS,
-            'rows.*.pin' => 'required|string|max:20',
-            'rows.*.name_en' => 'required|string|max:255',
-            'rows.*.email' => 'required|email',
-            'rows.*.joining_date' => 'required|date',
-            'rows.*.department_id' => 'required|integer|exists:departments,id',
-            'rows.*.joining_designation_id' => 'required|integer|exists:designations,id',
-            'rows.*.last_designation_id' => 'required|integer|exists:designations,id',
-            'rows.*.current_branch_id' => 'required|integer|exists:branches,id',
-            'rows.*.last_branch_id' => 'nullable|integer|exists:branches,id',
-            'rows.*.status' => 'required|in:active,inactive',
-            'rows.*.source_row' => 'nullable|integer',
-        ]);
+        $importId = trim((string) $request->input('importId', ''));
+        $cached = $importId !== '' ? Cache::get("employee_import_preview:{$importId}") : null;
 
-        $importId = (string) $validated['importId'];
-        $cached = Cache::get("employee_import_preview:{$importId}");
         if (! is_array($cached)) {
-            return back()->withErrors([
-                'importId' => 'Import preview expired. Please upload the file again.',
+            return redirect()->route('employees.index')
+                ->with('error', 'Import preview expired. Please upload the file again.');
+        }
+
+        $normalizedRows = $this->normalizeImportCommitRows(
+            is_array($request->input('rows')) ? $request->input('rows') : []
+        );
+        $request->merge(['rows' => $normalizedRows, 'importId' => $importId]);
+
+        $mergedPreviewRows = $this->mergeImportFormIntoCachedRows(
+            is_array($cached['rows'] ?? null) ? $cached['rows'] : [],
+            $normalizedRows
+        );
+        $this->writeImportPreviewCache($importId, $cached, $mergedPreviewRows);
+
+        try {
+            $validated = $request->validate([
+                'importId' => 'required|string',
+                'rows' => 'required|array|max:'.self::EMPLOYEE_IMPORT_MAX_ROWS,
+                'rows.*.pin' => 'required|string|max:20',
+                'rows.*.name_en' => 'required|string|max:255',
+                'rows.*.email' => 'nullable|email',
+                'rows.*.mobile_personal' => 'required|string|max:20',
+                'rows.*.employee_type_id' => 'required|integer|exists:employee_types,id',
+                'rows.*.joining_date' => 'required|date',
+                'rows.*.department_id' => 'required|integer|exists:departments,id',
+                'rows.*.joining_designation_id' => 'required|integer|exists:designations,id',
+                'rows.*.last_designation_id' => 'required|integer|exists:designations,id',
+                'rows.*.current_branch_id' => 'required|integer|exists:branches,id',
+                'rows.*.last_branch_id' => 'nullable|integer|exists:branches,id',
+                'rows.*.status' => 'required|in:active,inactive',
+                'rows.*.source_row' => 'nullable|integer',
             ]);
+        } catch (ValidationException $e) {
+            return redirect()
+                ->route('employees.import.review', ['importId' => $importId])
+                ->withErrors($e->errors());
+        }
+
+        $cachedBySourceRow = [];
+        foreach ($mergedPreviewRows as $cr) {
+            $cachedBySourceRow[(int) ($cr['source_row'] ?? 0)] = $cr;
         }
 
         $created = 0;
         $skipped = 0;
         $rowErrors = [];
+        $commitErrorsByRow = [];
         $createdByBranchId = [];
+        $batchPins = [];
+        $batchEmails = [];
+        $batchMobiles = [];
 
         $employedStatuses = Employee::statusesReservingUniqueIdentifiers();
 
@@ -2624,55 +2886,84 @@ class EmployeeController extends Controller
             foreach ($validated['rows'] as $idx => $row) {
                 $rowNumber = (int) ($row['source_row'] ?? ($idx + 2));
                 $pin = trim((string) $row['pin']);
-                $email = trim((string) $row['email']);
+                $email = trim((string) ($row['email'] ?? ''));
+                $mobile = trim((string) $row['mobile_personal']);
+                $emailKey = strtolower($email);
 
                 $errors = [];
-                if (Employee::query()
+                if ($pin !== '' && isset($batchPins[strtolower($pin)])) {
+                    $errors[] = 'Duplicate PIN in this batch';
+                }
+                if ($email !== '' && isset($batchEmails[$emailKey])) {
+                    $errors[] = 'Duplicate email in this batch';
+                }
+                if ($mobile !== '' && isset($batchMobiles[$mobile])) {
+                    $errors[] = 'Duplicate mobile in this batch';
+                }
+                if ($pin !== '' && Employee::query()
                     ->whereIn('status', $employedStatuses)
                     ->where(function ($q) use ($pin) {
                         $q->where('pin', $pin)->orWhere('employee_id', $pin);
                     })
                     ->exists()) {
-                    $errors[] = 'Duplicate PIN/Employee ID';
+                    $errors[] = 'PIN exists in system';
                 }
-                if (Employee::query()->whereIn('status', $employedStatuses)->where('email', $email)->exists()) {
-                    $errors[] = 'Duplicate email';
+                if ($email !== '' && Employee::query()->whereIn('status', $employedStatuses)->where('email', $email)->exists()) {
+                    $errors[] = 'Email exists in system';
                 }
-                if (User::where('email', $email)->exists()) {
-                    $errors[] = 'Email already used by a user account';
+                if ($mobile !== '' && Employee::query()->whereIn('status', $employedStatuses)->where('mobile_personal', $mobile)->exists()) {
+                    $errors[] = 'Mobile exists in system';
+                }
+                $resolvedEmail = $email;
+                if ($resolvedEmail === '' || filter_var($resolvedEmail, FILTER_VALIDATE_EMAIL) === false) {
+                    $resolvedEmail = strtolower($pin).'@'.$this->getAutoEmailDomain();
+                }
+                if (User::where('email', $resolvedEmail)->exists()) {
+                    $errors[] = 'Email used by user account';
                 }
 
                 if (count($errors) > 0) {
                     $skipped++;
                     $rowErrors[] = ['row' => $rowNumber, 'errors' => $errors];
+                    $commitErrorsByRow[$rowNumber] = $errors;
 
                     continue;
                 }
 
-                $employeeData = [
-                    'employee_id' => $pin,
-                    'first_name' => (string) $row['name_en'],
-                    'last_name' => (string) ($row['last_name'] ?? ''),
+                $csvRow = $cachedBySourceRow[$rowNumber] ?? [];
 
-                    'pin' => $pin,
-                    'name_en' => (string) $row['name_en'],
-                    'email' => $email,
-                    'joining_date' => Carbon::parse($row['joining_date'])->toDateString(),
-                    'department_id' => (int) $row['department_id'],
-                    'designation_id' => (int) $row['last_designation_id'],
-                    'joining_designation_id' => (int) $row['joining_designation_id'],
-                    'last_designation_id' => (int) $row['last_designation_id'],
-                    'current_branch_id' => (int) $row['current_branch_id'],
-                    'last_branch_id' => $row['last_branch_id'] ? (int) $row['last_branch_id'] : null,
-                    'status' => (string) $row['status'],
-                ];
+                try {
+                    $employee = $this->createEmployeeFromImportRow($csvRow, $row);
+                    $this->syncZoneRegionalManagerAssignment($employee);
+                    $this->syncUserAccountForEmployee($employee);
+                    $this->persistImportRelatedData($employee->id, $csvRow);
+                } catch (\Throwable $e) {
+                    $skipped++;
+                    $saveError = 'Save failed';
+                    if ($e instanceof \InvalidArgumentException || $e instanceof \RuntimeException) {
+                        $saveError = $e->getMessage();
+                    }
+                    Log::error('Employee import row save failed', [
+                        'row' => $rowNumber,
+                        'pin' => $pin,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $rowErrors[] = ['row' => $rowNumber, 'errors' => [$saveError]];
+                    $commitErrorsByRow[$rowNumber] = [$saveError];
 
-                $employee = Employee::create($employeeData);
-                $employee->load('designation');
-                $this->syncZoneRegionalManagerAssignment($employee);
-                $this->syncUserAccountForEmployee($employee);
+                    continue;
+                }
 
                 $created++;
+                if ($pin !== '') {
+                    $batchPins[strtolower($pin)] = true;
+                }
+                if ($email !== '') {
+                    $batchEmails[$emailKey] = true;
+                }
+                if ($mobile !== '') {
+                    $batchMobiles[$mobile] = true;
+                }
                 $bid = (int) $row['current_branch_id'];
                 $createdByBranchId[$bid] = ($createdByBranchId[$bid] ?? 0) + 1;
             }
@@ -2683,7 +2974,16 @@ class EmployeeController extends Controller
             throw $e;
         }
 
-        Cache::forget("employee_import_preview:{$importId}");
+        if ($created === 0 && $skipped > 0) {
+            return redirect()
+                ->route('employees.import.review', ['importId' => $importId])
+                ->with('error', 'No employees were imported. Fix the issues below and confirm again.')
+                ->with('import_commit_errors_by_row', $commitErrorsByRow);
+        }
+
+        if ($created > 0) {
+            Cache::forget("employee_import_preview:{$importId}");
+        }
 
         $branchBreakdown = [];
         if (count($createdByBranchId) > 0) {
@@ -2712,135 +3012,84 @@ class EmployeeController extends Controller
 
     public function downloadImportExample()
     {
-        $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="employee-import-example.csv"',
-        ];
+        $sampleDept = Department::query()->orderBy('name')->value('name') ?? 'Accounts';
+        $sampleDesig = Designation::query()->orderBy('name')->value('name') ?? 'Officer';
+        $sampleBranch = Branch::query()->orderBy('name')->value('name') ?? 'Head Office';
+        $sampleType = EmployeeType::query()->where('is_active', true)->orderBy('name')->value('name') ?? 'Permanent';
 
-        $csvHeader = [
-            'sl',
-            // Identity
-            'pin',
-            'name_en',
-            'name_bn',
-            'email',
-            'email_id',
-            'phone',
-            // Personal
-            'gender', // male|female|other
-            'blood_group',
-            'date_of_birth', // yyyy-mm-dd
-            // Employment / Org
-            'joining_date', // yyyy-mm-dd
-            'confirmation_date', // yyyy-mm-dd (optional)
-            'department', // id OR exact name
-            'joining_designation', // id OR exact name
-            'last_designation', // id OR exact name
-            'branch', // id OR exact name (current branch)
-            'last_branch', // id OR exact name (optional)
-            'reporting_to', // manager employee pin OR employee_id OR numeric employee table id (optional)
-            'status', // active|inactive
-            // Address
-            'address',
-            'village',
-            'post_office',
-            'union_pouroshova',
-            'ward_no',
-            'upazila',
-            'district',
-            // Education
-            'educational_qualification',
-            // IDs
-            'nid',
-            'nid_number',
-            'smart_card_number',
-            'birth_registration_number',
-            // Emergency / Family
-            'emergency_contact',
-            'fathers_name',
-            'fathers_mobile',
-            'mothers_name',
-            'mothers_mobile',
-            'marital_status',
-            'spouse_name',
-            'spouse_mobile',
-            // Service lifecycle
-            'resignation_date', // yyyy-mm-dd (optional)
-            'dropout_date', // yyyy-mm-dd (optional)
-            'dropout_reason',
-            'final_payment_date', // yyyy-mm-dd (optional)
-            'last_promotion_date', // yyyy-mm-dd (optional)
-        ];
-
-        $rows = [
+        $sampleRows = [
             [
-                '1',
-                '1001',
-                'Demo Employee',
-                '',
-                'demo.employee@example.com',
-                '2026-01-01',
-                'active',
+                'sl' => '1',
+                'pin' => '01101',
+                'name_en' => 'Karim Ahmed',
+                'name_bn' => 'করিম আহমেদ',
+                'employee_type' => $sampleType,
+                'email' => 'karim.ahmed@example.com',
+                'mobile_personal' => '01700000001',
+                'mobile_official' => '01700000002',
+                'gender' => 'male',
+                'religion' => 'Islam',
+                'blood_group' => 'B+',
+                'date_of_birth' => '1995-06-15',
+                'marital_status' => 'Married',
+                'fathers_name' => 'Abdul Karim',
+                'fathers_mobile' => '01710000001',
+                'mothers_name' => 'Rashida Begum',
+                'nid_number' => '1234567890',
+                'joining_date' => '2024-01-01',
+                'confirmation_date' => '2024-07-01',
+                'department' => $sampleDept,
+                'joining_designation' => $sampleDesig,
+                'last_designation' => $sampleDesig,
+                'branch' => $sampleBranch,
+                'status' => 'active',
+                'bank_name' => 'Prime Bank PLC',
+                'bank_branch_name' => 'Motijheel',
+                'bank_account_no' => '1234567890',
+                'bank_account_type' => 'savings',
+                'present_division' => 'Rajshahi',
+                'present_district' => 'Naogaon',
+                'present_upazila' => 'Naogaon Sadar',
+                'present_union' => 'Balubhara',
+                'present_village' => 'Balubhara',
+                'permanent_division' => 'Rajshahi',
+                'permanent_district' => 'Naogaon',
+                'permanent_upazila' => 'Naogaon Sadar',
+                'permanent_union' => 'Balubhara',
+                'permanent_village' => 'Balubhara',
             ],
             [
-                '2',
-                '1002',
-                'Second Employee',
-                '',
-                'second.employee@example.com',
-                '2026-02-15',
-                'active',
+                'sl' => '2',
+                'pin' => '01102',
+                'name_en' => 'Rina Akter',
+                'employee_type' => (string) (EmployeeType::query()->where('is_active', true)->orderBy('name')->value('id') ?? '1'),
+                'mobile_personal' => '01800000002',
+                'joining_date' => '2025-03-01',
+                'department' => (string) (Department::query()->orderBy('name')->value('id') ?? '1'),
+                'joining_designation' => (string) (Designation::query()->orderBy('name')->value('id') ?? '1'),
+                'last_designation' => (string) (Designation::query()->orderBy('name')->value('id') ?? '1'),
+                'branch' => (string) (Branch::query()->orderBy('name')->value('id') ?? '1'),
+                'status' => 'active',
             ],
         ];
 
-        // Expand sample rows to match header length (keep most optional fields blank).
-        $rows = array_map(function (array $r) use ($csvHeader) {
-            $targetCount = count($csvHeader);
-            if (count($r) < $targetCount) {
-                $r = array_pad($r, $targetCount, '');
-            } elseif (count($r) > $targetCount) {
-                $r = array_slice($r, 0, $targetCount);
-            }
+        $mapRef = fn ($query) => $query->get(['id', 'name'])
+            ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
+            ->all();
 
-            return $r;
-        }, $rows);
+        $references = [
+            'departments' => $mapRef(Department::query()->orderBy('name')),
+            'designations' => $mapRef(Designation::query()->orderBy('name')),
+            'branches' => $mapRef(Branch::query()->orderBy('name')),
+            'employee_types' => $mapRef(EmployeeType::query()->where('is_active', true)->orderBy('name')),
+        ];
 
-        // Fill a few meaningful defaults into the sample rows (by column name).
-        $headerIndex = array_flip($csvHeader);
-        $set = function (&$row, string $col, string $val) use ($headerIndex) {
-            if (isset($headerIndex[$col])) {
-                $row[$headerIndex[$col]] = $val;
-            }
-        };
+        $xlsx = EmployeeImportTemplateExporter::generate($sampleRows, $references);
 
-        if (isset($rows[0])) {
-            $set($rows[0], 'joining_date', '2026-01-01');
-            $set($rows[0], 'department', 'Accounts');
-            $set($rows[0], 'joining_designation', 'Officer');
-            $set($rows[0], 'last_designation', 'Officer');
-            $set($rows[0], 'branch', 'Head Office');
-            $set($rows[0], 'status', 'active');
-        }
-        if (isset($rows[1])) {
-            $set($rows[1], 'joining_date', '2026-02-15');
-            $set($rows[1], 'department', '5');
-            $set($rows[1], 'joining_designation', '9');
-            $set($rows[1], 'last_designation', '9');
-            $set($rows[1], 'branch', '2');
-            $set($rows[1], 'last_branch', '1');
-            $set($rows[1], 'status', 'active');
-        }
-
-        return response()->stream(function () use ($csvHeader, $rows) {
-            $out = fopen('php://output', 'wb');
-            // UTF-8 BOM for Excel
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, $csvHeader);
-            foreach ($rows as $r) {
-                fputcsv($out, $r);
-            }
-            fclose($out);
-        }, 200, $headers);
+        return response((string) $xlsx, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="employee-import-template.xlsx"',
+        ]);
     }
 
     private function readCsvRows(string $absPath, ?string $storageRelativePath = null): array
@@ -2972,10 +3221,89 @@ class EmployeeController extends Controller
         return $best;
     }
 
+    /**
+     * @return list<list<string>>
+     */
+    private function readXlsxRows(string $absPath, ?string $storageRelativePath = null): array
+    {
+        try {
+            return SimpleXlsxReader::sheetRows($absPath, 1);
+        } catch (\Throwable $e) {
+            Log::warning('Employee import: XLSX read failed', [
+                'path' => $absPath,
+                'relative_path' => $storageRelativePath,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        if (! is_string($storageRelativePath) || $storageRelativePath === '') {
+            return [];
+        }
+
+        try {
+            $binary = Storage::disk('local')->get($storageRelativePath);
+            if (! is_string($binary) || $binary === '') {
+                return [];
+            }
+
+            $tempPath = tempnam(sys_get_temp_dir(), 'emp_import_');
+            if ($tempPath === false) {
+                return [];
+            }
+            $tempXlsx = $tempPath.'.xlsx';
+            rename($tempPath, $tempXlsx);
+            file_put_contents($tempXlsx, $binary);
+
+            try {
+                return SimpleXlsxReader::sheetRows($tempXlsx, 1);
+            } finally {
+                @unlink($tempXlsx);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Employee import: XLSX read via storage failed', [
+                'relative_path' => $storageRelativePath,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    private function detectHeaderRow(array $rows): int
+    {
+        $maxScan = min(15, count($rows));
+        for ($i = 0; $i < $maxScan; $i++) {
+            foreach ($rows[$i] as $cell) {
+                if (EmployeeImportCsv::resolveHeaderKey((string) $cell) === 'pin') {
+                    return $i;
+                }
+            }
+        }
+
+        return 0;
+    }
+
     private function splitHeaderRows(array $rows): array
     {
-        $header = $rows[0] ?? [];
-        $data = array_slice($rows, 1);
+        $headerIdx = $this->detectHeaderRow($rows);
+        $header = $rows[$headerIdx] ?? [];
+        $headerKeys = array_map(
+            fn ($cell) => EmployeeImportCsv::resolveHeaderKey((string) $cell),
+            $header
+        );
+        $pinIdx = array_search('pin', $headerKeys, true);
+        $nameIdx = array_search('name_en', $headerKeys, true);
+
+        $data = [];
+        for ($i = $headerIdx + 1; $i < count($rows); $i++) {
+            $row = $rows[$i];
+            $pin = $pinIdx !== false ? trim((string) ($row[$pinIdx] ?? '')) : '';
+            $name = $nameIdx !== false ? trim((string) ($row[$nameIdx] ?? '')) : '';
+            if ($pin === '' && $name === '') {
+                continue;
+            }
+            $data[] = $row;
+        }
 
         return [$header, $data];
     }
@@ -2984,9 +3312,7 @@ class EmployeeController extends Controller
     {
         $map = [];
         foreach ($header as $idx => $name) {
-            $key = strtolower(trim((string) $name));
-            $key = preg_replace('/\s+/', '_', $key);
-            $key = preg_replace('/[^a-z0-9_\x{0980}-\x{09FF}]/u', '', $key);
+            $key = EmployeeImportCsv::resolveHeaderKey((string) $name);
             if ($key === '') {
                 $key = 'col_'.$idx;
             }
@@ -3040,16 +3366,255 @@ class EmployeeController extends Controller
             return $defaultId;
         }
 
+        return $this->resolveImportModelId($raw, $modelClass, $nameField) ?? $defaultId;
+    }
+
+    private function resolveImportModelId(string $raw, string $modelClass, string $nameField): ?int
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return null;
+        }
         if (ctype_digit($raw)) {
-            return (int) $raw;
+            return $modelClass::query()->whereKey((int) $raw)->exists() ? (int) $raw : null;
         }
 
-        // Try match by name (case-insensitive)
-        $name = trim($raw);
         $model = $modelClass::query()
-            ->whereRaw('LOWER('.$nameField.') = ?', [strtolower($name)])
+            ->whereRaw('LOWER('.$nameField.') = ?', [strtolower($raw)])
             ->first(['id']);
 
-        return $model?->id ?? $defaultId;
+        return $model?->id;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeImportCommitRows(array $rows): array
+    {
+        return array_values(array_map(function (array $row): array {
+            foreach ([
+                'employee_type_id',
+                'department_id',
+                'joining_designation_id',
+                'last_designation_id',
+                'current_branch_id',
+            ] as $key) {
+                if (array_key_exists($key, $row) && $row[$key] !== '' && $row[$key] !== null) {
+                    $row[$key] = (int) $row[$key];
+                }
+            }
+
+            if (array_key_exists('last_branch_id', $row)) {
+                $row['last_branch_id'] = ($row['last_branch_id'] === '' || $row['last_branch_id'] === null)
+                    ? null
+                    : (int) $row['last_branch_id'];
+            }
+
+            if (array_key_exists('source_row', $row) && $row['source_row'] !== '' && $row['source_row'] !== null) {
+                $row['source_row'] = (int) $row['source_row'];
+            }
+
+            if (array_key_exists('joining_date', $row) && is_string($row['joining_date']) && $row['joining_date'] !== '') {
+                $row['joining_date'] = ImportDateParser::parse($row['joining_date']) ?? $row['joining_date'];
+            }
+
+            return $row;
+        }, $rows));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $cachedRows
+     * @param  list<array<string, mixed>>  $formRows
+     * @return list<array<string, mixed>>
+     */
+    private function mergeImportFormIntoCachedRows(array $cachedRows, array $formRows): array
+    {
+        $bySource = [];
+        foreach ($cachedRows as $cr) {
+            $bySource[(int) ($cr['source_row'] ?? 0)] = $cr;
+        }
+
+        foreach ($formRows as $fr) {
+            $sourceRow = (int) ($fr['source_row'] ?? 0);
+            if ($sourceRow <= 0) {
+                continue;
+            }
+
+            $existing = $bySource[$sourceRow] ?? ['source_row' => $sourceRow];
+            $bySource[$sourceRow] = array_merge($existing, [
+                'source_row' => $sourceRow,
+                'pin' => trim((string) ($fr['pin'] ?? '')),
+                'name_en' => trim((string) ($fr['name_en'] ?? '')),
+                'email' => trim((string) ($fr['email'] ?? '')),
+                'mobile_personal' => trim((string) ($fr['mobile_personal'] ?? '')),
+                'joining_date' => ImportDateParser::parse(trim((string) ($fr['joining_date'] ?? '')))
+                    ?? trim((string) ($fr['joining_date'] ?? '')),
+                'employee_type' => (string) ($fr['employee_type_id'] ?? ''),
+                'department' => (string) ($fr['department_id'] ?? ''),
+                'joining_designation' => (string) ($fr['joining_designation_id'] ?? ''),
+                'last_designation' => (string) ($fr['last_designation_id'] ?? ''),
+                'current_branch' => (string) ($fr['current_branch_id'] ?? ''),
+                'last_branch' => (string) ($fr['last_branch_id'] ?? ''),
+                'status' => strtolower(trim((string) ($fr['status'] ?? 'active'))),
+            ]);
+        }
+
+        ksort($bySource);
+
+        return array_values($bySource);
+    }
+
+    /**
+     * @param  array<string, mixed>  $cached
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function writeImportPreviewCache(string $importId, array $cached, array $rows): void
+    {
+        $cached['rows'] = $rows;
+        Cache::put(
+            "employee_import_preview:{$importId}",
+            $cached,
+            self::EMPLOYEE_IMPORT_CACHE_TTL_SECONDS
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $csvRow
+     * @param  array<string, mixed>  $formRow
+     */
+    private function createEmployeeFromImportRow(array $csvRow, array $formRow): Employee
+    {
+        $pin = trim((string) $formRow['pin']);
+        $email = trim((string) ($formRow['email'] ?? ''));
+        if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            $email = strtolower($pin).'@'.$this->getAutoEmailDomain();
+        }
+
+        $joiningDate = ImportDateParser::parse((string) ($formRow['joining_date'] ?? ''));
+        if ($joiningDate === null) {
+            throw new \InvalidArgumentException('Invalid joining date.');
+        }
+
+        $confirmationRaw = trim((string) ($csvRow['confirmation_date'] ?? ''));
+        $employeeTypeId = (int) $formRow['employee_type_id'];
+        $confirmationDate = null;
+        if ($confirmationRaw !== '') {
+            $confirmationDate = ImportDateParser::parse($confirmationRaw);
+        } elseif ($employeeTypeId > 0) {
+            $etype = EmployeeType::query()->find($employeeTypeId);
+            $months = (int) ($etype?->probation_months ?? 0);
+            if ($months > 0) {
+                $confirmationDate = Carbon::parse($joiningDate)->addMonthsNoOverflow($months)->toDateString();
+            }
+        }
+
+        $dobRaw = trim((string) ($csvRow['date_of_birth'] ?? ''));
+        $dateOfBirth = $dobRaw !== '' ? ImportDateParser::parse($dobRaw) : null;
+        $lastDesigId = (int) $formRow['last_designation_id'];
+
+        $employeeData = [
+            'employee_id' => $pin,
+            'pin' => $pin,
+            'name_en' => (string) $formRow['name_en'],
+            'name_bn' => $this->nullableImportString($csvRow['name_bn'] ?? null),
+            'employee_type_id' => $employeeTypeId,
+            'email' => $email,
+            'mobile_personal' => trim((string) $formRow['mobile_personal']),
+            'mobile_official' => $this->nullableImportString($csvRow['mobile_official'] ?? null),
+            'gender' => $this->nullableImportString($csvRow['gender'] ?? null),
+            'religion' => $this->nullableImportString($csvRow['religion'] ?? null),
+            'blood_group' => $this->nullableImportString($csvRow['blood_group'] ?? null),
+            'date_of_birth' => $dateOfBirth,
+            'marital_status' => $this->nullableImportString($csvRow['marital_status'] ?? null),
+            'spouse_name' => $this->nullableImportString($csvRow['spouse_name'] ?? null),
+            'spouse_mobile' => $this->nullableImportString($csvRow['spouse_mobile'] ?? null),
+            'fathers_name' => $this->nullableImportString($csvRow['fathers_name'] ?? null),
+            'fathers_mobile' => $this->nullableImportString($csvRow['fathers_mobile'] ?? null),
+            'mothers_name' => $this->nullableImportString($csvRow['mothers_name'] ?? null),
+            'mothers_mobile' => $this->nullableImportString($csvRow['mothers_mobile'] ?? null),
+            'nid_number' => $this->nullableImportString($csvRow['nid_number'] ?? null),
+            'smart_card_number' => $this->nullableImportString($csvRow['smart_card_number'] ?? null),
+            'tin_certificate_no' => $this->nullableImportString($csvRow['tin_certificate_no'] ?? null),
+            'driving_license_no' => $this->nullableImportString($csvRow['driving_license_no'] ?? null),
+            'passport_no' => $this->nullableImportString($csvRow['passport_no'] ?? null),
+            'identification_mark' => $this->nullableImportString($csvRow['identification_mark'] ?? null),
+            'joining_date' => $joiningDate,
+            'confirmation_date' => $confirmationDate,
+            'department_id' => (int) $formRow['department_id'],
+            'designation_id' => $lastDesigId,
+            'joining_designation_id' => (int) $formRow['joining_designation_id'],
+            'last_designation_id' => $lastDesigId,
+            'current_branch_id' => (int) $formRow['current_branch_id'],
+            'last_branch_id' => ! empty($formRow['last_branch_id']) ? (int) $formRow['last_branch_id'] : null,
+            'status' => (string) $formRow['status'],
+        ];
+
+        if ($employeeData['confirmation_date']) {
+            $employeeData['probation_period_days'] = Carbon::parse($joiningDate)
+                ->diffInDays(Carbon::parse($employeeData['confirmation_date']));
+        }
+
+        return Employee::create($employeeData);
+    }
+
+    /**
+     * @param  array<string, mixed>  $csvRow
+     */
+    private function persistImportRelatedData(int $employeeId, array $csvRow): void
+    {
+        $bankName = trim((string) ($csvRow['bank_name'] ?? ''));
+        if ($bankName !== '') {
+            $accountType = strtolower(trim((string) ($csvRow['bank_account_type'] ?? '')));
+            if (! in_array($accountType, ['current', 'savings'], true)) {
+                $accountType = null;
+            }
+            DB::table('employee_bank_accounts')->insert([
+                'employee_id' => $employeeId,
+                'bank_name' => $bankName,
+                'branch_name' => $this->nullableImportString($csvRow['bank_branch_name'] ?? null),
+                'account_no' => $this->nullableImportString($csvRow['bank_account_no'] ?? null),
+                'account_type' => $accountType,
+                'is_primary' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach (['present' => 'present_', 'permanent' => 'permanent_'] as $type => $prefix) {
+            $parts = [
+                'division' => trim((string) ($csvRow[$prefix.'division'] ?? '')),
+                'district' => trim((string) ($csvRow[$prefix.'district'] ?? '')),
+                'upazila' => trim((string) ($csvRow[$prefix.'upazila'] ?? '')),
+                'union' => trim((string) ($csvRow[$prefix.'union'] ?? '')),
+                'village' => trim((string) ($csvRow[$prefix.'village'] ?? '')),
+            ];
+            if (implode('', $parts) === '') {
+                continue;
+            }
+            $addressDetails = implode(', ', array_filter($parts));
+            DB::table('employee_addresses')->insert([
+                'employee_id' => $employeeId,
+                'type' => $type,
+                'division' => $parts['division'] ?: null,
+                'district' => $parts['district'] ?: null,
+                'upazila' => $parts['upazila'] ?: null,
+                'union' => $parts['union'] ?: null,
+                'village' => $parts['village'] ?: null,
+                'address_details' => $addressDetails,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    private function nullableImportString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $s = trim((string) $value);
+
+        return $s === '' ? null : $s;
     }
 }

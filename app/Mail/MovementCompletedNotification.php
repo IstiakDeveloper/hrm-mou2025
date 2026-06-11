@@ -35,7 +35,7 @@ class MovementCompletedNotification extends Mailable
     public function build()
     {
         $employee = $this->movement->employee;
-        $employeeName = $employee->first_name . ' ' . $employee->last_name;
+        $employeeName = $employee->name_en ?? $employee->full_name_en ?? '';
         $fromDate = Carbon::parse($this->movement->from_datetime)->format('M d, Y h:i A');
         $toDate = Carbon::parse($this->movement->to_datetime)->format('M d, Y h:i A');
         $returnDate = $this->returnDateTime->format('M d, Y h:i A');

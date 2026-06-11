@@ -9,7 +9,7 @@ import { ComboSelect } from '@/components/ComboSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { DatePicker } from '@/components/ui/date-picker';
-import { PayrollComboField, PayrollFilterGrid, PayrollField } from '@/components/payroll/PayrollFilterGrid';
+import { PayrollComboField, PayrollField, PayrollBranchSelect, PayrollEmployeeSelect } from '@/components/payroll/PayrollFilterGrid';
 import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { DISPLAY_DATE_FMT, parseFormDateValue } from '@/lib/display-date';
 import { Pencil, Search, Save } from 'lucide-react';
@@ -83,6 +83,11 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
 
     const selectedHead = options.salaryHeads.find((h) => String(h.id) === filters.salary_head_id);
 
+    const selectItems = (optionsList: { id: number; name: string }[], allLabel: string) => [
+        { value: '', label: allLabel },
+        ...optionsList.map((o) => ({ value: String(o.id), label: o.name ?? '—', keywords: String(o.id) })),
+    ];
+
     return (
         <Layout>
             <Head title="Component overrides" />
@@ -94,17 +99,17 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                 />
 
                 {flash?.success && (
-                    <Alert className="mb-6 border-emerald-200 bg-emerald-50 text-emerald-950">
-                        <AlertTitle>Saved</AlertTitle>
-                        <AlertDescription>{flash.success}</AlertDescription>
+                    <Alert className="mb-6 border-emerald-100 bg-emerald-50/40 text-emerald-900 rounded-xl shadow-xs">
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wider text-emerald-800">Saved</AlertTitle>
+                        <AlertDescription className="text-xs text-emerald-700/90 mt-1">{flash.success}</AlertDescription>
                     </Alert>
                 )}
 
                 {(clientErrors.length > 0 || Object.keys(pageErrors).length > 0) && (
-                    <Alert variant="destructive" className="mb-6">
-                        <AlertTitle>Cannot load</AlertTitle>
+                    <Alert variant="destructive" className="mb-6 rounded-xl border-red-100 bg-red-50/30">
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wider text-red-800">Cannot load</AlertTitle>
                         <AlertDescription>
-                            <ul className="mt-2 list-disc space-y-1 pl-4 text-sm">
+                            <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-red-700/95">
                                 {[...clientErrors, ...Object.values(pageErrors).filter(Boolean)].map((msg) => (
                                     <li key={msg}>{msg}</li>
                                 ))}
@@ -113,15 +118,54 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                     </Alert>
                 )}
 
-                <PayrollSectionCard title="Filters & component" description="Narrow down employees, then pick which component to override." className="mb-6">
-                    <PayrollFilterGrid filters={filters} setFilter={setFilter} {...options} />
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        <PayrollField label="Effective from" required>
-                            <DatePicker
-                                selected={parseFormDateValue(filters.effective_from)}
-                                onSelect={(d) => setFilter('effective_from', d ? format(d, DISPLAY_DATE_FMT) : '')}
-                            />
-                        </PayrollField>
+                <div className="rounded-xl border border-slate-100/90 bg-white p-4 shadow-xs mb-4">
+                    {/* Row 1 */}
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <PayrollBranchSelect
+                            value={filters.branch_id}
+                            onChange={(v) => setFilter('branch_id', v)}
+                            branches={options.branches}
+                            allowAll
+                        />
+                        <PayrollComboField
+                            label="Program"
+                            value={filters.program_id}
+                            onChange={(v) => setFilter('program_id', v)}
+                            items={selectItems(options.programs, 'All programs')}
+                            placeholder="All programs"
+                        />
+                        <PayrollComboField
+                            label="Project"
+                            value={filters.project_id}
+                            onChange={(v) => setFilter('project_id', v)}
+                            items={selectItems(options.projects, 'All projects')}
+                            placeholder="All projects"
+                        />
+                        <PayrollComboField
+                            label="Department"
+                            value={filters.department_id}
+                            onChange={(v) => setFilter('department_id', v)}
+                            items={selectItems(options.departments, 'All departments')}
+                            placeholder="All departments"
+                        />
+                    </div>
+
+                    {/* Row 2 */}
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <PayrollComboField
+                            label="Designation"
+                            value={filters.designation_id}
+                            onChange={(v) => setFilter('designation_id', v)}
+                            items={selectItems(options.designations, 'All designations')}
+                            placeholder="All designations"
+                        />
+                        <PayrollEmployeeSelect
+                            value={filters.employee_id}
+                            onChange={(v) => setFilter('employee_id', v)}
+                            employees={options.employees}
+                            branchId={filters.branch_id || undefined}
+                            payrollReady
+                        />
                         <PayrollComboField
                             label="Salary component"
                             required
@@ -137,49 +181,63 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                             ]}
                             placeholder="Search component…"
                         />
-                        <PayrollField label="Note (optional)">
-                            <Input value={filters.reason} onChange={(e) => setFilter('reason', e.target.value)} placeholder="Reason for override" className="h-10" />
+                        <PayrollField label="Effective from" required>
+                            <DatePicker
+                                selected={parseFormDateValue(filters.effective_from)}
+                                onSelect={(d) => setFilter('effective_from', d ? format(d, DISPLAY_DATE_FMT) : '')}
+                            />
                         </PayrollField>
                     </div>
-                    <PayrollFormActions>
-                        <Button type="button" variant="outline" onClick={loadEmployees}>
-                            <Search className="mr-2 h-4 w-4" /> Load employees
-                        </Button>
-                        {rows.length > 0 && (
-                            <Button type="button" onClick={save} disabled={saving}>
-                                <Save className="mr-2 h-4 w-4" /> Save overrides
+
+                    {/* Row 3 - Note & Actions */}
+                    <div className="mt-3.5 flex flex-wrap items-end justify-between gap-3 pt-3 border-t border-slate-100/50">
+                        <div className="flex-1 min-w-[240px] max-w-md">
+                            <PayrollField label="Note (optional)">
+                                <Input value={filters.reason} onChange={(e) => setFilter('reason', e.target.value)} placeholder="Reason for override" className="h-8.5 text-xs bg-white" />
+                            </PayrollField>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={loadEmployees} className="cursor-pointer h-8.5 text-xs">
+                                <Search className="mr-1.5 h-3.5 w-3.5" /> Load employees
                             </Button>
-                        )}
-                    </PayrollFormActions>
-                </PayrollSectionCard>
+                            {rows.length > 0 && (
+                                <Button type="button" size="sm" onClick={save} disabled={saving} className="cursor-pointer h-8.5 text-xs">
+                                    <Save className="mr-1.5 h-3.5 w-3.5" /> Save overrides
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </div>
 
                 {rows.length > 0 ? (
                     <PayrollSectionCard
                         title={`Amounts — ${selectedHead?.name ?? 'Component'}`}
                         description={`${rows.length} employee(s). “Calculated” shows the value at payroll time.`}
                     >
-                        <div className="overflow-x-auto -mx-4 sm:-mx-5">
-                            <Table>
+                        <div className="overflow-x-auto -mx-4.5 sm:-mx-4.5">
+                            <Table className="min-w-full">
                                 <TableHeader>
-                                    <TableRow className="bg-slate-50 hover:bg-slate-50">
-                                        <TableHead>PIN</TableHead>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Calculation</TableHead>
-                                        <TableHead className="text-right">Value</TableHead>
-                                        <TableHead className="text-right">Calculated (৳)</TableHead>
+                                    <TableRow className="bg-slate-50/40 border-b border-slate-100 hover:bg-slate-50/40">
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 pl-5 w-28">PIN</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5">Name</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 w-44">Calculation</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 text-right w-36">Value</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 text-right pr-5 w-36">Calculated (৳)</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {rows.map((row) => (
-                                        <TableRow key={row.employee_id}>
-                                            <TableCell className="font-mono text-xs">{row.pin}</TableCell>
-                                            <TableCell className="text-sm font-medium">
-                                                {row.name}
-                                                {row.has_modification && (
-                                                    <Badge variant="secondary" className="ml-2 text-[10px]">Saved</Badge>
-                                                )}
+                                        <TableRow key={row.employee_id} className="border-b border-slate-100/70 hover:bg-slate-50/30">
+                                            <TableCell className="font-mono text-xs text-slate-500 py-2 pl-5">{row.pin}</TableCell>
+                                            <TableCell className="text-xs font-semibold text-slate-800 py-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    {row.name}
+                                                    {row.has_modification && (
+                                                        <Badge variant="outline" className="text-[8px] px-1 py-0 font-bold uppercase tracking-wider text-emerald-600 border-emerald-200 bg-emerald-50/50">Saved</Badge>
+                                                    )}
+                                                </div>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="py-1.5">
                                                 <ComboSelect
                                                     value={row.amount_type}
                                                     onChange={(v) => patchRow(row.employee_id, { amount_type: v ?? 'fixed' })}
@@ -187,13 +245,16 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                                         { value: 'percentage', label: 'Percent of basic' },
                                                         { value: 'fixed', label: 'Fixed amount' },
                                                     ]}
-                                                    className="h-9 w-40"
+                                                    className="h-8 w-40 bg-white text-xs"
                                                 />
                                             </TableCell>
-                                            <TableCell>
-                                                <Input className="h-9 w-full min-w-[7rem] text-right" type="number" min={0} step="any" value={row.amount} onChange={(e) => patchRow(row.employee_id, { amount: e.target.value })} />
+                                            <TableCell className="py-1.5 text-right">
+                                                <div className="relative flex items-center justify-end">
+                                                    <span className="absolute left-2.5 text-xs text-slate-400 font-medium">৳</span>
+                                                    <Input className="h-8 w-28 pl-5.5 pr-2.5 text-right font-mono text-xs bg-white" type="number" min={0} step="any" value={row.amount} onChange={(e) => patchRow(row.employee_id, { amount: e.target.value })} />
+                                                </div>
                                             </TableCell>
-                                            <TableCell className="text-right tabular-nums text-sm">{row.computed.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs text-slate-700 font-semibold pr-5 py-2">৳{row.computed.toLocaleString()}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

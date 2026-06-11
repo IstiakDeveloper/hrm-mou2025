@@ -11,6 +11,10 @@ use InvalidArgumentException;
 
 class EmployeeProvidentFundService
 {
+    public function __construct(
+        protected ProbationSalaryService $probationSalaryService,
+    ) {}
+
     public const TYPE_PAYROLL = 'payroll';
 
     public const TYPE_OPENING = 'opening_balance';
@@ -44,9 +48,13 @@ class EmployeeProvidentFundService
         ];
     }
 
-    public function isEligible(Employee $employee): bool
+    public function isEligible(Employee $employee, ?Carbon $asOfDate = null): bool
     {
-        return (bool) ($employee->pf_enrolled ?? true);
+        if (! ($employee->pf_enrolled ?? true)) {
+            return false;
+        }
+
+        return ! $this->probationSalaryService->isOnProbation($employee, $asOfDate);
     }
 
     public function recordForPayslip(

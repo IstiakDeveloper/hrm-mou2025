@@ -85,14 +85,14 @@
 <body>
     <div class="header">
         <h1>Attendance Report with Movement Details</h1>
-        <p>{{ $employee->first_name }} {{ $employee->last_name }}</p>
+        <p>{{ $employee->name_en ?? $employee->full_name_en }}</p>
         <p>Period: {{ Carbon\Carbon::parse($fromDate)->format('M d, Y') }} to {{ Carbon\Carbon::parse($toDate)->format('M d, Y') }}</p>
         <p>Generated: {{ $generatedAt }}</p>
     </div>
 
     <div class="employee-info">
         <strong>Employee Details:</strong><br>
-        Name: {{ $employee->first_name }} {{ $employee->last_name }} |
+        Name: {{ $employee->name_en ?? $employee->full_name_en }} |
         ID: {{ $employee->employee_id }} |
         Department: {{ $employee->department->name }} |
         Position: {{ $employee->designation->name }}

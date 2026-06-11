@@ -21,7 +21,7 @@ class RegionalOfficeController extends Controller
         $regionalOffices = RegionalOffice::query()
             ->with([
                 'zone:id,name,code',
-                'regionalManager:id,employee_id,first_name,last_name',
+                'regionalManager:id,employee_id,name_en',
             ])
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
@@ -48,8 +48,8 @@ class RegionalOfficeController extends Controller
         $zones = Zone::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
         $employees = Employee::query()
             ->where('status', 'active')
-            ->orderBy('first_name')
-            ->get(['id', 'employee_id', 'first_name', 'last_name']);
+            ->orderBy('name_en')
+            ->get(['id', 'employee_id', 'name_en']);
 
         return Inertia::render('regional-office/create', [
             'zones' => $zones,
@@ -78,8 +78,8 @@ class RegionalOfficeController extends Controller
         $zones = Zone::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
         $employees = Employee::query()
             ->where('status', 'active')
-            ->orderBy('first_name')
-            ->get(['id', 'employee_id', 'first_name', 'last_name']);
+            ->orderBy('name_en')
+            ->get(['id', 'employee_id', 'name_en']);
 
         return Inertia::render('regional-office/edit', [
             'regionalOffice' => $regionalOffice,

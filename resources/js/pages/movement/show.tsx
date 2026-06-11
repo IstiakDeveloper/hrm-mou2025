@@ -25,11 +25,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department?: {
         id: number;
@@ -182,7 +181,7 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                                             <div className="flex items-center">
                                                 <User className="h-4 w-4 mr-2 text-gray-400" />
                                                 <p className="font-medium">
-                                                    {movement.employee.first_name} {movement.employee.last_name}
+                                                    {employeeDisplayName(movement.employee)}
                                                 </p>
                                             </div>
                                             <p className="text-sm text-gray-500 mt-1">

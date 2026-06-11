@@ -68,6 +68,8 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         title: 'EMPLOYEE LOAN',
         description: 'Loans & installments',
         icon: HandCoins,
+        href: '/sections/employee-loan',
+        menuTitles: ['Setup', 'Process', 'Register', 'Collection', 'Reports'],
     },
     {
         id: 'staff-fund',
@@ -163,7 +165,9 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     }
 
     if (p.startsWith('/leave')) return 'leave';
-    if (p.startsWith('/transfers')) return 'human-resources';
+    if (p.startsWith('/transfers') || p.startsWith('/promotions')) {
+        return 'human-resources';
+    }
     if (p.startsWith('/reports/attendance')) return 'attendance-movement';
     if (p.startsWith('/reports/leave')) return 'leave';
     if (p.startsWith('/reports/movement')) return 'attendance-movement';
@@ -174,6 +178,8 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     }
     if (
         p.startsWith('/employees') ||
+        p.startsWith('/confirmations') ||
+        p.startsWith('/separations') ||
         p.startsWith('/branches') ||
         p.startsWith('/zones') ||
         p.startsWith('/regional-offices') ||
@@ -213,6 +219,8 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         p.startsWith('/bonus-calculation') ||
         p.startsWith('/bonus-post') ||
         p.startsWith('/salary-head-modifications') ||
+        p.startsWith('/probation-salary') ||
+        p.startsWith('/fixed-salary') ||
         p.startsWith('/salary-withheld') ||
         p.startsWith('/salary-process') ||
         p.startsWith('/salary-post') ||
@@ -223,6 +231,21 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     }
     if (p.startsWith('/sections/staff-fund') || p.startsWith('/provident-fund') || p.startsWith('/gratuity')) {
         return 'staff-fund';
+    }
+    if (
+        p.startsWith('/employee-loans')
+        || p.startsWith('/loan-policies')
+        || p.startsWith('/loan-committees')
+        || p.startsWith('/loan-applications')
+        || p.startsWith('/loan-approval')
+        || p.startsWith('/loan-disburse')
+        || p.startsWith('/loan-migration')
+        || p.startsWith('/loan-rollback')
+        || p.startsWith('/loan-collection')
+        || p.startsWith('/loan-transfer')
+        || p.startsWith('/employee-loan/reports')
+    ) {
+        return 'employee-loan';
     }
 
     return null;

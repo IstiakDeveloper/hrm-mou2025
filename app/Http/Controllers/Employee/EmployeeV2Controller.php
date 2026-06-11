@@ -61,20 +61,15 @@ class EmployeeV2Controller extends Controller
     {
         $nullableEmptiesToNull = [
             'email',
-            'email_id',
-            'phone',
             'mobile_personal',
             'mobile_official',
             'gender',
             'religion',
             'blood_group',
             'date_of_birth',
-            'birth_date_certificate',
-            'birth_date_original',
             'confirmation_date',
             'nid_number',
             'smart_card_number',
-            'birth_registration_number',
             'tin_certificate_no',
             'driving_license_no',
             'passport_no',
@@ -104,7 +99,7 @@ class EmployeeV2Controller extends Controller
         $managers = Employee::query()
             ->where('status', 'active')
             ->orderBy('name_en')
-            ->get(['id', 'employee_id', 'pin', 'name_en', 'first_name', 'last_name']);
+            ->get(['id', 'employee_id', 'pin', 'name_en']);
 
         $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get();
         $programs = Program::query()->where('is_active', true)->orderBy('name')->get();
@@ -141,7 +136,7 @@ class EmployeeV2Controller extends Controller
             ->where('status', 'active')
             ->where('id', '!=', $employee->id)
             ->orderBy('name_en')
-            ->get(['id', 'employee_id', 'pin', 'name_en', 'first_name', 'last_name']);
+            ->get(['id', 'employee_id', 'pin', 'name_en']);
 
         $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get();
         $programs = Program::query()->where('is_active', true)->orderBy('name')->get();
@@ -304,7 +299,7 @@ class EmployeeV2Controller extends Controller
 
         $name = trim((string) ($employee->getRawOriginal('name_en') ?? ''));
         if ($name === '') {
-            $name = trim((string) ($employee->getRawOriginal('first_name') ?? 'User'));
+            $name = 'User';
         }
 
         $payload = [
@@ -376,8 +371,6 @@ class EmployeeV2Controller extends Controller
                 'spouse_name' => 'nullable|string|max:255',
                 'spouse_mobile' => 'nullable|string|max:20',
 
-                'birth_date_certificate' => 'nullable|date',
-                'birth_date_original' => 'nullable|date',
                 'date_of_birth' => 'nullable|date',
 
                 'blood_group' => 'nullable|string|max:10',
@@ -395,10 +388,8 @@ class EmployeeV2Controller extends Controller
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
 
-                'nid' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid')],
-                'nid_number' => 'nullable|string|max:50',
+                'nid_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid_number')],
                 'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number')],
-                'birth_registration_number' => 'nullable|string|max:50',
                 'tin_certificate_no' => 'nullable|string|max:50',
                 'driving_license_no' => 'nullable|string|max:50',
                 'passport_no' => 'nullable|string|max:50',
@@ -410,8 +401,6 @@ class EmployeeV2Controller extends Controller
                 'email' => 'nullable|email',
                 'mobile_personal' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('mobile_personal')],
                 'mobile_official' => 'nullable|string|max:20',
-                'phone' => 'nullable|string|max:20',
-                'email_id' => 'nullable|email',
 
                 'addresses' => 'nullable|array',
                 'addresses.*.type' => 'required_with:addresses|in:present,permanent',
@@ -515,8 +504,6 @@ class EmployeeV2Controller extends Controller
                 'name_en',
                 'name_bn',
                 'email',
-                'email_id',
-                'phone',
                 'mobile_personal',
                 'mobile_official',
                 'gender',
@@ -524,8 +511,6 @@ class EmployeeV2Controller extends Controller
                 'marital_status',
                 'spouse_name',
                 'spouse_mobile',
-                'birth_date_certificate',
-                'birth_date_original',
                 'date_of_birth',
                 'blood_group',
                 'joining_date',
@@ -541,10 +526,8 @@ class EmployeeV2Controller extends Controller
                 'employee_type_id',
                 'program_id',
                 'project_id',
-                'nid',
                 'nid_number',
                 'smart_card_number',
-                'birth_registration_number',
                 'tin_certificate_no',
                 'driving_license_no',
                 'passport_no',
@@ -553,9 +536,7 @@ class EmployeeV2Controller extends Controller
                 'identification_mark',
             ]);
 
-            // legacy fields for compatibility
             $employeeData['employee_id'] = $employeeData['pin'];
-            $employeeData['first_name'] = $employeeData['name_en'];
 
             // Ensure employees.email is always filled (DB column is NOT NULL in existing schema)
             $email = trim((string) ($employeeData['email'] ?? ''));
@@ -819,8 +800,6 @@ class EmployeeV2Controller extends Controller
                 'marital_status' => 'nullable|string|max:30',
                 'spouse_name' => 'nullable|string|max:255',
                 'spouse_mobile' => 'nullable|string|max:20',
-                'birth_date_certificate' => 'nullable|date',
-                'birth_date_original' => 'nullable|date',
                 'date_of_birth' => 'nullable|date',
                 'blood_group' => 'nullable|string|max:10',
                 'joining_date' => 'required|date',
@@ -834,10 +813,8 @@ class EmployeeV2Controller extends Controller
                 'last_designation_id' => 'nullable|exists:designations,id',
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
-                'nid' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid', $employee->id)],
-                'nid_number' => 'nullable|string|max:50',
+                'nid_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid_number', $employee->id)],
                 'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number', $employee->id)],
-                'birth_registration_number' => 'nullable|string|max:50',
                 'tin_certificate_no' => 'nullable|string|max:50',
                 'driving_license_no' => 'nullable|string|max:50',
                 'passport_no' => 'nullable|string|max:50',
@@ -847,8 +824,6 @@ class EmployeeV2Controller extends Controller
                 'email' => 'nullable|email',
                 'mobile_personal' => ['required', 'string', 'max:20', $this->uniqueAmongEmployed('mobile_personal', $employee->id)],
                 'mobile_official' => 'nullable|string|max:20',
-                'phone' => 'nullable|string|max:20',
-                'email_id' => 'nullable|email',
 
                 'addresses' => 'nullable|array',
                 'addresses.*.type' => 'required_with:addresses|in:present,permanent',
@@ -955,7 +930,6 @@ class EmployeeV2Controller extends Controller
             ]);
 
             $employeeData['employee_id'] = $employeeData['pin'];
-            $employeeData['first_name'] = $employeeData['name_en'];
             if (empty($employeeData['last_designation_id'])) {
                 $employeeData['last_designation_id'] = $employeeData['joining_designation_id'];
             }

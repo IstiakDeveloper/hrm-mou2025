@@ -37,11 +37,10 @@ import {
   Network
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
 }
 
@@ -210,7 +209,7 @@ const hasPagination = departments.meta && departments.links;
                           <div className="flex items-center text-[13px] text-slate-600 font-medium">
                             <User className="h-4 w-4 mr-1.5 text-slate-400" />
                             <span>
-                              {department.headEmployee.first_name} {department.headEmployee.last_name}
+                              {employeeDisplayName(department.headEmployee)}
                             </span>
                           </div>
                         ) : (

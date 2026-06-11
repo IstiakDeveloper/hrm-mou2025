@@ -9,6 +9,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -218,7 +219,7 @@ export default function CreateHoliday({ branches }: CreateHolidayProps) {
 
                                         {!allBranches && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 pt-2">
-                                                {branches.map((branch) => (
+                                                {sortPayrollBranches(branches).map((branch) => (
                                                     <div key={branch.id} className="flex items-center space-x-2">
                                                         <Checkbox
                                                             id={`branch-${branch.id}`}
@@ -226,7 +227,7 @@ export default function CreateHoliday({ branches }: CreateHolidayProps) {
                                                             onCheckedChange={() => handleBranchSelect(branch.id)}
                                                         />
                                                         <Label htmlFor={`branch-${branch.id}`}>
-                                                            {branch.name}
+                                                            {formatBranchSelectLabel(branch)}
                                                         </Label>
                                                     </div>
                                                 ))}

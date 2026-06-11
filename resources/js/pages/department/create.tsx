@@ -8,11 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Building, Users } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
 }
 
@@ -144,7 +143,7 @@ export default function DepartmentCreate({ employees, departments }: DepartmentC
                     <SelectItem value="null">None</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employee.first_name} {employee.last_name} ({employee.employee_id})
+                        {employeeDisplayName(employee)} ({employee.employee_id})
                       </SelectItem>
                     ))}
                   </SelectContent>

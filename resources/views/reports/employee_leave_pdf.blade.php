@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>Leave Report - {{ $employee->first_name }} {{ $employee->last_name }}</title>
+    <title>Leave Report - {{ $employee->name_en ?? $employee->full_name_en }}</title>
     <style>
         body {
             font-family: 'DejaVu Sans', Arial, sans-serif;
@@ -253,7 +253,7 @@
     <!-- Header -->
     <div class="header">
         <h1>Leave Report</h1>
-        <h2>{{ $employee->first_name }} {{ $employee->last_name }}</h2>
+        <h2>{{ $employee->name_en ?? $employee->full_name_en }}</h2>
         <p><strong>Report Period:</strong> {{ \Carbon\Carbon::parse($fromDate)->format('M d, Y') }} to {{ \Carbon\Carbon::parse($toDate)->format('M d, Y') }}</p>
         <p><strong>Generated on:</strong> {{ $generatedAt }}</p>
     </div>
@@ -270,7 +270,7 @@
             </tr>
             <tr>
                 <td><strong>Full Name:</strong></td>
-                <td>{{ $employee->first_name }} {{ $employee->last_name }}</td>
+                <td>{{ $employee->name_en ?? $employee->full_name_en }}</td>
                 <td><strong>Designation:</strong></td>
                 <td>{{ $employee->designation->name ?? 'N/A' }}</td>
             </tr>

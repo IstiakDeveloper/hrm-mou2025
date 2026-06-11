@@ -357,7 +357,7 @@
                             <td>
                                 <div class="employee-info">
                                     <div class="employee-name">
-                                        {{ trim($application->employee->first_name . ' ' . ($application->employee->last_name ?? '')) }}
+                                        {{ ($application->employee->name_en ?? $application->employee->full_name_en ?? '') }}
                                     </div>
                                     <div class="employee-id">ID: {{ $application->employee->employee_id }}</div>
                                 </div>

@@ -5,7 +5,7 @@ import { CheckCircle2, Lock, XCircle, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
-import { hasAppPermission } from '@/lib/permissions';
+import { hasAppPermission, isSuperAdmin } from '@/lib/permissions';
 
 // Curated themes for each module to create a vibrant, professional layout
 const SECTION_THEMES: Record<string, {
@@ -261,6 +261,10 @@ export default function SectionsIndex() {
                         const Icon = section.icon;
                         const moduleActive = Boolean(section.href);
                         const hasAccess = (() => {
+                            if (isSuperAdmin(auth)) {
+                                return true;
+                            }
+
                             switch (section.id) {
                                 case 'human-resources':
                                     return (
@@ -298,6 +302,7 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'admin.access')
                                     );
                                 case 'staff-fund':
+                                case 'employee-loan':
                                     return (
                                         hasAppPermission(auth, 'payroll.view') ||
                                         hasAppPermission(auth, 'admin.access')

@@ -42,10 +42,20 @@ class HandleInertiaRequests extends Middleware
     {
         /** @var User|null $user */
         $user = Auth::user();
-        $user?->loadMissing(['role', 'roles']);
+        $user?->loadMissing(['role:id,name,permissions', 'roles:id,name,permissions']);
 
-        $employee = $user?->employee()?->with(['department', 'branch'])?->first();
+        $employee = null;
         $activeMovement = null;
+        if ($user?->employee_id) {
+            $employee = $user->employee()
+                ->select(['id', 'employee_id', 'pin', 'name_en', 'photo', 'department_id', 'current_branch_id'])
+                ->with([
+                    'department:id,name',
+                    'branch:id,name,branch_code',
+                ])
+                ->first();
+        }
+
         if ($employee) {
             $activeMovement = Movement::query()
                 ->where('employee_id', $employee->id)
@@ -76,7 +86,15 @@ class HandleInertiaRequests extends Middleware
                 'author' => trim($author),
             ],
             'auth' => [
-                'user' => $user,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'email_verified_at' => $user->email_verified_at,
+                    'employee_id' => $user->employee_id,
+                    'role' => $user->role,
+                    'roles' => $user->roles,
+                ] : null,
                 'employee' => $employee,
             ],
             'activeMovement' => $activeMovement,

@@ -303,7 +303,7 @@ class ProjectEmployeesFromCsvService
 
         $mobile = $this->normalizeMobile($row['mobile_personal'] ?? '');
         if ($mobile === '') {
-            $mobile = $this->normalizeMobile((string) ($employee->mobile_personal ?? $employee->phone ?? ''));
+            $mobile = $this->normalizeMobile((string) ($employee->mobile_personal ?? $employee->mobile_official ?? ''));
         }
         if ($mobile !== '' && $this->mobileTakenAmongEmployed($mobile, $employee->id)) {
             return [
@@ -703,7 +703,7 @@ class ProjectEmployeesFromCsvService
         $query = Employee::query()
             ->whereIn('status', Employee::statusesReservingUniqueIdentifiers())
             ->where(function ($q) use ($mobile) {
-                $q->where('mobile_personal', $mobile)->orWhere('phone', $mobile);
+                $q->where('mobile_personal', $mobile)->orWhere('mobile_official', $mobile);
             });
 
         if ($exceptEmployeeId !== null) {
@@ -749,7 +749,6 @@ class ProjectEmployeesFromCsvService
         $data = [
             'pin' => $pin,
             'employee_id' => $pin,
-            'first_name' => trim((string) ($row['name_en'] ?? '')),
             'name_en' => trim((string) ($row['name_en'] ?? '')),
             'email' => $email,
             'employee_type_id' => $this->projectEmployeeTypeId,
@@ -766,7 +765,6 @@ class ProjectEmployeesFromCsvService
 
         if ($mobile !== null && $mobile !== '') {
             $data['mobile_personal'] = $mobile;
-            $data['phone'] = $mobile;
         }
 
         if ($joiningDate !== null && $joiningDate !== '') {
@@ -805,7 +803,6 @@ class ProjectEmployeesFromCsvService
 
         $nid = trim((string) ($row['nid'] ?? ''));
         if ($nid !== '') {
-            $data['nid'] = $nid;
             $data['nid_number'] = $nid;
         }
 
@@ -878,7 +875,7 @@ class ProjectEmployeesFromCsvService
         if ($mobile !== '') {
             $byMobile = Employee::query()
                 ->where(function ($q) use ($mobile) {
-                    $q->where('mobile_personal', $mobile)->orWhere('phone', $mobile);
+                    $q->where('mobile_personal', $mobile)->orWhere('mobile_official', $mobile);
                 })
                 ->first();
             if ($byMobile) {
@@ -890,8 +887,7 @@ class ProjectEmployeesFromCsvService
         if (strlen($nid) >= 10) {
             $byNid = Employee::query()
                 ->where(function ($q) use ($row) {
-                    $q->where('nid', $row['nid'] ?? '')
-                        ->orWhere('nid_number', $row['nid'] ?? '')
+                    $q->where('nid_number', $row['nid'] ?? '')
                         ->orWhere('smart_card_number', $row['nid'] ?? '');
                 })
                 ->first();

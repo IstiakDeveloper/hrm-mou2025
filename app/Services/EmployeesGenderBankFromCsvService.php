@@ -105,16 +105,6 @@ class EmployeesGenderBankFromCsvService
                 ];
             }
 
-            $jsonMirror = null;
-            if ($bankPayload !== null) {
-                $jsonMirror = [
-                    'bank_name' => $bankPayload['bank_name'],
-                    'branch_name' => $bankPayload['branch_name'],
-                    'account_no' => $bankPayload['account_no'],
-                    'account_type' => $bankPayload['account_type'],
-                ];
-            }
-
             if ($employeeChanges === [] && $bankPayload === null) {
                 $log[] = ['pin' => $pinRaw, 'status' => 'skip', 'reason' => 'no gender change and incomplete bank columns'];
 
@@ -122,13 +112,9 @@ class EmployeesGenderBankFromCsvService
             }
 
             if (! $dryRun) {
-                DB::transaction(function () use ($employee, $employeeChanges, $bankPayload, $jsonMirror) {
-                    $attrs = $employeeChanges;
-                    if ($jsonMirror !== null) {
-                        $attrs['bank_account_details'] = $jsonMirror;
-                    }
-                    if ($attrs !== []) {
-                        $employee->update($attrs);
+                DB::transaction(function () use ($employee, $employeeChanges, $bankPayload) {
+                    if ($employeeChanges !== []) {
+                        $employee->update($employeeChanges);
                     }
                     if ($bankPayload !== null) {
                         DB::table('employee_bank_accounts')->where('employee_id', $employee->id)->delete();

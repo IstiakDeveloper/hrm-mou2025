@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Zone {
   id: number;
@@ -19,11 +20,9 @@ interface Zone {
   zone_manager_employee_id?: number | null;
 }
 
-interface EmployeeLite {
+interface EmployeeLite extends EmployeeNameFields {
   id: number;
   employee_id: string;
-  first_name: string;
-  last_name: string | null;
 }
 
 interface ZoneEditProps {
@@ -110,7 +109,7 @@ export default function ZoneEdit({ zone, employees }: ZoneEditProps) {
                     <SelectItem value="none">None</SelectItem>
                     {employees.map((e) => (
                       <SelectItem key={e.id} value={String(e.id)}>
-                        {e.first_name} {e.last_name || ''} ({e.employee_id})
+                        {employeeDisplayName(e)} ({e.employee_id})
                       </SelectItem>
                     ))}
                   </SelectContent>

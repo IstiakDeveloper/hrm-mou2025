@@ -23,6 +23,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 // ZKTeco Attendance API
 Route::post('/zkteco/sync', [ZKTecoAPIController::class, 'syncAttendance']);
+Route::post('/zkteco/device-pin-mappings', [ZKTecoAPIController::class, 'syncDevicePinMappings']);
 
 // Employee Sync API
 Route::post('/employees/sync', [EmployeeAPIController::class, 'syncEmployees']);

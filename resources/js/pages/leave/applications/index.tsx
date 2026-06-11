@@ -51,16 +51,15 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department {
     id: number;
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department: Department;
     designation: {
@@ -407,7 +406,7 @@ export default function ApplicationsIndex({
                                         <SelectItem value="all">All Employees</SelectItem>
                                         {employees && employees.map((employee) => (
                                             <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                {employee.first_name} {employee.last_name}
+                                                {employeeDisplayName(employee)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -455,7 +454,7 @@ export default function ApplicationsIndex({
                                                         </div>
                                                         <div>
                                                             <div className="font-semibold text-[13px] text-slate-800">
-                                                                {application.employee.first_name} {application.employee.last_name}
+                                                                {employeeDisplayName(application.employee)}
                                                             </div>
                                                             <div className="text-xs text-slate-500 font-mono">
                                                                 ID: {application.employee.employee_id}

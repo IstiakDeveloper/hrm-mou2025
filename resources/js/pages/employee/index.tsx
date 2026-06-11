@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import {
     DropdownMenu,
@@ -67,15 +68,12 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
     pin?: string;
     employee_id: string;
-    full_name_en?: string;
-    name_en?: string;
-    first_name: string;
-    last_name: string;
     email: string;
     phone: string | null;
     status: 'active' | 'inactive' | 'on_leave' | 'terminated';
@@ -272,13 +270,6 @@ export default function EmployeeIndex({
         }
     };
 
-    const getEmployeeInitials = (name: string) => {
-        const parts = name.trim().split(/\s+/).filter(Boolean);
-        const first = parts[0]?.[0] || '';
-        const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-        return `${first}${last}`.toUpperCase() || 'E';
-    };
-
     return (
         <Layout>
             <Head title="Employee Management" />
@@ -303,7 +294,7 @@ export default function EmployeeIndex({
                                 <DialogHeader>
                                     <DialogTitle>Import Employees</DialogTitle>
                                     <DialogDescription>
-                                        Upload a CSV file and assign all imported employees to a Branch.
+                                        Download the Excel template, fill employee data, then upload. You will review each row and fix branch, department, and designation before saving.
                                     </DialogDescription>
                                 </DialogHeader>
 
@@ -322,22 +313,22 @@ export default function EmployeeIndex({
                                 >
                                     <div className="flex items-center justify-between rounded-md border bg-muted/20 p-3">
                                         <div className="text-sm text-muted-foreground">
-                                            Need a template? Download the sample CSV.
+                                            Professional Excel template with grouped headers, Bengali labels, and reference data.
                                         </div>
                                         <a
                                             href={route('employees.import.example')}
                                             className="text-sm font-medium text-primary hover:underline"
                                         >
-                                            Download sample CSV
+                                            Download Excel template
                                         </a>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="importFile">CSV file</Label>
+                                        <Label htmlFor="importFile">Excel or CSV file</Label>
                                         <Input
                                             id="importFile"
                                             type="file"
-                                            accept=".csv,text/csv"
+                                            accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                             onChange={(e) => {
                                                 const f = e.target.files?.[0] ?? null;
                                                 importForm.setData('file', f);
@@ -347,7 +338,8 @@ export default function EmployeeIndex({
                                     </div>
 
                                     <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                                        File upload will only create a preview. On the next page you will select Branch/Department/Designations per employee and confirm.
+                                        Required: PIN, name, employment type, mobile, joining date, department, designation, branch.
+                                        Use the Excel template (row 3 = field keys). Email is optional. Next step: review and confirm.
                                     </div>
 
                                     <DialogFooter>
@@ -360,7 +352,7 @@ export default function EmployeeIndex({
                                             Cancel
                                         </Button>
                                         <Button type="submit" disabled={importForm.processing}>
-                                            {importForm.processing ? 'Importing...' : 'Import'}
+                                            {importForm.processing ? 'Uploading...' : 'Upload & Review'}
                                         </Button>
                                     </DialogFooter>
                                 </form>
@@ -496,9 +488,9 @@ export default function EmployeeIndex({
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Branches</SelectItem>
-                                            {branches.map(branch => (
+                                            {sortPayrollBranches(branches).map((branch) => (
                                                 <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                    {branch.name}
+                                                    {formatBranchSelectLabel(branch)}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -620,16 +612,16 @@ export default function EmployeeIndex({
                                                     <div className="flex items-center space-x-3">
                                                         <Avatar className="h-9 w-9">
                                                             {employee.photo ? (
-                                                                <AvatarImage src={`/storage/${employee.photo}`} alt={`${employee.full_name_en || employee.name_en || `${employee.first_name} ${employee.last_name}`}`} />
+                                                                <AvatarImage src={`/storage/${employee.photo}`} alt={employeeDisplayName(employee)} />
                                                             ) : (
                                                                 <AvatarFallback className="bg-primary/10 text-primary">
-                                                                    {getEmployeeInitials(employee.full_name_en || employee.name_en || `${employee.first_name} ${employee.last_name}`)}
+                                                                    {employeeInitials(employee)}
                                                                 </AvatarFallback>
                                                             )}
                                                         </Avatar>
                                                         <div>
                                                             <div className="font-semibold text-[13px] text-slate-800">
-                                                                {employee.full_name_en || employee.name_en || `${employee.first_name} ${employee.last_name}`}
+                                                                {employeeDisplayName(employee)}
                                                             </div>
                                                             <div className="text-[12px] font-medium text-emerald-600/90 mt-0.5">
                                                                 {employee.designation.name}
@@ -816,7 +808,7 @@ export default function EmployeeIndex({
                         <AlertDialogDescription>
                             This action will permanently delete the employee record for{' '}
                             <span className="font-medium text-gray-900">
-                                {employeeToDelete?.first_name} {employeeToDelete?.last_name}
+                                {employeeDisplayName(employeeToDelete ?? undefined)}
                             </span>
                             . This action cannot be undone.
                         </AlertDialogDescription>

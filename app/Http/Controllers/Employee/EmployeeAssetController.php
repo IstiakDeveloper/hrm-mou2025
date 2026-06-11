@@ -74,7 +74,7 @@ class EmployeeAssetController extends Controller
             'employee' => [
                 'id' => $employee->id,
                 'employee_id' => $employee->employee_id,
-                'name' => trim("{$employee->first_name} {$employee->last_name}"),
+                'name' => trim((string) ($employee->name_en ?? $employee->full_name_en ?? '')),
             ],
         ]);
     }

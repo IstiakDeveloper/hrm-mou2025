@@ -152,7 +152,7 @@ class ZKDeviceController extends Controller
             //     $zk->setUser(
             //         $employee->id,
             //         $employee->employee_id,
-            //         $employee->first_name . ' ' . $employee->last_name
+            //         $employee->name_en ?? $employee->full_name_en
             //     );
             // }
 

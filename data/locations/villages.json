@@ -2605,5 +2605,10 @@
     {
         "name": "Par Bakapur",
         "union_id": "1500"
+    },
+    {
+        "name": "Sultanpur",
+        "upazila": "Naogaon Sadar",
+        "union": "Naogaon Pouro"
     }
 ]

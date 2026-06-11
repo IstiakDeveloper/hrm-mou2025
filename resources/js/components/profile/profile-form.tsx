@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { employeeDisplayName, employeeInitials } from '@/lib/employee-name';
+import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
 import {
   User,
   UserIcon,
@@ -31,9 +31,7 @@ interface ProfileFormProps {
     role?: {
       name: string;
     };
-    employee?: {
-      first_name: string;
-      last_name: string;
+    employee?: EmployeeNameFields & {
       employee_id: string;
     };
   };

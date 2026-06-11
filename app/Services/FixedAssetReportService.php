@@ -166,7 +166,7 @@ class FixedAssetReportService
             ->with([
                 'category:id,code,name',
                 'branch:id,name,branch_code',
-                'custodian:id,employee_id,first_name,last_name',
+                'custodian:id,employee_id,name_en',
                 'transfers' => fn ($q) => $q->latest('transfer_date')->limit(1),
             ])
             ->tap(fn ($q) => $this->applyAssetFilters($q, $filters))
@@ -184,7 +184,7 @@ class FixedAssetReportService
                 'branch' => $a->branch?->name,
                 'category' => $a->category?->name,
                 'status' => FixedAsset::STATUSES[$a->status] ?? $a->status,
-                'custodian' => $a->custodian ? trim("{$a->custodian->first_name} {$a->custodian->last_name}") : '',
+                'custodian' => $a->custodian ? trim((string) ($a->custodian->name_en ?? $a->custodian->full_name_en ?? '')) : '',
                 'serial_number' => $a->serial_number,
                 'purchase_date' => $a->purchase_date?->format('Y-m-d'),
                 'book_value' => $a->book_value,
@@ -673,7 +673,7 @@ class FixedAssetReportService
     private function assetRegister(array $filters): array
     {
         $query = FixedAsset::query()
-            ->with(['category:id,code,name', 'branch:id,name', 'custodian:id,employee_id,first_name,last_name']);
+            ->with(['category:id,code,name', 'branch:id,name', 'custodian:id,employee_id,name_en']);
 
         $this->applyAssetFilters($query, $filters);
 
@@ -688,7 +688,7 @@ class FixedAssetReportService
                 'branch' => $a->branch?->name,
                 'category' => $a->category?->name,
                 'status' => $a->status,
-                'custodian' => $a->custodian ? "{$a->custodian->first_name} {$a->custodian->last_name}" : '',
+                'custodian' => $a->custodian ? ($a->custodian->name_en ?? $a->custodian->full_name_en ?? '') : '',
                 'book_value' => $a->book_value,
             ])->all(),
         ];

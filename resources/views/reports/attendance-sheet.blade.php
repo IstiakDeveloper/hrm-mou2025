@@ -266,7 +266,7 @@
                         <tr>
                             <td>
                                 <div class="employee-name">
-                                    {{ $attendance->employee->first_name }} {{ $attendance->employee->last_name }}
+                                    {{ $attendance->employee->name_en ?? $attendance->employee->full_name_en }}
                                 </div>
                                 <div class="employee-details">
                                     ID: {{ $attendance->employee->employee_id }}<br>

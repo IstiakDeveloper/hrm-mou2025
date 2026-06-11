@@ -50,11 +50,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department: {
         id: number;
@@ -263,7 +262,7 @@ export default function MovementIndex({
                     <SelectItem value="all">All Employees</SelectItem>
                     {employees.map((employee) => (
                         <SelectItem key={employee.id} value={employee.id.toString()}>
-                            {employee.first_name} {employee.last_name} ({employee.employee_id})
+                            {employeeDisplayName(employee)} ({employee.employee_id})
                         </SelectItem>
                     ))}
                 </SelectContent>
@@ -599,7 +598,7 @@ export default function MovementIndex({
                                                                 href={route('movements.show', movement.id)}
                                                                 className="block truncate text-[13px] font-semibold text-slate-800 transition-colors hover:text-emerald-600"
                                                             >
-                                                                {movement.employee.first_name} {movement.employee.last_name}
+                                                                {employeeDisplayName(movement.employee)}
                                                             </Link>
                                                             <div className="truncate text-xs text-slate-500">
                                                                 {movement.employee.department?.name || 'No Department'} •{' '}

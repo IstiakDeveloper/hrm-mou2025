@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle } from 'lucide-react';
 import AppearanceLightOnly from '@/components/appearance-light-only';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { type EmployeeNameFields } from '@/lib/employee-name';
 
 interface User {
   id: number;
@@ -16,9 +17,7 @@ interface User {
   role?: {
     name: string;
   };
-  employee?: {
-    first_name: string;
-    last_name: string;
+  employee?: EmployeeNameFields & {
     employee_id: string;
   };
 }

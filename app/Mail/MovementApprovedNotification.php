@@ -45,7 +45,7 @@ class MovementApprovedNotification extends Mailable
     public function build()
     {
         $subject = 'Movement Request Approved';
-        $employeeName = $this->movement->employee->first_name . ' ' . $this->movement->employee->last_name;
+        $employeeName = $this->movement->employee->name_en ?? $this->movement->employee->full_name_en ?? '';
 
         return $this->subject($subject)
             ->markdown('emails.movements.approved')

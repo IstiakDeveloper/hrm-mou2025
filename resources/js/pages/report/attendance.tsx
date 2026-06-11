@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
+import { useEmployeeLookup } from '@/lib/employee-lookup';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
@@ -10,6 +12,7 @@ import {
     TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -49,6 +52,7 @@ import { format, parseISO, differenceInDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Attendance {
     id: number;
@@ -60,11 +64,9 @@ interface Attendance {
     device_id: number | null;
     working_hours: number | null;
     overtime_hours: number | null;
-    employee: {
+    employee: EmployeeNameFields & {
         id: number;
         employee_id: string;
-        first_name: string;
-        last_name: string;
         department: {
             id: number;
             name: string;
@@ -90,11 +92,9 @@ interface Department {
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string;
 }
 
 interface ChartDataItem {
@@ -146,7 +146,8 @@ interface AttendanceReportProps {
     attendances: AttendanceResponse;
     branches: Branch[];
     departments: Department[];
-    employees: Employee[];
+    employees?: Employee[];
+    employeeLookupUrl?: string;
     filters: {
         start_date?: string;
         end_date?: string;
@@ -176,7 +177,7 @@ export default function AttendanceReport({
     attendances,
     branches,
     departments,
-    employees,
+    employees = [],
     filters,
     startDate,
     endDate,
@@ -196,6 +197,25 @@ export default function AttendanceReport({
     const [department, setDepartment] = useState(filters.department_id || 'all');
     const [status, setStatus] = useState(filters.status || 'all');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
+    const employeeLookup = useEmployeeLookup({
+        enabled: employees.length === 0,
+        branchId: branch !== 'all' ? branch : null,
+        limit: 50,
+    });
+    const employeeOptions = employees.length > 0 ? employees : employeeLookup.employees;
+    const employeeItems = useMemo(() => {
+        const items: ComboSelectItem<string>[] = [{ value: 'all', label: 'All Employees' }];
+        for (const employee of employeeOptions) {
+            const pin = employee.employee_id ?? employee.pin ?? '';
+            const name = employeeDisplayName(employee as Employee);
+            items.push({
+                value: String(employee.id),
+                label: pin ? `${pin} - ${name}` : name,
+                keywords: [pin, name, String(employee.id)].filter(Boolean).join(' '),
+            });
+        }
+        return items;
+    }, [employeeOptions]);
 
     // View control state
     const [showDetails, setShowDetails] = useState(false);
@@ -639,9 +659,9 @@ export default function AttendanceReport({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Branches</SelectItem>
-                                        {branches.map((branch) => (
+                                        {sortPayrollBranches(branches).map((branch) => (
                                             <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                {branch.name}
+                                                {formatBranchSelectLabel(branch)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -686,19 +706,13 @@ export default function AttendanceReport({
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Employee</label>
-                                <Select value={employeeId} onValueChange={setEmployeeId}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="All Employees" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Employees</SelectItem>
-                                        {employees.map((employee) => (
-                                            <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                {employee.employee_id} - {employee.first_name} {employee.last_name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <ComboSelect
+                                    value={employeeId}
+                                    onChange={(value) => setEmployeeId(value ?? 'all')}
+                                    items={employeeItems}
+                                    placeholder="All Employees"
+                                    className="h-10 bg-white text-sm"
+                                />
                             </div>
 
                             <div className="flex items-end gap-2">
@@ -754,7 +768,7 @@ export default function AttendanceReport({
                                         <TableRow key={attendance.id}>
                                             <TableCell className="font-medium">
                                                 <div>
-                                                    {attendance.employee.first_name} {attendance.employee.last_name}
+                                                    {employeeDisplayName(attendance.employee)}
                                                     <div className="text-xs text-gray-500">{attendance.employee.employee_id}</div>
                                                 </div>
                                             </TableCell>

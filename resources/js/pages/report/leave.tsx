@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from '@/layouts/AdminLayout';
 import { Head } from '@inertiajs/react';
 import { router } from '@inertiajs/react';
+import { formatPayrollBranchLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import {
     FileText,
     CheckCircle,
@@ -16,6 +17,7 @@ import {
     User,
     CalendarDays
 } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Branch {
     id: number;
@@ -35,12 +37,9 @@ interface Designation {
     department_id: number;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name?: string;
-    full_name?: string;
     department: {
         id: number;
         name: string;
@@ -255,9 +254,7 @@ const LeaveReport: React.FC<Props> = ({
         window.open(downloadUrl, '_blank');
     };
 
-    const getEmployeeFullName = (employee: Employee) => {
-        return employee.full_name || `${employee.first_name} ${employee.last_name || ''}`.trim();
-    };
+    const getEmployeeFullName = (employee: Employee) => employeeDisplayName(employee);
 
     return (
         <Layout>
@@ -486,9 +483,9 @@ const LeaveReport: React.FC<Props> = ({
                                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         >
                                             <option value="">All Branches</option>
-                                            {branches.map((branch) => (
+                                            {sortPayrollBranches(branches).map((branch) => (
                                                 <option key={branch.id} value={branch.id}>
-                                                    {branch.name} ({branch.branch_code})
+                                                    {formatPayrollBranchLabel(branch)}
                                                 </option>
                                             ))}
                                         </select>

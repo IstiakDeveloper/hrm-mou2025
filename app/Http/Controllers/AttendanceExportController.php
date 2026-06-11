@@ -289,8 +289,7 @@ class AttendanceExportController extends Controller
                     ->select('employees.*')
                     ->orderByRaw($orderCase)
                     ->orderBy('employees.created_at', 'asc')
-                    ->orderBy('employees.first_name')
-                    ->orderBy('employees.last_name');
+                    ->orderBy('employees.name_en');
     }
 
     /**
@@ -316,8 +315,8 @@ class AttendanceExportController extends Controller
         if ($request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('employees.first_name', 'like', "%{$search}%")
-                  ->orWhere('employees.last_name', 'like', "%{$search}%")
+                $q->where('employees.name_en', 'like', "%{$search}%")
+                  ->orWhere('employees.name_bn', 'like', "%{$search}%")
                   ->orWhere('employees.employee_id', 'like', "%{$search}%");
             });
         }

@@ -10,6 +10,7 @@ import {
     TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -53,12 +54,11 @@ import { format, parseISO } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string;
     email: string;
     phone: string;
     gender: 'male' | 'female' | 'other';
@@ -79,11 +79,7 @@ interface Employee {
         id: number;
         name: string;
     };
-    manager: {
-        id: number;
-        first_name: string;
-        last_name: string;
-    } | null;
+    manager: (EmployeeNameFields & { id: number }) | null;
 }
 
 interface Branch {
@@ -612,9 +608,9 @@ export default function EmployeeReport({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Branches</SelectItem>
-                                        {branches.map((branch) => (
+                                        {sortPayrollBranches(branches).map((branch) => (
                                             <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                {branch.name}
+                                                {formatBranchSelectLabel(branch)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -847,7 +843,7 @@ export default function EmployeeReport({
                                                 <div className="flex items-center">
                                                     <User2 className="h-4 w-4 mr-2 text-gray-500" />
                                                     <div>
-                                                        <div>{employee.first_name} {employee.last_name}</div>
+                                                        <div>{employeeDisplayName(employee)}</div>
                                                         <div className="text-xs text-gray-500">{employee.employee_id}</div>
                                                     </div>
                                                 </div>
@@ -876,7 +872,7 @@ export default function EmployeeReport({
                                             <TableCell>{getStatusBadge(employee.status)}</TableCell>
                                             <TableCell>
                                                 {employee.manager ? (
-                                                    `${employee.manager.first_name} ${employee.manager.last_name}`
+                                                    employeeDisplayName(employee.manager)
                                                 ) : (
                                                     <span className="text-gray-400">-</span>
                                                 )}

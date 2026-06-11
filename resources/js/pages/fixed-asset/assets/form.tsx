@@ -6,8 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ArrowLeft, Boxes } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type AssetData = {
     id: number;
@@ -38,7 +40,7 @@ type AssetData = {
 
 type BranchOpt = { id: number; name: string; branch_code: string | null; is_head_office: boolean };
 type CategoryOpt = { id: number; code: string; name: string; default_useful_life_years: number | null };
-type EmployeeOpt = { id: number; employee_id: string; first_name: string; last_name: string };
+type EmployeeOpt = EmployeeNameFields & { id: number; employee_id: string };
 type StatusOpt = { value: string; label: string };
 
 export default function FixedAssetForm({
@@ -140,10 +142,7 @@ export default function FixedAssetForm({
                                 <ComboSelect
                                     value={Number(data.branch_id) || null}
                                     onChange={(v) => v && setData('branch_id', v)}
-                                    items={branches.map((b) => ({
-                                        value: b.id,
-                                        label: b.is_head_office ? `${b.name} (HO)` : b.name,
-                                    }))}
+                                    items={branchComboSelectItems(branches, { numericValue: true })}
                                 />
                             </div>
                             <div>
@@ -243,7 +242,7 @@ export default function FixedAssetForm({
                             onChange={(v) => setData('custodian_employee_id', v ?? '')}
                             items={employees.map((e) => ({
                                 value: e.id,
-                                label: `${e.employee_id} — ${e.first_name} ${e.last_name}`,
+                                label: `${e.employee_id} — ${employeeDisplayName(e)}`,
                             }))}
                             placeholder="No custodian assigned"
                         />

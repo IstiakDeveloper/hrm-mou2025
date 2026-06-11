@@ -22,6 +22,7 @@ import {
 import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { Edit, MoreHorizontal, Plus, Search, Trash2, Map, ChevronLeft, ChevronRight, Trash, Eye, User, X } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Zone {
   id: number;
@@ -29,12 +30,10 @@ interface Zone {
   code: string;
   description?: string | null;
   is_active: boolean;
-  zone_manager?: {
+  zone_manager?: (EmployeeNameFields & {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string | null;
-  } | null;
+  }) | null;
 }
 
 interface PaginationLinks {
@@ -172,7 +171,7 @@ export default function ZoneIndex({ zones, filters }: ZoneIndexProps) {
                             <div className="flex items-center text-[13px] text-slate-600 font-medium">
                               <User className="h-4 w-4 mr-1.5 text-slate-400" />
                               <span>
-                                {zone.zone_manager.first_name} {zone.zone_manager.last_name || ''} ({zone.zone_manager.employee_id})
+                                {employeeDisplayName(zone.zone_manager)} ({zone.zone_manager.employee_id})
                               </span>
                             </div>
                           ) : (

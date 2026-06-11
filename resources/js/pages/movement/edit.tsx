@@ -30,11 +30,10 @@ import { cn } from '@/lib/utils';
 import { ArrowLeft, Calendar as CalendarIcon, CalendarClock, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
   department?: {
     id: number;
@@ -232,7 +231,7 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
                         <SelectContent>
                           {employees.map((employee) => (
                             <SelectItem key={employee.id} value={employee.id.toString()}>
-                              {employee.first_name} {employee.last_name} ({employee.employee_id})
+                              {employeeDisplayName(employee)} ({employee.employee_id})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -476,7 +475,7 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
                   <div className="space-y-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">Name</p>
-                      <p className="font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+                      <p className="font-medium">{employeeDisplayName(selectedEmployee)}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Employee ID</p>

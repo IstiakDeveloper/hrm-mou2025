@@ -11,6 +11,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -34,6 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { format, parseISO, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Transfer {
     id: number;
@@ -44,11 +46,9 @@ interface Transfer {
     from_branch_id: number;
     to_branch_id: number;
     status: string;
-    employee: {
+    employee: EmployeeNameFields & {
         id: number;
         employee_id: string;
-        first_name: string;
-        last_name: string;
         department?: { id: number; name: string } | null;
         designation?: { id: number; name: string } | null;
     };
@@ -77,11 +77,9 @@ interface Branch {
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string;
 }
 
 interface PaginationLinks {
@@ -158,10 +156,7 @@ function approverLabel(t: Transfer): string {
     const a = t.approver;
     if (!a) return '—';
     if (a.name) return a.name;
-    const fn = a.first_name ?? '';
-    const ln = a.last_name ?? '';
-    const full = `${fn} ${ln}`.trim();
-    return full || '—';
+    return employeeDisplayName(a, '—');
 }
 
 function branchName(obj: any, kind: 'from' | 'to'): string {
@@ -471,7 +466,7 @@ export default function TransferReport({
                                         <SelectItem value="all">All employees</SelectItem>
                                         {employees.map((e) => (
                                             <SelectItem key={e.id} value={e.id.toString()}>
-                                                {e.employee_id} — {e.first_name} {e.last_name}
+                                                {e.employee_id} — {employeeDisplayName(e)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -504,9 +499,9 @@ export default function TransferReport({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All branches</SelectItem>
-                                        {branches.map((b) => (
+                                        {sortPayrollBranches(branches).map((b) => (
                                             <SelectItem key={b.id} value={b.id.toString()}>
-                                                {b.name}
+                                                {formatBranchSelectLabel(b)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -520,9 +515,9 @@ export default function TransferReport({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All branches</SelectItem>
-                                        {branches.map((b) => (
+                                        {sortPayrollBranches(branches).map((b) => (
                                             <SelectItem key={b.id} value={b.id.toString()}>
-                                                {b.name}
+                                                {formatBranchSelectLabel(b)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -583,7 +578,7 @@ export default function TransferReport({
                                                         href={route('transfers.show', t.id)}
                                                         className="hover:text-violet-700 hover:underline"
                                                     >
-                                                        {t.employee.first_name} {t.employee.last_name}
+                                                        {employeeDisplayName(t.employee)}
                                                     </Link>
                                                     <div className="mt-0.5 font-normal text-[10px] text-zinc-500">{t.employee.employee_id}</div>
                                                 </TableCell>

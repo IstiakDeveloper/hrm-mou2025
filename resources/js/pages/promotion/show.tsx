@@ -9,16 +9,15 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, CheckCircle2, Check, XCircle, Calendar, BriefcaseBusiness } from 'lucide-react';
 import { format } from 'date-fns';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type Designation = { id: number; name: string };
 type SalaryGrade = { id: number; name: string };
 type User = { id: number; name: string };
 
-type Employee = {
+type Employee = EmployeeNameFields & {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string | null;
 };
 
 type Promotion = {
@@ -202,7 +201,7 @@ export default function PromotionShow({ promotion, canApprove }: Props) {
                                 <div className="space-y-3">
                                     <div className="rounded-lg border border-zinc-200 bg-white p-3">
                                         <p className="font-medium text-zinc-900">
-                                            {promotion.employee.first_name} {promotion.employee.last_name}
+                                            {employeeDisplayName(promotion.employee)}
                                         </p>
                                         <p className="text-[10px] text-zinc-500">{promotion.employee.employee_id}</p>
                                     </div>

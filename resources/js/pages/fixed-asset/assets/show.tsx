@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, ArrowRightLeft, Boxes, Edit, Trash2, TrendingDown, UserCheck, Wrench } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type TransferRow = {
     id: number;
@@ -25,7 +26,7 @@ type AssignmentRow = {
     id: number;
     assigned_date: string;
     released_date: string | null;
-    employee?: { employee_id: string; first_name: string; last_name: string };
+    employee?: EmployeeNameFields & { employee_id: string };
     assigned_by?: { name: string };
 };
 
@@ -61,7 +62,7 @@ type AssetPayload = {
     invoice_no: string | null;
     category?: { name: string };
     branch?: { name: string };
-    custodian?: { employee_id: string; first_name: string; last_name: string } | null;
+    custodian?: (EmployeeNameFields & { employee_id: string }) | null;
     transfers?: TransferRow[];
     assignments?: AssignmentRow[];
     maintenances?: MaintenanceRow[];
@@ -162,7 +163,7 @@ export default function FixedAssetShow({
                             <div className="flex justify-between"><dt className="text-muted-foreground">Status</dt><dd><Badge>{asset.status.replace(/_/g, ' ')}</Badge></dd></div>
                             <div className="flex justify-between"><dt className="text-muted-foreground">Category</dt><dd>{asset.category?.name ?? '—'}</dd></div>
                             <div className="flex justify-between"><dt className="text-muted-foreground">Branch</dt><dd>{asset.branch?.name ?? '—'}</dd></div>
-                            <div className="flex justify-between"><dt className="text-muted-foreground">Custodian</dt><dd>{asset.custodian ? `${asset.custodian.first_name} ${asset.custodian.last_name} (${asset.custodian.employee_id})` : '—'}</dd></div>
+                            <div className="flex justify-between"><dt className="text-muted-foreground">Custodian</dt><dd>{asset.custodian ? `${employeeDisplayName(asset.custodian)} (${asset.custodian.employee_id})` : '—'}</dd></div>
                             <div className="flex justify-between"><dt className="text-muted-foreground">Book value</dt><dd>{asset.book_value ?? asset.purchase_cost ?? '—'}</dd></div>
                             <div className="flex justify-between"><dt className="text-muted-foreground">Accum. depreciation</dt><dd>{asset.accumulated_depreciation ?? '—'}</dd></div>
                             <div className="flex justify-between">
@@ -198,7 +199,7 @@ export default function FixedAssetShow({
                             <TableBody>
                                 {asset.assignments!.map((a) => (
                                     <TableRow key={a.id}>
-                                        <TableCell>{a.employee ? `${a.employee.first_name} ${a.employee.last_name}` : '—'}</TableCell>
+                                        <TableCell>{a.employee ? employeeDisplayName(a.employee) : '—'}</TableCell>
                                         <TableCell>{a.assigned_date}</TableCell>
                                         <TableCell>{a.released_date ?? '—'}</TableCell>
                                         <TableCell>{a.assigned_by?.name ?? '—'}</TableCell>

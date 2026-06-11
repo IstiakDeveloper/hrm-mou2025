@@ -2,6 +2,7 @@ import React, { Fragment, useMemo, useState, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -458,9 +459,9 @@ export default function DailyBranchSummary({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Branches</SelectItem>
-                                        {branches.map((b) => (
+                                        {sortPayrollBranches(branches).map((b) => (
                                             <SelectItem key={b.id} value={b.id.toString()}>
-                                                {b.name}
+                                                {formatBranchSelectLabel(b)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

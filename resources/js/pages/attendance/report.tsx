@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -51,6 +52,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Label } from '@radix-ui/react-dropdown-menu';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department {
   id: number;
@@ -67,10 +69,8 @@ interface Designation {
   name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
   department: Department;
   designation: Designation;
@@ -359,9 +359,9 @@ export default function AttendanceReport({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Branches</SelectItem>
-                    {branches.map((branch) => (
+                    {sortPayrollBranches(branches).map((branch) => (
                       <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
+                        {formatBranchSelectLabel(branch)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -399,7 +399,7 @@ export default function AttendanceReport({
                     <SelectItem value="all">All Employees</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employee.first_name} {employee.last_name}
+                        {employeeDisplayName(employee)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -529,7 +529,7 @@ export default function AttendanceReport({
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">
-                          {attendance.employee.first_name} {attendance.employee.last_name}
+                          {employeeDisplayName(attendance.employee)}
                         </div>
                         <div className="text-xs text-gray-500">
                           {attendance.employee.employee_id}

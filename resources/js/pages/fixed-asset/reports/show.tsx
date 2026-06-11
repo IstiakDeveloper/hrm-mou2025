@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
 import { PayrollField, PayrollMonthSelect, PayrollYearSelect } from '@/components/payroll/PayrollFilterGrid';
@@ -265,11 +266,7 @@ export default function FixedAssetReportShow({
                                 <ComboSelect
                                     value={filters.branch_id ? Number(filters.branch_id) : null}
                                     onChange={(id) => setFilter('branch_id', id != null ? String(id) : '')}
-                                    items={filterOptions.branches.map((b) => ({
-                                        value: b.id,
-                                        label: b.is_head_office ? `${b.name} (HO)` : b.name,
-                                        keywords: b.branch_code ?? undefined,
-                                    }))}
+                                    items={branchComboSelectItems(filterOptions.branches, { numericValue: true })}
                                     placeholder="All branches"
                                 />
                             </PayrollField>

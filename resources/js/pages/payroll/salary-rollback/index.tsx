@@ -104,21 +104,21 @@ export default function SalaryRollbackIndex({ filters: init, rows, ...options }:
                 />
 
                 {flash?.success && (
-                    <Alert className="mb-6 border-emerald-200 bg-emerald-50 text-emerald-950">
-                        <AlertTitle>Done</AlertTitle>
-                        <AlertDescription>{flash.success}</AlertDescription>
+                    <Alert className="mb-6 border-emerald-100 bg-emerald-50/40 text-emerald-900 rounded-xl shadow-xs">
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wider text-emerald-800">Done</AlertTitle>
+                        <AlertDescription className="text-xs text-emerald-700/90 mt-1">{flash.success}</AlertDescription>
                     </Alert>
                 )}
 
                 {loadError && (
-                    <Alert variant="destructive" className="mb-6">
-                        <AlertTitle>Cannot load</AlertTitle>
-                        <AlertDescription>{loadError}</AlertDescription>
+                    <Alert variant="destructive" className="mb-6 rounded-xl border-red-100 bg-red-50/30">
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wider text-red-800">Cannot load</AlertTitle>
+                        <AlertDescription className="text-xs text-red-700/95 mt-1">{loadError}</AlertDescription>
                     </Alert>
                 )}
 
                 <PayrollSectionCard title="Find payroll" className="mb-6">
-                    <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="grid gap-4.5 sm:grid-cols-3">
                         <PayrollMonthSelect
                             value={filters.month}
                             onChange={(v) => setFilter('month', v)}
@@ -138,13 +138,15 @@ export default function SalaryRollbackIndex({ filters: init, rows, ...options }:
                             placeholder="Select pay type"
                         />
                     </div>
-                    <PayrollFilterGrid filters={filters} setFilter={setFilter} {...options} showProgram={false} />
-                    <PayrollFormActions>
-                        <Button type="button" variant="outline" onClick={load}>
+                    <div className="mt-4">
+                        <PayrollFilterGrid filters={filters} setFilter={setFilter} {...options} showProgram={false} />
+                    </div>
+                    <PayrollFormActions className="mt-5 pt-4">
+                        <Button type="button" variant="outline" onClick={load} className="cursor-pointer">
                             <Search className="mr-2 h-4 w-4" /> Load payroll
                         </Button>
                         {rows.length > 0 && (
-                            <Button type="button" variant="destructive" onClick={rollback} disabled={rolling || !runIds.length}>
+                            <Button type="button" variant="destructive" onClick={rollback} disabled={rolling || !runIds.length} className="cursor-pointer">
                                 <RotateCcw className="mr-2 h-4 w-4" /> Undo selected
                             </Button>
                         )}
@@ -153,31 +155,31 @@ export default function SalaryRollbackIndex({ filters: init, rows, ...options }:
 
                 {rows.length > 0 ? (
                     <PayrollSectionCard title="Payslips" description="Select rows to undo the whole payroll run they belong to.">
-                        <div className="overflow-x-auto -mx-4 sm:-mx-5">
-                            <Table>
+                        <div className="overflow-x-auto -mx-5 sm:-mx-6">
+                            <Table className="min-w-full">
                                 <TableHeader>
-                                    <TableRow className="bg-slate-50">
-                                        <TableHead className="w-10">
-                                            <Checkbox checked={rows.length > 0 && selected.length === rows.length} onCheckedChange={toggleAll} />
+                                    <TableRow className="bg-slate-50/40 border-b border-slate-100 hover:bg-slate-50/40">
+                                        <TableHead className="w-12 py-3.5 pl-6">
+                                            <Checkbox checked={rows.length > 0 && selected.length === rows.length} onCheckedChange={toggleAll} className="cursor-pointer" />
                                         </TableHead>
-                                        <TableHead>Branch</TableHead>
-                                        <TableHead>PIN</TableHead>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Grade</TableHead>
-                                        <TableHead>Step</TableHead>
-                                        <TableHead className="text-right">Net (৳)</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-3.5">Branch</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-3.5">PIN</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-3.5">Name</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-3.5">Grade</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-3.5">Step</TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-3.5 text-right pr-6">Net (৳)</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {rows.map((r) => (
-                                        <TableRow key={r.payslip_id}>
-                                            <TableCell><Checkbox checked={selected.includes(r.payslip_id)} onCheckedChange={() => toggle(r.payslip_id)} /></TableCell>
-                                            <TableCell className="text-sm">{r.branch}</TableCell>
-                                            <TableCell className="font-mono text-xs">{r.pin}</TableCell>
-                                            <TableCell className="text-sm font-medium">{r.name}</TableCell>
-                                            <TableCell className="text-sm">{r.grade ?? '—'}</TableCell>
-                                            <TableCell className="text-sm">{r.step ?? '—'}</TableCell>
-                                            <TableCell className="text-right tabular-nums text-sm">{r.net.toLocaleString()}</TableCell>
+                                        <TableRow key={r.payslip_id} className="border-b border-slate-100/70 hover:bg-slate-50/30">
+                                            <TableCell className="py-3 pl-6"><Checkbox checked={selected.includes(r.payslip_id)} onCheckedChange={() => toggle(r.payslip_id)} className="cursor-pointer" /></TableCell>
+                                            <TableCell className="text-xs text-slate-600 font-medium py-3">{r.branch}</TableCell>
+                                            <TableCell className="font-mono text-xs text-slate-500 py-3">{r.pin}</TableCell>
+                                            <TableCell className="text-sm font-semibold text-slate-800 py-3">{r.name}</TableCell>
+                                            <TableCell className="text-xs text-slate-600 font-medium py-3">{r.grade ?? '—'}</TableCell>
+                                            <TableCell className="text-xs text-slate-600 font-medium py-3">{r.step ?? '—'}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs text-slate-700 font-semibold pr-6 py-3">৳{r.net.toLocaleString()}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

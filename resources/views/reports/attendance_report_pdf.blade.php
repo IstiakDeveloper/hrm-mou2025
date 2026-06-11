@@ -3,7 +3,7 @@
 
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>Attendance Report - {{ $employee->first_name }} {{ $employee->last_name }}</title>
+    <title>Attendance Report - {{ $employee->name_en ?? $employee->full_name_en }}</title>
     <style>
         body {
             font-family: 'DejaVu Sans', sans-serif;
@@ -186,7 +186,7 @@
 <body>
     <div class="header">
         <h1>Attendance Report</h1>
-        <p>Employee: <strong>{{ $employee->first_name }} {{ $employee->last_name }}</strong></p>
+        <p>Employee: <strong>{{ $employee->name_en ?? $employee->full_name_en }}</strong></p>
         <p>Employee ID: <strong>{{ $employee->employee_id }}</strong></p>
         <p>Report Period: <strong>{{ date('d M Y', strtotime($from_date)) }}</strong> to
             <strong>{{ date('d M Y', strtotime($to_date)) }}</strong>

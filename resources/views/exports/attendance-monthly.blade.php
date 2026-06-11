@@ -209,7 +209,7 @@
                 @endphp
                 <tr>
                     <td class="employee-col">
-                        <div class="employee-name">{{ $employee->first_name }} {{ $employee->last_name }}</div>
+                        <div class="employee-name">{{ $employee->name_en ?? $employee->full_name_en }}</div>
                         <div class="employee-details">
                             {{ $employee->employee_id }} • {{ $employee->department->name }}
                         </div>

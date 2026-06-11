@@ -19,12 +19,11 @@ import {
     type PayrollPayscaleOption,
     type PayrollStepOption,
 } from '@/components/employee/EmployeeSalaryAssignment';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-type Employee = {
+type Employee = EmployeeNameFields & {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string | null;
     designation_id: number | null;
     salary_grade_id: number | null;
     basic_salary: number | string;
@@ -158,8 +157,8 @@ export default function CreatePromotion({
                                             placeholder="Search employee (PIN / name)…"
                                             items={employees.map((e) => ({
                                                 value: e.id,
-                                                label: `${e.employee_id} — ${e.first_name} ${e.last_name ?? ''}`.trim(),
-                                                keywords: `${e.employee_id} ${e.first_name} ${e.last_name ?? ''}`,
+                                                label: `${e.employee_id} — ${employeeDisplayName(e)}`.trim(),
+                                                keywords: `${e.employee_id} ${employeeDisplayName(e)}`,
                                             }))}
                                         />
                                         {errors.employee_id && <p className="text-xs text-rose-600">{errors.employee_id}</p>}
@@ -281,7 +280,7 @@ export default function CreatePromotion({
                                         <div>
                                             <p className="text-zinc-500">Employee</p>
                                             <p className="font-medium text-zinc-900">
-                                                {selectedEmployee.first_name} {selectedEmployee.last_name}
+                                                {employeeDisplayName(selectedEmployee)}
                                             </p>
                                             <p className="text-[10px] text-zinc-500">{selectedEmployee.employee_id}</p>
                                         </div>

@@ -35,11 +35,10 @@ import {
     PaginationNext,
     PaginationPrevious
 } from '@/components/ui/pagination';
+import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     photo: string | null;
     department: {
@@ -52,10 +51,8 @@ interface Employee {
     };
 }
 
-interface HeadEmployee {
+interface HeadEmployee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     photo: string | null;
 }
@@ -111,11 +108,6 @@ interface BranchShowProps {
 }
 
 export default function BranchShow({ branch, headEmployee, employees }: BranchShowProps) {
-    // Get initials for avatar fallback
-    const getInitials = (firstName: string, lastName: string) => {
-        return `${firstName.charAt(0)}${lastName.charAt(0)}`;
-    };
-
     // Check if pagination data exists
     const hasPagination = employees.meta && employees.links;
     const totalEmployees = employees.meta?.total || employees.data.length;
@@ -215,14 +207,11 @@ export default function BranchShow({ branch, headEmployee, employees }: BranchSh
                                         {headEmployee.photo ? (
                                             <AvatarImage
                                                 src={`/storage/${headEmployee.photo}`}
-                                                alt={`${headEmployee.first_name} ${headEmployee.last_name}`}
+                                                alt={employeeDisplayName(headEmployee)}
                                             />
                                         ) : (
                                             <AvatarFallback className="bg-purple-100 text-purple-600">
-                                                {getInitials(
-                                                    headEmployee.first_name || '',
-                                                    headEmployee.last_name || ''
-                                                )}
+                                                {employeeInitials(headEmployee)}
                                             </AvatarFallback>
                                         )}
                                     </Avatar>
@@ -231,7 +220,7 @@ export default function BranchShow({ branch, headEmployee, employees }: BranchSh
                                             href={route('employees.show', headEmployee.id)}
                                             className="text-base font-medium text-gray-900 hover:text-blue-600"
                                         >
-                                            {headEmployee.first_name} {headEmployee.last_name}
+                                            {employeeDisplayName(headEmployee)}
                                         </Link>
                                         <p className="text-sm text-gray-500">ID: {headEmployee.employee_id}</p>
                                         {branch.branchHeadDesignation?.name && (
@@ -283,16 +272,16 @@ export default function BranchShow({ branch, headEmployee, employees }: BranchSh
                                                             {employee.photo ? (
                                                                 <AvatarImage
                                                                     src={`/storage/${employee.photo}`}
-                                                                    alt={`${employee.first_name} ${employee.last_name}`}
+                                                                    alt={employeeDisplayName(employee)}
                                                                 />
                                                             ) : (
                                                                 <AvatarFallback className="bg-gray-100 text-gray-600">
-                                                                    {getInitials(employee.first_name, employee.last_name)}
+                                                                    {employeeInitials(employee)}
                                                                 </AvatarFallback>
                                                             )}
                                                         </Avatar>
                                                         <span className="font-medium">
-                                                            {employee.first_name} {employee.last_name}
+                                                            {employeeDisplayName(employee)}
                                                         </span>
                                                     </div>
                                                 </TableCell>

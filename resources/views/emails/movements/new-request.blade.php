@@ -45,7 +45,7 @@
     <div class="content">
         <p>Dear {{ $recipient->name }},</p>
         
-        <p>A new movement request has been submitted by <strong>{{ $employee->first_name }} {{ $employee->last_name }}</strong> that requires your approval.</p>
+        <p>A new movement request has been submitted by <strong>{{ $employee->name_en ?? $employee->full_name_en }}</strong> that requires your approval.</p>
         
         <h2>Movement Details</h2>
         <ul>

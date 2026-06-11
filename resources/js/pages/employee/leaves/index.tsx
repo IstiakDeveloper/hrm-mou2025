@@ -14,6 +14,7 @@ import { Calendar as CalendarIcon, Download, ArrowLeft, Search, CheckCircle, Ale
 import { format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PageSurface } from '@/components/page-surface';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface LeaveType {
   id: number;
@@ -67,11 +68,9 @@ interface Designation {
   name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
   employee_id: string;
-  first_name: string;
-  last_name: string;
   email: string;
   department: Department;
   designation: Designation;
@@ -214,7 +213,7 @@ interface EmployeeLeavesProps {
 
     return (
       <Layout>
-        <Head title={`Leaves - ${employee.first_name} ${employee.last_name}`} />
+        <Head title={`Leaves - ${employeeDisplayName(employee)}`} />
 
         <PageSurface>
           <div className="mb-6">
@@ -229,7 +228,7 @@ interface EmployeeLeavesProps {
 
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900">
-              Leave Management: {employee.first_name} {employee.last_name}
+              Leave Management: {employeeDisplayName(employee)}
             </h1>
             <div className="mt-1 text-gray-500">
               {employee.designation.name} • {employee.department.name} • {employee.employee_id}

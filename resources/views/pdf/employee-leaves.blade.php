@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>Leave Report - {{ $employee->first_name }} {{ $employee->last_name }}</title>
+    <title>Leave Report - {{ $employee->name_en ?? $employee->full_name_en }}</title>
     <style>
         body {
             font-family: 'DejaVu Sans', Arial, sans-serif;
@@ -75,7 +75,7 @@
 
     <div class="employee-info">
         <h3>Employee Details</h3>
-        <p><strong>Name:</strong> {{ $employee->first_name }} {{ $employee->last_name }}</p>
+        <p><strong>Name:</strong> {{ $employee->name_en ?? $employee->full_name_en }}</p>
         <p><strong>ID:</strong> {{ $employee->employee_id }}</p>
         <p><strong>Department:</strong> {{ $employee->department->name }}</p>
         <p><strong>Position:</strong> {{ $employee->designation->name }}</p>

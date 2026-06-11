@@ -10,6 +10,7 @@ import {
     TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -69,6 +70,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PageSurface } from '@/components/page-surface';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department {
     id: number;
@@ -80,10 +82,8 @@ interface Branch {
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department: Department;
     designation: {
@@ -475,7 +475,7 @@ export default function AttendanceIndex({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Branches</SelectItem>
-                                    {branches.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                                    {sortPayrollBranches(branches).map((b) => <SelectItem key={b.id} value={b.id.toString()}>{formatBranchSelectLabel(b)}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         )}
@@ -563,7 +563,7 @@ export default function AttendanceIndex({
                                                         </div>
                                                         <div>
                                                             <div className="font-semibold text-xs text-slate-800">
-                                                                {attendance.employee.first_name} {attendance.employee.last_name}
+                                                                {employeeDisplayName(attendance.employee)}
                                                             </div>
                                                             <div className="text-[11px] text-slate-500 font-mono">
                                                                 ID: {attendance.employee.employee_id}

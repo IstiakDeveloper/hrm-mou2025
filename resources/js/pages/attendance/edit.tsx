@@ -13,11 +13,10 @@ import {
   MapPin,
   User
 } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
 }
 
@@ -153,7 +152,7 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
 
   return (
     <Layout>
-      <Head title={`Edit Attendance - ${attendance.employee.first_name} ${attendance.employee.last_name}`} />
+      <Head title={`Edit Attendance - ${employeeDisplayName(attendance.employee)}`} />
 
       <div className="container mx-auto py-8">
         <div className="mb-6">
@@ -169,7 +168,7 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Edit Attendance Record</h1>
           <p className="mt-1 text-gray-500">
-            Update attendance record for {attendance.employee.first_name} {attendance.employee.last_name} on {new Date(attendance.date).toLocaleDateString()}
+            Update attendance record for {employeeDisplayName(attendance.employee)} on {new Date(attendance.date).toLocaleDateString()}
           </p>
         </div>
 
@@ -192,7 +191,7 @@ export default function AttendanceEdit({ attendance, devices, statuses }: Attend
                   <User className="h-5 w-5 text-blue-500 mr-2" />
                   <span className="font-medium">Employee:</span>
                   <span className="ml-2 text-gray-700">
-                    {attendance.employee.first_name} {attendance.employee.last_name} ({attendance.employee.employee_id})
+                    {employeeDisplayName(attendance.employee)} ({attendance.employee.employee_id})
                   </span>
                 </div>
                 <div className="mt-2 flex items-center">

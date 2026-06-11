@@ -111,8 +111,8 @@ class AttendanceController extends Controller
             $query->where('status', $status);
         })->when($request->search, function ($query, $search) {
             $query->whereHas('employee', function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
+                $q->where('name_en', 'like', "%{$search}%")
+                    ->orWhere('name_bn', 'like', "%{$search}%")
                     ->orWhere('employee_id', 'like', "%{$search}%");
             });
         });
@@ -863,8 +863,8 @@ class AttendanceController extends Controller
         if ($request->search) {
             $search = (string) $request->search;
             $employeesQuery->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
+                $q->where('name_en', 'like', "%{$search}%")
+                    ->orWhere('name_bn', 'like', "%{$search}%")
                     ->orWhere('employee_id', 'like', "%{$search}%");
             });
         }
@@ -872,8 +872,7 @@ class AttendanceController extends Controller
         $employees = $employeesQuery
             ->orderBy('current_branch_id')
             ->orderBy('department_id')
-            ->orderBy('first_name')
-            ->orderBy('last_name')
+            ->orderBy('name_en')
             ->get();
 
         $employeeIds = $employees->pluck('id')->map(fn ($x) => (int) $x)->values()->all();
@@ -1008,7 +1007,7 @@ class AttendanceController extends Controller
             $branchesOut[$branchIdInt]['employeesByStatus'][$status][] = [
                 'id' => $empId,
                 'employee_id' => (string) $e->employee_id,
-                'name' => trim(($e->first_name ?? '').' '.($e->last_name ?? '')),
+                'name' => trim((string) ($e->name_en ?? $e->full_name_en ?? '')),
                 'department' => $e->department?->name,
                 'designation' => $e->designation?->name,
                 'status' => $status,
@@ -1638,8 +1637,8 @@ class AttendanceController extends Controller
         // Apply search filter (applies to all user types)
         $query->when($request->search, function ($query, $search) {
             $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
+                $q->where('name_en', 'like', "%{$search}%")
+                    ->orWhere('name_bn', 'like', "%{$search}%")
                     ->orWhere('employee_id', 'like', "%{$search}%");
             });
         });

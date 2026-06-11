@@ -7,6 +7,8 @@ use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
+use App\Services\EmployeeLoanService;
+use App\Services\PayrollRunRollbackService;
 use App\Services\PayslipTotalsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,31 +20,15 @@ class SalaryPostController extends Controller
     use ProvidesPayrollFilters;
 
     public function __construct(
-        protected PayslipTotalsService $payslipTotals
+        protected PayslipTotalsService $payslipTotals,
+        protected EmployeeLoanService $loanService,
+        protected PayrollRunRollbackService $rollbackService,
     ) {}
 
     public function index(Request $request)
     {
         $context = $this->resolvePostContext($request);
         $salaryType = $context === 'bonus' ? 'bonus' : 'salary';
-
-        $mapRun = fn (PayrollRun $r) => [
-            'id' => $r->id,
-            'year' => $r->year,
-            'month' => $r->month,
-            'salary_type' => strtoupper($r->salary_type),
-            'bonus_label' => $r->salary_type === 'bonus' && $r->bonusConfiguration
-                ? trim(($r->bonusConfiguration->bonusType?->name ?? 'Bonus').' — '.$r->bonusConfiguration->name)
-                : null,
-            'branch' => $r->branch
-                ? trim($r->branch->name.(filled($r->branch->branch_code) ? ' ('.$r->branch->branch_code.')' : ''))
-                : '—',
-            'status' => $r->status,
-            'employee_count' => $r->employee_count,
-            'total_net' => (float) $r->total_net,
-            'processed_at' => $r->processed_at?->format('d-m-Y H:i'),
-            'posted_at' => $r->posted_at?->format('d-m-Y H:i'),
-        ];
 
         $baseQuery = PayrollRun::query()
             ->with(['branch:id,name,branch_code', 'bonusConfiguration.bonusType:id,name'])
@@ -51,27 +37,103 @@ class SalaryPostController extends Controller
             ->when($request->filled('month'), fn ($q) => $q->where('month', $request->integer('month')))
             ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->integer('branch_id')));
 
-        $pendingRuns = (clone $baseQuery)
-            ->where('status', 'processed')
-            ->orderByDesc('processed_at')
-            ->get()
-            ->map($mapRun);
+        $pendingBatches = $this->groupRunsIntoPeriodBatches(
+            (clone $baseQuery)->where('status', 'processed')->orderByDesc('processed_at')->get()
+        );
 
-        $postedRuns = (clone $baseQuery)
-            ->where('status', 'posted')
-            ->orderByDesc('posted_at')
-            ->limit(50)
-            ->get()
-            ->map($mapRun);
+        $postedBatches = $this->groupRunsIntoPeriodBatches(
+            (clone $baseQuery)->where('status', 'posted')->orderByDesc('posted_at')->limit(50)->get()
+        );
 
         return Inertia::render('payroll/salary-post/index', [
             ...$this->payrollFilterOptions(),
             'filters' => array_merge($this->payrollFilterValues($request), [
                 'salary_type' => $salaryType,
             ]),
-            'pendingRuns' => $pendingRuns,
-            'postedRuns' => $postedRuns,
+            'pendingBatches' => $pendingBatches,
+            'postedBatches' => $postedBatches,
             'pageContext' => $context,
+        ]);
+    }
+
+    public function period(Request $request, int $year, int $month)
+    {
+        $context = $this->resolvePostContext($request);
+        $salaryType = $context === 'bonus' ? 'bonus' : 'salary';
+        $status = $request->input('status', 'processed');
+        if (! in_array($status, ['processed', 'posted'], true)) {
+            $status = 'processed';
+        }
+
+        $runs = PayrollRun::query()
+            ->with([
+                'branch',
+                'bonusConfiguration.bonusType',
+                'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines.head'])->orderBy('id'),
+            ])
+            ->where('salary_type', $salaryType)
+            ->where('year', $year)
+            ->where('month', $month)
+            ->where('status', $status)
+            ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->integer('branch_id')))
+            ->get()
+            ->sortBy(function ($r) {
+                return $r->branch?->branch_code ?? '';
+            })
+            ->values();
+
+        if ($runs->isEmpty()) {
+            $prefix = $this->routePrefixForContext($context);
+
+            return redirect()
+                ->route("{$prefix}.index", $request->only(['branch_id', 'year', 'month']))
+                ->with('error', 'No payroll found for this period.');
+        }
+
+        $canEdit = $status === 'processed' && ($request->user()?->hasPermission('payroll.edit') ?? false);
+        $branches = [];
+
+        foreach ($runs as $run) {
+            if ($run->salary_type === 'salary' && $run->status === 'processed') {
+                $this->loanService->syncLoanDeductionsForPayrollRun($run);
+                $run->load([
+                    'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines.head'])->orderBy('id'),
+                ]);
+            }
+
+            $bonusConfig = $run->salary_type === 'bonus' ? $run->bonusConfiguration : null;
+            if ($bonusConfig && $run->status === 'processed') {
+                $this->repairLegacyBonusPayslips($run, $bonusConfig);
+                $run->refresh();
+            }
+
+            $branches[] = [
+                'run' => $this->mapRunForShow($run),
+                'payslips' => $run->payslips
+                    ->map(fn (Payslip $p) => $this->mapPayslipForShow($p, $bonusConfig))
+                    ->values(),
+                'bonusConfig' => $bonusConfig ? [
+                    'name' => $bonusConfig->name,
+                    'type_name' => $bonusConfig->bonusType?->name,
+                    'basic_percentage' => (float) $bonusConfig->basic_percentage,
+                ] : null,
+            ];
+        }
+
+        return Inertia::render('payroll/salary-post/period', [
+            'year' => $year,
+            'month' => $month,
+            'status' => $status,
+            'canEdit' => $canEdit,
+            'pageContext' => $context,
+            'summary' => [
+                'branch_count' => count($branches),
+                'employee_count' => $runs->sum('employee_count'),
+                'total_gross' => (float) $runs->sum('total_gross'),
+                'total_deduction' => (float) $runs->sum('total_deduction'),
+                'total_net' => (float) $runs->sum('total_net'),
+            ],
+            'branches' => $branches,
         ]);
     }
 
@@ -87,7 +149,7 @@ class SalaryPostController extends Controller
         $payroll_run->load([
             'branch',
             'bonusConfiguration.bonusType',
-            'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines'])->orderBy('id'),
+            'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines.head'])->orderBy('id'),
         ]);
 
         $canEdit = $payroll_run->status === 'processed'
@@ -98,6 +160,13 @@ class SalaryPostController extends Controller
         if ($bonusConfig && $payroll_run->status === 'processed') {
             $this->repairLegacyBonusPayslips($payroll_run, $bonusConfig);
             $payroll_run->refresh();
+        }
+
+        if ($payroll_run->salary_type === 'salary' && $payroll_run->status === 'processed') {
+            $this->loanService->syncLoanDeductionsForPayrollRun($payroll_run);
+            $payroll_run->load([
+                'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines.head'])->orderBy('id'),
+            ]);
         }
 
         return Inertia::render('payroll/salary-post/show', [
@@ -198,17 +267,7 @@ class SalaryPostController extends Controller
             return $redirect;
         }
 
-        if ($payroll_run->status !== 'processed') {
-            throw ValidationException::withMessages([
-                'run' => 'Only processed payroll can be posted.',
-            ]);
-        }
-
-        $payroll_run->update([
-            'status' => 'posted',
-            'posted_by' => auth()->id(),
-            'posted_at' => now(),
-        ]);
+        $this->finalizeRun($payroll_run);
 
         $prefix = $this->routePrefixForContext($this->resolvePostContext($request, $payroll_run));
 
@@ -217,6 +276,157 @@ class SalaryPostController extends Controller
             ->with('success', $payroll_run->salary_type === 'bonus'
                 ? 'Bonus posted successfully. This period is now locked.'
                 : 'Salary posted successfully. This period is now locked.');
+    }
+
+    public function postPeriod(Request $request, int $year, int $month)
+    {
+        $context = $this->resolvePostContext($request);
+        $salaryType = $context === 'bonus' ? 'bonus' : 'salary';
+
+        $runs = $this->periodRunsQuery($request, $year, $month, $salaryType, 'processed')->get();
+
+        if ($runs->isEmpty()) {
+            throw ValidationException::withMessages([
+                'period' => 'No processed payroll found for this period.',
+            ]);
+        }
+
+        DB::transaction(function () use ($runs) {
+            foreach ($runs as $run) {
+                $this->finalizeRun($run);
+            }
+        });
+
+        $prefix = $this->routePrefixForContext($context);
+        $label = $salaryType === 'bonus' ? 'Bonus' : 'Salary';
+
+        return redirect()
+            ->route("{$prefix}.index")
+            ->with('success', "{$label} finalized for all {$runs->count()} branch(es). This period is now locked.");
+    }
+
+    public function cancelPeriod(Request $request, int $year, int $month)
+    {
+        $context = $this->resolvePostContext($request);
+        $salaryType = $context === 'bonus' ? 'bonus' : 'salary';
+
+        $runs = $this->periodRunsQuery($request, $year, $month, $salaryType, 'processed')->get();
+
+        if ($runs->isEmpty()) {
+            throw ValidationException::withMessages([
+                'period' => 'No processed payroll to cancel for this period.',
+            ]);
+        }
+
+        $count = $this->rollbackService->rollback($runs);
+        $prefix = $this->routePrefixForContext($context);
+        $label = $salaryType === 'bonus' ? 'Bonus' : 'Salary';
+
+        return redirect()
+            ->route("{$prefix}.index")
+            ->with('success', "{$label} cancelled for {$count} branch(es). You can run calculation again.");
+    }
+
+    public function cancel(Request $request, PayrollRun $payroll_run)
+    {
+        $redirect = $this->redirectIfWrongPostSection($request, $payroll_run);
+        if ($redirect) {
+            return $redirect;
+        }
+
+        if ($payroll_run->status !== 'processed') {
+            throw ValidationException::withMessages([
+                'run' => 'Only processed (not yet posted) payroll can be cancelled from review.',
+            ]);
+        }
+
+        $this->rollbackService->rollbackSingle($payroll_run);
+
+        $prefix = $this->routePrefixForContext($this->resolvePostContext($request, $payroll_run));
+        $label = $payroll_run->salary_type === 'bonus' ? 'Bonus' : 'Salary';
+
+        return redirect()
+            ->route("{$prefix}.index")
+            ->with('success', "{$label} cancelled for {$payroll_run->branch?->name}. You can run calculation again.");
+    }
+
+    private function finalizeRun(PayrollRun $payroll_run): void
+    {
+        if ($payroll_run->status !== 'processed') {
+            throw ValidationException::withMessages([
+                'run' => 'Only processed payroll can be posted.',
+            ]);
+        }
+
+        if ($payroll_run->salary_type === 'salary') {
+            $this->loanService->postPaymentsForPayrollRun($payroll_run);
+        }
+
+        $payroll_run->update([
+            'status' => 'posted',
+            'posted_by' => auth()->id(),
+            'posted_at' => now(),
+        ]);
+    }
+
+    private function periodRunsQuery(Request $request, int $year, int $month, string $salaryType, string $status)
+    {
+        return PayrollRun::query()
+            ->where('salary_type', $salaryType)
+            ->where('year', $year)
+            ->where('month', $month)
+            ->where('status', $status)
+            ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->integer('branch_id')))
+            ->orderBy('branch_id');
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, PayrollRun>  $runs
+     * @return list<array<string, mixed>>
+     */
+    private function groupRunsIntoPeriodBatches($runs): array
+    {
+        $monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+        return $runs
+            ->groupBy(fn (PayrollRun $r) => $r->year.'-'.$r->month)
+            ->map(function ($periodRuns, $key) use ($monthNames) {
+                /** @var \Illuminate\Support\Collection<int, PayrollRun> $periodRuns */
+                $first = $periodRuns->first();
+                $branches = $periodRuns
+                    ->sortBy(fn (PayrollRun $r) => $r->branch?->branch_code ?? '')
+                    ->values()
+                    ->map(fn (PayrollRun $r) => [
+                        'id' => $r->id,
+                        'branch' => $r->branch
+                            ? trim($r->branch->name.(filled($r->branch->branch_code) ? ' ('.$r->branch->branch_code.')' : ''))
+                            : '—',
+                        'status' => $r->status,
+                        'employee_count' => $r->employee_count,
+                        'total_net' => (float) $r->total_net,
+                        'processed_at' => $r->processed_at?->format('d-m-Y H:i'),
+                        'posted_at' => $r->posted_at?->format('d-m-Y H:i'),
+                    ])->values()->all();
+
+                return [
+                    'year' => $first->year,
+                    'month' => $first->month,
+                    'period_label' => ($monthNames[$first->month] ?? $first->month).' '.$first->year,
+                    'salary_type' => strtoupper($first->salary_type),
+                    'bonus_label' => $first->salary_type === 'bonus' && $first->bonusConfiguration
+                        ? trim(($first->bonusConfiguration->bonusType?->name ?? 'Bonus').' — '.$first->bonusConfiguration->name)
+                        : null,
+                    'branch_count' => count($branches),
+                    'employee_count' => (int) $periodRuns->sum('employee_count'),
+                    'total_net' => (float) $periodRuns->sum('total_net'),
+                    'processed_at' => $periodRuns->max('processed_at')?->format('d-m-Y H:i'),
+                    'posted_at' => $periodRuns->max('posted_at')?->format('d-m-Y H:i'),
+                    'branches' => $branches,
+                ];
+            })
+            ->sortByDesc(fn (array $batch) => sprintf('%04d-%02d', $batch['year'], $batch['month']))
+            ->values()
+            ->all();
     }
 
     private function resolvePostContext(Request $request, ?PayrollRun $run = null): string
@@ -351,7 +561,15 @@ class SalaryPostController extends Controller
                 'input_value' => (float) $line->input_value,
                 'computed_amount' => (float) $line->computed_amount,
                 'sort_order' => $line->sort_order,
+                'is_loan' => (bool) ($line->head?->is_loan_head ?? preg_match('/\s—\sLN-/', $line->head_name)),
             ])->values(),
+            'loan_deductions' => $p->lines
+                ->filter(fn (PayslipLine $line) => $line->type === 'deduction' && ($line->head?->is_loan_head || preg_match('/\s—\sLN-/', $line->head_name)))
+                ->map(fn (PayslipLine $line) => [
+                    'head_name' => $line->head_name,
+                    'amount' => (float) $line->computed_amount,
+                ])
+                ->values(),
         ];
 
         if ($bonusConfig) {

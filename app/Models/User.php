@@ -121,11 +121,18 @@ class User extends Authenticatable
         ];
     }
 
+    /** @var list<string>|null */
+    private ?array $resolvedPermissions = null;
+
     /**
      * @return list<string>
      */
     private function allPermissionsFromRoles(): array
     {
+        if ($this->resolvedPermissions !== null) {
+            return $this->resolvedPermissions;
+        }
+
         $set = [];
         $this->loadMissing(['role', 'roles']);
 
@@ -143,7 +150,9 @@ class User extends Authenticatable
             $merge($role);
         }
 
-        return array_keys($set);
+        $this->resolvedPermissions = array_keys($set);
+
+        return $this->resolvedPermissions;
     }
 
     // Helper method to check permissions

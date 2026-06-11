@@ -9,9 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { Plus, Search, UserCheck } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type AssignmentRow = {
     id: number;
@@ -19,7 +21,7 @@ type AssignmentRow = {
     released_date: string | null;
     notes: string | null;
     fixed_asset?: { id: number; asset_tag: string; name: string; branch?: { name: string } };
-    employee?: { employee_id: string; first_name: string; last_name: string };
+    employee?: EmployeeNameFields & { employee_id: string };
     assigned_by_user?: { name: string };
 };
 
@@ -95,7 +97,7 @@ export default function AssetAssignmentIndex({
                         <ComboSelect
                             value={branchId}
                             onChange={(v) => setBranchId(v)}
-                            items={branches.map((b) => ({ value: b.id, label: b.is_head_office ? `${b.name} (HO)` : b.name }))}
+                            items={branchComboSelectItems(branches, { numericValue: true })}
                             placeholder="All branches"
                             className="min-w-[180px]"
                         />
@@ -137,7 +139,7 @@ export default function AssetAssignmentIndex({
                                             <div className="text-xs text-muted-foreground">{row.fixed_asset?.name}</div>
                                         </TableCell>
                                         <TableCell>
-                                            {row.employee ? `${row.employee.first_name} ${row.employee.last_name}` : '—'}
+                                            {row.employee ? employeeDisplayName(row.employee) : '—'}
                                             <div className="text-xs text-muted-foreground">{row.employee?.employee_id}</div>
                                         </TableCell>
                                         <TableCell>{row.fixed_asset?.branch?.name ?? '—'}</TableCell>

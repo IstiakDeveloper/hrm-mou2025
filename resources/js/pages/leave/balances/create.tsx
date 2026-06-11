@@ -19,11 +19,10 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { ArrowLeft, CalendarDays, User } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
 }
 
@@ -122,7 +121,7 @@ export default function Create({ employees, leaveTypes, currentYear, years }: Cr
                   <SelectContent>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employee.first_name} {employee.last_name} ({employee.employee_id})
+                        {employeeDisplayName(employee)} ({employee.employee_id})
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -7,11 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { hasAppPermission } from '@/lib/permissions';
 import { type SharedData } from '@/types';
 import { Boxes, Edit, Eye, Plus, Search } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type BranchOpt = { id: number; name: string; branch_code: string | null; is_head_office: boolean };
 type CategoryOpt = { id: number; code: string; name: string };
@@ -26,7 +28,7 @@ type AssetRow = {
     book_value: string | null;
     category?: { id: number; code: string; name: string };
     branch?: { id: number; name: string; is_head_office: boolean };
-    custodian?: { id: number; employee_id: string; first_name: string; last_name: string } | null;
+    custodian?: (EmployeeNameFields & { id: number; employee_id: string }) | null;
 };
 
 const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -116,11 +118,7 @@ export default function FixedAssetIndex({
                         <ComboSelect
                             value={branchId}
                             onChange={(v) => setBranchId(v)}
-                            items={branches.map((b) => ({
-                                value: b.id,
-                                label: b.is_head_office ? `${b.name} (HO)` : b.name,
-                                keywords: b.branch_code ?? '',
-                            }))}
+                            items={branchComboSelectItems(branches, { numericValue: true })}
                             placeholder="All branches"
                         />
                         <ComboSelect
@@ -169,7 +167,7 @@ export default function FixedAssetIndex({
                                         <TableCell>{row.branch?.name ?? '—'}</TableCell>
                                         <TableCell>
                                             {row.custodian
-                                                ? `${row.custodian.first_name} ${row.custodian.last_name}`
+                                                ? employeeDisplayName(row.custodian)
                                                 : '—'}
                                         </TableCell>
                                         <TableCell>{row.book_value ?? row.purchase_cost ?? '—'}</TableCell>

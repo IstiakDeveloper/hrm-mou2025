@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
+import { useEmployeeLookup } from '@/lib/employee-lookup';
 import { Label } from '@/components/ui/label';
-import { formatPayrollBranchLabel, sortPayrollBranches, type PayrollBranchOption } from '@/lib/payroll-branches';
+import { branchComboSelectItems, type PayrollBranchOption } from '@/lib/payroll-branches';
 
 type Option = { id: number; name: string | null };
 type EmpOption = {
@@ -70,7 +71,7 @@ function FilterSelect({
                 items={items}
                 placeholder={placeholder}
                 disabled={disabled}
-                className="h-10 bg-white"
+                className="h-8.5 bg-white text-xs"
             />
         </PayrollField>
     );
@@ -96,20 +97,13 @@ export function PayrollBranchSelect({
     disabled?: boolean;
 }) {
     const items = useMemo(() => {
-        const sorted = sortPayrollBranches(branches);
         const list: ComboSelectItem<string>[] = [];
         if (allowAll && !required) {
             list.push({ value: ALL_VALUE, label: allLabel });
         } else if (required) {
             list.push({ value: ALL_VALUE, label: 'Select branch', disabled: true });
         }
-        for (const b of sorted) {
-            list.push({
-                value: String(b.id),
-                label: formatPayrollBranchLabel(b),
-                keywords: [b.branch_code, b.name].filter(Boolean).join(' '),
-            });
-        }
+        list.push(...branchComboSelectItems(branches));
         return list;
     }, [allLabel, allowAll, branches, required]);
 
@@ -121,7 +115,7 @@ export function PayrollBranchSelect({
                 items={items}
                 placeholder={allowAll && !required ? allLabel : 'Select branch'}
                 disabled={disabled}
-                className="h-10 bg-white"
+                className="h-8.5 bg-white text-xs"
             />
         </PayrollField>
     );
@@ -139,6 +133,8 @@ export function PayrollEmployeeSelect({
     showPfBalance = false,
     disableZeroPfBalance = false,
     comboPortal = true,
+    branchId,
+    payrollReady = false,
 }: {
     label?: string;
     value: string;
@@ -151,7 +147,13 @@ export function PayrollEmployeeSelect({
     showPfBalance?: boolean;
     disableZeroPfBalance?: boolean;
     comboPortal?: boolean;
+    branchId?: string;
+    payrollReady?: boolean;
 }) {
+    const useLookup = employees.length === 0;
+    const lookup = useEmployeeLookup({ enabled: useLookup, branchId, limit: 50, payrollReady });
+    const employeeSource = useLookup ? lookup.employees : employees;
+
     const items = useMemo(() => {
         const list: ComboSelectItem<string>[] = [];
         if (allowAll && !required) {
@@ -159,7 +161,7 @@ export function PayrollEmployeeSelect({
         } else if (required) {
             list.push({ value: ALL_VALUE, label: 'Select employee', disabled: true });
         }
-        for (const e of employees) {
+        for (const e of employeeSource) {
             const pin = e.pin || e.employee_id || '';
             const name = e.name_en || '';
             const base = [pin, name].filter(Boolean).join(' — ') || `Employee #${e.id}`;
@@ -178,7 +180,7 @@ export function PayrollEmployeeSelect({
             });
         }
         return list;
-    }, [allLabel, allowAll, disableZeroPfBalance, employees, required, showPfBalance]);
+    }, [allLabel, allowAll, disableZeroPfBalance, employeeSource, required, showPfBalance]);
 
     return (
         <PayrollField label={label} required={required}>
@@ -189,7 +191,7 @@ export function PayrollEmployeeSelect({
                 placeholder={required ? 'Search employee…' : allLabel}
                 disabled={disabled}
                 portal={comboPortal}
-                className="h-10 bg-white"
+                className="h-8.5 bg-white text-xs"
             />
         </PayrollField>
     );
@@ -235,7 +237,7 @@ export function PayrollYearSelect({
                 items={items}
                 placeholder={allowAll ? allLabel : 'Select year'}
                 disabled={disabled}
-                className="h-10 bg-white"
+                className="h-8.5 bg-white text-xs"
             />
         </PayrollField>
     );
@@ -281,7 +283,7 @@ export function PayrollMonthSelect({
                 items={items}
                 placeholder={allowAll ? allLabel : 'Select month'}
                 disabled={disabled}
-                className="h-10 bg-white"
+                className="h-8.5 bg-white text-xs"
             />
         </PayrollField>
     );
@@ -380,7 +382,7 @@ export function PayrollComboField({
                 items={items}
                 placeholder={placeholder ?? 'Select…'}
                 disabled={disabled}
-                className="h-10 bg-white"
+                className="h-8.5 bg-white text-xs"
             />
         </PayrollField>
     );
@@ -395,11 +397,14 @@ export function PayrollFilterGrid({
     programs,
     projects,
     employees,
+    employeeTypes,
     showEmployee = true,
+    showEmployeeType = false,
     showProgram = true,
     showProject = true,
     showBranch = true,
     branchRequired = false,
+    payrollReadyEmployees = false,
 }: {
     filters: Record<string, string>;
     setFilter: (key: string, value: string) => void;
@@ -409,14 +414,17 @@ export function PayrollFilterGrid({
     programs: Option[];
     projects: Option[];
     employees: EmpOption[];
+    employeeTypes?: Option[];
     showEmployee?: boolean;
+    showEmployeeType?: boolean;
     showProgram?: boolean;
     showProject?: boolean;
     showBranch?: boolean;
     branchRequired?: boolean;
+    payrollReadyEmployees?: boolean;
 }) {
     return (
-        <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {showBranch && (
                 <PayrollBranchSelect
                     value={filters.branch_id}
@@ -434,11 +442,22 @@ export function PayrollFilterGrid({
             )}
             <FilterSelect label="Department" value={filters.department_id} onChange={(v) => setFilter('department_id', v)} options={departments} placeholder="All departments" />
             <FilterSelect label="Designation" value={filters.designation_id} onChange={(v) => setFilter('designation_id', v)} options={designations} placeholder="All designations" />
+            {showEmployeeType && employeeTypes ? (
+                <FilterSelect
+                    label="Employee type"
+                    value={filters.employee_type_id}
+                    onChange={(v) => setFilter('employee_type_id', v)}
+                    options={employeeTypes}
+                    placeholder="All types"
+                />
+            ) : null}
             {showEmployee && (
                 <PayrollEmployeeSelect
                     value={filters.employee_id}
                     onChange={(v) => setFilter('employee_id', v)}
                     employees={employees}
+                    branchId={filters.branch_id || undefined}
+                    payrollReady={payrollReadyEmployees}
                 />
             )}
         </div>
@@ -457,8 +476,8 @@ export function PayrollField({
     className?: string;
 }) {
     return (
-        <div className={className ?? 'min-w-0 space-y-1.5'}>
-            <Label className="text-sm font-medium text-slate-700">
+        <div className={className ?? 'min-w-0 space-y-1'}>
+            <Label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
                 {label}
                 {required && <span className="text-red-500"> *</span>}
             </Label>

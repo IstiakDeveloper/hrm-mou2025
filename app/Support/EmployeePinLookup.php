@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Employee;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Resolves employees when spreadsheet PINs omit leading zeros (e.g. CSV "1015" vs DB "01015").
@@ -38,14 +39,21 @@ final class EmployeePinLookup
             return null;
         }
 
-        return Employee::query()
-            ->where(function ($q) use ($vs) {
-                foreach ($vs as $v) {
-                    $q->orWhere(function ($qq) use ($v) {
-                        $qq->where('pin', $v)->orWhere('employee_id', $v);
-                    });
-                }
-            })
-            ->first();
+        $hasDeviceUserId = Schema::hasColumn('employees', 'device_user_id');
+
+        $query = Employee::query()->where(function ($q) use ($vs, $hasDeviceUserId) {
+            foreach ($vs as $v) {
+                $q->orWhere(function ($qq) use ($v, $hasDeviceUserId) {
+                    $qq->where('pin', $v)
+                        ->orWhere('employee_id', $v);
+
+                    if ($hasDeviceUserId) {
+                        $qq->orWhere('device_user_id', $v);
+                    }
+                });
+            }
+        });
+
+        return $query->first();
     }
 }

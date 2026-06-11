@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import BulkEmailButton from '@/components/BulkEmailButton';
 import { PageSurface } from '@/components/page-surface';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Role {
     id: number;
@@ -61,12 +62,9 @@ interface UserData {
     email: string;
     active_status: boolean;
     roles: Role[];
-    employee: {
+    employee: (EmployeeNameFields & {
         employee_id: string;
-        first_name?: string | null;
-        last_name?: string | null;
-        name_en?: string | null;
-    } | null;
+    }) | null;
     branch: {
         name: string;
     } | null;
@@ -157,17 +155,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
 
     const getUserFullName = (user: UserData) => {
         if (user.employee) {
-            const nameEn = (user.employee.name_en ?? '').trim();
-            if (nameEn) {
-                return nameEn;
-            }
-
-            const employeeName = [user.employee.first_name, user.employee.last_name]
-                .map((part) => (part ?? '').trim())
-                .filter(Boolean)
-                .join(' ');
-
-            return employeeName || user.name;
+            return employeeDisplayName(user.employee, user.name);
         }
         return user.name;
     };

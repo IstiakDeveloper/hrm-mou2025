@@ -37,7 +37,7 @@ class DepartmentController extends Controller
         $headEmployees = [];
         if (! empty($headEmployeeIds)) {
             $employees = \App\Models\Employee::whereIn('id', $headEmployeeIds)
-                ->select('id', 'employee_id', 'first_name', 'last_name', 'photo')
+                ->select('id', 'employee_id', 'name_en', 'photo')
                 ->get()
                 ->keyBy('id')
                 ->toArray();
@@ -195,7 +195,7 @@ class DepartmentController extends Controller
 
         // Directly fetch the head employee if it exists
         if ($department->head_employee_id) {
-            $headEmployee = Employee::select('id', 'employee_id', 'first_name', 'last_name', 'photo')
+            $headEmployee = Employee::select('id', 'employee_id', 'name_en', 'photo')
                 ->find($department->head_employee_id);
 
             if ($headEmployee) {

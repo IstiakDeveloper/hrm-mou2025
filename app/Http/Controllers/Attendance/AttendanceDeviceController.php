@@ -158,9 +158,9 @@ class AttendanceDeviceController extends Controller
      */
     public function biometricIds()
     {
-        $employees = Employee::select('id', 'employee_id', 'first_name', 'last_name', 'biometric_id', 'department_id', 'current_branch_id')
+        $employees = Employee::select('id', 'employee_id', 'name_en', 'biometric_id', 'department_id', 'current_branch_id')
             ->with(['department:id,name', 'branch:id,name'])
-            ->orderBy('first_name')
+            ->orderBy('name_en')
             ->paginate(15);
 
         return Inertia::render('attendance/devices/biometric-ids', [
@@ -181,7 +181,7 @@ class AttendanceDeviceController extends Controller
         $employee->save();
 
         return redirect()->route('attendance.devices.biometric-ids')
-            ->with('success', "Biometric ID updated for {$employee->first_name} {$employee->last_name}.");
+            ->with('success', 'Biometric ID updated for '.($employee->name_en ?? $employee->full_name_en ?? $employee->employee_id).'.');
     }
 
     /**

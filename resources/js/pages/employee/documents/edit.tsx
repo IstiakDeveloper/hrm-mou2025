@@ -22,11 +22,10 @@ import {
 } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
 }
 
@@ -87,7 +86,7 @@ export default function EmployeeDocumentEdit({ employee, document, documentTypes
 
   return (
     <Layout>
-      <Head title={`Edit Document - ${employee.first_name} ${employee.last_name}`} />
+      <Head title={`Edit Document - ${employeeDisplayName(employee)}`} />
 
       <div className="container mx-auto py-8">
         <div className="mb-6">
@@ -103,7 +102,7 @@ export default function EmployeeDocumentEdit({ employee, document, documentTypes
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Edit Document</h1>
           <p className="mt-1 text-gray-500">
-            Update document information for {employee.first_name} {employee.last_name} ({employee.employee_id})
+            Update document information for {employeeDisplayName(employee)} ({employee.employee_id})
           </p>
         </div>
 

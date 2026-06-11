@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import {
     Table,
@@ -46,6 +47,7 @@ import { Badge } from '@/components/ui/badge';
 import { format, parse } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department {
     id: number;
@@ -62,10 +64,8 @@ interface Designation {
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department: Department;
     designation: Designation;
@@ -620,7 +620,7 @@ export default function AttendanceMonthly({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Branches</SelectItem>
-                                    {branches.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                                    {sortPayrollBranches(branches).map((b) => <SelectItem key={b.id} value={b.id.toString()}>{formatBranchSelectLabel(b)}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         )}
@@ -718,7 +718,7 @@ export default function AttendanceMonthly({
                                                     <div className="flex items-center space-x-2">
                                                         <User className="h-4 w-4 text-gray-400" />
                                                         <div>
-                                                            <div className="font-medium">{employee.first_name} {employee.last_name}</div>
+                                                            <div className="font-medium">{employeeDisplayName(employee)}</div>
                                                             <div className="text-xs text-gray-500 flex items-center">
                                                                 <span className="mr-1">{employee.employee_id}</span>
                                                                 <span className="mx-1">•</span>

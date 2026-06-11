@@ -53,7 +53,7 @@ class LeaveApprovedNotification extends Mailable
     public function build()
     {
         $subject = 'Leave Application Approved';
-        $employeeName = $this->employee->first_name . ' ' . $this->employee->last_name;
+        $employeeName = $this->employee->name_en ?? $this->employee->full_name_en ?? '';
 
         return $this->subject($subject)
             ->markdown('emails.leave.approved')

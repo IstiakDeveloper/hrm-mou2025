@@ -30,6 +30,7 @@ import { ArrowLeft, CalendarIcon, Trash2, Upload, InfoIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
+import { employeeDisplayName } from '@/lib/employee-name';
 
 // Rest of the imports and interfaces remain the same
 
@@ -403,7 +404,7 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
                                 <div className="space-y-4">
                                     <div>
                                         <p className="text-sm font-medium text-gray-500">Name</p>
-                                        <p className="font-medium">{employee.first_name} {employee.last_name}</p>
+                                        <p className="font-medium">{employeeDisplayName(employee)}</p>
                                     </div>
                                     <div>
                                         <p className="text-sm font-medium text-gray-500">Employee ID</p>
@@ -557,7 +558,7 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
                                     <SelectContent>
                                         {employees.map((employee) => (
                                             <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                {employee.first_name} {employee.last_name} ({employee.employee_id})
+                                                {employeeDisplayName(employee)} ({employee.employee_id})
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

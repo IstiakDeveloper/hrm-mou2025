@@ -1,0 +1,238 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\LoanPolicy;
+use Illuminate\Database\Seeder;
+
+class LoanPolicySeeder extends Seeder
+{
+    /**
+     * Legacy loan policies from the previous HRM system.
+     * Safe to run multiple times — upserts by policy code.
+     */
+    public function run(): void
+    {
+        $policies = [
+            [
+                'code' => '001',
+                'name' => 'PF- 1 YR',
+                'loan_type' => 'pf_loan',
+                'tenure_years' => 1,
+                'total_installments' => 12,
+                'default_interest_rate' => 7,
+                'calculation_method' => 'reducing',
+                'collection_method' => 'reducing',
+                'install_amount_calculation' => 86.53,
+                'min_amount' => 1000,
+                'max_amount' => 500000,
+                'sort_order' => 1,
+            ],
+            [
+                'code' => '002',
+                'name' => 'PF- 2 YR',
+                'loan_type' => 'pf_loan',
+                'tenure_years' => 2,
+                'total_installments' => 24,
+                'default_interest_rate' => 7,
+                'calculation_method' => 'reducing',
+                'collection_method' => 'reducing',
+                'install_amount_calculation' => 44.77,
+                'min_amount' => 1000,
+                'max_amount' => 500000,
+                'sort_order' => 2,
+            ],
+            [
+                'code' => '003',
+                'name' => 'PF- 1.5 YR',
+                'loan_type' => 'pf_loan',
+                'tenure_years' => 2,
+                'total_installments' => 18,
+                'default_interest_rate' => 7,
+                'calculation_method' => 'reducing',
+                'collection_method' => 'reducing',
+                'install_amount_calculation' => 56.68,
+                'min_amount' => 1000,
+                'max_amount' => 500000,
+                'sort_order' => 3,
+            ],
+            [
+                'code' => '004',
+                'name' => 'PF- 3 YR',
+                'loan_type' => 'pf_loan',
+                'tenure_years' => 3,
+                'total_installments' => 36,
+                'default_interest_rate' => 7,
+                'calculation_method' => 'reducing',
+                'collection_method' => 'reducing',
+                'install_amount_calculation' => 30.88,
+                'min_amount' => 1000,
+                'max_amount' => 500000,
+                'sort_order' => 4,
+            ],
+            [
+                'code' => '009',
+                'name' => 'MT- 50 Mon',
+                'loan_type' => 'motorcycle_loan',
+                'tenure_years' => 5,
+                'total_installments' => 50,
+                'default_interest_rate' => 0,
+                'calculation_method' => 'flat',
+                'collection_method' => 'flat',
+                'install_amount_calculation' => 88.3,
+                'min_amount' => 10000,
+                'max_amount' => 200000,
+                'sort_order' => 9,
+            ],
+            [
+                'code' => '010',
+                'name' => 'MT- 45 Mon',
+                'loan_type' => 'motorcycle_loan',
+                'tenure_years' => 5,
+                'total_installments' => 45,
+                'default_interest_rate' => 0,
+                'calculation_method' => 'flat',
+                'collection_method' => 'flat',
+                'install_amount_calculation' => 88.3,
+                'min_amount' => 10000,
+                'max_amount' => 200000,
+                'sort_order' => 10,
+            ],
+            [
+                'code' => '015',
+                'name' => 'LP - 40000 (Old)',
+                'loan_type' => 'laptop_loan',
+                'tenure_years' => 3,
+                'total_installments' => 27,
+                'default_interest_rate' => 0,
+                'calculation_method' => 'flat',
+                'collection_method' => 'flat',
+                'install_amount_calculation' => 88.3,
+                'min_amount' => 1000,
+                'max_amount' => 40000,
+                'sort_order' => 15,
+            ],
+            [
+                'code' => '016',
+                'name' => 'LP - 30000 (Old)',
+                'loan_type' => 'laptop_loan',
+                'tenure_years' => 2,
+                'total_installments' => 20,
+                'default_interest_rate' => 0,
+                'calculation_method' => 'flat',
+                'collection_method' => 'flat',
+                'install_amount_calculation' => 88.3,
+                'min_amount' => 1000,
+                'max_amount' => 30000,
+                'sort_order' => 16,
+            ],
+            [
+                'code' => '017',
+                'name' => 'LP - 32000 (Old)',
+                'loan_type' => 'laptop_loan',
+                'tenure_years' => 2,
+                'total_installments' => 22,
+                'default_interest_rate' => 0,
+                'calculation_method' => 'flat',
+                'collection_method' => 'flat',
+                'install_amount_calculation' => 88.3,
+                'min_amount' => 1000,
+                'max_amount' => 32000,
+                'sort_order' => 17,
+            ],
+            [
+                'code' => '018',
+                'name' => 'LP - 31000 (Old)',
+                'loan_type' => 'laptop_loan',
+                'tenure_years' => 2,
+                'total_installments' => 21,
+                'default_interest_rate' => 0,
+                'calculation_method' => 'flat',
+                'collection_method' => 'flat',
+                'install_amount_calculation' => 88.3,
+                'min_amount' => 1000,
+                'max_amount' => 31000,
+                'sort_order' => 18,
+            ],
+            [
+                'code' => '019',
+                'name' => 'LP - 35000 (Old)',
+                'loan_type' => 'laptop_loan',
+                'tenure_years' => 2,
+                'total_installments' => 23,
+                'default_interest_rate' => 0,
+                'calculation_method' => 'flat',
+                'collection_method' => 'flat',
+                'install_amount_calculation' => 88.3,
+                'min_amount' => 1000,
+                'max_amount' => 35000,
+                'sort_order' => 19,
+            ],
+            [
+                'code' => '030',
+                'name' => 'Home Loan-(Flat)-10',
+                'loan_type' => 'other',
+                'tenure_years' => 10,
+                'total_installments' => 120,
+                'default_interest_rate' => 7,
+                'calculation_method' => 'reducing',
+                'collection_method' => 'reducing',
+                'install_amount_calculation' => 11.61,
+                'min_amount' => 10000,
+                'max_amount' => 5000000,
+                'sort_order' => 30,
+            ],
+            [
+                'code' => '032',
+                'name' => 'Home Loan-(Flat)-15',
+                'loan_type' => 'other',
+                'tenure_years' => 15,
+                'total_installments' => 180,
+                'default_interest_rate' => 7,
+                'calculation_method' => 'reducing',
+                'collection_method' => 'reducing',
+                'install_amount_calculation' => 8.99,
+                'min_amount' => 10000,
+                'max_amount' => 5000000,
+                'sort_order' => 32,
+            ],
+        ];
+
+        foreach ($policies as $row) {
+            $installments = (int) $row['total_installments'];
+
+            LoanPolicy::query()->updateOrCreate(
+                ['code' => $row['code']],
+                [
+                    'name' => $row['name'],
+                    'loan_type' => $row['loan_type'],
+                    'tenure_years' => $row['tenure_years'],
+                    'min_amount' => $row['min_amount'],
+                    'max_amount' => $row['max_amount'],
+                    'min_tenure_months' => $installments,
+                    'max_tenure_months' => $installments,
+                    'total_installments' => $installments,
+                    'default_interest_rate' => $row['default_interest_rate'],
+                    'calculation_method' => $row['calculation_method'],
+                    'collection_method' => $row['collection_method'],
+                    'is_amortization' => true,
+                    'install_amount_calculation' => $row['install_amount_calculation'],
+                    'install_amount_view' => true,
+                    'max_loan_limit_amount' => 0,
+                    'max_loan_limit_percentage' => 0,
+                    'grace_months' => 1,
+                    'interval_months' => 1,
+                    'description' => 'Imported from legacy HRM loan policy master.',
+                    'sort_order' => $row['sort_order'],
+                    'is_active' => true,
+                ],
+            );
+        }
+
+        // Remove placeholder policies from initial migration — legacy system has exactly 13 policies.
+        LoanPolicy::query()
+            ->whereIn('code', ['PF_LOAN_STD', 'MC_LOAN_STD', 'LAPTOP_LOAN_STD', 'OTHER_LOAN_STD'])
+            ->whereDoesntHave('loans')
+            ->delete();
+    }
+}

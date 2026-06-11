@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
+use App\Services\EmployeeLoanService;
 use App\Services\EmployeeProvidentFundService;
 use App\Services\PayrollCalculationService;
 use App\Support\PayrollFormHelper;
@@ -26,6 +27,7 @@ class SalaryProcessController extends Controller
     public function __construct(
         protected PayrollCalculationService $calculator,
         protected EmployeeProvidentFundService $pfService,
+        protected EmployeeLoanService $loanService,
     ) {}
 
     public function index(Request $request)
@@ -38,6 +40,8 @@ class SalaryProcessController extends Controller
             ->get()
             ->map(fn (PayrollRun $r) => [
                 'id' => $r->id,
+                'year' => $r->year,
+                'month' => $r->month,
                 'label' => sprintf(
                     '%s / %s %d — %s',
                     strtoupper($r->salary_type),
@@ -128,7 +132,10 @@ class SalaryProcessController extends Controller
             }
 
             return redirect()
-                ->route('salary-post.show', $result['run_id'])
+                ->route('salary-post.period', [
+                    'year' => $validated['year'],
+                    'month' => $validated['month'],
+                ])
                 ->with('success', $result['message']);
         } catch (ValidationException $e) {
             throw $e;
@@ -313,54 +320,90 @@ class SalaryProcessController extends Controller
         $totalNet = 0.0;
         $count = 0;
         $processCarbon = Carbon::parse($processDate);
+        $payslipLineRows = [];
+        $now = now();
 
-        foreach ($employees as $employee) {
-            $calc = $this->calculator->calculateForEmployee(
-                $employee,
-                $processCarbon,
-                $validated['salary_type']
-            );
+        $this->calculator->preloadBatch(
+            $employees,
+            $processCarbon,
+            $validated['salary_type'],
+            (int) $validated['year'],
+            (int) $validated['month'],
+        );
 
-            $payslip = Payslip::query()->create([
-                'payroll_run_id' => $run->id,
-                'employee_id' => $employee->id,
-                'payscale_id' => $employee->payscale_id,
-                'salary_grade_id' => $employee->salary_grade_id,
-                'salary_step_id' => $employee->salary_step_id,
-                'grade_label' => $calc['grade_label'] ?? $employee->salaryGrade?->name,
-                'step_number' => $calc['step_number'] ?? $employee->salaryStep?->step_number,
-                'basic_salary' => $calc['basic_salary'],
-                'gross_salary' => $calc['gross_salary'],
-                'total_deduction' => $calc['total_deduction'],
-                'net_payable' => $calc['net_payable'],
-                'is_withheld' => $calc['is_withheld'],
-            ]);
-
-            foreach ($calc['lines'] as $line) {
-                PayslipLine::query()->create([
-                    'payslip_id' => $payslip->id,
-                    ...$line,
-                ]);
-            }
-
-            if (
-                $validated['salary_type'] === 'salary'
-                && $this->pfService->isEligible($employee)
-                && ($calc['pf_employee_contribution'] ?? 0) > 0
-            ) {
-                $this->pfService->recordForPayslip(
+        try {
+            foreach ($employees as $employee) {
+                $calc = $this->calculator->calculateForEmployee(
                     $employee,
-                    $payslip,
-                    (float) $calc['pf_employee_contribution'],
-                    (float) $calc['pf_employer_contribution'],
-                    $processCarbon
+                    $processCarbon,
+                    $validated['salary_type'],
+                    (int) $validated['year'],
+                    (int) $validated['month'],
                 );
-            }
 
-            $totalGross += $calc['gross_salary'];
-            $totalDeduction += $calc['total_deduction'];
-            $totalNet += $calc['net_payable'];
-            $count++;
+                $payslip = Payslip::query()->create([
+                    'payroll_run_id' => $run->id,
+                    'employee_id' => $employee->id,
+                    'payscale_id' => $employee->payscale_id,
+                    'salary_grade_id' => $employee->salary_grade_id,
+                    'salary_step_id' => $employee->salary_step_id,
+                    'grade_label' => $calc['grade_label'] ?? $employee->salaryGrade?->name,
+                    'step_number' => $calc['step_number'] ?? $employee->salaryStep?->step_number,
+                    'basic_salary' => $calc['basic_salary'],
+                    'gross_salary' => $calc['gross_salary'],
+                    'total_deduction' => $calc['total_deduction'],
+                    'net_payable' => $calc['net_payable'],
+                    'is_withheld' => $calc['is_withheld'],
+                ]);
+
+                foreach ($calc['lines'] as $line) {
+                    $payslipLineRows[] = [
+                        'payslip_id' => $payslip->id,
+                        'salary_head_id' => $line['salary_head_id'],
+                        'head_name' => $line['head_name'],
+                        'type' => $line['type'],
+                        'amount_type' => $line['amount_type'],
+                        'input_value' => $line['input_value'],
+                        'computed_amount' => $line['computed_amount'],
+                        'sort_order' => $line['sort_order'],
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+
+                if (
+                    $validated['salary_type'] === 'salary'
+                    && $this->pfService->isEligible($employee, $processCarbon)
+                    && ($calc['pf_employee_contribution'] ?? 0) > 0
+                ) {
+                    $this->pfService->recordForPayslip(
+                        $employee,
+                        $payslip,
+                        (float) $calc['pf_employee_contribution'],
+                        (float) $calc['pf_employer_contribution'],
+                        $processCarbon
+                    );
+                }
+
+                if (
+                    $validated['salary_type'] === 'salary'
+                    && ! empty($calc['loan_deductions'])
+                    && ! ($calc['is_withheld'] ?? false)
+                ) {
+                    $this->loanService->scheduleInstallmentsForPayslip($payslip, $calc['loan_deductions']);
+                }
+
+                $totalGross += $calc['gross_salary'];
+                $totalDeduction += $calc['total_deduction'];
+                $totalNet += $calc['net_payable'];
+                $count++;
+            }
+        } finally {
+            $this->calculator->clearBatch();
+        }
+
+        foreach (array_chunk($payslipLineRows, 500) as $chunk) {
+            PayslipLine::query()->insert($chunk);
         }
 
         $run->update([

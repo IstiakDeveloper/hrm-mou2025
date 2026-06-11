@@ -67,11 +67,9 @@ interface AttendanceDevice {
   last_sync?: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
   employee_id: string;
-  first_name: string;
-  last_name: string;
   current_branch_id: number;
 }
 

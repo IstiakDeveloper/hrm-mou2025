@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Read first worksheet of an XLSX file; print JSON array of rows (stdout)."""
+import io
 import json
 import sys
+
+if hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 import zipfile
 import xml.etree.ElementTree as ET
 import re

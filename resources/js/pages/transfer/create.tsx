@@ -1,4 +1,4 @@
-import React, { useState, FormEvent, useEffect } from 'react';
+import React, { useMemo, useState, FormEvent, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
@@ -29,11 +29,11 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department_id: number | null;
     designation_id: number | null;
@@ -72,6 +72,7 @@ interface CreateTransferProps {
 }
 
 export default function CreateTransfer({ employees, branches, departments, designations, suggestedOrderNo }: CreateTransferProps) {
+    const branchItems = useMemo(() => branchComboSelectItems(branches), [branches]);
     const [employeeId, setEmployeeId] = useState('');
     const [fromBranchId, setFromBranchId] = useState('');
     const [toBranchId, setToBranchId] = useState('');
@@ -184,8 +185,8 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                             placeholder="Search employee (PIN / name)…"
                                             items={employees.map((e) => ({
                                                 value: e.id,
-                                                label: `${e.employee_id} — ${e.first_name} ${e.last_name ?? ''}`.trim(),
-                                                keywords: `${e.employee_id} ${e.first_name} ${e.last_name ?? ''}`,
+                                                label: `${e.employee_id} — ${employeeDisplayName(e)}`.trim(),
+                                                keywords: `${e.employee_id} ${employeeDisplayName(e)}`,
                                             }))}
                                         />
                                         {errors.employee_id && (
@@ -210,11 +211,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                     onChange={(v) => setFromBranchId(v ?? '')}
                                                     placeholder="Select branch…"
                                                     disabled={!selectedEmployee}
-                                                    items={branches.map((b) => ({
-                                                        value: String(b.id),
-                                                        label: b.name,
-                                                        keywords: b.name,
-                                                    }))}
+                                                    items={branchItems}
                                                 />
                                                 {errors.from_branch_id && (
                                                     <p className="text-sm font-medium text-red-500">{errors.from_branch_id}</p>
@@ -272,11 +269,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                                     onChange={(v) => setToBranchId(v ?? '')}
                                                     placeholder="Select destination branch…"
                                                     disabled={!selectedEmployee}
-                                                    items={branches.map((b) => ({
-                                                        value: String(b.id),
-                                                        label: b.name,
-                                                        keywords: b.name,
-                                                    }))}
+                                                    items={branchItems}
                                                 />
                                                 {errors.to_branch_id && (
                                                     <p className="text-sm font-medium text-red-500">{errors.to_branch_id}</p>
@@ -389,7 +382,7 @@ export default function CreateTransfer({ employees, branches, departments, desig
                                     <div className="space-y-4">
                                         <div>
                                             <p className="text-sm font-medium text-gray-500">Name</p>
-                                            <p className="font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+                                            <p className="font-medium">{employeeDisplayName(selectedEmployee)}</p>
                                         </div>
                                         <div>
                                             <p className="text-sm font-medium text-gray-500">Employee ID</p>

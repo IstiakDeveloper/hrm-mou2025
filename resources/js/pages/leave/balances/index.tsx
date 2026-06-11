@@ -10,6 +10,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -31,6 +32,7 @@ import {
   Users
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import {
   Select,
   SelectContent,
@@ -65,10 +67,8 @@ interface LeaveType {
   days_allowed?: number;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
-  first_name: string;
-  last_name: string;
   employee_id: string;
   gender?: string | null;
   department: Department | null;
@@ -412,9 +412,9 @@ export default function LeaveBalancesIndex({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Branches</SelectItem>
-                    {branches && branches.map((b) => (
+                    {branches && sortPayrollBranches(branches).map((b) => (
                       <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.name}
+                        {formatBranchSelectLabel(b)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -474,7 +474,7 @@ export default function LeaveBalancesIndex({
                           </TableCell>
                       <TableCell>
                         <div className="font-medium">
-                          {`${employee.first_name || ''} ${employee.last_name || ''}`.trim()}
+                          {employeeDisplayName(employee)}
                         </div>
                         <div className="text-xs text-gray-500">
                           {employee.employee_id}

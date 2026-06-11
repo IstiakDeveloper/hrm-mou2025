@@ -1040,7 +1040,7 @@ class EmployeeDashboardController extends Controller
             ]);
 
             // Add document metadata
-            $mpdf->SetTitle('Employee Report - '.$employee->first_name.' '.$employee->last_name);
+            $mpdf->SetTitle('Employee Report - '.($employee->name_en ?? $employee->full_name_en ?? ''));
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
@@ -1062,7 +1062,7 @@ class EmployeeDashboardController extends Controller
             $mpdf->WriteHTML($html);
 
             // Set the download filename
-            $filename = 'Employee_Report_'.str_replace(' ', '_', $employee->first_name).'_'.date('Y-m-d').'.pdf';
+            $filename = 'Employee_Report_'.str_replace(' ', '_', $employee->name_en ?? $employee->employee_id ?? 'employee').'_'.date('Y-m-d').'.pdf';
 
             // Output the PDF
             return response()->make(
@@ -1135,7 +1135,7 @@ class EmployeeDashboardController extends Controller
             ]);
 
             // Add document metadata
-            $mpdf->SetTitle('Attendance Report - '.$employee->first_name.' '.$employee->last_name);
+            $mpdf->SetTitle('Attendance Report - '.($employee->name_en ?? $employee->full_name_en ?? ''));
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
@@ -1154,7 +1154,7 @@ class EmployeeDashboardController extends Controller
             $mpdf->WriteHTML($html);
 
             // Set the download filename
-            $filename = 'Attendance_Report_'.str_replace(' ', '_', $employee->first_name).'_'.date('Y-m-d').'.pdf';
+            $filename = 'Attendance_Report_'.str_replace(' ', '_', $employee->name_en ?? $employee->employee_id ?? 'employee').'_'.date('Y-m-d').'.pdf';
 
             // Output the PDF
             return response()->make(
@@ -1230,7 +1230,7 @@ class EmployeeDashboardController extends Controller
             ]);
 
             // Add document metadata
-            $mpdf->SetTitle('Leave Report - '.$employee->first_name.' '.$employee->last_name);
+            $mpdf->SetTitle('Leave Report - '.($employee->name_en ?? $employee->full_name_en ?? ''));
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
@@ -1255,7 +1255,7 @@ class EmployeeDashboardController extends Controller
             $mpdf->WriteHTML($html);
 
             // Set the download filename with filter info
-            $filename = 'Leave_Report_'.str_replace(' ', '_', $employee->first_name);
+            $filename = 'Leave_Report_'.str_replace(' ', '_', $employee->name_en ?? $employee->employee_id ?? 'employee');
 
             if ($filterMode === 'specific' && ! empty($includeLeaveTypes)) {
                 $filename .= '_'.count($includeLeaveTypes).'_types';
@@ -1477,7 +1477,7 @@ class EmployeeDashboardController extends Controller
             ]);
 
             // Add document metadata
-            $mpdf->SetTitle('Movement Report - '.$employee->first_name.' '.$employee->last_name);
+            $mpdf->SetTitle('Movement Report - '.($employee->name_en ?? $employee->full_name_en ?? ''));
             $mpdf->SetAuthor(config('app.name'));
             $mpdf->SetCreator(config('app.name'));
 
@@ -1495,7 +1495,7 @@ class EmployeeDashboardController extends Controller
             $mpdf->WriteHTML($html);
 
             // Set the download filename
-            $filename = 'Movement_Report_'.str_replace(' ', '_', $employee->first_name).'_'.date('Y-m-d').'.pdf';
+            $filename = 'Movement_Report_'.str_replace(' ', '_', $employee->name_en ?? $employee->employee_id ?? 'employee').'_'.date('Y-m-d').'.pdf';
 
             // Output the PDF
             return response()->make(
@@ -1547,16 +1547,16 @@ class EmployeeDashboardController extends Controller
     private function employeesForDashboardDropdown(User $user)
     {
         $q = Employee::query()
-            ->select('id', 'employee_id', 'first_name', 'name_en')
+            ->select('id', 'employee_id', 'name_en')
             ->with(['department', 'designation'])
             ->where('status', 'active')
             ->orderBy('name_en')
-            ->orderBy('first_name');
+            ->orderBy('name_en');
 
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->get()->map(function ($employee) {
-            $fullName = trim((string) ($employee->name_en ?? '')) ?: trim((string) ($employee->first_name ?? ''));
+            $fullName = trim((string) ($employee->name_en ?? $employee->full_name_en ?? ''));
 
             return [
                 'id' => $employee->id,

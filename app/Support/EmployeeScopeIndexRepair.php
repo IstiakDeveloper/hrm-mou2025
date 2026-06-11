@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Ensures employees.pin / nid / employee_id uniqueness for active employees only,
+ * Ensures employees.pin / nid_number / employee_id uniqueness for active employees only,
  * using virtual generated columns (MySQL + MariaDB + phpMyAdmin import safe).
  */
 final class EmployeeScopeIndexRepair
@@ -48,7 +48,7 @@ final class EmployeeScopeIndexRepair
             }
         }
 
-        foreach (['pin', 'nid', 'employee_id'] as $col) {
+        foreach (['pin', 'employee_id'] as $col) {
             try {
                 Schema::table('employees', function (Blueprint $table) use ($col) {
                     $table->dropUnique([$col]);
@@ -58,7 +58,7 @@ final class EmployeeScopeIndexRepair
         }
 
         $exprPin = 'CASE WHEN `status` IN '.self::EMPLOYED." AND `pin` IS NOT NULL AND `pin` <> '' THEN `pin` END";
-        $exprNid = 'CASE WHEN `status` IN '.self::EMPLOYED." AND `nid` IS NOT NULL AND `nid` <> '' THEN `nid` END";
+        $exprNid = 'CASE WHEN `status` IN '.self::EMPLOYED." AND `nid_number` IS NOT NULL AND `nid_number` <> '' THEN `nid_number` END";
         $exprEmpId = 'CASE WHEN `status` IN '.self::EMPLOYED." AND `employee_id` IS NOT NULL AND `employee_id` <> '' THEN `employee_id` END";
 
         DB::statement('ALTER TABLE `employees` ADD COLUMN `uq_scope_pin` VARCHAR(255) GENERATED ALWAYS AS ('.$exprPin.') VIRTUAL NULL');

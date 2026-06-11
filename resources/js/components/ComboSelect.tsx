@@ -41,13 +41,19 @@ export function ComboSelect<TValue extends string | number = string>({
 
     const filtered = useMemo(() => {
         const raw = query.trim().toLowerCase();
-        if (!raw) return items;
-        const tokens = raw.split(/\s+/).filter(Boolean);
-        return items.filter((i) => {
-            const hay = `${i.label} ${i.keywords ?? ''}`.toLowerCase();
-            return tokens.every((t) => hay.includes(t));
-        });
-    }, [items, query]);
+        let list = items;
+        if (raw) {
+            const tokens = raw.split(/\s+/).filter(Boolean);
+            list = items.filter((i) => {
+                const hay = `${i.label} ${i.keywords ?? ''}`.toLowerCase();
+                return tokens.every((t) => hay.includes(t));
+            });
+        }
+        if (selectedItem && list.some((i) => i.value === selectedItem.value)) {
+            return [selectedItem, ...list.filter((i) => i.value !== selectedItem.value)];
+        }
+        return list;
+    }, [items, query, selectedItem]);
 
     return (
         <Combobox

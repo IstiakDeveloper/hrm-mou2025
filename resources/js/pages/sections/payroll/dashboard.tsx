@@ -4,10 +4,13 @@ import type { LucideIcon } from 'lucide-react';
 import {
     ArrowUpRight,
     Award,
+    Banknote,
     BriefcaseBusiness,
     Building2,
+    Calculator,
     Layers,
     ListOrdered,
+    Pencil,
     Settings2,
     Wallet,
     FileBarChart2,
@@ -148,6 +151,8 @@ export default function PayrollDashboard({ stats, userRole }: Props) {
                         {can('payroll.view') && <ShortcutTile href={`/salary-heads${section}`} title="Salary heads" icon={Wallet} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-structures/manual${section}`} title="Salary structure (manual)" icon={Settings2} />}
                         {can('payroll.view') && <ShortcutTile href={`/branch-payroll-banks${section}`} title="Branch wise bank" icon={Building2} />}
+                        {can('payroll.view') && <ShortcutTile href={`/probation-salary${section}`} title="Probation salary" icon={Banknote} />}
+                        {can('payroll.view') && <ShortcutTile href={`/fixed-salary${section}`} title="Fixed salary" icon={Banknote} />}
                     </div>
                 </section>
 
@@ -157,6 +162,17 @@ export default function PayrollDashboard({ stats, userRole }: Props) {
                         {can('payroll.view') && (
                             <ShortcutTile href={`/payroll/reports${section}`} title="All payroll reports" icon={FileBarChart2} />
                         )}
+                    </div>
+                </section>
+
+                <section className="mb-6">
+                    <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Salary</h2>
+                    <div className={cn(shortcutGrid)}>
+                        {can('payroll.view') && <ShortcutTile href={`/probation-salary${section}`} title="Probation salary" icon={Banknote} />}
+                        {can('payroll.view') && <ShortcutTile href={`/fixed-salary${section}`} title="Fixed salary" icon={Banknote} />}
+                        {can('payroll.view') && <ShortcutTile href={`/salary-head-modifications${section}`} title="Head modification" icon={Pencil} />}
+                        {can('payroll.view') && <ShortcutTile href={`/salary-process${section}`} title="Salary process" icon={Calculator} />}
+                        {can('payroll.view') && <ShortcutTile href={`/salary-post${section}`} title="Salary post" icon={Wallet} />}
                     </div>
                 </section>
 

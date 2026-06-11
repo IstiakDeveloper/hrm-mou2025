@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Select,
@@ -283,9 +284,9 @@ export default function AttendanceReport({
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Branches</SelectItem>
-                                            {branches.map((branch) => (
+                                            {sortPayrollBranches(branches).map((branch) => (
                                                 <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                    {branch.name}
+                                                    {formatBranchSelectLabel(branch)}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

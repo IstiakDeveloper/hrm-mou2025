@@ -33,11 +33,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from '@/components/ui/calendar';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department?: {
         id: number;
@@ -534,7 +533,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                         <SelectContent>
                                                             {(isAdmin ? employees : currentEmployee ? [currentEmployee] : []).map((employee) => (
                                                                 <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                                    {employee.first_name} {employee.last_name} ({employee.employee_id})
+                                                                    {employeeDisplayName(employee)} ({employee.employee_id})
                                                                 </SelectItem>
                                                             ))}
                                                         </SelectContent>
@@ -888,7 +887,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                     <div className="space-y-4">
                                         <div className="bg-gray-50 p-3 rounded-lg">
                                             <p className="text-sm font-medium text-gray-500">Name</p>
-                                            <p className="font-medium text-lg">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+                                            <p className="font-medium text-lg">{employeeDisplayName(selectedEmployee)}</p>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>

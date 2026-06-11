@@ -25,6 +25,7 @@ import {
 import { format } from 'date-fns';
 import { PageSurface } from '@/components/page-surface';
 import { DatePicker } from '@/components/ui/date-picker';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface User {
     id: number;
@@ -55,11 +56,9 @@ interface Designation {
     name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
-    first_name: string;
-    last_name: string;
     email: string;
     department: Department;
     designation: Designation;
@@ -212,7 +211,7 @@ export default function EmployeeMovements({
 
     return (
         <Layout>
-            <Head title={`Movements - ${employee.first_name} ${employee.last_name}`} />
+            <Head title={`Movements - ${employeeDisplayName(employee)}`} />
 
             <PageSurface>
                 <div className="mb-6">
@@ -227,7 +226,7 @@ export default function EmployeeMovements({
 
                 <div className="mb-8">
                     <h1 className="text-2xl font-bold text-gray-900">
-                        Movement Tracking: {employee.first_name} {employee.last_name}
+                        Movement Tracking: {employeeDisplayName(employee)}
                     </h1>
                     <div className="mt-1 text-gray-500">
                         {employee.designation.name} • {employee.department.name} • {employee.employee_id}

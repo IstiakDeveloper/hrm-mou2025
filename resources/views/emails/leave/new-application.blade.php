@@ -89,7 +89,7 @@
     <div class="content">
         <p>Dear {{ $recipient->name }},</p>
         
-        <p>A new leave application has been submitted by <span class="employee-name">{{ $employee->first_name }} {{ $employee->last_name }}</span> that requires your approval.</p>
+        <p>A new leave application has been submitted by <span class="employee-name">{{ $employee->name_en ?? $employee->full_name_en }}</span> that requires your approval.</p>
         
         <div class="details">
             <h2>Leave Application Details</h2>

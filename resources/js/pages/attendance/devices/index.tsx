@@ -10,6 +10,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import {
   Card,
@@ -253,9 +254,9 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Branches</SelectItem>
-                  {branches.map((branch) => (
+                  {sortPayrollBranches(branches).map((branch) => (
                     <SelectItem key={branch.id} value={branch.id.toString()}>
-                      {branch.name}
+                      {formatBranchSelectLabel(branch)}
                     </SelectItem>
                   ))}
                 </SelectContent>

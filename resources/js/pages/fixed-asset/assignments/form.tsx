@@ -9,10 +9,11 @@ import { ComboSelect } from '@/components/ComboSelect';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ArrowLeft, UserCheck } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type AssetOpt = { id: number; asset_tag: string; name: string; branch_id: number; custodian_employee_id: number | null };
-type Prefill = { id: number; asset_tag: string; name: string; branch_id: number; status: string; custodian?: { first_name: string; last_name: string } | null };
-type EmployeeOpt = { id: number; employee_id: string; first_name: string; last_name: string };
+type Prefill = { id: number; asset_tag: string; name: string; branch_id: number; status: string; custodian?: EmployeeNameFields | null };
+type EmployeeOpt = EmployeeNameFields & { id: number; employee_id: string };
 
 export default function AssetAssignmentForm({
     prefillAsset,
@@ -73,7 +74,7 @@ export default function AssetAssignmentForm({
                     <Alert className="mb-4">
                         <AlertTitle>Current custodian</AlertTitle>
                         <AlertDescription>
-                            {prefillAsset.custodian.first_name} {prefillAsset.custodian.last_name} — assigning again will release the previous custodian.
+                            {employeeDisplayName(prefillAsset.custodian)} — assigning again will release the previous custodian.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -98,7 +99,7 @@ export default function AssetAssignmentForm({
                                     onChange={(v) => v && setData('employee_id', v)}
                                     items={employees.map((e) => ({
                                         value: e.id,
-                                        label: `${e.employee_id} — ${e.first_name} ${e.last_name}`,
+                                        label: `${e.employee_id} — ${employeeDisplayName(e)}`,
                                     }))}
                                     placeholder={loadingEmployees ? 'Loading…' : branchId ? 'Select employee' : 'Select asset first'}
                                     disabled={!branchId || loadingEmployees}

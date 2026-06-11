@@ -50,6 +50,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 // Custom Calendar wrapper to avoid issues with the disabled prop
 const SafeCalendar = ({ disabledDates, ...props }: any) => {
@@ -63,10 +64,8 @@ const SafeCalendar = ({ disabledDates, ...props }: any) => {
     );
 };
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     department: {
         id: number;
@@ -508,7 +507,7 @@ export default function MovementReport({
                                             <SelectItem value="all">All Employees</SelectItem>
                                             {employees.map((employee) => (
                                                 <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                    {employee.first_name} {employee.last_name}
+                                                    {employeeDisplayName(employee)}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -558,7 +557,7 @@ export default function MovementReport({
                                             <TableCell>
                                                 <div>
                                                     <div className="font-medium">
-                                                        {movement.employee.first_name} {movement.employee.last_name}
+                                                        {employeeDisplayName(movement.employee)}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
                                                         {movement.employee.department?.name || 'No Department'}

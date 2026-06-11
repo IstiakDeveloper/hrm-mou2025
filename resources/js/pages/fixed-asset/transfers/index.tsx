@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ComboSelect } from '@/components/ComboSelect';
+import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { ArrowRightLeft, Plus, Search } from 'lucide-react';
@@ -78,10 +79,7 @@ export default function AssetTransferIndex({
                         <ComboSelect
                             value={branchId}
                             onChange={(v) => setBranchId(v)}
-                            items={branches.map((b) => ({
-                                value: b.id,
-                                label: b.is_head_office ? `${b.name} (HO)` : b.name,
-                            }))}
+                            items={branchComboSelectItems(branches, { numericValue: true })}
                             placeholder="All branches"
                             className="min-w-[200px]"
                         />

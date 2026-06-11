@@ -34,12 +34,11 @@ class EmployeeAPIController extends Controller
             'employees.*.employee_id' => 'required|string',
             'employees.*.pin' => 'nullable|string',
             'employees.*.biometric_id' => 'nullable|string',
-            'employees.*.first_name' => 'nullable|string',
-            'employees.*.last_name' => 'nullable|string',
             'employees.*.name_en' => 'nullable|string',
             'employees.*.name_bn' => 'nullable|string',
             'employees.*.email' => 'nullable|email',
-            'employees.*.phone' => 'nullable|string',
+            'employees.*.mobile_personal' => 'nullable|string',
+            'employees.*.mobile_official' => 'nullable|string',
             'employees.*.department' => 'nullable|string',
             'employees.*.designation' => 'nullable|string',
             'employees.*.branch' => 'nullable|string',
@@ -176,8 +175,10 @@ class EmployeeAPIController extends Controller
         $pin = $data['pin'] ?? $data['employee_id'];
         $employee = Employee::where('pin', $pin)->orWhere('employee_id', $data['employee_id'])->first();
 
-        $nameEn = $data['name_en'] ?? $data['first_name'] ?? null;
+        $nameEn = $data['name_en'] ?? null;
         $nameBn = $data['name_bn'] ?? null;
+        $mobilePersonal = $data['mobile_personal'] ?? null;
+        $mobileOfficial = $data['mobile_official'] ?? null;
 
         if ($employee) {
             // Update existing employee
@@ -185,14 +186,17 @@ class EmployeeAPIController extends Controller
             $employee->biometric_id = $data['biometric_id'] ?? $employee->biometric_id;
             if ($nameEn) {
                 $employee->name_en = $nameEn;
-                $employee->first_name = $nameEn; // legacy required column
             }
             if ($nameBn) {
                 $employee->name_bn = $nameBn;
             }
-            $employee->last_name = $data['last_name'] ?? $employee->last_name;
             $employee->email = $data['email'] ?? $employee->email;
-            $employee->phone = $data['phone'] ?? $employee->phone;
+            if ($mobilePersonal !== null) {
+                $employee->mobile_personal = $mobilePersonal;
+            }
+            if ($mobileOfficial !== null) {
+                $employee->mobile_official = $mobileOfficial;
+            }
             $employee->department_id = $department ? $department->id : $employee->department_id;
             $employee->designation_id = $designation ? $designation->id : $employee->designation_id;
             $employee->joining_designation_id = $designation ? $designation->id : $employee->joining_designation_id;
@@ -222,12 +226,11 @@ class EmployeeAPIController extends Controller
                 'employee_id' => $data['employee_id'],
                 'pin' => $pin,
                 'biometric_id' => $data['biometric_id'] ?? null,
-                'name_en' => $nameEn,
+                'name_en' => $nameEn ?? $data['employee_id'],
                 'name_bn' => $nameBn,
-                'first_name' => $nameEn ?? $data['employee_id'],
-                'last_name' => $data['last_name'] ?? '',
                 'email' => $data['email'] ?? null,
-                'phone' => $data['phone'] ?? null,
+                'mobile_personal' => $mobilePersonal,
+                'mobile_official' => $mobileOfficial,
                 'department_id' => $department ? $department->id : null,
                 'designation_id' => $designation ? $designation->id : null,
                 'joining_designation_id' => $designation ? $designation->id : null,

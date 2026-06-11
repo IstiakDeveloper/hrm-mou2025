@@ -426,8 +426,8 @@ class LeaveApplicationController extends Controller
             })
             ->when($request->search, function ($query, $search) {
                 $query->whereHas('employee', function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
+                    $q->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%");
                 });
             });
@@ -1031,7 +1031,7 @@ class LeaveApplicationController extends Controller
             $endDate = Carbon::parse($leaveApplication->end_date)->format('M d, Y');
 
             // Construct employee full name
-            $employeeName = $employee->first_name.' '.$employee->last_name;
+            $employeeName = $employee->name_en ?? $employee->full_name_en ?? '';
 
             // Notification details
             $title = 'New Leave Application';

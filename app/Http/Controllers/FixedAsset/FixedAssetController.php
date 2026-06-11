@@ -27,7 +27,7 @@ class FixedAssetController extends Controller
         $perPage = $this->resolvePerPage($request->get('per_page'));
 
         $query = FixedAsset::query()
-            ->with(['category:id,code,name', 'branch:id,name,branch_code,is_head_office', 'custodian:id,employee_id,first_name,last_name']);
+            ->with(['category:id,code,name', 'branch:id,name,branch_code,is_head_office', 'custodian:id,employee_id,name_en']);
 
         $scopedBranchId = $this->applyFixedAssetBranchScope($query, $request);
 
@@ -104,11 +104,11 @@ class FixedAssetController extends Controller
         $fixed_asset->load([
             'category',
             'branch',
-            'custodian:id,employee_id,first_name,last_name,current_branch_id',
+            'custodian:id,employee_id,name_en,current_branch_id',
             'transfers.fromBranch:id,name',
             'transfers.toBranch:id,name',
             'transfers.transferredByUser:id,name',
-            'assignments.employee:id,employee_id,first_name,last_name',
+            'assignments.employee:id,employee_id,name_en',
             'assignments.assignedByUser:id,name',
             'assignments.releasedByUser:id,name',
             'maintenances.recordedByUser:id,name',
@@ -243,9 +243,9 @@ class FixedAssetController extends Controller
             'employees' => Employee::query()
                 ->where('status', 'active')
                 ->when($branchId, fn ($q) => $q->where('current_branch_id', $branchId))
-                ->orderBy('first_name')
+                ->orderBy('name_en')
                 ->limit(500)
-                ->get(['id', 'employee_id', 'first_name', 'last_name', 'current_branch_id']),
+                ->get(['id', 'employee_id', 'name_en', 'current_branch_id']),
         ];
     }
 
@@ -303,7 +303,7 @@ class FixedAssetController extends Controller
                     'assigned_date' => $a->assigned_date?->format('Y-m-d'),
                     'released_date' => $a->released_date?->format('Y-m-d'),
                     'notes' => $a->notes,
-                    'employee' => $a->employee?->only(['id', 'employee_id', 'first_name', 'last_name']),
+                    'employee' => $a->employee?->only(['id', 'employee_id', 'name_en']),
                     'assigned_by' => $a->assignedByUser?->only(['id', 'name']),
                     'released_by' => $a->releasedByUser?->only(['id', 'name']),
                 ]);

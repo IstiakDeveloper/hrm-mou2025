@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -12,26 +13,17 @@ class Employee extends Model
     use HasFactory;
 
     protected $fillable = [
-        // Legacy fields (kept for backward compatibility)
         'employee_id',
-        'first_name',
-        'last_name',
-
-        // Preferred fields
         'pin',
         'name_en',
         'name_bn',
         'email',
-        'email_id',
-        'phone',
         'mobile_personal',
         'mobile_official',
         'gender',
         'religion',
         'blood_group',
         'date_of_birth',
-        'birth_date_certificate',
-        'birth_date_original',
         'joining_date',
         'confirmation_date',
         'address',
@@ -43,10 +35,8 @@ class Employee extends Model
         'district',
         'educational_qualification',
         'photo',
-        'nid',
         'nid_number',
         'smart_card_number',
-        'birth_registration_number',
         'tin_certificate_no',
         'driving_license_no',
         'passport_no',
@@ -78,39 +68,37 @@ class Employee extends Model
         'final_payment_date',
         'last_promotion_date',
         'probation_period_days',
-        'basic_salary',
         'pf_balance',
         'pf_enrolled',
         'pf_enrollment_date',
         'payscale_id',
         'salary_grade_id',
         'salary_step_id',
-        'bank_account_details',
+        'probation_salary',
+        'fixed_salary',
         'signature',
     ];
 
     protected $casts = [
         'date_of_birth' => 'date',
-        'birth_date_certificate' => 'date',
-        'birth_date_original' => 'date',
         'joining_date' => 'date',
         'confirmation_date' => 'date',
         'resignation_date' => 'date',
         'dropout_date' => 'date',
         'final_payment_date' => 'date',
         'last_promotion_date' => 'date',
-        'basic_salary' => 'decimal:2',
+        'probation_salary' => 'decimal:2',
+        'fixed_salary' => 'decimal:2',
         'pf_balance' => 'decimal:2',
         'pf_enrolled' => 'boolean',
         'pf_enrollment_date' => 'date',
-        'bank_account_details' => 'array',
         'is_project_employee' => 'boolean',
         'is_custodian' => 'boolean',
     ];
 
     /**
-     * Employees in these statuses still "hold" unique identifiers (PIN, NID, employee_id, phone, etc.).
-     * Inactive / terminated employees may share values with a new hire.
+     * Employees in these statuses still "hold" unique identifiers (PIN, NID, employee_id, mobile, etc.).
+     * Inactive employees may share values with a new hire.
      *
      * @return list<string>
      */
@@ -122,14 +110,27 @@ class Employee extends Model
     protected $appends = [
         'pin',
         'full_name_en',
+        'first_name',
+        'last_name',
         'total_service_length_days',
         'service_length_from_confirmation_days',
         'staff_age_years',
         'length_of_service_on_last_promotion_days',
-        'last_branch_name',
-        'joining_designation_name',
-        'last_designation_name',
     ];
+
+    /**
+     * Detail views only — avoids N+1 queries when serializing employee lists.
+     *
+     * @return list<string>
+     */
+    public static function detailAppends(): array
+    {
+        return [
+            'last_branch_name',
+            'joining_designation_name',
+            'last_designation_name',
+        ];
+    }
 
     public function getPinAttribute($value)
     {
@@ -143,11 +144,42 @@ class Employee extends Model
             return trim($name);
         }
 
-        $first = (string) ($this->attributes['first_name'] ?? '');
-        $last = (string) ($this->attributes['last_name'] ?? '');
-        $fallback = trim($first.' '.$last);
+        return null;
+    }
 
-        return $fallback !== '' ? $fallback : null;
+    /** @deprecated Legacy API — full English name; use name_en / full_name_en in new code. */
+    public function getFirstNameAttribute(): ?string
+    {
+        return $this->full_name_en;
+    }
+
+    /** @deprecated Legacy API — always empty; full name is in first_name (name_en). */
+    public function getLastNameAttribute(): string
+    {
+        return '';
+    }
+
+    public function resolveBasicSalary(): float
+    {
+        if ($this->payscale_id && $this->salary_grade_id && $this->salary_step_id) {
+            $structure = SalaryStructure::query()
+                ->where('payscale_id', $this->payscale_id)
+                ->where('salary_grade_id', $this->salary_grade_id)
+                ->where('salary_step_id', $this->salary_step_id)
+                ->with('step')
+                ->first();
+
+            if ($structure?->basic_salary !== null) {
+                return (float) $structure->basic_salary;
+            }
+
+            $this->loadMissing('salaryStep');
+            if ($this->salaryStep?->basic_salary) {
+                return (float) $this->salaryStep->basic_salary;
+            }
+        }
+
+        return 0.0;
     }
 
     public function getServiceEndDate(): Carbon
@@ -345,6 +377,11 @@ class Employee extends Model
         return $this->hasMany(EmployeePfTransaction::class);
     }
 
+    public function loans()
+    {
+        return $this->hasMany(EmployeeLoan::class);
+    }
+
     public function gratuityPayments()
     {
         return $this->hasMany(EmployeeGratuityPayment::class);
@@ -353,5 +390,22 @@ class Employee extends Model
     public function currentBranch()
     {
         return $this->belongsTo(Branch::class, 'current_branch_id');
+    }
+
+    public function scopePayrollReady(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where(function (Builder $q2) {
+                $q2->whereNotNull('payscale_id')
+                    ->whereNotNull('salary_grade_id')
+                    ->whereNotNull('salary_step_id');
+            })->orWhere(function (Builder $q2) {
+                $q2->whereNotNull('probation_salary')->where('probation_salary', '>', 0);
+            })->orWhereHas('employeeType', function (Builder $et) {
+                $et->where('probation_months', '>', 0);
+            })->orWhere(function (Builder $q2) {
+                $q2->whereNotNull('fixed_salary')->where('fixed_salary', '>', 0);
+            });
+        });
     }
 }

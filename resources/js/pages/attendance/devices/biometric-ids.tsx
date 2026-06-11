@@ -43,6 +43,7 @@ import {
   Building,
   Briefcase
 } from 'lucide-react';
+import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Department {
   id: number;
@@ -54,11 +55,9 @@ interface Branch {
   name: string;
 }
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
   id: number;
   employee_id: string;
-  first_name: string;
-  last_name: string;
   biometric_id: string | null;
   department_id: number;
   current_branch_id: number;
@@ -201,7 +200,7 @@ export default function BiometricIds({ employees }: BiometricIdsProps) {
                         <div className="font-medium">{employee.employee_id}</div>
                       </TableCell>
                       <TableCell>
-                        {`${employee.first_name} ${employee.last_name}`}
+                        {employeeDisplayName(employee)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center">
@@ -327,7 +326,7 @@ export default function BiometricIds({ employees }: BiometricIdsProps) {
           <DialogHeader>
             <DialogTitle>Assign Biometric ID</DialogTitle>
             <DialogDescription>
-              Enter the biometric ID for {selectedEmployee?.first_name} {selectedEmployee?.last_name}
+              Enter the biometric ID for {employeeDisplayName(selectedEmployee ?? undefined)}
             </DialogDescription>
           </DialogHeader>
 

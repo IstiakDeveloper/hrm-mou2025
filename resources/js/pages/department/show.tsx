@@ -35,11 +35,10 @@ import {
     PaginationNext,
     PaginationPrevious
 } from '@/components/ui/pagination';
+import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
 
-interface Employee {
+interface Employee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     photo: string | null;
     designation: {
@@ -53,10 +52,8 @@ interface ParentDepartment {
     name: string;
 }
 
-interface HeadEmployee {
+interface HeadEmployee extends EmployeeNameFields {
     id: number;
-    first_name: string;
-    last_name: string;
     employee_id: string;
     photo: string | null;
 }
@@ -103,10 +100,6 @@ interface DepartmentShowProps {
 }
 
 export default function DepartmentShow({ department, employees }: DepartmentShowProps) {
-    // Get initials for avatar fallback
-    const getInitials = (firstName: string, lastName: string) => {
-        return `${firstName.charAt(0)}${lastName.charAt(0)}`;
-    };
     const hasPagination = employees.meta && employees.links;
     const totalEmployees = employees.meta?.total || employees.data.length;
 
@@ -208,11 +201,11 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                                         {department.headEmployee.photo ? (
                                             <AvatarImage
                                                 src={`/storage/${department.headEmployee.photo}`}
-                                                alt={`${department.headEmployee.first_name} ${department.headEmployee.last_name}`}
+                                                alt={employeeDisplayName(department.headEmployee)}
                                             />
                                         ) : (
                                             <AvatarFallback className="bg-purple-100 text-purple-600">
-                                                {getInitials(department.headEmployee.first_name, department.headEmployee.last_name)}
+                                                {employeeInitials(department.headEmployee)}
                                             </AvatarFallback>
                                         )}
                                     </Avatar>
@@ -221,7 +214,7 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                                             href={route('employees.show', department.headEmployee.id)}
                                             className="text-base font-medium text-gray-900 hover:text-blue-600"
                                         >
-                                            {department.headEmployee.first_name} {department.headEmployee.last_name}
+                                            {employeeDisplayName(department.headEmployee)}
                                         </Link>
                                         <p className="text-sm text-gray-500">ID: {department.headEmployee.employee_id}</p>
                                     </div>
@@ -264,16 +257,16 @@ export default function DepartmentShow({ department, employees }: DepartmentShow
                                                             {employee.photo ? (
                                                                 <AvatarImage
                                                                     src={`/storage/${employee.photo}`}
-                                                                    alt={`${employee.first_name} ${employee.last_name}`}
+                                                                    alt={employeeDisplayName(employee)}
                                                                 />
                                                             ) : (
                                                                 <AvatarFallback className="bg-gray-100 text-gray-600">
-                                                                    {getInitials(employee.first_name, employee.last_name)}
+                                                                    {employeeInitials(employee)}
                                                                 </AvatarFallback>
                                                             )}
                                                         </Avatar>
                                                         <span className="font-medium">
-                                                            {employee.first_name} {employee.last_name}
+                                                            {employeeDisplayName(employee)}
                                                         </span>
                                                     </div>
                                                 </TableCell>
