@@ -13,9 +13,10 @@ type UseEmployeeLookupOptions = {
     branchId?: string | number | null;
     limit?: number;
     payrollReady?: boolean;
+    forGratuity?: boolean;
 };
 
-export function useEmployeeLookup({ enabled = true, branchId, limit = 50, payrollReady = false }: UseEmployeeLookupOptions = {}) {
+export function useEmployeeLookup({ enabled = true, branchId, limit = 50, payrollReady = false, forGratuity = false }: UseEmployeeLookupOptions = {}) {
     const [employees, setEmployees] = useState<EmployeeLookupOption[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -37,6 +38,9 @@ export function useEmployeeLookup({ enabled = true, branchId, limit = 50, payrol
                 if (payrollReady) {
                     params.set('payroll_ready', '1');
                 }
+                if (forGratuity) {
+                    params.set('for_gratuity', '1');
+                }
                 const response = await fetch(`/employees/lookup?${params}`, {
                     headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                     credentials: 'same-origin',
@@ -50,7 +54,7 @@ export function useEmployeeLookup({ enabled = true, branchId, limit = 50, payrol
                 setLoading(false);
             }
         },
-        [branchId, enabled, limit, payrollReady],
+        [branchId, enabled, limit, payrollReady, forGratuity],
     );
 
     useEffect(() => {

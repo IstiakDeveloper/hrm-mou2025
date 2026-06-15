@@ -88,7 +88,6 @@ class SelfAttendanceController extends Controller
         ];
 
         $attendance->check_in = $nowTime;
-        $attendance->status = 'present';
         $attendance->location_coordinates = array_merge((array) ($attendance->location_coordinates ?? []), $location);
         $attendance->save();
 
@@ -175,7 +174,6 @@ class SelfAttendanceController extends Controller
                 $attendance->check_out = $nowTime;
             }
         }
-        $attendance->status = 'present';
         $attendance->location_coordinates = array_merge((array) ($attendance->location_coordinates ?? []), $location);
         $attendance->save();
 

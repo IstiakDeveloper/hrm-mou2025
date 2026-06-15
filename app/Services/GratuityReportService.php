@@ -23,6 +23,7 @@ class GratuityReportService
         $report = $config['report'] ?? $slug;
 
         return match ($report) {
+            'gratuity_ledger' => $this->buildGratuityLedger($filters),
             'eligible_employees' => $this->buildEntitlementsTable($filters, $config, true, false),
             'unpaid_liability' => $this->buildUnpaidTable($filters),
             'liability_by_branch' => $this->buildLiabilityGrouped($filters, 'branch'),
@@ -66,9 +67,154 @@ class GratuityReportService
             return "From {$from} to {$to}";
         }
 
+        if ($report === 'gratuity_ledger') {
+            return 'All time · As of '.Carbon::today()->format('d M Y');
+        }
+
         $asOf = $filters['as_of'] ?: date('Y-m-d');
 
         return 'As of '.Carbon::parse($asOf)->format('d M Y');
+    }
+
+    /**
+     * @param  array<string, string>  $filters
+     * @return array<string, mixed>
+     */
+    protected function buildGratuityLedger(array $filters): array
+    {
+        $asOf = Carbon::today();
+
+        $employees = Employee::query()
+            ->with(['branch:id,name', 'department:id,name', 'designation:id,name', 'salaryStep:id,basic_salary'])
+            ->forGratuity()
+            ->when($filters['branch_id'], fn ($q) => $q->where('current_branch_id', (int) $filters['branch_id']))
+            ->when($filters['department_id'], fn ($q) => $q->where('department_id', (int) $filters['department_id']))
+            ->when($filters['employee_id'], fn ($q) => $q->whereKey((int) $filters['employee_id']))
+            ->where('status', 'active')
+            ->orderBy('pin')
+            ->limit(2000)
+            ->get();
+
+        $employeeIds = $employees->pluck('id');
+        $paymentsByEmployee = $employeeIds->isEmpty()
+            ? collect()
+            : EmployeeGratuityPayment::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->orderBy('payment_date')
+                ->orderBy('id')
+                ->get()
+                ->groupBy('employee_id');
+
+        $columns = [
+            ['key' => 'sl', 'label' => 'SL', 'align' => 'center'],
+            ['key' => 'pin', 'label' => 'PIN'],
+            ['key' => 'name', 'label' => 'Employee'],
+            ['key' => 'confirmation', 'label' => 'Confirmation', 'align' => 'center'],
+            ['key' => 'branch', 'label' => 'Branch'],
+            ['key' => 'date', 'label' => 'Date'],
+            ['key' => 'years', 'label' => 'Years', 'align' => 'center'],
+            ['key' => 'basic', 'label' => 'Basic', 'align' => 'right', 'numeric' => true],
+            ['key' => 'multiplier', 'label' => '×', 'align' => 'center'],
+            ['key' => 'credit', 'label' => 'Credit', 'align' => 'right', 'numeric' => true],
+            ['key' => 'debit', 'label' => 'Debit', 'align' => 'right', 'numeric' => true],
+            ['key' => 'balance', 'label' => 'Balance', 'align' => 'right', 'numeric' => true],
+            ['key' => 'notes', 'label' => 'Notes'],
+        ];
+
+        $rows = [];
+        $sl = 0;
+        $totalCredit = 0.0;
+        $totalDebit = 0.0;
+        $singleEmployeeHeader = null;
+
+        foreach ($employees as $employee) {
+            $calc = $this->gratuityService->calculate($employee, $asOf);
+            $entitlement = $calc['eligible'] ? (float) $calc['gratuity_amount'] : 0.0;
+            $balance = $entitlement;
+            $payments = $paymentsByEmployee->get($employee->id, collect());
+            $paidTotal = (float) $payments->where('status', 'paid')->sum('gratuity_amount');
+
+            if ($employees->count() === 1) {
+                $singleEmployeeHeader = [
+                    'label' => trim(($employee->pin ?? '').' — '.($employee->name_en ?? '')),
+                    'pin' => $employee->pin,
+                    'branch' => $employee->branch?->name,
+                    'department' => $employee->department?->name,
+                    'designation' => $employee->designation?->name,
+                    'confirmation_date' => $employee->confirmation_date?->format('d-m-Y') ?? '',
+                    'service_end' => Carbon::parse($calc['service_end'])->format('d-m-Y'),
+                    'years' => $calc['completed_years'],
+                    'basic' => (float) $calc['basic_salary'],
+                    'multiplier' => $calc['basic_multiplier'],
+                    'gratuity' => $entitlement,
+                    'eligible' => $calc['eligible'] ? 'Yes' : 'No',
+                    'paid_total' => $paidTotal,
+                    'outstanding' => max(0, $entitlement - $paidTotal),
+                ];
+            }
+
+            $confirmation = $employee->confirmation_date?->format('d-m-Y') ?? '';
+
+            $sl++;
+            $rows[] = [
+                'sl' => $sl,
+                'pin' => $employee->pin,
+                'name' => $employee->name_en,
+                'confirmation' => $confirmation,
+                'branch' => $employee->branch?->name,
+                'date' => $asOf->format('d-M-Y'),
+                'years' => $calc['completed_years'],
+                'basic' => (float) $calc['basic_salary'],
+                'multiplier' => $calc['basic_multiplier'],
+                'credit' => $entitlement,
+                'debit' => 0,
+                'balance' => $balance,
+                'notes' => $calc['label'],
+            ];
+            $totalCredit += $entitlement;
+
+            foreach ($payments as $payment) {
+                $sl++;
+                $debit = $payment->status === 'paid' ? (float) $payment->gratuity_amount : 0.0;
+                if ($debit > 0) {
+                    $balance = max(0, $balance - $debit);
+                    $totalDebit += $debit;
+                }
+
+                $rows[] = [
+                    'sl' => $sl,
+                    'pin' => $employee->pin,
+                    'name' => $employee->name_en,
+                    'confirmation' => $confirmation,
+                    'branch' => $employee->branch?->name,
+                    'date' => $payment->payment_date?->format('d-M-Y') ?? $payment->created_at?->format('d-M-Y') ?? '—',
+                    'years' => $payment->completed_years,
+                    'basic' => (float) $payment->basic_salary_used,
+                    'multiplier' => $payment->basic_multiplier,
+                    'credit' => 0,
+                    'debit' => $debit,
+                    'balance' => $balance,
+                    'notes' => $payment->notes ?? '',
+                ];
+            }
+        }
+
+        return [
+            'template' => 'gratuity-ledger',
+            'employee' => $singleEmployeeHeader,
+            'columns' => $columns,
+            'rows' => $rows,
+            'totals' => [
+                'sl' => 'Total',
+                'pin' => $employees->count().' employees',
+                'credit' => $totalCredit,
+                'debit' => $totalDebit,
+            ],
+            'meta' => [
+                'row_count' => count($rows),
+                'employee_count' => $employees->count(),
+            ],
+        ];
     }
 
     /**
@@ -204,6 +350,7 @@ class GratuityReportService
     {
         $query = EmployeeGratuityPayment::query()
             ->with(['employee.branch:id,name', 'employee.department:id,name'])
+            ->whereHas('employee', fn ($q) => $q->forGratuity())
             ->when($filters['branch_id'], fn ($q) => $q->whereHas(
                 'employee',
                 fn ($e) => $e->where('current_branch_id', (int) $filters['branch_id'])
@@ -271,6 +418,7 @@ class GratuityReportService
     protected function buildPaymentSummary(array $filters): array
     {
         $query = EmployeeGratuityPayment::query()
+            ->whereHas('employee', fn ($q) => $q->forGratuity())
             ->when($filters['branch_id'], fn ($q) => $q->whereHas(
                 'employee',
                 fn ($e) => $e->where('current_branch_id', (int) $filters['branch_id'])
@@ -321,7 +469,7 @@ class GratuityReportService
             'sl' => $i + 1,
             'min_years' => $t['min_years'],
             'multiplier' => $t['basic_multiplier'],
-            'description' => $t['min_years'].'+ years completed → '.$t['basic_multiplier'].'× basic salary',
+            'description' => $t['min_years'].'+ years completed → basic × years × '.$t['basic_multiplier'].' gratuity',
         ])->all();
 
         $rows[] = [
@@ -346,6 +494,7 @@ class GratuityReportService
     {
         $employees = Employee::query()
             ->with(['branch:id,name', 'department:id,name', 'designation:id,name', 'salaryStep:id,basic_salary'])
+            ->forGratuity()
             ->when($filters['branch_id'], fn ($q) => $q->where('current_branch_id', (int) $filters['branch_id']))
             ->when($filters['department_id'], fn ($q) => $q->where('department_id', (int) $filters['department_id']))
             ->when($filters['employee_id'], fn ($q) => $q->whereKey((int) $filters['employee_id']))

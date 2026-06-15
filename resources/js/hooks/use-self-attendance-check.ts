@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { router } from "@inertiajs/react";
+import { router, usePage } from "@inertiajs/react";
+import { toast } from "@/components/ui/use-toast";
 
 export type GeoSample = {
     lat: number;
@@ -54,14 +55,24 @@ function geoFailureMessage(e: unknown): string {
  * GPS-based self check-in / check-out (same routes as legacy employee dashboard).
  */
 export function useSelfAttendanceCheck() {
+    const { errors = {} } = usePage().props as any;
+    const [actionType, setActionType] = useState<"check-in" | "check-out" | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [attendanceError, setAttendanceError] = useState<string | null>(null);
+    const [localError, setLocalError] = useState<string | null>(null);
     const [locationStatus, setLocationStatus] = useState<string | null>(null);
     const [locationProgress, setLocationProgress] = useState(0);
     const [locationPreview, setLocationPreview] = useState<LocationPreview>({
         bestAccuracy: null,
         sampleCount: 0,
     });
+
+    const attendanceError = localError || (errors.attendance as string) || (errors.lat as string) || (errors.lng as string) || null;
+
+    const handleDismissError = useCallback(() => {
+        setLocalError(null);
+        setActionType(null);
+        router.clearErrors();
+    }, []);
 
     const getBestLocation = useCallback(async (sampleCount = 3) => {
         const samples: GeoSample[] = [];
@@ -73,7 +84,7 @@ export function useSelfAttendanceCheck() {
         });
 
         for (let i = 0; i < sampleCount; i++) {
-            setLocationStatus(`Getting location... (${i + 1}/${sampleCount})`);
+            setLocationStatus(`Locking GPS signal... (${i + 1}/${sampleCount})`);
             setLocationProgress(10 + Math.round((i / sampleCount) * 60));
 
             try {
@@ -160,13 +171,14 @@ export function useSelfAttendanceCheck() {
     }, []);
 
     const handleCheckIn = useCallback(async () => {
-        setAttendanceError(null);
+        setActionType("check-in");
+        setLocalError(null);
         setIsSubmitting(true);
         setLocationProgress(0);
 
         try {
             const { best, samples } = await getBestLocation(3);
-            setLocationStatus("Submitting check-in...");
+            setLocationStatus("Syncing with branch database...");
             setLocationProgress(90);
 
             router.post(
@@ -177,13 +189,21 @@ export function useSelfAttendanceCheck() {
                     onError: (errors) => {
                         const msg =
                             inertiaFirstString(errors as Record<string, unknown>) ?? "Check-in failed.";
-                        setAttendanceError(msg);
+                        setLocalError(msg);
+                        toast({
+                            title: "Check-in Failed",
+                            description: msg,
+                            variant: "destructive",
+                        });
                     },
                     onFinish: () => {
                         setIsSubmitting(false);
                         setLocationStatus(null);
                         setLocationProgress(100);
-                        window.setTimeout(() => setLocationProgress(0), 800);
+                        window.setTimeout(() => {
+                            setLocationProgress(0);
+                            setActionType(null);
+                        }, 1200);
                     },
                 },
             );
@@ -191,18 +211,25 @@ export function useSelfAttendanceCheck() {
             setIsSubmitting(false);
             setLocationStatus(null);
             setLocationProgress(0);
-            setAttendanceError(geoFailureMessage(e));
+            const msg = geoFailureMessage(e);
+            setLocalError(msg);
+            toast({
+                title: "Check-in Failed",
+                description: msg,
+                variant: "destructive",
+            });
         }
     }, [getBestLocation]);
 
     const handleCheckOut = useCallback(async () => {
-        setAttendanceError(null);
+        setActionType("check-out");
+        setLocalError(null);
         setIsSubmitting(true);
         setLocationProgress(0);
 
         try {
             const { best, samples } = await getBestLocation(3);
-            setLocationStatus("Submitting check-out...");
+            setLocationStatus("Syncing with branch database...");
             setLocationProgress(90);
 
             router.post(
@@ -213,13 +240,21 @@ export function useSelfAttendanceCheck() {
                     onError: (errors) => {
                         const msg =
                             inertiaFirstString(errors as Record<string, unknown>) ?? "Check-out failed.";
-                        setAttendanceError(msg);
+                        setLocalError(msg);
+                        toast({
+                            title: "Check-out Failed",
+                            description: msg,
+                            variant: "destructive",
+                        });
                     },
                     onFinish: () => {
                         setIsSubmitting(false);
                         setLocationStatus(null);
                         setLocationProgress(100);
-                        window.setTimeout(() => setLocationProgress(0), 800);
+                        window.setTimeout(() => {
+                            setLocationProgress(0);
+                            setActionType(null);
+                        }, 1200);
                     },
                 },
             );
@@ -227,11 +262,18 @@ export function useSelfAttendanceCheck() {
             setIsSubmitting(false);
             setLocationStatus(null);
             setLocationProgress(0);
-            setAttendanceError(geoFailureMessage(e));
+            const msg = geoFailureMessage(e);
+            setLocalError(msg);
+            toast({
+                title: "Check-out Failed",
+                description: msg,
+                variant: "destructive",
+            });
         }
     }, [getBestLocation]);
 
     return {
+        actionType,
         isSubmitting,
         attendanceError,
         locationStatus,
@@ -239,5 +281,6 @@ export function useSelfAttendanceCheck() {
         locationPreview,
         handleCheckIn,
         handleCheckOut,
+        handleDismissError,
     };
 }

@@ -4,6 +4,13 @@ return [
     'company_name' => env('GRATUITY_REPORT_COMPANY', env('PAYROLL_REPORT_COMPANY', env('APP_NAME', 'Organization'))),
 
     'reports' => [
+        'gratuity-ledger' => [
+            'title' => 'Gratuity Ledger',
+            'description' => 'All-time gratuity ledger for active employees — all or one selected employee.',
+            'filters' => ['branch_id', 'department_id', 'employee_id'],
+            'template' => 'gratuity-ledger',
+            'report' => 'gratuity_ledger',
+        ],
         'entitlements-register' => [
             'title' => 'Gratuity Entitlements Register',
             'description' => 'All employees with projected gratuity as of the selected date.',

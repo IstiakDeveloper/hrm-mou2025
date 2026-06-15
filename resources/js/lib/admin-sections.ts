@@ -45,7 +45,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Employee, organization & transfers',
         icon: Users,
         href: '/sections/human-resources',
-        menuTitles: ['Employee Management', 'Organization Setup', 'Holidays', 'Transfer & Promotion', 'Reports'],
+        menuTitles: ['My Notices', 'Employee Management', 'Organization Setup', 'Holidays', 'Transfer & Promotion', 'Reports'],
     },
     {
         id: 'attendance-movement',
@@ -190,6 +190,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         p.startsWith('/employee-types') ||
         p.startsWith('/programs') ||
         p.startsWith('/projects') ||
+        p.startsWith('/my-notices') ||
         p.startsWith('/employee/')
     ) {
         return 'human-resources';
@@ -252,16 +253,16 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
 }
 
 export function getActiveSectionId(location: Location): AdminSectionId | null {
-    const fromQuery = getSectionFromSearch(location.search);
-    if (fromQuery) {
-        storeSection(fromQuery);
-        return fromQuery;
-    }
-
     const inferred = inferSectionFromPath(location.pathname);
     if (inferred) {
         storeSection(inferred);
         return inferred;
+    }
+
+    const fromQuery = getSectionFromSearch(location.search);
+    if (fromQuery) {
+        storeSection(fromQuery);
+        return fromQuery;
     }
 
     return readStoredSection();

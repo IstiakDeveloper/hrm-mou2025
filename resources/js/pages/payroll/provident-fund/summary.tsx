@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PayrollBranchSelect, PayrollMonthSelect, PayrollYearSelect } from '@/components/payroll/PayrollFilterGrid';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ArrowLeft, FileBarChart2 } from 'lucide-react';
+import { formatPfAmount } from '@/lib/pf-format';
 
 type Props = {
     filters: Record<string, string>;
@@ -26,8 +27,7 @@ type Props = {
     years: number[];
 };
 
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = formatPfAmount;
 
 export default function ProvidentFundSummary({ filters: init, monthly, balances, branches, months, years }: Props) {
     const [filters, setFilters] = useState({
@@ -39,7 +39,7 @@ export default function ProvidentFundSummary({ filters: init, monthly, balances,
 
     const apply = () => router.get(route('provident-fund.summary'), filters, { preserveState: true });
 
-    const totalBalance = balances.reduce((s, r) => s + r.pf_balance, 0);
+    const totalBalance = balances.reduce((s, r) => s + Math.round(r.pf_balance || 0), 0);
 
     return (
         <Layout>
@@ -101,7 +101,7 @@ export default function ProvidentFundSummary({ filters: init, monthly, balances,
                     )}
                 </PayrollSectionCard>
 
-                <PayrollSectionCard title="Balance summary (active employees)">
+                <PayrollSectionCard title="Balance summary (all employees with PF balance)">
                     <p className="text-sm font-medium mb-3">Total PF liability: {fmt(totalBalance)} ({balances.length} employees)</p>
                     <div className="overflow-x-auto max-h-[480px]">
                         <Table>

@@ -126,7 +126,7 @@ export default function GratuityIndex({ filters: init, rows, tiers, branches, de
                 <div className="flex flex-wrap items-center gap-1.5">
                     {sortedTiers.map((t) => (
                         <span key={t.min_years} className="inline-flex rounded border border-zinc-200 bg-white px-2 py-0.5 text-[9px] font-bold text-zinc-500 uppercase tracking-wide">
-                            {t.min_years}+ Yrs: {t.basic_multiplier}x Basic
+                            {t.min_years}+ Yrs: basic × yrs × {t.basic_multiplier}
                         </span>
                     ))}
                     <span className="inline-flex rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-bold text-amber-700 uppercase tracking-wide">
@@ -242,6 +242,8 @@ export default function GratuityIndex({ filters: init, rows, tiers, branches, de
                                 value={filters.employee_id}
                                 onChange={(v) => applyFilters({ employee_id: v })}
                                 employees={employees}
+                                branchId={filters.branch_id || undefined}
+                                forGratuity
                             />
                         </div>
                         <div className="space-y-0.5">

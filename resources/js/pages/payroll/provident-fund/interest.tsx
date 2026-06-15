@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { ArrowLeft, Calculator, Save } from 'lucide-react';
 import { hasAppPermission } from '@/lib/permissions';
+import { formatPfAmount } from '@/lib/pf-format';
 import { staffFundPath } from '@/lib/staff-fund-nav';
 import type { SharedData } from '@/types';
 import { cn } from '@/lib/utils';
@@ -59,8 +60,7 @@ type Props = {
     preview: Preview | null;
 };
 
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = formatPfAmount;
 
 export default function ProvidentFundInterest({ pastRuns, formDefaults, preview }: Props) {
     const { auth, flash } = usePage<SharedData & { flash?: { success?: string } }>().props;
@@ -141,7 +141,7 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                                     <label className="text-[10px] font-bold text-zinc-500 uppercase">Total Interest Amount (৳)</label>
                                     <Input
                                         type="number"
-                                        step="0.01"
+                                        step="1"
                                         min="0.01"
                                         value={form.data.total_interest}
                                         onChange={(e) => form.setData('total_interest', e.target.value)}

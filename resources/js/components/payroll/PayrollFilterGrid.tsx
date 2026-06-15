@@ -135,6 +135,7 @@ export function PayrollEmployeeSelect({
     comboPortal = true,
     branchId,
     payrollReady = false,
+    forGratuity = false,
 }: {
     label?: string;
     value: string;
@@ -149,9 +150,10 @@ export function PayrollEmployeeSelect({
     comboPortal?: boolean;
     branchId?: string;
     payrollReady?: boolean;
+    forGratuity?: boolean;
 }) {
     const useLookup = employees.length === 0;
-    const lookup = useEmployeeLookup({ enabled: useLookup, branchId, limit: 50, payrollReady });
+    const lookup = useEmployeeLookup({ enabled: useLookup, branchId, limit: 50, payrollReady, forGratuity });
     const employeeSource = useLookup ? lookup.employees : employees;
 
     const items = useMemo(() => {
@@ -405,6 +407,7 @@ export function PayrollFilterGrid({
     showBranch = true,
     branchRequired = false,
     payrollReadyEmployees = false,
+    forGratuityEmployees = false,
 }: {
     filters: Record<string, string>;
     setFilter: (key: string, value: string) => void;
@@ -422,6 +425,7 @@ export function PayrollFilterGrid({
     showBranch?: boolean;
     branchRequired?: boolean;
     payrollReadyEmployees?: boolean;
+    forGratuityEmployees?: boolean;
 }) {
     return (
         <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -458,6 +462,7 @@ export function PayrollFilterGrid({
                     employees={employees}
                     branchId={filters.branch_id || undefined}
                     payrollReady={payrollReadyEmployees}
+                    forGratuity={forGratuityEmployees}
                 />
             )}
         </div>

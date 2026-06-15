@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Pencil, Save, Trash2, Calendar, FileText, Landmark, User, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { hasAppPermission } from '@/lib/permissions';
+import { formatPfAmount, roundPfAmount } from '@/lib/pf-format';
 import { cn } from '@/lib/utils';
 import type { SharedData } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +49,7 @@ type Props = {
     employee: {
         id: number;
         label: string;
+        status?: string;
         branch: string | null;
         department: string | null;
         pf_balance: number;
@@ -61,8 +63,7 @@ type Props = {
     years: number[];
 };
 
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = formatPfAmount;
 
 const TYPE_OPENING = 'opening_balance';
 const TYPE_MANUAL = 'manual';
@@ -125,7 +126,7 @@ export default function ProvidentFundLedger({ employee, filters: init, totals, t
     };
 
     const editTotal =
-        (parseFloat(editForm.data.employee_amount) || 0) + (parseFloat(editForm.data.employer_amount) || 0);
+        roundPfAmount(editForm.data.employee_amount) + roundPfAmount(editForm.data.employer_amount);
 
     return (
         <StaffFundLayout title={`PF Ledger — ${employee.label}`} activeTab="pf-register" description="Detailed transaction ledger of employee provident fund contributions and interest.">
@@ -138,8 +139,13 @@ export default function ProvidentFundLedger({ employee, filters: init, totals, t
                     >
                         <ArrowLeft className="h-3 w-3" /> Back to Register
                     </Link>
-                    <div className="text-xs text-zinc-500 font-medium">
-                        {employee.branch || '—'} · {employee.department || '—'}
+                    <div className="text-xs text-zinc-500 font-medium flex items-center gap-1.5">
+                        <span>{employee.branch || '—'} · {employee.department || '—'}</span>
+                        {employee.status && employee.status !== 'active' && employee.status !== 'on_leave' && (
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0 capitalize">
+                                {employee.status.replace('_', ' ')}
+                            </Badge>
+                        )}
                     </div>
                 </div>
                 {canEdit && (
@@ -361,7 +367,7 @@ export default function ProvidentFundLedger({ employee, filters: init, totals, t
                                     <label className="text-[10px] font-bold text-zinc-500 uppercase">Own Amount (Employee)</label>
                                     <Input
                                         type="number"
-                                        step="0.01"
+                                        step="1"
                                         min="0"
                                         value={editForm.data.employee_amount}
                                         onChange={(e) => editForm.setData('employee_amount', e.target.value)}
@@ -373,7 +379,7 @@ export default function ProvidentFundLedger({ employee, filters: init, totals, t
                                     <label className="text-[10px] font-bold text-zinc-500 uppercase">Organization Amount</label>
                                     <Input
                                         type="number"
-                                        step="0.01"
+                                        step="1"
                                         min="0"
                                         value={editForm.data.employer_amount}
                                         onChange={(e) => editForm.setData('employer_amount', e.target.value)}

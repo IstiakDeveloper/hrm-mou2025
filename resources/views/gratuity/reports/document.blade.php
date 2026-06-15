@@ -35,6 +35,8 @@
             <p>{{ $payload['meta']['message'] }}</p>
         @elseif ($template === 'gratuity-rules')
             @include('gratuity.reports.templates.rules', ['payload' => $payload])
+        @elseif ($template === 'gratuity-ledger')
+            @include('gratuity.reports.templates.ledger', ['payload' => $payload])
         @elseif ($template === 'gratuity-grouped')
             @include('gratuity.reports.templates.grouped', ['payload' => $payload])
         @elseif ($template === 'gratuity-table')

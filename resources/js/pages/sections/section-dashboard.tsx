@@ -38,6 +38,7 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                         { label: 'My Profile', href: '/profile' },
                         { label: 'My Leaves', href: '/employee/leaves' },
                         { label: 'My Movements', href: '/employee/movements' },
+                        { label: 'My Notices', href: '/my-notices' },
                     ];
             case 'attendance-movement':
                 return mode === 'admin'
@@ -52,7 +53,6 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     : [
                         { label: 'My Attendance', href: '/employee/dashboard' },
                         { label: 'My Movements', href: '/employee/movements' },
-                        { label: 'Notices', href: '/my-notices' },
                     ];
             case 'leave':
                 return mode === 'admin'
@@ -65,7 +65,6 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     : [
                         { label: 'My Leaves', href: '/employee/leaves' },
                         { label: 'Apply Leave', href: '/leave/applications/create' },
-                        { label: 'Notices', href: '/my-notices' },
                     ];
             case 'administration':
                 return [

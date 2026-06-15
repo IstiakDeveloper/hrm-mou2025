@@ -46,6 +46,31 @@ class GratuityReportCsvExporter
             return [$headers, $rows];
         }
 
+        if ($template === 'gratuity-ledger' && ! empty($payload['employee'])) {
+            $employee = $payload['employee'];
+            $headers = ['Field', 'Value'];
+            $rows = [
+                ['Employee', $employee['label'] ?? ''],
+                ['PIN', $employee['pin'] ?? ''],
+                ['Branch', $employee['branch'] ?? ''],
+                ['Department', $employee['department'] ?? ''],
+                ['Designation', $employee['designation'] ?? ''],
+                ['Confirmation', $employee['confirmation_date'] ?? ''],
+                ['Service end', $employee['service_end'] ?? ''],
+                ['Projected gratuity', $employee['gratuity'] ?? ''],
+                ['Paid total', $employee['paid_total'] ?? ''],
+                ['Outstanding', $employee['outstanding'] ?? ''],
+                ['', ''],
+            ];
+            [$tableHeaders, $tableRows] = self::tableRows($payload);
+            $rows[] = $tableHeaders;
+            foreach ($tableRows as $tableRow) {
+                $rows[] = $tableRow;
+            }
+
+            return [$headers, $rows];
+        }
+
         if ($template === 'gratuity-grouped') {
             $headers = ['Group', 'Employees', 'Total basic', 'Total gratuity'];
             $rows = [];
@@ -65,6 +90,15 @@ class GratuityReportCsvExporter
             return [$headers, $rows];
         }
 
+        return self::tableRows($payload);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{0: list<string>, 1: list<list<string|int|float|null>>}
+     */
+    protected static function tableRows(array $payload): array
+    {
         $columns = $payload['columns'] ?? [];
         $headers = array_map(fn ($c) => $c['label'] ?? $c['key'] ?? '', $columns);
         $rows = [];

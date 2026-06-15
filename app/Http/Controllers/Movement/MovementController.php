@@ -308,6 +308,18 @@ class MovementController extends Controller
 
         $canSelectEmployee = $this->canSelectEmployeeForMovement($user);
 
+        // Preprocess request: if to_datetime is missing, default it to from_datetime + 8 hours
+        if ($request->filled('from_datetime') && !$request->filled('to_datetime')) {
+            try {
+                $from = \Carbon\Carbon::parse($request->from_datetime);
+                $request->merge([
+                    'to_datetime' => $from->copy()->addHours(8)->toIso8601String()
+                ]);
+            } catch (\Exception $e) {
+                // Let validation catch invalid date formatting
+            }
+        }
+
         // Validate request
         $request->validate([
             'employee_id' => $canSelectEmployee ? 'required|exists:employees,id' : 'nullable',
@@ -395,7 +407,6 @@ class MovementController extends Controller
         $currentDate = $startDate->copy();
         $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
         $movementStart = Carbon::parse($movement->from_datetime);
-        $movementPlannedEnd = Carbon::parse($movement->to_datetime);
 
         // Loop through each day
         while ($currentDate->lte($endDate)) {
@@ -420,31 +431,18 @@ class MovementController extends Controller
                 }
             }
 
-            // Movement may justify "on_duty" + set/adjust check-in (earliest).
-            // Check-out rule:
-            // - If the movement covers the day until (or beyond) office end, we can auto-set check_out to office end
-            //   so that "on_duty" days have both times.
-            // - If the movement ends before office end (employee may return), do NOT auto-set check_out so the employee
-            //   can check out later and the button stays visible.
             $isStartDay = $movementStart->format('Y-m-d') === $dateStr;
-            $isEndDay = $movementPlannedEnd->format('Y-m-d') === $dateStr;
 
             $inCandidate = null;
-            $outCandidate = null;
+            $outCandidate = null; // No check out time on creation
 
-            if ($isStartDay) {
-                $inCandidate = $movementStart->format('H:i:s');
-            } else {
-                // For intermediate days (and end day if movement started earlier), use office start time
-                $inCandidate = $workTimes['work_start_time'];
-            }
-
-            // Only auto-set check_out for full-day on_duty coverage (movement ends at/after office end).
-            // Keep it null if the movement ends earlier.
-            $officeEnd = Carbon::parse($dateStr.' '.$workTimes['work_end_time']);
-            $coversOfficeEnd = $movementPlannedEnd->greaterThanOrEqualTo($officeEnd);
-            if ($coversOfficeEnd && (! $isEndDay || $movementPlannedEnd->format('H:i:s') >= $workTimes['work_end_time'])) {
-                $outCandidate = $workTimes['work_end_time'];
+            // Only set check-in if there is no existing check-in
+            if (! $attendance->check_in) {
+                if ($isStartDay) {
+                    $inCandidate = $movementStart->format('H:i:s');
+                } else {
+                    $inCandidate = $workTimes['work_start_time'];
+                }
             }
 
             // Merge (min/max) against any existing punch times
@@ -548,11 +546,6 @@ class MovementController extends Controller
                             'info',
                             $link
                         ));
-                    }
-
-                    // Send email notification
-                    if (isset($recipient->email)) {
-                        Mail::to($recipient->email)->send(new NewMovementNotification($movement, $employee, $recipient));
                     }
                 } catch (\Exception $e) {
                     \Log::error('Failed to process recipient: '.$e->getMessage());
@@ -1019,12 +1012,23 @@ class MovementController extends Controller
                     ]);
 
                     // Set to on_duty status and link to movement
-                    $attendance->status = 'on_duty';
+                    if (! $attendance->exists) {
+                        $attendance->status = 'on_duty';
+                    } else {
+                        if ($attendance->status == 'absent') {
+                            $attendance->status = 'on_duty';
+                        }
+                    }
                     $attendance->movement_id = $movement->id;
 
-                    // Set check-in and check-out times if they correspond to this date
-                    if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
-                        $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
+                    // Only set check-in if there is no existing check-in
+                    if (! $attendance->check_in) {
+                        if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
+                            $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
+                        } else {
+                            $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
+                            $attendance->check_in = $workTimes['work_start_time'];
+                        }
                     }
                     // Do not auto-set check-out from movement; check-out must reflect final punch/action.
 
@@ -1103,23 +1107,7 @@ class MovementController extends Controller
                             // Continue with the process even if notification fails
                         }
 
-                        // Only send email if the user has a valid email
-                        if ($employeeUser->email && filter_var($employeeUser->email, FILTER_VALIDATE_EMAIL)) {
-                            try {
-                                Mail::to($employeeUser->email)->send(new \App\Mail\MovementApprovedNotification($movement));
-
-                                \Log::info('Email notification sent successfully', [
-                                    'movement_id' => $movement->id,
-                                    'email' => $employeeUser->email,
-                                ]);
-                            } catch (\Exception $mailException) {
-                                \Log::error('Error sending email notification: '.$mailException->getMessage(), [
-                                    'movement_id' => $movement->id,
-                                    'email' => $employeeUser->email,
-                                ]);
-                                // Continue with the process even if email fails
-                            }
-                        }
+                        // Email notification disabled for movements
                     }
                 }
             } catch (\Exception $notificationException) {
@@ -1316,12 +1304,17 @@ class MovementController extends Controller
                 }
             }
 
-            // Movement completion indicates return, not end-of-day checkout.
-            // Do not auto-set check-out here; keep check-out for actual punch/action.
             $isStartDay = $movementStart->format('Y-m-d') === $date;
+            $isReturnDay = $return->format('Y-m-d') === $date;
 
-            $inCandidate = $isStartDay ? $movementStart->format('H:i:s') : $workTimes['work_start_time'];
-            $outCandidate = null;
+            // Only set check-in if there is no existing check-in
+            $inCandidate = null;
+            if (! $attendance->check_in) {
+                $inCandidate = $isStartDay ? $movementStart->format('H:i:s') : $workTimes['work_start_time'];
+            }
+
+            // Set check-out to the return time on the return day
+            $outCandidate = $isReturnDay ? $return->format('H:i:s') : null;
 
             $this->mergeAttendanceTimes($attendance, $inCandidate, $outCandidate);
 
@@ -1397,12 +1390,6 @@ class MovementController extends Controller
                         'info',
                         $link
                     ));
-                }
-
-                // Send email notification
-                if (isset($recipient->email)) {
-                    // You would need to create this mail class
-                    Mail::to($recipient->email)->send(new \App\Mail\MovementCompletedNotification($movement, $returnDateTime));
                 }
             }
         } catch (\Exception $e) {

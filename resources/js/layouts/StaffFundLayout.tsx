@@ -9,7 +9,7 @@ interface StaffFundLayoutProps {
     children: React.ReactNode;
     title: string;
     description?: string;
-    activeTab?: string; // e.g., 'pf-register', 'pf-interest', 'pf-withdrawal', 'gratuity-entitlements', 'gratuity-payments', 'gratuity-rules'
+    activeTab?: string;
 }
 
 export default function StaffFundLayout({ children, title, description, activeTab }: StaffFundLayoutProps) {
@@ -38,7 +38,6 @@ export default function StaffFundLayout({ children, title, description, activeTa
         <Layout>
             <Head title={title} />
             <div className="mx-auto w-full max-w-full px-3 py-2 bg-[#f9fafb]">
-                {/* Module Header - Highly Compact */}
                 <div className="mb-2.5 flex flex-col justify-between gap-2 border-b border-emerald-100 pb-2 sm:flex-row sm:items-center">
                     <div className="flex items-center gap-2">
                         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">
@@ -56,7 +55,6 @@ export default function StaffFundLayout({ children, title, description, activeTa
                         </div>
                     </div>
 
-                    {/* Compact Shortcuts */}
                     <div className="flex items-center gap-1.5">
                         <Link
                             href={staffFundPath('/sections/staff-fund')}
@@ -67,7 +65,6 @@ export default function StaffFundLayout({ children, title, description, activeTa
                     </div>
                 </div>
 
-                {/* Sub-navigation Tabs - Space Efficient & Premium Green theme */}
                 <div className="mb-3 flex flex-col gap-2 rounded-lg border border-zinc-200/60 bg-white p-1 shadow-2xs md:flex-row md:items-center">
                     <div className="flex flex-wrap items-center gap-4 px-1 py-0.5">
                         {navItems.map((group, groupIdx) => {
@@ -86,10 +83,10 @@ export default function StaffFundLayout({ children, title, description, activeTa
                                                     key={item.id}
                                                     href={staffFundPath(item.href)}
                                                     className={cn(
-                                                        "rounded px-2 py-0.5 text-[11px] font-medium transition-all",
+                                                        'rounded px-2 py-0.5 text-[11px] font-medium transition-all',
                                                         isActive
-                                                            ? "bg-emerald-600 text-white font-semibold shadow-2xs"
-                                                            : "text-zinc-600 hover:text-emerald-700 hover:bg-zinc-100"
+                                                            ? 'bg-emerald-600 text-white font-semibold shadow-2xs'
+                                                            : 'text-zinc-600 hover:text-emerald-700 hover:bg-zinc-100',
                                                     )}
                                                 >
                                                     {item.label}
@@ -103,10 +100,7 @@ export default function StaffFundLayout({ children, title, description, activeTa
                     </div>
                 </div>
 
-                {/* Content Area with strict spacing control */}
-                <div className="space-y-3">
-                    {children}
-                </div>
+                <div className="space-y-3">{children}</div>
             </div>
         </Layout>
     );

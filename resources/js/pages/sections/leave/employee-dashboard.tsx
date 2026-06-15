@@ -322,17 +322,6 @@ export function LeaveEmployeeDashboardView({
                                         <ArrowUpRight className="h-3.5 w-3.5 text-emerald-600" />
                                     </Link>
                                 </Button>
-                                <Button
-                                    asChild
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
-                                >
-                                    <Link href="/my-notices?section=leave">
-                                        Notices
-                                        <ArrowUpRight className="h-3.5 w-3.5 text-emerald-600" />
-                                    </Link>
-                                </Button>
                             </CardContent>
                         </Card>
                     </div>

@@ -38,4 +38,45 @@ class AttendanceSetting extends Model
     {
         return $this->belongsTo(Branch::class);
     }
+
+    /**
+     * Company-wide attendance rules (same for all branches).
+     * Uses the first saved setting; falls back to standard office hours.
+     */
+    public static function global(): self
+    {
+        $setting = static::query()->orderBy('id')->first();
+
+        if ($setting) {
+            return $setting;
+        }
+
+        return new static([
+            'work_start_time' => '09:00:00',
+            'work_end_time' => '17:00:00',
+            'late_threshold_minutes' => 15,
+            'half_day_hours' => 4,
+            'weekend_days' => [5, 6], // Friday, Saturday
+        ]);
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function weekendDayNumbers(): array
+    {
+        $raw = $this->weekend_days ?? [];
+
+        if (is_array($raw)) {
+            return array_values(array_map('intval', $raw));
+        }
+
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+
+            return is_array($decoded) ? array_values(array_map('intval', $decoded)) : [];
+        }
+
+        return [];
+    }
 }

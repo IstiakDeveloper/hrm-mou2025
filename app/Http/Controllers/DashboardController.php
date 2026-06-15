@@ -30,6 +30,7 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\EmployeeLoanDashboardService;
+use App\Services\SalaryStructureCalculator;
 use App\Support\SafeSchema;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -284,7 +285,7 @@ class DashboardController extends Controller
             ->where('pf_enrolled', true));
 
         $totalPfBalance = (float) (Employee::query()
-            ->whereIn('status', ['active', 'on_leave'])
+            ->where('pf_balance', '>', 0)
             ->sum('pf_balance') ?? 0);
 
         $pfCreditsMonth = (float) (EmployeePfTransaction::query()
@@ -293,19 +294,22 @@ class DashboardController extends Controller
             ->sum('credit_amount') ?? 0);
 
         $gratuityEligible = SafeSchema::modelCount(Employee::class, fn ($q) => $q
+            ->forGratuity()
             ->whereIn('status', ['active', 'on_leave'])
             ->whereNotNull('joining_date')
             ->whereDate('joining_date', '<=', $fiveYearsAgo));
 
-        $gratuityRecords = SafeSchema::modelCount(EmployeeGratuityPayment::class);
+        $gratuityRecords = SafeSchema::modelCount(EmployeeGratuityPayment::class, fn ($q) => $q
+            ->whereHas('employee', fn ($e) => $e->forGratuity()));
         $gratuityPending = SafeSchema::modelCount(EmployeeGratuityPayment::class, fn ($q) => $q
+            ->whereHas('employee', fn ($e) => $e->forGratuity())
             ->whereIn('status', ['calculated', 'approved']));
 
         return Inertia::render('sections/staff-fund/dashboard', [
             'stats' => [
                 'pfEnrolledEmployees' => $pfEnrolled,
-                'totalPfBalance' => round($totalPfBalance, 2),
-                'pfPayrollCreditsThisMonth' => round($pfCreditsMonth, 2),
+                'totalPfBalance' => SalaryStructureCalculator::roundTaka($totalPfBalance),
+                'pfPayrollCreditsThisMonth' => SalaryStructureCalculator::roundTaka($pfCreditsMonth),
                 'gratuityEligibleEmployees' => $gratuityEligible,
                 'gratuityPaymentRecords' => $gratuityRecords,
                 'gratuityPendingApproval' => $gratuityPending,

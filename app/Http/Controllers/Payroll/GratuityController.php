@@ -35,6 +35,7 @@ class GratuityController extends Controller
 
         $rows = Employee::query()
             ->with(['branch:id,name', 'department:id,name', 'designation:id,name', 'salaryStep:id,basic_salary'])
+            ->forGratuity()
             ->when($request->filled('branch_id'), fn ($q) => $q->where('current_branch_id', $request->integer('branch_id')))
             ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
             ->when($request->filled('employee_id'), fn ($q) => $q->whereKey($request->integer('employee_id')))
@@ -145,6 +146,7 @@ class GratuityController extends Controller
     {
         $records = EmployeeGratuityPayment::query()
             ->with(['employee:id,pin,name_en'])
+            ->whereHas('employee', fn ($q) => $q->forGratuity())
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
             ->orderByDesc('created_at')
             ->limit(200)
@@ -170,6 +172,10 @@ class GratuityController extends Controller
 
     public function show(Request $request, Employee $employee)
     {
+        if (! Employee::query()->whereKey($employee->id)->forGratuity()->exists()) {
+            abort(404, 'Gratuity is only available for permanent employees with payscale assigned.');
+        }
+
         $employee->load(['branch:id,name', 'department:id,name']);
 
         $defaultAsOf = $employee->dropout_date
@@ -225,6 +231,10 @@ class GratuityController extends Controller
 
     public function storePayment(Request $request, Employee $employee)
     {
+        if (! Employee::query()->whereKey($employee->id)->forGratuity()->exists()) {
+            abort(404, 'Gratuity is only available for permanent employees with payscale assigned.');
+        }
+
         $validated = $request->validate([
             'as_of' => 'required|date',
             'payment_date' => 'required|date',

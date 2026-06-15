@@ -12,7 +12,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Gratuity (completed years × basic salary tiers)
+    | Gratuity (basic salary × completed years × tier multiplier)
     |--------------------------------------------------------------------------
     */
     'gratuity_tiers' => [

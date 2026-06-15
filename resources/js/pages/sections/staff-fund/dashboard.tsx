@@ -23,6 +23,7 @@ import {
     staffFundPath,
 } from '@/lib/staff-fund-nav';
 import { type SharedData } from '@/types';
+import { formatPfAmount } from '@/lib/pf-format';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,8 +40,7 @@ type Props = {
     userRole: string;
 };
 
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = formatPfAmount;
 
 function KpiCard({
     label,
@@ -212,25 +212,15 @@ export default function StaffFundDashboard({ stats, userRole }: Props) {
                                 <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Provident Fund (PF) Controls</h2>
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <ShortcutTile
-                                href={staffFundPath('/provident-fund')}
-                                title="PF Register"
-                                icon={Landmark}
-                                description="Ledger & initial balance"
-                            />
-                            <ShortcutTile
-                                href={staffFundPath('/provident-fund/interest')}
-                                title="PF Interest"
-                                icon={Percent}
-                                description="Calculate & post interest"
-                            />
-                            <ShortcutTile
-                                href={staffFundPath('/provident-fund/withdrawals')}
-                                title="PF Withdrawal"
-                                icon={Wallet}
-                                description="Disburse employee shares"
-                            />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {STAFF_FUND_DASHBOARD_SHORTCUTS.pf.map((item) => (
+                                <ShortcutTile
+                                    key={item.href}
+                                    href={staffFundPath(item.href)}
+                                    title={item.title}
+                                    icon={item.icon}
+                                />
+                            ))}
                         </div>
                     </section>
 
@@ -240,25 +230,15 @@ export default function StaffFundDashboard({ stats, userRole }: Props) {
                             <span className="h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
                             <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Gratuity Management</h2>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <ShortcutTile
-                                href={staffFundPath('/gratuity')}
-                                title="Entitlements"
-                                icon={Gift}
-                                description="Tenure × basic salary logs"
-                            />
-                            <ShortcutTile
-                                href={staffFundPath('/gratuity/payments')}
-                                title="Payment Records"
-                                icon={FileBarChart2}
-                                description="History of approved payouts"
-                            />
-                            <ShortcutTile
-                                href={staffFundPath('/gratuity/rules')}
-                                title="Gratuity Rules"
-                                icon={BookOpen}
-                                description="View eligibility & tiers"
-                            />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {STAFF_FUND_DASHBOARD_SHORTCUTS.gratuity.map((item) => (
+                                <ShortcutTile
+                                    key={item.href}
+                                    href={staffFundPath(item.href)}
+                                    title={item.title}
+                                    icon={item.icon}
+                                />
+                            ))}
                         </div>
                     </section>
                 </div>
@@ -268,7 +248,7 @@ export default function StaffFundDashboard({ stats, userRole }: Props) {
                     <CardHeader className="pb-2 pt-3 px-4 border-b border-zinc-100 bg-zinc-50/50">
                         <CardTitle className="text-xs font-bold uppercase tracking-wide text-zinc-700">Quick Navigation Guide</CardTitle>
                         <CardDescription className="text-[10px] text-zinc-400 mt-0.5">
-                            Expand the PF or Gratuity sections in the sidebar for complete access to these resources.
+                            Expand PF or Gratuity in the sidebar; all reports are under Reports.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-3 sm:grid-cols-2 text-[11px] text-zinc-500 p-4">

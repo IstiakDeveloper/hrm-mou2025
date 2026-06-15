@@ -466,6 +466,7 @@ class EmployeeController extends Controller
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             'payroll_ready' => ['nullable', 'boolean'],
+            'for_gratuity' => ['nullable', 'boolean'],
         ]);
 
         $search = trim((string) ($validated['q'] ?? ''));
@@ -488,6 +489,10 @@ class EmployeeController extends Controller
 
         if ($request->boolean('payroll_ready')) {
             $query->payrollReady();
+        }
+
+        if ($request->boolean('for_gratuity')) {
+            $query->forGratuity();
         }
 
         OrganogramAccessService::constrainVisibleEmployees($query, $request->user());

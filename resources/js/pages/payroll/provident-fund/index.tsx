@@ -27,12 +27,14 @@ import { BookOpen, Filter, PenLine, Plus, Save, Search, Wallet, X } from 'lucide
 import { staffFundPath } from '@/lib/staff-fund-nav';
 import { hasAppPermission } from '@/lib/permissions';
 import type { SharedData } from '@/types';
+import { formatPfAmount, roundPfAmount } from '@/lib/pf-format';
 import { cn } from '@/lib/utils';
 
 type EmployeeRow = {
     id: number;
     pin: string | null;
     name_en: string | null;
+    status: string;
     label: string;
     branch: string | null;
     department: string | null;
@@ -62,8 +64,18 @@ type Props = {
     defaultPfPeriod: { year: string; month: string };
 };
 
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = formatPfAmount;
+
+const statusLabel = (status: string) => {
+    const map: Record<string, string> = {
+        active: 'Active',
+        on_leave: 'On leave',
+        inactive: 'Inactive',
+        resigned: 'Resigned',
+        terminated: 'Terminated',
+    };
+    return map[status] ?? status;
+};
 
 const defaultOpeningForm = () => ({
     employee_id: '',
@@ -113,14 +125,14 @@ export default function ProvidentFundIndex({
     const manualForm = useForm(defaultManualForm(defaultPfPeriod.year, defaultPfPeriod.month));
 
     const openingTotal = useMemo(() => {
-        const own = parseFloat(openingForm.data.employee_amount) || 0;
-        const org = parseFloat(openingForm.data.employer_amount) || 0;
+        const own = roundPfAmount(openingForm.data.employee_amount);
+        const org = roundPfAmount(openingForm.data.employer_amount);
         return own + org;
     }, [openingForm.data.employee_amount, openingForm.data.employer_amount]);
 
     const manualTotal = useMemo(() => {
-        const own = parseFloat(manualForm.data.employee_amount) || 0;
-        const org = parseFloat(manualForm.data.employer_amount) || 0;
+        const own = roundPfAmount(manualForm.data.employee_amount);
+        const org = roundPfAmount(manualForm.data.employer_amount);
         return own + org;
     }, [manualForm.data.employee_amount, manualForm.data.employer_amount]);
 
@@ -217,9 +229,9 @@ export default function ProvidentFundIndex({
         () =>
             rows.reduce(
                 (acc, r) => ({
-                    own: acc.own + r.own_contribution,
-                    org: acc.org + r.org_contribution,
-                    balance: acc.balance + r.pf_balance,
+                    own: acc.own + roundPfAmount(r.own_contribution),
+                    org: acc.org + roundPfAmount(r.org_contribution),
+                    balance: acc.balance + roundPfAmount(r.pf_balance),
                 }),
                 { own: 0, org: 0, balance: 0 },
             ),
@@ -230,7 +242,7 @@ export default function ProvidentFundIndex({
         Boolean(filters.search || filters.branch_id || filters.department_id || filters.employee_id || filters.enrolled_only);
 
     return (
-        <StaffFundLayout title="PF Register" activeTab="pf-register" description="Provident Fund registry showing enrolled staff balances, opening balances, and quick actions.">
+        <StaffFundLayout title="PF Register" activeTab="pf-register" description="Provident Fund registry for all employees with a PF balance, including inactive staff.">
             {/* Search & Actions Bar - Compact */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
                 <div className="flex items-center gap-1.5 w-full sm:w-auto">
@@ -350,6 +362,7 @@ export default function ProvidentFundIndex({
                                     <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50 border-b border-zinc-200/60">
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider pl-3">PIN</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Employee</TableHead>
+                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Status</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Branch</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Department</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Own Cont.</TableHead>
@@ -364,6 +377,17 @@ export default function ProvidentFundIndex({
                                         <TableRow key={e.id} className="hover:bg-emerald-50/10 border-b border-zinc-100/80 transition-colors group">
                                             <TableCell className="pl-3 py-1.5 font-medium text-zinc-700">{e.pin || '—'}</TableCell>
                                             <TableCell className="py-1.5 font-semibold text-zinc-800">{e.name_en || '—'}</TableCell>
+                                            <TableCell className="py-1.5">
+                                                {e.status === 'active' || e.status === 'on_leave' ? (
+                                                    <span className="inline-flex items-center rounded bg-emerald-50 px-1 py-0.2 text-[10px] font-medium text-emerald-800 border border-emerald-100">
+                                                        {statusLabel(e.status)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center rounded bg-zinc-100 px-1 py-0.2 text-[10px] font-medium text-zinc-600 border border-zinc-200">
+                                                        {statusLabel(e.status)}
+                                                    </span>
+                                                )}
+                                            </TableCell>
                                             <TableCell className="py-1.5 text-zinc-500 whitespace-nowrap">{e.branch || '—'}</TableCell>
                                             <TableCell className="py-1.5 text-zinc-500 whitespace-nowrap">{e.department || '—'}</TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums text-zinc-600">{fmt(e.own_contribution)}</TableCell>
@@ -433,7 +457,7 @@ export default function ProvidentFundIndex({
                                         </TableRow>
                                     ))}
                                     <TableRow className="bg-zinc-50/80 font-bold border-t border-zinc-200">
-                                        <TableCell colSpan={4} className="pl-3 py-2 text-zinc-700 uppercase text-[9px] tracking-wider">Total Sum</TableCell>
+                                        <TableCell colSpan={5} className="pl-3 py-2 text-zinc-700 uppercase text-[9px] tracking-wider">Total Sum</TableCell>
                                         <TableCell className="text-right py-2 tabular-nums text-zinc-800">{fmt(totals.own)}</TableCell>
                                         <TableCell className="text-right py-2 tabular-nums text-zinc-800">{fmt(totals.org)}</TableCell>
                                         <TableCell className="text-right py-2 tabular-nums text-zinc-900">{fmt(totals.balance)}</TableCell>
@@ -473,7 +497,7 @@ export default function ProvidentFundIndex({
                                 <label className="text-[10px] font-bold text-zinc-500 uppercase">Own Cont. (Employee)</label>
                                 <Input
                                     type="number"
-                                    step="0.01"
+                                    step="1"
                                     min="0"
                                     value={openingForm.data.employee_amount}
                                     onChange={(e) => openingForm.setData('employee_amount', e.target.value)}
@@ -485,7 +509,7 @@ export default function ProvidentFundIndex({
                                 <label className="text-[10px] font-bold text-zinc-500 uppercase">Org Cont. (Employer)</label>
                                 <Input
                                     type="number"
-                                    step="0.01"
+                                    step="1"
                                     min="0"
                                     value={openingForm.data.employer_amount}
                                     onChange={(e) => openingForm.setData('employer_amount', e.target.value)}
@@ -586,7 +610,7 @@ export default function ProvidentFundIndex({
                                 <label className="text-[10px] font-bold text-zinc-500 uppercase">Own Cont. (Employee)</label>
                                 <Input
                                     type="number"
-                                    step="0.01"
+                                    step="1"
                                     min="0"
                                     value={manualForm.data.employee_amount}
                                     onChange={(e) => manualForm.setData('employee_amount', e.target.value)}
@@ -598,7 +622,7 @@ export default function ProvidentFundIndex({
                                 <label className="text-[10px] font-bold text-zinc-500 uppercase">Org Cont. (Employer)</label>
                                 <Input
                                     type="number"
-                                    step="0.01"
+                                    step="1"
                                     min="0"
                                     value={manualForm.data.employer_amount}
                                     onChange={(e) => manualForm.setData('employer_amount', e.target.value)}

@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PayrollEmployeeSelect, PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { ArrowLeft, BookOpen, Save, Search, Wallet, X } from 'lucide-react';
 import { hasAppPermission } from '@/lib/permissions';
+import { formatPfAmount } from '@/lib/pf-format';
 import { staffFundPath } from '@/lib/staff-fund-nav';
 import type { SharedData } from '@/types';
 import { cn } from '@/lib/utils';
@@ -42,8 +43,7 @@ type Props = {
     preselectEmployeeId: string;
 };
 
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmt = formatPfAmount;
 
 function splitWholeTaka(amount: number) {
     const total = Math.max(0, Math.round(amount));

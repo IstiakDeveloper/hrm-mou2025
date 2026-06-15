@@ -330,65 +330,8 @@ class AttendanceDataUpdateController extends Controller
      */
     protected function updateAttendanceStatus($attendance, $branchId)
     {
-        $settings = AttendanceSetting::where('branch_id', $branchId)->first();
-
-        if (!$settings) {
-            $attendance->status = $attendance->check_in ? 'present' : 'absent';
-            return;
-        }
-
-        if (!$attendance->check_in) {
-            $attendance->status = 'absent';
-            return;
-        }
-
-        try {
-            $dateStr = $attendance->date;
-
-            // Convert check_in to time format if it's datetime
-            $checkInTime = $attendance->check_in;
-            if ($checkInTime instanceof \Carbon\Carbon) {
-                $checkInTime = $checkInTime->format('H:i:s');
-            }
-
-            $workStartTime = Carbon::parse("{$dateStr} {$settings->work_start_time}");
-            $lateThreshold = $workStartTime->copy()->addMinutes($settings->late_threshold_minutes ?? 15);
-            $checkInDateTime = Carbon::parse("{$dateStr} {$checkInTime}");
-
-            if ($checkInDateTime->gt($lateThreshold)) {
-                $attendance->status = 'late';
-            } else {
-                $attendance->status = 'present';
-            }
-
-            // Check for half-day
-            if ($attendance->check_in && $attendance->check_out) {
-                $checkOutTime = $attendance->check_out;
-                if ($checkOutTime instanceof \Carbon\Carbon) {
-                    $checkOutTime = $checkOutTime->format('H:i:s');
-                }
-
-                $checkOutDateTime = Carbon::parse("{$dateStr} {$checkOutTime}");
-
-                if ($checkOutDateTime->lt($checkInDateTime)) {
-                    $checkOutDateTime->addDay();
-                }
-
-                $hoursWorked = $checkInDateTime->diffInHours($checkOutDateTime);
-
-                if ($hoursWorked < ($settings->half_day_hours ?? 4) && $attendance->status !== 'absent') {
-                    $attendance->status = 'half_day';
-                }
-            }
-        } catch (\Exception $e) {
-            Log::error('Error calculating attendance status', [
-                'error' => $e->getMessage(),
-                'attendance_date' => $attendance->date,
-                'check_in' => $attendance->check_in,
-                'check_out' => $attendance->check_out
-            ]);
-            $attendance->status = 'present';
-        }
+        unset($branchId);
+        $attendance->applyPunchStatus();
     }
 
     /**

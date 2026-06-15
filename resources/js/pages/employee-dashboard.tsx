@@ -25,6 +25,7 @@ import {
     AlertCircle,
     IdCard,
     Palmtree,
+    Loader2,
 } from "lucide-react";
 import { format, differenceInMinutes, differenceInHours } from "date-fns";
 import AdminLayout from "@/layouts/AdminLayout";
@@ -32,6 +33,7 @@ import { PageSurface } from "@/components/page-surface";
 import { cn } from "@/lib/utils";
 import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from "@/lib/employee-name";
 import { useSelfAttendanceCheck } from "@/hooks/use-self-attendance-check";
+import { GeofenceVerificationOverlay } from "@/components/attendance/GeofenceVerificationOverlay";
 
 // Types for better code organization
 interface Employee extends EmployeeNameFields {
@@ -137,6 +139,7 @@ export function EmployeeDashboardView({
     const [countdownTimes, setCountdownTimes] = useState<Record<string, string>>({});
     const [elapsedTimes, setElapsedTimes] = useState<Record<string, string>>({});
     const {
+        actionType,
         isSubmitting,
         attendanceError,
         locationStatus,
@@ -144,6 +147,7 @@ export function EmployeeDashboardView({
         locationPreview,
         handleCheckIn,
         handleCheckOut,
+        handleDismissError,
     } = useSelfAttendanceCheck();
 
     const hrDisplayRows = useMemo(
@@ -311,18 +315,6 @@ export function EmployeeDashboardView({
 
     const dashboardBody = (
             <div className="flex flex-col gap-6">
-                {(attendanceError || locationStatus) && (
-                    <Alert className={attendanceError ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50"}>
-                        {(attendanceError ? <XCircle className="h-4 w-4 text-red-600" /> : <AlertCircle className="h-4 w-4 text-blue-600" />)}
-                        <AlertTitle className={attendanceError ? "text-red-800" : "text-blue-800"}>
-                            {attendanceError ? "Attendance action blocked" : "Working"}
-                        </AlertTitle>
-                        <AlertDescription className={attendanceError ? "text-red-700" : "text-blue-700"}>
-                            {attendanceError || locationStatus}
-                        </AlertDescription>
-                    </Alert>
-                )}
-
                 {/* Header Section */}
                 <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between border-b border-slate-100 pb-5">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
@@ -384,123 +376,113 @@ export function EmployeeDashboardView({
                 </div>
 
                 {/* Today's Attendance Card */}
-                <Card className="shadow-sm">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <Clock className="h-5 w-5 text-blue-600" />
-                            Today's Attendance
-                        </CardTitle>
-                        <CardDescription>Your attendance record for today</CardDescription>
+                <Card className="overflow-hidden border border-slate-200/80 bg-white shadow-md rounded-2xl">
+                    <CardHeader className="pb-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <CardTitle className="text-base font-bold flex items-center gap-2 text-slate-800">
+                                <Clock className="h-5 w-5 text-emerald-600 animate-pulse" />
+                                Today's Attendance
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-500 mt-1">
+                                Geofence-protected self check-in & check-out
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="relative flex h-2.5 w-2.5">
+                                <span className={cn(
+                                    "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                                    todayAttendance ? "bg-emerald-400" : "bg-amber-400"
+                                )}></span>
+                                <span className={cn(
+                                    "relative inline-flex rounded-full h-2.5 w-2.5",
+                                    todayAttendance ? "bg-emerald-500" : "bg-amber-500"
+                                )}></span>
+                            </span>
+                            <span className="text-xs font-semibold text-slate-600">
+                                Status: {getAttendanceStatus(todayAttendance)}
+                            </span>
+                        </div>
                     </CardHeader>
-                    <CardContent>
-                        {(isSubmitting || locationProgress > 0) && (
-                            <div className="mb-4 rounded-xl border bg-gradient-to-b from-white to-gray-50 p-4 shadow-sm">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="text-xs font-medium text-gray-700 truncate">
-                                            {locationStatus || "Checking location…"}
-                                        </div>
-                                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-500">
-                                            <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 ring-1 ring-blue-200">
-                                                GPS
-                                            </span>
-                                            {locationPreview.sampleCount > 0 && (
-                                                <span className="truncate">
-                                                    Best accuracy:{" "}
-                                                    <span className="font-semibold text-gray-700">
-                                                        {locationPreview.bestAccuracy !== null
-                                                            ? `${Math.round(locationPreview.bestAccuracy)}m`
-                                                            : "N/A"}
-                                                    </span>
-                                                    {" • "}Samples:{" "}
-                                                    <span className="font-semibold text-gray-700">
-                                                        {locationPreview.sampleCount}
-                                                    </span>
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="shrink-0 text-xs font-semibold tabular-nums text-gray-700">
-                                        {Math.min(100, Math.max(0, locationProgress))}%
-                                    </div>
+                    <CardContent className="p-6">
+                        {/* Attendance Time Slots */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            {/* Check In Card */}
+                            <div className={cn(
+                                "flex items-center gap-4 p-4 rounded-xl border transition-all duration-300",
+                                todayAttendance?.check_in 
+                                    ? "bg-emerald-50/40 border-emerald-100/85 shadow-xs" 
+                                    : "bg-slate-50/50 border-slate-100 hover:border-slate-200"
+                            )}>
+                                <div className={cn(
+                                    "p-3 rounded-xl",
+                                    todayAttendance?.check_in ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400"
+                                )}>
+                                    <LogIn className="h-5 w-5" />
                                 </div>
-
-                                <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-gray-600">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`inline-flex items-center gap-1 ${locationProgress < 70 ? "text-gray-900" : "text-gray-500"}`}>
-                                            <span className={`h-2 w-2 rounded-full ${locationProgress < 70 ? "bg-blue-600" : "bg-gray-300"}`} />
-                                            Locating
-                                        </span>
-                                        <span className="text-gray-300">•</span>
-                                        <span className={`inline-flex items-center gap-1 ${locationProgress >= 70 && locationProgress < 90 ? "text-gray-900" : "text-gray-500"}`}>
-                                            <span className={`h-2 w-2 rounded-full ${locationProgress >= 70 && locationProgress < 90 ? "bg-indigo-600" : "bg-gray-300"}`} />
-                                            Verifying
-                                        </span>
-                                        <span className="text-gray-300">•</span>
-                                        <span className={`inline-flex items-center gap-1 ${locationProgress >= 90 ? "text-gray-900" : "text-gray-500"}`}>
-                                            <span className={`h-2 w-2 rounded-full ${locationProgress >= 90 ? "bg-emerald-600" : "bg-gray-300"}`} />
-                                            Submitting
-                                        </span>
-                                    </div>
-                                    <div className="hidden sm:block text-gray-400">
-                                        Keep GPS on for best accuracy
-                                    </div>
-                                </div>
-
-                                <div className="mt-2">
-                                    <Progress
-                                        value={locationProgress}
-                                        className="h-3.5"
-                                        indicatorClassName="animate-pulse"
-                                    />
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Check In Time</p>
+                                    <p className={cn(
+                                        "text-lg font-bold font-mono tracking-tight mt-0.5",
+                                        todayAttendance?.check_in ? "text-emerald-700" : "text-slate-400"
+                                    )}>
+                                        {todayAttendance?.check_in ? formatTime(todayAttendance.check_in) : "-- : --"}
+                                    </p>
                                 </div>
                             </div>
-                        )}
 
-                        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
-                                <Badge
-                                    className={cn(
-                                        "px-2.5 py-1 text-xs font-semibold w-fit",
-                                        todayAttendance
-                                            ? "bg-green-100 text-green-800 border-green-300"
-                                            : "bg-yellow-100 text-yellow-800 border-yellow-300"
-                                    )}
-                                >
-                                    {getAttendanceStatus(todayAttendance)}
-                                </Badge>
-                                {todayAttendance && (
-                                    <div className="flex flex-wrap items-center gap-4 mt-2 sm:mt-0">
-                                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 text-xs sm:text-sm">
-                                            <LogIn className="h-4 w-4 text-emerald-600" />
-                                            <span className="font-medium text-slate-700">In: {formatTime(todayAttendance.check_in)}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 text-xs sm:text-sm">
-                                            <LogOut className="h-4 w-4 text-rose-600" />
-                                            <span className="font-medium text-slate-700">Out: {formatTime(todayAttendance.check_out)}</span>
-                                        </div>
-                                    </div>
-                                )}
+                            {/* Check Out Card */}
+                            <div className={cn(
+                                "flex items-center gap-4 p-4 rounded-xl border transition-all duration-300",
+                                todayAttendance?.check_out 
+                                    ? "bg-rose-50/40 border-rose-100/85 shadow-xs" 
+                                    : "bg-slate-50/50 border-slate-100 hover:border-slate-200"
+                            )}>
+                                <div className={cn(
+                                    "p-3 rounded-xl",
+                                    todayAttendance?.check_out ? "bg-rose-500 text-white" : "bg-slate-100 text-slate-400"
+                                )}>
+                                    <LogOut className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Check Out Time</p>
+                                    <p className={cn(
+                                        "text-lg font-bold font-mono tracking-tight mt-0.5",
+                                        todayAttendance?.check_out ? "text-rose-700" : "text-slate-400"
+                                    )}>
+                                        {todayAttendance?.check_out ? formatTime(todayAttendance.check_out) : "-- : --"}
+                                    </p>
+                                </div>
                             </div>
-                            <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col sm:flex-row gap-3 justify-end items-center border-t border-slate-100 pt-5">
+                            <span className="text-[11px] text-slate-500 font-medium mr-auto text-left flex items-center gap-1.5 py-1.5">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                Requires active device GPS within branch range.
+                            </span>
+                            <div className="flex gap-3 w-full sm:w-auto shrink-0">
                                 {(!todayAttendance || !todayAttendance.check_in) && (
                                     <Button
-                                        className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                                        className="w-full sm:w-auto h-11 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-md shadow-emerald-600/10 hover:shadow-lg hover:shadow-emerald-600/20 active:scale-95 transition-all duration-200"
                                         onClick={handleCheckIn}
                                         disabled={isSubmitting}
                                     >
-                                        <LogIn className="h-4 w-4 mr-2" />
-                                        {isSubmitting ? "Processing..." : "Check In"}
+                                        <LogIn className="h-4.5 w-4.5 mr-2" />
+                                        {isSubmitting ? "Locking GPS..." : "Check In"}
                                     </Button>
                                 )}
                                 {todayAttendance?.check_in && (
                                     <Button
-                                        className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white font-medium"
+                                        className="w-full sm:w-auto h-11 px-6 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold shadow-md shadow-rose-600/10 hover:shadow-lg hover:shadow-rose-600/20 active:scale-95 transition-all duration-200"
                                         onClick={handleCheckOut}
                                         disabled={isSubmitting}
                                     >
-                                        <LogOut className="h-4 w-4 mr-2" />
-                                        {isSubmitting ? "Processing..." : "Check Out"}
+                                        <LogOut className="h-4.5 w-4.5 mr-2" />
+                                        {isSubmitting ? "Locking GPS..." : "Check Out"}
                                     </Button>
                                 )}
                             </div>
@@ -859,17 +841,28 @@ export function EmployeeDashboardView({
             </div>
     );
 
-    if (embedded) {
-        return dashboardBody;
-    }
-
     return (
-        <AdminLayout>
-            <Head title="Human resources" />
-            <PageSurface className="px-0 py-0 md:py-2">
-                {dashboardBody}
-            </PageSurface>
-        </AdminLayout>
+        <>
+            <GeofenceVerificationOverlay
+                isOpen={!!actionType}
+                locationStatus={locationStatus}
+                locationProgress={locationProgress}
+                locationPreview={locationPreview}
+                attendanceError={attendanceError}
+                onDismissError={handleDismissError}
+                actionType={actionType}
+            />
+            {embedded ? (
+                dashboardBody
+            ) : (
+                <AdminLayout>
+                    <Head title="Human resources" />
+                    <PageSurface className="px-0 py-0 md:py-2">
+                        {dashboardBody}
+                    </PageSurface>
+                </AdminLayout>
+            )}
+        </>
     );
 }
 

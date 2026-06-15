@@ -19,6 +19,11 @@ class GratuityReportController extends Controller
         protected GratuityReportService $reports,
     ) {}
 
+    public function index()
+    {
+        return redirect()->route('sections.staff-fund', ['section' => 'staff-fund']);
+    }
+
     public function show(Request $request, string $report)
     {
         $config = $this->reportConfig($report);
@@ -28,10 +33,14 @@ class GratuityReportController extends Controller
         $error = null;
 
         if ($generated) {
+            $needsEmployee = (bool) ($config['require_employee'] ?? false);
             $needsAsOf = in_array('as_of', $config['filters'] ?? [], true);
-            $needsRange = in_array('date_from', $config['filters'] ?? [], true);
+            $needsRange = in_array('date_from', $config['filters'] ?? [], true)
+                && ! in_array('as_of', $config['filters'] ?? [], true);
 
-            if ($needsAsOf && ! $filters['as_of']) {
+            if ($needsEmployee && ! $filters['employee_id']) {
+                $error = 'Please select an employee.';
+            } elseif ($needsAsOf && ! $filters['as_of']) {
                 $error = 'Please select an as-of date.';
             } elseif ($needsRange && ! $filters['date_from'] && ! $filters['date_to']) {
                 $error = 'Please select a date range (from and/or to).';
@@ -47,6 +56,7 @@ class GratuityReportController extends Controller
                 'title' => $config['title'],
                 'description' => $config['description'] ?? '',
                 'filters' => $config['filters'] ?? [],
+                'requireEmployee' => (bool) ($config['require_employee'] ?? false),
             ],
             'filterOptions' => $this->reportFilterOptions(),
             'filters' => array_merge($this->payrollFilterValues($request), [

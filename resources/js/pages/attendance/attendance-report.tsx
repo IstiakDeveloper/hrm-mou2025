@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useEffect } from 'react';
+import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import { Head, useForm } from '@inertiajs/react';
 import { PageProps } from '@/types';
 import AppLayout from '@/layouts/AdminLayout';
-import { format, parseISO } from 'date-fns';
+import { format, isBefore, parseISO, startOfDay } from 'date-fns';
 import {
     Card,
     CardContent,
@@ -21,17 +22,8 @@ import {
     TableRow
 } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectLabel,
-    SelectTrigger,
-    SelectValue
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
     Form,
     FormControl,
@@ -62,13 +54,6 @@ import {
     MessageSquare,
     XCircle
 } from 'lucide-react';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
 
 interface Employee {
     id: number;
@@ -135,9 +120,20 @@ interface AttendanceReportProps extends PageProps {
 export default function AttendanceReport({ auth, employees, reports, employee_name, from_date, to_date, userPermissions }: AttendanceReportProps) {
     const { data, setData, post, processing, errors } = useForm({
         employee_id: '',
-        from_date: '',
-        to_date: '',
+        from_date: from_date || '',
+        to_date: to_date || '',
     });
+
+    const fromDateValue = data.from_date ? parseISO(data.from_date) : null;
+    const toDateValue = data.to_date ? parseISO(data.to_date) : null;
+
+    const employeeItems = useMemo((): ComboSelectItem<string>[] => {
+        return employees.map((employee) => ({
+            value: String(employee.id),
+            label: employee.name,
+            keywords: employee.name,
+        }));
+    }, [employees]);
 
     // Debug logs
     useEffect(() => {
@@ -318,27 +314,12 @@ export default function AttendanceReport({ auth, employees, reports, employee_na
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div className="space-y-2">
                                         <Label htmlFor="employee_id">Select Employee</Label>
-                                        <Select
-                                            value={data.employee_id}
-                                            onValueChange={(value) => {
-                                                console.log('Selected employee ID:', value);
-                                                setData('employee_id', value);
-                                            }}
-                                        >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select an employee" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectGroup>
-                                                    <SelectLabel>Employees</SelectLabel>
-                                                    {employees.map((employee) => (
-                                                        <SelectItem key={employee.id} value={employee.id.toString()}>
-                                                            {employee.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectGroup>
-                                            </SelectContent>
-                                        </Select>
+                                        <ComboSelect
+                                            value={data.employee_id || null}
+                                            onChange={(value) => setData('employee_id', value ?? '')}
+                                            items={employeeItems}
+                                            placeholder="Select an employee"
+                                        />
                                         {errors.employee_id && (
                                             <p className="text-sm text-red-500">{errors.employee_id}</p>
                                         )}
@@ -346,30 +327,22 @@ export default function AttendanceReport({ auth, employees, reports, employee_na
 
                                     <div className="space-y-2">
                                         <Label htmlFor="from_date">From Date</Label>
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full justify-start text-left font-normal"
-                                                    id="from_date"
-                                                >
-                                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {data.from_date ? formatDate(data.from_date) : <span>Select from date</span>}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={data.from_date ? new Date(data.from_date) : undefined}
-                                                    onSelect={(date) => {
-                                                        const formattedDate = date ? format(date, 'yyyy-MM-dd') : '';
-                                                        console.log('Selected from date:', formattedDate);
-                                                        setData('from_date', formattedDate);
-                                                    }}
-                                                    initialFocus
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
+                                        <DatePicker
+                                            id="from_date"
+                                            selected={fromDateValue}
+                                            onSelect={(date) => {
+                                                const formattedDate = date ? format(date, 'yyyy-MM-dd') : '';
+                                                setData((prev) => ({
+                                                    ...prev,
+                                                    from_date: formattedDate,
+                                                    to_date:
+                                                        date && prev.to_date && isBefore(parseISO(prev.to_date), startOfDay(date))
+                                                            ? ''
+                                                            : prev.to_date,
+                                                }));
+                                            }}
+                                            placeholderText="Select from date"
+                                        />
                                         {errors.from_date && (
                                             <p className="text-sm text-red-500">{errors.from_date}</p>
                                         )}
@@ -377,34 +350,13 @@ export default function AttendanceReport({ auth, employees, reports, employee_na
 
                                     <div className="space-y-2">
                                         <Label htmlFor="to_date">To Date</Label>
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full justify-start text-left font-normal"
-                                                    id="to_date"
-                                                >
-                                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {data.to_date ? formatDate(data.to_date) : <span>Select to date</span>}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={data.to_date ? new Date(data.to_date) : undefined}
-                                                    onSelect={(date) => {
-                                                        const formattedDate = date ? format(date, 'yyyy-MM-dd') : '';
-                                                        console.log('Selected to date:', formattedDate);
-                                                        setData('to_date', formattedDate);
-                                                    }}
-                                                    disabled={(date) => {
-                                                        if (!data.from_date) return false;
-                                                        return date < new Date(data.from_date);
-                                                    }}
-                                                    initialFocus
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
+                                        <DatePicker
+                                            id="to_date"
+                                            selected={toDateValue}
+                                            onSelect={(date) => setData('to_date', date ? format(date, 'yyyy-MM-dd') : '')}
+                                            placeholderText="Select to date"
+                                            minDate={fromDateValue || undefined}
+                                        />
                                         {errors.to_date && (
                                             <p className="text-sm text-red-500">{errors.to_date}</p>
                                         )}

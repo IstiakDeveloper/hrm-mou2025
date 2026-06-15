@@ -35,7 +35,7 @@ export default function GratuityRules({ tiers }: Props) {
                         {tiers.map((t) => (
                             <li key={t.min_years} className="flex justify-between py-2 text-zinc-700 font-medium">
                                 <span>{t.min_years}+ years of service completed</span>
-                                <span className="font-bold text-emerald-700">{t.basic_multiplier} × basic salary</span>
+                                <span className="font-bold text-emerald-700">basic × years × {t.basic_multiplier}</span>
                             </li>
                         ))}
                         <li className="flex justify-between py-2 text-zinc-500 font-medium">
@@ -44,7 +44,7 @@ export default function GratuityRules({ tiers }: Props) {
                         </li>
                         <li className="flex justify-between py-2 text-zinc-550 font-medium">
                             <span>Maximum limit</span>
-                            <span className="font-semibold text-zinc-700">4 × basic (20+ years)</span>
+                            <span className="font-semibold text-zinc-700">basic × years × 4 (20+ years)</span>
                         </li>
                     </ul>
                     <div className="rounded-md bg-zinc-50/50 border border-zinc-150 p-2.5 text-[10px] text-zinc-400 leading-normal">

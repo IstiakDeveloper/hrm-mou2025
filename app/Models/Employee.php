@@ -408,4 +408,16 @@ class Employee extends Model
             });
         });
     }
+
+    /**
+     * Permanent employees with payscale, grade, and step assigned (gratuity scope).
+     */
+    public function scopeForGratuity(Builder $query): Builder
+    {
+        return $query
+            ->whereHas('employeeType', fn (Builder $et) => $et->where('probation_months', 0))
+            ->whereNotNull('payscale_id')
+            ->whereNotNull('salary_grade_id')
+            ->whereNotNull('salary_step_id');
+    }
 }

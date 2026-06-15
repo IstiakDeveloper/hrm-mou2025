@@ -885,6 +885,16 @@ Route::middleware(['auth'])->group(function () {
 
         Route::prefix('provident-fund')->name('provident-fund.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'index'])->name('index');
+            Route::get('/summary', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'summary'])->name('summary');
+            Route::prefix('reports')->name('reports.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Payroll\PfReportController::class, 'index'])->name('index');
+                Route::get('/{report}', [\App\Http\Controllers\Payroll\PfReportController::class, 'show'])->name('show');
+                Route::get('/{report}/print', [\App\Http\Controllers\Payroll\PfReportController::class, 'print'])->name('print');
+                Route::middleware(['permission:reports.export'])->group(function () {
+                    Route::get('/{report}/pdf', [\App\Http\Controllers\Payroll\PfReportController::class, 'pdf'])->name('pdf');
+                    Route::get('/{report}/excel', [\App\Http\Controllers\Payroll\PfReportController::class, 'excel'])->name('excel');
+                });
+            });
             Route::get('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestIndex'])->name('interest.index');
             Route::post('/interest/preview', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestPreview'])->name('interest.preview')->middleware('permission:payroll.edit');
             Route::post('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestStore'])->name('interest.store')->middleware('permission:payroll.edit');
@@ -899,6 +909,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::prefix('gratuity')->name('gratuity.')->group(function () {
             Route::prefix('reports')->name('reports.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Payroll\GratuityReportController::class, 'index'])->name('index');
                 Route::get('/{report}', [\App\Http\Controllers\Payroll\GratuityReportController::class, 'show'])->name('show');
                 Route::get('/{report}/print', [\App\Http\Controllers\Payroll\GratuityReportController::class, 'print'])->name('print');
                 Route::middleware(['permission:reports.export'])->group(function () {

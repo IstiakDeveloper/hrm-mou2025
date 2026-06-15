@@ -34,7 +34,7 @@ class ProvidentFundController extends Controller
             ->with(['branch:id,name', 'department:id,name'])
             ->withSum(['pfTransactions as own_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employee_contribution')
             ->withSum(['pfTransactions as org_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employer_contribution')
-            ->whereIn('status', ['active', 'on_leave'])
+            ->where('pf_balance', '>', 0)
             ->when($request->filled('branch_id'), fn ($q) => $q->where('current_branch_id', $request->integer('branch_id')))
             ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
             ->when($request->filled('employee_id'), fn ($q) => $q->whereKey($request->integer('employee_id')))
@@ -47,7 +47,6 @@ class ProvidentFundController extends Controller
                 });
             })
             ->orderBy('pin')
-            ->limit(500)
             ->get()
             ->map(function (Employee $e) {
                 $own = SalaryStructureCalculator::roundTaka((float) ($e->own_contribution ?? 0));
@@ -61,18 +60,19 @@ class ProvidentFundController extends Controller
                     'id' => $e->id,
                     'pin' => $e->pin,
                     'name_en' => $e->name_en,
+                    'status' => $e->status,
                     'label' => trim(($e->pin ?? '').' — '.($e->name_en ?? '')),
                     'branch' => $e->branch?->name,
                     'department' => $e->department?->name,
                     'own_contribution' => $own,
                     'org_contribution' => $org,
-                    'pf_balance' => (float) $e->pf_balance,
+                    'pf_balance' => SalaryStructureCalculator::roundTaka((float) $e->pf_balance),
                     'pf_enrolled' => (bool) ($e->pf_enrolled ?? true),
                     'has_opening' => $openingTx !== null,
                     'opening_transaction' => $openingTx ? [
                         'id' => $openingTx->id,
-                        'employee_amount' => (float) $openingTx->employee_contribution,
-                        'employer_amount' => (float) $openingTx->employer_contribution,
+                        'employee_amount' => SalaryStructureCalculator::roundTaka((float) $openingTx->employee_contribution),
+                        'employer_amount' => SalaryStructureCalculator::roundTaka((float) $openingTx->employer_contribution),
                         'transaction_date' => $openingTx->transaction_date?->format('Y-m-d'),
                         'reference_no' => $openingTx->reference_no,
                         'notes' => $openingTx->notes,
@@ -111,9 +111,10 @@ class ProvidentFundController extends Controller
             'employee' => [
                 'id' => $employeeModel->id,
                 'label' => trim(($employeeModel->pin ?? '').' — '.($employeeModel->name_en ?? '')),
+                'status' => $employeeModel->status,
                 'branch' => $employeeModel->branch?->name,
                 'department' => $employeeModel->department?->name,
-                'pf_balance' => (float) $employeeModel->pf_balance,
+                'pf_balance' => SalaryStructureCalculator::roundTaka((float) $employeeModel->pf_balance),
                 'own_contribution' => SalaryStructureCalculator::roundTaka((float) ($employeeModel->own_contribution ?? 0)),
                 'org_contribution' => SalaryStructureCalculator::roundTaka((float) ($employeeModel->org_contribution ?? 0)),
             ],
@@ -135,11 +136,11 @@ class ProvidentFundController extends Controller
                     : null,
                 'transaction_date' => $tx->transaction_date?->format('d-m-Y'),
                 'transaction_date_iso' => $tx->transaction_date?->format('Y-m-d'),
-                'employee_contribution' => (float) $tx->employee_contribution,
-                'employer_contribution' => (float) $tx->employer_contribution,
-                'credit_amount' => (float) $tx->credit_amount,
-                'debit_amount' => (float) $tx->debit_amount,
-                'balance_after' => (float) $tx->balance_after,
+                'employee_contribution' => SalaryStructureCalculator::roundTaka((float) $tx->employee_contribution),
+                'employer_contribution' => SalaryStructureCalculator::roundTaka((float) $tx->employer_contribution),
+                'credit_amount' => SalaryStructureCalculator::roundTaka((float) $tx->credit_amount),
+                'debit_amount' => SalaryStructureCalculator::roundTaka((float) $tx->debit_amount),
+                'balance_after' => SalaryStructureCalculator::roundTaka((float) $tx->balance_after),
                 'notes' => $tx->notes,
                 'reference_no' => $tx->reference_no,
             ]),
@@ -353,8 +354,8 @@ class ProvidentFundController extends Controller
             ->map(fn (PfInterestRun $run) => [
                 'id' => $run->id,
                 'interest_year' => $run->interest_year,
-                'total_interest' => (float) $run->total_interest,
-                'total_pf_balance' => (float) $run->total_pf_balance,
+                'total_interest' => SalaryStructureCalculator::roundTaka((float) $run->total_interest),
+                'total_pf_balance' => SalaryStructureCalculator::roundTaka((float) $run->total_pf_balance),
                 'employee_count' => $run->employee_count,
                 'transaction_date' => $run->transaction_date?->format('d-m-Y'),
                 'notes' => $run->notes,
@@ -436,7 +437,7 @@ class ProvidentFundController extends Controller
                 'PF interest for %d posted to %d employees (total %s).',
                 $run->interest_year,
                 $run->employee_count,
-                number_format((float) $run->total_interest, 2)
+                number_format((float) $run->total_interest, 0)
             ));
     }
 
@@ -447,8 +448,7 @@ class ProvidentFundController extends Controller
     {
         return Employee::query()
             ->with(['branch:id,name'])
-            ->where('pf_enrolled', true)
-            ->whereIn('status', ['active', 'on_leave'])
+            ->where('pf_balance', '>', 0)
             ->orderBy('pin')
             ->get(['id', 'pin', 'name_en', 'employee_id', 'pf_balance', 'current_branch_id'])
             ->map(fn (Employee $e) => [
@@ -457,7 +457,7 @@ class ProvidentFundController extends Controller
                 'name_en' => $e->name_en,
                 'employee_id' => $e->employee_id,
                 'label' => trim(($e->pin ?? '').' — '.($e->name_en ?? '')),
-                'pf_balance' => (float) $e->pf_balance,
+                'pf_balance' => SalaryStructureCalculator::roundTaka((float) $e->pf_balance),
                 'branch' => $e->branch?->name,
             ])
             ->values()
@@ -487,9 +487,9 @@ class ProvidentFundController extends Controller
                 'employee_id' => $tx->employee_id,
                 'employee_label' => trim(($tx->employee?->pin ?? '').' — '.($tx->employee?->name_en ?? '')),
                 'transaction_date' => $tx->transaction_date?->format('d-m-Y'),
-                'debit_amount' => (float) $tx->debit_amount,
-                'own_amount' => (float) $tx->employee_contribution,
-                'org_amount' => (float) $tx->employer_contribution,
+                'debit_amount' => SalaryStructureCalculator::roundTaka((float) $tx->debit_amount),
+                'own_amount' => SalaryStructureCalculator::roundTaka((float) $tx->employee_contribution),
+                'org_amount' => SalaryStructureCalculator::roundTaka((float) $tx->employer_contribution),
                 'reference_no' => $tx->reference_no,
                 'notes' => $tx->notes,
             ]);

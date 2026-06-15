@@ -66,6 +66,8 @@ import { hasAppPermission } from '@/lib/permissions';
 import { getActiveSectionId, getMenuTitlesForSection, getSectionById, type AdminSectionId } from '@/lib/admin-sections';
 import { EMPLOYEE_LOAN_NAV_GROUPS, employeeLoanPath } from '@/lib/employee-loan-nav';
 import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee-loan-reports';
+import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
+import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { FIXED_ASSET_REPORT_NAV, fixedAssetReportPath } from '@/lib/fixed-asset-reports';
 import {
@@ -156,14 +158,16 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                 }));
         case 'staff-fund':
             return [
-                { title: 'Entitlements register', path: '/gratuity/reports/entitlements-register', permission: 'payroll.view' },
-                { title: 'Eligible employees', path: '/gratuity/reports/eligible-employees', permission: 'payroll.view' },
-                { title: 'Projected liability', path: '/gratuity/reports/projected-liability', permission: 'payroll.view' },
-                { title: 'Liability by department', path: '/gratuity/reports/liability-by-department', permission: 'payroll.view' },
-                { title: 'Unpaid liability', path: '/gratuity/reports/unpaid-liability', permission: 'payroll.view' },
-                { title: 'Settlement history', path: '/gratuity/reports/settlement-history', permission: 'payroll.view' },
-                { title: 'Payment summary', path: '/gratuity/reports/payment-summary', permission: 'payroll.view' },
-                { title: 'Gratuity rules', path: '/gratuity/reports/gratuity-rules', permission: 'payroll.view' },
+                ...PF_REPORT_NAV.map((r) => ({
+                    title: r.title,
+                    path: pfReportPath(r.slug),
+                    permission: 'payroll.view',
+                })),
+                ...GRATUITY_REPORT_NAV.map((r) => ({
+                    title: r.title,
+                    path: gratuityReportPath(r.slug),
+                    permission: 'payroll.view',
+                })),
             ];
         case 'payroll':
             return [
@@ -668,7 +672,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         if (!titles) {
             return menuItemsForLayout;
         }
-        const globalTitles = ['My Notices', ...(employee?.id ? (['My Assets'] as const) : [])];
+        const globalTitles = [...(employee?.id ? (['My Assets'] as const) : [])];
         const mergedTitles = [...globalTitles, ...titles.filter((t) => !globalTitles.includes(t))];
         return mergedTitles
             .map((title) => menuItemsForLayout.find((m) => m.title === title))
@@ -885,7 +889,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     };
 
     // Flash message handling
-    const { flash } = usePage().props as any;
+    const { flash, errors } = usePage().props as any;
     const { toast } = useToast();
     const [showSuccess, setShowSuccess] = useState(false);
     const [showError, setShowError] = useState(false);
@@ -898,9 +902,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             const timer = setTimeout(() => setShowSuccess(false), 5000);
             return () => clearTimeout(timer);
         }
-        if (flash.error) {
+        if (flash.error || errors?.attendance || errors?.lat || errors?.lng) {
             setShowError(true);
-            const timer = setTimeout(() => setShowError(false), 5000);
+            const timer = setTimeout(() => setShowError(false), 7000);
             return () => clearTimeout(timer);
         }
         if (flash.warning) {
@@ -913,7 +917,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             const timer = setTimeout(() => setShowInfo(false), 5000);
             return () => clearTimeout(timer);
         }
-    }, [flash]);
+    }, [flash, errors]);
 
     useEffect(() => {
         if (flash.success) {
@@ -1268,7 +1272,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 {showError && (
                     <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
                         <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>{flash.error}</AlertDescription>
+                        <AlertDescription>{flash.error || errors?.attendance || errors?.lat || errors?.lng || "Validation failed."}</AlertDescription>
                         <Button
                             variant="ghost"
                             size="icon"

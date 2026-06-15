@@ -152,8 +152,15 @@ export default function GratuityShow({ employee, filters, calculation, payments,
                                     <dd className="tabular-nums">{fmt(calculation.basic_salary)}</dd>
                                 </div>
                                 <div className="flex justify-between">
-                                    <dt className="text-slate-600">Multiplier</dt>
+                                    <dt className="text-slate-600">Gratuity rate</dt>
                                     <dd>{calculation.basic_multiplier}×</dd>
+                                </div>
+                                <div className="flex justify-between text-xs text-slate-500">
+                                    <dt>Formula</dt>
+                                    <dd className="tabular-nums">
+                                        {fmt(calculation.basic_salary)} × {calculation.completed_years} ×{' '}
+                                        {calculation.basic_multiplier}
+                                    </dd>
                                 </div>
                                 <div className="flex justify-between border-t border-violet-200 pt-2">
                                     <dt className="font-bold text-violet-900">Payable</dt>

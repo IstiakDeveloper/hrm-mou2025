@@ -15,6 +15,9 @@ class Attendance extends Model
 {
     use HasFactory;
 
+    /** Statuses set by leave/movement/holiday workflows — not overwritten by punch rules. */
+    private const PROGRAMMATIC_STATUSES = ['leave', 'on_duty', 'holiday'];
+
     protected $fillable = [
         'employee_id',
         'date',
@@ -34,6 +37,13 @@ class Attendance extends Model
         'check_out' => 'datetime',
         'location_coordinates' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Attendance $attendance) {
+            $attendance->applyPunchStatus();
+        });
+    }
 
     public function employee()
     {
@@ -124,17 +134,7 @@ class Attendance extends Model
         $employee = Employee::find($employeeId);
         $branchId = $employee?->current_branch_id ?: ($employee?->branch_id ?: null);
 
-        $weekendDays = [];
-        if ($branchId) {
-            $settings = AttendanceSetting::query()->where('branch_id', $branchId)->first();
-            $raw = $settings?->weekend_days;
-            if (is_array($raw)) {
-                $weekendDays = array_values(array_map('intval', $raw));
-            } elseif (is_string($raw)) {
-                $decoded = json_decode($raw, true);
-                $weekendDays = is_array($decoded) ? array_values(array_map('intval', $decoded)) : [];
-            }
-        }
+        $weekendDays = AttendanceSetting::global()->weekendDayNumbers();
 
         $isHoliday = Holiday::query()
             ->whereDate('date', $carbonDate->format('Y-m-d'))
@@ -149,7 +149,7 @@ class Attendance extends Model
             ->exists();
 
         if ($hasValidAttendance) {
-            return 'present';
+            return $attendanceRowStatus ?: 'present';
         }
         if ($isOnLeave) {
             return 'leave';
@@ -177,28 +177,112 @@ class Attendance extends Model
     }
 
     /**
-     * Determine attendance status based on attendance record
+     * Apply punch-based status using company-wide attendance settings.
      */
-    public function determineAttendanceStatus($attendance)
+    public function applyPunchStatus(?AttendanceSetting $settings = null): void
     {
-        // If no check-in and no check-out, it's absent
-        if (!$attendance->check_in && !$attendance->check_out) {
+        if ($this->shouldSkipPunchStatus()) {
+            return;
+        }
+
+        $this->status = $this->computeStatusFromPunch($settings);
+    }
+
+    /**
+     * Calculate status from check-in/check-out using global office rules.
+     *
+     * Rules (9:00 AM – 5:00 PM, 15 min grace):
+     * - No punch → absent
+     * - Check-in after grace → late
+     * - Check-out before office end → half_day (early leave)
+     * - Late + early leave → keep late
+     */
+    public function computeStatusFromPunch(?AttendanceSetting $settings = null): string
+    {
+        $settings ??= AttendanceSetting::global();
+
+        if (! $this->check_in && ! $this->check_out) {
             return 'absent';
         }
 
-        // If check-in exists but no check-out, it might be a partial day
-        if ($attendance->check_in && !$attendance->check_out) {
+        if (! $this->check_in && $this->check_out) {
             return 'half_day';
         }
 
-        // If both check-in and check-out exist, it's likely present
-        if ($attendance->check_in && $attendance->check_out) {
-            return 'present';
+        $attendanceDate = Carbon::parse($this->date)->startOfDay();
+        $checkInDateTime = $this->parsePunchDateTime($this->check_in, $attendanceDate);
+
+        $workStart = $this->buildWorkDateTime($attendanceDate, $settings->work_start_time);
+        $workEnd = $this->buildWorkDateTime($attendanceDate, $settings->work_end_time ?? '17:00:00');
+        $lateThreshold = $workStart->copy()->addMinutes((int) ($settings->late_threshold_minutes ?? 15));
+
+        $status = $checkInDateTime->gt($lateThreshold) ? 'late' : 'present';
+
+        if ($this->check_out) {
+            $checkOutDateTime = $this->parsePunchDateTime($this->check_out, $attendanceDate);
+
+            if ($checkOutDateTime->lt($checkInDateTime)) {
+                $checkOutDateTime->addDay();
+            }
+
+            // Early leave: left before official office end time
+            if ($checkOutDateTime->lt($workEnd) && $status !== 'late') {
+                $status = 'half_day';
+            }
+
+            $hoursWorked = $checkInDateTime->floatDiffInHours($checkOutDateTime);
+            if ($hoursWorked < ($settings->half_day_hours ?? 4) && $status !== 'late') {
+                $status = 'half_day';
+            }
         }
 
-        // Fallback to absent if nothing matches
-        return 'absent';
+        return $status;
     }
 
+    /**
+     * @deprecated Use computeStatusFromPunch() on the model instance instead.
+     */
+    public function determineAttendanceStatus($attendance): string
+    {
+        if ($attendance instanceof self) {
+            return $attendance->computeStatusFromPunch();
+        }
 
+        $clone = new self((array) $attendance);
+
+        return $clone->computeStatusFromPunch();
+    }
+
+    private function shouldSkipPunchStatus(): bool
+    {
+        if (! $this->check_in && ! $this->check_out) {
+            return in_array($this->status, self::PROGRAMMATIC_STATUSES, true);
+        }
+
+        if (in_array($this->status, self::PROGRAMMATIC_STATUSES, true) && ! $this->check_in) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function parsePunchDateTime(mixed $value, Carbon $attendanceDate): Carbon
+    {
+        $parsed = Carbon::parse($value);
+
+        return $attendanceDate->copy()
+            ->setHour($parsed->hour)
+            ->setMinute($parsed->minute)
+            ->setSecond($parsed->second);
+    }
+
+    private function buildWorkDateTime(Carbon $attendanceDate, mixed $timeValue): Carbon
+    {
+        $parsed = Carbon::parse($timeValue);
+
+        return $attendanceDate->copy()
+            ->setHour($parsed->hour)
+            ->setMinute($parsed->minute)
+            ->setSecond($parsed->second);
+    }
 }

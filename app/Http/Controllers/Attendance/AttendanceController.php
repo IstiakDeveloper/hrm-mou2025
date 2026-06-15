@@ -270,17 +270,8 @@ class AttendanceController extends Controller
             return;
         }
 
-        // Get branch ID from the employee
-        $branchId = $attendance->employee->current_branch_id;
-
-        // Get attendance settings for the branch
-        $settings = AttendanceSetting::where('branch_id', $branchId)->first();
-
-        if (! $settings) {
-            $attendance->auto_remarks = 'No attendance settings found for branch';
-
-            return;
-        }
+        // Get company-wide attendance settings
+        $settings = AttendanceSetting::global();
 
         try {
             // Parse date, extracting only the date portion

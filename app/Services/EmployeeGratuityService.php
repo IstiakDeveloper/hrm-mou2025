@@ -24,11 +24,22 @@ class EmployeeGratuityService
     {
         $asOf = $asOf ?? Carbon::today();
 
-        if (! $employee->joining_date) {
-            return $this->emptyResult('Joining date not set');
+        if (! $employee->confirmation_date) {
+            $end = $this->serviceEndDate($employee, $asOf);
+
+            return [
+                'completed_years' => 0,
+                'basic_salary' => $this->resolveBasicSalary($employee),
+                'basic_multiplier' => 0,
+                'gratuity_amount' => 0.0,
+                'service_start' => null,
+                'service_end' => $end->toDateString(),
+                'eligible' => false,
+                'label' => 'Confirmation date not set',
+            ];
         }
 
-        $start = Carbon::parse($employee->joining_date);
+        $start = Carbon::parse($employee->confirmation_date);
         $end = $this->serviceEndDate($employee, $asOf);
 
         if ($end->lt($start)) {
@@ -38,7 +49,7 @@ class EmployeeGratuityService
         $completedYears = (int) $start->diffInYears($end);
         $multiplier = $this->multiplierForYears($completedYears);
         $basic = $this->resolveBasicSalary($employee);
-        $amount = SalaryStructureCalculator::roundTaka($basic * $multiplier);
+        $amount = SalaryStructureCalculator::roundTaka($basic * $completedYears * $multiplier);
 
         return [
             'completed_years' => $completedYears,
@@ -105,7 +116,12 @@ class EmployeeGratuityService
             return sprintf('Not eligible (%d years completed; minimum 5 years)', $years);
         }
 
-        return sprintf('%d years completed — %d × basic salary', $years, $multiplier);
+        return sprintf(
+            '%d years completed — basic salary × %d years × %d gratuity',
+            $years,
+            $years,
+            $multiplier,
+        );
     }
 
     /**

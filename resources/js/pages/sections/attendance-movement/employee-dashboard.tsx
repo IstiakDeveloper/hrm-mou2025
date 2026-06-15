@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { useSelfAttendanceCheck } from '@/hooks/use-self-attendance-check';
+import { GeofenceVerificationOverlay } from '@/components/attendance/GeofenceVerificationOverlay';
 import {
     ArrowUpRight,
     CalendarDays,
@@ -20,6 +21,10 @@ import {
     UserRound,
     XCircle,
     AlertCircle,
+    Loader2,
+    AlertTriangle,
+    MapPin,
+    CheckCircle2,
 } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -117,6 +122,7 @@ export function AttendanceMovementEmployeeDashboardView({
     const { auth } = usePage().props as { auth?: { user?: { name?: string } } };
 
     const {
+        actionType,
         isSubmitting,
         attendanceError,
         locationStatus,
@@ -124,6 +130,7 @@ export function AttendanceMovementEmployeeDashboardView({
         locationPreview,
         handleCheckIn,
         handleCheckOut,
+        handleDismissError,
     } = useSelfAttendanceCheck();
 
     const todayStatus = useMemo(() => statusLabel(todayAttendance?.status), [todayAttendance?.status]);
@@ -133,23 +140,6 @@ export function AttendanceMovementEmployeeDashboardView({
 
     const dashboardBody = (
             <div className={embedded ? '' : 'contents'}>
-                {(attendanceError || locationStatus) && (
-                    <Alert
-                        className={`mb-4 ${attendanceError ? 'border-rose-200 bg-rose-50' : 'border-sky-200 bg-sky-50'}`}
-                    >
-                        {attendanceError ? (
-                            <XCircle className="h-4 w-4 text-rose-600" />
-                        ) : (
-                            <AlertCircle className="h-4 w-4 text-sky-600" />
-                        )}
-                        <AlertTitle className={attendanceError ? 'text-rose-900' : 'text-sky-900'}>
-                            {attendanceError ? 'Attendance action blocked' : 'Working'}
-                        </AlertTitle>
-                        <AlertDescription className={attendanceError ? 'text-rose-800' : 'text-sky-800'}>
-                            {attendanceError || locationStatus}
-                        </AlertDescription>
-                    </Alert>
-                )}
 
                 {/* Compact light header + today stats */}
                 <Card
@@ -230,42 +220,7 @@ export function AttendanceMovementEmployeeDashboardView({
                             </div>
                         </div>
 
-                        {(isSubmitting || locationProgress > 0) && (
-                            <div className="rounded-xl border border-zinc-200 bg-gradient-to-b from-white to-zinc-50/90 p-4 shadow-sm">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="truncate text-xs font-medium text-zinc-700">
-                                            {locationStatus || 'Checking location…'}
-                                        </div>
-                                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
-                                            <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-sky-800 ring-1 ring-sky-200">
-                                                GPS
-                                            </span>
-                                            {locationPreview.sampleCount > 0 && (
-                                                <span className="truncate">
-                                                    Best accuracy:{' '}
-                                                    <span className="font-semibold text-zinc-800">
-                                                        {locationPreview.bestAccuracy !== null
-                                                            ? `${Math.round(locationPreview.bestAccuracy)}m`
-                                                            : 'N/A'}
-                                                    </span>
-                                                    {' · '}Samples:{' '}
-                                                    <span className="font-semibold text-zinc-800">
-                                                        {locationPreview.sampleCount}
-                                                    </span>
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="shrink-0 text-xs font-semibold tabular-nums text-zinc-700">
-                                        {Math.min(100, Math.max(0, locationProgress))}%
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <Progress value={locationProgress} className="h-2" />
-                                </div>
-                            </div>
-                        )}
+
 
                         <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex flex-wrap items-center gap-2">
@@ -278,23 +233,23 @@ export function AttendanceMovementEmployeeDashboardView({
                                 {(!todayAttendance || !todayAttendance.check_in) && (
                                     <Button
                                         type="button"
-                                        className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                        className="h-10 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-md shadow-emerald-600/10 hover:shadow-lg hover:shadow-emerald-600/20 active:scale-95 transition-all duration-200"
                                         onClick={handleCheckIn}
                                         disabled={isSubmitting}
                                     >
-                                        <LogIn className="mr-2 h-4 w-4" />
-                                        {isSubmitting ? 'Processing…' : 'Check in'}
+                                        <LogIn className="mr-2 h-4.5 w-4.5" />
+                                        {isSubmitting ? 'Locking GPS...' : 'Check in'}
                                     </Button>
                                 )}
                                 {todayAttendance?.check_in && (
                                     <Button
                                         type="button"
-                                        className="bg-sky-600 text-white hover:bg-sky-700"
+                                        className="h-10 px-5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold shadow-md shadow-rose-600/10 hover:shadow-lg hover:shadow-rose-600/20 active:scale-95 transition-all duration-200"
                                         onClick={handleCheckOut}
                                         disabled={isSubmitting}
                                     >
-                                        <LogOut className="mr-2 h-4 w-4" />
-                                        {isSubmitting ? 'Processing…' : 'Check out'}
+                                        <LogOut className="mr-2 h-4.5 w-4.5" />
+                                        {isSubmitting ? 'Locking GPS...' : 'Check out'}
                                     </Button>
                                 )}
                             </div>
@@ -449,15 +404,26 @@ export function AttendanceMovementEmployeeDashboardView({
             </div>
     );
 
-    if (embedded) {
-        return dashboardBody;
-    }
-
     return (
-        <Layout>
-            <Head title="My attendance & movements" />
-            <PageSurface className="px-3 sm:px-4">{dashboardBody}</PageSurface>
-        </Layout>
+        <>
+            <GeofenceVerificationOverlay
+                isOpen={!!actionType}
+                locationStatus={locationStatus}
+                locationProgress={locationProgress}
+                locationPreview={locationPreview}
+                attendanceError={attendanceError}
+                onDismissError={handleDismissError}
+                actionType={actionType}
+            />
+            {embedded ? (
+                dashboardBody
+            ) : (
+                <Layout>
+                    <Head title="My attendance & movements" />
+                    <PageSurface className="px-3 sm:px-4">{dashboardBody}</PageSurface>
+                </Layout>
+            )}
+        </>
     );
 }
 

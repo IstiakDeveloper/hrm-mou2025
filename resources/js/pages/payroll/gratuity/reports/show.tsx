@@ -13,6 +13,7 @@ import {
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
 import { WordTableReport } from '@/components/reports/WordTableReport';
+import { gratuityReportPath } from '@/lib/gratuity-reports';
 import { staffFundPath } from '@/lib/staff-fund-nav';
 import { Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
@@ -21,6 +22,7 @@ type ReportMeta = {
     title: string;
     description: string;
     filters: string[];
+    requireEmployee?: boolean;
 };
 
 type Props = {
@@ -80,7 +82,31 @@ export default function GratuityReportShow({
         };
     }, [report.filters]);
 
-    const basePath = staffFundPath(`/gratuity/reports/${report.slug}`);
+    const fmt = (n: unknown) => {
+        const v = Math.round(Number(n ?? 0));
+        return Number.isFinite(v) ? v.toLocaleString() : '0';
+    };
+
+    const employeeBlock = payload?.employee as
+        | {
+              label?: string;
+              pin?: string;
+              branch?: string | null;
+              department?: string | null;
+              designation?: string | null;
+              confirmation_date?: string;
+              service_end?: string;
+              years?: number;
+              basic?: number;
+              multiplier?: number;
+              gratuity?: number;
+              eligible?: string;
+              paid_total?: number;
+              outstanding?: number;
+          }
+        | undefined;
+
+    const basePath = gratuityReportPath(report.slug);
 
     const generate = () => {
         router.get(basePath, { ...filters, generate: '1' }, { preserveState: true });
@@ -104,7 +130,7 @@ export default function GratuityReportShow({
             <PayrollPage>
                 <PayrollPageHeader title={report.title} description={report.description} />
 
-                {report.filters.length > 0 && (
+            {report.filters.length > 0 && (
                     <PayrollSectionCard
                         title="Filters"
                         description="Set criteria and click Generate report."
@@ -127,6 +153,7 @@ export default function GratuityReportShow({
                                     showDesignation={false}
                                     showProgram={false}
                                     showProject={false}
+                                    forGratuityEmployees
                                 />
                             )}
 
@@ -177,6 +204,14 @@ export default function GratuityReportShow({
                                         onChange={(v) => setFilter('payment_status', v)}
                                         items={PAYMENT_OPTIONS}
                                         placeholder="All"
+                                    />
+                                )}
+                                {show.employee && !show.grid && (
+                                    <PayrollEmployeeSelect
+                                        employees={filterOptions.employees}
+                                        value={filters.employee_id}
+                                        onChange={(v) => setFilter('employee_id', v)}
+                                        forGratuity
                                     />
                                 )}
                             </div>
@@ -240,6 +275,52 @@ export default function GratuityReportShow({
                             periodLabel={periodLabel}
                             rowCount={(payload.meta as { row_count?: number } | undefined)?.row_count}
                         />
+                        {employeeBlock && (
+                            <div className="mb-3 overflow-x-auto border border-black bg-white text-[11px] text-black">
+                                <table className="w-full border-collapse">
+                                    <tbody>
+                                        <tr className="border-b border-black">
+                                            <th className="border-r border-black p-1 text-left font-semibold">Employee</th>
+                                            <td className="border-r border-black p-1">{employeeBlock.label}</td>
+                                            <th className="border-r border-black p-1 text-left font-semibold">Branch</th>
+                                            <td className="p-1">{employeeBlock.branch ?? '—'}</td>
+                                        </tr>
+                                        <tr className="border-b border-black">
+                                            <th className="border-r border-black p-1 text-left font-semibold">PIN</th>
+                                            <td className="border-r border-black p-1">{employeeBlock.pin}</td>
+                                            <th className="border-r border-black p-1 text-left font-semibold">Department</th>
+                                            <td className="p-1">{employeeBlock.department ?? '—'}</td>
+                                        </tr>
+                                        <tr className="border-b border-black">
+                                            <th className="border-r border-black p-1 text-left font-semibold">Designation</th>
+                                            <td className="border-r border-black p-1">{employeeBlock.designation ?? '—'}</td>
+                                            <th className="border-r border-black p-1 text-left font-semibold">Eligible</th>
+                                            <td className="p-1">{employeeBlock.eligible ?? '—'}</td>
+                                        </tr>
+                                        <tr className="border-b border-black">
+                                            <th className="border-r border-black p-1 text-left font-semibold">Confirmation / Service end</th>
+                                            <td className="border-r border-black p-1">
+                                                {employeeBlock.confirmation_date
+                                                    ? `${employeeBlock.confirmation_date} / ${employeeBlock.service_end ?? '—'}`
+                                                    : employeeBlock.service_end ?? '—'}
+                                            </td>
+                                            <th className="border-r border-black p-1 text-left font-semibold">Years × Basic × ×</th>
+                                            <td className="p-1">
+                                                {employeeBlock.years ?? 0} × {fmt(employeeBlock.basic)} × {employeeBlock.multiplier ?? 0}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th className="border-r border-black p-1 text-left font-semibold">Projected gratuity</th>
+                                            <td className="border-r border-black p-1">{fmt(employeeBlock.gratuity)}</td>
+                                            <th className="border-r border-black p-1 text-left font-semibold">Paid / Outstanding</th>
+                                            <td className="p-1">
+                                                {fmt(employeeBlock.paid_total)} / {fmt(employeeBlock.outstanding)}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                         <WordTableReport payload={payload as Parameters<typeof WordTableReport>[0]['payload']} />
                     </PayrollSectionCard>
                 )}

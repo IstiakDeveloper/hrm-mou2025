@@ -215,18 +215,7 @@ class ZKDeviceController extends Controller
     private function processAttendanceLogs($logs, AttendanceDevice $device)
     {
         $processedCount = 0;
-        $settings = AttendanceSetting::where('branch_id', $device->branch_id)->first();
-
-        if (!$settings) {
-            // Use default settings if none found for this branch
-            $settings = new AttendanceSetting([
-                'work_start_time' => '09:00',
-                'work_end_time' => '17:00',
-                'late_threshold_minutes' => 15,
-                'half_day_hours' => 4,
-                'weekend_days' => json_encode([0, 6]), // Sunday and Saturday
-            ]);
-        }
+        $settings = AttendanceSetting::global();
 
         // Group logs by employee and date
         $groupedLogs = [];
@@ -264,9 +253,7 @@ class ZKDeviceController extends Controller
             foreach ($dates as $date => $record) {
                 // Skip weekend days if configured
                 $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-                // AttendanceSetting casts weekend_days to array; avoid json_decode(array)
-                $rawWeekend = $settings->weekend_days ?? [];
-                $weekendDays = is_array($rawWeekend) ? $rawWeekend : (json_decode($rawWeekend ?? '[]', true) ?: []);
+                $weekendDays = $settings->weekendDayNumbers();
                 if (in_array($dayOfWeek, $weekendDays)) {
                     continue;
                 }
@@ -281,10 +268,6 @@ class ZKDeviceController extends Controller
                     $existing->check_in = $record['check_in'] ? Carbon::parse($record['check_in'])->format('H:i:s') : null;
                     $existing->check_out = $record['check_out'] ? Carbon::parse($record['check_out'])->format('H:i:s') : null;
                     $existing->device_id = $device->id;
-
-                    // Determine status
-                    $existing->status = $this->determineAttendanceStatus($record, $settings);
-
                     $existing->save();
                 } else {
                     // Create new record
@@ -293,7 +276,6 @@ class ZKDeviceController extends Controller
                         'date' => $date,
                         'check_in' => $record['check_in'] ? Carbon::parse($record['check_in'])->format('H:i:s') : null,
                         'check_out' => $record['check_out'] ? Carbon::parse($record['check_out'])->format('H:i:s') : null,
-                        'status' => $this->determineAttendanceStatus($record, $settings),
                         'device_id' => $device->id,
                     ]);
                 }
@@ -303,41 +285,6 @@ class ZKDeviceController extends Controller
         }
 
         return $processedCount;
-    }
-
-    /**
-     * Determine attendance status based on check-in/out times and settings.
-     */
-    private function determineAttendanceStatus($record, $settings)
-    {
-        if (!$record['check_in']) {
-            return 'absent';
-        }
-
-        $checkIn = Carbon::parse($record['check_in']);
-        $workStart = Carbon::parse($checkIn->format('Y-m-d') . ' ' . $settings->work_start_time);
-
-        // Check if late
-        $isLate = $checkIn->diffInMinutes($workStart) > $settings->late_threshold_minutes &&
-            $checkIn->greaterThan($workStart);
-
-        // Check if half day
-// Check if half day
-        $isHalfDay = false;
-
-        if ($record['check_out']) {
-            $checkOut = Carbon::parse($record['check_out']);
-            $workHours = $checkIn->diffInHours($checkOut);
-            $isHalfDay = $workHours < $settings->half_day_hours;
-        }
-
-        if ($isHalfDay) {
-            return 'half_day';
-        } elseif ($isLate) {
-            return 'late';
-        } else {
-            return 'present';
-        }
     }
 
     /**

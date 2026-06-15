@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
+import { useEmployeeLookup } from '@/lib/employee-lookup';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
@@ -155,11 +157,31 @@ export default function AttendanceReport({
   const [branchId, setBranchId] = useState(filters.branch_id || null);
   const [departmentId, setDepartmentId] = useState(filters.department_id || null);
   const [status, setStatus] = useState(filters.status || null);
-  const [employeeId, setEmployeeId] = useState(filters.employee_id || null);
+  const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
   const [currentStartDate, setCurrentStartDate] = useState(startDate);
   const [currentEndDate, setCurrentEndDate] = useState(endDate);
   const [startDateOpen, setStartDateOpen] = useState(false);
   const [endDateOpen, setEndDateOpen] = useState(false);
+
+  const employeeLookup = useEmployeeLookup({
+    enabled: employees.length === 0,
+    branchId: branchId ?? null,
+    limit: 50,
+  });
+  const employeeOptions = employees.length > 0 ? employees : employeeLookup.employees;
+  const employeeItems = useMemo(() => {
+    const items: ComboSelectItem<string>[] = [{ value: 'all', label: 'All Employees' }];
+    for (const employee of employeeOptions) {
+      const pin = employee.employee_id ?? employee.pin ?? '';
+      const name = employeeDisplayName(employee as Employee);
+      items.push({
+        value: String(employee.id),
+        label: pin ? `${pin} - ${name}` : name,
+        keywords: [pin, name, String(employee.id)].filter(Boolean).join(' '),
+      });
+    }
+    return items;
+  }, [employeeOptions]);
 
   const handleSearch = () => {
     router.get(route('attendance.report'), {
@@ -168,7 +190,7 @@ export default function AttendanceReport({
       branch_id: branchId || '',
       department_id: departmentId || '',
       status: status || '',
-      employee_id: employeeId || ''
+      employee_id: employeeId !== 'all' ? employeeId : ''
     }, { preserveState: true });
   };
 
@@ -176,7 +198,7 @@ export default function AttendanceReport({
     setBranchId(null);
     setDepartmentId(null);
     setStatus(null);
-    setEmployeeId(null);
+    setEmployeeId('all');
     router.get(route('attendance.report'), {
       start_date: currentStartDate,
       end_date: currentEndDate
@@ -206,7 +228,7 @@ export default function AttendanceReport({
       branch_id: branchId || '',
       department_id: departmentId || '',
       status: status || '',
-      employee_id: employeeId || ''
+      employee_id: employeeId !== 'all' ? employeeId : ''
     }, { preserveState: true });
   };
 
@@ -388,22 +410,12 @@ export default function AttendanceReport({
               </div>
 
               <div>
-                <Select
-                  value={employeeId || undefined}
-                  onValueChange={(value) => setEmployeeId(value === "all" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select employee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Employees</SelectItem>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id.toString()}>
-                        {employeeDisplayName(employee)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ComboSelect
+                  value={employeeId}
+                  onChange={(value) => setEmployeeId(value ?? 'all')}
+                  items={employeeItems}
+                  placeholder="All Employees"
+                />
               </div>
 
               <div>
@@ -572,7 +584,7 @@ export default function AttendanceReport({
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center">
                       No attendance records found for the selected criteria.
-                      {(branchId || departmentId || status || employeeId) && (
+                      {(branchId || departmentId || status || (employeeId && employeeId !== 'all')) && (
                         <Button
                           variant="link"
                           onClick={resetFilters}
@@ -606,7 +618,7 @@ export default function AttendanceReport({
                           branch_id: branchId || '',
                           department_id: departmentId || '',
                           status: status || '',
-                          employee_id: employeeId || ''
+                          employee_id: employeeId !== 'all' ? employeeId : ''
                         }, { preserveState: true });
                       }}
                     />
@@ -638,7 +650,7 @@ export default function AttendanceReport({
                               branch_id: branchId || '',
                               department_id: departmentId || '',
                               status: status || '',
-                              employee_id: employeeId || ''
+                              employee_id: employeeId !== 'all' ? employeeId : ''
                             }, { preserveState: true });
                           }
                         }}
@@ -661,7 +673,7 @@ export default function AttendanceReport({
                           branch_id: branchId || '',
                           department_id: departmentId || '',
                           status: status || '',
-                          employee_id: employeeId || ''
+                          employee_id: employeeId !== 'all' ? employeeId : ''
                         }, { preserveState: true });
                       }}
                     />
