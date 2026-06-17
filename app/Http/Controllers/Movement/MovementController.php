@@ -326,15 +326,24 @@ class MovementController extends Controller
             'movement_type' => 'required|in:official,personal',
             'from_datetime' => 'required|date',
             'to_datetime' => 'required|date|after:from_datetime',
-            'purpose' => ['required', 'string', 'english_only'], // Using custom rule
-            'destination' => ['required', 'string', 'english_only'], // Using custom rule
-            'remarks' => ['nullable', 'string', 'english_only'], // Using custom rule
+            'purpose' => 'required|string|max:500',
+            'destination' => 'required|string|max:255',
+            'remarks' => 'nullable|string|max:1000',
         ]);
 
         // Movement start must be within the last 5 minutes or in the future (small clock / form delay tolerance)
         $from = $this->parseMovementDateTimeToApp($request->from_datetime);
         $to = $this->parseMovementDateTimeToApp($request->to_datetime);
         $now = Carbon::now(config('app.timezone'));
+
+        // Same-day form delay: if the user picked "now" but submitted a few minutes later, snap start to current time.
+        if ($from->lt($now) && $from->isSameDay($now)) {
+            $from = $now->copy();
+            if ($to->lte($from)) {
+                $to = $from->copy()->addHours(8);
+            }
+        }
+
         if ($from->lt($now->copy()->subMinutes(5))) {
             return redirect()->back()
                 ->withErrors(['from_datetime' => 'Movement start (from date & time) cannot be more than 5 minutes in the past.'])
@@ -384,9 +393,16 @@ class MovementController extends Controller
         // Send notifications to department heads and branch heads
         $this->sendNotificationsToManagers($movement, $targetEmployee);
 
-        // For official movements, update attendance records
+        // For official movements, update attendance records (non-blocking — movement must still be created)
         if ($movement->movement_type === 'official') {
-            $this->updateAttendanceForMovement($movement);
+            try {
+                $this->updateAttendanceForMovement($movement);
+            } catch (\Throwable $e) {
+                \Log::error('Movement attendance update failed after create', [
+                    'movement_id' => $movement->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return redirect()->route('movements.index')
@@ -745,7 +761,7 @@ class MovementController extends Controller
     /**
      * Show form to edit a movement.
      */
-    public function edit(Movement $movement)
+    public function edit(Request $request, Movement $movement)
     {
         $user = Auth::user();
         $employee = $user->employee;
@@ -758,13 +774,11 @@ class MovementController extends Controller
             ! $isAdminEditor &&
             (! $employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
         ) {
-            return redirect()->route('movements.index')
-                ->with('error', 'You do not have permission to edit this movement request.');
+            return $this->redirectToMovementIndex($request, 'error', 'You do not have permission to edit this movement request.');
         }
 
         if ($isAdminEditor && ! in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
-            return redirect()->route('movements.index')
-                ->with('error', 'This movement cannot be edited.');
+            return $this->redirectToMovementIndex($request, 'error', 'This movement cannot be edited.');
         }
 
         $employees = $user->hasPermission('movements.edit') ?
@@ -776,6 +790,7 @@ class MovementController extends Controller
             'employees' => $employees,
             'isAdmin' => $user->hasPermission('movements.edit'),
             'movementTypes' => ['official', 'personal'],
+            'returnFilters' => $this->movementIndexFiltersFromRequest($request),
         ]);
     }
 
@@ -793,13 +808,11 @@ class MovementController extends Controller
             ! $isAdminEditor &&
             (! $employee || (int) $employee->id !== (int) $movement->employee_id || $movement->status !== 'pending')
         ) {
-            return redirect()->route('movements.index')
-                ->with('error', 'You do not have permission to update this movement request.');
+            return $this->redirectToMovementIndex($request, 'error', 'You do not have permission to update this movement request.');
         }
 
         if ($isAdminEditor && ! in_array($movement->status, ['active', 'completed', 'pending', 'approved'], true)) {
-            return redirect()->route('movements.index')
-                ->with('error', 'This movement cannot be updated.');
+            return $this->redirectToMovementIndex($request, 'error', 'This movement cannot be updated.');
         }
 
         $isCompleted = $movement->status === 'completed';
@@ -875,20 +888,18 @@ class MovementController extends Controller
             $this->updateAttendanceForCompletion($movement->fresh(), $newReturnFinal);
         }
 
-        return redirect()->route('movements.index')
-            ->with('success', 'Movement request updated successfully.');
+        return $this->redirectToMovementIndex($request, 'success', 'Movement request updated successfully.');
     }
 
     /**
      * Remove the specified movement (admin only).
      */
-    public function destroy(Movement $movement)
+    public function destroy(Request $request, Movement $movement)
     {
         $user = Auth::user();
 
         if (! $user->hasPermission('movements.delete')) {
-            return redirect()->route('movements.index')
-                ->with('error', 'You do not have permission to delete movements.');
+            return $this->redirectToMovementIndex($request, 'error', 'You do not have permission to delete movements.');
         }
 
         DB::beginTransaction();
@@ -898,16 +909,55 @@ class MovementController extends Controller
             $movement->delete();
             DB::commit();
 
-            return redirect()->route('movements.index')
-                ->with('success', 'Movement deleted successfully.');
+            return $this->redirectToMovementIndex($request, 'success', 'Movement deleted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Error deleting movement: '.$e->getMessage(), [
                 'movement_id' => $movement->id,
             ]);
 
-            return redirect()->route('movements.index')
-                ->with('error', 'Could not delete this movement.');
+            return $this->redirectToMovementIndex($request, 'error', 'Could not delete this movement.');
+        }
+    }
+
+    /**
+     * Remove multiple movements (admin only).
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $user = Auth::user();
+
+        if (! $user->hasPermission('movements.delete')) {
+            return $this->redirectToMovementIndex($request, 'error', 'You do not have permission to delete movements.');
+        }
+
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:movements,id',
+        ]);
+
+        $ids = $validated['ids'];
+
+        DB::beginTransaction();
+
+        try {
+            Attendance::whereIn('movement_id', $ids)->update(['movement_id' => null]);
+            Movement::whereIn('id', $ids)->delete();
+            DB::commit();
+
+            $count = count($ids);
+            $message = $count === 1
+                ? 'Movement deleted successfully.'
+                : "{$count} movements deleted successfully.";
+
+            return $this->redirectToMovementIndex($request, 'success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error bulk deleting movements: '.$e->getMessage(), [
+                'ids' => $ids,
+            ]);
+
+            return $this->redirectToMovementIndex($request, 'error', 'Could not delete the selected movements.');
         }
     }
 
@@ -1523,5 +1573,48 @@ class MovementController extends Controller
         ]);
 
         return $pdf->download('movement-report-'.now()->format('Y-m-d').'.pdf');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function movementIndexFilterKeys(): array
+    {
+        return [
+            'status',
+            'department_id',
+            'employee_id',
+            'movement_type',
+            'from_date',
+            'to_date',
+            'search',
+            'per_page',
+            'page',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function movementIndexFiltersFromRequest(Request $request): array
+    {
+        return array_filter(
+            $request->only($this->movementIndexFilterKeys()),
+            static fn ($value) => $value !== null && $value !== '',
+        );
+    }
+
+    /**
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    private function redirectToMovementIndex(Request $request, ?string $flashKey = null, ?string $flashMessage = null)
+    {
+        $redirect = redirect()->route('movements.index', $this->movementIndexFiltersFromRequest($request));
+
+        if ($flashKey && $flashMessage) {
+            $redirect->with($flashKey, $flashMessage);
+        }
+
+        return $redirect;
     }
 }

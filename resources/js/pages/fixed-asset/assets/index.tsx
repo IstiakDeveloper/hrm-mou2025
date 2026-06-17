@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ComboSelect } from '@/components/ComboSelect';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
-import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
+import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed-asset/AssetPageShell';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { hasAppPermission } from '@/lib/permissions';
 import { type SharedData } from '@/types';
@@ -31,11 +31,26 @@ type AssetRow = {
     custodian?: (EmployeeNameFields & { id: number; employee_id: string }) | null;
 };
 
-const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    active: 'default',
-    in_transit: 'outline',
-    under_maintenance: 'secondary',
-    disposed: 'destructive',
+const getStatusBadge = (status: string) => {
+    const labels: Record<string, string> = {
+        active: 'Active',
+        in_transit: 'In Transit',
+        under_maintenance: 'Maintenance',
+        not_in_use: 'Not in Use',
+        disposed: 'Disposed',
+    };
+    const classes: Record<string, string> = {
+        active: 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-50',
+        in_transit: 'bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-50',
+        under_maintenance: 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-50',
+        not_in_use: 'bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-100',
+        disposed: 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-50',
+    };
+    return (
+        <Badge variant="outline" className={classes[status] || 'bg-zinc-50 text-zinc-600 border-zinc-100'}>
+            {labels[status] || status.replace(/_/g, ' ')}
+        </Badge>
+    );
 };
 
 export default function FixedAssetIndex({
@@ -72,116 +87,144 @@ export default function FixedAssetIndex({
     return (
         <Layout>
             <Head title="Fixed assets" />
-            <PayrollPage>
-                <PayrollPageHeader
+            <AssetPage>
+                <AssetPageHeader
                     icon={Boxes}
                     title="Asset register"
                     description="All fixed assets across head office and 42+ branches."
                 >
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                         {canCreate && (
                             <Link href={route('fixed-assets.import.index')}>
-                                <Button size="sm" variant="outline">Import CSV</Button>
+                                <Button size="sm" variant="outline" className="border-zinc-200 text-zinc-700 hover:bg-zinc-50 h-8.5 rounded-lg cursor-pointer">Import CSV</Button>
                             </Link>
                         )}
                         {canCreate && (
                             <Link href={route('fixed-assets.create')}>
-                                <Button size="sm"><Plus className="mr-2 h-4 w-4" />Register asset</Button>
+                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-2xs h-8.5 rounded-lg cursor-pointer"><Plus className="mr-2 h-4 w-4" />Register asset</Button>
                             </Link>
                         )}
                     </div>
-                </PayrollPageHeader>
+                </AssetPageHeader>
 
                 <BranchScopeAlert branchScoped={branchScoped} />
 
                 {flash?.success && (
-                    <Alert className="mb-4 border-emerald-200 bg-emerald-50">
-                        <AlertTitle>Success</AlertTitle>
-                        <AlertDescription>{flash.success}</AlertDescription>
+                    <Alert className="mb-4 border-emerald-100 bg-emerald-50/40 text-emerald-950 rounded-xl shadow-2xs">
+                        <AlertTitle className="text-xs font-semibold uppercase tracking-wider text-emerald-800">Success</AlertTitle>
+                        <AlertDescription className="text-xs text-emerald-700 mt-1">{flash.success}</AlertDescription>
                     </Alert>
                 )}
                 {flash?.error && (
-                    <Alert variant="destructive" className="mb-4">
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>{flash.error}</AlertDescription>
+                    <Alert variant="destructive" className="mb-4 rounded-xl shadow-2xs">
+                        <AlertTitle className="text-xs font-semibold uppercase tracking-wider text-rose-800">Error</AlertTitle>
+                        <AlertDescription className="text-xs text-rose-700 mt-1">{flash.error}</AlertDescription>
                     </Alert>
                 )}
 
-                <PayrollSectionCard title="Filters" className="mb-4">
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-                        <Input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-                            placeholder="Tag, name, serial…"
-                        />
-                        <ComboSelect
-                            value={branchId}
-                            onChange={(v) => setBranchId(v)}
-                            items={branchComboSelectItems(branches, { numericValue: true })}
-                            placeholder="All branches"
-                        />
-                        <ComboSelect
-                            value={categoryId}
-                            onChange={(v) => setCategoryId(v)}
-                            items={categories.map((c) => ({ value: c.id, label: `${c.code} — ${c.name}` }))}
-                            placeholder="All categories"
-                        />
-                        <ComboSelect
-                            value={status || null}
-                            onChange={(v) => setStatus(v ? String(v) : '')}
-                            items={statusOptions.map((s) => ({ value: s.value, label: s.label }))}
-                            placeholder="All statuses"
-                        />
-                        <Button variant="outline" onClick={applyFilters}><Search className="mr-2 h-4 w-4" />Filter</Button>
+                <AssetSectionCard title="Filters" className="mb-1">
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-end">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Search</label>
+                            <Input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                                placeholder="Tag, name, serial…"
+                                className="h-9 border-zinc-200"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Branch</label>
+                            <ComboSelect
+                                value={branchId}
+                                onChange={(v) => setBranchId(v)}
+                                items={branchComboSelectItems(branches, { numericValue: true })}
+                                placeholder="All branches"
+                                className="h-9 border-zinc-200"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Category</label>
+                            <ComboSelect
+                                value={categoryId}
+                                onChange={(v) => setCategoryId(v)}
+                                items={categories.map((c) => ({ value: c.id, label: `${c.code} — ${c.name}` }))}
+                                placeholder="All categories"
+                                className="h-9 border-zinc-200"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Status</label>
+                            <ComboSelect
+                                value={status || null}
+                                onChange={(v) => setStatus(v ? String(v) : '')}
+                                items={statusOptions.map((s) => ({ value: s.value, label: s.label }))}
+                                placeholder="All statuses"
+                                className="h-9 border-zinc-200"
+                            />
+                        </div>
+                        <div>
+                            <Button className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-2xs cursor-pointer gap-2" onClick={applyFilters}>
+                                <Search className="h-4 w-4" /> Filter
+                            </Button>
+                        </div>
                     </div>
-                </PayrollSectionCard>
+                </AssetSectionCard>
 
-                <PayrollSectionCard title="Assets">
+                <AssetSectionCard title="Assets Register" noPadding className="mt-4">
                     <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Tag</TableHead>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Category</TableHead>
-                                <TableHead>Branch</TableHead>
-                                <TableHead>Custodian</TableHead>
-                                <TableHead>Book value</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                        <TableHeader className="bg-zinc-50/50">
+                            <TableRow className="hover:bg-transparent border-zinc-100">
+                                <TableHead className="font-semibold text-zinc-700 py-3.5 pl-6">Tag</TableHead>
+                                <TableHead className="font-semibold text-zinc-700">Name</TableHead>
+                                <TableHead className="font-semibold text-zinc-700">Category</TableHead>
+                                <TableHead className="font-semibold text-zinc-700">Branch</TableHead>
+                                <TableHead className="font-semibold text-zinc-700">Custodian</TableHead>
+                                <TableHead className="font-semibold text-zinc-700 text-right">Book value</TableHead>
+                                <TableHead className="font-semibold text-zinc-700">Status</TableHead>
+                                <TableHead className="py-3.5 pr-6 text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {assets.data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="py-12 text-center text-zinc-400 font-medium">
                                         No assets found. Register your first asset.
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 assets.data.map((row) => (
-                                    <TableRow key={row.id}>
-                                        <TableCell className="font-mono text-xs">{row.asset_tag}</TableCell>
-                                        <TableCell className="font-medium">{row.name}</TableCell>
-                                        <TableCell>{row.category?.name ?? '—'}</TableCell>
-                                        <TableCell>{row.branch?.name ?? '—'}</TableCell>
-                                        <TableCell>
-                                            {row.custodian
-                                                ? employeeDisplayName(row.custodian)
-                                                : '—'}
+                                    <TableRow key={row.id} className="hover:bg-zinc-50/40 border-zinc-100 group transition-colors">
+                                        <TableCell className="font-mono text-xs font-semibold text-zinc-900 py-3.5 pl-6">{row.asset_tag}</TableCell>
+                                        <TableCell className="font-medium text-zinc-800">{row.name}</TableCell>
+                                        <TableCell className="text-zinc-600 text-xs">{row.category?.name ?? '—'}</TableCell>
+                                        <TableCell className="text-zinc-600 text-xs">{row.branch?.name ?? '—'}</TableCell>
+                                        <TableCell className="text-zinc-600 text-xs">
+                                            {row.custodian ? (
+                                                <span className="font-medium text-zinc-700">{employeeDisplayName(row.custodian)}</span>
+                                            ) : (
+                                                <span className="text-zinc-400">—</span>
+                                            )}
                                         </TableCell>
-                                        <TableCell>{row.book_value ?? row.purchase_cost ?? '—'}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={statusVariant[row.status] ?? 'secondary'}>
-                                                {row.status.replace(/_/g, ' ')}
-                                            </Badge>
+                                        <TableCell className="text-right font-mono text-xs font-semibold text-zinc-800 tabular-nums">
+                                            {row.book_value != null || row.purchase_cost != null ? (
+                                                `৳${Number(row.book_value ?? row.purchase_cost).toLocaleString()}`
+                                            ) : (
+                                                '—'
+                                            )}
                                         </TableCell>
-                                        <TableCell className="space-x-1 text-right">
+                                        <TableCell>{getStatusBadge(row.status)}</TableCell>
+                                        <TableCell className="text-right py-3.5 pr-6 space-x-1.5">
                                             <Link href={route('fixed-assets.show', row.id)}>
-                                                <Button variant="outline" size="sm"><Eye className="h-4 w-4" /></Button>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-colors cursor-pointer">
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
                                             </Link>
                                             <Link href={route('fixed-assets.edit', row.id)}>
-                                                <Button variant="outline" size="sm"><Edit className="h-4 w-4" /></Button>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-700 rounded-lg transition-colors cursor-pointer">
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
                                             </Link>
                                         </TableCell>
                                     </TableRow>
@@ -189,8 +232,8 @@ export default function FixedAssetIndex({
                             )}
                         </TableBody>
                     </Table>
-                </PayrollSectionCard>
-            </PayrollPage>
+                </AssetSectionCard>
+            </AssetPage>
         </Layout>
     );
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminNoticeController;
+use App\Http\Controllers\Admin\ActiveSessionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Attendance\AttendanceController;
@@ -22,11 +23,26 @@ use App\Http\Controllers\Employee\EmployeeLeaveController;
 use App\Http\Controllers\Employee\EmployeeMovementController;
 use App\Http\Controllers\FixedAsset\AssetAssignmentController;
 use App\Http\Controllers\FixedAsset\AssetCategoryController;
+use App\Http\Controllers\FixedAsset\AssetCustodianChangeController;
+use App\Http\Controllers\FixedAsset\AssetCustodianController;
+use App\Http\Controllers\FixedAsset\AssetCustodianDepartmentController;
+use App\Http\Controllers\FixedAsset\AssetCustodianDesignationController;
 use App\Http\Controllers\FixedAsset\AssetDepreciationController;
 use App\Http\Controllers\FixedAsset\AssetDisposalController;
+use App\Http\Controllers\FixedAsset\AssetDisposalReasonController;
+use App\Http\Controllers\FixedAsset\AssetFinancialYearController;
+use App\Http\Controllers\FixedAsset\AssetGuaranteeController;
+use App\Http\Controllers\FixedAsset\AssetInsuranceController;
 use App\Http\Controllers\FixedAsset\AssetMaintenanceController;
+use App\Http\Controllers\FixedAsset\AssetNotInUseController;
+use App\Http\Controllers\FixedAsset\AssetPurchaseController;
+use App\Http\Controllers\FixedAsset\AssetStockController;
 use App\Http\Controllers\FixedAsset\AssetRevaluationController;
+use App\Http\Controllers\FixedAsset\AssetSubCategoryController;
+use App\Http\Controllers\FixedAsset\AssetTrackingController;
 use App\Http\Controllers\FixedAsset\AssetTransferController;
+use App\Http\Controllers\FixedAsset\AssetVendorController;
+use App\Http\Controllers\FixedAsset\AssetWarrantyController;
 use App\Http\Controllers\FixedAsset\FixedAssetController;
 use App\Http\Controllers\FixedAsset\FixedAssetDashboardController;
 use App\Http\Controllers\FixedAsset\FixedAssetImportController;
@@ -133,7 +149,11 @@ Route::get('/error/{type}', function ($type) {
 // PUBLIC ROUTES
 // ====================
 Route::get('/', function () {
-    return Auth::check() ? redirect()->route('sections.index') : redirect()->route('login');
+    if (! Auth::check()) {
+        return redirect()->route('login');
+    }
+
+    return redirect()->route('sections.index');
 });
 
 Route::get('/admin/roles/fix-permissions', [RoleController::class, 'fixAllRolePermissions'])
@@ -191,6 +211,10 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middl
 Route::middleware(['auth'])->group(function () {
 
     require __DIR__.'/settings.php';
+
+    // Legacy branch portal URLs → normal section flow
+    Route::redirect('/branch', '/sections')->name('branch.portal');
+    Route::redirect('/branch/attendance', '/attendance/daily-branch-summary?section=attendance-movement')->name('branch.portal.attendance');
 
     // Section Landing - Modules (available to all authenticated users)
     Route::get('/sections', function () {
@@ -313,6 +337,18 @@ Route::middleware(['auth'])->group(function () {
     // ====================
     // ADMIN MANAGEMENT (Super Admin Only)
     // ====================
+    Route::prefix('admin')->name('admin.')->middleware(['permission:users.view'])->group(function () {
+        Route::prefix('sessions')->name('sessions.')->group(function () {
+            Route::get('/', [ActiveSessionController::class, 'index'])->name('index');
+            Route::delete('/{sessionId}', [ActiveSessionController::class, 'destroy'])
+                ->name('destroy')
+                ->middleware('permission:admin.access');
+            Route::delete('/user/{user}', [ActiveSessionController::class, 'destroyUser'])
+                ->name('destroy-user')
+                ->middleware('permission:admin.access');
+        });
+    });
+
     Route::prefix('admin')->name('admin.')->middleware(['permission:admin.access'])->group(function () {
 
         // One-time (token-protected) storage linker for shared hosting.
@@ -939,13 +975,145 @@ Route::middleware(['auth'])->group(function () {
     // FIXED ASSET
     // ====================
     Route::middleware(['permission:fixed-assets.view'])->group(function () {
-        Route::prefix('asset-categories')->name('asset-categories.')->group(function () {
-            Route::get('/', [AssetCategoryController::class, 'index'])->name('index');
-            Route::get('/create', [AssetCategoryController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
-            Route::post('/', [AssetCategoryController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
-            Route::get('/{asset_category}/edit', [AssetCategoryController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
-            Route::put('/{asset_category}', [AssetCategoryController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
-            Route::delete('/{asset_category}', [AssetCategoryController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+        Route::redirect('/asset-categories', '/fixed-asset/settings/categories');
+        Route::redirect('/asset-categories/create', '/fixed-asset/settings/categories/create');
+
+        Route::prefix('fixed-asset/settings')->name('fixed-asset.settings.')->group(function () {
+            Route::prefix('financial-years')->name('financial-years.')->group(function () {
+                Route::get('/', [AssetFinancialYearController::class, 'index'])->name('index');
+                Route::get('/create', [AssetFinancialYearController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetFinancialYearController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{financial_year}/edit', [AssetFinancialYearController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{financial_year}', [AssetFinancialYearController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{financial_year}', [AssetFinancialYearController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+                Route::post('/{financial_year}/activate', [AssetFinancialYearController::class, 'activate'])->name('activate')->middleware('permission:fixed-assets.edit');
+            });
+
+            Route::prefix('vendors')->name('vendors.')->group(function () {
+                Route::get('/', [AssetVendorController::class, 'index'])->name('index');
+                Route::get('/create', [AssetVendorController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetVendorController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{vendor}/edit', [AssetVendorController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{vendor}', [AssetVendorController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{vendor}', [AssetVendorController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::prefix('categories')->name('categories.')->group(function () {
+                Route::get('/', [AssetCategoryController::class, 'index'])->name('index');
+                Route::get('/create', [AssetCategoryController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetCategoryController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{asset_category}/edit', [AssetCategoryController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{asset_category}', [AssetCategoryController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{asset_category}', [AssetCategoryController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::prefix('sub-categories')->name('sub-categories.')->group(function () {
+                Route::get('/', [AssetSubCategoryController::class, 'index'])->name('index');
+                Route::get('/create', [AssetSubCategoryController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetSubCategoryController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{sub_category}/edit', [AssetSubCategoryController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{sub_category}', [AssetSubCategoryController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{sub_category}', [AssetSubCategoryController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+        });
+
+        Route::prefix('fixed-asset/custodian')->name('fixed-asset.custodian.')->group(function () {
+            Route::prefix('departments')->name('departments.')->group(function () {
+                Route::get('/', [AssetCustodianDepartmentController::class, 'index'])->name('index');
+                Route::get('/create', [AssetCustodianDepartmentController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetCustodianDepartmentController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{department}/edit', [AssetCustodianDepartmentController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{department}', [AssetCustodianDepartmentController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{department}', [AssetCustodianDepartmentController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::prefix('designations')->name('designations.')->group(function () {
+                Route::get('/', [AssetCustodianDesignationController::class, 'index'])->name('index');
+                Route::get('/create', [AssetCustodianDesignationController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetCustodianDesignationController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{designation}/edit', [AssetCustodianDesignationController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{designation}', [AssetCustodianDesignationController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{designation}', [AssetCustodianDesignationController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::prefix('custodians')->name('custodians.')->group(function () {
+                Route::get('/', [AssetCustodianController::class, 'index'])->name('index');
+                Route::get('/employees', [AssetCustodianController::class, 'employees'])->name('employees');
+                Route::get('/create', [AssetCustodianController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetCustodianController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{custodian}/edit', [AssetCustodianController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{custodian}', [AssetCustodianController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{custodian}', [AssetCustodianController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::prefix('changes')->name('changes.')->group(function () {
+                Route::get('/', [AssetCustodianChangeController::class, 'index'])->name('index');
+                Route::get('/create', [AssetCustodianChangeController::class, 'create'])->name('create')->middleware('permission:fixed-assets.edit');
+                Route::post('/', [AssetCustodianChangeController::class, 'store'])->name('store')->middleware('permission:fixed-assets.edit');
+            });
+        });
+
+        Route::prefix('fixed-asset/purchases')->name('fixed-asset.purchases.')->group(function () {
+            Route::get('/', [AssetPurchaseController::class, 'index'])->name('index');
+            Route::get('/create', [AssetPurchaseController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+            Route::post('/', [AssetPurchaseController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+            Route::get('/sub-categories', [AssetPurchaseController::class, 'subCategories'])->name('sub-categories');
+            Route::get('/preview-codes', [AssetPurchaseController::class, 'previewCodes'])->name('preview-codes');
+            Route::get('/{purchase}', [AssetPurchaseController::class, 'show'])->name('show');
+        });
+
+        Route::prefix('fixed-asset/assets')->name('fixed-asset.assets.')->group(function () {
+            Route::get('/tracking', [AssetTrackingController::class, 'index'])->name('tracking.index');
+
+            Route::prefix('insurance')->name('insurance.')->group(function () {
+                Route::get('/', [AssetInsuranceController::class, 'index'])->name('index');
+                Route::get('/create', [AssetInsuranceController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetInsuranceController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{insurance}/edit', [AssetInsuranceController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{insurance}', [AssetInsuranceController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{insurance}', [AssetInsuranceController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::prefix('warranties')->name('warranties.')->group(function () {
+                Route::get('/', [AssetWarrantyController::class, 'index'])->name('index');
+                Route::get('/create', [AssetWarrantyController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetWarrantyController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{warranty}/edit', [AssetWarrantyController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{warranty}', [AssetWarrantyController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{warranty}', [AssetWarrantyController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::prefix('guarantees')->name('guarantees.')->group(function () {
+                Route::get('/', [AssetGuaranteeController::class, 'index'])->name('index');
+                Route::get('/create', [AssetGuaranteeController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetGuaranteeController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{guarantee}/edit', [AssetGuaranteeController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{guarantee}', [AssetGuaranteeController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{guarantee}', [AssetGuaranteeController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::prefix('not-in-use')->name('not-in-use.')->group(function () {
+                Route::get('/', [AssetNotInUseController::class, 'index'])->name('index');
+                Route::get('/history', [AssetNotInUseController::class, 'history'])->name('history');
+                Route::post('/', [AssetNotInUseController::class, 'store'])->name('store')->middleware('permission:fixed-assets.edit');
+                Route::post('/{fixed_asset}/restore', [AssetNotInUseController::class, 'restore'])->name('restore')->middleware('permission:fixed-assets.edit');
+            });
+        });
+
+        Route::prefix('fixed-asset/stock')->name('fixed-asset.stock.')->group(function () {
+            Route::get('/category-wise', [AssetStockController::class, 'categoryWise'])->name('category-wise');
+            Route::get('/branch-wise', [AssetStockController::class, 'branchWise'])->name('branch-wise');
+        });
+
+        Route::prefix('fixed-asset/depreciation')->name('fixed-asset.depreciation.')->group(function () {
+            Route::get('/calculation', [AssetDepreciationController::class, 'calculation'])->name('calculation');
+            Route::get('/posting', [AssetDepreciationController::class, 'posting'])->name('posting');
+            Route::post('/posting', [AssetDepreciationController::class, 'post'])->name('post')->middleware('permission:fixed-assets.edit');
+            Route::get('/rollback', [AssetDepreciationController::class, 'rollback'])->name('rollback');
+            Route::post('/rollback', [AssetDepreciationController::class, 'rollbackRun'])->name('rollback.run')->middleware('permission:fixed-assets.edit');
+            Route::get('/manual', [AssetDepreciationController::class, 'manual'])->name('manual');
+            Route::post('/manual', [AssetDepreciationController::class, 'manualStore'])->name('manual.store')->middleware('permission:fixed-assets.edit');
+            Route::get('/schedule/{fixed_asset}', [AssetDepreciationController::class, 'schedule'])->name('schedule');
         });
 
         Route::prefix('fixed-assets')->name('fixed-assets.')->group(function () {
@@ -960,6 +1128,20 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/{fixed_asset}', [FixedAssetController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
             Route::delete('/{fixed_asset}', [FixedAssetController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
         });
+
+        Route::prefix('fixed-asset/transfer')->name('fixed-asset.transfer.')->group(function () {
+            Route::get('/branch', [AssetTransferController::class, 'branchIndex'])->name('branch.index');
+            Route::get('/branch/create', [AssetTransferController::class, 'branchCreate'])->name('branch.create')->middleware('permission:fixed-assets.edit');
+            Route::post('/branch', [AssetTransferController::class, 'branchStore'])->name('branch.store')->middleware('permission:fixed-assets.edit');
+            Route::get('/project/create', [AssetTransferController::class, 'projectCreate'])->name('project.create')->middleware('permission:fixed-assets.edit');
+            Route::post('/project', [AssetTransferController::class, 'projectStore'])->name('project.store')->middleware('permission:fixed-assets.edit');
+            Route::get('/custodian/create', [AssetTransferController::class, 'custodianCreate'])->name('custodian.create')->middleware('permission:fixed-assets.edit');
+            Route::post('/custodian', [AssetTransferController::class, 'custodianStore'])->name('custodian.store')->middleware('permission:fixed-assets.edit');
+            Route::get('/history', [AssetTransferController::class, 'history'])->name('history');
+        });
+
+        Route::redirect('/asset-transfers', '/fixed-asset/transfer/branch');
+        Route::redirect('/asset-transfers/create', '/fixed-asset/transfer/branch/create');
 
         Route::prefix('asset-transfers')->name('asset-transfers.')->group(function () {
             Route::get('/', [AssetTransferController::class, 'index'])->name('index');
@@ -984,6 +1166,33 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/{asset_maintenance}', [AssetMaintenanceController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
         });
 
+        Route::prefix('fixed-asset/disposal')->name('fixed-asset.disposal.')->group(function () {
+            Route::prefix('reasons')->name('reasons.')->group(function () {
+                Route::get('/', [AssetDisposalReasonController::class, 'index'])->name('index');
+                Route::get('/create', [AssetDisposalReasonController::class, 'create'])->name('create')->middleware('permission:fixed-assets.create');
+                Route::post('/', [AssetDisposalReasonController::class, 'store'])->name('store')->middleware('permission:fixed-assets.create');
+                Route::get('/{reason}/edit', [AssetDisposalReasonController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+                Route::put('/{reason}', [AssetDisposalReasonController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+                Route::delete('/{reason}', [AssetDisposalReasonController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
+            });
+
+            Route::get('/requests', [AssetDisposalController::class, 'requestsIndex'])->name('requests.index');
+            Route::get('/requests/create', [AssetDisposalController::class, 'requestsCreate'])->name('requests.create')->middleware('permission:fixed-assets.edit');
+            Route::post('/requests', [AssetDisposalController::class, 'requestsStore'])->name('requests.store')->middleware('permission:fixed-assets.edit');
+
+            Route::get('/dispose/create', [AssetDisposalController::class, 'disposeCreate'])->name('dispose.create')->middleware('permission:fixed-assets.delete');
+            Route::post('/dispose', [AssetDisposalController::class, 'disposeStore'])->name('dispose.store')->middleware('permission:fixed-assets.delete');
+
+            Route::get('/batch/create', [AssetDisposalController::class, 'batchCreate'])->name('batch.create')->middleware('permission:fixed-assets.delete');
+            Route::post('/batch', [AssetDisposalController::class, 'batchStore'])->name('batch.store')->middleware('permission:fixed-assets.delete');
+
+            Route::post('/requests/{asset_disposal}/approve', [AssetDisposalController::class, 'approve'])->name('approve')->middleware('permission:fixed-assets.delete');
+            Route::post('/requests/{asset_disposal}/reject', [AssetDisposalController::class, 'reject'])->name('reject')->middleware('permission:fixed-assets.delete');
+        });
+
+        Route::redirect('/asset-disposals', '/fixed-asset/disposal/requests');
+        Route::redirect('/asset-disposals/create', '/fixed-asset/disposal/requests/create');
+
         Route::prefix('asset-disposals')->name('asset-disposals.')->group(function () {
             Route::get('/', [AssetDisposalController::class, 'index'])->name('index');
             Route::get('/create', [AssetDisposalController::class, 'create'])->name('create')->middleware('permission:fixed-assets.edit');
@@ -991,6 +1200,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{asset_disposal}/approve', [AssetDisposalController::class, 'approve'])->name('approve')->middleware('permission:fixed-assets.delete');
             Route::post('/{asset_disposal}/reject', [AssetDisposalController::class, 'reject'])->name('reject')->middleware('permission:fixed-assets.delete');
         });
+
+        Route::redirect('/asset-depreciation', '/fixed-asset/depreciation/posting');
 
         Route::prefix('asset-depreciation')->name('asset-depreciation.')->group(function () {
             Route::get('/', [AssetDepreciationController::class, 'index'])->name('index');
@@ -1084,7 +1295,7 @@ Route::middleware(['auth'])->group(function () {
         Route::prefix('attendance')->name('attendance.')->group(function () {
             Route::get('/report', [AttendanceReportController::class, 'index'])->name('report');
             Route::post('/report', [AttendanceReportController::class, 'index']);
-            Route::post('/report/pdf', [AttendanceReportController::class, 'downloadPdf'])->name('report.pdf');
+            Route::get('/report/pdf', [AttendanceReportController::class, 'downloadPdf'])->name('report.pdf');
         });
     });
 
@@ -1234,6 +1445,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{movement}/edit', [MovementController::class, 'edit'])->name('edit');
             Route::put('/{movement}', [MovementController::class, 'update'])->name('update');
         });
+
+        Route::post('/bulk-destroy', [MovementController::class, 'bulkDestroy'])
+            ->name('bulk-destroy')
+            ->middleware('permission:movements.delete');
 
         Route::delete('/{movement}', [MovementController::class, 'destroy'])
             ->name('destroy')
@@ -1399,6 +1614,7 @@ Route::middleware(['auth'])->group(function () {
     // ====================
     Route::middleware(['permission:reports.view'])->prefix('reports')->name('reports.')->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
+        Route::get('/administration', [ReportController::class, 'administration'])->name('administration');
         Route::get('/attendance', [ReportController::class, 'attendance'])->name('attendance');
         Route::get('/leave', [ReportController::class, 'leave'])->name('leave');
         Route::get('/movement', [ReportController::class, 'movement'])->name('movement');

@@ -33,6 +33,7 @@ class AttendanceReportController extends Controller
         // Initialize empty reports array
         $reports = [];
         $employeeName = '';
+        $employeeId = '';
         $fromDate = '';
         $toDate = '';
 
@@ -45,22 +46,23 @@ class AttendanceReportController extends Controller
                 'to_date' => 'required|date|after_or_equal:from_date',
             ]);
 
-            $employeeId = (int) $request->employee_id;
+            $selectedEmployeeId = (int) $request->employee_id;
             $fromDate = $request->from_date;
             $toDate = $request->to_date;
 
-            if (! $this->userMayViewEmployeeAttendanceReport($user, $employeeId)) {
+            if (! $this->userMayViewEmployeeAttendanceReport($user, $selectedEmployeeId)) {
                 return redirect()->back()->withErrors([
                     'employee_id' => 'You do not have access to this employee’s attendance report.',
                 ])->withInput();
             }
 
             // Get employee full name
-            $employee = Employee::findOrFail($employeeId);
+            $employee = Employee::findOrFail($selectedEmployeeId);
             $employeeName = $employee->name_en ?? $employee->full_name_en ?? '';
+            $employeeId = (string) $selectedEmployeeId;
 
             // Generate the attendance report
-            $reports = $this->generateAttendanceReport($employeeId, $fromDate, $toDate);
+            $reports = $this->generateAttendanceReport($selectedEmployeeId, $fromDate, $toDate);
         }
 
         // Return Inertia view with data
@@ -68,6 +70,7 @@ class AttendanceReportController extends Controller
             'employees' => $employees,
             'reports' => $reports,
             'employee_name' => $employeeName,
+            'employee_id' => $employeeId,
             'from_date' => $fromDate,
             'to_date' => $toDate,
             'userPermissions' => [
@@ -591,11 +594,9 @@ class AttendanceReportController extends Controller
                 ]
             );
         } catch (\Exception $e) {
-            // Log the error
             Log::error('PDF generation error: ' . $e->getMessage());
 
-            // Return with error message
-            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+            abort(500, 'Failed to generate PDF. Please try again.');
         }
     }
 

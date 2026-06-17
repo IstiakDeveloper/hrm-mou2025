@@ -18,11 +18,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { DISPLAY_DATE_FMT } from "@/lib/display-date";
 
-/** Bangladesh-style: day–month–year (e.g. 13-05-2026). */
-const DISPLAY_FORMAT = "dd-MM-yyyy" as const;
-
-const PARSE_FORMATS = ["dd-MM-yyyy", "dd/MM/yyyy", "yyyy-MM-dd"] as const;
+const PARSE_FORMATS = [DISPLAY_DATE_FMT, "dd-MM-yyyy", "yyyy-MM-dd"] as const;
 
 function tryParseDateString(value: string): Date | null {
   const trimmed = value.trim();
@@ -43,26 +41,28 @@ interface DatePickerProps {
   maxDate?: Date;
   id?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function DatePicker({
   selected,
   onSelect,
-  placeholderText = "DD-MM-YYYY",
+  placeholderText = "DD/MM/YYYY",
   minDate,
   maxDate,
   id,
   className,
+  disabled,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState(() =>
-    selected ? format(selected, DISPLAY_FORMAT) : ""
+    selected ? format(selected, DISPLAY_DATE_FMT) : ""
   );
   const [invalid, setInvalid] = React.useState(false);
 
   React.useEffect(() => {
     if (selected) {
-      setInputValue(format(selected, DISPLAY_FORMAT));
+      setInputValue(format(selected, DISPLAY_DATE_FMT));
     } else {
       setInputValue("");
     }
@@ -90,7 +90,7 @@ export function DatePicker({
     if (!parsed || !isInRange(parsed)) {
       setInvalid(true);
       if (selected) {
-        setInputValue(format(selected, DISPLAY_FORMAT));
+        setInputValue(format(selected, DISPLAY_DATE_FMT));
       } else {
         setInputValue("");
       }
@@ -98,7 +98,7 @@ export function DatePicker({
     }
     setInvalid(false);
     onSelect(parsed);
-    setInputValue(format(parsed, DISPLAY_FORMAT));
+    setInputValue(format(parsed, DISPLAY_DATE_FMT));
   }, [inputValue, isInRange, onSelect, selected]);
 
   const handleCalendarSelect = (date: Date | undefined) => {
@@ -110,7 +110,7 @@ export function DatePicker({
     }
     if (!isInRange(date)) return;
     onSelect(date);
-    setInputValue(format(date, DISPLAY_FORMAT));
+    setInputValue(format(date, DISPLAY_DATE_FMT));
     setInvalid(false);
     setOpen(false);
   };
@@ -123,6 +123,7 @@ export function DatePicker({
           value={inputValue}
           placeholder={placeholderText}
           aria-invalid={invalid}
+          disabled={disabled}
           className={cn("pr-10 h-8.5 text-xs bg-white", invalid && "border-destructive", className)}
           onChange={(e) => {
             setInputValue(e.target.value);
@@ -140,6 +141,7 @@ export function DatePicker({
           <Button
             type="button"
             variant="ghost"
+            disabled={disabled}
             className="absolute right-0 top-0 h-8.5 w-8.5 shrink-0 px-0 text-muted-foreground hover:text-foreground"
             aria-label="Open calendar"
             onMouseDown={(e) => e.preventDefault()}

@@ -3,12 +3,13 @@ import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ComboSelect } from '@/components/ComboSelect';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
 import { PayrollField, PayrollMonthSelect, PayrollYearSelect } from '@/components/payroll/PayrollFilterGrid';
+import { FormDateField } from '@/components/fixed-asset/FormDateField';
+import { displayDateToServer, toFormDisplayDate } from '@/lib/display-date';
 import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
 type ReportMeta = {
@@ -18,12 +19,13 @@ type ReportMeta = {
     filters: string[];
     dateRange: boolean;
     purchaseMonth?: boolean;
+    usesFinancialYear?: boolean;
 };
 
 type Section = {
     title: string;
     rows: Record<string, unknown>[];
-    subtotal?: { asset_count?: number; purchase_cost?: number };
+    subtotal?: { asset_count?: number; purchase_cost?: number; purchase_amount?: number; closing_value?: number };
 };
 
 type Props = {
@@ -32,6 +34,7 @@ type Props = {
     filterOptions: {
         branches: { id: number; name: string; branch_code?: string | null; is_head_office?: boolean }[];
         categories: { id: number; code: string; name: string }[];
+        financialYears: { id: number; label: string; start_date: string; end_date: string; is_active: boolean }[];
         statuses: { value: string; label: string }[];
         years: number[];
         months: { value: number; label: string }[];
@@ -51,34 +54,38 @@ function fmt(n: unknown) {
 }
 
 function columnKeys(template: string, firstRow: Record<string, unknown>, payload?: Record<string, unknown>): string[] {
+    if (payload?.headers && Array.isArray(payload.headers)) {
+        const headerCount = (payload.headers as string[]).length;
+        const rowKeys = Object.keys(firstRow);
+        if (rowKeys.length >= headerCount) {
+            return rowKeys;
+        }
+    }
+
     switch (template) {
         case 'asset-tracking':
-            return ['asset_tag', 'name', 'branch', 'category', 'status', 'custodian', 'serial_number', 'purchase_date', 'book_value'];
-        case 'vendor-list':
-            return ['vendor', 'asset_count', 'total_purchase'];
+            return ['sl', 'asset_no', 'model_no', 'purchase_date', 'purchase_amount', 'book_value', 'floor', 'room', 'voucher', 'ledger', 'description'];
         case 'purchase-list':
-            return ['asset_tag', 'name', 'branch', 'category', 'purchase_date', 'purchase_cost', 'vendor', 'invoice_no'];
-        case 'repair-list':
-            return ['maintenance_date', 'asset_tag', 'branch', 'maintenance_type', 'status', 'description', 'cost', 'service_provider'];
-        case 'transfer-log':
-            return ['transfer_date', 'asset_tag', 'asset_name', 'from_branch', 'to_branch', 'notes'];
-        case 'salvaged-list':
-            return ['asset_tag', 'name', 'branch', 'category', 'purchase_cost', 'salvage_value', 'book_value', 'status'];
+            return firstRow.category != null
+                ? ['category', 'sub_category', 'asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'closing_value', 'vendor', 'voucher_no', 'ledger_no', 'status']
+                : ['asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'closing_value', 'vendor', 'voucher_no', 'ledger_no', 'status'];
         case 'disposal-list':
-            return ['disposal_date', 'asset_tag', 'branch', 'category', 'disposal_method', 'disposal_amount', 'reason'];
-        case 'depreciation-schedule':
-            if ((payload?.schedule_variant as string) === 'audit') {
-                return [
-                    'asset_tag', 'name', 'group_label', 'serial_number', 'vendor', 'invoice_no', 'purchase_date',
-                    'purchase_cost', 'salvage_value', 'useful_life_years', 'accumulated_depreciation', 'book_value', 'monthly_depreciation',
-                ];
+            return ['sl', 'category', 'sub_category', 'asset_no', 'branch', 'purchase_date', 'purchase_amount', 'opening_value', 'depreciation', 'disposal_amount', 'closing_value'];
+        case 'depreciation-schedule': {
+            const variant = payload?.schedule_variant as string;
+            const group = payload?.schedule_group as string;
+            if (variant === 'audit') {
+                return ['sl', 'group_label', 'asset_count', 'cost_opening', 'cost_addition', 'cost_sales_adj', 'cost_closing', 'depreciation_rate', 'dep_opening', 'dep_charged', 'dep_sales_adj', 'dep_closing', 'written_down_value'];
             }
-            return [
-                'asset_tag', 'name', 'group_label', 'purchase_cost', 'salvage_value', 'useful_life_years',
-                'accumulated_depreciation', 'book_value', 'monthly_depreciation',
-            ];
-        case 'depreciation-schedule-summary':
-            return ['group_label', 'asset_count', 'total_purchase', 'total_accumulated', 'total_book_value'];
+            if (variant === 'summary') {
+                return group === 'category'
+                    ? ['sl', 'branch', 'asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'new_purchase', 'transfer_in', 'addition_total', 'depreciation', 'disposal', 'transfer_out', 'deduction_total', 'cumulative_deduction', 'closing_value', 'passed_day']
+                    : ['asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'new_purchase', 'transfer_in', 'addition_total', 'depreciation', 'disposal', 'transfer_out', 'deduction_total', 'cumulative_deduction', 'closing_value', 'passed_day'];
+            }
+            return group === 'branch'
+                ? ['sub_category', 'asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'addition_h1', 'addition_h2', 'depreciation_h1', 'depreciation_h2', 'closing_value']
+                : ['asset_no', 'location', 'purchase_date', 'purchase_amount', 'opening_value', 'addition_h1', 'addition_h2', 'depreciation_h1', 'depreciation_h2', 'closing_value'];
+        }
         default:
             return Object.keys(firstRow);
     }
@@ -165,9 +172,11 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                             {section.title}
                             <span className="ml-2 font-normal text-muted-foreground">
                                 ({section.rows.length} assets
-                                {section.subtotal?.purchase_cost != null
-                                    ? ` · ৳${fmt(section.subtotal.purchase_cost)}`
-                                    : ''}
+                                {section.subtotal?.purchase_amount != null
+                                    ? ` · ৳${fmt(section.subtotal.purchase_amount)}`
+                                    : section.subtotal?.purchase_cost != null
+                                      ? ` · ৳${fmt(section.subtotal.purchase_cost)}`
+                                      : ''}
                                 )
                             </span>
                         </h3>
@@ -177,7 +186,7 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                 {totals && (
                     <p className="text-sm font-semibold">
                         Grand total: {totals.asset_count != null ? `${totals.asset_count} assets · ` : ''}
-                        Purchase ৳{fmt(totals.purchase_cost)}
+                        Purchase ৳{fmt(totals.purchase_amount ?? totals.purchase_cost)}
                     </p>
                 )}
             </div>
@@ -206,25 +215,51 @@ export default function FixedAssetReportShow({
     error,
     exportUrls,
 }: Props) {
-    const [filters, setFilters] = useState(initFilters);
+    const allowed = report.filters;
+    const [filters, setFilters] = useState({
+        ...initFilters,
+        date_from: toFormDisplayDate(initFilters.date_from),
+        date_to: toFormDisplayDate(initFilters.date_to),
+    });
     const setFilter = (key: string, value: string) => setFilters((f) => ({ ...f, [key]: value }));
 
-    const allowed = report.filters;
+    const showFinancialYear = report.usesFinancialYear || allowed.includes('financial_year_id');
     const showBranch = allowed.includes('branch_id') && !branchScoped;
     const showCategory = allowed.includes('asset_category_id');
     const showStatus = allowed.includes('status');
     const showYear = allowed.includes('year') || report.purchaseMonth;
     const showMonth = allowed.includes('month') || report.purchaseMonth;
-    const showOptionalDateRange = report.dateRange && !report.purchaseMonth;
+    const showOptionalDateRange = report.dateRange;
+
+    const applyFinancialYearDates = (fyId: string) => {
+        const fy = filterOptions.financialYears.find((f) => String(f.id) === fyId);
+        if (!fy) return;
+        setFilters((f) => ({
+            ...f,
+            financial_year_id: fyId,
+            date_from: toFormDisplayDate(fy.start_date),
+            date_to: toFormDisplayDate(fy.end_date),
+        }));
+    };
 
     const generate = () => {
-        router.get(route('fixed-asset.reports.show', report.slug), { ...filters, generate: '1' }, { preserveState: true });
+        router.get(route('fixed-asset.reports.show', report.slug), {
+            ...filters,
+            date_from: displayDateToServer(toFormDisplayDate(filters.date_from)),
+            date_to: displayDateToServer(toFormDisplayDate(filters.date_to)),
+            generate: '1',
+        }, { preserveState: true });
     };
 
     const exportQuery = useMemo(() => {
         const p = new URLSearchParams();
         Object.entries(filters).forEach(([k, v]) => {
-            if (v) p.set(k, v);
+            if (!v) return;
+            if (k === 'date_from' || k === 'date_to') {
+                p.set(k, displayDateToServer(toFormDisplayDate(v)));
+            } else {
+                p.set(k, v);
+            }
         });
         p.set('generate', '1');
         return p.toString();
@@ -246,8 +281,8 @@ export default function FixedAssetReportShow({
             <PayrollPage>
                 <PayrollPageHeader title={report.title} description={report.description}>
                     <Button asChild variant="outline" size="sm">
-                        <Link href={route('fixed-assets.index')}>
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Asset register
+                        <Link href={route('sections.fixed-asset')}>
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Fixed Asset
                         </Link>
                     </Button>
                 </PayrollPageHeader>
@@ -259,8 +294,21 @@ export default function FixedAssetReportShow({
                     </Alert>
                 )}
 
-                <PayrollSectionCard title="Filters" description="Set criteria and click Generate report.">
+                <PayrollSectionCard title="Filters" description="Financial year and dates drive the report period. Adjust filters, then generate.">
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        {showFinancialYear && (
+                            <PayrollField label="Financial Year">
+                                <ComboSelect
+                                    value={filters.financial_year_id ? Number(filters.financial_year_id) : null}
+                                    onChange={(id) => id && applyFinancialYearDates(String(id))}
+                                    items={filterOptions.financialYears.map((fy) => ({
+                                        value: fy.id,
+                                        label: `${fy.label}${fy.is_active ? ' (Active)' : ''}`,
+                                    }))}
+                                    placeholder="Select financial year"
+                                />
+                            </PayrollField>
+                        )}
                         {showBranch && (
                             <PayrollField label="Branch">
                                 <ComboSelect
@@ -316,22 +364,16 @@ export default function FixedAssetReportShow({
                         )}
                         {showOptionalDateRange && (
                             <>
-                                <PayrollField label="Date from">
-                                    <Input
-                                        type="date"
-                                        className="h-10 bg-white"
-                                        value={filters.date_from}
-                                        onChange={(e) => setFilter('date_from', e.target.value)}
-                                    />
-                                </PayrollField>
-                                <PayrollField label="Date to">
-                                    <Input
-                                        type="date"
-                                        className="h-10 bg-white"
-                                        value={filters.date_to}
-                                        onChange={(e) => setFilter('date_to', e.target.value)}
-                                    />
-                                </PayrollField>
+                                <FormDateField
+                                    label="Date from"
+                                    value={filters.date_from}
+                                    onChange={(v) => setFilter('date_from', v)}
+                                />
+                                <FormDateField
+                                    label="Date to"
+                                    value={filters.date_to}
+                                    onChange={(v) => setFilter('date_to', v)}
+                                />
                             </>
                         )}
                     </div>

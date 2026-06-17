@@ -7,6 +7,7 @@ import {
     Bell,
     KeyRound,
     Megaphone,
+    Monitor,
     Send,
     Settings,
     Shield,
@@ -34,6 +35,10 @@ type Props = {
     roleCount: number;
     recentUsers: RecentUser[];
     userRole: string;
+    sessionStats: {
+        active_sessions: number;
+        active_users: number;
+    };
 };
 
 const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
@@ -122,7 +127,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     return <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{children}</h2>;
 }
 
-export default function AdministrationDashboard({ userCount, roleCount, recentUsers, userRole }: Props) {
+export default function AdministrationDashboard({ userCount, roleCount, recentUsers, userRole, sessionStats }: Props) {
     const { auth } = usePage<SharedData>().props;
     const hasPermission = (permission?: string): boolean => hasAppPermission(auth, permission);
 
@@ -174,6 +179,16 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
                                 accent="zinc"
                             />
                         )}
+                        {hasPermission('users.view') && (
+                            <KpiCard
+                                label="Active sessions"
+                                value={sessionStats?.active_users ?? 0}
+                                sub={`${sessionStats?.active_sessions ?? 0} login(s)`}
+                                href="/admin/sessions?section=administration"
+                                icon={Monitor}
+                                accent="sky"
+                            />
+                        )}
                     </div>
                 </section>
 
@@ -182,6 +197,9 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
                     <div className={shortcutGrid}>
                         {hasPermission('users.view') && (
                             <ShortcutTile href="/admin/users?section=administration" title="Manage users" icon={Users} />
+                        )}
+                        {hasPermission('users.view') && (
+                            <ShortcutTile href="/admin/sessions?section=administration" title="Active sessions" icon={Monitor} />
                         )}
                         {hasPermission('roles.view') && (
                             <ShortcutTile href="/admin/roles?section=administration" title="Roles & permissions" icon={Shield} />
@@ -193,7 +211,7 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
                             </>
                         )}
                         {hasPermission('reports.view') && (
-                            <ShortcutTile href="/reports?section=administration" title="Reports overview" icon={BarChart3} />
+                            <ShortcutTile href="/reports/administration?section=administration" title="Administration report" icon={BarChart3} />
                         )}
                         <ShortcutTile href="/settings/profile?section=administration" title="Profile" icon={Settings} />
                         <ShortcutTile href="/settings/notifications?section=administration" title="Notifications" icon={Bell} />

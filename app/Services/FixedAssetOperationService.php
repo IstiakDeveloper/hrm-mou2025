@@ -112,11 +112,14 @@ class FixedAssetOperationService
             $asset->update([
                 'status' => FixedAsset::STATUS_DISPOSED,
                 'custodian_employee_id' => null,
+                'asset_custodian_id' => null,
                 'disposal_date' => $disposal->disposal_date,
                 'disposal_amount' => $disposal->disposal_amount,
                 'disposal_notes' => trim(($disposal->reason ?? '')."\n".($disposal->notes ?? '')),
                 'book_value' => 0,
             ]);
+
+            $disposal->update(['disposed_at' => now()]);
         });
     }
 

@@ -38,6 +38,7 @@ class UserController extends Controller
         }
 
         $users = User::with('roles', 'employee', 'branch')
+            ->where('account_type', 'staff')
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")

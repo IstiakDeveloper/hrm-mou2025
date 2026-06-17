@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Holiday;
+use App\Observers\HolidayObserver;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
 
@@ -12,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Services\HolidayAttendanceSyncService::class);
     }
 
     /**
@@ -20,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Holiday::observe(HolidayObserver::class);
+
         Validator::extend('english_only', function ($attribute, $value, $parameters, $validator) {
             // If value is empty, let required rule handle it
             if (empty($value)) {

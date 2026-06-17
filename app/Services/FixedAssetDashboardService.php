@@ -85,6 +85,7 @@ class FixedAssetDashboardService
             'active' => (int) ($byStatus[FixedAsset::STATUS_ACTIVE] ?? 0),
             'inTransit' => (int) ($byStatus[FixedAsset::STATUS_IN_TRANSIT] ?? 0),
             'underMaintenance' => (int) ($byStatus[FixedAsset::STATUS_UNDER_MAINTENANCE] ?? 0),
+            'notInUse' => (int) ($byStatus[FixedAsset::STATUS_NOT_IN_USE] ?? 0),
             'disposed' => (int) ($byStatus[FixedAsset::STATUS_DISPOSED] ?? 0),
             'categories' => AssetCategory::query()->where('is_active', true)->count(),
             'branches' => $branchId ? 1 : Branch::query()->where('is_active', true)->count(),

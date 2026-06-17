@@ -834,6 +834,16 @@ class AttendanceController extends Controller
     public function dailyBranchSummary(Request $request)
     {
         $user = Auth::user();
+        $portalMode = (bool) $user?->isBranchAccount();
+
+        if ($portalMode && ! $user->branch_id) {
+            abort(403);
+        }
+
+        if ($portalMode) {
+            $request->merge(['branch_id' => (string) $user->branch_id]);
+        }
+
         $date = $request->date ? Carbon::parse($request->date)->startOfDay() : Carbon::today()->startOfDay();
         $ymd = $date->format('Y-m-d');
 
@@ -960,6 +970,8 @@ class AttendanceController extends Controller
                     'name' => $branchName,
                     'counts' => array_fill_keys($statuses, 0),
                     'employeesByStatus' => array_fill_keys($statuses, []),
+                    'movementCount' => 0,
+                    'employeesWithMovement' => [],
                 ];
             }
 
@@ -994,8 +1006,20 @@ class AttendanceController extends Controller
             $checkIn = $att && $att->check_in ? date('h:i A', strtotime($att->check_in)) : null;
             $checkOut = $att && $att->check_out ? date('h:i A', strtotime($att->check_out)) : null;
 
-            $branchesOut[$branchIdInt]['counts'][$status]++;
-            $branchesOut[$branchIdInt]['employeesByStatus'][$status][] = [
+            $empMovements = isset($movementsByEmployee[$empId]) ? $movementsByEmployee[$empId]->map(function ($m) {
+                return [
+                    'id' => $m->id,
+                    'movement_type' => $m->movement_type,
+                    'purpose' => $m->purpose,
+                    'destination' => $m->destination,
+                    'status' => $m->status,
+                    'from_time' => $m->from_datetime ? $m->from_datetime->format('h:i A') : null,
+                    'to_time' => $m->to_datetime ? $m->to_datetime->format('h:i A') : null,
+                    'actual_return_time' => $m->actual_return_datetime ? $m->actual_return_datetime->format('h:i A') : null,
+                ];
+            })->all() : [];
+
+            $employeeRow = [
                 'id' => $empId,
                 'employee_id' => (string) $e->employee_id,
                 'name' => trim((string) ($e->name_en ?? $e->full_name_en ?? '')),
@@ -1005,7 +1029,17 @@ class AttendanceController extends Controller
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
                 'leave_type' => $leaveTypeByEmployee[$empId] ?? null,
+                'movements' => $empMovements,
+                'has_movement' => $hasMovement,
             ];
+
+            $branchesOut[$branchIdInt]['counts'][$status]++;
+            $branchesOut[$branchIdInt]['employeesByStatus'][$status][] = $employeeRow;
+
+            if ($hasMovement) {
+                $branchesOut[$branchIdInt]['movementCount']++;
+                $branchesOut[$branchIdInt]['employeesWithMovement'][] = $employeeRow;
+            }
         }
 
         // Sort branches by name; sort employees by name within each status
@@ -1019,10 +1053,32 @@ class AttendanceController extends Controller
                         ->values()
                         ->all();
                 }
+                $b['employeesWithMovement'] = collect($b['employeesWithMovement'] ?? [])
+                    ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+                    ->values()
+                    ->all();
                 return $b;
             })
             ->values()
             ->all();
+
+        if ($portalMode && $user->branch_id) {
+            $portalBranchId = (int) $user->branch_id;
+            $hasPortalBranch = collect($branchesList)->contains(
+                fn (array $b): bool => (int) ($b['id'] ?? 0) === $portalBranchId
+            );
+            if (! $hasPortalBranch) {
+                $branchModel = Branch::query()->find($portalBranchId, ['id', 'name']);
+                $branchesList[] = [
+                    'id' => $portalBranchId,
+                    'name' => $branchModel?->name ?? 'Branch',
+                    'counts' => array_fill_keys($statuses, 0),
+                    'employeesByStatus' => array_fill_keys($statuses, []),
+                    'movementCount' => 0,
+                    'employeesWithMovement' => [],
+                ];
+            }
+        }
 
         return Inertia::render('attendance/daily-branch-summary', [
             'date' => $ymd,
@@ -1033,7 +1089,22 @@ class AttendanceController extends Controller
             'filters' => $request->only(['date', 'branch_id', 'department_id', 'search']),
             'statuses' => $statuses,
             'holidays' => $holidays,
+            'portalMode' => $portalMode,
+            'portalBranch' => $portalMode && $user->branch_id
+                ? Branch::query()->find($user->branch_id, ['id', 'name', 'branch_code'])
+                : null,
         ]);
+    }
+
+    /**
+     * Branch portal: today's attendance & movement for this branch only.
+     */
+    public function branchPortalDailySummary(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user?->isBranchAccount() && $user->branch_id, 403);
+
+        return $this->dailyBranchSummary($request);
     }
 
     /**

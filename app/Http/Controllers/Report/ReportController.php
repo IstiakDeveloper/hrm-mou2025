@@ -11,7 +11,10 @@ use App\Models\Employee;
 use App\Models\LeaveApplication;
 use App\Models\LeaveType;
 use App\Models\Movement;
+use App\Models\Role;
 use App\Models\Transfer;
+use App\Models\User;
+use App\Services\ActiveSessionService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -22,8 +25,14 @@ class ReportController extends Controller
     /**
      * Display report dashboard.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $section = $request->query('section');
+
+        if ($section === 'administration') {
+            return redirect()->route('reports.administration', ['section' => 'administration']);
+        }
+
         $reportTypes = [
             ['id' => 'attendance', 'name' => 'Attendance Report'],
             ['id' => 'leave', 'name' => 'Leave Report'],
@@ -35,6 +44,226 @@ class ReportController extends Controller
         return Inertia::render('report/index', [
             'reportTypes' => $reportTypes,
         ]);
+    }
+
+    /**
+     * Administration section — users, roles & active sessions summary (printable).
+     */
+    public function administration(Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser instanceof User) {
+            abort(403);
+        }
+
+        if (! $authUser->hasPermission('reports.view')
+            && ! $authUser->hasPermission('users.view')
+            && ! $authUser->hasPermission('admin.access')) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:100',
+            'session_search' => 'nullable|string|max:100',
+            'role_search' => 'nullable|string|max:100',
+            'account_type' => 'nullable|in:all,staff,branch',
+            'active_status' => 'nullable|in:all,active,inactive',
+            'role_id' => 'nullable|integer|exists:roles,id',
+            'branch_id' => 'nullable|integer|exists:branches,id',
+            'created_from' => 'nullable|date',
+            'created_to' => 'nullable|date|after_or_equal:created_from',
+            'online_only' => 'nullable|boolean',
+            'show_users' => 'nullable|boolean',
+            'show_roles' => 'nullable|boolean',
+            'show_sessions' => 'nullable|boolean',
+        ]);
+
+        $filters = [
+            'search' => $validated['search'] ?? '',
+            'session_search' => $validated['session_search'] ?? '',
+            'role_search' => $validated['role_search'] ?? '',
+            'account_type' => $validated['account_type'] ?? 'all',
+            'active_status' => $validated['active_status'] ?? 'all',
+            'role_id' => isset($validated['role_id']) ? (string) $validated['role_id'] : '',
+            'branch_id' => isset($validated['branch_id']) ? (string) $validated['branch_id'] : '',
+            'created_from' => $validated['created_from'] ?? '',
+            'created_to' => $validated['created_to'] ?? '',
+            'online_only' => $request->boolean('online_only'),
+            'show_users' => $request->boolean('show_users', true),
+            'show_roles' => $request->boolean('show_roles', true),
+            'show_sessions' => $request->boolean('show_sessions', true),
+        ];
+
+        $sessionService = app(ActiveSessionService::class);
+        $sessionStats = $sessionService->stats();
+        $activeUserIds = $sessionService->activeUserIds();
+
+        $userQuery = User::query()->with(['role:id,name', 'roles:id,name', 'branch:id,name']);
+
+        if ($filters['search'] !== '') {
+            $like = '%'.$filters['search'].'%';
+            $userQuery->where(function ($q) use ($like) {
+                $q->where('name', 'like', $like)
+                    ->orWhere('email', 'like', $like)
+                    ->orWhere('username', 'like', $like);
+            });
+        }
+
+        if ($filters['account_type'] !== 'all') {
+            $userQuery->where('account_type', $filters['account_type']);
+        }
+
+        if ($filters['active_status'] === 'active') {
+            $userQuery->where('active_status', true);
+        } elseif ($filters['active_status'] === 'inactive') {
+            $userQuery->where('active_status', false);
+        }
+
+        if ($filters['branch_id'] !== '') {
+            $userQuery->where('branch_id', (int) $filters['branch_id']);
+        }
+
+        if ($filters['role_id'] !== '') {
+            $roleId = (int) $filters['role_id'];
+            $userQuery->where(function ($q) use ($roleId) {
+                $q->where('role_id', $roleId)
+                    ->orWhereHas('roles', fn ($r) => $r->where('roles.id', $roleId));
+            });
+        }
+
+        if ($filters['created_from'] !== '') {
+            $userQuery->whereDate('created_at', '>=', $filters['created_from']);
+        }
+
+        if ($filters['created_to'] !== '') {
+            $userQuery->whereDate('created_at', '<=', $filters['created_to']);
+        }
+
+        if ($filters['online_only'] && $activeUserIds !== []) {
+            $userQuery->whereIn('id', $activeUserIds);
+        } elseif ($filters['online_only']) {
+            $userQuery->whereRaw('1 = 0');
+        }
+
+        $filteredUsers = (clone $userQuery)->get();
+
+        $users = $filteredUsers
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->map(function (User $user) use ($activeUserIds) {
+                $roleNames = $user->roles->pluck('name');
+                if ($user->role) {
+                    $roleNames = $roleNames->prepend($user->role->name);
+                }
+
+                return [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'username' => $user->username,
+                    'account_type' => $user->account_type ?? 'staff',
+                    'branch_name' => $user->branch?->name,
+                    'roles' => $roleNames->unique()->values()->implode(', '),
+                    'active_status' => (bool) $user->active_status,
+                    'is_online' => in_array($user->id, $activeUserIds, true),
+                    'created_at' => $user->created_at?->format('Y-m-d'),
+                ];
+            })
+            ->all();
+
+        $roleQuery = Role::query()->withCount('users')->orderBy('name');
+        if ($filters['role_search'] !== '') {
+            $like = '%'.$filters['role_search'].'%';
+            $roleQuery->where(function ($q) use ($like) {
+                $q->where('name', 'like', $like)->orWhere('description', 'like', $like);
+            });
+        }
+        if ($filters['role_id'] !== '') {
+            $roleQuery->where('id', (int) $filters['role_id']);
+        }
+
+        $roles = $roleQuery
+            ->get(['id', 'name', 'description'])
+            ->map(fn (Role $role) => [
+                'name' => $role->name,
+                'description' => $role->description,
+                'users_count' => (int) $role->users_count,
+            ])
+            ->values()
+            ->all();
+
+        $activeSessions = $sessionService->listActive(
+            limit: 200,
+            search: $filters['session_search'] !== '' ? $filters['session_search'] : null,
+            roleId: $filters['role_id'] !== '' ? (int) $filters['role_id'] : null,
+            branchId: $filters['branch_id'] !== '' ? (int) $filters['branch_id'] : null,
+            accountType: $filters['account_type'] !== 'all' ? $filters['account_type'] : null,
+        );
+
+        $filterLabels = $this->administrationReportFilterLabels($filters, Role::find($filters['role_id'] ?: null), Branch::find($filters['branch_id'] ?: null));
+
+        return Inertia::render('report/administration', [
+            'companyName' => config('app.name'),
+            'generatedAt' => now()->format('Y-m-d H:i'),
+            'filters' => $filters,
+            'filterLabels' => $filterLabels,
+            'roleOptions' => Role::query()->orderBy('name')->get(['id', 'name']),
+            'branchOptions' => Branch::query()->orderBy('name')->get(['id', 'name', 'branch_code']),
+            'summary' => [
+                'total_users' => $filteredUsers->count(),
+                'active_accounts' => $filteredUsers->where('active_status', true)->count(),
+                'inactive_accounts' => $filteredUsers->where('active_status', false)->count(),
+                'staff_accounts' => $filteredUsers->where('account_type', 'staff')->count(),
+                'branch_accounts' => $filteredUsers->where('account_type', 'branch')->count(),
+                'total_roles' => count($roles),
+                'active_sessions' => count($activeSessions),
+                'active_session_users' => $sessionStats['active_users'],
+                'online_in_results' => collect($users)->where('is_online', true)->count(),
+            ],
+            'users' => $users,
+            'roles' => $roles,
+            'activeSessions' => $activeSessions,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return list<string>
+     */
+    private function administrationReportFilterLabels(array $filters, ?Role $role, ?Branch $branch): array
+    {
+        $labels = [];
+        if ($filters['search'] !== '') {
+            $labels[] = 'Search: '.$filters['search'];
+        }
+        if ($filters['session_search'] !== '') {
+            $labels[] = 'Session search: '.$filters['session_search'];
+        }
+        if ($filters['role_search'] !== '') {
+            $labels[] = 'Role search: '.$filters['role_search'];
+        }
+        if ($filters['account_type'] !== 'all') {
+            $labels[] = 'Account type: '.ucfirst($filters['account_type']);
+        }
+        if ($filters['active_status'] !== 'all') {
+            $labels[] = 'Status: '.ucfirst($filters['active_status']);
+        }
+        if ($role) {
+            $labels[] = 'Role: '.$role->name;
+        }
+        if ($branch) {
+            $labels[] = 'Branch: '.$branch->name;
+        }
+        if ($filters['created_from'] !== '') {
+            $labels[] = 'Created from: '.$filters['created_from'];
+        }
+        if ($filters['created_to'] !== '') {
+            $labels[] = 'Created to: '.$filters['created_to'];
+        }
+        if ($filters['online_only']) {
+            $labels[] = 'Online users only';
+        }
+
+        return $labels;
     }
 
     /**

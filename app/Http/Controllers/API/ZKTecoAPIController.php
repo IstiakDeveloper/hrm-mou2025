@@ -8,6 +8,7 @@ use App\Models\AttendanceDevice;
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\Holiday;
+use App\Services\HolidayAttendanceSyncService;
 use App\Support\EmployeeNameMatcher;
 use App\Support\EmployeePinLookup;
 use App\Support\ZktecoEmployeeResolver;
@@ -64,58 +65,12 @@ class ZKTecoAPIController extends Controller
     private function ensureHolidayAttendanceBackfilled(): void
     {
         Cache::remember('attendance:holiday-backfill:from-2026', now()->addDay(), function () {
-            $start = Carbon::create(2026, 1, 1)->startOfDay();
-            $end = Carbon::now()->startOfDay();
+            $updated = app(HolidayAttendanceSyncService::class)->syncAllStoredHolidays();
 
-            if ($end->lt($start)) {
-                return true;
-            }
+            Log::info('Holiday backfill: updated absent attendances to holiday from stored holidays.', [
+                'updated' => $updated,
+            ]);
 
-            $holidays = Holiday::query()
-                ->select(['date', 'is_recurring', 'applicable_branches'])
-                ->get();
-
-            $startYear = (int) $start->year;
-            $endYear = (int) $end->year;
-
-            foreach ($holidays as $holiday) {
-                $base = Carbon::parse($holiday->date);
-                $branches = is_array($holiday->applicable_branches) ? $holiday->applicable_branches : [];
-
-                $dates = [];
-
-                if ($holiday->is_recurring) {
-                    for ($y = $startYear; $y <= $endYear; $y++) {
-                        $occurrence = Carbon::create($y, $base->month, $base->day)->startOfDay();
-                        if ($occurrence->betweenIncluded($start, $end)) {
-                            $dates[] = $occurrence->toDateString();
-                        }
-                    }
-                } else {
-                    $d = $base->startOfDay();
-                    if ($d->betweenIncluded($start, $end)) {
-                        $dates[] = $d->toDateString();
-                    }
-                }
-
-                foreach ($dates as $dateStr) {
-                    $q = DB::table('attendances')
-                        ->join('employees', 'attendances.employee_id', '=', 'employees.id')
-                        ->whereDate('attendances.date', $dateStr)
-                        ->where('attendances.status', 'absent')
-                        ->whereNull('attendances.check_in')
-                        ->whereNull('attendances.check_out')
-                        ->where('employees.status', 'active');
-
-                    if (!empty($branches)) {
-                        $q->whereIn('employees.current_branch_id', $branches);
-                    }
-
-                    $q->update(['attendances.status' => 'holiday']);
-                }
-            }
-
-            Log::info('Holiday backfill: updated absent attendances to holiday from stored holidays.');
             return true;
         });
     }

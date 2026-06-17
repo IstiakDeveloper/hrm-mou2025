@@ -17,6 +17,7 @@ interface Branch {
   contact_number: string | null;
   branch_code: string;
   is_head_office: boolean;
+  has_login_pin?: boolean;
   geofence_enabled?: boolean;
   geofence_latitude?: number | null;
   geofence_longitude?: number | null;
@@ -43,6 +44,7 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
     branch_code: branch.branch_code || '',
     is_head_office: Boolean(branch.is_head_office),
     is_active: (branch as any).is_active !== undefined ? Boolean((branch as any).is_active) : true,
+    login_pin: '',
     geofence_enabled: Boolean(branch.geofence_enabled),
     geofence_latitude: branch.geofence_latitude ?? '',
     geofence_longitude: branch.geofence_longitude ?? '',
@@ -294,6 +296,27 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
                 </Label>
               </div>
               {errors.is_active && <p className="mt-1 text-sm text-red-500">{errors.is_active}</p>}
+
+              <div className="border-t pt-6 space-y-2">
+                <Label htmlFor="login_pin">Branch login PIN</Label>
+                <Input
+                  id="login_pin"
+                  type="password"
+                  inputMode="numeric"
+                  value={data.login_pin}
+                  onChange={(e) => setData('login_pin', e.target.value.replace(/\D/g, ''))}
+                  placeholder={branch.has_login_pin ? 'Leave blank to keep current PIN' : 'Set 4–12 digit PIN for branch login'}
+                  maxLength={12}
+                  autoComplete="new-password"
+                />
+                {(errors as any).login_pin && (
+                  <p className="mt-1 text-sm text-red-500">{(errors as any).login_pin}</p>
+                )}
+                <p className="text-xs text-gray-500">
+                  Saves a dedicated branch account (blank — no permissions yet). Staff use Branch Login with this PIN.
+                  {branch.has_login_pin ? ' PIN is already set.' : ''}
+                </p>
+              </div>
 
               <div className="border-t pt-6">
                 <div className="flex items-center space-x-2 mb-4">

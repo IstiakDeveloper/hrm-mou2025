@@ -86,6 +86,9 @@ return [
         'users.edit' => ['label' => 'Edit Users', 'category' => 'users'],
         'users.delete' => ['label' => 'Delete Users', 'category' => 'users'],
 
+        'sessions.view' => ['label' => 'View Active Login Sessions', 'category' => 'users'],
+        'sessions.revoke' => ['label' => 'Force Logout Active Sessions', 'category' => 'users'],
+
         'roles.view' => ['label' => 'View Roles', 'category' => 'roles'],
         'roles.create' => ['label' => 'Create Roles', 'category' => 'roles'],
         'roles.edit' => ['label' => 'Edit Roles', 'category' => 'roles'],

@@ -5,8 +5,10 @@ namespace App\Http\Controllers\FixedAsset;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\FixedAsset\Concerns\ResolvesFixedAssetBranchScope;
 use App\Models\AssetCategory;
+use App\Models\AssetFinancialYear;
 use App\Models\Branch;
 use App\Models\FixedAsset;
+use App\Services\AssetFinancialYearService;
 use App\Services\FixedAssetReportService;
 use App\Support\FixedAssetReportCsvExporter;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -20,6 +22,7 @@ class FixedAssetReportController extends Controller
 
     public function __construct(
         private readonly FixedAssetReportService $reports,
+        private readonly AssetFinancialYearService $financialYears,
     ) {}
 
     public function index()
@@ -42,10 +45,9 @@ class FixedAssetReportController extends Controller
         $error = null;
 
         if ($generated) {
-            $strictDateRange = ! empty($config['date_range'])
-                && in_array($config['template'] ?? '', ['repair-list', 'transfer-log', 'disposal-list'], true);
-
-            if ($strictDateRange && ! $filters['date_from'] && ! $filters['date_to']) {
+            if (! empty($config['uses_financial_year']) && empty($filters['financial_year_id'])) {
+                $error = 'Please select a financial year.';
+            } elseif (! empty($config['date_range']) && ! ($filters['date_from'] ?? null) && ! ($filters['date_to'] ?? null)) {
                 $error = 'Please select date from and date to.';
             } else {
                 $payload = $this->reports->build($report, $config, $filters);
@@ -63,6 +65,7 @@ class FixedAssetReportController extends Controller
                 'filters' => $config['filters'] ?? [],
                 'dateRange' => (bool) ($config['date_range'] ?? false),
                 'purchaseMonth' => ($config['purchase_group'] ?? null) === 'month',
+                'usesFinancialYear' => (bool) ($config['uses_financial_year'] ?? false),
             ],
             'filterOptions' => $this->filterOptions($request, $config),
             'filters' => $this->filterValuesForView($filters),
@@ -148,6 +151,7 @@ class FixedAssetReportController extends Controller
     private function filterValuesForView(array $filters): array
     {
         return [
+            'financial_year_id' => $filters['financial_year_id'] ? (string) $filters['financial_year_id'] : '',
             'branch_id' => $filters['branch_id'] ? (string) $filters['branch_id'] : '',
             'asset_category_id' => $filters['asset_category_id'] ? (string) $filters['asset_category_id'] : '',
             'status' => $filters['status'] ?? '',
@@ -178,6 +182,15 @@ class FixedAssetReportController extends Controller
             'branches' => $branches,
             'categories' => in_array('asset_category_id', $allowed, true)
                 ? AssetCategory::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name'])
+                : [],
+            'financialYears' => in_array('financial_year_id', $allowed, true)
+                ? $this->financialYears->options()->map(fn (AssetFinancialYear $fy) => [
+                    'id' => $fy->id,
+                    'label' => $fy->label,
+                    'start_date' => $fy->start_date->toDateString(),
+                    'end_date' => $fy->end_date->toDateString(),
+                    'is_active' => $fy->is_active,
+                ])
                 : [],
             'statuses' => collect(FixedAsset::STATUSES)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'years' => range((int) date('Y'), (int) date('Y') - 10),

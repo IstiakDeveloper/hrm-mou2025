@@ -112,14 +112,15 @@ interface AttendanceReportProps extends PageProps {
     employees: Employee[];
     reports: ReportItem[];
     employee_name: string;
+    employee_id: string;
     from_date: string;
     to_date: string;
     userPermissions: UserPermissions;
 }
 
-export default function AttendanceReport({ auth, employees, reports, employee_name, from_date, to_date, userPermissions }: AttendanceReportProps) {
+export default function AttendanceReport({ auth, employees, reports, employee_name, employee_id, from_date, to_date, userPermissions }: AttendanceReportProps) {
     const { data, setData, post, processing, errors } = useForm({
-        employee_id: '',
+        employee_id: employee_id || '',
         from_date: from_date || '',
         to_date: to_date || '',
     });
@@ -135,12 +136,17 @@ export default function AttendanceReport({ auth, employees, reports, employee_na
         }));
     }, [employees]);
 
-    // Debug logs
     useEffect(() => {
-        console.log('Reports data received:', reports);
-        console.log('Employee name:', employee_name);
-        console.log('Date range:', from_date, 'to', to_date);
-    }, [reports, employee_name, from_date, to_date]);
+        if (employee_id) {
+            setData('employee_id', employee_id);
+        }
+        if (from_date) {
+            setData('from_date', from_date);
+        }
+        if (to_date) {
+            setData('to_date', to_date);
+        }
+    }, [employee_id, from_date, to_date, setData]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -162,38 +168,21 @@ export default function AttendanceReport({ auth, employees, reports, employee_na
     };
 
     const handleDownloadPdf = () => {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = route('attendance.report.pdf');
-        form.target = '_blank'; // open in new tab
+        const employeeId = data.employee_id || employee_id || '';
+        const fromDateValue = data.from_date || from_date || '';
+        const toDateValue = data.to_date || to_date || '';
 
-        // Add CSRF token
-        const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = '_token';
-        csrfInput.value = csrf;
-        form.appendChild(csrfInput);
+        if (!employeeId || !fromDateValue || !toDateValue) {
+            return;
+        }
 
-        // Add form data
-        const formData = {
-            employee_id: data.employee_id || '',
-            from_date: data.from_date || from_date || '',
-            to_date: data.to_date || to_date || '',
-        };
-
-        Object.entries(formData).forEach(([key, value]) => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = key;
-            input.value = value;
-            form.appendChild(input);
+        const params = new URLSearchParams({
+            employee_id: employeeId,
+            from_date: fromDateValue,
+            to_date: toDateValue,
         });
 
-        // Append and submit form
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form); // cleanup
+        window.open(`${route('attendance.report.pdf')}?${params.toString()}`, '_blank');
     };
 
 

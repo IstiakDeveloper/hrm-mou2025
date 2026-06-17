@@ -8,11 +8,17 @@ use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\RegionalOffice;
 use App\Models\Zone;
+use App\Services\BranchAccountService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 
 class BranchController extends Controller
 {
+    public function __construct(
+        private readonly BranchAccountService $branchAccounts,
+    ) {}
+
     /**
      * Display a listing of branches.
      */
@@ -132,7 +138,9 @@ class BranchController extends Controller
         $designations = Designation::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('branch/edit', [
-            'branch' => $branch,
+            'branch' => array_merge($branch->toArray(), [
+                'has_login_pin' => $branch->hasLoginPin(),
+            ]),
             'employees' => $employees,
             'zones' => $zones,
             'regionalOffices' => $regionalOffices,
@@ -160,9 +168,21 @@ class BranchController extends Controller
             'geofence_longitude' => 'nullable|numeric|between:-180,180',
             'geofence_radius_meters' => 'nullable|integer|min:1|max:5000',
             'geofence_max_accuracy_meters' => 'nullable|integer|min:1|max:500',
+            'login_pin' => 'nullable|string|min:4|max:12|regex:/^[0-9]+$/',
         ]);
 
+        if ($request->filled('login_pin')) {
+            $validated['login_pin'] = Hash::make($request->input('login_pin'));
+        } else {
+            unset($validated['login_pin']);
+        }
+
         $branch->update($validated);
+        $branch->refresh();
+
+        if ($branch->hasLoginPin()) {
+            $this->branchAccounts->ensureForBranch($branch);
+        }
 
         return redirect()->route('branches.index')
             ->with('success', 'Branch updated successfully.');

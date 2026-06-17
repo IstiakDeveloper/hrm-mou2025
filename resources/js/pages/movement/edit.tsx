@@ -63,9 +63,10 @@ interface EditMovementProps {
   employees: Employee[];
   isAdmin: boolean;
   movementTypes: string[];
+  returnFilters?: Record<string, string>;
 }
 
-export default function EditMovement({ movement, employees, isAdmin, movementTypes }: EditMovementProps) {
+export default function EditMovement({ movement, employees, isAdmin, movementTypes, returnFilters = {} }: EditMovementProps) {
   const fromDateTime = new Date(movement.from_datetime);
   const toDateTime = new Date(movement.to_datetime);
 
@@ -181,7 +182,7 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
       payload.actual_return_datetime = formatISO(ret);
     }
 
-    router.put(route('movements.update', movement.id), payload, {
+    router.put(route('movements.update', movement.id), { ...payload, ...returnFilters }, {
       onError: (errors) => {
         setErrors(errors);
         setSubmitting(false);
@@ -199,7 +200,7 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
 
       <div className="container mx-auto py-8">
         <div className="mb-6">
-          <Link href={route('movements.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
+          <Link href={route('movements.index', returnFilters)} className="text-blue-600 hover:text-blue-800 flex items-center">
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back to Movement Requests
           </Link>

@@ -139,6 +139,12 @@ return [
                 'fixed-assets.view', 'fixed-assets.create', 'fixed-assets.edit',
             ],
         ],
+        'Branch Account' => [
+            'description' => 'Dedicated branch terminal account. PIN-only sign-in. Features enabled step by step.',
+            'permissions' => [
+                'attendance.view',
+            ],
+        ],
         'Department Head' => [
             'description' => 'Head office: department employees and approvals (department scope in app logic).',
             'permissions' => [

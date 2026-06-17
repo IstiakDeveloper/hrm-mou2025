@@ -4,10 +4,12 @@ namespace App\Http\Middleware;
 
 use App\Models\Movement;
 use App\Models\User;
+use App\Services\AssetFinancialYearService;
 use App\Services\WebPushService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -78,6 +80,19 @@ class HandleInertiaRequests extends Middleware
         $pushConfigured = WebPushService::isConfigured();
         $subscriptionCount = $user ? $user->pushSubscriptions()->count() : 0;
 
+        $assetFinancialYear = null;
+        if (Schema::hasTable('asset_financial_years')) {
+            $currentYear = app(AssetFinancialYearService::class)->current();
+            if ($currentYear) {
+                $assetFinancialYear = [
+                    'id' => $currentYear->id,
+                    'label' => $currentYear->label,
+                    'start_date' => $currentYear->start_date->format('Y-m-d'),
+                    'end_date' => $currentYear->end_date->format('Y-m-d'),
+                ];
+            }
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -92,6 +107,8 @@ class HandleInertiaRequests extends Middleware
                     'email' => $user->email,
                     'email_verified_at' => $user->email_verified_at,
                     'employee_id' => $user->employee_id,
+                    'account_type' => $user->account_type,
+                    'branch_id' => $user->branch_id,
                     'role' => $user->role,
                     'roles' => $user->roles,
                 ] : null,
@@ -111,6 +128,7 @@ class HandleInertiaRequests extends Middleware
                 'import_summary' => $request->session()->get('import_summary'),
                 'import_row_errors' => $request->session()->get('import_row_errors'),
             ],
+            'assetFinancialYear' => $assetFinancialYear,
         ];
     }
 }

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ComboSelect } from '@/components/ComboSelect';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
-import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
+import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed-asset/AssetPageShell';
 import { ArrowLeft, Boxes } from 'lucide-react';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
@@ -106,172 +106,185 @@ export default function FixedAssetForm({
     return (
         <Layout>
             <Head title={isEdit ? `Edit ${asset?.asset_tag}` : 'Register asset'} />
-            <PayrollPage>
-                <Link href={route('fixed-assets.index')} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-                    <ArrowLeft className="mr-1 h-4 w-4" /> Back to register
+            <AssetPage>
+                <Link href={route('fixed-assets.index')} className="inline-flex items-center text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition-colors">
+                    <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Back to register
                 </Link>
-                <PayrollPageHeader
+                <AssetPageHeader
                     icon={Boxes}
-                    title={isEdit ? `Edit — ${asset?.asset_tag}` : 'Register fixed asset'}
+                    title={isEdit ? `Edit — ${asset?.asset_tag}` : 'Register Fixed Asset'}
                     description={isEdit ? undefined : 'Asset tag is generated automatically from branch and year.'}
                 />
-                <form onSubmit={submit} className="grid gap-4 lg:grid-cols-2">
-                    <PayrollSectionCard title="Identification">
-                        <div className="space-y-4">
+                <form onSubmit={submit} className="grid gap-6 lg:grid-cols-2">
+                    <AssetSectionCard title="Identification">
+                        <div className="space-y-4.5">
                             {isEdit && (
-                                <div>
-                                    <Label>Asset tag</Label>
-                                    <Input value={asset?.asset_tag} disabled className="font-mono" />
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Asset tag</Label>
+                                    <Input value={asset?.asset_tag} disabled className="font-mono h-9 bg-zinc-50 border-zinc-200" />
                                 </div>
                             )}
-                            <div>
-                                <Label>Name *</Label>
-                                <Input value={data.name} onChange={(e) => setData('name', e.target.value)} required />
-                                {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Name *</Label>
+                                <Input value={data.name} onChange={(e) => setData('name', e.target.value)} required className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
+                                {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
                             </div>
-                            <div>
-                                <Label>Category *</Label>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Category *</Label>
                                 <ComboSelect
                                     value={Number(data.asset_category_id) || null}
                                     onChange={(v) => v && setData('asset_category_id', v)}
                                     items={categories.map((c) => ({ value: c.id, label: `${c.code} — ${c.name}` }))}
+                                    className="h-9 border-zinc-200"
                                 />
                             </div>
-                            <div>
-                                <Label>Branch *</Label>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Branch *</Label>
                                 <ComboSelect
                                     value={Number(data.branch_id) || null}
                                     onChange={(v) => v && setData('branch_id', v)}
                                     items={branchComboSelectItems(branches, { numericValue: true })}
+                                    className="h-9 border-zinc-200"
                                 />
                             </div>
-                            <div>
-                                <Label>Status *</Label>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Status *</Label>
                                 <ComboSelect
                                     value={data.status}
                                     onChange={(v) => v && setData('status', String(v))}
                                     items={statusOptions.map((s) => ({ value: s.value, label: s.label }))}
+                                    className="h-9 border-zinc-200"
                                 />
                             </div>
-                            <div>
-                                <Label>Description</Label>
-                                <Textarea value={data.description} onChange={(e) => setData('description', e.target.value)} rows={2} />
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Description</Label>
+                                <Textarea value={data.description} onChange={(e) => setData('description', e.target.value)} rows={3} className="border-zinc-200 focus-visible:ring-emerald-500" />
                             </div>
                         </div>
-                    </PayrollSectionCard>
+                    </AssetSectionCard>
 
-                    <PayrollSectionCard title="Purchase & value">
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Purchase date</Label>
-                                    <Input type="date" value={data.purchase_date} onChange={(e) => setData('purchase_date', e.target.value)} />
+                    <AssetSectionCard title="Purchase & Value Details">
+                        <div className="space-y-4.5">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Purchase date</Label>
+                                    <Input type="date" value={data.purchase_date} onChange={(e) => setData('purchase_date', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
-                                <div>
-                                    <Label>Warranty expiry</Label>
-                                    <Input type="date" value={data.warranty_expiry} onChange={(e) => setData('warranty_expiry', e.target.value)} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Purchase cost</Label>
-                                    <Input type="number" min={0} step="0.01" value={data.purchase_cost} onChange={(e) => setData('purchase_cost', e.target.value)} />
-                                </div>
-                                <div>
-                                    <Label>Book value</Label>
-                                    <Input type="number" min={0} step="0.01" value={data.book_value} onChange={(e) => setData('book_value', e.target.value)} />
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Warranty expiry</Label>
+                                    <Input type="date" value={data.warranty_expiry} onChange={(e) => setData('warranty_expiry', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Serial no.</Label>
-                                    <Input value={data.serial_number} onChange={(e) => setData('serial_number', e.target.value)} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Purchase cost (৳)</Label>
+                                    <Input type="number" min={0} step="0.01" value={data.purchase_cost} onChange={(e) => setData('purchase_cost', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
-                                <div>
-                                    <Label>Useful life (years)</Label>
-                                    <Input type="number" min={1} value={data.useful_life_years} onChange={(e) => setData('useful_life_years', e.target.value)} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Model</Label>
-                                    <Input value={data.model} onChange={(e) => setData('model', e.target.value)} />
-                                </div>
-                                <div>
-                                    <Label>Manufacturer</Label>
-                                    <Input value={data.manufacturer} onChange={(e) => setData('manufacturer', e.target.value)} />
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Book value (৳)</Label>
+                                    <Input type="number" min={0} step="0.01" value={data.book_value} onChange={(e) => setData('book_value', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
                             </div>
-                            <div>
-                                <Label>Vendor</Label>
-                                <Input value={data.vendor} onChange={(e) => setData('vendor', e.target.value)} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Serial no.</Label>
+                                    <Input value={data.serial_number} onChange={(e) => setData('serial_number', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Useful life (years)</Label>
+                                    <Input type="number" min={1} value={data.useful_life_years} onChange={(e) => setData('useful_life_years', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
+                                </div>
                             </div>
-                            <div>
-                                <Label>Invoice no.</Label>
-                                <Input value={data.invoice_no} onChange={(e) => setData('invoice_no', e.target.value)} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Model</Label>
+                                    <Input value={data.model} onChange={(e) => setData('model', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Manufacturer</Label>
+                                    <Input value={data.manufacturer} onChange={(e) => setData('manufacturer', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Vendor</Label>
+                                <Input value={data.vendor} onChange={(e) => setData('vendor', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Invoice no.</Label>
+                                <Input value={data.invoice_no} onChange={(e) => setData('invoice_no', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                             </div>
                         </div>
-                    </PayrollSectionCard>
+                    </AssetSectionCard>
 
-                    <PayrollSectionCard title="Depreciation">
-                        <div className="space-y-4">
-                            <div>
-                                <Label>Method</Label>
+                    <AssetSectionCard title="Depreciation Configuration">
+                        <div className="space-y-4.5">
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Method</Label>
                                 <ComboSelect
                                     value={data.depreciation_method || null}
                                     onChange={(v) => setData('depreciation_method', v ? String(v) : '')}
                                     items={depreciationMethodOptions.map((o) => ({ value: o.value, label: o.label }))}
+                                    className="h-9 border-zinc-200"
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Salvage value</Label>
-                                    <Input type="number" min={0} step="0.01" value={data.salvage_value} onChange={(e) => setData('salvage_value', e.target.value)} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Salvage value (৳)</Label>
+                                    <Input type="number" min={0} step="0.01" value={data.salvage_value} onChange={(e) => setData('salvage_value', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
-                                <div>
-                                    <Label>Depreciation start</Label>
-                                    <Input type="date" value={data.depreciation_start_date} onChange={(e) => setData('depreciation_start_date', e.target.value)} />
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Depreciation start</Label>
+                                    <Input type="date" value={data.depreciation_start_date} onChange={(e) => setData('depreciation_start_date', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
                             </div>
                         </div>
-                    </PayrollSectionCard>
+                    </AssetSectionCard>
 
-                    <PayrollSectionCard title="Custodian" className="lg:col-span-2">
-                        <ComboSelect
-                            value={data.custodian_employee_id ? Number(data.custodian_employee_id) : null}
-                            onChange={(v) => setData('custodian_employee_id', v ?? '')}
-                            items={employees.map((e) => ({
-                                value: e.id,
-                                label: `${e.employee_id} — ${employeeDisplayName(e)}`,
-                            }))}
-                            placeholder="No custodian assigned"
-                        />
-                    </PayrollSectionCard>
+                    <AssetSectionCard title="Asset Custodian">
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Custodian Employee</Label>
+                            <ComboSelect
+                                value={data.custodian_employee_id ? Number(data.custodian_employee_id) : null}
+                                onChange={(v) => setData('custodian_employee_id', v ?? '')}
+                                items={employees.map((e) => ({
+                                    value: e.id,
+                                    label: `${e.employee_id} — ${employeeDisplayName(e)}`,
+                                }))}
+                                placeholder="No custodian assigned"
+                                className="h-9 border-zinc-200"
+                            />
+                        </div>
+                    </AssetSectionCard>
 
                     {data.status === 'disposed' && (
-                        <PayrollSectionCard title="Disposal" className="lg:col-span-2">
+                        <AssetSectionCard title="Disposal Details" className="lg:col-span-2">
                             <div className="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <Label>Disposal date</Label>
-                                    <Input type="date" value={data.disposal_date} onChange={(e) => setData('disposal_date', e.target.value)} />
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Disposal date</Label>
+                                    <Input type="date" value={data.disposal_date} onChange={(e) => setData('disposal_date', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
-                                <div>
-                                    <Label>Disposal amount</Label>
-                                    <Input type="number" min={0} step="0.01" value={data.disposal_amount} onChange={(e) => setData('disposal_amount', e.target.value)} />
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Disposal amount (৳)</Label>
+                                    <Input type="number" min={0} step="0.01" value={data.disposal_amount} onChange={(e) => setData('disposal_amount', e.target.value)} className="h-9 border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
-                                <div className="md:col-span-1">
-                                    <Label>Notes</Label>
-                                    <Textarea value={data.disposal_notes} onChange={(e) => setData('disposal_notes', e.target.value)} rows={2} />
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Notes</Label>
+                                    <Textarea value={data.disposal_notes} onChange={(e) => setData('disposal_notes', e.target.value)} rows={2} className="border-zinc-200 focus-visible:ring-emerald-500" />
                                 </div>
                             </div>
-                        </PayrollSectionCard>
+                        </AssetSectionCard>
                     )}
 
-                    <div className="lg:col-span-2">
-                        <Button type="submit" disabled={processing}>{isEdit ? 'Save changes' : 'Register asset'}</Button>
+                    <div className="lg:col-span-2 flex justify-end gap-3 mt-4 pt-4 border-t border-zinc-100">
+                        <Link href={route('fixed-assets.index')}>
+                            <Button type="button" variant="outline" className="border-zinc-200 text-zinc-700 hover:bg-zinc-50 h-9.5 rounded-lg cursor-pointer">Cancel</Button>
+                        </Link>
+                        <Button type="submit" disabled={processing} className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-2xs h-9.5 rounded-lg cursor-pointer">
+                            {isEdit ? 'Save Changes' : 'Register Asset'}
+                        </Button>
                     </div>
                 </form>
-            </PayrollPage>
+            </AssetPage>
         </Layout>
     );
 }

@@ -20,6 +20,7 @@ class User extends Authenticatable
         'employee_id',
         'branch_id',
         'active_status',
+        'account_type',
     ];
 
     protected $hidden = [
@@ -184,6 +185,16 @@ class User extends Authenticatable
         }
 
         return false;
+    }
+
+    public function isBranchAccount(): bool
+    {
+        return $this->account_type === 'branch';
+    }
+
+    public function isStaffAccount(): bool
+    {
+        return $this->account_type !== 'branch';
     }
 
     /**

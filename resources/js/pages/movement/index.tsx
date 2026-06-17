@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
     Table,
@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Sheet,
     SheetContent,
@@ -45,6 +46,7 @@ import {
     X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -151,6 +153,8 @@ export default function MovementIndex({
     filters,
     userPermissions,
 }: MovementIndexProps) {
+    const { flash } = usePage<{ flash?: { success?: string; error?: string; warning?: string } }>().props;
+
     const [status, setStatus] = useState(filters.status || '');
     const [departmentId, setDepartmentId] = useState(filters.department_id || '');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || '');
@@ -167,6 +171,7 @@ export default function MovementIndex({
     const [toDateOpen, setToDateOpen] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     const buildFilterParams = () => ({
         status: status && status !== 'all' ? status : '',
@@ -177,6 +182,10 @@ export default function MovementIndex({
         to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '',
         search,
         per_page: perPage,
+        page:
+            movements.meta?.current_page && movements.meta.current_page > 1
+                ? String(movements.meta.current_page)
+                : '',
     });
 
     const handleSearch = () => {
@@ -225,6 +234,59 @@ export default function MovementIndex({
     const applyFiltersAndClose = () => {
         handleSearch();
         setFilterSheetOpen(false);
+    };
+
+    const deletableIdsOnPage = movements.data.map((movement) => movement.id);
+    const allOnPageSelected =
+        deletableIdsOnPage.length > 0 && deletableIdsOnPage.every((id) => selectedIds.includes(id));
+    const someOnPageSelected = deletableIdsOnPage.some((id) => selectedIds.includes(id));
+
+    const toggleSelectAllOnPage = (checked: boolean) => {
+        if (checked) {
+            setSelectedIds((prev) => Array.from(new Set([...prev, ...deletableIdsOnPage])));
+            return;
+        }
+        setSelectedIds((prev) => prev.filter((id) => !deletableIdsOnPage.includes(id)));
+    };
+
+    const toggleSelectMovement = (movementId: number, checked: boolean) => {
+        if (checked) {
+            setSelectedIds((prev) => (prev.includes(movementId) ? prev : [...prev, movementId]));
+            return;
+        }
+        setSelectedIds((prev) => prev.filter((id) => id !== movementId));
+    };
+
+    const handleDeleteMovement = (movementId: number) => {
+        if (!confirm('Delete this movement? Attendance links to this movement will be cleared.')) {
+            return;
+        }
+
+        router.delete(route('movements.destroy', movementId), {
+            data: buildFilterParams(),
+            preserveScroll: true,
+            onSuccess: () => setSelectedIds((prev) => prev.filter((id) => id !== movementId)),
+        });
+    };
+
+    const handleBulkDelete = () => {
+        if (selectedIds.length === 0) {
+            return;
+        }
+
+        const label = selectedIds.length === 1 ? 'this movement' : `${selectedIds.length} movements`;
+        if (!confirm(`Delete ${label}? Attendance links to these movements will be cleared.`)) {
+            return;
+        }
+
+        router.post(
+            route('movements.bulk-destroy'),
+            { ids: selectedIds, ...buildFilterParams() },
+            {
+                preserveScroll: true,
+                onSuccess: () => setSelectedIds([]),
+            },
+        );
     };
 
     const filterFields = (
@@ -401,6 +463,25 @@ export default function MovementIndex({
             <Head title="Movement Requests" />
 
             <PageSurface>
+                {flash?.success && (
+                    <Alert className="mb-4 border-emerald-200 bg-emerald-50">
+                        <AlertTitle>Success</AlertTitle>
+                        <AlertDescription>{flash.success}</AlertDescription>
+                    </Alert>
+                )}
+                {flash?.error && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertTitle>Error</AlertTitle>
+                        <AlertDescription>{flash.error}</AlertDescription>
+                    </Alert>
+                )}
+                {flash?.warning && (
+                    <Alert className="mb-4 border-amber-200 bg-amber-50">
+                        <AlertTitle>Notice</AlertTitle>
+                        <AlertDescription>{flash.warning}</AlertDescription>
+                    </Alert>
+                )}
+
                 <div className="mb-3 flex items-center justify-between gap-2 border-b border-slate-200 pb-3 md:mb-4 md:pb-4">
                     <div className="min-w-0">
                         <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 md:text-2xl">
@@ -514,6 +595,19 @@ export default function MovementIndex({
                             <Search className="mr-1 h-4 w-4" />
                             Search
                         </Button>
+
+                        {userPermissions.canDelete && selectedIds.length > 0 && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                className="h-8 shrink-0 px-3 sm:h-9"
+                                onClick={handleBulkDelete}
+                            >
+                                <Trash className="mr-1 h-4 w-4" />
+                                Delete ({selectedIds.length})
+                            </Button>
+                        )}
                     </div>
 
                     {showFilters && (
@@ -555,7 +649,21 @@ export default function MovementIndex({
                             <Table>
                                 <TableHeader>
                                     <TableRow className="border-b border-slate-200 bg-slate-50/80">
-                                        <TableHead className="h-11 pl-6 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                        {userPermissions.canDelete && (
+                                            <TableHead className="h-11 w-12 pl-6">
+                                                <Checkbox
+                                                    checked={allOnPageSelected ? true : someOnPageSelected ? 'indeterminate' : false}
+                                                    onCheckedChange={(checked) => toggleSelectAllOnPage(checked === true)}
+                                                    aria-label="Select all movements on this page"
+                                                />
+                                            </TableHead>
+                                        )}
+                                        <TableHead
+                                            className={cn(
+                                                'h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase',
+                                                !userPermissions.canDelete && 'pl-6',
+                                            )}
+                                        >
                                             Employee
                                         </TableHead>
                                         <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
@@ -588,7 +696,18 @@ export default function MovementIndex({
                                                 key={movement.id}
                                                 className="group border-b border-slate-100 transition-colors hover:bg-slate-50"
                                             >
-                                                <TableCell className="pl-6">
+                                                {userPermissions.canDelete && (
+                                                    <TableCell className="pl-6">
+                                                        <Checkbox
+                                                            checked={selectedIds.includes(movement.id)}
+                                                            onCheckedChange={(checked) =>
+                                                                toggleSelectMovement(movement.id, checked === true)
+                                                            }
+                                                            aria-label={`Select movement for ${employeeDisplayName(movement.employee)}`}
+                                                        />
+                                                    </TableCell>
+                                                )}
+                                                <TableCell className={cn(!userPermissions.canDelete && 'pl-6')}>
                                                     <div className="flex min-w-[180px] items-center">
                                                         <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                                                             <Activity className="h-4 w-4" />
@@ -675,7 +794,12 @@ export default function MovementIndex({
                                                                 size="icon"
                                                                 className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
                                                                 title="Edit Movement"
-                                                                onClick={() => router.get(route('movements.edit', movement.id))}
+                                                                onClick={() =>
+                                                                    router.get(
+                                                                        route('movements.edit', movement.id),
+                                                                        buildFilterParams(),
+                                                                    )
+                                                                }
                                                             >
                                                                 <Edit className="h-4 w-4" />
                                                             </Button>
@@ -697,15 +821,7 @@ export default function MovementIndex({
                                                                 size="icon"
                                                                 className="h-8 w-8 rounded-lg bg-red-50 text-red-600 transition-colors hover:bg-red-100 hover:text-red-700"
                                                                 title="Delete Movement"
-                                                                onClick={() => {
-                                                                    if (
-                                                                        confirm(
-                                                                            'Delete this movement? Attendance links to this movement will be cleared.',
-                                                                        )
-                                                                    ) {
-                                                                        router.delete(route('movements.destroy', movement.id));
-                                                                    }
-                                                                }}
+                                                                onClick={() => handleDeleteMovement(movement.id)}
                                                             >
                                                                 <Trash className="h-4 w-4" />
                                                             </Button>
@@ -716,7 +832,7 @@ export default function MovementIndex({
                                         ))
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="h-24 text-center">
+                                            <TableCell colSpan={userPermissions.canDelete ? 9 : 8} className="h-24 text-center">
                                                 No movement requests found.
                                                 {hasActiveFilters && (
                                                     <Button variant="link" onClick={resetFilters} className="px-2 font-normal">

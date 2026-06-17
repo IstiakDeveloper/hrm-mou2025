@@ -1,5 +1,5 @@
-import React, { useState, FormEvent, useEffect } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import React, { useState, FormEvent, useEffect, useMemo } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
     Card,
@@ -28,7 +28,7 @@ import { format, formatISO, parse, isAfter, isBefore, startOfDay } from 'date-fn
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Calendar as CalendarIcon, Clock, MapPin, AlertCircle, User, BriefcaseBusiness, FileText, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from '@/components/ui/calendar';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
@@ -252,6 +252,8 @@ const SafeCalendar = ({ disabledDates, ...props }: any) => {
 };
 
 export default function CreateMovement({ employees, currentEmployee, isAdmin, movementTypes }: CreateMovementProps) {
+    const { flash } = usePage<{ flash?: { success?: string; error?: string; warning?: string } }>().props;
+
     const getCurrentTime = () => {
         const now = new Date();
         return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -272,6 +274,12 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
     const [fromDateOpen, setFromDateOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('details');
     const [showDropdown, setShowDropdown] = useState(false);
+    const [timeSnappedNotice, setTimeSnappedNotice] = useState<string | null>(null);
+
+    const serverErrorMessages = useMemo(
+        () => Object.values(errors).filter((message): message is string => Boolean(message)),
+        [errors],
+    );
 
     const officialTemplates = [
         { title: 'Client Meeting', purpose: 'Meeting with client to discuss project requirements and timeline', hours: 3 },
@@ -357,8 +365,26 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         return Object.keys(newErrors).length === 0;
     };
 
+    const resolveSubmitDateTimes = () => {
+        let fromDateTime = getFromDateTime();
+        if (!fromDateTime) return { fromDateTime: null, toDateTime: null };
+
+        const now = new Date();
+        const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+        if (fromDateTime < fiveMinutesAgo) {
+            const durationMs = durationHours * 60 * 60 * 1000;
+            fromDateTime = now;
+            const toDateTime = new Date(fromDateTime.getTime() + durationMs);
+            setTimeSnappedNotice('Start time was updated to the current time because the form was open for a while.');
+            return { fromDateTime, toDateTime };
+        }
+
+        return { fromDateTime, toDateTime: getToDateTime() };
+    };
+
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
+        setTimeSnappedNotice(null);
 
         if (!validateForm()) {
             setActiveTab('details');
@@ -367,24 +393,46 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
 
         setSubmitting(true);
 
-        const fromDateTime = getFromDateTime();
-        const toDateTime = getToDateTime();
+        const { fromDateTime, toDateTime } = resolveSubmitDateTimes();
+        if (!fromDateTime || !toDateTime) {
+            setErrors((prev) => ({
+                ...prev,
+                from_datetime: 'Please select a valid start date and time.',
+                to_datetime: 'Could not calculate the expected return time.',
+            }));
+            setSubmitting(false);
+            setActiveTab('details');
+            return;
+        }
+
+        if (toDateTime <= fromDateTime) {
+            setErrors((prev) => ({
+                ...prev,
+                to_datetime: 'Expected return time must be after the start time.',
+            }));
+            setSubmitting(false);
+            setActiveTab('details');
+            return;
+        }
 
         router.post(route('movements.store'), {
             employee_id: isAdmin ? employeeId : undefined,
             movement_type: movementType,
-            from_datetime: fromDateTime ? formatISO(fromDateTime) : '',
-            to_datetime: toDateTime ? formatISO(toDateTime) : '',
+            from_datetime: formatISO(fromDateTime),
+            to_datetime: formatISO(toDateTime),
             purpose,
             destination,
             remarks,
         }, {
-            onError: (errors) => {
-                setErrors(errors);
+            onError: (errs) => {
+                const normalized = Object.fromEntries(
+                    Object.entries(errs).map(([key, value]) => [key, Array.isArray(value) ? value[0] : String(value)]),
+                );
+                setErrors(normalized);
                 setActiveTab('details');
                 setSubmitting(false);
             },
-            onFinish: () => setSubmitting(false)
+            onFinish: () => setSubmitting(false),
         });
     };
 
@@ -415,6 +463,43 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                         <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mt-0.5">New Movement</h1>
                     </div>
                 </div>
+
+                {flash?.error && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Could not create movement</AlertTitle>
+                        <AlertDescription>{flash.error}</AlertDescription>
+                    </Alert>
+                )}
+
+                {flash?.warning && (
+                    <Alert className="mb-4 border-amber-200 bg-amber-50">
+                        <AlertCircle className="h-4 w-4 text-amber-700" />
+                        <AlertTitle>Notice</AlertTitle>
+                        <AlertDescription>{flash.warning}</AlertDescription>
+                    </Alert>
+                )}
+
+                {serverErrorMessages.length > 0 && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Please fix the following</AlertTitle>
+                        <AlertDescription>
+                            <ul className="mt-1 list-disc space-y-1 pl-4">
+                                {serverErrorMessages.map((message) => (
+                                    <li key={message}>{message}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {timeSnappedNotice && (
+                    <Alert className="mb-4 border-blue-200 bg-blue-50">
+                        <AlertCircle className="h-4 w-4 text-blue-700" />
+                        <AlertDescription>{timeSnappedNotice}</AlertDescription>
+                    </Alert>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                     <div className="md:col-span-2">
@@ -549,6 +634,18 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                         {errors.from_datetime}
                                                     </AlertDescription>
                                                 </Alert>
+                                            )}
+
+                                            {errors.to_datetime && (
+                                                <Alert variant="destructive" className="border-red-200 bg-red-50 text-red-800 p-2.5">
+                                                    <AlertDescription className="text-xs">
+                                                        {errors.to_datetime}
+                                                    </AlertDescription>
+                                                </Alert>
+                                            )}
+
+                                            {errors.remarks && (
+                                                <p className="text-xs font-medium text-red-500">{errors.remarks}</p>
                                             )}
 
                                             <div className="space-y-1 relative">

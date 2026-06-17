@@ -5,7 +5,7 @@ import { CheckCircle2, Lock, XCircle, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
-import { hasAppPermission, isSuperAdmin } from '@/lib/permissions';
+import { hasAppPermission, isBranchAccount, isSuperAdmin } from '@/lib/permissions';
 
 // Curated themes for each module to create a vibrant, professional layout
 const SECTION_THEMES: Record<string, {
@@ -261,6 +261,10 @@ export default function SectionsIndex() {
                         const Icon = section.icon;
                         const moduleActive = Boolean(section.href);
                         const hasAccess = (() => {
+                            if (isBranchAccount(auth)) {
+                                return section.id === 'attendance-movement';
+                            }
+
                             if (isSuperAdmin(auth)) {
                                 return true;
                             }

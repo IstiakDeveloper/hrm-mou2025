@@ -25,11 +25,17 @@ class Branch extends Model
         'branch_head_designation_id',
         'is_head_office',
         'is_active',
+        'login_pin',
+        'branch_user_id',
         'geofence_latitude',
         'geofence_longitude',
         'geofence_radius_meters',
         'geofence_max_accuracy_meters',
         'geofence_enabled',
+    ];
+
+    protected $hidden = [
+        'login_pin',
     ];
 
     protected $casts = [
@@ -107,5 +113,24 @@ class Branch extends Model
     public function users()
     {
         return $this->hasMany(User::class);
+    }
+
+    public function branchUser()
+    {
+        return $this->belongsTo(User::class, 'branch_user_id');
+    }
+
+    public function hasLoginPin(): bool
+    {
+        return filled($this->login_pin);
+    }
+
+    public function verifyLoginPin(string $pin): bool
+    {
+        if (! $this->login_pin) {
+            return false;
+        }
+
+        return \Illuminate\Support\Facades\Hash::check($pin, $this->login_pin);
     }
 }

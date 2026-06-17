@@ -8,13 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { 
-    ArrowDownAZ, 
-    ArrowLeft, 
-    ArrowUpAZ, 
-    Building2, 
-    ChevronDown, 
-    Search, 
+import {
+    ArrowDownAZ,
+    ArrowLeft,
+    ArrowUpAZ,
+    Building2,
+    ChevronDown,
+    Search,
     Users,
     Grid,
     List,
@@ -30,11 +30,11 @@ import {
     Info,
     ChevronRight,
     Sparkles,
-    RefreshCw,
     Printer
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 type Status =
     | 'present'
@@ -56,6 +56,17 @@ interface Department {
     name: string;
 }
 
+interface MovementInfo {
+    id: number;
+    movement_type: string;
+    purpose: string;
+    destination: string;
+    status: string;
+    from_time: string | null;
+    to_time: string | null;
+    actual_return_time: string | null;
+}
+
 interface EmployeeRow {
     id: number;
     employee_id: string;
@@ -66,6 +77,8 @@ interface EmployeeRow {
     check_in: string | null;
     check_out: string | null;
     leave_type: string | null;
+    movements?: MovementInfo[];
+    has_movement?: boolean;
 }
 
 interface BranchSummary {
@@ -73,7 +86,11 @@ interface BranchSummary {
     name: string;
     counts: Record<Status, number>;
     employeesByStatus: Record<Status, EmployeeRow[]>;
+    movementCount: number;
+    employeesWithMovement: EmployeeRow[];
 }
+
+type InspectorTab = Status | 'movement';
 
 interface Props {
     date: string;
@@ -88,6 +105,12 @@ interface Props {
         department_id?: string;
         search?: string;
     };
+    portalMode?: boolean;
+    portalBranch?: {
+        id: number;
+        name: string;
+        branch_code?: string | null;
+    } | null;
 }
 
 function statusLabel(s: Status) {
@@ -161,6 +184,593 @@ function MiniStackBar({
     );
 }
 
+function ReportHelpPopover() {
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-full border-slate-200 text-slate-500 hover:text-slate-800"
+                    title="How to read this report"
+                >
+                    <Info className="h-4 w-4" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[min(100vw-2rem,22rem)] p-4 text-xs text-slate-700" align="end">
+                <p className="font-bold text-slate-900 text-sm mb-2">How to read this report</p>
+                <ul className="space-y-1.5 text-slate-600 leading-relaxed">
+                    <li><strong className="text-emerald-700">Present</strong> — checked in at branch</li>
+                    <li><strong className="text-amber-700">Movement</strong> — official duty outside branch</li>
+                    <li><strong className="text-rose-700">Absent</strong> — no punch and not on approved leave</li>
+                    <li><strong className="text-blue-700">Leave</strong> — approved leave for this date</li>
+                </ul>
+                <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+                    All staff are listed below by status. Use search to find a name or employee ID quickly.
+                </p>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function filterStaffList(list: EmployeeRow[], query: string) {
+    if (!query.trim()) return list;
+    const q = query.toLowerCase().trim();
+    return list.filter(
+        (r) =>
+            r.name.toLowerCase().includes(q) ||
+            r.employee_id.toLowerCase().includes(q) ||
+            (r.department && r.department.toLowerCase().includes(q)) ||
+            (r.designation && r.designation.toLowerCase().includes(q)),
+    );
+}
+
+function portalPresentEmployees(branch: BranchSummary): EmployeeRow[] {
+    const movementIds = new Set((branch.employeesWithMovement ?? []).map((e) => e.id));
+    const keys: Status[] = ['present', 'late', 'half_day', 'on_duty'];
+    const rows: EmployeeRow[] = [];
+    const seen = new Set<number>();
+
+    for (const key of keys) {
+        for (const row of branch.employeesByStatus?.[key] ?? []) {
+            if (movementIds.has(row.id) || seen.has(row.id)) {
+                continue;
+            }
+            seen.add(row.id);
+            rows.push(row);
+        }
+    }
+
+    return rows;
+}
+
+function portalColumnEmployees(branch: BranchSummary, key: 'present' | 'movement' | 'absent' | 'leave'): EmployeeRow[] {
+    switch (key) {
+        case 'present':
+            return portalPresentEmployees(branch);
+        case 'movement':
+            return branch.employeesWithMovement ?? [];
+        case 'absent':
+            return branch.employeesByStatus?.absent ?? [];
+        case 'leave':
+            return branch.employeesByStatus?.leave ?? [];
+        default:
+            return [];
+    }
+}
+
+function portalEmployeeStatusTag(status: Status): string | null {
+    if (status === 'late') return 'Late';
+    if (status === 'half_day') return 'Half day';
+    if (status === 'on_duty') return 'On duty';
+    return null;
+}
+
+function PortalGridStaffCard({
+    row,
+    column,
+    compact = false,
+}: {
+    row: EmployeeRow;
+    column: 'present' | 'movement' | 'absent' | 'leave';
+    compact?: boolean;
+}) {
+    const statusTag = portalEmployeeStatusTag(row.status);
+    const movement = row.movements?.[0];
+
+    // Determine left border color and icons for SaaS feel
+    let borderLeftColor = 'border-l-slate-200';
+    if (column === 'present') {
+        if (row.status === 'late') borderLeftColor = 'border-l-amber-500';
+        else if (row.status === 'half_day') borderLeftColor = 'border-l-orange-500';
+        else if (row.status === 'on_duty') borderLeftColor = 'border-l-teal-500';
+        else borderLeftColor = 'border-l-emerald-500';
+    } else if (column === 'movement') {
+        borderLeftColor = 'border-l-indigo-500';
+    } else if (column === 'absent') {
+        borderLeftColor = 'border-l-rose-500';
+    } else if (column === 'leave') {
+        borderLeftColor = 'border-l-blue-500';
+    }
+
+    const initials = row.name
+        ? row.name
+              .split(' ')
+              .map((n) => n[0])
+              .join('')
+              .substring(0, 2)
+              .toUpperCase()
+        : '??';
+
+    if (compact) {
+        return (
+            <div className="border-b border-slate-100 px-2 py-1 last:border-0 hover:bg-slate-50/80">
+                <p className="truncate font-bold text-[9px] leading-tight text-slate-800" title={row.name}>
+                    {row.name}
+                </p>
+                <p className="truncate text-[8px] text-slate-500">
+                    <span className="font-mono">{row.employee_id}</span>
+                    {row.designation ? <span> · {row.designation}</span> : null}
+                </p>
+                {column === 'present' && (
+                    <div className="mt-0.5 flex items-center gap-1 font-mono text-[8px] text-slate-600">
+                        {statusTag && (
+                            <span className="rounded bg-amber-100 px-1 py-px text-[7px] font-bold uppercase text-amber-800">
+                                {statusTag}
+                            </span>
+                        )}
+                        {row.check_in ? (
+                            <span className="font-semibold text-emerald-700">IN {row.check_in}</span>
+                        ) : (
+                            <span className="text-slate-400">No IN</span>
+                        )}
+                        {row.check_out && <span className="text-slate-500">OUT {row.check_out}</span>}
+                    </div>
+                )}
+                {column === 'movement' && movement && (
+                    <p className="truncate text-[8px] text-indigo-700 font-semibold">
+                        {movement.destination || 'On duty'}
+                    </p>
+                )}
+                {column === 'absent' && (
+                    <p className="text-[8px] font-semibold text-rose-600">Absent</p>
+                )}
+                {column === 'leave' && (
+                    <p className="text-[8px] font-semibold text-blue-700">{row.leave_type || 'Leave'}</p>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className={cn(
+            'bg-white rounded-xl border border-slate-200/60 p-2.5 shadow-xs hover:shadow-md transition-all duration-200 border-l-4 flex flex-col gap-1.5 relative group overflow-hidden mb-2 last:mb-0',
+            borderLeftColor
+        )}>
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    <div className={cn(
+                        'h-7 w-7 rounded-full border flex items-center justify-center text-[9px] font-extrabold shrink-0 select-none',
+                        column === 'present' ? 'bg-emerald-50/50 border-emerald-100 text-emerald-700' :
+                        column === 'movement' ? 'bg-indigo-50/50 border-indigo-100 text-indigo-700' :
+                        column === 'absent' ? 'bg-rose-50/50 border-rose-100 text-rose-700' :
+                        'bg-blue-50/50 border-blue-100 text-blue-700'
+                    )}>
+                        {initials}
+                    </div>
+                    <div className="min-w-0 leading-tight">
+                        <p className="text-xs font-bold text-slate-800 truncate" title={row.name}>
+                            {row.name}
+                        </p>
+                        <p className="text-[9px] font-mono text-slate-400 tracking-wider">
+                            {row.employee_id}
+                        </p>
+                    </div>
+                </div>
+                {row.designation && (
+                    <span className="text-[8px] text-slate-400 max-w-[80px] truncate bg-slate-50 px-1.5 py-0.5 rounded font-medium" title={row.designation}>
+                        {row.designation}
+                    </span>
+                )}
+            </div>
+
+            {row.department && (
+                <div className="text-[9px] text-slate-500 font-medium border-t border-slate-50 pt-1 flex items-center gap-1">
+                    <span className="h-1 w-1 rounded-full bg-slate-300" />
+                    <span className="truncate">{row.department}</span>
+                </div>
+            )}
+
+            <div className="border-t border-slate-50/80 pt-1">
+                {column === 'present' && (
+                    <div className="flex flex-wrap items-center gap-1.5 font-mono text-[9px]">
+                        {statusTag && (
+                            <span className={cn(
+                                'rounded px-1 py-px text-[7.5px] font-bold uppercase tracking-wide',
+                                row.status === 'late' ? 'bg-amber-100 text-amber-800' :
+                                row.status === 'half_day' ? 'bg-orange-100 text-orange-800' :
+                                'bg-teal-100 text-teal-800'
+                            )}>
+                                {statusTag}
+                            </span>
+                        )}
+                        <div className="flex items-center gap-1.5 text-slate-600">
+                            {row.check_in ? (
+                                <span className="inline-flex items-center gap-0.5">
+                                    <Clock className="h-3 w-3 text-emerald-500" />
+                                    <span className="font-bold text-emerald-700">IN {row.check_in}</span>
+                                </span>
+                            ) : (
+                                <span className="text-slate-400">No IN</span>
+                            )}
+                            {row.check_out ? (
+                                <span className="inline-flex items-center gap-0.5">
+                                    <span className="text-slate-400">OUT</span>
+                                    <span className="font-semibold text-slate-700">{row.check_out}</span>
+                                </span>
+                            ) : row.check_in ? (
+                                <span className="text-slate-400 font-medium italic">Active</span>
+                            ) : null}
+                        </div>
+                    </div>
+                )}
+
+                {column === 'movement' && (
+                    <div className="text-[9px] space-y-0.5">
+                        {movement ? (
+                            <>
+                                <div className="flex items-center gap-1 text-indigo-700 font-bold">
+                                    <MapPin className="h-3 w-3 shrink-0 text-indigo-500" />
+                                    <span className="truncate" title={movement.destination}>
+                                        {movement.destination || 'On duty'}
+                                    </span>
+                                    {movement.status === 'active' && (
+                                        <span className="ml-auto relative flex h-2 w-2 shrink-0">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center justify-between text-[8.5px] text-slate-400 font-mono">
+                                    <span>
+                                        {movement.from_time ? `IN: ${movement.from_time}` : ''}
+                                        {movement.actual_return_time || movement.to_time
+                                            ? ` · RTN: ${movement.actual_return_time || movement.to_time}`
+                                            : ' · Active'}
+                                    </span>
+                                    <span className={cn(
+                                        'font-bold uppercase tracking-wider text-[8px]',
+                                        movement.status === 'completed' ? 'text-emerald-650' : 'text-amber-600'
+                                    )}>
+                                        {movement.status}
+                                    </span>
+                                </div>
+                            </>
+                        ) : (
+                            <span className="text-slate-400">Movement details</span>
+                        )}
+                    </div>
+                )}
+
+                {column === 'absent' && (
+                    <div className="flex items-center justify-between text-[9px]">
+                        <span className="font-semibold text-rose-600 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3 text-rose-500 shrink-0" />
+                            Unexcused Absence
+                        </span>
+                        <span className="text-[7.5px] bg-rose-50 text-rose-700 border border-rose-100 px-1 py-0.5 rounded uppercase font-bold tracking-wider">
+                            No Punch
+                        </span>
+                    </div>
+                )}
+
+                {column === 'leave' && (
+                    <div className="flex items-center justify-between text-[9px]">
+                        <span className="font-semibold text-blue-700 flex items-center gap-1">
+                            <Calendar className="h-3 w-3 text-blue-500 shrink-0" />
+                            Approved Leave
+                        </span>
+                        <span className="text-[8.5px] font-bold bg-blue-50 text-blue-800 border border-blue-100 px-1.5 py-0.5 rounded">
+                            {row.leave_type || 'Leave'}
+                        </span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+const PORTAL_GRID_COLUMNS: Array<{
+    key: 'present' | 'movement' | 'absent' | 'leave';
+    label: string;
+    headerClass: string;
+    badgeClass: string;
+}> = [
+    { key: 'present', label: 'Present', headerClass: 'border-emerald-200 bg-emerald-50', badgeClass: 'bg-emerald-600' },
+    { key: 'movement', label: 'Movement', headerClass: 'border-indigo-200 bg-indigo-50', badgeClass: 'bg-indigo-650' },
+    { key: 'absent', label: 'Absent', headerClass: 'border-rose-200 bg-rose-50', badgeClass: 'bg-rose-600' },
+    { key: 'leave', label: 'Leave', headerClass: 'border-blue-200 bg-blue-50', badgeClass: 'bg-blue-600' },
+];
+
+type PortalStats = {
+    presentOnly: number;
+    movementCount: number;
+    absent: number;
+    leave: number;
+    workingTotal: number;
+    present: number;
+};
+
+function PortalStatsBar({ stats, compact = false }: { stats: PortalStats; compact?: boolean }) {
+    if (compact) {
+        return (
+            <div className="grid grid-cols-5 gap-1">
+                {PORTAL_GRID_COLUMNS.map((col) => {
+                    const value =
+                        col.key === 'present'
+                            ? stats.presentOnly
+                            : col.key === 'movement'
+                              ? stats.movementCount
+                              : col.key === 'absent'
+                                ? stats.absent
+                                : stats.leave;
+                    return (
+                        <div
+                            key={col.key}
+                            className={cn('rounded-lg border text-center print-color-exact px-1.5 py-1 bg-slate-50 border-slate-200')}
+                        >
+                            <p className="font-bold text-slate-700 text-[8px] leading-tight">{col.label}</p>
+                            <p className="font-black tabular-nums leading-tight text-slate-900 text-base">{value}</p>
+                        </div>
+                    );
+                })}
+                <div className="rounded-lg border border-slate-200 bg-slate-50 text-center print-color-exact px-1.5 py-1">
+                    <p className="font-bold text-slate-700 text-[8px] leading-tight">Total</p>
+                    <p className="font-black tabular-nums leading-tight text-slate-900 text-base">{stats.workingTotal}</p>
+                </div>
+            </div>
+        );
+    }
+
+    const cards = [
+        {
+            key: 'total',
+            label: 'Scheduled Staff',
+            value: stats.workingTotal,
+            icon: <Users className="h-4.5 w-4.5" />,
+            bg: 'from-slate-50 to-white border-slate-200/70',
+            iconBg: 'bg-slate-100 text-slate-600',
+            valueColor: 'text-slate-900',
+            desc: 'attendance scheduled'
+        },
+        {
+            key: 'present',
+            label: 'Present at Branch',
+            value: stats.presentOnly,
+            icon: <UserCheck className="h-4.5 w-4.5" />,
+            bg: 'from-emerald-50/40 to-white border-emerald-100',
+            iconBg: 'bg-emerald-100/60 text-emerald-600',
+            valueColor: 'text-emerald-700',
+            desc: 'checked-in on-site'
+        },
+        {
+            key: 'movement',
+            label: 'On Duty / Movement',
+            value: stats.movementCount,
+            icon: <MapPin className="h-4.5 w-4.5" />,
+            bg: 'from-indigo-50/40 to-white border-indigo-100',
+            iconBg: 'bg-indigo-100/60 text-indigo-650',
+            valueColor: 'text-indigo-700',
+            desc: 'official duty details'
+        },
+        {
+            key: 'absent',
+            label: 'Unexcused Absences',
+            value: stats.absent,
+            icon: <UserX className="h-4.5 w-4.5" />,
+            bg: stats.absent > 0 ? 'from-rose-50/40 to-white border-rose-100' : 'from-slate-50/20 to-white border-slate-200/50',
+            iconBg: stats.absent > 0 ? 'bg-rose-100/60 text-rose-600' : 'bg-slate-100 text-slate-400',
+            valueColor: stats.absent > 0 ? 'text-rose-600' : 'text-slate-905',
+            desc: 'unexcused absences'
+        },
+        {
+            key: 'leave',
+            label: 'Approved Leaves',
+            value: stats.leave,
+            icon: <CalendarDays className="h-4.5 w-4.5" />,
+            bg: 'from-blue-50/40 to-white border-blue-100',
+            iconBg: 'bg-blue-100/60 text-blue-600',
+            valueColor: 'text-blue-700',
+            desc: 'excused leave today'
+        }
+    ];
+
+    return (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 shrink-0">
+            {cards.map((c) => (
+                <div
+                    key={c.key}
+                    className={cn(
+                        'relative bg-gradient-to-br border p-3 rounded-2xl shadow-xs flex items-center justify-between group hover:shadow-sm transition-all duration-200 overflow-hidden',
+                        c.bg
+                    )}
+                >
+                    <div className="min-w-0">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block truncate">
+                            {c.label}
+                        </span>
+                        <div className={cn('text-xl md:text-2xl font-black tracking-tight mt-1 leading-none', c.valueColor)}>
+                            {c.value}
+                        </div>
+                        <p className="text-[9px] text-slate-400 mt-1 font-medium truncate">
+                            {c.desc}
+                        </p>
+                    </div>
+                    <div className={cn('p-2 rounded-xl transition-all duration-300 group-hover:scale-105 shrink-0', c.iconBg)}>
+                        {c.icon}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function PortalGridBoard({
+    branch,
+    stats,
+    searchQuery,
+    variant = 'screen',
+}: {
+    branch: BranchSummary;
+    stats: PortalStats;
+    searchQuery: string;
+    variant?: 'screen' | 'print';
+}) {
+    const isPrint = variant === 'print';
+
+    return (
+        <div
+            className={cn(
+                isPrint
+                    ? 'portal-print-grid grid grid-cols-4 gap-1.5'
+                    : 'grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-0.5',
+            )}
+        >
+            {PORTAL_GRID_COLUMNS.map((column) => {
+                const allRows = portalColumnEmployees(branch, column.key);
+                const rows = filterStaffList(allRows, searchQuery);
+                const count =
+                    column.key === 'present'
+                        ? stats.presentOnly
+                        : column.key === 'movement'
+                          ? stats.movementCount
+                          : column.key === 'absent'
+                            ? stats.absent
+                            : stats.leave;
+
+                const columnColors = {
+                    present: {
+                        bg: 'bg-emerald-50/20 border-emerald-100',
+                        accent: 'bg-emerald-500',
+                        text: 'text-emerald-800',
+                        badge: 'bg-emerald-600 text-white',
+                        subtext: 'present at branch'
+                    },
+                    movement: {
+                        bg: 'bg-indigo-50/20 border-indigo-100',
+                        accent: 'bg-indigo-500',
+                        text: 'text-indigo-850',
+                        badge: 'bg-indigo-600 text-white',
+                        subtext: 'out on official duty'
+                    },
+                    absent: {
+                        bg: 'bg-rose-50/20 border-rose-100',
+                        accent: 'bg-rose-500',
+                        text: 'text-rose-805',
+                        badge: 'bg-rose-600 text-white',
+                        subtext: 'unexcused absences'
+                    },
+                    leave: {
+                        bg: 'bg-blue-50/20 border-blue-100',
+                        accent: 'bg-blue-500',
+                        text: 'text-blue-800',
+                        badge: 'bg-blue-600 text-white',
+                        subtext: 'approved leaves'
+                    }
+                }[column.key];
+
+                return (
+                    <div
+                        key={column.key}
+                        className={cn(
+                            'flex flex-col overflow-hidden rounded-2xl border bg-slate-50/30 shadow-xs transition-all duration-350',
+                            columnColors.bg,
+                            isPrint ? 'break-inside-avoid' : 'min-h-0',
+                        )}
+                    >
+                        <div className={cn(
+                            'flex shrink-0 items-center justify-between border-b border-inherit px-3.5 py-2.5 relative',
+                            isPrint ? 'px-1.5 py-0.5' : ''
+                        )}>
+                            <div className="flex items-center gap-2">
+                                <span className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl', columnColors.accent)} />
+                                <div>
+                                    <span className={cn('font-extrabold tracking-tight', isPrint ? 'text-[10px]' : 'text-xs md:text-[13px]', columnColors.text)}>
+                                        {column.label}
+                                    </span>
+                                    {!isPrint && (
+                                        <p className="text-[9.5px] text-slate-400 font-medium">
+                                            {columnColors.subtext}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            <span className={cn('rounded-full font-black text-center min-w-[20px] px-1.5 py-0.5 text-[9.5px] tabular-nums', columnColors.badge)}>
+                                {count}
+                            </span>
+                        </div>
+                        <div className={cn(
+                            isPrint 
+                                ? 'bg-white' 
+                                : 'min-h-0 flex-1 overflow-y-auto bg-slate-50/10 p-2.5 scrollbar-thin'
+                        )}>
+                            {rows.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center py-12 text-center text-slate-400 select-none">
+                                    <span className="text-[10px] font-medium bg-slate-100/60 border border-slate-200/50 rounded-lg px-2.5 py-1">
+                                        No staff
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {rows.map((row) => (
+                                        <PortalGridStaffCard key={row.id} row={row} column={column.key} compact={isPrint} />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+function PortalPrintReport({
+    branchName,
+    readableDate,
+    branch,
+    stats,
+}: {
+    branchName: string;
+    readableDate: string;
+    branch: BranchSummary;
+    stats: PortalStats;
+}) {
+    return (
+        <div className="portal-print-report">
+            <div className="mb-2 flex items-end justify-between border-b-2 border-slate-900 pb-1.5">
+                <div>
+                    <h1 className="text-sm font-black uppercase tracking-tight text-slate-900">{branchName}</h1>
+                    <p className="text-[10px] font-medium text-slate-600">Attendance &amp; Movement — {readableDate}</p>
+                </div>
+                <p className="text-[9px] text-slate-500">Printed: {format(new Date(), 'dd MMM yyyy, hh:mm a')}</p>
+            </div>
+
+            <div className="mb-2">
+                <PortalStatsBar stats={stats} compact />
+            </div>
+
+            <PortalGridBoard branch={branch} stats={stats} searchQuery="" variant="print" />
+
+            <div className="mt-2 flex items-center justify-between border-t border-slate-300 pt-1 text-[8px] text-slate-400">
+                <span>Branch attendance report</span>
+                <span>Confidential — internal use only</span>
+            </div>
+        </div>
+    );
+}
+
 export default function DailyBranchSummary({
     date,
     readableDate,
@@ -169,7 +779,10 @@ export default function DailyBranchSummary({
     departments,
     statuses,
     filters,
+    portalMode = false,
+    portalBranch = null,
 }: Props) {
+    const summaryRoute = 'attendance.daily-branch-summary';
     const [selectedDate, setSelectedDate] = useState<Date | null>(() => (date ? parseISO(date) : new Date()));
     const [branch, setBranch] = useState(filters.branch_id || 'all');
     const [department, setDepartment] = useState(filters.department_id || 'all');
@@ -177,7 +790,7 @@ export default function DailyBranchSummary({
     const [sortMode, setSortMode] = useState<'attention' | 'name_asc' | 'name_desc'>('attention');
     const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
     const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
-    const [selectedStatus, setSelectedStatus] = useState<Status>('absent');
+    const [selectedStatus, setSelectedStatus] = useState<InspectorTab>('absent');
     const [localSearch, setLocalSearch] = useState('');
 
     const totals = useMemo(() => {
@@ -202,16 +815,18 @@ export default function DailyBranchSummary({
     const derived = useMemo(() => {
         return branchesSummary.map((b) => {
             const c = b.counts ?? ({} as Record<Status, number>);
-            const present = (c.present ?? 0) + (c.late ?? 0) + (c.half_day ?? 0) + (c.on_duty ?? 0);
+            const movementCount = b.movementCount ?? 0;
             const absent = c.absent ?? 0;
             const leave = c.leave ?? 0;
             const other = (c.holiday ?? 0) + (c.weekend ?? 0);
             const total = statuses.reduce((a, s) => a + (c[s] ?? 0), 0);
             const workingTotal = clamp(total - other, 0, total);
+            const present = clamp(workingTotal - absent - leave, 0, workingTotal);
+            const presentOnly = clamp(present - movementCount, 0, present);
             const presentRate = workingTotal > 0 ? present / workingTotal : 1;
             const attention = (1 - presentRate) * 1000 + absent * 2 + leave * 0.5;
 
-            return { branch: b, present, absent, leave, total, workingTotal, presentRate, attention };
+            return { branch: b, present, presentOnly, movementCount, absent, leave, total, workingTotal, presentRate, attention };
         });
     }, [branchesSummary, statuses]);
 
@@ -261,27 +876,33 @@ export default function DailyBranchSummary({
     useEffect(() => {
         if (activeBranch) {
             const counts = activeBranch.branch.counts || ({} as Record<Status, number>);
+            const movementCount = activeBranch.movementCount ?? 0;
             if ((counts.absent ?? 0) > 0) {
                 setSelectedStatus('absent');
+            } else if (movementCount > 0) {
+                setSelectedStatus('movement');
             } else if ((counts.late ?? 0) > 0) {
                 setSelectedStatus('late');
             } else if ((counts.present ?? 0) > 0) {
                 setSelectedStatus('present');
             } else {
-                const primaryTabs: Status[] = ['present', 'absent', 'leave', 'late', 'half_day', 'on_duty', 'holiday', 'weekend'];
-                const firstWithCount = primaryTabs.find((s) => (counts[s] ?? 0) > 0);
+                const primaryTabs: InspectorTab[] = ['present', 'absent', 'movement', 'leave', 'late', 'half_day', 'on_duty', 'holiday', 'weekend'];
+                const firstWithCount = primaryTabs.find((s) => {
+                    if (s === 'movement') return movementCount > 0;
+                    return (counts[s as Status] ?? 0) > 0;
+                });
                 setSelectedStatus(firstWithCount || 'present');
             }
-            setLocalSearch(''); // Reset local search on branch change
+            setLocalSearch('');
         }
     }, [activeBranch?.branch.id]);
 
     const applyFilters = () => {
         router.get(
-            route('attendance.daily-branch-summary'),
+            route(summaryRoute),
             {
                 date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '',
-                branch_id: branch !== 'all' ? branch : '',
+                ...(portalMode ? {} : { branch_id: branch !== 'all' ? branch : '' }),
                 department_id: department !== 'all' ? department : '',
                 search: search || '',
             },
@@ -289,12 +910,42 @@ export default function DailyBranchSummary({
         );
     };
 
+    const handlePortalDateChange = (next: Date | null) => {
+        setSelectedDate(next);
+        if (!next) {
+            return;
+        }
+        const formatted = format(next, 'yyyy-MM-dd');
+        if (formatted === date) {
+            return;
+        }
+        router.get(
+            route(summaryRoute),
+            { date: formatted },
+            { preserveState: true, preserveScroll: true },
+        );
+    };
+
+    useEffect(() => {
+        if (!date) {
+            return;
+        }
+        const parsed = parseISO(date);
+        setSelectedDate((current) => {
+            if (!current || format(current, 'yyyy-MM-dd') !== date) {
+                return parsed;
+            }
+            return current;
+        });
+    }, [date]);
+
     const resetFilters = () => {
         setBranch('all');
         setDepartment('all');
         setSearch('');
+        setLocalSearch('');
         router.get(
-            route('attendance.daily-branch-summary'),
+            route(summaryRoute),
             { date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '' },
             { preserveState: true },
         );
@@ -305,16 +956,87 @@ export default function DailyBranchSummary({
     const overallPresentCount = useMemo(() => derived.reduce((sum, r) => sum + r.present, 0), [derived]);
     const overallAbsentCount = useMemo(() => derived.reduce((sum, r) => sum + r.absent, 0), [derived]);
     const overallLeaveCount = useMemo(() => derived.reduce((sum, r) => sum + r.leave, 0), [derived]);
+    const overallMovementCount = useMemo(() => derived.reduce((sum, r) => sum + r.movementCount, 0), [derived]);
     const overallAttendancePct = overallWorkingTotal > 0 ? (overallPresentCount / overallWorkingTotal) * 100 : 0;
+
+    const portalBranchSummary = useMemo((): BranchSummary | null => {
+        if (!portalMode) {
+            return null;
+        }
+        if (portalBranch?.id) {
+            const matched = branchesSummary.find((b) => b.id === portalBranch.id);
+            if (matched) {
+                return matched;
+            }
+        }
+        return branchesSummary[0] ?? null;
+    }, [portalMode, portalBranch, branchesSummary]);
+
+    const portalStats = useMemo(() => {
+        if (!portalBranchSummary) {
+            return null;
+        }
+        const c = portalBranchSummary.counts ?? ({} as Record<Status, number>);
+        const movementCount = portalBranchSummary.movementCount ?? 0;
+        const absent = c.absent ?? 0;
+        const leave = c.leave ?? 0;
+        const other = (c.holiday ?? 0) + (c.weekend ?? 0);
+        const total = statuses.reduce((a, s) => a + (c[s] ?? 0), 0);
+        const workingTotal = clamp(total - other, 0, total);
+        const present = clamp(workingTotal - absent - leave, 0, workingTotal);
+        const presentOnly = clamp(present - movementCount, 0, present);
+
+        return { presentOnly, movementCount, absent, leave, workingTotal, present };
+    }, [portalBranchSummary, statuses]);
+
+    const singleBranchData = useMemo(() => {
+        if (portalMode) {
+            if (!portalBranchSummary || !portalStats) return null;
+            return {
+                branch: portalBranchSummary,
+                stats: portalStats,
+            };
+        } else if (sorted.length === 1) {
+            const item = sorted[0];
+            return {
+                branch: item.branch,
+                stats: {
+                    presentOnly: item.presentOnly,
+                    movementCount: item.movementCount,
+                    absent: item.absent,
+                    leave: item.leave,
+                    workingTotal: item.workingTotal,
+                    present: item.present,
+                },
+            };
+        }
+        return null;
+    }, [portalMode, portalBranchSummary, portalStats, sorted]);
+
+    const branchStackSegments = (row: (typeof derived)[number]) => {
+        return [
+            { key: 'present', label: 'Present', value: row.presentOnly, className: 'bg-emerald-500' },
+            { key: 'movement', label: 'On Duty (Movement)', value: row.movementCount, className: 'bg-amber-500' },
+            { key: 'absent', label: 'Absent', value: row.absent, className: 'bg-rose-500' },
+            { key: 'leave', label: 'Leave', value: row.leave, className: 'bg-blue-500' },
+        ];
+    };
+
+    const inspectorTabLabel = (tab: InspectorTab) => {
+        if (tab === 'movement') return 'Movement';
+        return statusLabel(tab);
+    };
 
     // Filter local employee search within active branch
     const filteredEmployees = useMemo(() => {
         if (!activeBranch) return [];
-        const list = activeBranch.branch.employeesByStatus?.[selectedStatus] ?? [];
+        const list = selectedStatus === 'movement'
+            ? (activeBranch.branch.employeesWithMovement ?? [])
+            : (activeBranch.branch.employeesByStatus?.[selectedStatus] ?? []);
         if (!localSearch.trim()) return list;
         const query = localSearch.toLowerCase().trim();
-        return list.filter((r) => 
-            r.name.toLowerCase().includes(query) || 
+        return list.filter((r) =>
+            r.name.toLowerCase().includes(query) ||
             r.employee_id.toLowerCase().includes(query) ||
             (r.department && r.department.toLowerCase().includes(query)) ||
             (r.designation && r.designation.toLowerCase().includes(query))
@@ -323,10 +1045,11 @@ export default function DailyBranchSummary({
 
     return (
         <Layout>
-            <Head title="Daily Branch Attendance Summary" />
+            <Head title={portalMode ? 'Attendance & Movement' : 'Daily Branch Summary'} />
 
-            <div className="container mx-auto py-5 px-4 max-w-7xl animate-in fade-in duration-300 print:hidden">
+            <div className={cn('mx-auto max-w-7xl animate-in fade-in duration-300 print:hidden', (portalMode || singleBranchData) && '!max-w-none px-2 py-2 lg:px-3')}>
                 {/* Back Link */}
+                {!portalMode && !singleBranchData && (
                 <div className="mb-4">
                     <Link
                         href={route('attendance.index')}
@@ -336,16 +1059,133 @@ export default function DailyBranchSummary({
                         <span>Back to Daily Attendance</span>
                     </Link>
                 </div>
+                )}
 
+                {singleBranchData ? (
+                    <div className="flex h-[calc(100vh-7rem)] min-h-[500px] flex-col gap-3 overflow-hidden">
+                        <div className="flex shrink-0 flex-wrap items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-xs">
+                            {portalMode ? (
+                                <Link
+                                    href={route('sections.index')}
+                                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+                                    title="Back to Modules"
+                                >
+                                    <ArrowLeft className="h-4.5 w-4.5" />
+                                </Link>
+                            ) : (
+                                <Link
+                                    href={route('attendance.index')}
+                                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+                                    title="Back to Daily Attendance"
+                                >
+                                    <ArrowLeft className="h-4.5 w-4.5" />
+                                </Link>
+                            )}
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                    <h1 className="truncate text-base font-black text-slate-900 tracking-tight sm:text-lg">
+                                        {singleBranchData.branch.name}
+                                    </h1>
+                                    <span className={cn(
+                                        "px-2 py-0.5 text-[10px] font-bold rounded-full border shrink-0",
+                                        singleBranchData.stats.workingTotal > 0 && (singleBranchData.stats.present / singleBranchData.stats.workingTotal) < 0.75 ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                                        singleBranchData.stats.workingTotal > 0 && (singleBranchData.stats.present / singleBranchData.stats.workingTotal) < 0.90 ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                        'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    )}>
+                                        {singleBranchData.stats.workingTotal > 0 
+                                            ? `${Math.round((singleBranchData.stats.present / singleBranchData.stats.workingTotal) * 105) / 1.05}% Attendance`
+                                            : '0% Attendance'
+                                        }
+                                    </span>
+                                    {portalMode && <ReportHelpPopover />}
+                                </div>
+                                <p className="truncate text-[11px] font-medium text-slate-550">{readableDate}</p>
+                            </div>
+                            <div className="w-[140px] shrink-0">
+                                <DatePicker 
+                                    selected={selectedDate} 
+                                    onSelect={portalMode ? handlePortalDateChange : (d) => {
+                                        setSelectedDate(d);
+                                        router.get(
+                                            route(summaryRoute),
+                                            {
+                                                date: d ? format(d, 'yyyy-MM-dd') : '',
+                                                branch_id: branch !== 'all' ? branch : '',
+                                                department_id: department !== 'all' ? department : '',
+                                                search: search || '',
+                                            },
+                                            { preserveState: true }
+                                        );
+                                    }} 
+                                />
+                            </div>
+                            <div className="relative min-w-[150px] flex-1 sm:max-w-[220px]">
+                                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                                <Input
+                                    value={localSearch}
+                                    onChange={(e) => setLocalSearch(e.target.value)}
+                                    placeholder="Quick search staff name/ID..."
+                                    className="h-9 pl-8 text-xs bg-slate-50 focus:bg-white rounded-xl border-slate-200"
+                                />
+                                {localSearch && (
+                                    <button
+                                        onClick={() => setLocalSearch('')}
+                                        className="absolute right-2.5 top-2.5 text-xs text-slate-450 hover:text-slate-700 font-semibold"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {!portalMode && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={resetFilters}
+                                        className="h-9 text-xs font-bold px-3 rounded-xl border-slate-200 text-slate-600"
+                                    >
+                                        Reset Filters
+                                    </Button>
+                                )}
+                                <Button
+                                    type="button"
+                                    onClick={() => window.print()}
+                                    className="h-9 bg-slate-900 px-3.5 text-xs font-bold text-white hover:bg-slate-800 rounded-xl shadow-sm inline-flex items-center gap-1.5"
+                                >
+                                    <Printer className="h-3.5 w-3.5" />
+                                    <span>Print Board</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        <PortalStatsBar stats={singleBranchData.stats} />
+
+                        <PortalGridBoard
+                            branch={singleBranchData.branch}
+                            stats={singleBranchData.stats}
+                            searchQuery={localSearch}
+                        />
+                    </div>
+                ) : (
+                    <>
                 {/* Header Title Area */}
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-5">
                     <div>
                         <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                             <Building2 className="h-6 w-6 text-emerald-600" />
-                            Daily Branch Summary
+                            {portalMode ? 'Attendance & Movement' : 'Daily Branch Summary'}
                         </h1>
                         <p className="text-xs text-slate-500 mt-0.5">
-                            Real-time attendance health across <span className="font-semibold text-slate-700">{branchesSummary.length} branches</span> for <span className="font-semibold text-emerald-600 underline decoration-dotted">{readableDate}</span>
+                            {portalMode ? (
+                                <>
+                                    <span className="font-semibold text-slate-700">{portalBranch?.name ?? 'Your branch'}</span>
+                                    {' — staff status for '}
+                                    <span className="font-semibold text-emerald-600 underline decoration-dotted">{readableDate}</span>
+                                </>
+                            ) : (
+                                <>
+                                    Real-time attendance health across <span className="font-semibold text-slate-700">{branchesSummary.length} branches</span> for <span className="font-semibold text-emerald-600 underline decoration-dotted">{readableDate}</span>
+                                </>
+                            )}
                         </p>
                     </div>
 
@@ -381,7 +1221,7 @@ export default function DailyBranchSummary({
                         <div className="absolute right-3 top-3 bg-emerald-100 text-emerald-700 p-1.5 rounded-lg">
                             <TrendingUp className="h-4 w-4" />
                         </div>
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Avg Attendance</span>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">{portalMode ? 'Branch Attendance' : 'Avg Attendance'}</span>
                         <div className="text-2xl font-black text-slate-900 tracking-tight mt-1">
                             {formatPct(overallAttendancePct)}
                         </div>
@@ -405,8 +1245,8 @@ export default function DailyBranchSummary({
                     {/* Absent Count Card */}
                     <div className={cn(
                         "border p-3.5 rounded-xl shadow-xs relative overflow-hidden transition-all duration-300",
-                        overallAbsentCount > 0 
-                            ? "bg-gradient-to-br from-rose-50/30 to-white border-rose-100" 
+                        overallAbsentCount > 0
+                            ? "bg-gradient-to-br from-rose-50/30 to-white border-rose-100"
                             : "bg-white border-slate-200/80"
                     )}>
                         <div className={cn("absolute right-3 top-3 p-1.5 rounded-lg", overallAbsentCount > 0 ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600")}>
@@ -417,8 +1257,8 @@ export default function DailyBranchSummary({
                             {overallAbsentCount}
                         </div>
                         <p className="text-[10px] mt-2 font-semibold">
-                            {overallAbsentCount > 0 
-                                ? "🚨 Attention suggested" 
+                            {overallAbsentCount > 0
+                                ? "🚨 Attention suggested"
                                 : "✅ Schedule compliance OK"}
                         </p>
                     </div>
@@ -429,11 +1269,15 @@ export default function DailyBranchSummary({
                             <CalendarDays className="h-4 w-4" />
                         </div>
                         <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Leaves & Duty</span>
-                        <div className="text-2xl font-black text-slate-900 tracking-tight mt-1">
-                            {overallLeaveCount} <span className="text-xs text-slate-400 font-medium">Leave</span>
+                        <div className="text-2xl font-black text-slate-900 tracking-tight mt-1 flex items-baseline gap-1.5">
+                            <span>{overallLeaveCount}</span>
+                            <span className="text-xs text-slate-400 font-bold uppercase">Leave</span>
+                            <span className="text-slate-300 mx-1">|</span>
+                            <span>{overallMovementCount}</span>
+                            <span className="text-xs text-amber-500 font-bold uppercase">Movement</span>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-2 font-medium">
-                            {derived.reduce((sum, r) => sum + (r.branch.counts?.on_duty ?? 0), 0)} on duty today
+                            Active official movement count for today
                         </p>
                     </div>
                 </div>
@@ -450,6 +1294,7 @@ export default function DailyBranchSummary({
                         </div>
 
                         {/* Branch Selector */}
+                        {!portalMode && (
                         <div className="md:col-span-3">
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Filter Branch</label>
                             <div className="mt-1">
@@ -468,6 +1313,7 @@ export default function DailyBranchSummary({
                                 </Select>
                             </div>
                         </div>
+                        )}
 
                         {/* Department Selector */}
                         <div className="md:col-span-3">
@@ -515,6 +1361,7 @@ export default function DailyBranchSummary({
                     </div>
 
                     {/* Sorting & Layout View Controls */}
+                    {!portalMode && (
                     <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 pt-3 text-xs">
                         <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider">Sorting:</span>
@@ -590,12 +1437,14 @@ export default function DailyBranchSummary({
                             </div>
                         </div>
                     </div>
+                    )}
                 </div>
 
                 {/* Dashboard Split Panel Workspace */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                    
+
                     {/* Left Pane: Branches List / Visual Heatmap */}
+                    {!portalMode && (
                     <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-3">
                         {sorted.length === 0 ? (
                             <div className="bg-white border border-slate-200 rounded-xl py-14 text-center text-sm text-slate-400 shadow-xs">
@@ -610,10 +1459,10 @@ export default function DailyBranchSummary({
                                     const isActive = activeBranch?.branch.id === b.id;
                                     const presentPct = pct(row.present, row.workingTotal);
                                     const healthAccentBg = scoreColor(row.presentRate);
-                                    const cardBorderColor = isActive 
-                                        ? "border-emerald-500 ring-2 ring-emerald-500/10 shadow-sm" 
+                                    const cardBorderColor = isActive
+                                        ? "border-emerald-500 ring-2 ring-emerald-500/10 shadow-sm"
                                         : "border-slate-200/80 hover:border-slate-350 hover:shadow-xs";
-                                        
+
                                     return (
                                         <div
                                             key={b.id}
@@ -625,7 +1474,7 @@ export default function DailyBranchSummary({
                                         >
                                             {/* Status accent border line on the left side */}
                                             <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl", healthAccentBg)} />
-                                            
+
                                             <div className="pl-1">
                                                 <div className="flex items-start justify-between gap-1.5">
                                                     <span className="text-xs font-bold text-slate-800 truncate block leading-tight max-w-[70%]" title={b.name}>
@@ -639,20 +1488,17 @@ export default function DailyBranchSummary({
                                                 {/* Mini Stack bar sparkline */}
                                                 <div className="mt-2.5">
                                                     <MiniStackBar
-                                                        ariaLabel={`${b.name} Present / Absent / Leave`}
-                                                        segments={[
-                                                            { key: 'present', label: 'Present', value: row.present, className: 'bg-emerald-500' },
-                                                            { key: 'absent', label: 'Absent', value: row.absent, className: 'bg-rose-500' },
-                                                            { key: 'leave', label: 'Leave', value: row.leave, className: 'bg-blue-500' },
-                                                        ]}
+                                                        ariaLabel={`${b.name} Present / On Duty / Absent / Leave`}
+                                                        segments={branchStackSegments(row)}
                                                     />
                                                 </div>
 
                                                 {/* Mini Stats row */}
                                                 <div className="mt-2 flex items-center justify-between text-[9px] font-bold text-slate-500 tabular-nums">
-                                                    <span>P: <strong className="text-emerald-600">{row.present}</strong></span>
+                                                    <span>P: <strong className="text-emerald-600">{row.presentOnly}</strong></span>
+                                                    <span>M: <strong className={row.movementCount > 0 ? "text-amber-600" : "text-slate-400"}>{row.movementCount}</strong></span>
                                                     <span>A: <strong className="text-rose-600">{row.absent}</strong></span>
-                                                    <span>L: <strong className="text-blue-500">{row.leave}</strong></span>
+                                                    <span>L: <strong className="text-blue-550">{row.leave}</strong></span>
                                                     <span className="text-slate-400 font-normal">Tot: {row.workingTotal}</span>
                                                 </div>
                                             </div>
@@ -672,6 +1518,7 @@ export default function DailyBranchSummary({
                                             <TableHead className="w-[90px] text-right px-3.5 py-2.5 text-[10px] uppercase font-bold text-slate-400">Present %</TableHead>
                                             <TableHead className="w-[120px] px-3.5 py-2.5 text-[10px] uppercase font-bold text-slate-400">Visual Breakdown</TableHead>
                                             <TableHead className="w-[60px] text-right px-3.5 py-2.5 text-[10px] uppercase font-bold text-slate-400">Absent</TableHead>
+                                            <TableHead className="w-[60px] text-right px-3.5 py-2.5 text-[10px] uppercase font-bold text-slate-400">Movement</TableHead>
                                             <TableHead className="w-[60px] text-right px-3.5 py-2.5 text-[10px] uppercase font-bold text-slate-400">Leave</TableHead>
                                             <TableHead className="w-[40px] px-3.5 py-2.5 text-[10px] uppercase font-bold text-slate-400"></TableHead>
                                         </TableRow>
@@ -695,7 +1542,7 @@ export default function DailyBranchSummary({
                                                     <TableCell className="px-3.5 py-2 align-middle">
                                                         <div className={cn('h-2 w-2 rounded-full ring-2', indicatorColor, scoreRingClass(row.presentRate))} />
                                                     </TableCell>
-                                                    
+
                                                     <TableCell className="px-3.5 py-2 align-middle">
                                                         <div className="font-bold text-xs text-slate-800 leading-tight">
                                                             {b.name}
@@ -722,17 +1569,19 @@ export default function DailyBranchSummary({
                                                     <TableCell className="px-3.5 py-2 align-middle">
                                                         <MiniStackBar
                                                             ariaLabel={`${b.name} distribution`}
-                                                            segments={[
-                                                                { key: 'present', label: 'Present', value: row.present, className: 'bg-emerald-500' },
-                                                                { key: 'absent', label: 'Absent', value: row.absent, className: 'bg-rose-500' },
-                                                                { key: 'leave', label: 'Leave', value: row.leave, className: 'bg-blue-500' },
-                                                            ]}
+                                                            segments={branchStackSegments(row)}
                                                         />
                                                     </TableCell>
 
                                                     <TableCell className="px-3.5 py-2 align-middle text-right text-xs font-bold tabular-nums">
                                                         <span className={row.absent > 0 ? "text-rose-600" : "text-slate-500"}>
                                                             {row.absent}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="px-3.5 py-2 align-middle text-right text-xs font-semibold tabular-nums">
+                                                        <span className={row.movementCount > 0 ? "text-amber-600 font-bold" : "text-slate-500"}>
+                                                            {row.movementCount}
                                                         </span>
                                                     </TableCell>
 
@@ -751,20 +1600,42 @@ export default function DailyBranchSummary({
                             </div>
                         )}
                     </div>
+                    )}
+
+                    {portalMode && activeBranch && (
+                        <div className="lg:col-span-12 mb-1">
+                            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div>
+                                        <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Today&apos;s breakdown</p>
+                                        <p className="text-sm font-bold text-slate-800 mt-0.5">
+                                            P:{activeBranch.presentOnly} · M:{activeBranch.movementCount} · A:{activeBranch.absent} · L:{activeBranch.leave} · Tot:{activeBranch.workingTotal}
+                                        </p>
+                                    </div>
+                                    <div className="w-full sm:max-w-xs">
+                                        <MiniStackBar
+                                            ariaLabel="Branch attendance breakdown"
+                                            segments={branchStackSegments(activeBranch)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Right Pane: Selected Branch Details / Inspector Card */}
-                    <div className="lg:col-span-5 xl:col-span-4 sticky top-4">
+                    <div className={portalMode ? 'lg:col-span-12' : 'lg:col-span-5 xl:col-span-4 sticky top-4'}>
                         {activeBranch ? (
                             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm animate-in slide-in-from-right duration-250">
-                                
+
                                 {/* Inspector Header Banner */}
                                 <div className="bg-slate-900 text-white p-4">
                                     <div className="flex items-center justify-between gap-2.5">
                                         <div className="min-w-0">
-                                            <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-400">Branch Inspector</span>
+                                            <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-400">{portalMode ? 'Staff List' : 'Branch Inspector'}</span>
                                             <h2 className="text-base font-black truncate leading-tight mt-0.5">{activeBranch.branch.name}</h2>
                                         </div>
-                                        
+
                                         {/* Color Badge representing overall health */}
                                         <span className={cn("px-2 py-0.5 text-[10px] font-black rounded-full border shrink-0", scoreBgClass(activeBranch.presentRate))}>
                                             {activeBranch.presentRate < 0.75 ? 'Critical' : activeBranch.presentRate < 0.9 ? 'Warning' : 'Healthy'}
@@ -772,7 +1643,7 @@ export default function DailyBranchSummary({
                                     </div>
 
                                     {/* Stats grid widget inside banner */}
-                                    <div className="grid grid-cols-3 gap-2 mt-4 pt-3.5 border-t border-white/10 text-center font-mono">
+                                    <div className="grid grid-cols-4 gap-2 mt-4 pt-3.5 border-t border-white/10 text-center font-mono">
                                         <div>
                                             <div className="text-slate-400 text-[9px] uppercase font-bold tracking-wider">Attendance</div>
                                             <div className={cn("text-base font-black mt-0.5", scoreTextClass(activeBranch.presentRate))}>
@@ -786,8 +1657,14 @@ export default function DailyBranchSummary({
                                             </div>
                                         </div>
                                         <div>
+                                            <div className="text-slate-400 text-[9px] uppercase font-bold tracking-wider">Movement</div>
+                                            <div className={cn("text-base font-black mt-0.5", activeBranch.movementCount > 0 ? "text-amber-400" : "text-white")}>
+                                                {activeBranch.movementCount}
+                                            </div>
+                                        </div>
+                                        <div>
                                             <div className="text-slate-400 text-[9px] uppercase font-bold tracking-wider">Absent</div>
-                                            <div className={cn("text-base font-black mt-0.5", activeBranch.absent > 0 ? "text-rose-450" : "text-white")}>
+                                            <div className={cn("text-base font-black mt-0.5", activeBranch.absent > 0 ? "text-rose-455" : "text-white")}>
                                                 {activeBranch.absent}
                                             </div>
                                         </div>
@@ -797,22 +1674,25 @@ export default function DailyBranchSummary({
                                 {/* Inspector Workspace Body */}
                                 <div className="p-4">
                                     <h3 className="text-xs font-bold text-slate-800 mb-2">Staff Distribution by Status</h3>
-                                    
+
                                     {/* Sub-status filter buttons */}
                                     <div className="flex flex-wrap gap-1">
                                         {([
-                                            { key: 'present', label: 'Present', tone: 'good' },
-                                            { key: 'absent', label: 'Absent', tone: 'bad' },
-                                            { key: 'leave', label: 'Leave', tone: 'info' },
-                                            { key: 'late', label: 'Late', tone: 'warn' },
-                                            { key: 'half_day', label: 'Half Day', tone: 'warn' },
-                                            { key: 'on_duty', label: 'On Duty', tone: 'neutral' },
-                                            { key: 'holiday', label: 'Holiday', tone: 'neutral' },
-                                            { key: 'weekend', label: 'Weekend', tone: 'neutral' },
-                                        ] as Array<{ key: Status; label: string; tone: 'good' | 'warn' | 'bad' | 'info' | 'neutral' }>).map((s) => {
-                                            const count = activeBranch.branch.counts?.[s.key] ?? 0;
+                                            { key: 'present' as InspectorTab, label: 'Present', tone: 'good' },
+                                            { key: 'absent' as InspectorTab, label: 'Absent', tone: 'bad' },
+                                            { key: 'movement' as InspectorTab, label: 'Movement', tone: 'warn' },
+                                            { key: 'leave' as InspectorTab, label: 'Leave', tone: 'info' },
+                                            { key: 'late' as InspectorTab, label: 'Late', tone: 'warn' },
+                                            { key: 'half_day' as InspectorTab, label: 'Half Day', tone: 'warn' },
+                                            { key: 'on_duty' as InspectorTab, label: 'On Duty', tone: 'neutral' },
+                                            { key: 'holiday' as InspectorTab, label: 'Holiday', tone: 'neutral' },
+                                            { key: 'weekend' as InspectorTab, label: 'Weekend', tone: 'neutral' },
+                                        ] as Array<{ key: InspectorTab; label: string; tone: 'good' | 'warn' | 'bad' | 'info' | 'neutral' }>).map((s) => {
+                                            const count = s.key === 'movement'
+                                                ? (activeBranch.movementCount ?? 0)
+                                                : (activeBranch.branch.counts?.[s.key as Status] ?? 0);
                                             const isSelected = selectedStatus === s.key;
-                                            
+
                                             let badgeStyle = "";
                                             if (isSelected) {
                                                 if (s.tone === 'good') badgeStyle = "bg-emerald-600 border-emerald-600 text-white";
@@ -827,7 +1707,7 @@ export default function DailyBranchSummary({
                                                 else if (s.tone === 'info') badgeStyle = "bg-blue-50/80 text-blue-700 border-blue-100 hover:bg-blue-100/50";
                                                 else badgeStyle = "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100/60";
                                             }
-                                            
+
                                             return (
                                                 <button
                                                     key={s.key}
@@ -837,7 +1717,7 @@ export default function DailyBranchSummary({
                                                         badgeStyle
                                                     )}
                                                 >
-                                                    <span>{statusLabel(s.key)}</span>
+                                                    <span>{s.label}</span>
                                                     <span className={cn(
                                                         "px-1 rounded-full text-[9px] font-black",
                                                         isSelected ? "bg-black/15 text-white" : "bg-black/5 text-slate-500"
@@ -860,7 +1740,7 @@ export default function DailyBranchSummary({
                                             className="h-8.5 pl-8 text-xs bg-slate-50/50 border-slate-200 focus:bg-white"
                                         />
                                         {localSearch && (
-                                            <button 
+                                            <button
                                                 onClick={() => setLocalSearch('')}
                                                 className="absolute right-2.5 top-2.5 text-[10px] text-slate-400 hover:text-slate-700 font-semibold"
                                             >
@@ -870,58 +1750,113 @@ export default function DailyBranchSummary({
                                     </div>
 
                                     {/* Employee list container */}
-                                    <div className="mt-3 max-h-[350px] overflow-y-auto pr-1 space-y-1.5">
+                                    <div className="mt-3 max-h-[350px] overflow-y-auto pr-1 space-y-1.5 font-sans">
                                         {filteredEmployees.length === 0 ? (
                                             <div className="py-8 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2 border border-dashed border-slate-200 rounded-xl bg-slate-50/30">
                                                 <Info className="h-5 w-5 text-slate-300" />
-                                                <span>No employees found under status: <strong>{statusLabel(selectedStatus)}</strong></span>
+                                                <span>No employees found under: <strong>{inspectorTabLabel(selectedStatus)}</strong></span>
                                             </div>
                                         ) : (
                                             filteredEmployees.map((r) => (
-                                                <div 
-                                                    key={r.id} 
-                                                    className="flex items-center justify-between gap-3 p-2 rounded-xl border border-slate-100 bg-slate-50/20 hover:bg-slate-50/50 transition-colors"
+                                                <div
+                                                    key={r.id}
+                                                    className="flex flex-col gap-2 p-3 rounded-xl border border-slate-100 bg-slate-50/20 hover:bg-slate-50/50 transition-all duration-200"
                                                 >
-                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                        <div className="h-8 w-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0 select-none">
-                                                            {r.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()}
-                                                        </div>
-                                                        <div className="min-w-0 leading-tight">
-                                                            <div className="text-xs font-bold text-slate-800 truncate" title={r.name}>{r.name}</div>
-                                                            <div className="text-[9px] text-slate-400 font-mono tracking-wider">{r.employee_id}</div>
-                                                            {r.designation && (
-                                                                <div className="text-[9px] text-slate-400 truncate mt-0.5 font-medium">
-                                                                    {r.designation} {r.department ? `• ${r.department}` : ''}
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <div className="h-8 w-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0 select-none">
+                                                                {r.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()}
+                                                            </div>
+                                                            <div className="min-w-0 leading-tight">
+                                                                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 min-w-0">
+                                                                    <span className="truncate" title={r.name}>{r.name}</span>
+                                                                    {!(r.has_movement ?? (r.movements && r.movements.length > 0)) && selectedStatus !== 'movement' && (
+                                                                        <span className="text-[8px] font-semibold text-slate-400 bg-slate-100 border border-slate-200 px-1 py-0.5 rounded leading-none shrink-0">
+                                                                            No Movement
+                                                                        </span>
+                                                                    )}
                                                                 </div>
+                                                                <div className="text-[9px] text-slate-400 font-mono tracking-wider">{r.employee_id}</div>
+                                                                {r.designation && (
+                                                                    <div className="text-[9px] text-slate-400 truncate mt-0.5 font-medium">
+                                                                        {r.designation} {r.department ? `• ${r.department}` : ''}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="text-right shrink-0 flex flex-col items-end justify-center font-mono">
+                                                            {selectedStatus === 'leave' && r.leave_type ? (
+                                                                <span className="text-[9px] font-black bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded-md">
+                                                                    {r.leave_type}
+                                                                </span>
+                                                            ) : (selectedStatus === 'movement' || (r.movements && r.movements.length > 0)) && r.movements && r.movements.length > 0 ? (
+                                                                <div className="flex flex-col items-end gap-0.5">
+                                                                    <div className="flex items-center justify-end gap-1 text-amber-700">
+                                                                        <MapPin className="h-3 w-3 shrink-0" />
+                                                                        <span className="truncate max-w-[120px]" title={r.movements[0].destination}>
+                                                                            {r.movements[0].destination}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className="text-[8px] font-semibold uppercase tracking-wider text-amber-600/80">
+                                                                        {r.movements[0].status}
+                                                                    </span>
+                                                                </div>
+                                                            ) : ['present', 'late', 'half_day', 'on_duty'].includes(selectedStatus as Status) ? (
+                                                                <div className="text-[9px] text-slate-600 font-bold leading-normal">
+                                                                    {r.check_in && (
+                                                                        <div className="flex items-center justify-end gap-1">
+                                                                            <span className="text-slate-400 font-normal">IN:</span>
+                                                                            <span>{r.check_in}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {r.check_out && (
+                                                                        <div className="flex items-center justify-end gap-1 text-slate-400">
+                                                                            <span>OUT:</span>
+                                                                            <span>{r.check_out}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {!r.check_in && !r.check_out && (
+                                                                        <span className="text-slate-300">-</span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-slate-300 text-xs font-bold">-</span>
                                                             )}
                                                         </div>
                                                     </div>
-                                                    
-                                                    <div className="text-right shrink-0 flex flex-col items-end justify-center font-mono">
-                                                        {selectedStatus === 'leave' && r.leave_type ? (
-                                                            <span className="text-[9px] font-black bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded-md">
-                                                                {r.leave_type}
-                                                            </span>
-                                                        ) : ['present', 'late', 'half_day', 'on_duty'].includes(selectedStatus) ? (
-                                                            <div className="text-[9px] text-slate-600 font-bold leading-normal">
-                                                                {r.check_in && (
-                                                                    <div className="flex items-center justify-end gap-1">
-                                                                        <span className="text-slate-400 font-normal">IN:</span>
-                                                                        <span>{r.check_in}</span>
-                                                                    </div>
-                                                                )}
-                                                                {r.check_out && (
-                                                                    <div className="flex items-center justify-end gap-1 text-slate-400">
-                                                                        <span>OUT:</span>
-                                                                        <span>{r.check_out}</span>
-                                                                    </div>
-                                                                )}
-                                                                {!r.check_in && !r.check_out && <span className="text-slate-300">-</span>}
+
+                                                    {/* Movements Details Section */}
+                                                    {r.movements && r.movements.length > 0 && (
+                                                        <div className="mt-1 pt-2 border-t border-slate-100 space-y-1.5">
+                                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                                                <TrendingUp className="h-3 w-3 text-amber-500" />
+                                                                Today's Movements ({r.movements.length})
                                                             </div>
-                                                        ) : (
-                                                            <span className="text-slate-300 text-xs font-bold">-</span>
-                                                        )}
-                                                    </div>
+                                                            {r.movements.map((m) => (
+                                                                <div key={m.id} className="bg-amber-50/35 border border-amber-100/60 rounded-lg p-2 text-[10px] text-slate-700">
+                                                                    <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                                                                        <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                                                        <span className="truncate">To: {m.destination}</span>
+                                                                        <span className={`ml-auto text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                                                            m.status === 'completed' ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                                                                        }`}>
+                                                                            {m.status}
+                                                                        </span>
+                                                                    </div>
+                                                                    {m.purpose && (
+                                                                        <div className="text-slate-500 mt-1 pl-5 italic">
+                                                                            Purpose: {m.purpose}
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="flex items-center gap-1 pl-5 mt-1 text-[9px] font-mono text-slate-500">
+                                                                        <Clock className="h-3 w-3 text-slate-400" />
+                                                                        <span>{m.from_time} - {m.actual_return_time || m.to_time || 'Pending'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))
                                         )}
@@ -936,20 +1871,23 @@ export default function DailyBranchSummary({
                         )}
                     </div>
                 </div>
+                    </>
+                )}
             </div>
 
-            {/* Print Only Executive Layout */}
-            <div id="print-root-container" className="hidden print:block print-color-exact w-full bg-white p-2">
+            {/* Print Only Layout */}
+            <div
+                id="print-root-container"
+                className={cn('hidden w-full bg-white p-2 print:block print-color-exact', (portalMode || singleBranchData) && 'portal-print-root')}
+            >
                 {/* Print Stylesheet */}
                 <style dangerouslySetInnerHTML={{ __html: `
                     @media print {
-                        /* Reset height and overflow of layout scrollable containers to allow printing */
                         html, body, #app, main, .flex, div {
                             height: auto !important;
                             overflow: visible !important;
                         }
 
-                        /* Hide sidebars, headers, and navigation menus */
                         header,
                         nav,
                         aside,
@@ -957,14 +1895,13 @@ export default function DailyBranchSummary({
                         .print-hide {
                             display: none !important;
                         }
-                        
-                        /* Reset layout main padding and backgrounds */
+
                         main {
                             padding: 0 !important;
                             margin: 0 !important;
                             background: transparent !important;
                         }
-                        
+
                         main > div {
                             border: none !important;
                             background: transparent !important;
@@ -972,8 +1909,7 @@ export default function DailyBranchSummary({
                             padding: 0 !important;
                             margin: 0 !important;
                         }
-                        
-                        /* Force position the report at the very top of the page */
+
                         #print-root-container {
                             display: block !important;
                             position: absolute !important;
@@ -986,12 +1922,26 @@ export default function DailyBranchSummary({
                             color: black !important;
                             z-index: 99999 !important;
                         }
-                        
-                        @page {
-                            size: A4 portrait;
-                            margin: 8mm 12mm 8mm 12mm;
+
+                        #print-root-container.portal-print-root {
+                            padding: 4mm !important;
                         }
-                        
+
+                        #print-root-container.portal-print-root .portal-print-report {
+                            width: 100% !important;
+                        }
+
+                        #print-root-container.portal-print-root .portal-print-grid {
+                            display: grid !important;
+                            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+                            gap: 4px !important;
+                        }
+
+                        @page {
+                            size: ${(portalMode || singleBranchData) ? 'A4 landscape' : 'A4 portrait'};
+                            margin: ${(portalMode || singleBranchData) ? '6mm 8mm' : '8mm 12mm 8mm 12mm'};
+                        }
+
                         .print-color-exact {
                             -webkit-print-color-adjust: exact !important;
                             print-color-adjust: exact !important;
@@ -999,6 +1949,15 @@ export default function DailyBranchSummary({
                     }
                 `}} />
 
+                {singleBranchData ? (
+                    <PortalPrintReport
+                        branchName={singleBranchData.branch.name}
+                        readableDate={readableDate}
+                        branch={singleBranchData.branch}
+                        stats={singleBranchData.stats}
+                    />
+                ) : (
+                <>
                 {/* Print Header */}
                 <div className="border-b-2 border-slate-950 pb-2.5 mb-3 flex items-end justify-between">
                     <div>
@@ -1037,7 +1996,11 @@ export default function DailyBranchSummary({
                     </div>
                     <div className="border border-slate-300 p-2 rounded-lg bg-slate-50 print-color-exact">
                         <span className="text-[8px] font-bold uppercase tracking-wider text-slate-455 block leading-none">Leaves & Duty</span>
-                        <div className="text-base font-black text-blue-650 mt-1 leading-none">{overallLeaveCount}</div>
+                        <div className="text-sm font-black text-slate-800 mt-1 leading-none flex items-baseline gap-1">
+                            <span>{overallLeaveCount} L</span>
+                            <span className="text-slate-300 font-normal">|</span>
+                            <span className="text-amber-600">{overallMovementCount} M</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1056,9 +2019,15 @@ export default function DailyBranchSummary({
                         </span>
                         <span className="flex items-center gap-1">
                             <svg width="12" height="6" viewBox="0 0 12 6" className="shrink-0" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="12" height="6" rx="1.5" ry="1.5" fill="#f59e0b" />
+                            </svg>
+                            Movement
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <svg width="12" height="6" viewBox="0 0 12 6" className="shrink-0" xmlns="http://www.w3.org/2000/svg">
                                 <rect width="12" height="6" rx="1.5" ry="1.5" fill="#f43f5e" />
                             </svg>
-                            Absent / Other
+                            Absent
                         </span>
                     </div>
                 </div>
@@ -1069,10 +2038,29 @@ export default function DailyBranchSummary({
                         const b = row.branch;
                         const presentPct = pct(row.present, row.workingTotal);
                         const dotColor = row.presentRate < 0.75 ? "#ef4444" : row.presentRate < 0.9 ? "#f59e0b" : "#10b981";
+                        const presentOnly = row.presentOnly;
+                        const movementCount = row.movementCount;
+                        const barSegments = [
+                            { value: presentOnly, color: '#00c58d' },
+                            { value: movementCount, color: '#f59e0b' },
+                            { value: row.absent, color: '#f43f5e' },
+                            { value: row.leave, color: '#3b82f6' },
+                        ];
+                        const barRects: Array<{ x: number; width: number; color: string }> = [];
+                        let barOffset = 0;
+                        for (const seg of barSegments) {
+                            const segWidth = row.workingTotal > 0
+                                ? Math.max(0, (seg.value / row.workingTotal) * 48)
+                                : 0;
+                            if (segWidth > 0) {
+                                barRects.push({ x: barOffset, width: segWidth, color: seg.color });
+                            }
+                            barOffset += segWidth;
+                        }
 
                         return (
-                            <div 
-                                key={b.id} 
+                            <div
+                                key={b.id}
                                 className="break-inside-avoid flex items-center justify-between py-1.5 border-b border-slate-200 text-[10px] leading-tight"
                             >
                                 <div className="min-w-0 flex items-center gap-1.5 pr-1">
@@ -1083,7 +2071,7 @@ export default function DailyBranchSummary({
                                     <span className="font-bold text-slate-800 truncate" title={b.name}>{b.name}</span>
                                 </div>
                                 <div className="text-right shrink-0 flex items-center gap-1.5">
-                                    {/* SVG Progress Bar: Guaranteed to print regardless of 'background graphics' checkbox */}
+                                    {/* SVG Progress Bar: Present / On Duty / Absent / Leave */}
                                     <svg width="48" height="6" viewBox="0 0 48 6" className="shrink-0" xmlns="http://www.w3.org/2000/svg">
                                         <defs>
                                             <clipPath id={`pill-clip-${b.id}`}>
@@ -1091,12 +2079,20 @@ export default function DailyBranchSummary({
                                             </clipPath>
                                         </defs>
                                         <g clipPath={`url(#pill-clip-${b.id})`}>
-                                            <rect width="48" height="6" fill="#f43f5e" />
-                                            <rect width={Math.max(0, Math.min(48, (presentPct / 100) * 48))} height="6" fill="#00c58d" />
+                                            <rect width="48" height="6" fill="#e2e8f0" />
+                                            {barRects.map((rect, idx) => (
+                                                <rect
+                                                    key={idx}
+                                                    x={rect.x}
+                                                    width={rect.width}
+                                                    height="6"
+                                                    fill={rect.color}
+                                                />
+                                            ))}
                                         </g>
                                     </svg>
-                                    <span className="text-[8px] text-slate-500 font-mono tracking-tighter w-[30px] text-left shrink-0">
-                                        P:{row.present} A:{row.absent}
+                                    <span className="text-[8px] text-slate-500 font-mono tracking-tighter w-[48px] text-left shrink-0">
+                                        P:{presentOnly} M:{movementCount} A:{row.absent}
                                     </span>
                                     <span className={cn("font-black font-mono w-[30px] text-right shrink-0", scoreTextClass(row.presentRate))}>
                                         {formatPct(presentPct)}
@@ -1113,6 +2109,8 @@ export default function DailyBranchSummary({
                     <span>Daily Branch Summary Report</span>
                     <span>Page 1 of 1</span>
                 </div>
+                </>
+                )}
             </div>
         </Layout>
     );

@@ -29,6 +29,7 @@ use App\Models\SalaryStructure;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Zone;
+use App\Services\ActiveSessionService;
 use App\Services\EmployeeLoanDashboardService;
 use App\Services\SalaryStructureCalculator;
 use App\Support\SafeSchema;
@@ -55,6 +56,10 @@ class DashboardController extends Controller
         /** @var User $user */
         $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
         $today = Carbon::today();
+
+        if ($user->isBranchAccount()) {
+            return redirect('/attendance/daily-branch-summary?section=attendance-movement');
+        }
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
@@ -180,6 +185,7 @@ class DashboardController extends Controller
             'admin.access',
             'roles.view',
             'users.view',
+            'sessions.view',
             'reports.view',
         ])->contains(fn ($p) => $user->can($p) || $hasPermission($user, $p));
 
@@ -205,11 +211,17 @@ class DashboardController extends Controller
         $roles = $user->roles;
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
 
+        $sessionStats = ['active_sessions' => 0, 'active_users' => 0];
+        if ($hasPermission($user, 'admin.access') || $hasPermission($user, 'users.view')) {
+            $sessionStats = app(ActiveSessionService::class)->stats();
+        }
+
         return Inertia::render('sections/administration/dashboard', [
             'userCount' => $userCount,
             'roleCount' => $roleCount,
             'recentUsers' => $recentUsers,
             'userRole' => $role?->name ?? 'User',
+            'sessionStats' => $sessionStats,
         ]);
     }
 

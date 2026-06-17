@@ -4,6 +4,12 @@
 
 export const SUPER_ADMIN_ROLE_NAMES = ['Super Admin'];
 
+export function isBranchAccount(
+  auth: { user?: { account_type?: string } } | null | undefined,
+): boolean {
+  return auth?.user?.account_type === 'branch';
+}
+
 export function isSuperAdmin(auth: { user?: { role?: { name?: string }; roles?: { name?: string }[] } } | null | undefined): boolean {
   if (!auth?.user) return false;
   const primary = auth.user.role?.name;

@@ -5,12 +5,17 @@ namespace App\Http\Controllers\Holiday;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Holiday;
+use App\Services\HolidayAttendanceSyncService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class HolidayController extends Controller
 {
+    public function __construct(
+        private readonly HolidayAttendanceSyncService $holidayAttendanceSync,
+    ) {}
+
     /**
      * Display a listing of holidays.
      */
@@ -111,17 +116,23 @@ class HolidayController extends Controller
             'applicable_branches.*' => 'exists:branches,id',
         ]);
 
-        $data = $request->all();
+        $data = $request->only([
+            'title',
+            'date',
+            'description',
+            'is_recurring',
+            'applicable_branches',
+        ]);
 
-        // Convert applicable branches to JSON
-        if (isset($data['applicable_branches'])) {
-            $data['applicable_branches'] = json_encode($data['applicable_branches']);
+        $holiday = Holiday::create($data);
+
+        $message = 'Holiday created successfully.';
+        if ($this->holidayAttendanceSync->lastSyncCount > 0) {
+            $message .= " {$this->holidayAttendanceSync->lastSyncCount} absent attendance record(s) updated to holiday.";
         }
 
-        Holiday::create($data);
-
         return redirect()->route('holidays.index')
-            ->with('success', 'Holiday created successfully.');
+            ->with('success', $message);
     }
 
     /**
@@ -152,17 +163,23 @@ class HolidayController extends Controller
             'applicable_branches.*' => 'exists:branches,id',
         ]);
 
-        $data = $request->all();
-
-        // Convert applicable branches to JSON
-        if (isset($data['applicable_branches'])) {
-            $data['applicable_branches'] = json_encode($data['applicable_branches']);
-        }
+        $data = $request->only([
+            'title',
+            'date',
+            'description',
+            'is_recurring',
+            'applicable_branches',
+        ]);
 
         $holiday->update($data);
 
+        $message = 'Holiday updated successfully.';
+        if ($this->holidayAttendanceSync->lastSyncCount > 0) {
+            $message .= " {$this->holidayAttendanceSync->lastSyncCount} absent attendance record(s) updated to holiday.";
+        }
+
         return redirect()->route('holidays.index')
-            ->with('success', 'Holiday updated successfully.');
+            ->with('success', $message);
     }
 
     /**

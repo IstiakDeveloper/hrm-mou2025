@@ -39,27 +39,39 @@ class AssetDisposal extends Model
 
     protected $fillable = [
         'fixed_asset_id',
+        'asset_disposal_reason_id',
         'status',
         'disposal_method',
+        'request_date',
         'disposal_date',
         'disposal_amount',
         'reason',
         'notes',
+        'photo_path',
+        'batch_reference',
         'requested_by',
         'reviewed_by',
         'reviewed_at',
+        'disposed_at',
         'review_notes',
     ];
 
     protected $casts = [
         'disposal_date' => 'date',
+        'request_date' => 'date',
         'disposal_amount' => 'decimal:2',
         'reviewed_at' => 'datetime',
+        'disposed_at' => 'datetime',
     ];
 
     public function fixedAsset(): BelongsTo
     {
         return $this->belongsTo(FixedAsset::class);
+    }
+
+    public function disposalReason(): BelongsTo
+    {
+        return $this->belongsTo(AssetDisposalReason::class, 'asset_disposal_reason_id');
     }
 
     public function requestedByUser(): BelongsTo

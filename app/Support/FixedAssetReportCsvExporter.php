@@ -33,24 +33,15 @@ class FixedAssetReportCsvExporter
     {
         $headers = $payload['headers'] ?? [];
         $rows = $payload['rows'] ?? [];
-        $template = $payload['template'] ?? '';
+        $sections = $payload['sections'] ?? [];
 
-        $keys = match ($template) {
-            'asset-tracking' => ['asset_tag', 'name', 'branch', 'category', 'status', 'custodian', 'serial_number', 'purchase_date', 'book_value'],
-            'vendor-list' => ['vendor', 'asset_count', 'total_purchase'],
-            'purchase-list' => ['asset_tag', 'name', 'branch', 'category', 'purchase_date', 'purchase_cost', 'vendor', 'invoice_no'],
-            'repair-list' => ['maintenance_date', 'asset_tag', 'branch', 'maintenance_type', 'status', 'description', 'cost', 'service_provider'],
-            'transfer-log' => ['transfer_date', 'asset_tag', 'asset_name', 'from_branch', 'to_branch', 'notes'],
-            'salvaged-list' => ['asset_tag', 'name', 'branch', 'category', 'purchase_cost', 'salvage_value', 'book_value', 'status'],
-            'disposal-list' => ['disposal_date', 'asset_tag', 'branch', 'category', 'disposal_method', 'disposal_amount', 'reason'],
-            'depreciation-schedule' => self::scheduleKeys($payload),
-            'depreciation-schedule-summary' => ['group_label', 'asset_count', 'total_purchase', 'total_accumulated', 'total_book_value'],
-            'branch-summary' => ['branch', 'asset_count', 'total_purchase', 'total_book_value'],
-            'category-summary' => ['code', 'category', 'asset_count', 'total_book_value'],
-            'asset-register' => ['asset_tag', 'name', 'branch', 'category', 'status', 'custodian', 'book_value'],
-            'depreciation-summary' => ['asset_tag', 'branch', 'depreciation_amount', 'book_value_after'],
-            default => [],
-        };
+        if ($rows === [] && $sections !== []) {
+            $rows = collect($sections)->flatMap(fn ($section) => $section['rows'] ?? [])->all();
+        }
+
+        $template = $payload['template'] ?? '';
+        $firstRow = $rows[0] ?? [];
+        $keys = self::keysForPayload($template, $firstRow, $payload);
 
         if ($keys === []) {
             return [$headers, []];
@@ -65,20 +56,33 @@ class FixedAssetReportCsvExporter
 
     /**
      * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $firstRow
      * @return list<string>
      */
-    private static function scheduleKeys(array $payload): array
+    private static function keysForPayload(string $template, array $firstRow, array $payload): array
     {
-        if (($payload['schedule_variant'] ?? '') === 'audit') {
-            return [
-                'asset_tag', 'name', 'group_label', 'serial_number', 'vendor', 'invoice_no', 'purchase_date',
-                'purchase_cost', 'salvage_value', 'useful_life_years', 'accumulated_depreciation', 'book_value', 'monthly_depreciation',
-            ];
+        if ($firstRow !== []) {
+            return array_keys($firstRow);
         }
 
-        return [
-            'asset_tag', 'name', 'group_label', 'purchase_cost', 'salvage_value', 'useful_life_years',
-            'accumulated_depreciation', 'book_value', 'monthly_depreciation',
-        ];
+        $purchaseGroup = $payload['purchase_group'] ?? '';
+
+        return match ($template) {
+            'asset-tracking' => ['sl', 'asset_no', 'model_no', 'purchase_date', 'purchase_amount', 'book_value', 'floor', 'room', 'voucher', 'ledger', 'description'],
+            'purchase-list' => $purchaseGroup === 'category'
+                ? ['category', 'sub_category', 'asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'closing_value', 'vendor', 'voucher_no', 'ledger_no', 'status']
+                : ['asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'closing_value', 'vendor', 'voucher_no', 'ledger_no', 'status'],
+            'disposal-list' => ['sl', 'category', 'sub_category', 'asset_no', 'branch', 'purchase_date', 'purchase_amount', 'opening_value', 'depreciation', 'disposal_amount', 'closing_value'],
+            'depreciation-schedule' => match ($payload['schedule_variant'] ?? '') {
+                'audit' => ['sl', 'group_label', 'asset_count', 'cost_opening', 'cost_addition', 'cost_sales_adj', 'cost_closing', 'depreciation_rate', 'dep_opening', 'dep_charged', 'dep_sales_adj', 'dep_closing', 'written_down_value'],
+                'summary' => ($payload['schedule_group'] ?? '') === 'category'
+                    ? ['sl', 'branch', 'asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'new_purchase', 'transfer_in', 'addition_total', 'depreciation', 'disposal', 'transfer_out', 'deduction_total', 'cumulative_deduction', 'closing_value', 'passed_day']
+                    : ['asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'new_purchase', 'transfer_in', 'addition_total', 'depreciation', 'disposal', 'transfer_out', 'deduction_total', 'cumulative_deduction', 'closing_value', 'passed_day'],
+                default => ($payload['schedule_group'] ?? '') === 'branch'
+                    ? ['sub_category', 'asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'addition_h1', 'addition_h2', 'depreciation_h1', 'depreciation_h2', 'closing_value']
+                    : ['asset_no', 'location', 'purchase_date', 'purchase_amount', 'opening_value', 'addition_h1', 'addition_h2', 'depreciation_h1', 'depreciation_h2', 'closing_value'],
+            },
+            default => [],
+        };
     }
 }

@@ -148,6 +148,18 @@ class OrganogramAccessService
             return;
         }
 
+        if ($user->isBranchAccount()) {
+            $bid = (int) ($user->branch_id ?: 0);
+            if ($bid > 0) {
+                $query->where('current_branch_id', $bid);
+
+                return;
+            }
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
         $roleNames = self::mergedRoleNames($user);
         $eid = $user->employee_id;
 
@@ -274,6 +286,12 @@ class OrganogramAccessService
             return null;
         }
 
+        if ($user->isBranchAccount()) {
+            $bid = (int) ($user->branch_id ?: 0);
+
+            return $bid > 0 ? [$bid] : [];
+        }
+
         $roleNames = self::mergedRoleNames($user);
         $eid = $user->employee_id;
 
@@ -362,6 +380,22 @@ class OrganogramAccessService
     {
         if ($user->isSuperAdmin() || self::hasGlobalEmployeeDirectoryAccess($user)) {
             return null;
+        }
+
+        if ($user->isBranchAccount()) {
+            $bid = (int) ($user->branch_id ?: 0);
+            if ($bid <= 0) {
+                return [];
+            }
+
+            return Employee::query()
+                ->where('current_branch_id', $bid)
+                ->distinct()
+                ->pluck('department_id')
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
         }
 
         $roleNames = self::mergedRoleNames($user);

@@ -3,6 +3,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
 import { ADMIN_SECTIONS, type AdminSectionId } from '@/lib/admin-sections';
+import { FIXED_ASSET_DASHBOARD_LINKS } from '@/lib/fixed-asset-nav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowRight, Shield, User } from 'lucide-react';
@@ -99,13 +100,10 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
             case 'fixed-asset':
                 return [
                     { label: 'Fixed Asset dashboard', href: '/sections/fixed-asset' },
-                    { label: 'Asset categories', href: '/asset-categories' },
-                    { label: 'Asset register', href: '/fixed-assets' },
-                    { label: 'Employee assignments', href: '/asset-assignments' },
-                    { label: 'Maintenance log', href: '/asset-maintenances' },
-                    { label: 'Disposal requests', href: '/asset-disposals' },
-                    { label: 'Branch transfers', href: '/asset-transfers' },
-                    { label: 'Depreciation', href: '/asset-depreciation' },
+                    ...FIXED_ASSET_DASHBOARD_LINKS.slice(0, 12).map((link) => ({
+                        label: link.label,
+                        href: link.href,
+                    })),
                 ];
             default:
                 return [];

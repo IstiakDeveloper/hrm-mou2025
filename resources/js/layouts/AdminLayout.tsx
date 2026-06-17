@@ -31,6 +31,7 @@ import {
     Landmark,
     Coins,
     Home,
+    Monitor,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -62,14 +63,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ActiveMovementBanner from '@/components/active-movement-banner';
 import NotificationDropdown from '@/components/notification-dropdown';
-import { hasAppPermission } from '@/lib/permissions';
-import { getActiveSectionId, getMenuTitlesForSection, getSectionById, type AdminSectionId } from '@/lib/admin-sections';
+import { hasAppPermission, isBranchAccount } from '@/lib/permissions';
+import { getActiveSectionId, getMenuKeysForSection, getSectionById, withSectionParam, type AdminSectionId } from '@/lib/admin-sections';
 import { EMPLOYEE_LOAN_NAV_GROUPS, employeeLoanPath } from '@/lib/employee-loan-nav';
 import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee-loan-reports';
 import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
-import { FIXED_ASSET_REPORT_NAV, fixedAssetReportPath } from '@/lib/fixed-asset-reports';
+import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
 import {
     Dialog,
     DialogContent,
@@ -90,11 +91,15 @@ interface AdminLayoutProps {
 
 interface MenuItemType {
     title: string;
+    /** Stable id for section-scoped sidebar filtering (unique across all sections). */
+    menuKey?: string;
     icon: React.ReactNode;
     path: string;
     hasSubmenu: boolean;
     permission?: string;
     hrOnly?: boolean;
+    /** Show if user has ANY of these permissions (top-level menu). */
+    anyPermissions?: string[];
     /** Visible only when the logged-in user has a linked employee profile. */
     employeeOnly?: boolean;
     submenu?: {
@@ -102,6 +107,7 @@ interface MenuItemType {
         path: string;
         permission?: string;
         hrOnly?: boolean;
+        isGroupLabel?: boolean;
         /** Show if user has ANY of these permissions (omit to ignore). */
         anyPermissions?: string[];
         /** Show only if user has ALL of these permissions (omit to ignore). */
@@ -149,7 +155,7 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                 { title: 'Leave summary report', path: '/reports/leave', permission: 'reports.view' },
             ];
         case 'administration':
-            return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
+            return [{ title: 'Administration summary', path: withSectionParam('/reports/administration', 'administration'), permission: 'reports.view' }];
         case 'employee-loan':
             return EMPLOYEE_LOAN_REPORT_NAV.map((r) => ({
                     title: r.title,
@@ -188,19 +194,15 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                 { title: 'Bonus Register', path: '/payroll/reports/bonus-register', permission: 'payroll.view' },
                 { title: 'Salary Certificate', path: '/payroll/reports/salary-certificate', permission: 'payroll.view' },
             ];
-        case 'fixed-asset':
-            return FIXED_ASSET_REPORT_NAV.map((r) => ({
-                title: r.title,
-                path: fixedAssetReportPath(r.slug),
-                permission: 'fixed-assets.view',
-            }));
         default:
             return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
     }
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
-    const { auth, notifications, activeMovement } = usePage().props as any;
+    const page = usePage();
+    const { auth, notifications, activeMovement } = page.props as any;
+    const inertiaUrl = page.url;
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -211,12 +213,22 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const [closeError, setCloseError] = useState<string | null>(null);
     const [closing, setClosing] = useState(false);
 
-    // Get current path for highlighting active menu
-    const currentPath = window.location.pathname;
-    const currentSearch = window.location.search;
-    const activeSectionId = getActiveSectionId(window.location);
+    // Get current path for highlighting active menu (Inertia url so highlight updates on navigate)
+    const { pathname: currentPath, search: currentSearch } = useMemo(() => {
+        const raw = inertiaUrl || window.location.pathname + window.location.search;
+        const qIndex = raw.indexOf('?');
+        if (qIndex === -1) {
+            return { pathname: raw, search: '' };
+        }
+        return { pathname: raw.slice(0, qIndex), search: raw.slice(qIndex) };
+    }, [inertiaUrl]);
+    const activeSectionId = getActiveSectionId({
+        pathname: currentPath,
+        search: currentSearch,
+    } as Location);
     const activeSection = getSectionById(activeSectionId);
     const employee = auth?.employee;
+    const branchAccount = isBranchAccount(auth);
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
 
     // Toggle functions
@@ -333,6 +345,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'admin.access',
         'roles.view',
         'users.view',
+        'sessions.view',
         'reports.view',
     ];
 
@@ -361,12 +374,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         () => [
         {
             title: 'My Notices',
+            menuKey: 'my-notices',
             icon: <Bell className="w-5 h-5" />,
             path: '/my-notices',
             hasSubmenu: false,
         },
         {
             title: 'My Assets',
+            menuKey: 'my-assets',
             icon: <Boxes className="w-5 h-5" />,
             path: '/my-assets',
             hasSubmenu: false,
@@ -374,6 +389,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Employee Management',
+            menuKey: 'employee-management',
             icon: <Users className="w-5 h-5" />,
             path: '/employees',
             hasSubmenu: true,
@@ -386,6 +402,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Organization Setup',
+            menuKey: 'organization-setup',
             icon: <Building2 className="w-5 h-5" />,
             path: '/branches',
             hasSubmenu: true,
@@ -404,6 +421,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Attendance',
+            menuKey: 'attendance',
             icon: <ClipboardList className="w-5 h-5" />,
             path: '/attendance',
             hasSubmenu: true,
@@ -417,6 +435,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Leave Management',
+            menuKey: 'leave-management',
             icon: <CalendarDays className="w-5 h-5" />,
             path: '/leave',
             hasSubmenu: true,
@@ -431,6 +450,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Movement',
+            menuKey: 'movement',
             icon: <Activity className="w-5 h-5" />,
             path: '/movements',
             hasSubmenu: true,
@@ -441,6 +461,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Transfer & Promotion',
+            menuKey: 'transfer-promotion',
             icon: <ArrowLeftRight className="w-5 h-5" />,
             path: '/transfers',
             hasSubmenu: true,
@@ -451,6 +472,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Holidays',
+            menuKey: 'holidays',
             icon: <Award className="w-5 h-5" />,
             path: '/holidays',
             hasSubmenu: true,
@@ -462,6 +484,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Payroll Setup',
+            menuKey: 'payroll-setup',
             icon: <BriefcaseBusiness className="w-5 h-5" />,
             path: '/payscales',
             hasSubmenu: true,
@@ -480,6 +503,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Bonus',
+            menuKey: 'bonus',
             icon: <Award className="w-5 h-5" />,
             path: '/bonus-types',
             hasSubmenu: true,
@@ -496,6 +520,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         },
         {
             title: 'Salary',
+            menuKey: 'salary',
             icon: <Wallet className="w-5 h-5" />,
             path: '/salary-process',
             hasSubmenu: true,
@@ -518,6 +543,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return [
                     {
                         title: item.title,
+                        menuKey: `el-${group.id}`,
                         icon: <GroupIcon className="w-5 h-5" />,
                         path: employeeLoanPath(item.path),
                         hasSubmenu: false as const,
@@ -530,6 +556,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             return [
                 {
                     title: group.title,
+                    menuKey: `el-${group.id}`,
                     icon: <GroupIcon className="w-5 h-5" />,
                     path: employeeLoanPath(group.defaultPath),
                     hasSubmenu: true as const,
@@ -550,6 +577,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return [
                     {
                         title: item.title,
+                        menuKey: `sf-${group.id}`,
                         icon: <GroupIcon className="w-5 h-5" />,
                         path: staffFundPath(item.path),
                         hasSubmenu: false as const,
@@ -562,6 +590,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             return [
                 {
                     title: group.title,
+                    menuKey: `sf-${group.id}`,
                     icon: <GroupIcon className="w-5 h-5" />,
                     path: staffFundPath(group.defaultPath),
                     hasSubmenu: true as const,
@@ -575,75 +604,52 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 },
             ];
         }),
-        {
-            title: 'Asset Setup',
-            icon: <Boxes className="w-5 h-5" />,
-            path: '/asset-categories',
-            hasSubmenu: false,
-            permission: 'fixed-assets.view',
-            hrOnly: true,
-        },
-        {
-            title: 'Asset Register',
-            icon: <Boxes className="w-5 h-5" />,
-            path: '/fixed-assets',
-            hasSubmenu: false,
-            permission: 'fixed-assets.view',
-            hrOnly: true,
-        },
-        {
-            title: 'Asset Operations',
-            icon: <Wrench className="w-5 h-5" />,
-            path: '/asset-assignments',
-            hasSubmenu: true,
-            permission: 'fixed-assets.view',
-            hrOnly: true,
-            submenu: [
-                { title: 'Employee Assignments', path: '/asset-assignments', permission: 'fixed-assets.view' },
-                { title: 'Maintenance Log', path: '/asset-maintenances', permission: 'fixed-assets.view' },
-                { title: 'Disposal Requests', path: '/asset-disposals', permission: 'fixed-assets.view' },
-            ],
-        },
-        {
-            title: 'Asset Transfers',
-            icon: <ArrowRightLeft className="w-5 h-5" />,
-            path: '/asset-transfers',
-            hasSubmenu: false,
-            permission: 'fixed-assets.view',
-            hrOnly: true,
-        },
-        {
-            title: 'Depreciation',
-            icon: <TrendingDown className="w-5 h-5" />,
-            path: '/asset-depreciation',
-            hasSubmenu: false,
-            permission: 'fixed-assets.view',
-            hrOnly: true,
-        },
+        ...FIXED_ASSET_NAV_GROUPS.flatMap((group) => {
+            const GroupIcon = group.icon;
+
+            return [
+                {
+                    title: group.title,
+                    menuKey: `fa-${group.id}`,
+                    icon: <GroupIcon className="w-5 h-5" />,
+                    path: fixedAssetPath(group.defaultPath),
+                    hasSubmenu: true as const,
+                    permission: 'fixed-assets.view',
+                    hrOnly: true,
+                    submenu: group.items.map((item) => ({
+                        title: item.title,
+                        path: fixedAssetPath(item.path),
+                        permission: item.permission ?? 'fixed-assets.view',
+                    })),
+                },
+            ];
+        }),
         {
             title: 'User Management',
+            menuKey: 'admin-user-management',
             icon: <User className="w-5 h-5" />,
-            path: '/admin/users',
+            path: withSectionParam('/admin/users', 'administration'),
             hasSubmenu: true,
-            permission: 'admin.access',
-            hrOnly: true,
+            anyPermissions: ['admin.access', 'users.view'],
             submenu: [
-                { title: 'All Users', path: '/admin/users', permission: 'users.view' },
-                { title: 'Add User', path: '/admin/users/create', permission: 'users.create' },
-                { title: 'Roles & Permissions', path: '/admin/roles', permission: 'roles.view' },
-                { title: 'Notices', path: '/admin/notices', permission: 'admin.access' },
-                { title: 'Send notice', path: '/admin/notices/create', permission: 'admin.access' },
+                { title: 'All Users', path: withSectionParam('/admin/users', 'administration'), permission: 'users.view' },
+                { title: 'Add User', path: withSectionParam('/admin/users/create', 'administration'), permission: 'users.create' },
+                { title: 'Active Sessions', path: withSectionParam('/admin/sessions', 'administration'), anyPermissions: ['admin.access', 'users.view'] },
+                { title: 'Roles & Permissions', path: withSectionParam('/admin/roles', 'administration'), permission: 'roles.view' },
+                { title: 'Notices', path: withSectionParam('/admin/notices', 'administration'), permission: 'admin.access' },
+                { title: 'Send notice', path: withSectionParam('/admin/notices/create', 'administration'), permission: 'admin.access' },
             ]
         },
         {
             title: 'Settings',
+            menuKey: 'admin-settings',
             icon: <Settings className="w-5 h-5" />,
-            path: '/settings',
+            path: withSectionParam('/settings/profile', 'administration'),
             hasSubmenu: true,
             submenu: [
-                { title: 'Profile', path: '/settings/profile' },
-                { title: 'Password', path: '/settings/password' },
-                { title: 'Notifications', path: '/settings/notifications' },
+                { title: 'Profile', path: withSectionParam('/settings/profile', 'administration') },
+                { title: 'Password', path: withSectionParam('/settings/password', 'administration') },
+                { title: 'Notifications', path: withSectionParam('/settings/notifications', 'administration') },
             ]
         },
         ],
@@ -652,47 +658,66 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const menuItemsForLayout = useMemo(() => {
         const sub = buildReportsSubmenu(activeSectionId);
-        const reportsPath = sub[0]?.path ?? '/reports';
+        const reportsSub = branchAccount
+            ? sub.filter((item) => item.path === '/attendance/daily-branch-summary')
+            : sub;
+
+        if (reportsSub.length === 0) {
+            return baseMenuItems;
+        }
+
+        const reportsPath = reportsSub[0]?.path ?? '/reports';
         const reportsItem: MenuItemType = {
             title: 'Reports',
+            menuKey: 'section-reports',
             icon: <BarChart className="w-5 h-5" />,
             path: reportsPath,
             hasSubmenu: true,
-            submenu: sub,
+            submenu: reportsSub,
         };
         const idx = baseMenuItems.findIndex((m) => m.title === 'User Management');
         if (idx === -1) {
             return [...baseMenuItems, reportsItem];
         }
         return [...baseMenuItems.slice(0, idx), reportsItem, ...baseMenuItems.slice(idx)];
-    }, [activeSectionId, baseMenuItems]);
+    }, [activeSectionId, baseMenuItems, branchAccount]);
 
     const visibleMenuItems = useMemo(() => {
-        const titles = getMenuTitlesForSection(activeSectionId);
-        if (!titles) {
+        if (branchAccount) {
+            if (activeSectionId !== 'attendance-movement') {
+                return [];
+            }
+            const reports = menuItemsForLayout.find((m) => m.title === 'Reports');
+            return reports ? [reports] : [];
+        }
+
+        const keys = getMenuKeysForSection(activeSectionId);
+        if (!keys) {
             return menuItemsForLayout;
         }
-        const globalTitles = [...(employee?.id ? (['My Assets'] as const) : [])];
-        const mergedTitles = [...globalTitles, ...titles.filter((t) => !globalTitles.includes(t))];
-        return mergedTitles
-            .map((title) => menuItemsForLayout.find((m) => m.title === title))
+        const globalKeys = [...(employee?.id ? (['my-assets'] as const) : [])];
+        const mergedKeys = [...globalKeys, ...keys.filter((k) => !globalKeys.includes(k))];
+        return mergedKeys
+            .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
             .filter((x): x is MenuItemType => Boolean(x));
-    }, [activeSectionId, menuItemsForLayout, employee?.id]);
+    }, [activeSectionId, menuItemsForLayout, employee?.id, branchAccount]);
 
-    /** All sidebar link paths — longest-prefix wins so /leave/applications does not swallow /leave/applications/report */
+    /** Sidebar paths in the current section — longest-prefix wins within visible items only. */
     const menuNavPaths = useMemo(() => {
         const paths = new Set<string>();
-        for (const item of menuItemsForLayout) {
+        for (const item of visibleMenuItems) {
             if (item.hasSubmenu && item.submenu) {
                 for (const s of item.submenu) {
-                    if (s.path) paths.add(s.path);
+                    if (s.path && !s.isGroupLabel) {
+                        paths.add(s.path);
+                    }
                 }
             } else if (item.path) {
                 paths.add(item.path);
             }
         }
         return Array.from(paths);
-    }, [menuItemsForLayout]);
+    }, [visibleMenuItems]);
 
     const isActive = useCallback(
         (path: string) => {
@@ -706,27 +731,47 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return currentPath === pathBase;
             }
 
-            // Links with ?section=… (staff fund) must match the path exactly — not as a prefix of
-            // /provident-fund/interest, /provident-fund/withdrawals, etc.
             if (expectedParams) {
-                if (currentPath !== pathBase) {
+                const actual = new URLSearchParams(currentSearch);
+                const expectedSection = expectedParams.get('section');
+                const sectionOnly =
+                    expectedSection !== null
+                    && [...expectedParams.keys()].every((key) => key === 'section');
+
+                if (sectionOnly) {
+                    const sectionMatches =
+                        actual.get('section') === expectedSection || activeSectionId === expectedSection;
+
+                    if (!sectionMatches) {
+                        return false;
+                    }
+
+                    // Staff-fund register links must not highlight on sibling sub-routes.
+                    const staffFundExactPaths = ['/provident-fund', '/gratuity'];
+                    if (staffFundExactPaths.includes(pathBase)) {
+                        return currentPath === pathBase;
+                    }
+
+                    return pathMatches(pathBase);
+                }
+
+                if (!pathMatches(pathBase) && currentPath !== pathBase) {
                     return false;
                 }
-                const actual = new URLSearchParams(currentSearch);
+
                 for (const [key, value] of expectedParams) {
                     if (actual.get(key) !== value) {
                         return false;
                     }
                 }
-                return true;
+
+                return currentPath === pathBase || pathMatches(pathBase);
             }
 
             if (currentPath === pathBase) {
                 return true;
             }
 
-            // Prefix match only for the longest matching sidebar path (e.g. /provident-fund/interest
-            // must not highlight /provident-fund "PF Register").
             const candidates = menuNavPaths
                 .map((p) => p.split('?')[0])
                 .filter((base) => pathMatches(base));
@@ -736,7 +781,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             const best = candidates.reduce((a, b) => (a.length >= b.length ? a : b));
             return best === pathBase;
         },
-        [currentPath, currentSearch, menuNavPaths],
+        [currentPath, currentSearch, menuNavPaths, activeSectionId],
     );
 
     const hasAnyDashboardPerm = (perms: string[]) => perms.some((p) => hasPermission(p));
@@ -791,33 +836,41 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     // Automatically expand the menu item if a child is active
     useEffect(() => {
-        if (!activeMenu) {
-            const activeParent = visibleMenuItems.find(item =>
-                item.hasSubmenu && item.submenu?.some(subItem => isActive(subItem.path))
-            );
-            if (activeParent) {
-                setActiveMenu(activeParent.title);
-            }
+        const activeParent = visibleMenuItems.find((item) =>
+            item.hasSubmenu && item.submenu?.some((subItem) => !subItem.isGroupLabel && isActive(subItem.path)),
+        );
+        if (activeParent) {
+            setActiveMenu(activeParent.title);
         }
-    }, [currentPath, visibleMenuItems, activeMenu, isActive]);
+    }, [currentPath, currentSearch, visibleMenuItems, isActive]);
 
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
         if (item.hrOnly && !isHRUser) return null;
         if (item.employeeOnly && !employee?.id) return null;
-        if (item.permission && !hasPermission(item.permission)) return null;
+        if (item.anyPermissions?.length) {
+            if (!item.anyPermissions.some((p) => hasPermission(p))) return null;
+        } else if (item.permission && !hasPermission(item.permission)) {
+            return null;
+        }
 
         const permittedSubmenu = item.submenu?.filter(subItem =>
-            (!subItem.hrOnly || isHRUser)
+            subItem.isGroupLabel
+            || ((!subItem.hrOnly || isHRUser)
             && (!subItem.permission || hasPermission(subItem.permission))
             && (!subItem.anyPermissions?.length
                 || subItem.anyPermissions.some((p) => hasPermission(p)))
             && (!subItem.allPermissions?.length
-                || subItem.allPermissions.every((p) => hasPermission(p)))
-        );
+                || subItem.allPermissions.every((p) => hasPermission(p))))
+        )?.filter((subItem, index, items) => {
+            if (!subItem.isGroupLabel) {
+                return true;
+            }
+            return items.slice(index + 1).some((next) => !next.isGroupLabel);
+        });
 
         if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
 
-        const submenuSectionActive = permittedSubmenu?.some((s) => isActive(s.path)) ?? false;
+        const submenuSectionActive = permittedSubmenu?.some((s) => !s.isGroupLabel && isActive(s.path)) ?? false;
         const isMenuOpen = activeMenu === item.title;
 
         return item.hasSubmenu ? (
@@ -852,6 +905,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         )}
                     >
                         {permittedSubmenu?.map((subItem, idx) => (
+                            subItem.isGroupLabel ? (
+                                <p
+                                    key={idx}
+                                    className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 first:pt-0"
+                                >
+                                    {subItem.title}
+                                </p>
+                            ) : (
                             <Link
                                 key={idx}
                                 href={subItem.path}
@@ -863,6 +924,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             >
                                 {subItem.title}
                             </Link>
+                            )
                         ))}
                     </div>
                 )}

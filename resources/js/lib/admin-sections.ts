@@ -34,7 +34,9 @@ export type AdminSection = {
     icon: LucideIcon;
     /** Route to jump into the module (if implemented). */
     href?: string;
-    /** Which `AdminLayout` menu item titles belong to this section. */
+    /** Stable keys matching `AdminLayout` menu items for this section. */
+    menuKeys?: string[];
+    /** @deprecated Use menuKeys — kept for backwards compatibility during migration. */
     menuTitles?: string[];
 };
 
@@ -45,7 +47,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Employee, organization & transfers',
         icon: Users,
         href: '/sections/human-resources',
-        menuTitles: ['My Notices', 'Employee Management', 'Organization Setup', 'Holidays', 'Transfer & Promotion', 'Reports'],
+        menuKeys: ['my-notices', 'employee-management', 'organization-setup', 'holidays', 'transfer-promotion', 'section-reports'],
     },
     {
         id: 'attendance-movement',
@@ -53,7 +55,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Attendance and field movement',
         icon: ClipboardList,
         href: '/sections/attendance-movement',
-        menuTitles: ['Attendance', 'Movement', 'Reports'],
+        menuKeys: ['attendance', 'movement', 'section-reports'],
     },
     {
         id: 'leave',
@@ -61,7 +63,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Leave applications & settings',
         icon: CalendarDays,
         href: '/sections/leave',
-        menuTitles: ['Leave Management', 'Reports'],
+        menuKeys: ['leave-management', 'section-reports'],
     },
     {
         id: 'employee-loan',
@@ -69,7 +71,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Loans & installments',
         icon: HandCoins,
         href: '/sections/employee-loan',
-        menuTitles: ['Setup', 'Process', 'Register', 'Collection', 'Reports'],
+        menuKeys: ['el-setup', 'el-process', 'el-register', 'el-collection', 'section-reports'],
     },
     {
         id: 'staff-fund',
@@ -77,7 +79,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Provident Fund & Gratuity',
         icon: Coins,
         href: '/sections/staff-fund',
-        menuTitles: ['PF', 'Gratuity', 'Reports'],
+        menuKeys: ['sf-pf', 'sf-gratuity', 'section-reports'],
     },
     {
         id: 'payroll',
@@ -85,7 +87,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Salary setup & payslips',
         icon: BriefcaseBusiness,
         href: '/sections/payroll',
-        menuTitles: ['Payroll Setup', 'Bonus', 'Salary', 'Reports'],
+        menuKeys: ['payroll-setup', 'bonus', 'salary', 'section-reports'],
     },
     {
         id: 'fixed-asset',
@@ -93,7 +95,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Asset tracking across branches',
         icon: Boxes,
         href: '/sections/fixed-asset',
-        menuTitles: ['Asset Setup', 'Asset Register', 'Asset Operations', 'Asset Transfers', 'Depreciation', 'Reports'],
+        menuKeys: ['fa-settings', 'fa-custodian', 'fa-purchase', 'fa-asset', 'fa-stock', 'fa-depreciation', 'fa-transfer', 'fa-disposal', 'fa-reports'],
     },
     {
         id: 'inventory',
@@ -125,7 +127,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'System & access control',
         icon: Settings,
         href: '/sections/administration',
-        menuTitles: ['User Management', 'Reports', 'Settings'],
+        menuKeys: ['admin-user-management', 'section-reports', 'admin-settings'],
     },
 ];
 
@@ -198,12 +200,15 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     if (p.startsWith('/admin/') || p.startsWith('/reports') || p.startsWith('/settings')) return 'administration';
     if (
         p.startsWith('/asset-categories') ||
+        p.startsWith('/fixed-asset/settings') ||
+        p.startsWith('/fixed-asset/custodian') ||
+        p.startsWith('/fixed-asset/purchases') ||
+        p.startsWith('/fixed-asset/assets') ||
+        p.startsWith('/fixed-asset/stock') ||
+        p.startsWith('/fixed-asset/depreciation') ||
+        p.startsWith('/fixed-asset/transfer') ||
+        p.startsWith('/fixed-asset/disposal') ||
         p.startsWith('/fixed-assets') ||
-        p.startsWith('/asset-transfers') ||
-        p.startsWith('/asset-assignments') ||
-        p.startsWith('/asset-maintenances') ||
-        p.startsWith('/asset-disposals') ||
-        p.startsWith('/asset-depreciation') ||
         p.startsWith('/fixed-asset/reports')
     ) {
         return 'fixed-asset';
@@ -253,16 +258,16 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
 }
 
 export function getActiveSectionId(location: Location): AdminSectionId | null {
-    const inferred = inferSectionFromPath(location.pathname);
-    if (inferred) {
-        storeSection(inferred);
-        return inferred;
-    }
-
     const fromQuery = getSectionFromSearch(location.search);
     if (fromQuery) {
         storeSection(fromQuery);
         return fromQuery;
+    }
+
+    const inferred = inferSectionFromPath(location.pathname);
+    if (inferred) {
+        storeSection(inferred);
+        return inferred;
     }
 
     return readStoredSection();
@@ -273,9 +278,27 @@ export function getSectionById(sectionId: AdminSectionId | null) {
     return ADMIN_SECTIONS.find((s) => s.id === sectionId) ?? null;
 }
 
-export function getMenuTitlesForSection(sectionId: AdminSectionId | null): string[] | null {
+export function getMenuKeysForSection(sectionId: AdminSectionId | null): string[] | null {
     const s = getSectionById(sectionId);
-    if (!s?.menuTitles?.length) return null;
-    return s.menuTitles;
+    if (s?.menuKeys?.length) {
+        return s.menuKeys;
+    }
+    if (s?.menuTitles?.length) {
+        return s.menuTitles;
+    }
+    return null;
+}
+
+/** @deprecated Use getMenuKeysForSection */
+export function getMenuTitlesForSection(sectionId: AdminSectionId | null): string[] | null {
+    return getMenuKeysForSection(sectionId);
+}
+
+export function withSectionParam(path: string, sectionId: AdminSectionId): string {
+    const [base, query = ''] = path.split('?');
+    const params = new URLSearchParams(query);
+    params.set('section', sectionId);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
 }
 
