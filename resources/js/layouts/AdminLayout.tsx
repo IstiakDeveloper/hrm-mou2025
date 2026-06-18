@@ -71,6 +71,7 @@ import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
+import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
 import {
     Dialog,
     DialogContent,
@@ -624,6 +625,25 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 },
             ];
         }),
+        ...INVENTORY_NAV_GROUPS.flatMap((group) => {
+            const GroupIcon = group.icon;
+
+            return [
+                {
+                    title: group.title,
+                    menuKey: `inv-${group.id}`,
+                    icon: <GroupIcon className="w-5 h-5" />,
+                    path: inventoryPath(group.defaultPath),
+                    hasSubmenu: true as const,
+                    permission: 'inventory.view',
+                    submenu: group.items.map((item) => ({
+                        title: item.title,
+                        path: inventoryPath(item.path),
+                        permission: item.permission ?? 'inventory.view',
+                    })),
+                },
+            ];
+        }),
         {
             title: 'User Management',
             menuKey: 'admin-user-management',
@@ -684,11 +704,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const visibleMenuItems = useMemo(() => {
         if (branchAccount) {
-            if (activeSectionId !== 'attendance-movement') {
-                return [];
+            if (activeSectionId === 'attendance-movement') {
+                const reports = menuItemsForLayout.find((m) => m.title === 'Reports');
+                return reports ? [reports] : [];
             }
-            const reports = menuItemsForLayout.find((m) => m.title === 'Reports');
-            return reports ? [reports] : [];
+            if (activeSectionId === 'inventory') {
+                const allowedKeys = new Set(['inv-products', 'inv-operations', 'inv-reports']);
+                return menuItemsForLayout.filter((m) => m.menuKey != null && allowedKeys.has(m.menuKey));
+            }
+            return [];
         }
 
         const keys = getMenuKeysForSection(activeSectionId);

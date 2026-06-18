@@ -10,9 +10,10 @@ type Props = {
     required?: boolean;
     disabled?: boolean;
     error?: string;
+    nested?: boolean;
 };
 
-export function FormDateField({ label, value, onChange, required, disabled, error }: Props) {
+export function FormDateField({ label, value, onChange, required, disabled, error, nested }: Props) {
     return (
         <div>
             <Label>
@@ -23,6 +24,7 @@ export function FormDateField({ label, value, onChange, required, disabled, erro
                 selected={parseFormDateValue(value)}
                 onSelect={(d) => onChange(d ? format(d, DISPLAY_DATE_FMT) : '')}
                 disabled={disabled}
+                nested={nested}
             />
             {error && <p className="text-sm text-red-500">{error}</p>}
         </div>

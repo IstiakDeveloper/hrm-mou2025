@@ -1,1 +1,7 @@
+
 https://hrm.mousumibd.org/admin/utils/storage-link?token=some-strong-random-string
+
+
+
+php artisan permissions:sync-default-roles
+

@@ -42,6 +42,8 @@ interface DatePickerProps {
   id?: string;
   className?: string;
   disabled?: boolean;
+  /** Use inside Dialog/Modal — avoids focus trap conflicts */
+  nested?: boolean;
 }
 
 export function DatePicker({
@@ -53,6 +55,7 @@ export function DatePicker({
   id,
   className,
   disabled,
+  nested = false,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState(() =>
@@ -116,7 +119,7 @@ export function DatePicker({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={!nested}>
       <div className="relative w-full">
         <Input
           id={id}
@@ -151,7 +154,7 @@ export function DatePicker({
         </PopoverTrigger>
       </div>
       <PopoverContent
-        className="w-[min(19rem,calc(100vw-1rem))] p-0"
+        className={cn('w-[min(19rem,calc(100vw-1rem))] p-0', nested && 'z-[300]')}
         align="start"
         collisionPadding={8}
       >

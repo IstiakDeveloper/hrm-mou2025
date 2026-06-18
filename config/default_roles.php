@@ -25,6 +25,7 @@ return [
                 'profile.view', 'profile.edit',
                 'reports.view',
                 'fixed-assets.view',
+                'inventory.view',
             ],
         ],
         'HR Manager' => [
@@ -137,12 +138,15 @@ return [
                 'profile.view', 'profile.edit',
                 'reports.view',
                 'fixed-assets.view', 'fixed-assets.create', 'fixed-assets.edit',
+                'inventory.view', 'inventory.create', 'inventory.edit', 'inventory.delete',
             ],
         ],
         'Branch Account' => [
             'description' => 'Dedicated branch terminal account. PIN-only sign-in. Features enabled step by step.',
             'permissions' => [
                 'attendance.view',
+                'inventory.view',
+                'inventory.create',
             ],
         ],
         'Department Head' => [

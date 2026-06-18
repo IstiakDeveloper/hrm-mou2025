@@ -21,6 +21,10 @@ type Props<TValue extends string | number = string> = {
     portal?: boolean;
     /** Whether the selection can be cleared. Defaults to true. */
     clearable?: boolean;
+    /** Show "Add …" when search text has no exact match. */
+    creatable?: boolean;
+    onCreate?: (label: string) => void;
+    createLabel?: (query: string) => string;
 };
 
 export function ComboSelect<TValue extends string | number = string>({
@@ -32,6 +36,9 @@ export function ComboSelect<TValue extends string | number = string>({
     className,
     portal = true,
     clearable = true,
+    creatable = false,
+    onCreate,
+    createLabel = (q) => `Add "${q}"`,
 }: Props<TValue>) {
     const [query, setQuery] = useState('');
 
@@ -54,6 +61,11 @@ export function ComboSelect<TValue extends string | number = string>({
         }
         return list;
     }, [items, query, selectedItem]);
+
+    const trimmedQuery = query.trim();
+    const canCreate = creatable
+        && trimmedQuery.length > 0
+        && !items.some((i) => i.label.toLowerCase() === trimmedQuery.toLowerCase());
 
     return (
         <Combobox
@@ -126,10 +138,24 @@ export function ComboSelect<TValue extends string | number = string>({
                             'transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0',
                         )}
                     >
-                        {filtered.length === 0 ? (
+                        {filtered.length === 0 && !canCreate ? (
                             <div className="text-muted-foreground px-2 py-3 text-center text-xs italic">No results found.</div>
                         ) : (
-                            filtered.map((item) => (
+                            <>
+                                {canCreate && onCreate && (
+                                    <button
+                                        type="button"
+                                        className="flex w-full cursor-pointer items-center rounded-sm py-1.5 pr-2 pl-2.5 text-xs font-medium text-sky-700 hover:bg-sky-50 md:text-sm"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                            onCreate(trimmedQuery);
+                                            setQuery('');
+                                        }}
+                                    >
+                                        + {createLabel(trimmedQuery)}
+                                    </button>
+                                )}
+                                {filtered.map((item) => (
                                 <ComboboxOption
                                     key={String(item.value)}
                                     value={item}
@@ -147,7 +173,8 @@ export function ComboSelect<TValue extends string | number = string>({
                                         <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                                     </span>
                                 </ComboboxOption>
-                            ))
+                                ))}
+                            </>
                         )}
                     </ComboboxOptions>
                 </div>

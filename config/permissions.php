@@ -76,6 +76,11 @@ return [
             'description' => 'Asset register, categories, and branch transfers',
             'color' => 'amber',
         ],
+        'inventory' => [
+            'label' => 'Inventory Management',
+            'description' => 'Stock in, disbursement, and stock reports',
+            'color' => 'sky',
+        ],
     ],
 
     'permissions' => [
@@ -197,6 +202,11 @@ return [
         'fixed-assets.create' => ['label' => 'Register Fixed Assets', 'category' => 'fixed-assets'],
         'fixed-assets.edit' => ['label' => 'Edit Fixed Assets & Transfers', 'category' => 'fixed-assets'],
         'fixed-assets.delete' => ['label' => 'Delete Fixed Assets', 'category' => 'fixed-assets'],
+
+        'inventory.view' => ['label' => 'View Inventory', 'category' => 'inventory'],
+        'inventory.create' => ['label' => 'Stock In & Disburse', 'category' => 'inventory'],
+        'inventory.edit' => ['label' => 'Edit Inventory Master', 'category' => 'inventory'],
+        'inventory.delete' => ['label' => 'Delete Inventory Records', 'category' => 'inventory'],
     ],
 
     /** Map legacy role JSON keys to current catalog keys. */

@@ -102,6 +102,8 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         title: 'INVENTORY',
         description: 'Stock, items & issuance',
         icon: Package,
+        href: '/sections/inventory',
+        menuKeys: ['inv-products', 'inv-operations', 'inv-reports'],
     },
     {
         id: 'store',
@@ -198,6 +200,11 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         return 'human-resources';
     }
     if (p.startsWith('/admin/') || p.startsWith('/reports') || p.startsWith('/settings')) return 'administration';
+    if (
+        p.startsWith('/inventory')
+    ) {
+        return 'inventory';
+    }
     if (
         p.startsWith('/asset-categories') ||
         p.startsWith('/fixed-asset/settings') ||

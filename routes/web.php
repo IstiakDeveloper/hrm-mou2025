@@ -47,6 +47,10 @@ use App\Http\Controllers\FixedAsset\FixedAssetController;
 use App\Http\Controllers\FixedAsset\FixedAssetDashboardController;
 use App\Http\Controllers\FixedAsset\FixedAssetImportController;
 use App\Http\Controllers\FixedAsset\FixedAssetReportController;
+use App\Http\Controllers\Inventory\InventoryDashboardController;
+use App\Http\Controllers\Inventory\InventoryOperationsController;
+use App\Http\Controllers\Inventory\InventoryProductController;
+use App\Http\Controllers\Inventory\InventoryReportController;
 use App\Http\Controllers\Holiday\HolidayController;
 use App\Http\Controllers\Leave\LeaveApplicationController;
 use App\Http\Controllers\Leave\LeaveBalanceController;
@@ -215,6 +219,7 @@ Route::middleware(['auth'])->group(function () {
     // Legacy branch portal URLs → normal section flow
     Route::redirect('/branch', '/sections')->name('branch.portal');
     Route::redirect('/branch/attendance', '/attendance/daily-branch-summary?section=attendance-movement')->name('branch.portal.attendance');
+    Route::redirect('/branch/inventory', '/inventory/operations?section=inventory')->name('branch.portal.inventory');
 
     // Section Landing - Modules (available to all authenticated users)
     Route::get('/sections', function () {
@@ -251,6 +256,10 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('permission:fixed-assets.view')
         ->name('sections.fixed-asset');
 
+    Route::get('/sections/inventory', InventoryDashboardController::class)
+        ->middleware('permission:inventory.view')
+        ->name('sections.inventory');
+
     // Section Dashboard (Overview) - role-aware (employee vs admin)
     Route::get('/sections/{section}', function (Request $request, string $section) {
         $allowed = [
@@ -261,6 +270,7 @@ Route::middleware(['auth'])->group(function () {
             'staff-fund',
             'payroll',
             'fixed-asset',
+            'inventory',
             'store',
             'recruitment',
             'training',
@@ -1219,6 +1229,48 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{report}/pdf', [FixedAssetReportController::class, 'pdf'])->name('pdf');
             Route::get('/{report}/excel', [FixedAssetReportController::class, 'excel'])->name('excel');
             Route::get('/{report}', [FixedAssetReportController::class, 'show'])->name('show');
+        });
+    });
+
+    // ====================
+    // INVENTORY
+    // ====================
+    Route::middleware(['permission:inventory.view'])->prefix('inventory')->name('inventory.')->group(function () {
+        Route::prefix('products')->name('products.')->group(function () {
+            Route::get('/', [InventoryProductController::class, 'index'])->name('index');
+            Route::post('/', [InventoryProductController::class, 'store'])->name('store')->middleware('permission:inventory.create');
+            Route::put('/{inventory_product}', [InventoryProductController::class, 'update'])->name('update')->middleware('permission:inventory.edit');
+            Route::delete('/{inventory_product}', [InventoryProductController::class, 'destroy'])->name('destroy')->middleware('permission:inventory.delete');
+            Route::redirect('/create', '/inventory/products');
+            Route::get('/{inventory_product}/edit', fn () => redirect()->route('inventory.products.index'));
+        });
+
+        Route::get('/operations', [InventoryOperationsController::class, 'index'])->name('operations.index');
+        Route::post('/operations/stock-in', [InventoryOperationsController::class, 'storeStockIn'])->name('operations.stock-in')->middleware('permission:inventory.create');
+        Route::post('/operations/disburse', [InventoryOperationsController::class, 'storeDisburse'])->name('operations.disburse')->middleware('permission:inventory.create');
+        Route::put('/operations/movements/{movement}', [InventoryOperationsController::class, 'updateMovement'])->name('operations.movements.update')->middleware('permission:inventory.edit');
+        Route::delete('/operations/movements/{movement}', [InventoryOperationsController::class, 'destroyMovement'])->name('operations.movements.destroy')->middleware('permission:inventory.delete');
+        Route::get('/operations/stock-check', [InventoryOperationsController::class, 'stockCheck'])->name('operations.stock-check');
+        Route::get('/operations/recipients', [InventoryOperationsController::class, 'recipients'])->name('operations.recipients');
+        Route::post('/operations/recipients', [InventoryOperationsController::class, 'storeRecipient'])->name('operations.recipients.store')->middleware('permission:inventory.create');
+
+        Route::post('/products/quick', [InventoryProductController::class, 'quickStore'])->name('products.quick')->middleware('permission:inventory.create');
+
+        Route::redirect('/stock-in', '/inventory/operations?tab=in');
+        Route::redirect('/stock-in/create', '/inventory/operations');
+        Route::redirect('/disburse', '/inventory/operations?tab=out');
+        Route::redirect('/disburse/create', '/inventory/operations');
+
+        Route::prefix('reports')->name('reports.')->group(function () {
+            Route::get('/stock-ledger', [InventoryReportController::class, 'stockLedger'])->name('stock-ledger');
+            Route::get('/stock-ledger/print', [InventoryReportController::class, 'stockLedgerPrint'])->name('stock-ledger.print');
+            Route::get('/stock-ledger/pdf', [InventoryReportController::class, 'stockLedgerPdf'])->name('stock-ledger.pdf');
+            Route::get('/stock-ledger/excel', [InventoryReportController::class, 'stockLedgerExcel'])->name('stock-ledger.excel');
+            Route::get('/product-ledger', [InventoryReportController::class, 'productLedger'])->name('product-ledger');
+            Route::get('/product-ledger/print', [InventoryReportController::class, 'productLedgerPrint'])->name('product-ledger.print');
+            Route::get('/product-ledger/pdf', [InventoryReportController::class, 'productLedgerPdf'])->name('product-ledger.pdf');
+            Route::get('/product-ledger/excel', [InventoryReportController::class, 'productLedgerExcel'])->name('product-ledger.excel');
+            Route::redirect('/current-stock', '/inventory/reports/stock-ledger');
         });
     });
 

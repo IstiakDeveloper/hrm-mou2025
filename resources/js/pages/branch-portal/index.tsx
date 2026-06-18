@@ -1,7 +1,7 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
 import BranchPortalLayout from '@/layouts/BranchPortalLayout';
-import { CalendarDays, ChevronRight, MapPin } from 'lucide-react';
+import { CalendarDays, ChevronRight, MapPin, Package } from 'lucide-react';
 
 interface Props {
     branch: {
@@ -38,6 +38,22 @@ export default function BranchPortalIndex({ branch }: Props) {
                         </p>
                     </div>
                     <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-emerald-600 shrink-0" />
+                </Link>
+
+                <Link
+                    href={route('branch.portal.inventory')}
+                    className="mt-3 flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-sky-300 hover:shadow-md transition-all group"
+                >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 text-sky-600 group-hover:bg-sky-100">
+                        <Package className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h2 className="font-bold text-slate-900">Inventory</h2>
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            Stock in, disburse to staff, and branch stock reports — your branch only.
+                        </p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-sky-600 shrink-0" />
                 </Link>
 
                 <div className="mt-6 rounded-lg border border-dashed border-slate-200 bg-slate-50/50 p-4 text-xs text-slate-400 flex items-start gap-2">

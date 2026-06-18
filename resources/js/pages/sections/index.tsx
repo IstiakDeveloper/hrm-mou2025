@@ -262,7 +262,16 @@ export default function SectionsIndex() {
                         const moduleActive = Boolean(section.href);
                         const hasAccess = (() => {
                             if (isBranchAccount(auth)) {
-                                return section.id === 'attendance-movement';
+                                if (section.id === 'attendance-movement') {
+                                    return true;
+                                }
+                                if (section.id === 'inventory') {
+                                    return (
+                                        hasAppPermission(auth, 'inventory.view') ||
+                                        hasAppPermission(auth, 'inventory.create')
+                                    );
+                                }
+                                return false;
                             }
 
                             if (isSuperAdmin(auth)) {
@@ -303,6 +312,13 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'fixed-assets.view') ||
                                         hasAppPermission(auth, 'fixed-assets.create') ||
                                         hasAppPermission(auth, 'fixed-assets.edit') ||
+                                        hasAppPermission(auth, 'admin.access')
+                                    );
+                                case 'inventory':
+                                    return (
+                                        hasAppPermission(auth, 'inventory.view') ||
+                                        hasAppPermission(auth, 'inventory.create') ||
+                                        hasAppPermission(auth, 'inventory.edit') ||
                                         hasAppPermission(auth, 'admin.access')
                                     );
                                 case 'staff-fund':
