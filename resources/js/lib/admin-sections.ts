@@ -169,7 +169,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     }
 
     if (p.startsWith('/leave')) return 'leave';
-    if (p.startsWith('/transfers') || p.startsWith('/promotions')) {
+    if (p.startsWith('/transfers') || p.startsWith('/promotions') || p.startsWith('/demotions')) {
         return 'human-resources';
     }
     if (p.startsWith('/reports/attendance')) return 'attendance-movement';
@@ -185,6 +185,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         p.startsWith('/confirmations') ||
         p.startsWith('/separations') ||
         p.startsWith('/branches') ||
+        p.startsWith('/organization-structure') ||
         p.startsWith('/zones') ||
         p.startsWith('/regional-offices') ||
         p.startsWith('/departments') ||
@@ -238,6 +239,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         p.startsWith('/salary-process') ||
         p.startsWith('/salary-post') ||
         p.startsWith('/salary-rollback') ||
+        p.startsWith('/final-payments') ||
         p.startsWith('/payroll/reports')
     ) {
         return 'payroll';

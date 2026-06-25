@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Inventory;
 
+use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Http\Controllers\Controller;
 use App\Models\InventoryProduct;
 use Illuminate\Http\Request;
@@ -10,10 +11,11 @@ use Inertia\Inertia;
 
 class InventoryProductController extends Controller
 {
+    use PaginatesForInertia;
+
     public function index(Request $request)
     {
-        $perPage = in_array((int) $request->input('per_page', 15), [10, 15, 25, 50, 100], true)
-            ? (int) $request->input('per_page', 15) : 15;
+        $perPage = $this->resolvePerPage($request->input('per_page'), 10);
 
         $products = InventoryProduct::query()
             ->when($request->search, fn ($q, $s) => $q->where(function ($q) use ($s) {
@@ -25,7 +27,7 @@ class InventoryProductController extends Controller
             ->withQueryString();
 
         return Inertia::render('inventory/products/index', [
-            'products' => $products,
+            'products' => $this->inertiaPagination($products),
             'filters' => $request->only(['search', 'per_page']),
             'units' => config('inventory.units'),
         ]);

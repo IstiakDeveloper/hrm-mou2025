@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\PaginatesForInertia;
 use App\Models\BonusConfiguration;
 use App\Models\BonusType;
-use App\Models\Payscale;
 use App\Models\PayrollRun;
+use App\Models\Payscale;
 use App\Models\SalaryGrade;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -105,7 +105,7 @@ class BonusConfigurationController extends Controller
     {
         return [
             'bonusTypes' => BonusType::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
-            'payscales' => Payscale::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'payscales' => Payscale::query()->active()->orderBy('name')->get(['id', 'name']),
             'salaryGrades' => SalaryGrade::query()->with('payscale:id,name')->orderBy('name')->get(['id', 'name', 'payscale_id']),
             'months' => collect(range(1, 12))->map(fn ($m) => [
                 'value' => $m,

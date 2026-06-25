@@ -309,7 +309,7 @@ class EmployeeV2Controller extends Controller
             'role_id' => $employeeRole->id,
             'employee_id' => $employee->id,
             'branch_id' => $employee->current_branch_id,
-            'active_status' => $employee->status === 'active',
+            'active_status' => ($employee->status ?: (Employee::query()->whereKey($employee->id)->value('status') ?? 'active')) === 'active',
         ];
 
         if ($user) {
@@ -548,6 +548,7 @@ class EmployeeV2Controller extends Controller
                 $employeeData['last_designation_id'] = $employeeData['joining_designation_id'];
             }
             $employeeData['designation_id'] = $employeeData['last_designation_id'];
+            $employeeData['status'] = $employeeData['status'] ?? 'active';
 
             // Auto probation/confirmation from employee type (months)
             if (! empty($employeeData['joining_date']) && empty($employeeData['confirmation_date']) && ! empty($employeeData['employee_type_id'])) {

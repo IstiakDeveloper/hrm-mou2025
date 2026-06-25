@@ -74,9 +74,9 @@ interface Employee extends EmployeeNameFields {
     id: number;
     pin?: string;
     employee_id: string;
-    email: string;
-    phone: string | null;
     status: 'active' | 'inactive' | 'on_leave' | 'terminated';
+    employee_type?: { id: number; name: string } | null;
+    employeeType?: { id: number; name: string } | null;
     photo: string | null;
     department: {
         id: number;
@@ -89,6 +89,20 @@ interface Employee extends EmployeeNameFields {
     branch: {
         id: number;
         name: string;
+        branch_code?: string | null;
+        is_head_office?: boolean;
+        regional_office?: {
+            id: number;
+            name: string;
+            code?: string | null;
+            zone?: { id: number; name: string; code?: string | null } | null;
+        } | null;
+        regionalOffice?: {
+            id: number;
+            name: string;
+            code?: string | null;
+            zone?: { id: number; name: string; code?: string | null } | null;
+        } | null;
     };
 }
 
@@ -131,12 +145,14 @@ interface EmployeeIndexProps {
     departments: Department[];
     branches: Branch[];
     employee_types: EmployeeTypeOption[];
+    designations: Designation[];
     filters: {
         search?: string;
         department_id?: string;
         branch_id?: string;
         status?: string;
         employee_type_id?: string;
+        designation_id?: string;
         per_page?: string;
         sort_by?: string;
         sort_dir?: string;
@@ -149,6 +165,7 @@ export default function EmployeeIndex({
     departments,
     branches,
     employee_types,
+    designations,
     filters,
     success
 }: EmployeeIndexProps) {
@@ -158,8 +175,9 @@ export default function EmployeeIndex({
         branch_id: filters.branch_id || '',
         status: filters.status || '',
         employee_type_id: filters.employee_type_id || '',
+        designation_id: filters.designation_id || '',
         per_page: filters.per_page || '100',
-        sort_by: filters.sort_by || 'id',
+        sort_by: filters.sort_by || 'organogram',
         sort_dir: filters.sort_dir || 'asc',
     });
 
@@ -179,7 +197,7 @@ export default function EmployeeIndex({
     const importRowErrors = (page?.props?.flash?.import_row_errors as { row: number; errors: string[] }[] | undefined) ?? [];
 
     const [showFilters, setShowFilters] = useState(
-        !!(filters.department_id || filters.branch_id || filters.status || filters.employee_type_id)
+        !!(filters.department_id || filters.branch_id || filters.status || filters.employee_type_id || filters.designation_id)
     );
 
     const applyFilters = (next: Partial<typeof data>) => {
@@ -196,8 +214,9 @@ export default function EmployeeIndex({
         if (merged.branch_id) params.branch_id = merged.branch_id;
         if (merged.status) params.status = merged.status;
         if (merged.employee_type_id) params.employee_type_id = merged.employee_type_id;
+        if (merged.designation_id) params.designation_id = merged.designation_id;
         if (merged.per_page && merged.per_page !== '100') params.per_page = merged.per_page;
-        if (merged.sort_by && merged.sort_by !== 'id') params.sort_by = merged.sort_by;
+        if (merged.sort_by && merged.sort_by !== 'organogram') params.sort_by = merged.sort_by;
         if (merged.sort_dir && merged.sort_dir !== 'asc') params.sort_dir = merged.sort_dir;
 
         router.get(route('employees.index'), params, { preserveState: true, replace: true });
@@ -212,6 +231,12 @@ export default function EmployeeIndex({
 
         applyFilters({ sort_by: sortBy, sort_dir: nextDir } as any);
     };
+
+    const useOrganogramSort = () => {
+        applyFilters({ sort_by: 'organogram', sort_dir: 'asc' } as any);
+    };
+
+    const isOrganogramSort = (data.sort_by || 'organogram') === 'organogram';
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -241,6 +266,7 @@ export default function EmployeeIndex({
             branch_id: '',
             status: '',
             employee_type_id: '',
+            designation_id: '',
         });
     };
 
@@ -417,9 +443,25 @@ export default function EmployeeIndex({
                 <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
                     <CardHeader className="bg-white border-b border-slate-100 pb-5 pt-6 px-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <CardTitle className="text-lg font-bold text-slate-800 tracking-wide">Employees Directory</CardTitle>
+                            <CardTitle className="text-lg font-bold text-slate-800 tracking-wide">
+                                Employees Directory
+                                {isOrganogramSort && (
+                                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                                        · Organogram order
+                                    </span>
+                                )}
+                            </CardTitle>
 
                             <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant={isOrganogramSort ? 'default' : 'outline'}
+                                    size="sm"
+                                    className={`h-9 text-xs ${isOrganogramSort ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+                                    onClick={useOrganogramSort}
+                                >
+                                    Organogram
+                                </Button>
                                 <form onSubmit={handleSearch} className="flex items-center">
                                     <div className="relative flex-1">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -454,7 +496,7 @@ export default function EmployeeIndex({
                         </div>
 
                         {showFilters && (
-                            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                                 <div>
                                     <Select
                                         value={data.department_id || 'all'}
@@ -519,6 +561,27 @@ export default function EmployeeIndex({
 
                                 <div>
                                     <Select
+                                        value={data.designation_id || 'all'}
+                                        onValueChange={value => {
+                                            applyFilters({ designation_id: value === 'all' ? '' : value });
+                                        }}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Filter by Designation" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Designations</SelectItem>
+                                            {designations.map((designation) => (
+                                                <SelectItem key={designation.id} value={designation.id.toString()}>
+                                                    {designation.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <Select
                                         value={data.employee_type_id || 'all'}
                                         onValueChange={value => {
                                             applyFilters({ employee_type_id: value === 'all' ? '' : value });
@@ -577,7 +640,7 @@ export default function EmployeeIndex({
                                         </TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Department</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Contact</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Employee Type</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">
                                             <button
                                                 type="button"
@@ -598,7 +661,7 @@ export default function EmployeeIndex({
                                                     <Users className="h-8 w-8 text-gray-400" />
                                                     <h3 className="mt-2 text-lg font-medium text-gray-900">No Employees Found</h3>
                                                     <p className="mt-1 text-gray-500">
-                                                        {data.search || data.department_id || data.branch_id || data.status || data.employee_type_id
+                                                        {data.search || data.department_id || data.branch_id || data.status || data.employee_type_id || data.designation_id
                                                             ? 'Try different search filters'
                                                             : 'Get started by adding a new employee'}
                                                     </p>
@@ -607,7 +670,10 @@ export default function EmployeeIndex({
                                         </TableRow>
                                     ) : (
                                         employees.data.map((employee) => (
-                                            <TableRow key={employee.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
+                                            <TableRow
+                                                key={employee.id}
+                                                className="hover:bg-slate-50 transition-colors border-b border-slate-100 group"
+                                            >
                                                 <TableCell className="pl-6">
                                                     <div className="flex items-center space-x-3">
                                                         <Avatar className="h-9 w-9">
@@ -632,11 +698,8 @@ export default function EmployeeIndex({
                                                 <TableCell className="text-[13px] text-slate-600 font-medium">{employee.pin || employee.employee_id}</TableCell>
                                                 <TableCell className="text-[13px] text-slate-600">{employee.department.name}</TableCell>
                                                 <TableCell className="text-[13px] text-slate-600">{employee.branch.name}</TableCell>
-                                                <TableCell>
-                                                    <div className="text-[13px] text-slate-600">
-                                                        <div className="font-medium">{employee.email}</div>
-                                                        {employee.phone && <div className="text-slate-500 mt-0.5">{employee.phone}</div>}
-                                                    </div>
+                                                <TableCell className="text-[13px] text-slate-600">
+                                                    {employee.employee_type?.name || employee.employeeType?.name || '—'}
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">

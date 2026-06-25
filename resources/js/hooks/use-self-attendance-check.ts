@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { router, usePage } from "@inertiajs/react";
-import { toast } from "@/components/ui/use-toast";
+import { getAttendanceDeviceFingerprint } from "@/lib/attendance-device-fingerprint";
 
 export type GeoSample = {
     lat: number;
@@ -183,7 +183,13 @@ export function useSelfAttendanceCheck() {
 
             router.post(
                 route("employee.attendance.check-in"),
-                { lat: best.lat, lng: best.lng, accuracy: best.accuracy, samples },
+                {
+                    lat: best.lat,
+                    lng: best.lng,
+                    accuracy: best.accuracy,
+                    samples,
+                    device_fingerprint: getAttendanceDeviceFingerprint(),
+                },
                 {
                     preserveScroll: true,
                     onError: (errors) => {
@@ -234,7 +240,13 @@ export function useSelfAttendanceCheck() {
 
             router.post(
                 route("employee.attendance.check-out"),
-                { lat: best.lat, lng: best.lng, accuracy: best.accuracy, samples },
+                {
+                    lat: best.lat,
+                    lng: best.lng,
+                    accuracy: best.accuracy,
+                    samples,
+                    device_fingerprint: getAttendanceDeviceFingerprint(),
+                },
                 {
                     preserveScroll: true,
                     onError: (errors) => {

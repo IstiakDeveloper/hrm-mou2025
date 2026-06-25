@@ -13,6 +13,8 @@ use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\Movement;
 use App\Services\OrganogramAccessService;
+use App\Support\BranchOrganogram;
+use App\Support\HeadOfficeOrganogram;
 use App\Support\MonthlyAttendanceCalculator;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -103,12 +105,12 @@ class AttendanceController extends Controller
 
         // Change this line to include movement relationship
         $query = Attendance::with(['employee.department', 'employee.designation', 'device'])
-            ->whereDate('date', $date);
+            ->whereDate('attendances.date', $date);
 
         $this->applyUserFilters($query, $user, $request);
 
         $query->when($request->status, function ($query, $status) {
-            $query->where('status', $status);
+            $query->where('attendances.status', $status);
         })->when($request->search, function ($query, $search) {
             $query->whereHas('employee', function ($q) use ($search) {
                 $q->where('name_en', 'like', "%{$search}%")
@@ -119,6 +121,8 @@ class AttendanceController extends Controller
 
         $perPage = $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
+
+        HeadOfficeOrganogram::applyToAttendanceQuery($query);
 
         $attendances = $query->paginate($perPage)->withQueryString();
 
@@ -270,8 +274,8 @@ class AttendanceController extends Controller
             return;
         }
 
-        // Get company-wide attendance settings
-        $settings = AttendanceSetting::global();
+        // Get company-wide attendance settings (or employee custom override)
+        $settings = AttendanceSetting::forEmployee($attendance->employee_id);
 
         try {
             // Parse date, extracting only the date portion
@@ -439,6 +443,8 @@ class AttendanceController extends Controller
 
         // Apply filters based on user permissions and role
         $this->applyEmployeeFilters($employeesQuery, $user, $request);
+
+        $this->applyOrganogramEmployeeOrder($employeesQuery);
 
         $employees = $employeesQuery->paginate(100)->withQueryString();
         $employeeIds = $employees->pluck('id')->toArray();
@@ -871,9 +877,7 @@ class AttendanceController extends Controller
         }
 
         $employees = $employeesQuery
-            ->orderBy('current_branch_id')
-            ->orderBy('department_id')
-            ->orderBy('name_en')
+            ->tap(fn ($q) => $this->applyOrganogramEmployeeOrder($q))
             ->get();
 
         $employeeIds = $employees->pluck('id')->map(fn ($x) => (int) $x)->values()->all();
@@ -1042,21 +1046,21 @@ class AttendanceController extends Controller
             }
         }
 
-        // Sort branches by name; sort employees by name within each status
+        // Sort branches by organogram; preserve employee order within each status bucket
+        $branchModels = Branch::query()
+            ->whereIn('id', array_keys($branchesOut))
+            ->get()
+            ->keyBy('id');
+
         $branchesList = collect($branchesOut)
             ->values()
-            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
-            ->map(function ($b) use ($statuses) {
-                foreach ($statuses as $s) {
-                    $b['employeesByStatus'][$s] = collect($b['employeesByStatus'][$s] ?? [])
-                        ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
-                        ->values()
-                        ->all();
-                }
-                $b['employeesWithMovement'] = collect($b['employeesWithMovement'] ?? [])
-                    ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
-                    ->values()
-                    ->all();
+            ->sort(function (array $a, array $b) use ($branchModels) {
+                return BranchOrganogram::compareBranches(
+                    $branchModels->get((int) ($a['id'] ?? 0)),
+                    $branchModels->get((int) ($b['id'] ?? 0))
+                );
+            })
+            ->map(function ($b) {
                 return $b;
             })
             ->values()
@@ -1233,6 +1237,8 @@ class AttendanceController extends Controller
                         });
                     }
                 }
+
+                HeadOfficeOrganogram::applyToAttendanceQuery($query);
 
                 $attendances = $query->get();
                 $totalAttendanceRecords += $attendances->count();
@@ -1578,25 +1584,25 @@ class AttendanceController extends Controller
 
         // Base query with appropriate relationships
         $query = Attendance::with(['employee.department', 'employee.designation', 'employee.branch'])
-            ->whereBetween('date', [$startDate, $endDate]);
+            ->whereBetween('attendances.date', [$startDate, $endDate]);
 
         // Apply filters based on user permissions and role
         $this->applyUserFilters($query, $user, $request);
 
         // Apply additional report filters
         $query->when($request->status, function ($query, $status) {
-            $query->where('status', $status);
+            $query->where('attendances.status', $status);
         })
             ->when($request->employee_id, function ($query, $employeeId) {
-                $query->where('employee_id', $employeeId);
+                $query->where('attendances.employee_id', $employeeId);
             });
 
         // For summary statistics, we clone the query to avoid issues
         $queryForStats = clone $query;
 
-        $attendances = $query->orderBy('date', 'desc')
-            ->paginate(20)
-            ->withQueryString();
+        $query->orderBy('attendances.date', 'desc');
+        HeadOfficeOrganogram::applyToAttendanceQuery($query);
+        $attendances = $query->paginate(20)->withQueryString();
 
         // Get accessible branches, departments, and employees
         $branches = $this->getAccessibleBranches($user);
@@ -1691,6 +1697,11 @@ class AttendanceController extends Controller
         }
     }
 
+    private function applyOrganogramEmployeeOrder($query): void
+    {
+        HeadOfficeOrganogram::applyToEmployeeQuery($query, 'organogram', 'asc');
+    }
+
     /**
      * Apply employee filters based on user permissions and role
      */
@@ -1699,9 +1710,10 @@ class AttendanceController extends Controller
         // Apply search filter (applies to all user types)
         $query->when($request->search, function ($query, $search) {
             $query->where(function ($q) use ($search) {
-                $q->where('name_en', 'like', "%{$search}%")
-                    ->orWhere('name_bn', 'like', "%{$search}%")
-                    ->orWhere('employee_id', 'like', "%{$search}%");
+                $q->where('employees.name_en', 'like', "%{$search}%")
+                    ->orWhere('employees.name_bn', 'like', "%{$search}%")
+                    ->orWhere('employees.employee_id', 'like', "%{$search}%")
+                    ->orWhere('employees.pin', 'like', "%{$search}%");
             });
         });
 
@@ -1733,10 +1745,18 @@ class AttendanceController extends Controller
     {
         $ids = OrganogramAccessService::accessibleBranchIdList($user);
         if ($ids === null) {
-            return Branch::query()->orderBy('name')->get();
+            return Branch::query()->active()->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))->get();
         }
 
-        return Branch::query()->whereIn('id', $ids)->orderBy('name')->get();
+        if ($ids === []) {
+            return collect();
+        }
+
+        return Branch::query()
+            ->active()
+            ->whereIn('branches.id', $ids)
+            ->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))
+            ->get();
     }
 
     /**
@@ -1760,8 +1780,9 @@ class AttendanceController extends Controller
      */
     private function getAccessibleEmployees($user)
     {
-        $q = Employee::query()->where('status', 'active')->orderBy('name_en');
+        $q = Employee::query()->where('status', 'active');
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
+        $this->applyOrganogramEmployeeOrder($q);
 
         return $q->get();
     }

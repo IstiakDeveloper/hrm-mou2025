@@ -7,6 +7,7 @@ use App\Http\Controllers\Payroll\Concerns\PaginatesForInertia;
 use App\Models\Payscale;
 use App\Models\SalaryGrade;
 use App\Support\PayrollFormHelper;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -16,6 +17,8 @@ class PayscaleController extends Controller
 
     public function index(Request $request)
     {
+        Payscale::normalizeSingleActive();
+
         $perPage = $this->resolvePerPage($request->get('per_page'));
 
         $paginator = Payscale::query()
@@ -36,12 +39,15 @@ class PayscaleController extends Controller
         return Inertia::render('payroll/payscales/index', [
             'payscales' => $this->inertiaPagination($paginator),
             'filters' => $request->only(['search', 'per_page', 'is_active']),
+            'activePayscaleId' => Payscale::activeId(),
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('payroll/payscales/create');
+        return Inertia::render('payroll/payscales/create', [
+            'hasActivePayscale' => Payscale::query()->active()->exists(),
+        ]);
     }
 
     public function store(Request $request)
@@ -58,13 +64,20 @@ class PayscaleController extends Controller
             return back()->withErrors(['effective_from' => 'Enter date as DD-MM-YYYY.'])->withInput();
         }
 
-        Payscale::create([
+        $wantActive = $request->boolean('is_active', false);
+        $noActiveYet = ! Payscale::query()->active()->exists();
+
+        $payscale = Payscale::create([
             'name' => $validated['name'],
             'code' => null,
             'description' => $validated['description'] ?? null,
             'effective_from' => $effectiveFrom,
-            'is_active' => $request->boolean('is_active', true),
+            'is_active' => false,
         ]);
+
+        if ($wantActive || $noActiveYet) {
+            $payscale->activateAsOnly();
+        }
 
         return redirect()->route('payscales.index')->with('success', 'Payscale created successfully.');
     }
@@ -79,6 +92,10 @@ class PayscaleController extends Controller
                 'effective_from' => PayrollFormHelper::formatDisplayDate($payscale->effective_from),
                 'is_active' => $payscale->is_active,
             ],
+            'hasOtherActivePayscale' => Payscale::query()
+                ->active()
+                ->where('id', '!=', $payscale->id)
+                ->exists(),
         ]);
     }
 
@@ -100,14 +117,40 @@ class PayscaleController extends Controller
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'effective_from' => $effectiveFrom,
-            'is_active' => $request->boolean('is_active'),
         ]);
+
+        $redirect = $this->applyPayscaleActiveState($payscale->fresh(), $request->boolean('is_active'), 'is_active');
+        if ($redirect) {
+            return $redirect;
+        }
 
         return redirect()->route('payscales.index')->with('success', 'Payscale updated successfully.');
     }
 
+    /**
+     * Toggle active/inactive from the payscale index (only one may be active).
+     */
+    public function updateStatus(Request $request, Payscale $payscale)
+    {
+        $validated = $request->validate([
+            'active' => 'required|boolean',
+        ]);
+
+        $redirect = $this->applyPayscaleActiveState($payscale, (bool) $validated['active']);
+        if ($redirect) {
+            return $redirect;
+        }
+
+        return back()->with('success', 'Payscale status updated successfully.');
+    }
+
     public function destroy(Payscale $payscale)
     {
+        if ($payscale->is_active) {
+            return redirect()->route('payscales.index')
+                ->with('error', 'Cannot delete the active payscale. Activate another payscale first.');
+        }
+
         if (SalaryGrade::where('payscale_id', $payscale->id)->exists()) {
             return redirect()->route('payscales.index')
                 ->with('error', 'Cannot delete payscale that has salary grades.');
@@ -115,6 +158,45 @@ class PayscaleController extends Controller
 
         $payscale->delete();
 
+        if (! Payscale::query()->active()->exists() && Payscale::query()->exists()) {
+            Payscale::query()->orderBy('id')->first()?->activateAsOnly();
+        }
+
         return redirect()->route('payscales.index')->with('success', 'Payscale deleted successfully.');
+    }
+
+    private function applyPayscaleActiveState(Payscale $payscale, bool $active, string $errorKey = 'active'): ?RedirectResponse
+    {
+        if ($active) {
+            $payscale->activateAsOnly();
+
+            return null;
+        }
+
+        if (! $payscale->is_active) {
+            return null;
+        }
+
+        $otherCount = Payscale::query()->where('id', '!=', $payscale->id)->count();
+        if ($otherCount === 0) {
+            return back()->withErrors([
+                $errorKey => 'The only payscale must remain active for payroll.',
+            ]);
+        }
+
+        $otherActiveExists = Payscale::query()
+            ->active()
+            ->where('id', '!=', $payscale->id)
+            ->exists();
+
+        if (! $otherActiveExists) {
+            return back()->withErrors([
+                $errorKey => 'Activate another payscale before deactivating this one.',
+            ]);
+        }
+
+        $payscale->update(['is_active' => false]);
+
+        return null;
     }
 }

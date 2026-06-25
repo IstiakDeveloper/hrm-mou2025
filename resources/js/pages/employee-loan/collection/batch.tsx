@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PayrollComboField } from '@/components/payroll/PayrollFilterGrid';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
-import { fmt, type LoanOption } from './types';
+import { estimateInstallmentCollectionAmount, fmt, type LoanOption } from './types';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
 
 type Row = { id: string; employee_loan_id: string; installment_count: string; notes: string };
@@ -54,7 +54,7 @@ export default function LoanCollectionBatch({ loans, defaultCollectionDate }: Pr
     const totalEstimate = rows.reduce((sum, row) => {
         const loan = loans.find((l) => String(l.id) === row.employee_loan_id);
         if (!loan) return sum;
-        return sum + loan.installment_amount * (parseInt(row.installment_count, 10) || 1);
+        return sum + estimateInstallmentCollectionAmount(loan, parseInt(row.installment_count, 10) || 1);
     }, 0);
 
     const submit = (e: React.FormEvent) => {

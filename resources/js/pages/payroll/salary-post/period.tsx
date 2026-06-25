@@ -4,16 +4,16 @@ import Layout from '@/layouts/AdminLayout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import {
-    BonusPayslipEmployeeCard,
-    PayslipEmployeeCard,
+    BonusPayslipReviewTable,
+    PayslipReviewTable,
     buildAmountsMap,
     previewTotals,
     type PayslipRow,
 } from '@/components/payroll/PayslipReviewPanels';
-import { PayrollPage, PayrollPageHeader } from '@/components/payroll/PayrollPageShell';
+import { PayrollPage, PayrollPageHeader, payrollBtnPrimary, payrollFilterActive } from '@/components/payroll/PayrollPageShell';
+import { BranchReviewSidebar } from '@/components/payroll/BranchReviewSidebar';
 import { cn } from '@/lib/utils';
 import { payrollPostLabels, payrollPostRoutes, type PayrollPostContext } from '@/lib/payroll-post-routes';
 import { ArrowLeft, CheckCircle2, ChevronDown, Save, Trash2, Search, Users, Coins, Building, ShieldAlert, Check, X, SlidersHorizontal } from 'lucide-react';
@@ -72,7 +72,6 @@ export default function SalaryPostPeriod({
     const [branchQuery, setBranchQuery] = useState('');
     const [employeeQuery, setEmployeeQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'on_hold' | 'has_loan' | 'with_deductions'>('all');
-    const [expandAll, setExpandAll] = useState<boolean | null>(null);
 
     const allPayslips = useMemo(() => initialBranches.flatMap((b) => b.payslips), [initialBranches]);
     const [amounts, setAmounts] = useState<Record<number, string>>(() => buildAmountsMap(allPayslips, isBonus));
@@ -94,23 +93,28 @@ export default function SalaryPostPeriod({
         setDirtyRuns((prev) => ({ ...prev, [runId]: true }));
     }, []);
 
+    const buildBranchLinesPayload = useCallback(
+        (block: (typeof initialBranches)[number]) => {
+            const lineIds = isBonus
+                ? block.payslips.map((p) => p.bonus_review?.line_id).filter((id): id is number => id != null)
+                : block.payslips.flatMap((p) => p.lines.map((l) => l.id));
+
+            return lineIds.map((id) => ({
+                id,
+                computed_amount: Number(amounts[id] ?? 0),
+            }));
+        },
+        [amounts, isBonus],
+    );
+
     const saveBranch = (runId: number) => {
         const block = initialBranches.find((b) => b.run.id === runId);
         if (!block) return;
 
-        const lineIds = isBonus
-            ? block.payslips.map((p) => p.bonus_review?.line_id).filter((id): id is number => id != null)
-            : block.payslips.flatMap((p) => p.lines.map((l) => l.id));
-
-        const lines = lineIds.map((id) => ({
-            id,
-            computed_amount: Number(amounts[id] ?? 0),
-        }));
-
         setSaving(runId);
         router.put(
             routes.updatePayslips(runId),
-            { lines },
+            { lines: buildBranchLinesPayload(block) },
             {
                 preserveScroll: true,
                 onSuccess: () => setDirtyRuns((prev) => ({ ...prev, [runId]: false })),
@@ -121,22 +125,78 @@ export default function SalaryPostPeriod({
 
     const hasDirty = Object.values(dirtyRuns).some(Boolean);
 
-    const finalizeBranch = (runId: number) => {
-        if (dirtyRuns[runId] && !confirm('You have unsaved changes for this branch. Save first or continue without saving?')) {
+    const saveDirtyBranchesThen = (onDone: () => void, onError: () => void) => {
+        const dirtyIds = Object.entries(dirtyRuns)
+            .filter(([, dirty]) => dirty)
+            .map(([runId]) => Number(runId));
+
+        if (dirtyIds.length === 0) {
+            onDone();
             return;
         }
+
+        const saveNext = (index: number) => {
+            const runId = dirtyIds[index];
+            const block = initialBranches.find((b) => b.run.id === runId);
+            if (!block) {
+                if (index + 1 >= dirtyIds.length) {
+                    onDone();
+                } else {
+                    saveNext(index + 1);
+                }
+                return;
+            }
+
+            router.put(
+                routes.updatePayslips(runId),
+                { lines: buildBranchLinesPayload(block) },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setDirtyRuns((prev) => ({ ...prev, [runId]: false }));
+                        if (index + 1 >= dirtyIds.length) {
+                            onDone();
+                        } else {
+                            saveNext(index + 1);
+                        }
+                    },
+                    onError,
+                },
+            );
+        };
+
+        saveNext(0);
+    };
+
+    const finalizeBranch = (runId: number) => {
         if (!confirm('Finalize this branch payroll? The period will be locked for this branch.')) return;
         setPostingRunId(runId);
-        router.post(routes.post(runId), {}, { onFinish: () => setPostingRunId(null) });
+
+        const block = initialBranches.find((b) => b.run.id === runId);
+        const payload =
+            dirtyRuns[runId] && canEdit && block ? { lines: buildBranchLinesPayload(block) } : {};
+
+        router.post(routes.post(runId), payload, {
+            preserveScroll: true,
+            onSuccess: () => setDirtyRuns((prev) => ({ ...prev, [runId]: false })),
+            onFinish: () => setPostingRunId(null),
+        });
     };
 
     const finalizeAll = () => {
-        if (hasDirty && !confirm('Some branches have unsaved changes. Save first or continue without saving?')) {
-            return;
-        }
         if (!confirm(`Finalize payroll for all ${summary.branch_count} branch(es)? This period will be locked.`)) return;
         setFinalizingAll(true);
-        router.post(routes.finalizePeriod(year, month), {}, { onFinish: () => setFinalizingAll(false) });
+
+        const postAll = () => {
+            router.post(routes.finalizePeriod(year, month), {}, { onFinish: () => setFinalizingAll(false) });
+        };
+
+        if (hasDirty && canEdit) {
+            saveDirtyBranchesThen(postAll, () => setFinalizingAll(false));
+            return;
+        }
+
+        postAll();
     };
 
     const cancelPeriod = () => {
@@ -211,7 +271,8 @@ export default function SalaryPostPeriod({
 
     // Live active branch totals calculation based on client amounts edits
     const liveActiveBranchTotals = useMemo(() => {
-        if (!activeBlock) return { gross: 0, deduction: 0, net: 0 };
+        if (!activeBlock) return { basic: 0, gross: 0, deduction: 0, net: 0 };
+        let basic = 0;
         let gross = 0;
         let deduction = 0;
         let net = 0;
@@ -223,13 +284,38 @@ export default function SalaryPostPeriod({
                 net += p.is_withheld ? 0 : amt;
             } else {
                 const totals = previewTotals(p, amounts);
+                basic += totals.basic || p.basic;
                 gross += totals.gross;
                 deduction += totals.deduction;
                 net += totals.net;
             }
         }
-        return { gross, deduction, net };
+        return { basic, gross, deduction, net };
     }, [activeBlock, amounts, isBonus]);
+
+    const livePeriodTotals = useMemo(() => {
+        let basic = 0;
+        let gross = 0;
+        let deduction = 0;
+        let net = 0;
+        for (const block of initialBranches) {
+            for (const p of block.payslips) {
+                if (isBonus && p.bonus_review?.line_id) {
+                    const raw = amounts[p.bonus_review.line_id] ?? String(p.bonus_review.bonus_amount);
+                    const amt = Number(raw) || 0;
+                    gross += amt;
+                    net += p.is_withheld ? 0 : amt;
+                } else {
+                    const totals = previewTotals(p, amounts);
+                    basic += totals.basic || p.basic;
+                    gross += totals.gross;
+                    deduction += totals.deduction;
+                    net += totals.net;
+                }
+            }
+        }
+        return { basic, gross, deduction, net };
+    }, [initialBranches, amounts, isBonus]);
 
     return (
         <Layout>
@@ -263,7 +349,7 @@ export default function SalaryPostPeriod({
                                     size="sm" 
                                     onClick={finalizeAll} 
                                     disabled={finalizingAll || cancellingAll || postingRunId !== null} 
-                                    className="cursor-pointer font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 shadow-2xs"
+                                    className={cn('cursor-pointer font-semibold rounded-lg shadow-2xs', payrollBtnPrimary)}
                                 >
                                     <CheckCircle2 className="mr-1.5 h-4 w-4" />
                                     {finalizingAll ? copy.finalizingAllButton : copy.finalizeAllButton}
@@ -290,18 +376,26 @@ export default function SalaryPostPeriod({
                         <ShieldAlert className="h-4 w-4 text-sky-600" />
                         <AlertTitle className="text-xs font-bold uppercase tracking-wider text-sky-800">Workspace Editor Mode</AlertTitle>
                         <AlertDescription className="text-xs text-sky-700/90 mt-1">
-                            Click branch names in the left sidebar to load employees, edit fields inline, and finalize branch-by-branch.
+                            Use the branch panel on the left to switch branches — collapse or expand it with the arrow control.
                         </AlertDescription>
                     </Alert>
                 )}
 
                 {/* Overall Summary of all branches in the period */}
-                <div className="mb-6 grid gap-4 grid-cols-2 lg:grid-cols-4">
+                <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                     {[
-                        { label: 'Total Branches', value: summary.branch_count.toLocaleString(), icon: Building, color: 'text-blue-500 bg-blue-50/50 border-blue-100' },
-                        { label: 'Total Employees', value: summary.employee_count.toLocaleString(), icon: Users, color: 'text-indigo-500 bg-indigo-50/50 border-indigo-100' },
-                        { label: 'Overall Gross', value: summary.total_gross.toLocaleString(), icon: Coins, color: 'text-slate-500 bg-slate-50/50 border-slate-100' },
-                        { label: 'Overall Net Payable', value: summary.total_net.toLocaleString(), icon: Coins, color: 'text-emerald-700 bg-emerald-50/50 border-emerald-100', highlight: true },
+                        { label: 'Total Branches', value: summary.branch_count.toLocaleString(), icon: Building, color: 'text-blue-500 bg-blue-50/50 border-blue-100', isMoney: false },
+                        { label: 'Employees', value: summary.employee_count.toLocaleString(), icon: Users, color: 'text-indigo-500 bg-indigo-50/50 border-indigo-100', isMoney: false },
+                        ...(isBonus
+                            ? [
+                                  { label: 'Total Bonus (Live)', value: livePeriodTotals.net.toLocaleString(), icon: Coins, color: 'text-emerald-700 bg-emerald-50/50 border-emerald-100', highlight: true, isMoney: true },
+                              ]
+                            : [
+                                  { label: 'Basic Salary (Live)', value: livePeriodTotals.basic.toLocaleString(), icon: Coins, color: 'text-violet-500 bg-violet-50/50 border-violet-100', isMoney: true },
+                                  { label: 'Gross (Live)', value: livePeriodTotals.gross.toLocaleString(), icon: Coins, color: 'text-slate-500 bg-slate-50/50 border-slate-100', isMoney: true },
+                                  { label: 'Total Deduction (Live)', value: livePeriodTotals.deduction.toLocaleString(), icon: Coins, color: 'text-red-500 bg-red-50/50 border-red-100', isMoney: true },
+                                  { label: 'Net Payable (Live)', value: livePeriodTotals.net.toLocaleString(), icon: Coins, color: 'text-emerald-700 bg-emerald-50/50 border-emerald-100', highlight: true, isMoney: true },
+                              ]),
                     ].map((s) => {
                         const Icon = s.icon;
                         return (
@@ -315,7 +409,7 @@ export default function SalaryPostPeriod({
                                 <div className="min-w-0">
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{s.label}</p>
                                     <p className={cn('mt-1.5 text-lg font-bold tabular-nums font-mono', s.highlight ? 'text-emerald-800' : 'text-slate-800')}>
-                                        {s.label.includes('Total') ? s.value : `৳${s.value}`}
+                                        {s.isMoney ? `৳${s.value}` : s.value}
                                     </p>
                                 </div>
                                 <div className={cn('p-2 rounded-lg border shrink-0', s.color)}>
@@ -326,95 +420,23 @@ export default function SalaryPostPeriod({
                     })}
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
-                    {/* Left Sidebar: Branch Selector */}
-                    <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-6 lg:self-start">
-                        <div className="rounded-xl border border-slate-100/90 bg-white p-3.5 shadow-2xs">
-                            <h2 className="text-[10px] font-bold tracking-wider text-slate-500 uppercase mb-3 flex items-center justify-between">
-                                <span>Branches ({initialBranches.length})</span>
-                                {hasDirty && (
-                                    <Badge className="text-[9px] font-bold bg-amber-500 text-white rounded-md border-none uppercase py-0.5 px-1 animate-pulse">
-                                        Unsaved changes
-                                    </Badge>
-                                )}
-                            </h2>
-
-                            <div className="relative flex items-center mb-3">
-                                <Search className="absolute left-2.5 h-3.5 w-3.5 text-slate-400" />
-                                <Input
-                                    placeholder="Search branches..."
-                                    value={branchQuery}
-                                    onChange={(e) => setBranchQuery(e.target.value)}
-                                    className="pl-8 text-xs h-8.5 bg-slate-50/50 border-slate-200/80 rounded-lg placeholder:text-slate-400"
-                                />
-                            </div>
-
-                            <ScrollArea className="h-[480px] pr-1">
-                                <div className="space-y-1.5">
-                                    {filteredBranches.length === 0 ? (
-                                        <p className="text-center text-xs text-slate-400 py-6">No branches matched.</p>
-                                    ) : (
-                                        filteredBranches.map((block) => {
-                                            const isActive = activeRunId === block.run.id;
-                                            const isDirty = dirtyRuns[block.run.id];
-                                            return (
-                                                <button
-                                                    key={block.run.id}
-                                                    onClick={() => {
-                                                        setActiveRunId(block.run.id);
-                                                        setEmployeeQuery('');
-                                                    }}
-                                                    className={cn(
-                                                        "w-full text-left p-3 rounded-lg border text-xs transition-all cursor-pointer flex flex-col gap-1",
-                                                        isActive
-                                                            ? "bg-slate-900 border-slate-900 text-white shadow-xs"
-                                                            : "bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50/50 text-slate-700"
-                                                    )}
-                                                >
-                                                    <div className="flex items-start justify-between w-full gap-2">
-                                                        <span className="font-bold truncate pr-1">
-                                                            {block.run.branch ?? 'Branch'}
-                                                        </span>
-                                                        {isDirty && (
-                                                            <span className={cn(
-                                                                "h-2 w-2 rounded-full shrink-0 mt-1",
-                                                                isActive ? "bg-amber-400" : "bg-amber-500"
-                                                            )} title="Unsaved changes" />
-                                                        )}
-                                                    </div>
-                                                    
-                                                    <div className={cn(
-                                                        "flex items-center justify-between mt-1 text-[10px] font-medium",
-                                                        isActive ? "text-slate-300" : "text-slate-400"
-                                                    )}>
-                                                        <span>{block.run.employee_count} employees</span>
-                                                        <span className="font-mono font-bold">৳{block.run.total_net.toLocaleString()}</span>
-                                                    </div>
-
-                                                    <div className="flex items-center justify-between mt-1 pt-1 border-t border-slate-100/10">
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={cn(
-                                                                "text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase",
-                                                                block.run.status === 'posted'
-                                                                    ? (isActive ? 'text-emerald-300 border-emerald-900 bg-emerald-950/20' : 'text-emerald-700 border-emerald-100 bg-emerald-50/50')
-                                                                    : (isActive ? 'text-amber-300 border-amber-900 bg-amber-950/20' : 'text-amber-700 border-amber-100 bg-amber-50/50')
-                                                            )}
-                                                        >
-                                                            {block.run.status}
-                                                        </Badge>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </div>
-                    </div>
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+                    <BranchReviewSidebar
+                        branches={filteredBranches}
+                        totalCount={initialBranches.length}
+                        activeRunId={activeRunId}
+                        onSelect={(runId) => {
+                            setActiveRunId(runId);
+                            setEmployeeQuery('');
+                        }}
+                        branchQuery={branchQuery}
+                        onBranchQueryChange={setBranchQuery}
+                        dirtyRuns={dirtyRuns}
+                        hasDirty={hasDirty}
+                    />
 
                     {/* Right Workspace: Details and Employee List */}
-                    <div className="lg:col-span-9 space-y-6">
+                    <div className="min-w-0 flex-1 space-y-6">
                         {activeBlock ? (
                             <>
                                 {/* Active Branch Summary KPI Board */}
@@ -451,7 +473,7 @@ export default function SalaryPostPeriod({
                                                     size="sm"
                                                     onClick={() => finalizeBranch(activeBlock.run.id)}
                                                     disabled={postingRunId === activeBlock.run.id || cancellingRunId === activeBlock.run.id}
-                                                    className="cursor-pointer font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 shadow-2xs h-8 text-xs"
+                                                    className={cn('cursor-pointer font-semibold rounded-lg shadow-2xs h-8 text-xs', payrollBtnPrimary)}
                                                 >
                                                     <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                                                     {postingRunId === activeBlock.run.id ? 'Finalizing…' : 'Finalize Branch'}
@@ -471,7 +493,7 @@ export default function SalaryPostPeriod({
                                     </div>
 
                                     {/* Active Branch Stat Grid */}
-                                    <div className="grid gap-3.5 grid-cols-2 md:grid-cols-3">
+                                    <div className="grid gap-3.5 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
                                         <div className="rounded-lg border border-slate-50 bg-slate-50/30 px-3.5 py-2.5">
                                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Employees</span>
                                             <p className="mt-1 text-sm font-bold text-slate-700">{activeBlock.run.employee_count}</p>
@@ -479,8 +501,16 @@ export default function SalaryPostPeriod({
                                         {!isBonus ? (
                                             <>
                                                 <div className="rounded-lg border border-slate-50 bg-slate-50/30 px-3.5 py-2.5">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Basic Salary (Live)</span>
+                                                    <p className="mt-1 text-sm font-bold text-slate-700 font-mono">৳{liveActiveBranchTotals.basic.toLocaleString()}</p>
+                                                </div>
+                                                <div className="rounded-lg border border-slate-50 bg-slate-50/30 px-3.5 py-2.5">
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gross (Live)</span>
                                                     <p className="mt-1 text-sm font-bold text-slate-700 font-mono">৳{liveActiveBranchTotals.gross.toLocaleString()}</p>
+                                                </div>
+                                                <div className="rounded-lg border border-red-50/60 bg-red-50/10 px-3.5 py-2.5">
+                                                    <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider">Total Deduction (Live)</span>
+                                                    <p className="mt-1 text-sm font-bold text-red-900 font-mono">৳{liveActiveBranchTotals.deduction.toLocaleString()}</p>
                                                 </div>
                                                 <div className="rounded-lg border border-emerald-50/60 bg-emerald-50/15 px-3.5 py-2.5 col-span-2 md:col-span-1">
                                                     <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Net Payable (Live)</span>
@@ -488,7 +518,7 @@ export default function SalaryPostPeriod({
                                                 </div>
                                             </>
                                         ) : (
-                                            <div className="rounded-lg border border-emerald-50/60 bg-emerald-50/15 px-3.5 py-2.5 col-span-2">
+                                            <div className="rounded-lg border border-emerald-50/60 bg-emerald-50/15 px-3.5 py-2.5 col-span-2 md:col-span-4">
                                                 <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Total Bonus (Live)</span>
                                                 <p className="mt-1 text-sm font-bold text-emerald-950 font-mono">৳{liveActiveBranchTotals.net.toLocaleString()}</p>
                                             </div>
@@ -518,7 +548,7 @@ export default function SalaryPostPeriod({
                                                 className={cn(
                                                     "px-2.5 py-1 rounded-md text-[11px] font-semibold cursor-pointer border transition-colors",
                                                     statusFilter === 'all'
-                                                        ? "bg-slate-900 border-slate-900 text-white"
+                                                        ? payrollFilterActive
                                                         : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                                 )}
                                             >
@@ -562,57 +592,30 @@ export default function SalaryPostPeriod({
                                                 </>
                                             )}
                                         </div>
-
-                                        {/* Toggle Expand/Collapse */}
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setExpandAll((v) => (v === true ? false : true))}
-                                            className="text-[11px] h-8 font-semibold text-slate-600 bg-white border-slate-200 hover:bg-slate-50 cursor-pointer shadow-3xs"
-                                        >
-                                            {expandAll === true ? 'Collapse All' : 'Expand All'}
-                                        </Button>
                                     </div>
 
                                     {/* Employees List */}
-                                    <div className="space-y-3">
+                                    <div>
                                         {filteredPayslips.length === 0 ? (
                                             <div className="py-12 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/40">
                                                 <Users className="mx-auto h-8 w-8 text-slate-300 stroke-1 mb-2" />
                                                 <p className="text-xs font-semibold text-slate-600">No employees match this filter</p>
                                                 <p className="text-[10px] text-slate-400 mt-1">Try clearing filters or search keyword</p>
                                             </div>
+                                        ) : isBonus ? (
+                                            <BonusPayslipReviewTable
+                                                payslips={filteredPayslips.filter((p) => p.bonus_review)}
+                                                canEdit={canEdit && status !== 'posted'}
+                                                amounts={amounts}
+                                                onAmountChange={(lineId, value) => onAmountChange(lineId, value, activeBlock.run.id)}
+                                            />
                                         ) : (
-                                            filteredPayslips.map((p, idx) =>
-                                                isBonus && p.bonus_review ? (
-                                                    <BonusPayslipEmployeeCard
-                                                        key={p.id}
-                                                        payslip={p}
-                                                        canEdit={canEdit && status !== 'posted'}
-                                                        amount={
-                                                            p.bonus_review.line_id
-                                                                ? amounts[p.bonus_review.line_id] ?? String(p.bonus_review.bonus_amount)
-                                                                : String(p.bonus_review.bonus_amount)
-                                                        }
-                                                        onAmountChange={(value) => {
-                                                            if (p.bonus_review?.line_id) onAmountChange(p.bonus_review.line_id, value, activeBlock.run.id);
-                                                        }}
-                                                        defaultOpen={false}
-                                                        expandAll={expandAll}
-                                                    />
-                                                ) : (
-                                                    <PayslipEmployeeCard
-                                                        key={p.id}
-                                                        payslip={p}
-                                                        canEdit={canEdit && status !== 'posted'}
-                                                        amounts={amounts}
-                                                        onAmountChange={(lineId, value) => onAmountChange(lineId, value, activeBlock.run.id)}
-                                                        defaultOpen={false}
-                                                        expandAll={expandAll}
-                                                    />
-                                                ),
-                                            )
+                                            <PayslipReviewTable
+                                                payslips={filteredPayslips}
+                                                canEdit={canEdit && status !== 'posted'}
+                                                amounts={amounts}
+                                                onAmountChange={(lineId, value) => onAmountChange(lineId, value, activeBlock.run.id)}
+                                            />
                                         )}
                                     </div>
                                 </div>

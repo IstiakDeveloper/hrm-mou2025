@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { LoanCollectionFormFields } from './LoanCollectionFormFields';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
-import { fmt, type LoanOption } from './types';
+import { estimateInstallmentCollectionAmount, fmt, type LoanOption } from './types';
 import { ArrowLeft, Save } from 'lucide-react';
 
 type Props = {
@@ -32,7 +32,9 @@ export default function LoanCollectionSingle({ filters, branches, employees, loa
     });
 
     const selectedLoan = loans.find((l) => String(l.id) === loanId);
-    const estimated = selectedLoan ? selectedLoan.installment_amount * (parseInt(form.data.installment_count, 10) || 1) : 0;
+    const estimated = selectedLoan
+        ? estimateInstallmentCollectionAmount(selectedLoan, parseInt(form.data.installment_count, 10) || 1)
+        : 0;
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -60,7 +62,7 @@ export default function LoanCollectionSingle({ filters, branches, employees, loa
                 <Card className="border-zinc-200/90 shadow-sm">
                     <CardHeader className="border-b border-zinc-100 py-3">
                         <CardTitle className="text-sm font-semibold">Collection details</CardTitle>
-                        <CardDescription className="text-xs">Full installment amount(s) will be collected in order from pending schedule.</CardDescription>
+                        <CardDescription className="text-xs">Collects pending installments in order. Rebate-adjusted outstanding balance is used for the amount due.</CardDescription>
                     </CardHeader>
                     <CardContent className="pt-4">
                         <LoanCollectionFormFields
@@ -91,7 +93,7 @@ export default function LoanCollectionSingle({ filters, branches, employees, loa
                                     onChange={(e) => form.setData('installment_count', e.target.value)}
                                 />
                             </PayrollField>
-                            <PayrollField label="Estimated collection (৳)">
+                            <PayrollField label="Amount to collect (৳)">
                                 <Input readOnly className="h-9 bg-zinc-50 text-xs tabular-nums" value={estimated ? fmt(estimated) : ''} />
                             </PayrollField>
                         </div>

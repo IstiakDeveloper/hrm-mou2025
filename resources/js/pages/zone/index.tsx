@@ -100,6 +100,13 @@ export default function ZoneIndex({ zones, filters }: ZoneIndexProps) {
       <Head title="Zones" />
 
       <PageSurface>
+        <Link
+          href={route('organization-structure.index')}
+          className="mb-4 inline-flex items-center text-sm text-slate-500 hover:text-emerald-700"
+        >
+          <ChevronLeft className="mr-1 h-4 w-4" />
+          Back to organization structure
+        </Link>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-5">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Zones</h1>

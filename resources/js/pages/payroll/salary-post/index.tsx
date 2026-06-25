@@ -8,7 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PayrollBranchSelect, PayrollMonthSelect, PayrollYearSelect } from '@/components/payroll/PayrollFilterGrid';
-import { PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
+import { PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState, payrollBtnPrimary, payrollBadgePrimary } from '@/components/payroll/PayrollPageShell';
 import { payrollPostLabels, payrollPostRoutes, type PayrollPostContext } from '@/lib/payroll-post-routes';
 import { cn } from '@/lib/utils';
 import { CheckCircle2, ChevronDown, Eye, Search, FolderOpen, Archive, Users, Building, Coins } from 'lucide-react';
@@ -90,7 +90,7 @@ function PeriodBatchCard({
                         </p>
                     </div>
                 </CollapsibleTrigger>
-                <Button asChild size="sm" variant={showPostedAt ? 'outline' : 'default'} className="cursor-pointer font-semibold rounded-lg shadow-sm">
+                <Button asChild size="sm" variant={showPostedAt ? 'outline' : 'default'} className={cn('cursor-pointer font-semibold rounded-lg shadow-sm', !showPostedAt && payrollBtnPrimary)}>
                     <Link href={routes.period(batch.year, batch.month, status)}>
                         <Eye className="mr-1.5 h-3.5 w-3.5" />
                         {showPostedAt ? 'View details' : 'Review & post'}
@@ -215,7 +215,7 @@ export default function SalaryPostIndex({
                                     allowAll
                                 />
                             </div>
-                            <Button type="button" onClick={applyFilters} className="cursor-pointer h-9 px-4 font-semibold shadow-sm shrink-0 bg-slate-900 text-white hover:bg-slate-800 rounded-lg">
+                            <Button type="button" onClick={applyFilters} className={cn('cursor-pointer h-9 px-4 font-semibold shadow-sm shrink-0 rounded-lg', payrollBtnPrimary)}>
                                 <Search className="mr-1.5 h-4 w-4" /> Apply filter
                              </Button>
                         </div>
@@ -240,7 +240,7 @@ export default function SalaryPostIndex({
                                     <FolderOpen className="h-3.5 w-3.5" />
                                     {copy.readySection}
                                     {pendingBatches.length > 0 && (
-                                        <Badge className="ml-1 px-1.5 py-0 text-[10px] bg-slate-900 text-white border-none font-bold">
+                                        <Badge className={cn('ml-1 px-1.5 py-0 text-[10px] font-bold', payrollBadgePrimary)}>
                                             {pendingBatches.length}
                                         </Badge>
                                     )}

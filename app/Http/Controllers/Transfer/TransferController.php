@@ -13,6 +13,7 @@ use App\Services\TransferCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class TransferController extends Controller
@@ -103,7 +104,7 @@ class TransferController extends Controller
         );
 
         $departments = Department::all();
-        $branches = Branch::all();
+        $branches = Branch::query()->active()->orderBy('name')->get();
         $employees = Employee::where('status', 'active')->get();
 
         return Inertia::render('transfer/index', [
@@ -130,7 +131,7 @@ class TransferController extends Controller
         }
 
         $employees = Employee::where('status', 'active')->get();
-        $branches = Branch::all();
+        $branches = Branch::query()->active()->orderBy('name')->get();
         $departments = Department::all();
         $designations = Designation::all();
 
@@ -158,7 +159,7 @@ class TransferController extends Controller
         $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'from_branch_id' => 'required|exists:branches,id',
-            'to_branch_id' => 'required|exists:branches,id|different:from_branch_id',
+            'to_branch_id' => ['required', Rule::exists('branches', 'id')->where(fn ($q) => $q->where('is_active', true)), 'different:from_branch_id'],
             'from_department_id' => 'nullable|exists:departments,id',
             'to_department_id' => 'nullable|exists:departments,id',
             'from_designation_id' => 'nullable|exists:designations,id',
@@ -247,7 +248,7 @@ class TransferController extends Controller
         }
 
         $employees = Employee::where('status', 'active')->get();
-        $branches = Branch::all();
+        $branches = Branch::query()->active()->orderBy('name')->get();
         $departments = Department::all();
         $designations = Designation::all();
 
@@ -280,7 +281,7 @@ class TransferController extends Controller
         $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'from_branch_id' => 'required|exists:branches,id',
-            'to_branch_id' => 'required|exists:branches,id|different:from_branch_id',
+            'to_branch_id' => ['required', Rule::exists('branches', 'id')->where(fn ($q) => $q->where('is_active', true)), 'different:from_branch_id'],
             'from_department_id' => 'nullable|exists:departments,id',
             'to_department_id' => 'nullable|exists:departments,id',
             'from_designation_id' => 'nullable|exists:designations,id',

@@ -500,7 +500,7 @@ function OrganizationHubCard({
                 <div className="grid grid-cols-2 gap-2">
                     {hasPermission('zones.view') && (
                         <Link
-                            href="/zones?section=human-resources"
+                            href="/organization-structure?section=human-resources"
                             className="group flex items-center gap-2.5 rounded-lg border border-zinc-100 bg-zinc-50/50 p-2 transition-all hover:border-emerald-100 hover:bg-emerald-50/30"
                         >
                             <span className="group-hover:text-emerald-705 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50 text-violet-700 ring-1 ring-violet-600/10 transition-colors group-hover:bg-emerald-100 group-hover:text-emerald-700">
@@ -514,7 +514,7 @@ function OrganizationHubCard({
                     )}
                     {hasPermission('regional-offices.view') && (
                         <Link
-                            href="/regional-offices?section=human-resources"
+                            href="/organization-structure?section=human-resources"
                             className="group flex items-center gap-2.5 rounded-lg border border-zinc-100 bg-zinc-50/50 p-2 transition-all hover:border-emerald-100 hover:bg-emerald-50/30"
                         >
                             <span className="group-hover:text-emerald-705 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50 text-violet-700 ring-1 ring-violet-600/10 transition-colors group-hover:bg-emerald-100 group-hover:text-emerald-700">
@@ -528,7 +528,7 @@ function OrganizationHubCard({
                     )}
                     {hasPermission('branches.view') && (
                         <Link
-                            href="/branches?section=human-resources"
+                            href="/organization-structure?section=human-resources"
                             className="group col-span-2 flex items-center gap-2.5 rounded-lg border border-zinc-100 bg-zinc-50/50 p-2 transition-all hover:border-emerald-100 hover:bg-emerald-50/30"
                         >
                             <span className="group-hover:text-emerald-705 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-600/10 transition-colors group-hover:bg-emerald-100 group-hover:text-emerald-700">
@@ -588,7 +588,9 @@ function QuickActionsCard({ hasPermission }: { hasPermission: (permission?: stri
                     {hasPermission('employees.view') && (
                         <ShortcutTile href="/organization-chart?section=human-resources" title="Org Chart" icon={GitBranch} />
                     )}
-                    {hasPermission('branches.view') && <ShortcutTile href="/branches?section=human-resources" title="Branches" icon={Building2} />}
+                    {hasPermission('branches.view') && (
+                        <ShortcutTile href="/organization-structure?section=human-resources" title="Org Structure" icon={Building2} />
+                    )}
                     {hasPermission('departments.view') && (
                         <>
                             <ShortcutTile href="/employee-types?section=human-resources" title="Emp Types" icon={Tags} />

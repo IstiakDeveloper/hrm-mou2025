@@ -4,22 +4,14 @@ import { format } from 'date-fns';
 import Layout from '@/layouts/AdminLayout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { DatePicker } from '@/components/ui/date-picker';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
-import {
-    PayrollBranchSelect,
-    PayrollComboField,
-    PayrollField,
-    PayrollFilterGrid,
-    PayrollMonthSelect,
-    PayrollYearSelect,
-} from '@/components/payroll/PayrollFilterGrid';
-import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
-import { DISPLAY_DATE_FMT, parseFormDateValue } from '@/lib/display-date';
-import { Calculator, ChevronRight, ChevronDown, SlidersHorizontal, Search, History, Clock, Users, ArrowRight } from 'lucide-react';
+import { PayrollFilterGrid } from '@/components/payroll/PayrollFilterGrid';
+import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState, payrollBtnPrimary, payrollBadgePrimary } from '@/components/payroll/PayrollPageShell';
+import { DISPLAY_DATE_FMT } from '@/lib/display-date';
+import { payrollPostContextFromSalaryType, payrollPostRoutes } from '@/lib/payroll-post-routes';
+import { Calculator, ChevronDown, Search, Users, Coins, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const salaryTypeLabels: Record<string, string> = {
@@ -28,9 +20,33 @@ const salaryTypeLabels: Record<string, string> = {
     arrear: 'Arrear',
 };
 
+type BranchRun = {
+    id: number;
+    branch: string;
+    status: string;
+    employee_count: number;
+    total_net: number;
+    processed_at: string | null;
+    posted_at: string | null;
+};
+
+type PeriodBatch = {
+    year: number;
+    month: number;
+    period_label: string;
+    salary_type: string;
+    bonus_label?: string | null;
+    branch_count: number;
+    employee_count: number;
+    total_net: number;
+    processed_at: string | null;
+    posted_at: string | null;
+    branches: BranchRun[];
+};
+
 type Props = {
     filters: Record<string, string | boolean>;
-    recentRuns: { id: number; year: number; month: number; label: string; status: string; employee_count: number; total_net: number; processed_at: string | null }[];
+    pendingBatches: PeriodBatch[];
     branches: { id: number; name: string; branch_code?: string | null }[];
     departments: { id: number; name: string }[];
     designations: { id: number; name: string }[];
@@ -53,10 +69,107 @@ function flattenErrors(err: Record<string, string | undefined>): string[] {
     return out;
 }
 
-export default function SalaryProcessIndex({ filters: init, recentRuns, canProcess = false, ...options }: Props) {
+function reviewPeriodHref(batch: PeriodBatch): string | null {
+    const context = payrollPostContextFromSalaryType(batch.salary_type);
+    if (context === 'arrear') {
+        return batch.branches.length === 1 ? payrollPostRoutes('salary').show(batch.branches[0].id) : null;
+    }
+    return payrollPostRoutes(context).period(batch.year, batch.month, 'processed');
+}
+
+function reviewBranchHref(batch: PeriodBatch, branchId: number): string {
+    const context = payrollPostContextFromSalaryType(batch.salary_type);
+    if (context === 'bonus') {
+        return payrollPostRoutes('bonus').show(branchId);
+    }
+    return payrollPostRoutes('salary').show(branchId);
+}
+
+function ProcessBatchCard({ batch }: { batch: PeriodBatch }) {
+    const [open, setOpen] = useState(false);
+    const periodHref = reviewPeriodHref(batch);
+
+    return (
+        <Collapsible open={open} onOpenChange={setOpen} className="rounded-xl border border-slate-100 bg-white shadow-2xs overflow-hidden hover:border-slate-200 transition-all duration-200">
+            <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+                <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-3.5 text-left hover:opacity-95 focus:outline-hidden cursor-pointer">
+                    <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-slate-800 text-sm">{batch.period_label}</span>
+                            <Badge
+                                variant="outline"
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider text-slate-500 border-slate-200 bg-slate-50"
+                            >
+                                {batch.bonus_label ?? salaryTypeLabels[batch.salary_type.toLowerCase()] ?? batch.salary_type}
+                            </Badge>
+                            <Badge
+                                variant="secondary"
+                                className="text-[10px] font-medium px-2 py-0.5 rounded-md text-slate-500 bg-slate-100/80 border border-slate-200/30"
+                            >
+                                {batch.branch_count} branch{batch.branch_count === 1 ? '' : 'es'}
+                            </Badge>
+                        </div>
+                        <p className="mt-1.5 text-xs text-slate-400 font-medium flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                            <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5 text-slate-300" /> {batch.employee_count} employees</span>
+                            <span>·</span>
+                            <span className="flex items-center gap-1"><Coins className="h-3.5 w-3.5 text-slate-300" /> Net <span className="font-mono font-bold text-slate-600">৳{batch.total_net.toLocaleString()}</span></span>
+                            <span>·</span>
+                            <span>Calculated {batch.processed_at ?? '—'}</span>
+                        </p>
+                    </div>
+                </CollapsibleTrigger>
+                {periodHref ? (
+                    <Button asChild size="sm" className={cn('cursor-pointer font-semibold rounded-lg shadow-sm', payrollBtnPrimary)}>
+                        <Link href={periodHref}>
+                            <Eye className="mr-1.5 h-3.5 w-3.5" />
+                            Review & post
+                        </Link>
+                    </Button>
+                ) : (
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="cursor-pointer font-semibold rounded-lg shadow-sm"
+                        onClick={() => setOpen(true)}
+                    >
+                        <Eye className="mr-1.5 h-3.5 w-3.5" />
+                        Review branches
+                    </Button>
+                )}
+            </div>
+            <CollapsibleContent>
+                <div className="border-t border-slate-100/70 bg-slate-50/20 px-5 py-4 space-y-2">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Branch breakdowns</p>
+                    <div className="space-y-2">
+                        {batch.branches.map((branch) => (
+                            <div
+                                key={branch.id}
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-3xs hover:border-slate-200 transition-colors"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-xs font-bold text-slate-700">{branch.branch}</p>
+                                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                                        {branch.employee_count} employees · Net <span className="font-mono font-bold text-slate-500">৳{branch.total_net.toLocaleString()}</span>
+                                    </p>
+                                </div>
+                                <Button asChild size="sm" variant="ghost" className="h-8 rounded-lg border border-slate-100 bg-white text-slate-600 hover:text-slate-900 shadow-3xs cursor-pointer hover:bg-slate-50 text-xs font-semibold">
+                                    <Link href={reviewBranchHref(batch, branch.id)}>Review branch</Link>
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </CollapsibleContent>
+        </Collapsible>
+    );
+}
+
+export default function SalaryProcessIndex({ filters: init, pendingBatches, canProcess = false, ...options }: Props) {
     const { errors: pageErrors = {}, flash } = usePage<{
         errors?: Record<string, string>;
-        flash?: { success?: string; error?: string; info?: string };
+        flash?: { success?: string; error?: string; warning?: string; info?: string };
     }>().props;
 
     const [filters, setFilters] = useState({
@@ -67,16 +180,14 @@ export default function SalaryProcessIndex({ filters: init, recentRuns, canProce
         project_id: String(init.project_id || ''),
         employee_id: String(init.employee_id || ''),
         year: String(init.year || new Date().getFullYear()),
-        month: String(init.month || ''),
+        month: String(init.month || new Date().getMonth() + 1),
         salary_type: String(init.salary_type || 'salary'),
         process_date: String(init.process_date || format(new Date(), DISPLAY_DATE_FMT)),
-        is_partial: Boolean(init.is_partial),
     });
     const [processing, setProcessing] = useState(false);
     const [clientErrors, setClientErrors] = useState<string[]>([]);
     const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({});
-    const [showAdvanced, setShowAdvanced] = useState(false);
-    const [recentSearch, setRecentSearch] = useState('');
+    const [listSearch, setListSearch] = useState('');
 
     const setFilter = (key: string, value: string) => setFilters((f) => ({ ...f, [key]: value }));
 
@@ -85,16 +196,19 @@ export default function SalaryProcessIndex({ filters: init, recentRuns, canProce
         [pageErrors, submitErrors],
     );
 
-    const filteredRecentRuns = useMemo(() => {
-        if (!recentSearch.trim()) return recentRuns;
-        const q = recentSearch.toLowerCase();
-        return recentRuns.filter(
-            (r) =>
-                r.label.toLowerCase().includes(q) ||
-                r.status.toLowerCase().includes(q) ||
-                String(r.employee_count).includes(q)
+    const filterBatches = (batches: PeriodBatch[]) => {
+        if (!listSearch.trim()) return batches;
+        const q = listSearch.toLowerCase();
+        return batches.filter(
+            (b) =>
+                b.period_label.toLowerCase().includes(q) ||
+                b.salary_type.toLowerCase().includes(q) ||
+                (b.bonus_label && b.bonus_label.toLowerCase().includes(q)) ||
+                b.branches.some((branch) => branch.branch.toLowerCase().includes(q)),
         );
-    }, [recentRuns, recentSearch]);
+    };
+
+    const filteredPending = useMemo(() => filterBatches(pendingBatches), [pendingBatches, listSearch]);
 
     const validateClient = (): string[] => {
         const msgs: string[] = [];
@@ -117,7 +231,7 @@ export default function SalaryProcessIndex({ filters: init, recentRuns, canProce
         setProcessing(true);
         router.post(
             route('salary-process.process'),
-            { ...filters, is_partial: filters.is_partial ? 1 : 0 },
+            filters,
             {
                 preserveScroll: true,
                 onError: (errs) => {
@@ -135,18 +249,25 @@ export default function SalaryProcessIndex({ filters: init, recentRuns, canProce
 
     return (
         <Layout>
-            <Head title="Calculate payroll" />
+            <Head title="Salary process" />
             <PayrollPage>
                 <PayrollPageHeader
                     icon={Calculator}
-                    title="Calculate payroll"
-                    description="Run salary processing for active employees. Select a single branch or calculate all branches together."
+                    title="Salary process"
+                    description="Calculate payroll for active employees, then review and post from the list below."
                 />
 
                 {flash?.success && (
                     <Alert className="mb-6 border-emerald-100 bg-emerald-50/40 text-emerald-900 rounded-xl shadow-xs transition-all duration-300">
                         <AlertTitle className="text-xs font-bold uppercase tracking-wider text-emerald-800">Success</AlertTitle>
                         <AlertDescription className="text-xs text-emerald-700/90 mt-1">{flash.success}</AlertDescription>
+                    </Alert>
+                )}
+
+                {flash?.warning && (
+                    <Alert className="mb-6 border-amber-100 bg-amber-50/40 text-amber-900 rounded-xl shadow-xs transition-all duration-300">
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wider text-amber-800">Already processed</AlertTitle>
+                        <AlertDescription className="text-xs text-amber-800/90 mt-1">{flash.warning}</AlertDescription>
                     </Alert>
                 )}
 
@@ -164,7 +285,7 @@ export default function SalaryProcessIndex({ filters: init, recentRuns, canProce
                     </Alert>
                 )}
 
-                {(clientErrors.length > 0 || allErrors.length > 0) && (
+                {(clientErrors.length > 0 || allErrors.length > 0) && !flash?.warning && !flash?.error && (
                     <Alert variant="destructive" className="mb-6 rounded-xl border-red-100 bg-red-50/30 transition-all duration-300">
                         <AlertTitle className="text-xs font-bold uppercase tracking-wider text-red-800">Please fix the following</AlertTitle>
                         <AlertDescription>
@@ -186,290 +307,79 @@ export default function SalaryProcessIndex({ filters: init, recentRuns, canProce
                     </Alert>
                 )}
 
-                <div className="grid gap-6 lg:grid-cols-3 items-start">
-                    <div className="lg:col-span-2 space-y-6">
-                        <PayrollSectionCard 
-                            title="Scope & Configurations" 
-                            description="Choose pay period and configure parameters. Each branch/month can only be calculated once until rolled back."
-                        >
-                            <div className="space-y-5">
-                                <div className="grid gap-4.5 sm:grid-cols-3">
-                                    <div className="sm:col-span-1">
-                                        <PayrollYearSelect
-                                            value={filters.year}
-                                            onChange={(v) => setFilter('year', v)}
-                                            years={options.years}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="sm:col-span-1">
-                                        <PayrollMonthSelect
-                                            value={filters.month}
-                                            onChange={(v) => setFilter('month', v)}
-                                            months={options.months}
-                                            required
-                                        />
-                                        {submitErrors.month && <p className="text-[10px] text-red-500 mt-1">{submitErrors.month}</p>}
-                                    </div>
-                                    <div className="sm:col-span-1">
-                                        <PayrollBranchSelect
-                                            label="Branch"
-                                            value={filters.branch_id}
-                                            onChange={(v) => setFilter('branch_id', v)}
-                                            branches={options.branches}
-                                            allowAll
-                                            allLabel="All branches (Bulk run)"
-                                        />
-                                        {submitErrors.branch_id && <p className="text-[10px] text-red-500 mt-1">{submitErrors.branch_id}</p>}
-                                    </div>
-                                </div>
+                <div className="flex flex-col gap-6">
+                    <PayrollSectionCard
+                        title="Calculate payroll"
+                        description="Choose pay period and scope, then run calculation."
+                    >
+                        <PayrollFilterGrid
+                            filters={filters}
+                            setFilter={setFilter}
+                            {...options}
+                            years={options.years}
+                            months={options.months}
+                            salaryTypes={options.salaryTypes.map((t) => ({
+                                value: t.value,
+                                label: salaryTypeLabels[t.value] ?? t.label,
+                            }))}
+                            processDate={filters.process_date}
+                            onProcessDateChange={(v) => setFilter('process_date', v)}
+                            branchAllLabel="All branches (Bulk run)"
+                            payrollReadyEmployees
+                            fieldErrors={submitErrors}
+                            columns={4}
+                        />
 
-                                <div className="grid gap-4.5 sm:grid-cols-3 border-t border-slate-100 pt-4">
-                                    <div className="sm:col-span-1">
-                                        <PayrollComboField
-                                            label="Pay type"
-                                            required
-                                            value={filters.salary_type}
-                                            onChange={(v) => setFilter('salary_type', v)}
-                                            items={options.salaryTypes.map((t) => ({
-                                                value: t.value,
-                                                label: salaryTypeLabels[t.value] ?? t.label,
-                                            }))}
-                                            placeholder="Select pay type"
-                                        />
-                                    </div>
-                                    <div className="sm:col-span-1">
-                                        <PayrollField label="Calculation date" required>
-                                            <DatePicker
-                                                selected={parseFormDateValue(filters.process_date)}
-                                                onSelect={(d) => setFilter('process_date', d ? format(d, DISPLAY_DATE_FMT) : '')}
-                                            />
-                                            {submitErrors.process_date && <p className="text-[10px] text-red-500 mt-1">{submitErrors.process_date}</p>}
-                                        </PayrollField>
-                                    </div>
-                                    <div className="sm:col-span-1 flex items-end">
-                                        <label className="flex w-full items-center gap-2.5 rounded-lg border border-slate-100 bg-slate-50/40 px-3.5 py-2.5 h-8.5 shadow-2xs cursor-pointer hover:bg-slate-50 transition-colors">
-                                            <Checkbox 
-                                                checked={filters.is_partial} 
-                                                onCheckedChange={(v) => setFilters((f) => ({ ...f, is_partial: Boolean(v) }))} 
-                                            />
-                                            <span className="text-[11px] font-semibold text-slate-600">Partial month calculations</span>
-                                        </label>
-                                    </div>
-                                </div>
+                        <PayrollFormActions className="mt-4 border-t border-slate-100 pt-3">
+                            <Button
+                                onClick={runProcess}
+                                disabled={processing || !canProcess}
+                                className={cn('cursor-pointer rounded-lg px-4 h-9 shadow-sm flex items-center transition-all', payrollBtnPrimary)}
+                            >
+                                <Eye className="mr-2 h-4 w-4 shrink-0" />
+                                {processing ? 'Loading…' : 'View'}
+                            </Button>
+                        </PayrollFormActions>
+                    </PayrollSectionCard>
 
-                                <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced} className="border-t border-slate-100 pt-4">
-                                    <CollapsibleTrigger asChild>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="px-2 h-8 text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 cursor-pointer"
-                                        >
-                                            <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
-                                            {showAdvanced ? 'Hide advanced filters' : 'Show advanced scope filters'}
-                                            <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 transition-transform duration-200", showAdvanced && "rotate-180")} />
-                                        </Button>
-                                    </CollapsibleTrigger>
-                                    <CollapsibleContent className="pt-3">
-                                        <div className="rounded-xl border border-slate-100 bg-slate-50/[0.15] p-3.5">
-                                            <PayrollFilterGrid 
-                                                filters={filters} 
-                                                setFilter={setFilter} 
-                                                {...options} 
-                                                showBranch={false}
-                                                payrollReadyEmployees
-                                            />
-                                            <p className="text-[10px] text-slate-400 mt-2 font-medium">
-                                                * Leave these empty to process the whole branch. Using these targeting options will only run payroll for matching employees.
-                                            </p>
-                                        </div>
-                                    </CollapsibleContent>
-                                </Collapsible>
-                            </div>
-
-                            <PayrollFormActions className="mt-5 border-t border-slate-100 pt-4">
-                                <Button 
-                                    onClick={runProcess} 
-                                    disabled={processing || !canProcess} 
-                                    className="cursor-pointer bg-slate-900 text-white hover:bg-slate-800 rounded-lg px-4 h-9 shadow-sm flex items-center transition-all"
-                                >
-                                    <Calculator className="mr-2 h-4 w-4 shrink-0" />
-                                    {processing ? 'Calculating payroll…' : 'Calculate payroll'}
-                                </Button>
-                            </PayrollFormActions>
-                        </PayrollSectionCard>
-                    </div>
-
-                    <div className="lg:col-span-1">
-                        <PayrollSectionCard 
-                            title="Recent Calculations" 
-                            description="Calculated periods awaiting review or posted."
-                        >
-                            <div className="space-y-4">
-                                <div className="relative flex items-center">
+                    <PayrollSectionCard
+                        title="Salary process list"
+                        description="Calculated payroll awaiting review and posting."
+                    >
+                        <div className="space-y-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="relative flex items-center max-w-sm w-full">
                                     <Search className="absolute left-2.5 h-3.5 w-3.5 text-slate-400" />
                                     <Input
-                                        placeholder="Search calculation runs..."
-                                        value={recentSearch}
-                                        onChange={(e) => setRecentSearch(e.target.value)}
+                                        placeholder="Search by month, branch, pay type..."
+                                        value={listSearch}
+                                        onChange={(e) => setListSearch(e.target.value)}
                                         className="pl-8 text-xs h-8.5 bg-white border-slate-200 rounded-lg placeholder:text-slate-400"
                                     />
                                 </div>
-
-                                {filteredRecentRuns.length === 0 ? (
-                                    <div className="py-8 text-center text-slate-400">
-                                        <History className="mx-auto h-6 w-6 text-slate-300 stroke-1 mb-2" />
-                                        <p className="text-xs font-medium">No calculations found</p>
-                                    </div>
-                                ) : (
-                                    <div className="max-h-[580px] overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
-                                        {(() => {
-                                            const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                                            
-                                            // Group by year and month
-                                            const getBranchCodeFromLabel = (label: string): string => {
-                                                const match = label.match(/\((\d+)\)/);
-                                                return match ? match[1] : '';
-                                            };
-
-                                            const groups: Record<string, { year: number; month: number; label: string; runs: typeof recentRuns; totalNet: number; employeeCount: number }> = {};
-                                            for (const r of filteredRecentRuns) {
-                                                const key = `${r.year}-${r.month}`;
-                                                if (!groups[key]) {
-                                                    const mName = monthNames[r.month] || String(r.month);
-                                                    groups[key] = {
-                                                        year: r.year,
-                                                        month: r.month,
-                                                        label: `${mName} ${r.year}`,
-                                                        runs: [],
-                                                        totalNet: 0,
-                                                        employeeCount: 0,
-                                                    };
-                                                }
-                                                groups[key].runs.push(r);
-                                                groups[key].totalNet += r.total_net;
-                                                groups[key].employeeCount += r.employee_count;
-                                            }
-
-                                            // Sort runs within each group by branch code
-                                            for (const key in groups) {
-                                                groups[key].runs.sort((a, b) => {
-                                                    const codeA = getBranchCodeFromLabel(a.label);
-                                                    const codeB = getBranchCodeFromLabel(b.label);
-                                                    return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
-                                                });
-                                            }
-
-                                            const sortedGroups = Object.values(groups).sort((a, b) => {
-                                                if (a.year !== b.year) return b.year - a.year;
-                                                return b.month - a.month;
-                                            });
-
-                                            return sortedGroups.map((group) => {
-                                                const groupKey = `${group.year}-${group.month}`;
-                                                return (
-                                                    <MonthGroupWrapper
-                                                        key={groupKey}
-                                                        group={group}
-                                                    />
-                                                );
-                                            });
-                                        })()}
-                                    </div>
+                                {pendingBatches.length > 0 && (
+                                    <Badge className={cn('w-fit px-2 py-1 text-[10px] font-bold', payrollBadgePrimary)}>
+                                        {pendingBatches.length} waiting
+                                    </Badge>
                                 )}
                             </div>
-                        </PayrollSectionCard>
-                    </div>
+
+                            {filteredPending.length === 0 ? (
+                                <PayrollEmptyState message="Nothing waiting to review. Run Calculate payroll above, or clear search if you already posted." />
+                            ) : (
+                                <div className="space-y-3">
+                                    {filteredPending.map((batch) => (
+                                        <ProcessBatchCard
+                                            key={`${batch.year}-${batch.month}-${batch.salary_type}`}
+                                            batch={batch}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </PayrollSectionCard>
                 </div>
             </PayrollPage>
         </Layout>
     );
 }
-
-function MonthGroupWrapper({
-    group,
-}: {
-    group: {
-        year: number;
-        month: number;
-        label: string;
-        runs: any[];
-        totalNet: number;
-        employeeCount: number;
-    };
-}) {
-    const [open, setOpen] = useState(false);
-    return (
-        <Collapsible open={open} onOpenChange={setOpen} className="rounded-xl border border-slate-100 bg-white shadow-2xs overflow-hidden">
-            <CollapsibleTrigger asChild>
-                <div className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left hover:bg-slate-50/50 focus:outline-hidden cursor-pointer">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-800 text-xs">{group.label}</span>
-                            <Badge variant="secondary" className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded-md border-none">
-                                {group.runs.length} branch{group.runs.length === 1 ? '' : 'es'}
-                            </Badge>
-                        </div>
-                        <p className="mt-1.5 text-[10px] text-slate-400 font-medium">
-                            {group.employeeCount} employees · Net <span className="font-mono font-bold text-slate-600">৳{group.totalNet.toLocaleString()}</span>
-                        </p>
-                    </div>
-                    <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
-                </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-                <div className="border-t border-slate-100/70 bg-slate-50/20 p-3 space-y-2">
-                    {group.runs.map((r, index) => (
-                        <div 
-                            key={r.id} 
-                            className="group relative flex flex-col p-3 rounded-lg border border-slate-100 bg-white hover:border-slate-200 transition-all duration-200"
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <span className="text-xs font-bold text-slate-700 truncate pr-1">
-                                    {(() => {
-                                        const parts = r.label.split(' / ');
-                                        const branchPart = parts[1] || r.label;
-                                        const branchName = branchPart.replace(/\s+\d+\s+—\s+\d+$/, '');
-                                        const type = parts[0] ? parts[0].toLowerCase() : 'salary';
-                                        return `${index + 1}. ${branchName} (${salaryTypeLabels[type] || type})`;
-                                    })()}
-                                </span>
-                                <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                        "text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider",
-                                        r.status === 'posted' 
-                                            ? 'text-emerald-700 border-emerald-100 bg-emerald-50/50' 
-                                            : 'text-amber-700 border-amber-100 bg-amber-50/50'
-                                    )}
-                                >
-                                    {r.status}
-                                </Badge>
-                            </div>
-
-                            <div className="mt-2.5 flex items-center justify-between text-[10px] text-slate-400 font-medium border-t border-slate-50/60 pt-2">
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-slate-500">{r.employee_count} employees</span>
-                                    <span className="font-mono mt-0.5 font-bold text-slate-600">৳{r.total_net.toLocaleString()}</span>
-                                </div>
-                                <div className="flex flex-col text-right">
-                                    <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-slate-300" /> {r.processed_at ? r.processed_at.split(' ')[0] : '—'}</span>
-                                </div>
-                            </div>
-
-                            <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button asChild size="icon" variant="ghost" className="h-6 w-6 rounded-md bg-slate-50 hover:bg-slate-100 cursor-pointer">
-                                    <Link href={route('salary-post.period', { year: r.year, month: r.month })}>
-                                        <ArrowRight className="h-3 w-3 text-slate-500" />
-                                    </Link>
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </CollapsibleContent>
-        </Collapsible>
-    );
-}
-
-

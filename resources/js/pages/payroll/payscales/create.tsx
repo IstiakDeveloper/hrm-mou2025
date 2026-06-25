@@ -12,12 +12,12 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { DISPLAY_DATE_FMT, displayDateToServer, parseFormDateValue } from '@/lib/display-date';
 import { ArrowLeft } from 'lucide-react';
 
-export default function PayscaleCreate() {
+export default function PayscaleCreate({ hasActivePayscale = false }: { hasActivePayscale?: boolean }) {
     const { data, setData, post, processing, errors, transform } = useForm({
         name: '',
         description: '',
         effective_from: '',
-        is_active: true,
+        is_active: !hasActivePayscale,
     });
 
     const submit = (e: React.FormEvent) => {
@@ -57,9 +57,15 @@ export default function PayscaleCreate() {
                                 <Label>Description</Label>
                                 <Textarea value={data.description} onChange={(e) => setData('description', e.target.value)} rows={3} />
                             </div>
-                            <div className="flex items-center gap-2">
-                                <Checkbox checked={data.is_active} onCheckedChange={(v) => setData('is_active', Boolean(v))} />
-                                <Label>Active</Label>
+                            <div className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                                <Checkbox checked={data.is_active} onCheckedChange={(v) => setData('is_active', Boolean(v))} className="mt-0.5" />
+                                <div>
+                                    <Label>Set as active payscale</Label>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Only one payscale can be active. Checking this will deactivate any other active payscale.
+                                        {!hasActivePayscale && ' If unchecked, this will still become active because no payscale is active yet.'}
+                                    </p>
+                                </div>
                             </div>
                         </CardContent>
                         <CardFooter className="justify-end gap-2">

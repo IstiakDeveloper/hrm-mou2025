@@ -31,7 +31,7 @@ class SalaryStepController extends Controller
 
         return Inertia::render('payroll/salary-steps/index', [
             'steps' => $this->inertiaPagination($paginator),
-            'payscales' => Payscale::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'payscales' => Payscale::query()->active()->orderBy('name')->get(['id', 'name']),
             'grades' => SalaryGrade::query()
                 ->with('payscale:id,name')
                 ->when($request->payscale_id, fn ($q, $id) => $q->where('payscale_id', $id))

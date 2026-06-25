@@ -32,4 +32,14 @@ class Separation extends Model
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
+
+    public function histories()
+    {
+        return $this->hasMany(SeparationHistory::class);
+    }
+
+    public function finalPayment()
+    {
+        return $this->hasOne(SeparationFinalPayment::class);
+    }
 }

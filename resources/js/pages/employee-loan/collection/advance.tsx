@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { LoanCollectionFormFields } from './LoanCollectionFormFields';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
-import { fmt, type LoanOption } from './types';
+import { estimateInstallmentCollectionAmount, fmt, type LoanOption } from './types';
 import { ArrowLeft, Save } from 'lucide-react';
 
 type Props = {
@@ -32,7 +32,9 @@ export default function LoanCollectionAdvance({ filters, branches, employees, lo
     });
 
     const selectedLoan = loans.find((l) => String(l.id) === loanId);
-    const estimated = selectedLoan ? selectedLoan.installment_amount * (parseInt(form.data.installment_count, 10) || 1) : 0;
+    const estimated = selectedLoan
+        ? estimateInstallmentCollectionAmount(selectedLoan, parseInt(form.data.installment_count, 10) || 1)
+        : 0;
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();

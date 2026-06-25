@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -63,7 +64,7 @@ export default function SalaryWithheldIndex({ filters: init, records, branches, 
                         <PayrollMonthSelect value={form.month} onChange={(v) => setForm((f) => ({ ...f, month: v }))} months={months} required />
                         <PayrollBranchSelect
                             value={form.branch_id}
-                            onChange={(v) => setForm((f) => ({ ...f, branch_id: v }))}
+                            onChange={(v) => setForm((f) => ({ ...f, branch_id: v, employee_id: '' }))}
                             branches={branches}
                             required
                             allowAll={false}
@@ -72,8 +73,10 @@ export default function SalaryWithheldIndex({ filters: init, records, branches, 
                             value={form.employee_id}
                             onChange={(v) => setForm((f) => ({ ...f, employee_id: v }))}
                             employees={employees}
+                            branchId={form.branch_id || undefined}
                             required
                             allowAll={false}
+                            disabled={!form.branch_id}
                         />
                         <PayrollComboField
                             label="Pay type"

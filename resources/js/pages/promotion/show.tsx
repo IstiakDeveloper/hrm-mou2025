@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, CheckCircle2, Check, XCircle, Calendar, BriefcaseBusiness } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Check, XCircle, Calendar, BriefcaseBusiness, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type Designation = { id: number; name: string };
 type SalaryGrade = { id: number; name: string };
+type SalaryStep = { id: number; step_number: number };
 type User = { id: number; name: string };
 
 type Employee = EmployeeNameFields & {
@@ -40,6 +41,7 @@ type Promotion = {
 type Props = {
     promotion: Promotion;
     canApprove: boolean;
+    canEdit?: boolean;
 };
 
 function statusBadge(status: Promotion['status']) {
@@ -59,7 +61,7 @@ function statusBadge(status: Promotion['status']) {
     }
 }
 
-export default function PromotionShow({ promotion, canApprove }: Props) {
+export default function PromotionShow({ promotion, canApprove, canEdit = false }: Props) {
     const [rejectReason, setRejectReason] = useState('');
     const effective = new Date(promotion.effective_date);
     const anyPromotion: any = promotion as any;
@@ -67,6 +69,8 @@ export default function PromotionShow({ promotion, canApprove }: Props) {
     const toDesignation = anyPromotion.toDesignation ?? anyPromotion.to_designation;
     const fromGrade = anyPromotion.fromSalaryGrade ?? anyPromotion.from_salary_grade;
     const toGrade = anyPromotion.toSalaryGrade ?? anyPromotion.to_salary_grade;
+    const fromStep = anyPromotion.fromSalaryStep ?? anyPromotion.from_salary_step;
+    const toStep = anyPromotion.toSalaryStep ?? anyPromotion.to_salary_step;
 
     return (
         <Layout>
@@ -86,6 +90,15 @@ export default function PromotionShow({ promotion, canApprove }: Props) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                        {canEdit && (
+                            <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+                                <Link href={route('promotions.edit', promotion.id)}>
+                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                    Edit
+                                </Link>
+                            </Button>
+                        )}
+
                         {promotion.status === 'pending' && canApprove && (
                             <>
                                 <Button
@@ -155,6 +168,10 @@ export default function PromotionShow({ promotion, canApprove }: Props) {
                                             <span className="font-medium">Grade:</span> {fromGrade?.name ?? '—'}
                                         </p>
                                         <p className="mt-1 text-xs text-zinc-900">
+                                            <span className="font-medium">Step:</span>{' '}
+                                            {fromStep?.step_number != null ? `Step ${fromStep.step_number}` : '—'}
+                                        </p>
+                                        <p className="mt-1 text-xs text-zinc-900">
                                             <span className="font-medium">Basic:</span> {promotion.from_basic_salary ?? '—'}
                                         </p>
                                     </div>
@@ -166,6 +183,10 @@ export default function PromotionShow({ promotion, canApprove }: Props) {
                                         </p>
                                         <p className="mt-1 text-xs text-zinc-900">
                                             <span className="font-medium">Grade:</span> {toGrade?.name ?? '—'}
+                                        </p>
+                                        <p className="mt-1 text-xs text-zinc-900">
+                                            <span className="font-medium">Step:</span>{' '}
+                                            {toStep?.step_number != null ? `Step ${toStep.step_number}` : '—'}
                                         </p>
                                         <p className="mt-1 text-xs text-zinc-900">
                                             <span className="font-medium">Basic:</span> {promotion.to_basic_salary ?? '—'}

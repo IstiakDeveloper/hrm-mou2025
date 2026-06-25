@@ -199,7 +199,7 @@ class Attendance extends Model
      */
     public function computeStatusFromPunch(?AttendanceSetting $settings = null): string
     {
-        $settings ??= AttendanceSetting::global();
+        $settings ??= AttendanceSetting::forEmployee($this->employee_id);
 
         if (! $this->check_in && ! $this->check_out) {
             return 'absent';

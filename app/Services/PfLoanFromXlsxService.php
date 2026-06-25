@@ -4,10 +4,13 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\EmployeeLoan;
+use App\Models\EmployeeLoanTransaction;
+use App\Models\LoanMigrationItem;
 use App\Models\LoanPolicy;
 use App\Support\EmployeePinLookup;
 use App\Support\SimpleXlsxReader;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -28,6 +31,9 @@ class PfLoanFromXlsxService
 
     public function __construct(
         protected LoanMigrationService $migrationService,
+        protected EmployeeLoanService $loanService,
+        protected LegacyLoanRebuildService $rebuildService,
+        protected LoanCalculationService $calculator,
     ) {}
 
     /**
@@ -531,5 +537,301 @@ class PfLoanFromXlsxService
         }
 
         return $out;
+    }
+
+    /**
+     * Update PF legacy loan disbursement dates from pfloan.xlsx and realign installment schedules.
+     *
+     * @return array{
+     *     xlsx_rows: int,
+     *     matched: int,
+     *     updated: int,
+     *     already_correct: int,
+     *     skipped_no_date: int,
+     *     skipped_no_loan: int,
+     *     dry_run: bool,
+     *     changes: list<array<string, mixed>>,
+     * }
+     */
+    public function syncDisbursementDates(?string $xlsxAbsolutePath = null, bool $dryRun = false): array
+    {
+        $absPath = $xlsxAbsolutePath ?? base_path(self::DEFAULT_XLSX);
+        if (! is_readable($absPath)) {
+            throw new InvalidArgumentException('XLSX not readable: '.$absPath);
+        }
+
+        $rows = $this->parseXlsx($absPath);
+        $policyByCode = LoanPolicy::query()
+            ->whereIn('code', array_values(self::POLICY_CODE_BY_XLSX_NAME))
+            ->get()
+            ->keyBy('code');
+
+        $matched = 0;
+        $updated = 0;
+        $alreadyCorrect = 0;
+        $skippedNoDate = 0;
+        $skippedNoLoan = 0;
+        $changes = [];
+
+        foreach ($rows as $row) {
+            $pinRaw = trim((string) ($row['pin'] ?? ''));
+            $pinLower = strtolower($pinRaw);
+
+            if ($pinLower === '' || str_starts_with($pinLower, 'grand total')) {
+                continue;
+            }
+
+            $xlsxDate = $this->parseExcelDate($row['disbursement_date'] ?? null);
+            if (! $xlsxDate) {
+                $skippedNoDate++;
+
+                continue;
+            }
+
+            $policy = $this->resolvePolicy((string) ($row['policy'] ?? ''), $policyByCode);
+            if (! $policy) {
+                continue;
+            }
+
+            $employee = EmployeePinLookup::findEmployee($pinRaw);
+            if (! $employee) {
+                $skippedNoLoan++;
+
+                continue;
+            }
+
+            $disburse = SalaryStructureCalculator::roundTaka((float) ($row['disburse_amount'] ?? 0));
+            $loan = EmployeeLoan::query()
+                ->where('employee_id', $employee->id)
+                ->where('is_legacy_import', true)
+                ->where('loan_type', 'pf_loan')
+                ->where('principal_amount', $disburse)
+                ->where('loan_policy_id', $policy->id)
+                ->first();
+
+            if (! $loan) {
+                $skippedNoLoan++;
+
+                continue;
+            }
+
+            $matched++;
+            $newDate = $xlsxDate->toDateString();
+
+            if ($loan->disbursement_date->toDateString() === $newDate) {
+                $alreadyCorrect++;
+
+                continue;
+            }
+
+            $changes[] = [
+                'loan_number' => $loan->loan_number,
+                'pin' => $pinRaw,
+                'old_date' => $loan->disbursement_date->toDateString(),
+                'new_date' => $newDate,
+            ];
+
+            if ($dryRun) {
+                $updated++;
+
+                continue;
+            }
+
+            DB::transaction(function () use ($loan, $newDate) {
+                $loan->update(['disbursement_date' => $newDate]);
+
+                LoanMigrationItem::query()
+                    ->where('employee_loan_id', $loan->id)
+                    ->update(['disbursement_date' => $newDate]);
+
+                $loan->transactions()
+                    ->where('transaction_type', EmployeeLoanTransaction::TYPE_DISBURSEMENT)
+                    ->update(['transaction_date' => $newDate]);
+
+                $this->loanService->realignFullInstallmentSchedule($loan->fresh(['installments', 'policy']));
+            });
+
+            $updated++;
+        }
+
+        return [
+            'xlsx_rows' => count($rows),
+            'matched' => $matched,
+            'updated' => $updated,
+            'already_correct' => $alreadyCorrect,
+            'skipped_no_date' => $skippedNoDate,
+            'skipped_no_loan' => $skippedNoLoan,
+            'dry_run' => $dryRun,
+            'changes' => $changes,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     installment_amount: float,
+     *     total_payable: float,
+     *     total_installments: int,
+     *     passed_months: int,
+     *     outstanding_total: float,
+     *     outstanding_principal: float,
+     *     outstanding_service_charge: float,
+     * }
+     */
+    public function buildPolicyPfSnapshot(LoanPolicy $policy, array $xlsxRow): array
+    {
+        $disburse = SalaryStructureCalculator::roundTaka((float) ($xlsxRow['disburse_amount'] ?? 0));
+        $outstandingPrincipal = SalaryStructureCalculator::roundTaka((float) ($xlsxRow['outstanding_principal'] ?? 0));
+        $outstandingServiceCharge = SalaryStructureCalculator::roundTaka((float) ($xlsxRow['outstanding_service_charge'] ?? 0));
+        $outstandingTotal = SalaryStructureCalculator::roundTaka((float) ($xlsxRow['outstanding_total'] ?? 0));
+
+        $policyCalc = $this->calculator->calculate($policy, $disburse);
+        $installAmount = SalaryStructureCalculator::roundTaka((float) $policyCalc['installment_amount_monthly']);
+        $totalPayable = SalaryStructureCalculator::roundTaka((float) $policyCalc['total_payable']);
+        $totalInstallments = (int) $policyCalc['total_installments'];
+
+        $credited = SalaryStructureCalculator::roundTaka($totalPayable - $outstandingTotal);
+        $passedMonths = $installAmount > 0
+            ? max(0, min($totalInstallments - 1, (int) round($credited / $installAmount)))
+            : 0;
+
+        return [
+            'installment_amount' => $installAmount,
+            'total_payable' => $totalPayable,
+            'total_installments' => $totalInstallments,
+            'passed_months' => $passedMonths,
+            'outstanding_total' => $outstandingTotal,
+            'outstanding_principal' => $outstandingPrincipal,
+            'outstanding_service_charge' => $outstandingServiceCharge,
+        ];
+    }
+
+    /**
+     * Rebuild PF legacy loan installments using policy-calculated installment amounts,
+     * spreadsheet outstanding balances, and the loan's current disbursement date.
+     *
+     * @return array{
+     *     matched: int,
+     *     rebuilt: int,
+     *     june_collections_restored: int,
+     *     dry_run: bool,
+     *     changes: list<array<string, mixed>>,
+     * }
+     */
+    public function syncInstallmentSchedules(?string $xlsxAbsolutePath = null, bool $dryRun = false): array
+    {
+        $absPath = $xlsxAbsolutePath ?? base_path(self::DEFAULT_XLSX);
+        if (! is_readable($absPath)) {
+            throw new InvalidArgumentException('XLSX not readable: '.$absPath);
+        }
+
+        $rows = $this->parseXlsx($absPath);
+        $policyByCode = LoanPolicy::query()
+            ->whereIn('code', array_values(self::POLICY_CODE_BY_XLSX_NAME))
+            ->get()
+            ->keyBy('code');
+
+        $matched = 0;
+        $rebuilt = 0;
+        $juneCollectionsRestored = 0;
+        $changes = [];
+        $loanIdsToRebuild = [];
+
+        foreach ($rows as $row) {
+            $pinRaw = trim((string) ($row['pin'] ?? ''));
+            $pinLower = strtolower($pinRaw);
+
+            if ($pinLower === '' || str_starts_with($pinLower, 'grand total')) {
+                continue;
+            }
+
+            $policy = $this->resolvePolicy((string) ($row['policy'] ?? ''), $policyByCode);
+            if (! $policy) {
+                continue;
+            }
+
+            $employee = EmployeePinLookup::findEmployee($pinRaw);
+            if (! $employee) {
+                continue;
+            }
+
+            $disburse = SalaryStructureCalculator::roundTaka((float) ($row['disburse_amount'] ?? 0));
+            $loan = EmployeeLoan::query()
+                ->where('employee_id', $employee->id)
+                ->where('is_legacy_import', true)
+                ->where('loan_type', 'pf_loan')
+                ->where('principal_amount', $disburse)
+                ->where('loan_policy_id', $policy->id)
+                ->first();
+
+            if (! $loan) {
+                continue;
+            }
+
+            $matched++;
+            $disbursementDate = $loan->disbursement_date->toDateString();
+            $snapshot = $this->buildPolicyPfSnapshot($policy, $row);
+
+            $item = LoanMigrationItem::query()->where('employee_loan_id', $loan->id)->first();
+            if (! $item) {
+                continue;
+            }
+
+            $oldInstall = SalaryStructureCalculator::roundTaka((float) $loan->installment_amount);
+            $oldOutstanding = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
+
+            $changes[] = [
+                'loan_number' => $loan->loan_number,
+                'pin' => $pinRaw,
+                'disbursement_date' => $disbursementDate,
+                'old_installment_amount' => $oldInstall,
+                'new_installment_amount' => $snapshot['installment_amount'],
+                'old_outstanding' => $oldOutstanding,
+                'new_outstanding' => $snapshot['outstanding_total'],
+                'passed_months' => $snapshot['passed_months'],
+                'total_installments' => $snapshot['total_installments'],
+            ];
+
+            if ($dryRun) {
+                $rebuilt++;
+                $juneCollectionsRestored += $this->countJuneCollections($loan);
+
+                continue;
+            }
+
+            $item->update([
+                'disbursement_date' => $disbursementDate,
+                'installment_amount' => $snapshot['installment_amount'],
+                'passed_months' => $snapshot['passed_months'],
+                'outstanding_principal' => $snapshot['outstanding_principal'],
+                'outstanding_service_charge' => $snapshot['outstanding_service_charge'],
+                'outstanding_total' => $snapshot['outstanding_total'],
+            ]);
+
+            $loanIdsToRebuild[] = $loan->id;
+        }
+
+        if (! $dryRun && $loanIdsToRebuild !== []) {
+            $result = $this->rebuildService->rebuildLoanIds($loanIdsToRebuild, false);
+            $rebuilt = $result['loans_rebuilt'];
+            $juneCollectionsRestored = $result['june_collections_restored'];
+        }
+
+        return [
+            'matched' => $matched,
+            'rebuilt' => $rebuilt,
+            'june_collections_restored' => $juneCollectionsRestored,
+            'dry_run' => $dryRun,
+            'changes' => $changes,
+        ];
+    }
+
+    protected function countJuneCollections(EmployeeLoan $loan): int
+    {
+        return EmployeeLoanTransaction::query()
+            ->where('employee_loan_id', $loan->id)
+            ->whereIn('transaction_type', EmployeeLoanTransaction::COLLECTION_TYPES)
+            ->whereYear('transaction_date', 2026)
+            ->whereMonth('transaction_date', 6)
+            ->count();
     }
 }

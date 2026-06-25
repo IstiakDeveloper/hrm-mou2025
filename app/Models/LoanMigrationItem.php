@@ -15,6 +15,8 @@ class LoanMigrationItem extends Model
         'disburse_amount',
         'installment_amount',
         'passed_months',
+        'use_manual_terms',
+        'service_charge_amount',
         'outstanding_principal',
         'outstanding_service_charge',
         'outstanding_total',
@@ -25,9 +27,11 @@ class LoanMigrationItem extends Model
         'disbursement_date' => 'date',
         'disburse_amount' => 'decimal:2',
         'installment_amount' => 'decimal:2',
+        'service_charge_amount' => 'decimal:2',
         'outstanding_principal' => 'decimal:2',
         'outstanding_service_charge' => 'decimal:2',
         'outstanding_total' => 'decimal:2',
+        'use_manual_terms' => 'boolean',
     ];
 
     public function migration(): BelongsTo

@@ -29,6 +29,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Eye,
+    Pencil,
     Plus,
     Search,
     User,
@@ -92,6 +93,8 @@ type Props = {
         per_page?: string;
     };
     canApprove: boolean;
+    canEditPromotions?: boolean;
+    canEditCompleted?: boolean;
 };
 
 function statusBadge(status: Promotion['status']) {
@@ -111,7 +114,7 @@ function statusBadge(status: Promotion['status']) {
     }
 }
 
-export default function PromotionIndex({ promotions, employees, filters, canApprove }: Props) {
+export default function PromotionIndex({ promotions, employees, filters, canApprove, canEditPromotions = false, canEditCompleted = false }: Props) {
     const [status, setStatus] = useState(filters.status || 'all');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
     const [search, setSearch] = useState(filters.search || '');
@@ -307,6 +310,19 @@ export default function PromotionIndex({ promotions, employees, filters, canAppr
                                                 <TableCell>{statusBadge(p.status)}</TableCell>
                                                 <TableCell className="text-right pr-6">
                                                     <div className="flex items-center justify-end gap-2">
+                                                        {((canEditPromotions && (p.status === 'pending' || p.status === 'approved')) ||
+                                                            (canEditCompleted && p.status === 'completed')) && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-violet-600 bg-violet-50 hover:bg-violet-100 hover:text-violet-700 rounded-lg transition-colors"
+                                                                title="Edit"
+                                                                onClick={() => router.visit(route('promotions.edit', p.id))}
+                                                            >
+                                                                <Pencil className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"

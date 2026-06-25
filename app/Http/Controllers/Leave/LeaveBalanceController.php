@@ -302,6 +302,7 @@ class LeaveBalanceController extends Controller
             ->withQueryString();
 
         $branches = Branch::query()
+            ->active()
             ->orderBy('name')
             ->get(['id', 'name']);
 

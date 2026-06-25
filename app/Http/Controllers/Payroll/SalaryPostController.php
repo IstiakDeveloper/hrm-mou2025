@@ -10,6 +10,9 @@ use App\Models\PayslipLine;
 use App\Services\EmployeeLoanService;
 use App\Services\PayrollRunRollbackService;
 use App\Services\PayslipTotalsService;
+use App\Services\SeparationPayrollService;
+use App\Support\BranchOrganogram;
+use App\Support\HeadOfficeOrganogram;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +26,7 @@ class SalaryPostController extends Controller
         protected PayslipTotalsService $payslipTotals,
         protected EmployeeLoanService $loanService,
         protected PayrollRunRollbackService $rollbackService,
+        protected SeparationPayrollService $separationPayrollService,
     ) {}
 
     public function index(Request $request)
@@ -69,7 +73,7 @@ class SalaryPostController extends Controller
             ->with([
                 'branch',
                 'bonusConfiguration.bonusType',
-                'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines.head'])->orderBy('id'),
+                'payslips' => $this->payslipsOrganogramEagerLoad(),
             ])
             ->where('salary_type', $salaryType)
             ->where('year', $year)
@@ -77,8 +81,8 @@ class SalaryPostController extends Controller
             ->where('status', $status)
             ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->integer('branch_id')))
             ->get()
-            ->sortBy(function ($r) {
-                return $r->branch?->branch_code ?? '';
+            ->sort(function (PayrollRun $a, PayrollRun $b) {
+                return BranchOrganogram::compareBranches($a->branch, $b->branch);
             })
             ->values();
 
@@ -97,7 +101,7 @@ class SalaryPostController extends Controller
             if ($run->salary_type === 'salary' && $run->status === 'processed') {
                 $this->loanService->syncLoanDeductionsForPayrollRun($run);
                 $run->load([
-                    'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines.head'])->orderBy('id'),
+                    'payslips' => $this->payslipsOrganogramEagerLoad(),
                 ]);
             }
 
@@ -110,7 +114,7 @@ class SalaryPostController extends Controller
             $branches[] = [
                 'run' => $this->mapRunForShow($run),
                 'payslips' => $run->payslips
-                    ->map(fn (Payslip $p) => $this->mapPayslipForShow($p, $bonusConfig))
+                    ->map(fn (Payslip $p) => $this->mapPayslipForShow($p, $bonusConfig, $run))
                     ->values(),
                 'bonusConfig' => $bonusConfig ? [
                     'name' => $bonusConfig->name,
@@ -149,7 +153,7 @@ class SalaryPostController extends Controller
         $payroll_run->load([
             'branch',
             'bonusConfiguration.bonusType',
-            'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines.head'])->orderBy('id'),
+            'payslips' => $this->payslipsOrganogramEagerLoad(),
         ]);
 
         $canEdit = $payroll_run->status === 'processed'
@@ -165,14 +169,14 @@ class SalaryPostController extends Controller
         if ($payroll_run->salary_type === 'salary' && $payroll_run->status === 'processed') {
             $this->loanService->syncLoanDeductionsForPayrollRun($payroll_run);
             $payroll_run->load([
-                'payslips' => fn ($q) => $q->with(['employee:id,pin,name_en', 'lines.head'])->orderBy('id'),
+                'payslips' => $this->payslipsOrganogramEagerLoad(),
             ]);
         }
 
         return Inertia::render('payroll/salary-post/show', [
             'run' => $this->mapRunForShow($payroll_run),
             'payslips' => $payroll_run->payslips
-                ->map(fn (Payslip $p) => $this->mapPayslipForShow($p, $bonusConfig))
+                ->map(fn (Payslip $p) => $this->mapPayslipForShow($p, $bonusConfig, $payroll_run))
                 ->values(),
             'canEdit' => $canEdit,
             'pageContext' => $context,
@@ -209,47 +213,7 @@ class SalaryPostController extends Controller
             'lines.*.computed_amount' => 'required|numeric|min:0',
         ]);
 
-        $payslipIds = Payslip::query()
-            ->where('payroll_run_id', $payroll_run->id)
-            ->pluck('id');
-
-        DB::transaction(function () use ($validated, $payslipIds, $payroll_run) {
-            $touchedPayslipIds = [];
-
-            foreach ($validated['lines'] as $row) {
-                $line = PayslipLine::query()
-                    ->where('id', $row['id'])
-                    ->whereIn('payslip_id', $payslipIds)
-                    ->first();
-
-                if (! $line) {
-                    continue;
-                }
-
-                $line->update([
-                    'computed_amount' => round((float) $row['computed_amount'], 2),
-                ]);
-
-                $touchedPayslipIds[$line->payslip_id] = true;
-            }
-
-            $payroll_run->loadMissing('bonusConfiguration.bonusType');
-
-            foreach (array_keys($touchedPayslipIds) as $payslipId) {
-                $payslip = Payslip::query()->with('lines')->find($payslipId);
-                if (! $payslip) {
-                    continue;
-                }
-
-                if ($payroll_run->salary_type === 'bonus' && $payroll_run->bonusConfiguration) {
-                    $this->normalizeBonusPayslipLines($payslip, $payroll_run->bonusConfiguration);
-                }
-
-                $this->payslipTotals->syncPayslipFromLines($payslip);
-            }
-
-            $this->payslipTotals->syncPayrollRunTotals($payroll_run);
-        });
+        $this->applyPayslipLineUpdates($payroll_run, $validated['lines']);
 
         $prefix = $this->routePrefixForContext($this->resolvePostContext($request, $payroll_run));
 
@@ -265,6 +229,28 @@ class SalaryPostController extends Controller
         $redirect = $this->redirectIfWrongPostSection($request, $payroll_run);
         if ($redirect) {
             return $redirect;
+        }
+
+        if ($payroll_run->status !== 'processed') {
+            throw ValidationException::withMessages([
+                'run' => 'Only processed payroll can be posted.',
+            ]);
+        }
+
+        if ($request->filled('lines')) {
+            if (! $request->user()?->hasPermission('payroll.edit')) {
+                throw ValidationException::withMessages([
+                    'run' => 'You do not have permission to edit payroll.',
+                ]);
+            }
+
+            $validated = $request->validate([
+                'lines' => 'required|array|min:1',
+                'lines.*.id' => 'required|integer|exists:payslip_lines,id',
+                'lines.*.computed_amount' => 'required|numeric|min:0',
+            ]);
+
+            $this->applyPayslipLineUpdates($payroll_run, $validated['lines']);
         }
 
         $this->finalizeRun($payroll_run);
@@ -350,6 +336,61 @@ class SalaryPostController extends Controller
             ->with('success', "{$label} cancelled for {$payroll_run->branch?->name}. You can run calculation again.");
     }
 
+    /**
+     * @param  list<array{id: int, computed_amount: float|int|string}>  $lines
+     */
+    private function applyPayslipLineUpdates(PayrollRun $payroll_run, array $lines): void
+    {
+        $payslipIds = Payslip::query()
+            ->where('payroll_run_id', $payroll_run->id)
+            ->pluck('id');
+
+        DB::transaction(function () use ($lines, $payslipIds, $payroll_run) {
+            $touchedPayslipIds = [];
+
+            foreach ($lines as $row) {
+                $line = PayslipLine::query()
+                    ->with('head')
+                    ->where('id', $row['id'])
+                    ->whereIn('payslip_id', $payslipIds)
+                    ->first();
+
+                if (! $line) {
+                    continue;
+                }
+
+                $rounded = round((float) $row['computed_amount'], 2);
+                $isLoanLine = (bool) ($line->head?->is_loan_head ?? preg_match('/\s—\sLN-/', (string) $line->head_name));
+
+                $updates = ['computed_amount' => $rounded];
+                if ($isLoanLine) {
+                    $updates['input_value'] = $rounded;
+                }
+
+                $line->update($updates);
+
+                $touchedPayslipIds[$line->payslip_id] = true;
+            }
+
+            $payroll_run->loadMissing('bonusConfiguration.bonusType');
+
+            foreach (array_keys($touchedPayslipIds) as $payslipId) {
+                $payslip = Payslip::query()->with('lines')->find($payslipId);
+                if (! $payslip) {
+                    continue;
+                }
+
+                if ($payroll_run->salary_type === 'bonus' && $payroll_run->bonusConfiguration) {
+                    $this->normalizeBonusPayslipLines($payslip, $payroll_run->bonusConfiguration);
+                }
+
+                $this->payslipTotals->syncPayslipFromLines($payslip);
+            }
+
+            $this->payslipTotals->syncPayrollRunTotals($payroll_run);
+        });
+    }
+
     private function finalizeRun(PayrollRun $payroll_run): void
     {
         if ($payroll_run->status !== 'processed') {
@@ -394,7 +435,9 @@ class SalaryPostController extends Controller
                 /** @var \Illuminate\Support\Collection<int, PayrollRun> $periodRuns */
                 $first = $periodRuns->first();
                 $branches = $periodRuns
-                    ->sortBy(fn (PayrollRun $r) => $r->branch?->branch_code ?? '')
+                    ->sort(function (PayrollRun $a, PayrollRun $b) {
+                        return BranchOrganogram::compareBranches($a->branch, $b->branch);
+                    })
                     ->values()
                     ->map(fn (PayrollRun $r) => [
                         'id' => $r->id,
@@ -537,14 +580,51 @@ class SalaryPostController extends Controller
     }
 
     /**
+     * @return array{payable_days: int|null, days_in_month: int|null, payroll_remark: string|null}
+     */
+    private function separationPayrollPreview(Payslip $p, ?PayrollRun $run = null): array
+    {
+        $empty = ['payable_days' => null, 'days_in_month' => null, 'payroll_remark' => null];
+
+        $run ??= $p->relationLoaded('payrollRun') ? $p->payrollRun : null;
+        if (! $run || $run->salary_type !== 'salary') {
+            return $empty;
+        }
+
+        $employee = $p->employee;
+        if (! $employee) {
+            return $empty;
+        }
+
+        $proration = $this->separationPayrollService->resolveForPayrollMonth(
+            $employee,
+            (int) $run->year,
+            (int) $run->month,
+        );
+
+        if (! $proration['is_partial'] || ! $proration['payroll_remark']) {
+            return $empty;
+        }
+
+        return [
+            'payable_days' => $proration['payable_days'],
+            'days_in_month' => $proration['days_in_month'],
+            'payroll_remark' => $proration['payroll_remark'],
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function mapPayslipForShow(Payslip $p, ?\App\Models\BonusConfiguration $bonusConfig = null): array
+    private function mapPayslipForShow(Payslip $p, ?\App\Models\BonusConfiguration $bonusConfig = null, ?PayrollRun $run = null): array
     {
+        $separationPreview = $this->separationPayrollPreview($p, $run);
+
         $mapped = [
             'id' => $p->id,
             'pin' => $p->employee?->pin,
             'name' => $p->employee?->name_en,
+            'designation' => $p->employee?->designation?->name,
             'grade' => $p->grade_label,
             'step' => $p->step_number,
             'basic' => (float) $p->basic_salary,
@@ -552,22 +632,30 @@ class SalaryPostController extends Controller
             'deduction' => (float) $p->total_deduction,
             'net' => (float) $p->net_payable,
             'is_withheld' => $p->is_withheld,
+            'payable_days' => $separationPreview['payable_days'],
+            'days_in_month' => $separationPreview['days_in_month'],
+            'payroll_remark' => $separationPreview['payroll_remark'],
             'lines' => $p->lines->map(fn (PayslipLine $line) => [
                 'id' => $line->id,
                 'salary_head_id' => $line->salary_head_id,
                 'head_name' => $line->head_name,
+                'head_label' => $line->head?->name ?? $line->head_name,
                 'type' => $line->type,
                 'amount_type' => $line->amount_type,
                 'input_value' => (float) $line->input_value,
                 'computed_amount' => (float) $line->computed_amount,
                 'sort_order' => $line->sort_order,
                 'is_loan' => (bool) ($line->head?->is_loan_head ?? preg_match('/\s—\sLN-/', $line->head_name)),
+                'loan_head_type' => $this->resolveLoanHeadType($line),
+                'loan_type_label' => $this->loanTypeLabel($this->resolveLoanHeadType($line)),
             ])->values(),
             'loan_deductions' => $p->lines
                 ->filter(fn (PayslipLine $line) => $line->type === 'deduction' && ($line->head?->is_loan_head || preg_match('/\s—\sLN-/', $line->head_name)))
                 ->map(fn (PayslipLine $line) => [
                     'head_name' => $line->head_name,
                     'amount' => (float) $line->computed_amount,
+                    'loan_head_type' => $this->resolveLoanHeadType($line),
+                    'loan_type_label' => $this->loanTypeLabel($this->resolveLoanHeadType($line)),
                 ])
                 ->values(),
         ];
@@ -586,5 +674,48 @@ class SalaryPostController extends Controller
         }
 
         return $mapped;
+    }
+
+    private function resolveLoanHeadType(PayslipLine $line): ?string
+    {
+        $isLoan = (bool) ($line->head?->is_loan_head ?? preg_match('/\s—\sLN-/', $line->head_name));
+        if (! $isLoan || $line->type !== 'deduction') {
+            return null;
+        }
+
+        if (filled($line->head?->loan_head_type)) {
+            return $line->head->loan_head_type;
+        }
+
+        foreach (config('employee_loans.loan_types', []) as $type => $meta) {
+            $shortName = $meta['short_name'] ?? '';
+            if ($shortName !== '' && str_starts_with($line->head_name, $shortName)) {
+                return $type;
+            }
+        }
+
+        return 'other';
+    }
+
+    private function loanTypeLabel(?string $loanHeadType): ?string
+    {
+        if (! $loanHeadType) {
+            return null;
+        }
+
+        return config("employee_loans.loan_types.{$loanHeadType}.label")
+            ?? ucfirst(str_replace('_', ' ', $loanHeadType));
+    }
+
+    private function payslipsOrganogramEagerLoad(): \Closure
+    {
+        return function ($query) {
+            $query->with([
+                'employee:id,pin,name_en,dropout_date,designation_id',
+                'employee.designation:id,name',
+                'lines.head',
+            ]);
+            HeadOfficeOrganogram::applyToPayslipQuery($query);
+        };
     }
 }

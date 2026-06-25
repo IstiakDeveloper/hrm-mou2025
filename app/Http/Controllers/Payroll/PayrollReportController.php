@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\Payscale;
 use App\Services\PayrollReportService;
-use App\Support\PayrollReportCsvExporter;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\PayrollReportPrintPdf;
+use App\Support\PayrollReportXlsxExporter;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Mpdf\HTMLParserMode;
+use Mpdf\Mpdf;
+use Symfony\Component\HttpFoundation\Response;
 
 class PayrollReportController extends Controller
 {
@@ -58,6 +60,8 @@ class PayrollReportController extends Controller
 
         return Inertia::render('payroll/reports/show', [
             'companyName' => config('payroll_reports.company_name'),
+            'companyAddress' => config('payroll_reports.company_address'),
+            'signatureBlocks' => config('payroll_reports.signature_blocks', []),
             'report' => [
                 'slug' => $report,
                 'title' => $config['title'],
@@ -91,23 +95,74 @@ class PayrollReportController extends Controller
     public function pdf(Request $request, string $report)
     {
         $data = $this->documentData($request, $report);
-
-        $pdf = Pdf::loadView('payroll.reports.document', $data)
-            ->setPaper('a4', $data['orientation'] ?? 'portrait');
-
+        $html = view('payroll.reports.document', $data)->render();
         $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.pdf';
 
-        return $pdf->download($filename);
+        try {
+            if (! PayrollReportPrintPdf::canGenerate()) {
+                throw new \RuntimeException('Chrome is not available for PDF export.');
+            }
+
+            $pdf = PayrollReportPrintPdf::generate($html);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->downloadPdfViaMpdf($data, $filename);
+        }
+
+        return response()->make(
+            $pdf,
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                'Cache-Control' => 'public, must-revalidate, max-age=0',
+            ]
+        );
     }
 
-    public function excel(Request $request, string $report): StreamedResponse
+    protected function downloadPdfViaMpdf(array $data, string $filename): Response
+    {
+        $isLandscape = ($data['orientation'] ?? 'landscape') === 'landscape';
+
+        $mpdf = new Mpdf([
+            'mode' => 'utf-8',
+            'format' => $isLandscape ? 'A4-L' : 'A4',
+            'margin_left' => $this->printSideMarginMm(),
+            'margin_right' => $this->printSideMarginMm(),
+            'margin_top' => (float) (config('payroll_reports.print.margin_top_mm') ?? 4),
+            'margin_bottom' => (float) (config('payroll_reports.print.margin_bottom_mm') ?? 4),
+            'default_font' => 'dejavusans',
+            'shrink_tables_to_fit' => 1.4,
+        ]);
+
+        $mpdf->SetTitle($data['title']);
+        $mpdf->SetAuthor(config('app.name'));
+        $this->writePayrollReportHtml($mpdf, view('payroll.reports.document', array_merge($data, ['pdfMode' => true]))->render());
+
+        return response()->make(
+            $mpdf->Output($filename, 'S'),
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                'Cache-Control' => 'public, must-revalidate, max-age=0',
+            ]
+        );
+    }
+
+    public function excel(Request $request, string $report): Response
     {
         $data = $this->documentData($request, $report);
         $template = $data['payload']['template'] ?? 'generic';
-        [$headers, $rows] = PayrollReportCsvExporter::rowsFromPayload($template, $data['payload']);
-        $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.csv';
+        $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.xlsx';
 
-        return PayrollReportCsvExporter::download($filename, $headers, $rows);
+        return PayrollReportXlsxExporter::download($filename, $template, $data['payload'], [
+            'companyName' => $data['companyName'],
+            'companyAddress' => $data['companyAddress'],
+            'title' => $data['title'],
+            'periodLabel' => $data['periodLabel'],
+        ]);
     }
 
     /**
@@ -132,13 +187,12 @@ class PayrollReportController extends Controller
 
         return [
             'companyName' => config('payroll_reports.company_name'),
+            'companyAddress' => config('payroll_reports.company_address'),
             'title' => $config['title'],
             'periodLabel' => $this->reports->periodLabel($filters, $config),
             'generatedAt' => now()->format('d M Y H:i'),
             'payload' => $payload,
-            'orientation' => ($payload['template'] ?? '') === 'salary-sheet' && count($payload['heads'] ?? []) > 6
-                ? 'landscape'
-                : 'portrait',
+            'orientation' => 'landscape',
         ];
     }
 
@@ -165,5 +219,73 @@ class PayrollReportController extends Controller
         $base['payscales'] = Payscale::query()->orderBy('name')->get(['id', 'name', 'code']);
 
         return $base;
+    }
+
+    protected function writePayrollReportHtml(Mpdf $mpdf, string $html): void
+    {
+        if (function_exists('ini_set')) {
+            @ini_set('pcre.backtrack_limit', '10000000');
+        }
+
+        if (preg_match('/<style\b[^>]*>.*?<\/style>/is', $html, $styleMatch)) {
+            $mpdf->WriteHTML($styleMatch[0], HTMLParserMode::HEADER_CSS);
+        }
+
+        if (! preg_match('/<body[^>]*>(.*)<\/body>/is', $html, $bodyMatch)) {
+            $mpdf->WriteHTML($html);
+
+            return;
+        }
+
+        foreach ($this->payrollReportHtmlChunks(trim($bodyMatch[1])) as $chunk) {
+            $mpdf->WriteHTML($chunk);
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function payrollReportHtmlChunks(string $body): array
+    {
+        $chunks = [];
+
+        if (preg_match('/^(.*?)(?=<(?:div class="branch-section|table class="data salary-sheet-table))/s', $body, $headerMatch)) {
+            $header = trim($headerMatch[1]);
+            if ($header !== '') {
+                $chunks[] = $header;
+            }
+        }
+
+        $tablePattern = '/(?:<table class="section-title-table"[^>]*>.*?<\/table>\s*)?<table class="data salary-sheet-table"[^>]*>.*?<\/table>/s';
+
+        if (preg_match_all($tablePattern, $body, $tableMatches)) {
+            foreach ($tableMatches[0] as $index => $tableHtml) {
+                $chunk = trim($tableHtml);
+                if ($index > 0 && str_contains($chunk, 'section-title-table')) {
+                    $chunk = '<div class="branch-section-break"></div>'.$chunk;
+                }
+                $chunks[] = $chunk;
+            }
+
+            return $chunks;
+        }
+
+        if (preg_match_all('/<table\b[^>]*>.*?<\/table>/is', $body, $tableMatches)) {
+            foreach ($tableMatches[0] as $tableHtml) {
+                $chunks[] = trim($tableHtml);
+            }
+
+            return $chunks;
+        }
+
+        return [$body];
+    }
+
+    protected function printSideMarginMm(): float
+    {
+        $mm = (float) (config('payroll_reports.print.margin_side_mm') ?? 3);
+        $extraPx = (int) (config('payroll_reports.print.margin_side_extra_px') ?? 10);
+
+        return $mm + ($extraPx * 25.4 / 96);
     }
 }

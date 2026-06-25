@@ -3,6 +3,12 @@
 namespace App\Services;
 
 use App\Models\Branch;
+use App\Models\Employee;
+use App\Models\RegionalOffice;
+use App\Models\User;
+use App\Models\Zone;
+use App\Services\OrganogramAccessService;
+use Illuminate\Support\Collection;
 
 class GeoFenceService
 {
@@ -83,5 +89,115 @@ class GeoFenceService
             'radius_meters' => $radius,
             'max_accuracy_meters' => (int) $maxAcc,
         ];
+    }
+
+    /**
+     * Branches whose geofence this employee may use for self check-in/out.
+     * Regular staff: own branch only. Zonal / regional managers: all branches under their scope.
+     *
+     * @return Collection<int, Branch>
+     */
+    public function eligibleBranchesForEmployee(User $user, Employee $employee): Collection
+    {
+        $branchIds = collect(OrganogramAccessService::accessibleBranchIdList($user) ?? []);
+
+        $zoneIds = Zone::query()
+            ->where('zone_manager_employee_id', $employee->id)
+            ->where('is_active', true)
+            ->pluck('id');
+
+        if ($zoneIds->isNotEmpty()) {
+            $regionalOfficeIds = RegionalOffice::query()
+                ->whereIn('zone_id', $zoneIds)
+                ->where('is_active', true)
+                ->pluck('id');
+
+            $branchIds = $branchIds->merge(
+                Branch::query()->whereIn('regional_office_id', $regionalOfficeIds)->pluck('id')
+            );
+        }
+
+        $managedRegionalOfficeIds = RegionalOffice::query()
+            ->where('regional_manager_employee_id', $employee->id)
+            ->where('is_active', true)
+            ->pluck('id');
+
+        if ($managedRegionalOfficeIds->isNotEmpty()) {
+            $branchIds = $branchIds->merge(
+                Branch::query()->whereIn('regional_office_id', $managedRegionalOfficeIds)->pluck('id')
+            );
+        }
+
+        $ownBranchId = (int) ($employee->current_branch_id ?? $employee->branch_id ?? 0);
+        if ($ownBranchId > 0) {
+            $branchIds->push($ownBranchId);
+        }
+
+        $branchIds = $branchIds->filter()->map(fn ($id) => (int) $id)->unique()->values();
+
+        if ($branchIds->isEmpty()) {
+            return collect();
+        }
+
+        return Branch::query()
+            ->whereIn('id', $branchIds)
+            ->where('is_active', true)
+            ->where('geofence_enabled', true)
+            ->get()
+            ->sortBy(fn (Branch $branch) => (int) $branch->id === $ownBranchId ? 0 : 1)
+            ->values();
+    }
+
+    /**
+     * Find the first branch geofence that contains the given coordinates.
+     *
+     * @param  Collection<int, Branch>|iterable<int, Branch>  $branches
+     * @return array{ok:bool,branch?:Branch,branch_id?:int,branch_name?:string,reason?:string,distance_meters?:float,radius_meters?:int,max_accuracy_meters?:int}
+     */
+    public function findMatchingBranch(
+        iterable $branches,
+        float $lat,
+        float $lng,
+        ?float $accuracyMeters
+    ): array {
+        $bestFailure = null;
+
+        foreach ($branches as $branch) {
+            $result = $this->validateBranchLocation($branch, $lat, $lng, $accuracyMeters);
+
+            if ($result['ok']) {
+                return array_merge($result, [
+                    'branch' => $branch,
+                    'branch_id' => $branch->id,
+                    'branch_name' => $branch->name,
+                ]);
+            }
+
+            if ($this->isMeaningfulGeofenceFailure($result)) {
+                $bestFailure = array_merge($result, [
+                    'branch_id' => $branch->id,
+                    'branch_name' => $branch->name,
+                ]);
+            }
+        }
+
+        if ($bestFailure !== null) {
+            return array_merge($bestFailure, ['ok' => false]);
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'No geofence-enabled branch is available for your account.',
+        ];
+    }
+
+    private function isMeaningfulGeofenceFailure(array $result): bool
+    {
+        $reason = $result['reason'] ?? '';
+
+        return ! in_array($reason, [
+            'Branch geofence is disabled.',
+            'Branch geofence is not configured.',
+        ], true);
     }
 }

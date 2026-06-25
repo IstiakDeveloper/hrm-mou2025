@@ -6,6 +6,7 @@ use App\Models\AdminNotice;
 use App\Models\Transfer;
 use App\Models\TransferHistory;
 use App\Notifications\AdminNoticeNotification;
+use App\Support\BangladeshDate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -14,11 +15,7 @@ class TransferCompletionService
 {
     public function shouldApplyImmediately(mixed $effectiveDate): bool
     {
-        if ($effectiveDate === null) {
-            return true;
-        }
-
-        return Carbon::parse($effectiveDate)->startOfDay()->lte(now()->startOfDay());
+        return BangladeshDate::isDue($effectiveDate);
     }
 
     public function apply(Transfer $transfer, ?int $actorUserId): void
@@ -89,7 +86,7 @@ class TransferCompletionService
 
         Transfer::query()
             ->where('status', 'approved')
-            ->whereDate('effective_date', '<=', now()->toDateString())
+            ->whereDate('effective_date', '<=', BangladeshDate::todayString())
             ->orderBy('id')
             ->each(function (Transfer $transfer) use ($actorUserId, &$activated) {
                 DB::transaction(function () use ($transfer, $actorUserId, &$activated) {

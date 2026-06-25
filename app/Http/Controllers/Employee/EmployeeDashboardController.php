@@ -745,18 +745,11 @@ class EmployeeDashboardController extends Controller
     private function getAttendanceSettings($attendance)
     {
         try {
-            // Get employee directly from ID
-            $employee = Employee::find($attendance->employee_id);
-            if (! $employee) {
-                return null;
+            if (! $attendance->employee_id) {
+                return AttendanceSetting::global();
             }
 
-            $branchId = $employee->current_branch_id;
-
-            // Get attendance settings for the branch
-            $settings = AttendanceSetting::where('branch_id', $branchId)->first();
-
-            return $settings;
+            return AttendanceSetting::forEmployee($attendance->employee_id);
         } catch (\Exception $e) {
             Log::error('Error getting attendance settings: '.$e->getMessage());
 

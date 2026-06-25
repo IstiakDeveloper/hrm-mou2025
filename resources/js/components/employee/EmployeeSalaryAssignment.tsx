@@ -31,6 +31,7 @@ type Props = {
     salaryGradeId: string;
     salaryStepId: string;
     basicSalary: string;
+    activePayscaleId?: string | null;
     onPayscaleIdChange: (value: string) => void;
     onSalaryGradeIdChange: (value: string) => void;
     onSalaryStepIdChange: (value: string) => void;
@@ -46,21 +47,33 @@ export function EmployeeSalaryAssignment({
     salaryGradeId,
     salaryStepId,
     basicSalary,
+    activePayscaleId = null,
     onPayscaleIdChange,
     onSalaryGradeIdChange,
     onSalaryStepIdChange,
     onBasicSalaryChange,
     errors = {},
 }: Props) {
+    const lockedPayscaleId = activePayscaleId ?? (payscales.length === 1 ? String(payscales[0].id) : null);
+    const payscaleLocked = Boolean(lockedPayscaleId);
+    const effectivePayscaleId = payscaleId || lockedPayscaleId || '';
+
+    useEffect(() => {
+        if (!lockedPayscaleId) return;
+        if (payscaleId === lockedPayscaleId) return;
+        onPayscaleIdChange(lockedPayscaleId);
+        onSalaryGradeIdChange('');
+        onSalaryStepIdChange('');
+    }, [lockedPayscaleId, payscaleId, onPayscaleIdChange, onSalaryGradeIdChange, onSalaryStepIdChange]);
     const payscaleItems: ComboSelectItem<string>[] = useMemo(
         () => payscales.map((p) => ({ value: String(p.id), label: p.name })),
         [payscales],
     );
 
     const filteredGrades = useMemo(() => {
-        if (!payscaleId) return [];
-        return grades.filter((g) => g.payscale_id === Number(payscaleId));
-    }, [grades, payscaleId]);
+        if (!effectivePayscaleId) return [];
+        return grades.filter((g) => g.payscale_id === Number(effectivePayscaleId));
+    }, [grades, effectivePayscaleId]);
 
     const gradeItems: ComboSelectItem<string>[] = useMemo(
         () => filteredGrades.map((g) => ({ value: String(g.id), label: gradeLabel(g) })),
@@ -94,21 +107,24 @@ export function EmployeeSalaryAssignment({
     return (
         <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-                Link this employee to a payscale, grade, and step for payroll calculation. Leave blank if not ready yet.
+                {payscaleLocked
+                    ? 'Payscale is set automatically from the active organization scale. Choose grade and step below, or leave all blank if not ready yet.'
+                    : 'Link this employee to a payscale, grade, and step for payroll calculation. Leave blank if not ready yet.'}
             </p>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                     <Label className="text-xs">Payscale</Label>
                     <ComboSelect
-                        value={payscaleId || null}
+                        value={(payscaleId || lockedPayscaleId) || null}
                         onChange={(v) => {
                             onPayscaleIdChange(v ?? '');
                             onSalaryGradeIdChange('');
                             onSalaryStepIdChange('');
                         }}
                         items={payscaleItems}
-                        placeholder="Select payscale"
-                        clearable
+                        placeholder={payscaleLocked ? 'Active payscale' : 'Select payscale'}
+                        disabled={payscaleLocked}
+                        clearable={!payscaleLocked}
                     />
                     {errors.payscale_id && <p className="text-xs text-red-500">{errors.payscale_id}</p>}
                 </div>
@@ -121,8 +137,8 @@ export function EmployeeSalaryAssignment({
                             onSalaryStepIdChange('');
                         }}
                         items={gradeItems}
-                        placeholder={payscaleId ? 'Select grade' : 'Select payscale first'}
-                        disabled={!payscaleId}
+                        placeholder={effectivePayscaleId ? 'Select grade' : 'Select payscale first'}
+                        disabled={!effectivePayscaleId}
                         clearable
                     />
                     {errors.salary_grade_id && <p className="text-xs text-red-500">{errors.salary_grade_id}</p>}

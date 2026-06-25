@@ -16,17 +16,20 @@ use App\Models\LocationVillage;
 use App\Models\Payscale;
 use App\Models\Program;
 use App\Models\Project;
+use App\Models\DemotionHistory;
+use App\Models\PromotionHistory;
 use App\Models\RegionalOffice;
 use App\Models\Role;
 use App\Models\SalaryGrade;
 use App\Models\SalaryStep;
 use App\Models\TransferHistory;
-use App\Models\PromotionHistory;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\OrganogramAccessService;
 use App\Support\EmployeeImportCsv;
 use App\Support\EmployeeImportTemplateExporter;
+use App\Support\BranchOrganogram;
+use App\Support\HeadOfficeOrganogram;
 use App\Support\ImportDateParser;
 use App\Support\SimpleXlsxReader;
 use Illuminate\Database\QueryException;
@@ -54,6 +57,10 @@ class EmployeeController extends Controller
     private const AUTO_USER_EMPLOYEE_ROLE_NAME = 'Employee';
 
     private const AUTO_EMAIL_DOMAIN_ENV = 'HRM_AUTO_EMAIL_DOMAIN';
+
+    private const DEFAULT_EMPLOYEE_BANK_ACCOUNT_TYPE = 'savings';
+
+    private const DEFAULT_EMPLOYEE_BANK_BRANCH_NAME = 'Naogaon Sadar';
 
     private function getAutoEmailDomain(): string
     {
@@ -464,6 +471,7 @@ class EmployeeController extends Controller
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:100'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             'payroll_ready' => ['nullable', 'boolean'],
             'for_gratuity' => ['nullable', 'boolean'],
@@ -471,9 +479,10 @@ class EmployeeController extends Controller
 
         $search = trim((string) ($validated['q'] ?? ''));
         $limit = (int) ($validated['limit'] ?? 25);
+        $selectedEmployeeId = isset($validated['employee_id']) ? (int) $validated['employee_id'] : null;
 
         $query = Employee::query()
-            ->select(['id', 'pin', 'name_en', 'employee_id', 'pf_balance'])
+            ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance'])
             ->where('status', 'active')
             ->when($validated['branch_id'] ?? null, fn ($q, $branchId) => $q->where('current_branch_id', $branchId))
             ->when($search !== '', function ($q) use ($search) {
@@ -497,14 +506,36 @@ class EmployeeController extends Controller
 
         OrganogramAccessService::constrainVisibleEmployees($query, $request->user());
 
+        $results = $query->get();
+
+        if ($selectedEmployeeId && ! $results->contains('id', $selectedEmployeeId)) {
+            $selected = Employee::query()
+                ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance'])
+                ->where('id', $selectedEmployeeId)
+                ->where('status', 'active')
+                ->first();
+
+            if ($selected) {
+                $visible = Employee::query()
+                    ->select(['id'])
+                    ->where('id', $selectedEmployeeId);
+                OrganogramAccessService::constrainVisibleEmployees($visible, $request->user());
+
+                if ($visible->exists()) {
+                    $results->prepend($selected);
+                }
+            }
+        }
+
         return response()->json(
-            $query->get()->map(fn (Employee $employee) => [
+            $results->map(fn (Employee $employee) => [
                 'id' => $employee->id,
                 'pin' => $employee->pin,
                 'name_en' => $employee->name_en,
+                'name_bn' => $employee->name_bn,
                 'employee_id' => $employee->employee_id,
                 'pf_balance' => $employee->pf_balance,
-            ])
+            ])->values()
         );
     }
 
@@ -516,13 +547,17 @@ class EmployeeController extends Controller
      */
     private function employeePayrollFormOptions(): array
     {
+        $activePayscaleId = Payscale::activeId();
+
         return [
+            'activePayscaleId' => $activePayscaleId,
             'payscales' => Payscale::query()
-                ->where('is_active', true)
+                ->active()
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'payrollGrades' => SalaryGrade::query()
                 ->where('is_active', true)
+                ->when($activePayscaleId, fn ($q) => $q->where('payscale_id', $activePayscaleId))
                 ->orderBy('sort_order')
                 ->orderBy('code')
                 ->get(['id', 'payscale_id', 'code', 'name']),
@@ -531,6 +566,29 @@ class EmployeeController extends Controller
                 ->orderBy('step_number')
                 ->get(['id', 'salary_grade_id', 'step_number', 'basic_salary']),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function assertActiveBranchForEmployedEmployee(array $validated, ?string $statusOverride = null): void
+    {
+        $status = $statusOverride ?? ($validated['status'] ?? 'active');
+        if ($status !== 'active') {
+            return;
+        }
+
+        $branchId = (int) ($validated['current_branch_id'] ?? 0);
+        if ($branchId <= 0) {
+            return;
+        }
+
+        $branch = Branch::query()->find($branchId);
+        if ($branch && ! $branch->is_active) {
+            throw ValidationException::withMessages([
+                'current_branch_id' => 'Active employees cannot be assigned to an inactive branch.',
+            ]);
+        }
     }
 
     /**
@@ -546,8 +604,21 @@ class EmployeeController extends Controller
         $validated['salary_grade_id'] = $gradeId ?: null;
         $validated['salary_step_id'] = $stepId ?: null;
 
+        $activePayscaleId = Payscale::activeId();
+
+        if ($payscaleId && ! $gradeId && ! $stepId) {
+            $validated['payscale_id'] = null;
+
+            return;
+        }
+
         if (! $payscaleId && ! $gradeId && ! $stepId) {
             return;
+        }
+
+        if ($activePayscaleId && ! $payscaleId && $gradeId && $stepId) {
+            $validated['payscale_id'] = $activePayscaleId;
+            $payscaleId = $activePayscaleId;
         }
 
         if (! $payscaleId || ! $gradeId || ! $stepId) {
@@ -560,6 +631,12 @@ class EmployeeController extends Controller
         if (! $grade || (int) $grade->payscale_id !== (int) $payscaleId) {
             throw ValidationException::withMessages([
                 'salary_grade_id' => 'Grade does not belong to the selected payscale.',
+            ]);
+        }
+
+        if ($activePayscaleId && (int) $payscaleId !== $activePayscaleId) {
+            throw ValidationException::withMessages([
+                'payscale_id' => 'Only the currently active payscale can be assigned to employees.',
             ]);
         }
 
@@ -595,6 +672,161 @@ class EmployeeController extends Controller
                 $request->merge([$field => null]);
             }
         }
+
+        $this->normalizeEmployeeBankPayload($request);
+        $this->normalizeEmployeeNomineeGuarantorPayload($request);
+    }
+
+    private function normalizeEmployeeNomineeGuarantorPayload(Request $request): void
+    {
+        $nominees = $request->input('nominees');
+        if (is_array($nominees)) {
+            $normalized = [];
+            foreach ($nominees as $nominee) {
+                if (! is_array($nominee)) {
+                    continue;
+                }
+
+                $normalized[] = [
+                    'name' => $nominee['name'] ?? '',
+                    'relation' => $this->nullableRequestString($nominee['relation'] ?? null),
+                    'date_of_birth' => $this->nullableRequestString($nominee['date_of_birth'] ?? null),
+                    'contact' => $this->nullableRequestString($nominee['contact'] ?? $nominee['mobile'] ?? null),
+                    'share' => $this->nullableRequestNumber($nominee['share'] ?? $nominee['share_percentage'] ?? null),
+                ];
+            }
+
+            $request->merge(['nominees' => $normalized]);
+        }
+
+        $guarantors = $request->input('guarantors');
+        if (is_array($guarantors)) {
+            $normalized = [];
+            foreach ($guarantors as $guarantor) {
+                if (! is_array($guarantor)) {
+                    continue;
+                }
+
+                $normalized[] = [
+                    'name' => $guarantor['name'] ?? '',
+                    'father_name' => $this->nullableRequestString($guarantor['father_name'] ?? null),
+                    'age' => $this->nullableRequestInteger($guarantor['age'] ?? null),
+                    'occupation' => $this->nullableRequestString($guarantor['occupation'] ?? $guarantor['profession'] ?? null),
+                    'relation' => $this->nullableRequestString($guarantor['relation'] ?? null),
+                    'phone' => $this->nullableRequestString($guarantor['phone'] ?? $guarantor['mobile'] ?? null),
+                    'email' => $this->nullableRequestString($guarantor['email'] ?? null),
+                    'nid' => $this->nullableRequestString($guarantor['nid'] ?? null),
+                    'organization' => $this->nullableRequestString($guarantor['organization'] ?? null),
+                    'designation' => $this->nullableRequestString($guarantor['designation'] ?? null),
+                    'address' => $this->nullableRequestString($guarantor['address'] ?? null),
+                ];
+            }
+
+            $request->merge(['guarantors' => $normalized]);
+        }
+    }
+
+    private function nullableRequestString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim((string) $value);
+
+        return $trimmed === '' ? null : $trimmed;
+    }
+
+    private function nullableRequestNumber(mixed $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $value;
+    }
+
+    private function nullableRequestInteger(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $nominee
+     * @return array<string, mixed>
+     */
+    private function employeeNomineeInsertRow(int $employeeId, array $nominee): array
+    {
+        return [
+            'employee_id' => $employeeId,
+            'name' => (string) ($nominee['name'] ?? ''),
+            'relation' => $nominee['relation'] ?? null,
+            'date_of_birth' => $nominee['date_of_birth'] ?? null,
+            'share' => $nominee['share'] ?? null,
+            'contact' => $nominee['contact'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $guarantor
+     * @return array<string, mixed>
+     */
+    private function employeeGuarantorInsertRow(int $employeeId, array $guarantor): array
+    {
+        return [
+            'employee_id' => $employeeId,
+            'name' => (string) ($guarantor['name'] ?? ''),
+            'father_name' => $guarantor['father_name'] ?? null,
+            'age' => $guarantor['age'] ?? null,
+            'occupation' => $guarantor['occupation'] ?? null,
+            'relation' => $guarantor['relation'] ?? null,
+            'phone' => $guarantor['phone'] ?? null,
+            'email' => $guarantor['email'] ?? null,
+            'nid' => $guarantor['nid'] ?? null,
+            'organization' => $guarantor['organization'] ?? null,
+            'designation' => $guarantor['designation'] ?? null,
+            'address' => $guarantor['address'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+    }
+
+    private function normalizeEmployeeBankPayload(Request $request): void
+    {
+        if (! $request->has('bank') || ! is_array($request->input('bank'))) {
+            return;
+        }
+
+        $bank = $request->input('bank');
+        $bank['account_type'] = self::DEFAULT_EMPLOYEE_BANK_ACCOUNT_TYPE;
+        $bank['branch_name'] = self::DEFAULT_EMPLOYEE_BANK_BRANCH_NAME;
+        $request->merge(['bank' => $bank]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $bank
+     * @return array<string, mixed>
+     */
+    private function employeeBankInsertRow(int $employeeId, array $bank): array
+    {
+        return [
+            'employee_id' => $employeeId,
+            'bank_name' => (string) ($bank['bank_name'] ?? ''),
+            'branch_name' => self::DEFAULT_EMPLOYEE_BANK_BRANCH_NAME,
+            'account_no' => $bank['account_no'] ?? null,
+            'account_type' => self::DEFAULT_EMPLOYEE_BANK_ACCOUNT_TYPE,
+            'bank_address' => $bank['bank_address'] ?? null,
+            'remark' => $bank['remark'] ?? null,
+            'is_primary' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
     }
 
     /**
@@ -1146,6 +1378,31 @@ class EmployeeController extends Controller
     }
 
     /**
+     * User login access follows employee employment status.
+     * After Employee::create(), status may be unset on the in-memory model until refresh
+     * even when the DB default is active — treat missing status as active.
+     */
+    private function employeeIsActiveForUserAccess(Employee $employee): bool
+    {
+        $status = $employee->status;
+        if ($status === null || $status === '') {
+            $status = $employee->exists
+                ? (Employee::query()->whereKey($employee->id)->value('status') ?? 'active')
+                : 'active';
+        }
+
+        return $status === 'active';
+    }
+
+    /**
+     * Keep linked login accounts in sync when employment status changes.
+     */
+    private function syncLinkedUserActiveStatusFromEmployee(Employee $employee): void
+    {
+        $employee->syncLinkedUserActiveStatus();
+    }
+
+    /**
      * Create or update a User for this employee: username from PIN, email from employee, password on first create only.
      * Pivot roles: always "Employee", plus organogram roles when designation matches.
      *
@@ -1215,7 +1472,7 @@ class EmployeeController extends Controller
             'role_id' => $primaryRoleId,
             'employee_id' => $employee->id,
             'branch_id' => $employee->current_branch_id,
-            'active_status' => $employee->status === 'active',
+            'active_status' => $this->employeeIsActiveForUserAccess($employee),
         ];
 
         if ($user) {
@@ -1237,30 +1494,38 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
-        $query = Employee::with(['department', 'designation', 'branch']);
+        $query = Employee::with([
+            'department',
+            'designation',
+            'branch.regionalOffice.zone',
+            'employeeType',
+        ]);
         OrganogramAccessService::constrainVisibleEmployees($query, $user);
 
         $query
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($query) use ($search) {
-                    $query->where('name_en', 'like', "%{$search}%")
-                        ->orWhere('name_bn', 'like', "%{$search}%")
-                        ->orWhere('pin', 'like', "%{$search}%")
-                        ->orWhere('employee_id', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
+                    $query->where('employees.name_en', 'like', "%{$search}%")
+                        ->orWhere('employees.name_bn', 'like', "%{$search}%")
+                        ->orWhere('employees.pin', 'like', "%{$search}%")
+                        ->orWhere('employees.employee_id', 'like', "%{$search}%")
+                        ->orWhere('employees.email', 'like', "%{$search}%");
                 });
             })
             ->when($request->department_id, function ($query, $departmentId) {
-                $query->where('department_id', $departmentId);
+                $query->where('employees.department_id', $departmentId);
             })
             ->when($request->branch_id, function ($query, $branchId) {
-                $query->where('current_branch_id', $branchId);
+                $query->where('employees.current_branch_id', $branchId);
             })
             ->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
+                $query->where('employees.status', $status);
             })
             ->when($request->employee_type_id, function ($query, $employeeTypeId) {
-                $query->where('employee_type_id', $employeeTypeId);
+                $query->where('employees.employee_type_id', $employeeTypeId);
+            })
+            ->when($request->designation_id, function ($query, $designationId) {
+                $query->where('employees.designation_id', $designationId);
             });
 
         $perPage = (int) $request->get('per_page', 25);
@@ -1268,10 +1533,10 @@ class EmployeeController extends Controller
             $perPage = 25;
         }
 
-        $allowedSortBy = ['id', 'pin', 'name', 'status'];
-        $sortBy = (string) $request->get('sort_by', 'id');
+        $allowedSortBy = ['organogram', 'id', 'pin', 'name', 'status'];
+        $sortBy = (string) $request->get('sort_by', 'organogram');
         if (! in_array($sortBy, $allowedSortBy, true)) {
-            $sortBy = 'id';
+            $sortBy = 'organogram';
         }
 
         $sortDir = strtolower((string) $request->get('sort_dir', 'asc'));
@@ -1279,15 +1544,7 @@ class EmployeeController extends Controller
             $sortDir = 'asc';
         }
 
-        if ($sortBy === 'pin') {
-            $query->orderByRaw('COALESCE(pin, employee_id) '.$sortDir);
-        } elseif ($sortBy === 'name') {
-            $query->orderBy('name_en', $sortDir);
-        } elseif ($sortBy === 'status') {
-            $query->orderBy('status', $sortDir)->orderBy('id', 'asc');
-        } else {
-            $query->orderBy('id', $sortDir);
-        }
+        HeadOfficeOrganogram::applyToEmployeeQuery($query, $sortBy, $sortDir);
 
         $employees = $query
             ->paginate($perPage)
@@ -1311,12 +1568,15 @@ class EmployeeController extends Controller
 
         $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get();
 
+        $designations = Designation::query()->orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('employee/index', [
             'employees' => $employees,
             'departments' => $departments,
             'branches' => $branches,
             'employee_types' => $employeeTypes,
-            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status', 'employee_type_id', 'per_page', 'sort_by', 'sort_dir']),
+            'designations' => $designations,
+            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status', 'employee_type_id', 'designation_id', 'per_page', 'sort_by', 'sort_dir']),
         ]);
     }
 
@@ -1330,12 +1590,19 @@ class EmployeeController extends Controller
         ]);
 
         $newStatus = $validated['active'] ? 'active' : 'inactive';
+        if ($newStatus === 'active') {
+            $branch = Branch::query()->find($employee->current_branch_id);
+            if ($branch && ! $branch->is_active) {
+                return back()->withErrors([
+                    'active' => 'Cannot activate employee while their branch is inactive. Transfer them to an active branch first.',
+                ]);
+            }
+        }
+
         $employee->status = $newStatus;
         $employee->save();
 
-        User::query()
-            ->where('employee_id', $employee->id)
-            ->update(['active_status' => $newStatus === 'active']);
+        $this->syncLinkedUserActiveStatusFromEmployee($employee->fresh());
 
         return back()->with('success', 'Employee status updated successfully.');
     }
@@ -1348,6 +1615,7 @@ class EmployeeController extends Controller
         $departments = Department::all();
         $designations = Designation::all();
         $branches = Branch::query()
+            ->active()
             ->with([
                 'regionalOffice.zone.zoneManager:id,employee_id,name_en',
                 'regionalOffice.regionalManager:id,employee_id,name_en',
@@ -1510,11 +1778,16 @@ class EmployeeController extends Controller
 
                 'guarantors' => 'nullable|array',
                 'guarantors.*.name' => 'required_with:guarantors|string|max:200',
+                'guarantors.*.father_name' => 'nullable|string|max:200',
                 'guarantors.*.age' => 'nullable|integer|min:0|max:150',
                 'guarantors.*.occupation' => 'nullable|string|max:150',
                 'guarantors.*.relation' => 'nullable|string|max:80',
                 'guarantors.*.phone' => 'nullable|string|max:30',
                 'guarantors.*.email' => 'nullable|email',
+                'guarantors.*.nid' => 'nullable|string|max:30',
+                'guarantors.*.organization' => 'nullable|string|max:200',
+                'guarantors.*.designation' => 'nullable|string|max:150',
+                'guarantors.*.address' => 'nullable|string',
 
                 'guarantor_cheques' => 'nullable|array',
                 'guarantor_cheques.*.bank_name' => 'nullable|string|max:200',
@@ -1580,6 +1853,7 @@ class EmployeeController extends Controller
             }
 
             $this->assertEmployeePayrollAssignment($validated);
+            $this->assertActiveBranchForEmployedEmployee($validated);
 
             if (empty($validated['last_designation_id'])) {
                 $validated['last_designation_id'] = $validated['joining_designation_id'];
@@ -1604,6 +1878,7 @@ class EmployeeController extends Controller
 
             $employeeData['employee_id'] = $employeeData['pin'];
             $employeeData['designation_id'] = $employeeData['last_designation_id'];
+            $employeeData['status'] = $employeeData['status'] ?? 'active';
 
             // Ensure employees.email is always filled (DB column is NOT NULL)
             $email = trim((string) ($employeeData['email'] ?? ''));
@@ -1694,47 +1969,23 @@ class EmployeeController extends Controller
 
                 $bank = is_array($validated['bank'] ?? null) ? $validated['bank'] : null;
                 if ($bank) {
-                    DB::table('employee_bank_accounts')->insert([
-                        'employee_id' => $eid,
-                        'bank_name' => (string) ($bank['bank_name'] ?? ''),
-                        'branch_name' => $bank['branch_name'] ?? null,
-                        'account_no' => $bank['account_no'] ?? null,
-                        'account_type' => $bank['account_type'] ?? null,
-                        'bank_address' => $bank['bank_address'] ?? null,
-                        'remark' => $bank['remark'] ?? null,
-                        'is_primary' => true,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    DB::table('employee_bank_accounts')->insert(
+                        $this->employeeBankInsertRow($eid, $bank)
+                    );
                 }
 
                 $nominees = is_array($validated['nominees'] ?? null) ? $validated['nominees'] : [];
                 foreach ($nominees as $n) {
-                    DB::table('employee_nominees')->insert([
-                        'employee_id' => $eid,
-                        'name' => (string) ($n['name'] ?? ''),
-                        'relation' => $n['relation'] ?? null,
-                        'date_of_birth' => $n['date_of_birth'] ?? null,
-                        'share' => $n['share'] ?? null,
-                        'contact' => $n['contact'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    DB::table('employee_nominees')->insert(
+                        $this->employeeNomineeInsertRow($eid, $n)
+                    );
                 }
 
                 $guarantors = is_array($validated['guarantors'] ?? null) ? $validated['guarantors'] : [];
                 foreach ($guarantors as $g) {
-                    DB::table('employee_guarantors')->insert([
-                        'employee_id' => $eid,
-                        'name' => (string) ($g['name'] ?? ''),
-                        'age' => $g['age'] ?? null,
-                        'occupation' => $g['occupation'] ?? null,
-                        'relation' => $g['relation'] ?? null,
-                        'phone' => $g['phone'] ?? null,
-                        'email' => $g['email'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    DB::table('employee_guarantors')->insert(
+                        $this->employeeGuarantorInsertRow($eid, $g)
+                    );
                 }
 
                 $guarantorCheques = is_array($validated['guarantor_cheques'] ?? null) ? $validated['guarantor_cheques'] : [];
@@ -1850,6 +2101,7 @@ class EmployeeController extends Controller
         $departments = Department::all();
         $designations = Designation::all();
         $branches = Branch::query()
+            ->active()
             ->with([
                 'regionalOffice.zone.zoneManager:id,employee_id,name_en',
                 'regionalOffice.regionalManager:id,employee_id,name_en',
@@ -1871,6 +2123,10 @@ class EmployeeController extends Controller
         $employeePayload['addresses'] = DB::table('employee_addresses')->where('employee_id', $employee->id)->get()->all();
         $employeePayload['educations'] = DB::table('employee_educations')->where('employee_id', $employee->id)->get()->all();
         $employeePayload['bank'] = DB::table('employee_bank_accounts')->where('employee_id', $employee->id)->first();
+        if ($employeePayload['bank']) {
+            $employeePayload['bank']->account_type = self::DEFAULT_EMPLOYEE_BANK_ACCOUNT_TYPE;
+            $employeePayload['bank']->branch_name = self::DEFAULT_EMPLOYEE_BANK_BRANCH_NAME;
+        }
         $employeePayload['nominees'] = DB::table('employee_nominees')->where('employee_id', $employee->id)->get()->all();
         $employeePayload['guarantors'] = DB::table('employee_guarantors')->where('employee_id', $employee->id)->get()->all();
         $employeePayload['guarantor_cheques'] = DB::table('employee_guarantor_cheques')->where('employee_id', $employee->id)->get()->all();
@@ -2029,11 +2285,16 @@ class EmployeeController extends Controller
 
                 'guarantors' => 'nullable|array',
                 'guarantors.*.name' => 'required_with:guarantors|string|max:200',
+                'guarantors.*.father_name' => 'nullable|string|max:200',
                 'guarantors.*.age' => 'nullable|integer|min:0|max:150',
                 'guarantors.*.occupation' => 'nullable|string|max:150',
                 'guarantors.*.relation' => 'nullable|string|max:80',
                 'guarantors.*.phone' => 'nullable|string|max:30',
                 'guarantors.*.email' => 'nullable|email',
+                'guarantors.*.nid' => 'nullable|string|max:30',
+                'guarantors.*.organization' => 'nullable|string|max:200',
+                'guarantors.*.designation' => 'nullable|string|max:150',
+                'guarantors.*.address' => 'nullable|string',
 
                 'guarantor_cheques' => 'nullable|array',
                 'guarantor_cheques.*.bank_name' => 'nullable|string|max:200',
@@ -2094,6 +2355,7 @@ class EmployeeController extends Controller
             ]);
 
             $this->assertEmployeePayrollAssignment($validated);
+            $this->assertActiveBranchForEmployedEmployee($validated, $employee->status);
 
             if (empty($validated['last_designation_id'])) {
                 $validated['last_designation_id'] = $validated['joining_designation_id'];
@@ -2216,47 +2478,23 @@ class EmployeeController extends Controller
 
                 $bank = is_array($validated['bank'] ?? null) ? $validated['bank'] : null;
                 if ($bank) {
-                    DB::table('employee_bank_accounts')->insert([
-                        'employee_id' => $eid,
-                        'bank_name' => (string) ($bank['bank_name'] ?? ''),
-                        'branch_name' => $bank['branch_name'] ?? null,
-                        'account_no' => $bank['account_no'] ?? null,
-                        'account_type' => $bank['account_type'] ?? null,
-                        'bank_address' => $bank['bank_address'] ?? null,
-                        'remark' => $bank['remark'] ?? null,
-                        'is_primary' => true,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    DB::table('employee_bank_accounts')->insert(
+                        $this->employeeBankInsertRow($eid, $bank)
+                    );
                 }
 
                 $nominees = is_array($validated['nominees'] ?? null) ? $validated['nominees'] : [];
                 foreach ($nominees as $n) {
-                    DB::table('employee_nominees')->insert([
-                        'employee_id' => $eid,
-                        'name' => (string) ($n['name'] ?? ''),
-                        'relation' => $n['relation'] ?? null,
-                        'date_of_birth' => $n['date_of_birth'] ?? null,
-                        'share' => $n['share'] ?? null,
-                        'contact' => $n['contact'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    DB::table('employee_nominees')->insert(
+                        $this->employeeNomineeInsertRow($eid, $n)
+                    );
                 }
 
                 $guarantors = is_array($validated['guarantors'] ?? null) ? $validated['guarantors'] : [];
                 foreach ($guarantors as $g) {
-                    DB::table('employee_guarantors')->insert([
-                        'employee_id' => $eid,
-                        'name' => (string) ($g['name'] ?? ''),
-                        'age' => $g['age'] ?? null,
-                        'occupation' => $g['occupation'] ?? null,
-                        'relation' => $g['relation'] ?? null,
-                        'phone' => $g['phone'] ?? null,
-                        'email' => $g['email'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    DB::table('employee_guarantors')->insert(
+                        $this->employeeGuarantorInsertRow($eid, $g)
+                    );
                 }
 
                 $guarantorCheques = is_array($validated['guarantor_cheques'] ?? null) ? $validated['guarantor_cheques'] : [];
@@ -2370,6 +2608,8 @@ class EmployeeController extends Controller
         $employee->load([
             'department',
             'employeeType',
+            'program',
+            'project',
             'payscale',
             'salaryGrade',
             'salaryStep',
@@ -2415,6 +2655,25 @@ class EmployeeController extends Controller
         $employee->assets = \Illuminate\Support\Facades\DB::table('employee_assets')->where('employee_id', $employee->id)->get()->all();
         $employee->experiences = \Illuminate\Support\Facades\DB::table('employee_experiences')->where('employee_id', $employee->id)->get()->all();
         $employee->trainings = \Illuminate\Support\Facades\DB::table('employee_trainings')->where('employee_id', $employee->id)->get()->all();
+        $employee->documents = EmployeeDocument::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (EmployeeDocument $d) => [
+                'id' => $d->id,
+                'document_type' => $d->document_type,
+                'title' => $d->title,
+                'description' => $d->description,
+                'expiry_date' => $d->expiry_date?->format('Y-m-d'),
+                'file_path' => $d->file_path,
+                'created_at' => $d->created_at?->toIso8601String(),
+            ])
+            ->all();
+
+        if ($employee->collateral && is_string($employee->collateral->certificate_levels ?? null)) {
+            $decoded = json_decode($employee->collateral->certificate_levels, true);
+            $employee->collateral->certificate_levels = is_array($decoded) ? $decoded : [];
+        }
 
         $transferHistories = TransferHistory::query()
             ->with(['fromBranch:id,name', 'toBranch:id,name', 'transfer:id,transfer_order_no,effective_date,status'])
@@ -2436,6 +2695,19 @@ class EmployeeController extends Controller
             ->limit(50)
             ->get();
 
+        $demotionHistories = DemotionHistory::query()
+            ->with([
+                'fromDesignation:id,name',
+                'toDesignation:id,name',
+                'fromSalaryGrade:id,name',
+                'toSalaryGrade:id,name',
+                'demotion:id,demotion_order_no,effective_date,status',
+            ])
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('demotion_date')
+            ->limit(50)
+            ->get();
+
         return Inertia::render('employee/show', [
             'employee' => $employee,
             'currentYearLeaveBalances' => $currentYearLeaveBalances,
@@ -2443,6 +2715,7 @@ class EmployeeController extends Controller
             'recentMovements' => $recentMovements,
             'transferHistories' => $transferHistories,
             'promotionHistories' => $promotionHistories,
+            'demotionHistories' => $demotionHistories,
         ]);
     }
 
@@ -2494,7 +2767,7 @@ class EmployeeController extends Controller
         $headOffice = Branch::query()
             ->with([
                 'headEmployee' => fn ($q) => $q->where('status', 'active')->with('designation'),
-                'employees' => fn ($q) => $q->where('status', 'active')->with('designation'),
+                'employees' => fn ($q) => $q->where('status', 'active')->with('designation')->orderBy('name_en'),
             ])
             ->withCount([
                 'employees' => fn ($q) => $q->where('status', 'active'),
@@ -2502,27 +2775,39 @@ class EmployeeController extends Controller
             ->where('is_head_office', true)
             ->first();
 
+        $headOfficeTiers = $headOffice
+            ? HeadOfficeOrganogram::groupEmployeesByTier($headOffice->employees)
+            : [];
+
         $zones = Zone::with([
             'zoneManager' => fn ($q) => $q->where('status', 'active')->with('designation'),
             'regionalOffices' => function ($q) {
-                $q->orderBy('name');
+                $q->orderBy('code')->orderBy('name');
             },
             'regionalOffices.regionalManager' => fn ($q) => $q->where('status', 'active')->with('designation'),
             'regionalOffices.branches' => function ($q) {
                 $q->where('is_head_office', false)
+                    ->orderBy('branch_code')
                     ->orderBy('name')
                     ->withCount([
                         'employees' => fn ($employeeQuery) => $employeeQuery->where('status', 'active'),
                     ]);
             },
-            'regionalOffices.branches.headEmployee' => fn ($q) => $q->where('status', 'active')->with('designation'),
             'regionalOffices.branches.employees' => fn ($q) => $q->where('status', 'active')->with('designation'),
-        ])->orderBy('name')->get();
+        ])->orderBy('code')->orderBy('name')->get();
 
         $zones->each(function (Zone $zone): void {
             $zoneTotal = 0;
             foreach ($zone->regionalOffices as $ro) {
                 /** @var RegionalOffice $ro */
+                foreach ($ro->branches as $branch) {
+                    /** @var Branch $branch */
+                    $branch->setAttribute(
+                        'employee_tiers',
+                        BranchOrganogram::groupEmployeesByTier($branch->employees)
+                    );
+                }
+
                 $roTotal = (int) $ro->branches->reduce(
                     fn (int $total, Branch $branch): int => $total + (int) $branch->employees_count,
                     0
@@ -2535,6 +2820,7 @@ class EmployeeController extends Controller
 
         return Inertia::render('employee/organization-chart', [
             'headOffice' => $headOffice,
+            'headOfficeTiers' => $headOfficeTiers,
             'zones' => $zones,
         ]);
     }
@@ -3570,16 +3856,12 @@ class EmployeeController extends Controller
     {
         $bankName = trim((string) ($csvRow['bank_name'] ?? ''));
         if ($bankName !== '') {
-            $accountType = strtolower(trim((string) ($csvRow['bank_account_type'] ?? '')));
-            if (! in_array($accountType, ['current', 'savings'], true)) {
-                $accountType = null;
-            }
             DB::table('employee_bank_accounts')->insert([
                 'employee_id' => $employeeId,
                 'bank_name' => $bankName,
-                'branch_name' => $this->nullableImportString($csvRow['bank_branch_name'] ?? null),
+                'branch_name' => self::DEFAULT_EMPLOYEE_BANK_BRANCH_NAME,
                 'account_no' => $this->nullableImportString($csvRow['bank_account_no'] ?? null),
-                'account_type' => $accountType,
+                'account_type' => self::DEFAULT_EMPLOYEE_BANK_ACCOUNT_TYPE,
                 'is_primary' => true,
                 'created_at' => now(),
                 'updated_at' => now(),

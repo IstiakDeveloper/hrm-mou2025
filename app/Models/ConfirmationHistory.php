@@ -16,6 +16,12 @@ class ConfirmationHistory extends Model
         'to_designation_id',
         'from_employee_type_id',
         'to_employee_type_id',
+        'from_salary_grade_id',
+        'to_salary_grade_id',
+        'from_salary_step_id',
+        'to_salary_step_id',
+        'from_basic_salary',
+        'to_basic_salary',
         'confirmation_date',
         'previous_confirmation_date',
         'created_by',
@@ -24,6 +30,8 @@ class ConfirmationHistory extends Model
     protected $casts = [
         'confirmation_date' => 'date',
         'previous_confirmation_date' => 'date',
+        'from_basic_salary' => 'decimal:2',
+        'to_basic_salary' => 'decimal:2',
     ];
 
     public function confirmation()
@@ -54,6 +62,26 @@ class ConfirmationHistory extends Model
     public function toEmployeeType()
     {
         return $this->belongsTo(EmployeeType::class, 'to_employee_type_id');
+    }
+
+    public function fromSalaryGrade()
+    {
+        return $this->belongsTo(SalaryGrade::class, 'from_salary_grade_id');
+    }
+
+    public function toSalaryGrade()
+    {
+        return $this->belongsTo(SalaryGrade::class, 'to_salary_grade_id');
+    }
+
+    public function fromSalaryStep()
+    {
+        return $this->belongsTo(SalaryStep::class, 'from_salary_step_id');
+    }
+
+    public function toSalaryStep()
+    {
+        return $this->belongsTo(SalaryStep::class, 'to_salary_step_id');
     }
 
     public function creator()

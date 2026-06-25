@@ -15,6 +15,13 @@ class Confirmation extends Model
         'to_designation_id',
         'from_employee_type_id',
         'to_employee_type_id',
+        'from_salary_grade_id',
+        'to_salary_grade_id',
+        'from_salary_step_id',
+        'to_salary_step_id',
+        'from_basic_salary',
+        'to_basic_salary',
+        'promotion_id',
         'confirmation_date',
         'confirmation_order_no',
         'reason',
@@ -24,6 +31,8 @@ class Confirmation extends Model
 
     protected $casts = [
         'confirmation_date' => 'date',
+        'from_basic_salary' => 'decimal:2',
+        'to_basic_salary' => 'decimal:2',
     ];
 
     public function employee()
@@ -49,6 +58,31 @@ class Confirmation extends Model
     public function toEmployeeType()
     {
         return $this->belongsTo(EmployeeType::class, 'to_employee_type_id');
+    }
+
+    public function fromSalaryGrade()
+    {
+        return $this->belongsTo(SalaryGrade::class, 'from_salary_grade_id');
+    }
+
+    public function toSalaryGrade()
+    {
+        return $this->belongsTo(SalaryGrade::class, 'to_salary_grade_id');
+    }
+
+    public function fromSalaryStep()
+    {
+        return $this->belongsTo(SalaryStep::class, 'from_salary_step_id');
+    }
+
+    public function toSalaryStep()
+    {
+        return $this->belongsTo(SalaryStep::class, 'to_salary_step_id');
+    }
+
+    public function promotion()
+    {
+        return $this->belongsTo(Promotion::class);
     }
 
     public function approver()

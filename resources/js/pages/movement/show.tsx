@@ -364,7 +364,7 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                     }
                 }}
             >
-                <DialogContent>
+                <DialogContent className="max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
                     <DialogHeader>
                         <DialogTitle>Close Movement</DialogTitle>
                         <DialogDescription>
@@ -377,7 +377,11 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                             By default, your return is recorded at <strong>the current time</strong> when you confirm.
                         </p>
 
-                        <div className="flex items-start space-x-3 rounded-md border p-3">
+                        <div className={`flex items-start space-x-3 rounded-md border p-4 transition-all duration-200 ${
+                            forgotReturnTime 
+                                ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-500' 
+                                : 'border-amber-200 bg-amber-50/20 hover:bg-amber-50/40'
+                        }`}>
                             <Checkbox
                                 id="forgotReturnTime"
                                 checked={forgotReturnTime}
@@ -388,13 +392,14 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                                         setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
                                     }
                                 }}
+                                className="mt-1 border-amber-400 data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
                             />
                             <div className="grid gap-1.5 leading-none">
-                                <Label htmlFor="forgotReturnTime" className="cursor-pointer font-medium">
-                                    I forgot to close earlier — set actual return date &amp; time
+                                <Label htmlFor="forgotReturnTime" className="cursor-pointer font-semibold text-amber-950">
+                                    আমি আগে ক্লোজ করতে ভুলে গিয়েছিলাম
                                 </Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Check this if you already returned but did not close the movement. Then pick when you actually came back.
+                                <p className="text-xs text-amber-800">
+                                    ইতিমধ্যে ফিরে এসে থাকলে, এটি টিক দিয়ে আপনার ফেরার সঠিক সময়টি সিলেক্ট করুন।
                                 </p>
                             </div>
                         </div>
@@ -415,9 +420,9 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                             <p className="text-sm font-medium text-red-600">{closeError}</p>
                         )}
 
-                        <div className="bg-blue-50 p-3 rounded-md">
+                        <div className="bg-blue-50 p-3 rounded-md flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 text-blue-700 shrink-0 mt-0.5" />
                             <p className="text-sm text-blue-700">
-                                <AlertCircle className="h-4 w-4 inline mr-1" />
                                 This will mark your movement as completed and update your attendance records.
                             </p>
                         </div>

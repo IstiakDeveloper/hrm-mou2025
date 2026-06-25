@@ -14,6 +14,7 @@ import {
     Settings2,
     Wallet,
     FileBarChart2,
+    HandCoins,
 } from 'lucide-react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
@@ -168,11 +169,12 @@ export default function PayrollDashboard({ stats, userRole }: Props) {
                 <section className="mb-6">
                     <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Salary</h2>
                     <div className={cn(shortcutGrid)}>
-                        {can('payroll.view') && <ShortcutTile href={`/probation-salary${section}`} title="Probation salary" icon={Banknote} />}
-                        {can('payroll.view') && <ShortcutTile href={`/fixed-salary${section}`} title="Fixed salary" icon={Banknote} />}
+                        {can('payroll.view') && <ShortcutTile href={`/final-payments${section}`} title="Final payment" icon={HandCoins} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-head-modifications${section}`} title="Head modification" icon={Pencil} />}
+                        {can('payroll.view') && <ShortcutTile href={`/salary-withheld${section}`} title="Salary withheld" icon={Banknote} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-process${section}`} title="Salary process" icon={Calculator} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-post${section}`} title="Salary post" icon={Wallet} />}
+                        {can('payroll.view') && <ShortcutTile href={`/salary-rollback${section}`} title="Salary rollback" icon={Calculator} />}
                     </div>
                 </section>
 

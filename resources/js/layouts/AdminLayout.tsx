@@ -1,90 +1,61 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import {
-    User,
-    Users,
-    ClipboardList,
-    LogOut,
-    Menu,
-    X,
-    ChevronDown,
-    ChevronRight,
-    Settings,
+    Activity,
+    ArrowLeftRight,
+    Award,
     BarChart,
     Bell,
-    Activity,
-    Award,
-    BriefcaseBusiness,
-    CalendarDays,
-    Building2,
-    ChevronsLeft,
-    ArrowLeftRight,
-    LayoutDashboard,
-    Wallet,
     Boxes,
-    ArrowRightLeft,
-    UserCheck,
-    Wrench,
-    Trash2,
-    TrendingDown,
-    Gift,
-    Landmark,
-    Coins,
+    BriefcaseBusiness,
+    Building2,
+    CalendarDays,
+    ChevronDown,
+    ChevronRight,
+    ClipboardList,
     Home,
-    Monitor,
+    LayoutDashboard,
+    LogOut,
+    Menu,
+    Settings,
+    User,
+    Users,
+    Wallet,
+    X,
 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Toast, ToastAction } from '@/components/ui/toast';
-import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/use-toast';
+import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
+import ActiveMovementBanner from '@/components/active-movement-banner';
+import NotificationDropdown from '@/components/notification-dropdown';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
-    DropdownMenuTrigger
+    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Sheet,
-    SheetContent,
-    SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import ActiveMovementBanner from '@/components/active-movement-banner';
-import NotificationDropdown from '@/components/notification-dropdown';
-import { hasAppPermission, isBranchAccount } from '@/lib/permissions';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { getActiveSectionId, getMenuKeysForSection, getSectionById, withSectionParam, type AdminSectionId } from '@/lib/admin-sections';
 import { EMPLOYEE_LOAN_NAV_GROUPS, employeeLoanPath } from '@/lib/employee-loan-nav';
 import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee-loan-reports';
-import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
-import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
-import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
+import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { format } from 'date-fns';
+import { hasAppPermission, isBranchAccount } from '@/lib/permissions';
+import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
+import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -123,13 +94,7 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                 {
                     title: 'Employee Full Report',
                     path: '/employee/dashboard',
-                    anyPermissions: [
-                        'employees.view',
-                        'leave-applications.view',
-                        'movements.view',
-                        'transfers.view',
-                        'attendance.view',
-                    ],
+                    anyPermissions: ['employees.view', 'leave-applications.view', 'movements.view', 'transfers.view', 'attendance.view'],
                 },
                 {
                     title: 'Employee Report',
@@ -156,13 +121,15 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                 { title: 'Leave summary report', path: '/reports/leave', permission: 'reports.view' },
             ];
         case 'administration':
-            return [{ title: 'Administration summary', path: withSectionParam('/reports/administration', 'administration'), permission: 'reports.view' }];
+            return [
+                { title: 'Administration summary', path: withSectionParam('/reports/administration', 'administration'), permission: 'reports.view' },
+            ];
         case 'employee-loan':
             return EMPLOYEE_LOAN_REPORT_NAV.map((r) => ({
-                    title: r.title,
-                    path: employeeLoanReportPath(r.slug),
-                    permission: 'payroll.view',
-                }));
+                title: r.title,
+                path: employeeLoanReportPath(r.slug),
+                permission: 'payroll.view',
+            }));
         case 'staff-fund':
             return [
                 ...PF_REPORT_NAV.map((r) => ({
@@ -182,11 +149,19 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                 { title: 'Salary Sheet (Posted)', path: '/payroll/reports/salary-sheet-posted', permission: 'payroll.view' },
                 { title: 'Salary Sheet (Un-posted)', path: '/payroll/reports/salary-sheet-unposted', permission: 'payroll.view' },
                 { title: 'Salary Sheet (Employee Wise Posted)', path: '/payroll/reports/salary-sheet-employee-posted', permission: 'payroll.view' },
-                { title: 'Salary Sheet (Employee Wise Unposted)', path: '/payroll/reports/salary-sheet-employee-unposted', permission: 'payroll.view' },
+                {
+                    title: 'Salary Sheet (Employee Wise Unposted)',
+                    path: '/payroll/reports/salary-sheet-employee-unposted',
+                    permission: 'payroll.view',
+                },
                 { title: 'Salary Sheet (Date Range)', path: '/payroll/reports/salary-sheet-date-range', permission: 'payroll.view' },
                 { title: 'Salary Sheet Report (Branch Wise)', path: '/payroll/reports/salary-sheet-branch-wise', permission: 'payroll.view' },
                 { title: 'Salary Sheet Report (Month Wise)', path: '/payroll/reports/salary-sheet-month-wise', permission: 'payroll.view' },
-                { title: 'Salary Sheet Report (Designation Wise)', path: '/payroll/reports/salary-sheet-designation-wise', permission: 'payroll.view' },
+                {
+                    title: 'Salary Sheet Report (Designation Wise)',
+                    path: '/payroll/reports/salary-sheet-designation-wise',
+                    permission: 'payroll.view',
+                },
                 { title: 'Bank Advice Report', path: '/payroll/reports/bank-advice', permission: 'payroll.view' },
                 { title: 'Bank Advice Bonus Report', path: '/payroll/reports/bank-advice-bonus', permission: 'payroll.view' },
                 { title: 'Salary Addition Register', path: '/payroll/reports/addition-register', permission: 'payroll.view' },
@@ -244,7 +219,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const getInitials = (name: string) => {
         return name
             .split(' ')
-            .map(word => word[0])
+            .map((word) => word[0])
             .join('')
             .toUpperCase();
     };
@@ -270,16 +245,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'admin.access',
     ].some((p) => hasPermission(p));
 
-    const hasOwnActiveMovement = Boolean(
-        activeMovement?.id
-        && auth?.employee?.id
-        && activeMovement.employee_id === auth.employee.id
-    );
+    const hasOwnActiveMovement = Boolean(activeMovement?.id && auth?.employee?.id && activeMovement.employee_id === auth.employee.id);
 
-    const canCloseOwnMovement = Boolean(
-        hasOwnActiveMovement
-        && hasPermission('movements.complete')
-    );
+    const canCloseOwnMovement = Boolean(hasOwnActiveMovement && hasPermission('movements.complete'));
 
     const openCloseMovementDialog = (movementId?: number) => {
         setCloseError(null);
@@ -300,16 +268,20 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         }
 
         setClosing(true);
-        router.post(route('movements.complete', movementId), {
-            forgot_return_time: forgotReturnTime ? '1' : '0',
-            actual_return_datetime: forgotReturnTime ? customReturnTime : null,
-        }, {
-            preserveScroll: true,
-            onFinish: () => {
-                setClosing(false);
-                setShowCloseMovementDialog(false);
-            }
-        });
+        router.post(
+            route('movements.complete', movementId),
+            {
+                forgot_return_time: forgotReturnTime ? '1' : '0',
+                actual_return_datetime: forgotReturnTime ? customReturnTime : null,
+            },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setClosing(false);
+                    setShowCloseMovementDialog(false);
+                },
+            },
+        );
     };
 
     useEffect(() => {
@@ -342,345 +314,323 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'transfers.view',
     ];
 
-    const administrationSectionDashboardAny: string[] = [
-        'admin.access',
-        'roles.view',
-        'users.view',
-        'sessions.view',
-        'reports.view',
-    ];
+    const administrationSectionDashboardAny: string[] = ['admin.access', 'roles.view', 'users.view', 'sessions.view', 'reports.view'];
 
-    const payrollSectionDashboardAny: string[] = [
-        'payroll.view',
-        'payroll.create',
-        'payroll.edit',
-        'admin.access',
-    ];
+    const payrollSectionDashboardAny: string[] = ['payroll.view', 'payroll.create', 'payroll.edit', 'admin.access'];
 
-    const staffFundSectionDashboardAny: string[] = [
-        'payroll.view',
-        'payroll.edit',
-        'admin.access',
-    ];
+    const staffFundSectionDashboardAny: string[] = ['payroll.view', 'payroll.edit', 'admin.access'];
 
-    const fixedAssetSectionDashboardAny: string[] = [
-        'fixed-assets.view',
-        'fixed-assets.create',
-        'fixed-assets.edit',
-        'admin.access',
-    ];
+    const fixedAssetSectionDashboardAny: string[] = ['fixed-assets.view', 'fixed-assets.create', 'fixed-assets.edit', 'admin.access'];
 
     // Organized Menu Structure with EXACT permission names matching web.php
     const baseMenuItems = useMemo<MenuItemType[]>(
         () => [
-        {
-            title: 'My Notices',
-            menuKey: 'my-notices',
-            icon: <Bell className="w-5 h-5" />,
-            path: '/my-notices',
-            hasSubmenu: false,
-        },
-        {
-            title: 'My Assets',
-            menuKey: 'my-assets',
-            icon: <Boxes className="w-5 h-5" />,
-            path: '/my-assets',
-            hasSubmenu: false,
-            employeeOnly: true,
-        },
-        {
-            title: 'Employee Management',
-            menuKey: 'employee-management',
-            icon: <Users className="w-5 h-5" />,
-            path: '/employees',
-            hasSubmenu: true,
-            submenu: [
-                { title: 'All Employees', path: '/employees', permission: 'employees.view', hrOnly: true },
-                { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view', hrOnly: true },
-                { title: 'Confirmations', path: '/confirmations', permission: 'confirmations.view', hrOnly: true },
-                { title: 'Separations', path: '/separations', permission: 'separations.view', hrOnly: true },
-            ]
-        },
-        {
-            title: 'Organization Setup',
-            menuKey: 'organization-setup',
-            icon: <Building2 className="w-5 h-5" />,
-            path: '/branches',
-            hasSubmenu: true,
-            permission: 'branches.view',
-            hrOnly: true,
-            submenu: [
-                { title: 'Branches', path: '/branches', permission: 'branches.view' },
-                { title: 'Zones', path: '/zones', permission: 'zones.view' },
-                { title: 'Regional Offices', path: '/regional-offices', permission: 'regional-offices.view' },
-                { title: 'Departments', path: '/departments', permission: 'departments.view' },
-                { title: 'Designations', path: '/designations', permission: 'designations.view' },
-                { title: 'Employee Types', path: '/employee-types', permission: 'departments.view' },
-                { title: 'Programs', path: '/programs', permission: 'departments.view' },
-                { title: 'Projects', path: '/projects', permission: 'departments.view' },
-            ]
-        },
-        {
-            title: 'Attendance',
-            menuKey: 'attendance',
-            icon: <ClipboardList className="w-5 h-5" />,
-            path: '/attendance',
-            hasSubmenu: true,
-            permission: 'attendance.view',
-            submenu: [
-                { title: 'Daily Attendance', path: '/attendance', permission: 'attendance.view' },
-                { title: 'Attendance Devices', path: '/attendance/devices', permission: 'attendance.admin' },
-                { title: 'Device Settings', path: '/attendance/settings', permission: 'attendance.admin' },
-                { title: 'ZKTeco Integration', path: '/zkteco', permission: 'attendance.admin' },
-            ]
-        },
-        {
-            title: 'Leave Management',
-            menuKey: 'leave-management',
-            icon: <CalendarDays className="w-5 h-5" />,
-            path: '/leave',
-            hasSubmenu: true,
-            permission: 'leave-applications.view',
-            submenu: [
-                { title: 'Leave Applications', path: '/leave/applications', permission: 'leave-applications.view' },
-                { title: 'Leave Settings', path: '/leave/settings', permission: 'leave-types.view', hrOnly: true },
-                { title: 'Leave Types', path: '/leave/types', permission: 'leave-types.view', hrOnly: true },
-                { title: 'Leave Balances', path: '/leave/balances', permission: 'leave-balances.view', hrOnly: true },
-                { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk', permission: 'leave-balances.admin', hrOnly: true },
-            ]
-        },
-        {
-            title: 'Movement',
-            menuKey: 'movement',
-            icon: <Activity className="w-5 h-5" />,
-            path: '/movements',
-            hasSubmenu: true,
-            permission: 'movements.view',
-            submenu: [
-                { title: 'Movements', path: '/movements', permission: 'movements.view' },
-            ]
-        },
-        {
-            title: 'Transfer & Promotion',
-            menuKey: 'transfer-promotion',
-            icon: <ArrowLeftRight className="w-5 h-5" />,
-            path: '/transfers',
-            hasSubmenu: true,
-            submenu: [
-                { title: 'Transfers', path: '/transfers', permission: 'transfers.view' },
-                { title: 'Promotions', path: '/promotions', permission: 'promotions.view' },
-            ]
-        },
-        {
-            title: 'Holidays',
-            menuKey: 'holidays',
-            icon: <Award className="w-5 h-5" />,
-            path: '/holidays',
-            hasSubmenu: true,
-            permission: 'holidays.view',
-            submenu: [
-                { title: 'All Holidays', path: '/holidays', permission: 'holidays.view' },
-                { title: 'Holiday Calendar', path: '/holidays/calendar', permission: 'holidays.view' },
-            ]
-        },
-        {
-            title: 'Payroll Setup',
-            menuKey: 'payroll-setup',
-            icon: <BriefcaseBusiness className="w-5 h-5" />,
-            path: '/payscales',
-            hasSubmenu: true,
-            permission: 'payroll.view',
-            hrOnly: true,
-            submenu: [
-                { title: 'Payscales', path: '/payscales', permission: 'payroll.view' },
-                { title: 'Grades', path: '/salary-grades', permission: 'payroll.view' },
-                { title: 'Steps', path: '/salary-steps', permission: 'payroll.view' },
-                { title: 'Salary Components', path: '/salary-heads', permission: 'payroll.view' },
-                { title: 'Salary Structure', path: '/salary-structures/manual', permission: 'payroll.view' },
-                { title: 'Branch Wise Bank', path: '/branch-payroll-banks', permission: 'payroll.view' },
-                { title: 'Probation Salary', path: '/probation-salary', permission: 'payroll.view' },
-                { title: 'Fixed Salary', path: '/fixed-salary', permission: 'payroll.view' },
-            ],
-        },
-        {
-            title: 'Bonus',
-            menuKey: 'bonus',
-            icon: <Award className="w-5 h-5" />,
-            path: '/bonus-types',
-            hasSubmenu: true,
-            permission: 'payroll.view',
-            hrOnly: true,
-            submenu: [
-                { title: 'Bonus Type', path: '/bonus-types', permission: 'payroll.view' },
-                { title: 'Bonus Configuration', path: '/bonus-configurations', permission: 'payroll.view' },
-                { title: 'Bonus Calculation', path: '/bonus-calculation', permission: 'payroll.view' },
-                { title: 'Bonus Withheld', path: '/salary-withheld?salary_type=bonus', permission: 'payroll.view' },
-                { title: 'Bonus Post', path: '/bonus-post', permission: 'payroll.view' },
-                { title: 'Bonus Rollback', path: '/salary-rollback?salary_type=bonus', permission: 'payroll.view' },
-            ],
-        },
-        {
-            title: 'Salary',
-            menuKey: 'salary',
-            icon: <Wallet className="w-5 h-5" />,
-            path: '/salary-process',
-            hasSubmenu: true,
-            permission: 'payroll.view',
-            hrOnly: true,
-            submenu: [
-                { title: 'Head Modification', path: '/salary-head-modifications', permission: 'payroll.view' },
-                { title: 'Probation Salary', path: '/probation-salary', permission: 'payroll.view' },
-                { title: 'Fixed Salary', path: '/fixed-salary', permission: 'payroll.view' },
-                { title: 'Salary Withheld', path: '/salary-withheld', permission: 'payroll.view' },
-                { title: 'Salary Process', path: '/salary-process', permission: 'payroll.view' },
-                { title: 'Salary Post', path: '/salary-post', permission: 'payroll.view' },
-                { title: 'Salary Rollback', path: '/salary-rollback', permission: 'payroll.view' },
-            ],
-        },
-        ...EMPLOYEE_LOAN_NAV_GROUPS.flatMap((group) => {
-            const GroupIcon = group.icon;
-            if (group.items.length === 1) {
-                const item = group.items[0];
-                return [
-                    {
-                        title: item.title,
-                        menuKey: `el-${group.id}`,
-                        icon: <GroupIcon className="w-5 h-5" />,
-                        path: employeeLoanPath(item.path),
-                        hasSubmenu: false as const,
-                        permission: item.permission ?? 'payroll.view',
-                        hrOnly: true,
-                    },
-                ];
-            }
+            {
+                title: 'My Notices',
+                menuKey: 'my-notices',
+                icon: <Bell className="h-5 w-5" />,
+                path: '/my-notices',
+                hasSubmenu: false,
+            },
+            {
+                title: 'My Assets',
+                menuKey: 'my-assets',
+                icon: <Boxes className="h-5 w-5" />,
+                path: '/my-assets',
+                hasSubmenu: false,
+                employeeOnly: true,
+            },
+            {
+                title: 'Employee Management',
+                menuKey: 'employee-management',
+                icon: <Users className="h-5 w-5" />,
+                path: '/employees',
+                hasSubmenu: true,
+                submenu: [
+                    { title: 'All Employees', path: '/employees', permission: 'employees.view', hrOnly: true },
+                    { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view', hrOnly: true },
+                    { title: 'Confirmations', path: '/confirmations', permission: 'confirmations.view', hrOnly: true },
+                    { title: 'Separations', path: '/separations', permission: 'separations.view', hrOnly: true },
+                ],
+            },
+            {
+                title: 'Organization Setup',
+                menuKey: 'organization-setup',
+                icon: <Building2 className="h-5 w-5" />,
+                path: '/organization-structure',
+                hasSubmenu: true,
+                permission: 'branches.view',
+                hrOnly: true,
+                submenu: [
+                    { title: 'Organization Structure', path: '/organization-structure', permission: 'branches.view' },
+                    { title: 'Departments', path: '/departments', permission: 'departments.view' },
+                    { title: 'Designations', path: '/designations', permission: 'designations.view' },
+                    { title: 'Employee Types', path: '/employee-types', permission: 'departments.view' },
+                    { title: 'Programs', path: '/programs', permission: 'departments.view' },
+                    { title: 'Projects', path: '/projects', permission: 'departments.view' },
+                ],
+            },
+            {
+                title: 'Attendance',
+                menuKey: 'attendance',
+                icon: <ClipboardList className="h-5 w-5" />,
+                path: '/attendance',
+                hasSubmenu: true,
+                permission: 'attendance.view',
+                submenu: [
+                    { title: 'Daily Attendance', path: '/attendance', permission: 'attendance.view' },
+                    { title: 'Attendance Devices', path: '/attendance/devices', permission: 'attendance.admin' },
+                    { title: 'Device Settings', path: '/attendance/settings', permission: 'attendance.admin' },
+                    { title: 'ZKTeco Integration', path: '/zkteco', permission: 'attendance.admin' },
+                ],
+            },
+            {
+                title: 'Leave Management',
+                menuKey: 'leave-management',
+                icon: <CalendarDays className="h-5 w-5" />,
+                path: '/leave',
+                hasSubmenu: true,
+                permission: 'leave-applications.view',
+                submenu: [
+                    { title: 'Leave Applications', path: '/leave/applications', permission: 'leave-applications.view' },
+                    { title: 'Leave Settings', path: '/leave/settings', permission: 'leave-types.view', hrOnly: true },
+                    { title: 'Leave Types', path: '/leave/types', permission: 'leave-types.view', hrOnly: true },
+                    { title: 'Leave Balances', path: '/leave/balances', permission: 'leave-balances.view', hrOnly: true },
+                    { title: 'Bulk Allocate', path: '/leave/balances/allocate-bulk', permission: 'leave-balances.admin', hrOnly: true },
+                ],
+            },
+            {
+                title: 'Movement',
+                menuKey: 'movement',
+                icon: <Activity className="h-5 w-5" />,
+                path: '/movements',
+                hasSubmenu: true,
+                permission: 'movements.view',
+                submenu: [{ title: 'Movements', path: '/movements', permission: 'movements.view' }],
+            },
+            {
+                title: 'Transfer & Promotion',
+                menuKey: 'transfer-promotion',
+                icon: <ArrowLeftRight className="h-5 w-5" />,
+                path: '/transfers',
+                hasSubmenu: true,
+                submenu: [
+                    { title: 'Transfers', path: '/transfers', permission: 'transfers.view' },
+                    { title: 'Promotions', path: '/promotions', permission: 'promotions.view' },
+                    { title: 'Demotions', path: '/demotions', permission: 'demotions.view' },
+                ],
+            },
+            {
+                title: 'Holidays',
+                menuKey: 'holidays',
+                icon: <Award className="h-5 w-5" />,
+                path: '/holidays',
+                hasSubmenu: true,
+                permission: 'holidays.view',
+                submenu: [
+                    { title: 'All Holidays', path: '/holidays', permission: 'holidays.view' },
+                    { title: 'Holiday Calendar', path: '/holidays/calendar', permission: 'holidays.view' },
+                ],
+            },
+            {
+                title: 'Payroll Setup',
+                menuKey: 'payroll-setup',
+                icon: <BriefcaseBusiness className="h-5 w-5" />,
+                path: '/payscales',
+                hasSubmenu: true,
+                permission: 'payroll.view',
+                hrOnly: true,
+                submenu: [
+                    { title: 'Payscales', path: '/payscales', permission: 'payroll.view' },
+                    { title: 'Grades', path: '/salary-grades', permission: 'payroll.view' },
+                    { title: 'Steps', path: '/salary-steps', permission: 'payroll.view' },
+                    { title: 'Salary Components', path: '/salary-heads', permission: 'payroll.view' },
+                    { title: 'Salary Structure', path: '/salary-structures/manual', permission: 'payroll.view' },
+                    { title: 'Branch Wise Bank', path: '/branch-payroll-banks', permission: 'payroll.view' },
+                    { title: 'Probation Salary', path: '/probation-salary', permission: 'payroll.view' },
+                    { title: 'Fixed Salary', path: '/fixed-salary', permission: 'payroll.view' },
+                ],
+            },
+            {
+                title: 'Bonus',
+                menuKey: 'bonus',
+                icon: <Award className="h-5 w-5" />,
+                path: '/bonus-types',
+                hasSubmenu: true,
+                permission: 'payroll.view',
+                hrOnly: true,
+                submenu: [
+                    { title: 'Bonus Type', path: '/bonus-types', permission: 'payroll.view' },
+                    { title: 'Bonus Configuration', path: '/bonus-configurations', permission: 'payroll.view' },
+                    { title: 'Bonus Calculation', path: '/bonus-calculation', permission: 'payroll.view' },
+                    { title: 'Bonus Withheld', path: '/salary-withheld?salary_type=bonus', permission: 'payroll.view' },
+                    { title: 'Bonus Post', path: '/bonus-post', permission: 'payroll.view' },
+                    { title: 'Bonus Rollback', path: '/salary-rollback?salary_type=bonus', permission: 'payroll.view' },
+                ],
+            },
+            {
+                title: 'Salary',
+                menuKey: 'salary',
+                icon: <Wallet className="h-5 w-5" />,
+                path: '/salary-process',
+                hasSubmenu: true,
+                permission: 'payroll.view',
+                hrOnly: true,
+                submenu: [
+                    { title: 'Final Payment', path: '/final-payments', permission: 'payroll.view' },
+                    { title: 'Head Modification', path: '/salary-head-modifications', permission: 'payroll.view' },
+                    { title: 'Salary Withheld', path: '/salary-withheld', permission: 'payroll.view' },
+                    { title: 'Salary Process', path: '/salary-process', permission: 'payroll.view' },
+                    { title: 'Salary Post', path: '/salary-post', permission: 'payroll.view' },
+                    { title: 'Salary Rollback', path: '/salary-rollback', permission: 'payroll.view' },
+                ],
+            },
+            ...EMPLOYEE_LOAN_NAV_GROUPS.flatMap((group) => {
+                const GroupIcon = group.icon;
+                if (group.items.length === 1) {
+                    const item = group.items[0];
+                    return [
+                        {
+                            title: item.title,
+                            menuKey: `el-${group.id}`,
+                            icon: <GroupIcon className="h-5 w-5" />,
+                            path: employeeLoanPath(item.path),
+                            hasSubmenu: false as const,
+                            permission: item.permission ?? 'payroll.view',
+                            hrOnly: true,
+                        },
+                    ];
+                }
 
-            return [
-                {
-                    title: group.title,
-                    menuKey: `el-${group.id}`,
-                    icon: <GroupIcon className="w-5 h-5" />,
-                    path: employeeLoanPath(group.defaultPath),
-                    hasSubmenu: true as const,
-                    permission: 'payroll.view',
-                    hrOnly: true,
-                    submenu: group.items.map((item) => ({
-                        title: item.title,
-                        path: employeeLoanPath(item.path),
-                        permission: item.permission ?? 'payroll.view',
-                    })),
-                },
-            ];
-        }),
-        ...STAFF_FUND_NAV_GROUPS.flatMap((group) => {
-            const GroupIcon = group.icon;
-            if (group.items.length === 1) {
-                const item = group.items[0];
                 return [
                     {
-                        title: item.title,
-                        menuKey: `sf-${group.id}`,
-                        icon: <GroupIcon className="w-5 h-5" />,
-                        path: staffFundPath(item.path),
-                        hasSubmenu: false as const,
+                        title: group.title,
+                        menuKey: `el-${group.id}`,
+                        icon: <GroupIcon className="h-5 w-5" />,
+                        path: employeeLoanPath(group.defaultPath),
+                        hasSubmenu: true as const,
                         permission: 'payroll.view',
                         hrOnly: true,
+                        submenu: group.items.map((item) => ({
+                            title: item.title,
+                            path: employeeLoanPath(item.path),
+                            permission: item.permission ?? 'payroll.view',
+                        })),
                     },
                 ];
-            }
+            }),
+            ...STAFF_FUND_NAV_GROUPS.flatMap((group) => {
+                const GroupIcon = group.icon;
+                if (group.items.length === 1) {
+                    const item = group.items[0];
+                    return [
+                        {
+                            title: item.title,
+                            menuKey: `sf-${group.id}`,
+                            icon: <GroupIcon className="h-5 w-5" />,
+                            path: staffFundPath(item.path),
+                            hasSubmenu: false as const,
+                            permission: 'payroll.view',
+                            hrOnly: true,
+                        },
+                    ];
+                }
 
-            return [
-                {
-                    title: group.title,
-                    menuKey: `sf-${group.id}`,
-                    icon: <GroupIcon className="w-5 h-5" />,
-                    path: staffFundPath(group.defaultPath),
-                    hasSubmenu: true as const,
-                    permission: 'payroll.view',
-                    hrOnly: true,
-                    submenu: group.items.map((item) => ({
-                        title: item.title,
-                        path: staffFundPath(item.path),
-                        permission: item.permission ?? 'payroll.view',
-                    })),
-                },
-            ];
-        }),
-        ...FIXED_ASSET_NAV_GROUPS.flatMap((group) => {
-            const GroupIcon = group.icon;
+                return [
+                    {
+                        title: group.title,
+                        menuKey: `sf-${group.id}`,
+                        icon: <GroupIcon className="h-5 w-5" />,
+                        path: staffFundPath(group.defaultPath),
+                        hasSubmenu: true as const,
+                        permission: 'payroll.view',
+                        hrOnly: true,
+                        submenu: group.items.map((item) => ({
+                            title: item.title,
+                            path: staffFundPath(item.path),
+                            permission: item.permission ?? 'payroll.view',
+                        })),
+                    },
+                ];
+            }),
+            ...FIXED_ASSET_NAV_GROUPS.flatMap((group) => {
+                const GroupIcon = group.icon;
 
-            return [
-                {
-                    title: group.title,
-                    menuKey: `fa-${group.id}`,
-                    icon: <GroupIcon className="w-5 h-5" />,
-                    path: fixedAssetPath(group.defaultPath),
-                    hasSubmenu: true as const,
-                    permission: 'fixed-assets.view',
-                    hrOnly: true,
-                    submenu: group.items.map((item) => ({
-                        title: item.title,
-                        path: fixedAssetPath(item.path),
-                        permission: item.permission ?? 'fixed-assets.view',
-                    })),
-                },
-            ];
-        }),
-        ...INVENTORY_NAV_GROUPS.flatMap((group) => {
-            const GroupIcon = group.icon;
+                return [
+                    {
+                        title: group.title,
+                        menuKey: `fa-${group.id}`,
+                        icon: <GroupIcon className="h-5 w-5" />,
+                        path: fixedAssetPath(group.defaultPath),
+                        hasSubmenu: true as const,
+                        permission: 'fixed-assets.view',
+                        hrOnly: true,
+                        submenu: group.items.map((item) => ({
+                            title: item.title,
+                            path: fixedAssetPath(item.path),
+                            permission: item.permission ?? 'fixed-assets.view',
+                        })),
+                    },
+                ];
+            }),
+            ...INVENTORY_NAV_GROUPS.flatMap((group) => {
+                const GroupIcon = group.icon;
 
-            return [
-                {
-                    title: group.title,
-                    menuKey: `inv-${group.id}`,
-                    icon: <GroupIcon className="w-5 h-5" />,
-                    path: inventoryPath(group.defaultPath),
-                    hasSubmenu: true as const,
-                    permission: 'inventory.view',
-                    submenu: group.items.map((item) => ({
-                        title: item.title,
-                        path: inventoryPath(item.path),
-                        permission: item.permission ?? 'inventory.view',
-                    })),
-                },
-            ];
-        }),
-        {
-            title: 'User Management',
-            menuKey: 'admin-user-management',
-            icon: <User className="w-5 h-5" />,
-            path: withSectionParam('/admin/users', 'administration'),
-            hasSubmenu: true,
-            anyPermissions: ['admin.access', 'users.view'],
-            submenu: [
-                { title: 'All Users', path: withSectionParam('/admin/users', 'administration'), permission: 'users.view' },
-                { title: 'Add User', path: withSectionParam('/admin/users/create', 'administration'), permission: 'users.create' },
-                { title: 'Active Sessions', path: withSectionParam('/admin/sessions', 'administration'), anyPermissions: ['admin.access', 'users.view'] },
-                { title: 'Roles & Permissions', path: withSectionParam('/admin/roles', 'administration'), permission: 'roles.view' },
-                { title: 'Notices', path: withSectionParam('/admin/notices', 'administration'), permission: 'admin.access' },
-                { title: 'Send notice', path: withSectionParam('/admin/notices/create', 'administration'), permission: 'admin.access' },
-            ]
-        },
-        {
-            title: 'Settings',
-            menuKey: 'admin-settings',
-            icon: <Settings className="w-5 h-5" />,
-            path: withSectionParam('/settings/profile', 'administration'),
-            hasSubmenu: true,
-            submenu: [
-                { title: 'Profile', path: withSectionParam('/settings/profile', 'administration') },
-                { title: 'Password', path: withSectionParam('/settings/password', 'administration') },
-                { title: 'Notifications', path: withSectionParam('/settings/notifications', 'administration') },
-            ]
-        },
+                return [
+                    {
+                        title: group.title,
+                        menuKey: `inv-${group.id}`,
+                        icon: <GroupIcon className="h-5 w-5" />,
+                        path: inventoryPath(group.defaultPath),
+                        hasSubmenu: true as const,
+                        permission: 'inventory.view',
+                        submenu: group.items.map((item) => ({
+                            title: item.title,
+                            path: inventoryPath(item.path),
+                            permission: item.permission ?? 'inventory.view',
+                        })),
+                    },
+                ];
+            }),
+            {
+                title: 'User Management',
+                menuKey: 'admin-user-management',
+                icon: <User className="h-5 w-5" />,
+                path: withSectionParam('/admin/users', 'administration'),
+                hasSubmenu: true,
+                anyPermissions: ['admin.access', 'users.view'],
+                submenu: [
+                    { title: 'All Users', path: withSectionParam('/admin/users', 'administration'), permission: 'users.view' },
+                    { title: 'Add User', path: withSectionParam('/admin/users/create', 'administration'), permission: 'users.create' },
+                    {
+                        title: 'Active Sessions',
+                        path: withSectionParam('/admin/sessions', 'administration'),
+                        anyPermissions: ['admin.access', 'users.view'],
+                    },
+                    { title: 'Roles & Permissions', path: withSectionParam('/admin/roles', 'administration'), permission: 'roles.view' },
+                    { title: 'Notices', path: withSectionParam('/admin/notices', 'administration'), permission: 'admin.access' },
+                    { title: 'Send notice', path: withSectionParam('/admin/notices/create', 'administration'), permission: 'admin.access' },
+                ],
+            },
+            {
+                title: 'Settings',
+                menuKey: 'admin-settings',
+                icon: <Settings className="h-5 w-5" />,
+                path: withSectionParam('/settings/profile', 'administration'),
+                hasSubmenu: true,
+                submenu: [
+                    { title: 'Profile', path: withSectionParam('/settings/profile', 'administration') },
+                    { title: 'Password', path: withSectionParam('/settings/password', 'administration') },
+                    { title: 'Notifications', path: withSectionParam('/settings/notifications', 'administration') },
+                ],
+            },
         ],
         [],
     );
 
     const menuItemsForLayout = useMemo(() => {
         const sub = buildReportsSubmenu(activeSectionId);
-        const reportsSub = branchAccount
-            ? sub.filter((item) => item.path === '/attendance/daily-branch-summary')
-            : sub;
+        const reportsSub = branchAccount ? sub.filter((item) => item.path === '/attendance/daily-branch-summary') : sub;
 
         if (reportsSub.length === 0) {
             return baseMenuItems;
@@ -690,7 +640,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         const reportsItem: MenuItemType = {
             title: 'Reports',
             menuKey: 'section-reports',
-            icon: <BarChart className="w-5 h-5" />,
+            icon: <BarChart className="h-5 w-5" />,
             path: reportsPath,
             hasSubmenu: true,
             submenu: reportsSub,
@@ -721,9 +671,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         }
         const globalKeys = [...(employee?.id ? (['my-assets'] as const) : [])];
         const mergedKeys = [...globalKeys, ...keys.filter((k) => !globalKeys.includes(k))];
-        return mergedKeys
-            .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
-            .filter((x): x is MenuItemType => Boolean(x));
+        return mergedKeys.map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key)).filter((x): x is MenuItemType => Boolean(x));
     }, [activeSectionId, menuItemsForLayout, employee?.id, branchAccount]);
 
     /** Sidebar paths in the current section — longest-prefix wins within visible items only. */
@@ -748,8 +696,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             const [pathBase, pathQuery] = path.split('?');
             const expectedParams = pathQuery ? new URLSearchParams(pathQuery) : null;
 
-            const pathMatches = (base: string) =>
-                currentPath === base || (base !== '/' && currentPath.startsWith(`${base}/`));
+            const pathMatches = (base: string) => currentPath === base || (base !== '/' && currentPath.startsWith(`${base}/`));
 
             if (!pathBase || pathBase === '/') {
                 return currentPath === pathBase;
@@ -758,13 +705,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             if (expectedParams) {
                 const actual = new URLSearchParams(currentSearch);
                 const expectedSection = expectedParams.get('section');
-                const sectionOnly =
-                    expectedSection !== null
-                    && [...expectedParams.keys()].every((key) => key === 'section');
+                const sectionOnly = expectedSection !== null && [...expectedParams.keys()].every((key) => key === 'section');
 
                 if (sectionOnly) {
-                    const sectionMatches =
-                        actual.get('section') === expectedSection || activeSectionId === expectedSection;
+                    const sectionMatches = actual.get('section') === expectedSection || activeSectionId === expectedSection;
 
                     if (!sectionMatches) {
                         return false;
@@ -796,9 +740,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return true;
             }
 
-            const candidates = menuNavPaths
-                .map((p) => p.split('?')[0])
-                .filter((base) => pathMatches(base));
+            const candidates = menuNavPaths.map((p) => p.split('?')[0]).filter((base) => pathMatches(base));
             if (candidates.length === 0) {
                 return false;
             }
@@ -834,25 +776,17 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             case 'leave':
                 return hasPermission('leave-applications.view') ? [{ title: 'Leave dashboard', path: '/sections/leave' }] : [];
             case 'administration':
-                return hasAnyDashboardPerm(administrationSectionDashboardAny)
-                    ? [{ title: 'Administration', path: '/sections/administration' }]
-                    : [];
+                return hasAnyDashboardPerm(administrationSectionDashboardAny) ? [{ title: 'Administration', path: '/sections/administration' }] : [];
             case 'payroll':
-                return hasAnyDashboardPerm(payrollSectionDashboardAny)
-                    ? [{ title: 'Payroll', path: '/sections/payroll' }]
-                    : [];
+                return hasAnyDashboardPerm(payrollSectionDashboardAny) ? [{ title: 'Payroll', path: '/sections/payroll' }] : [];
             case 'staff-fund':
-                return hasAnyDashboardPerm(staffFundSectionDashboardAny)
-                    ? [{ title: 'Staff Fund', path: '/sections/staff-fund' }]
-                    : [];
+                return hasAnyDashboardPerm(staffFundSectionDashboardAny) ? [{ title: 'Staff Fund', path: '/sections/staff-fund' }] : [];
             case 'employee-loan':
-                return hasPermission('payroll.view')
-                    ? [{ title: 'Employee Loan', path: '/sections/employee-loan' }]
-                    : [];
+                return hasPermission('payroll.view') ? [{ title: 'Employee Loan', path: '/sections/employee-loan' }] : [];
             case 'fixed-asset':
-                return hasAnyDashboardPerm(fixedAssetSectionDashboardAny)
-                    ? [{ title: 'Fixed Asset', path: '/sections/fixed-asset' }]
-                    : [];
+                return hasAnyDashboardPerm(fixedAssetSectionDashboardAny) ? [{ title: 'Fixed Asset', path: '/sections/fixed-asset' }] : [];
+            case 'inventory':
+                return hasPermission('inventory.view') || hasPermission('admin.access') ? [{ title: 'Inventory', path: '/sections/inventory' }] : [];
             default:
                 return [];
         }
@@ -860,8 +794,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     // Automatically expand the menu item if a child is active
     useEffect(() => {
-        const activeParent = visibleMenuItems.find((item) =>
-            item.hasSubmenu && item.submenu?.some((subItem) => !subItem.isGroupLabel && isActive(subItem.path)),
+        const activeParent = visibleMenuItems.find(
+            (item) => item.hasSubmenu && item.submenu?.some((subItem) => !subItem.isGroupLabel && isActive(subItem.path)),
         );
         if (activeParent) {
             setActiveMenu(activeParent.title);
@@ -877,20 +811,21 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             return null;
         }
 
-        const permittedSubmenu = item.submenu?.filter(subItem =>
-            subItem.isGroupLabel
-            || ((!subItem.hrOnly || isHRUser)
-            && (!subItem.permission || hasPermission(subItem.permission))
-            && (!subItem.anyPermissions?.length
-                || subItem.anyPermissions.some((p) => hasPermission(p)))
-            && (!subItem.allPermissions?.length
-                || subItem.allPermissions.every((p) => hasPermission(p))))
-        )?.filter((subItem, index, items) => {
-            if (!subItem.isGroupLabel) {
-                return true;
-            }
-            return items.slice(index + 1).some((next) => !next.isGroupLabel);
-        });
+        const permittedSubmenu = item.submenu
+            ?.filter(
+                (subItem) =>
+                    subItem.isGroupLabel ||
+                    ((!subItem.hrOnly || isHRUser) &&
+                        (!subItem.permission || hasPermission(subItem.permission)) &&
+                        (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
+                        (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p)))),
+            )
+            ?.filter((subItem, index, items) => {
+                if (!subItem.isGroupLabel) {
+                    return true;
+                }
+                return items.slice(index + 1).some((next) => !next.isGroupLabel);
+            });
 
         if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
 
@@ -898,17 +833,19 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         const isMenuOpen = activeMenu === item.title;
 
         return item.hasSubmenu ? (
-            <div className="mb-1 relative group">
+            <div className="group relative mb-1">
                 <button
                     onClick={() => toggleMenu(item.title)}
                     title={!isSidebarOpen && !isMobileSidebarOpen ? item.title : undefined}
-                    className={`flex items-center transition-all duration-300 text-[13px] font-medium ${isSidebarOpen || isMobileSidebarOpen
-                            ? 'w-full justify-between px-3 py-2.5 rounded-lg'
-                            : 'w-11 h-11 justify-center mx-auto rounded-xl'
-                        } ${submenuSectionActive || isActive(item.path)
+                    className={`flex items-center text-[13px] font-medium transition-all duration-300 ${
+                        isSidebarOpen || isMobileSidebarOpen
+                            ? 'w-full justify-between rounded-lg px-3 py-2.5'
+                            : 'mx-auto h-11 w-11 justify-center rounded-xl'
+                    } ${
+                        submenuSectionActive || isActive(item.path)
                             ? 'bg-emerald-50 text-emerald-700'
                             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                        }`}
+                    }`}
                 >
                     <div className={`flex items-center ${isSidebarOpen || isMobileSidebarOpen ? 'gap-3' : ''}`}>
                         <div className={`${submenuSectionActive || isActive(item.path) ? 'text-emerald-600' : 'text-slate-500'}`}>
@@ -917,39 +854,36 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         {(isSidebarOpen || isMobileSidebarOpen) && <span className="truncate tracking-wide">{item.title}</span>}
                     </div>
                     {(isSidebarOpen || isMobileSidebarOpen) && (
-                        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-300 ${isMenuOpen ? 'rotate-90' : ''}`} />
+                        <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-300 ${isMenuOpen ? 'rotate-90' : ''}`} />
                     )}
                 </button>
                 {isMenuOpen && (isSidebarOpen || isMobileSidebarOpen) && (
                     <div
                         className={cn(
-                            'ml-9 mt-1 space-y-0.5 border-l border-emerald-500/20 pl-4 py-1',
-                            (permittedSubmenu?.length ?? 0) > 8 &&
-                                'max-h-[min(320px,45vh)] overflow-y-auto overscroll-contain pr-1',
+                            'mt-1 ml-9 space-y-0.5 border-l border-emerald-500/20 py-1 pl-4',
+                            (permittedSubmenu?.length ?? 0) > 8 && 'max-h-[min(320px,45vh)] overflow-y-auto overscroll-contain pr-1',
                         )}
                     >
-                        {permittedSubmenu?.map((subItem, idx) => (
+                        {permittedSubmenu?.map((subItem, idx) =>
                             subItem.isGroupLabel ? (
-                                <p
-                                    key={idx}
-                                    className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 first:pt-0"
-                                >
+                                <p key={idx} className="px-3 pt-2 text-[10px] font-semibold tracking-wide text-slate-400 uppercase first:pt-0">
                                     {subItem.title}
                                 </p>
                             ) : (
-                            <Link
-                                key={idx}
-                                href={subItem.path}
-                                className={`block px-3 py-2 rounded-md text-[12px] transition-all duration-200 tracking-wide ${isActive(subItem.path)
-                                        ? 'bg-emerald-50 text-emerald-700 font-semibold'
-                                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                                <Link
+                                    key={idx}
+                                    href={subItem.path}
+                                    className={`block rounded-md px-3 py-2 text-[12px] tracking-wide transition-all duration-200 ${
+                                        isActive(subItem.path)
+                                            ? 'bg-emerald-50 font-semibold text-emerald-700'
+                                            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                                     }`}
-                                onClick={closeMobileSidebar}
-                            >
-                                {subItem.title}
-                            </Link>
-                            )
-                        ))}
+                                    onClick={closeMobileSidebar}
+                                >
+                                    {subItem.title}
+                                </Link>
+                            ),
+                        )}
                     </div>
                 )}
             </div>
@@ -957,13 +891,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <Link
                 href={item.path}
                 title={!isSidebarOpen && !isMobileSidebarOpen ? item.title : undefined}
-                className={`flex items-center transition-all duration-300 text-[13px] font-medium mb-1 ${isSidebarOpen || isMobileSidebarOpen
-                        ? 'w-full gap-3 px-3 py-2.5 rounded-lg'
-                        : 'w-11 h-11 justify-center mx-auto rounded-xl'
-                    } ${isActive(item.path)
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
+                className={`mb-1 flex items-center text-[13px] font-medium transition-all duration-300 ${
+                    isSidebarOpen || isMobileSidebarOpen ? 'w-full gap-3 rounded-lg px-3 py-2.5' : 'mx-auto h-11 w-11 justify-center rounded-xl'
+                } ${isActive(item.path) ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
                 onClick={closeMobileSidebar}
             >
                 <div className={`${isActive(item.path) ? 'text-emerald-600' : 'text-slate-500'}`}>
@@ -1008,30 +938,30 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     useEffect(() => {
         if (flash.success) {
             toast({
-                title: "Success",
+                title: 'Success',
                 description: flash.success,
-                variant: "success"
+                variant: 'success',
             });
         }
         if (flash.error) {
             toast({
-                title: "Error",
+                title: 'Error',
                 description: flash.error,
-                variant: "destructive"
+                variant: 'destructive',
             });
         }
         if (flash.warning) {
             toast({
-                title: "Warning",
+                title: 'Warning',
                 description: flash.warning,
-                variant: "warning"
+                variant: 'warning',
             });
         }
         if (flash.info) {
             toast({
-                title: "Information",
+                title: 'Information',
                 description: flash.info,
-                variant: "info"
+                variant: 'info',
             });
         }
     }, [flash]);
@@ -1077,38 +1007,43 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <div className="relative z-10 flex flex-1 overflow-hidden">
                 {/* Sidebar */}
                 <aside
-                    className={`hidden md:flex h-full min-h-0 shrink-0 flex-col bg-white/95 backdrop-blur border-r border-emerald-900/15 transition-all duration-300 z-20 shadow-sm relative ${isSidebarOpen ? 'w-[260px]' : 'w-[84px]'
-                        }`}
+                    className={`relative z-20 hidden h-full min-h-0 shrink-0 flex-col border-r border-emerald-900/15 bg-white/95 shadow-sm backdrop-blur transition-all duration-300 md:flex ${
+                        isSidebarOpen ? 'w-[260px]' : 'w-[84px]'
+                    }`}
                 >
                     {/* Toggle Button */}
                     <button
                         onClick={toggleSidebar}
-                        className="absolute -right-3.5 top-6 bg-white/90 backdrop-blur border border-emerald-900/10 shadow-sm rounded-full p-1 text-slate-400 hover:text-emerald-700 hover:border-emerald-300/60 hover:bg-emerald-50/80 transition-all z-50 flex items-center justify-center"
+                        className="absolute top-6 -right-3.5 z-50 flex items-center justify-center rounded-full border border-emerald-900/10 bg-white/90 p-1 text-slate-400 shadow-sm backdrop-blur transition-all hover:border-emerald-300/60 hover:bg-emerald-50/80 hover:text-emerald-700"
                     >
-                        <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${isSidebarOpen ? 'rotate-180' : ''}`} />
+                        <ChevronRight className={`h-4 w-4 transition-transform duration-300 ${isSidebarOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {/* Sidebar Header */}
-                    <div className={`shrink-0 h-16 border-b border-emerald-900/10 bg-white/90 backdrop-blur flex items-center transition-all ${isSidebarOpen ? 'px-4 justify-start' : 'px-0 justify-center'}`}>
-                        <Link href="/sections" className="flex items-center gap-3 min-w-0" title={!isSidebarOpen ? "Mousumi ERP" : undefined}>
-                            <div className="bg-emerald-50 p-1.5 rounded-lg flex items-center justify-center border border-emerald-100 shrink-0">
-                                <img src="/logo.png" className="w-6 h-6 rounded-md object-contain" alt="Logo" />
+                    <div
+                        className={`flex h-16 shrink-0 items-center border-b border-emerald-900/10 bg-white/90 backdrop-blur transition-all ${isSidebarOpen ? 'justify-start px-4' : 'justify-center px-0'}`}
+                    >
+                        <Link href="/sections" className="flex min-w-0 items-center gap-3" title={!isSidebarOpen ? 'Mousumi ERP' : undefined}>
+                            <div className="flex shrink-0 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 p-1.5">
+                                <img src="/logo.png" className="h-6 w-6 rounded-md object-contain" alt="Logo" />
                             </div>
                             {isSidebarOpen && (
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-[14px] font-bold text-slate-800 tracking-wide truncate">Mousumi ERP</p>
-                                    <p className="text-[10px] text-emerald-600 font-semibold truncate uppercase tracking-widest">{activeSection?.title || 'System'}</p>
+                                    <p className="truncate text-[14px] font-bold tracking-wide text-slate-800">Mousumi ERP</p>
+                                    <p className="truncate text-[10px] font-semibold tracking-widest text-emerald-600 uppercase">
+                                        {activeSection?.title || 'System'}
+                                    </p>
                                 </div>
                             )}
                         </Link>
                     </div>
 
                     {/* Sidebar Menu — min-h-0 + overflow so long menus (e.g. Reports) scroll */}
-                    <div className="sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-5">
+                    <div className="sidebar-nav-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-5">
                         {sectionDashboardEntries.length > 0 && (
                             <div className={cn('mb-4', isSidebarOpen ? 'px-0' : 'px-0')}>
                                 {isSidebarOpen && (
-                                    <p className="mb-1.5 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dashboard</p>
+                                    <p className="mb-1.5 px-3 text-[10px] font-bold tracking-widest text-slate-400 uppercase">Dashboard</p>
                                 )}
                                 <div className={cn('flex flex-col gap-1', !isSidebarOpen && 'items-center')}>
                                     {sectionDashboardEntries.map((d) => (
@@ -1123,7 +1058,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                                     : 'mx-auto h-11 w-11 justify-center rounded-xl',
                                                 isActive(d.path)
                                                     ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20'
-                                                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300',
+                                                    : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50',
                                             )}
                                         >
                                             {isSidebarOpen ? (
@@ -1133,10 +1068,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                                 </>
                                             ) : (
                                                 <LayoutDashboard
-                                                    className={cn(
-                                                        'h-[18px] w-[18px]',
-                                                        isActive(d.path) ? 'text-emerald-600' : 'text-slate-500',
-                                                    )}
+                                                    className={cn('h-[18px] w-[18px]', isActive(d.path) ? 'text-emerald-600' : 'text-slate-500')}
                                                 />
                                             )}
                                         </Link>
@@ -1145,7 +1077,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </div>
                         )}
                         <div className="mb-3 px-3">
-                            <p className={`text-[10px] font-bold text-slate-400 uppercase tracking-widest ${!isSidebarOpen && 'text-center'}`}>
+                            <p className={`text-[10px] font-bold tracking-widest text-slate-400 uppercase ${!isSidebarOpen && 'text-center'}`}>
                                 {isSidebarOpen ? 'Main Menu' : '•••'}
                             </p>
                         </div>
@@ -1157,18 +1089,17 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </div>
 
                     {/* Sidebar Footer - Logout */}
-                    <div className="shrink-0 p-4 border-t border-slate-200">
+                    <div className="shrink-0 border-t border-slate-200 p-4">
                         <Link
                             href="/logout"
                             method="post"
                             as="button"
-                            title={!isSidebarOpen ? "Sign Out" : undefined}
-                            className={`flex items-center transition-all duration-200 font-medium text-[13px] tracking-wide text-red-600 hover:bg-red-50 hover:text-red-700 ${isSidebarOpen
-                                    ? 'w-full gap-3 px-3 py-2.5 rounded-lg'
-                                    : 'w-11 h-11 justify-center mx-auto rounded-xl'
-                                }`}
+                            title={!isSidebarOpen ? 'Sign Out' : undefined}
+                            className={`flex items-center text-[13px] font-medium tracking-wide text-red-600 transition-all duration-200 hover:bg-red-50 hover:text-red-700 ${
+                                isSidebarOpen ? 'w-full gap-3 rounded-lg px-3 py-2.5' : 'mx-auto h-11 w-11 justify-center rounded-xl'
+                            }`}
                         >
-                            <LogOut className="w-[18px] h-[18px]" />
+                            <LogOut className="h-[18px] w-[18px]" />
                             {isSidebarOpen && 'Sign Out'}
                         </Link>
                     </div>
@@ -1176,23 +1107,28 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                 {/* Mobile Sidebar Sheet */}
                 <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-                    <SheetContent side="left" className="flex h-full max-h-[100dvh] w-72 flex-col gap-0 p-0 border-r-0 md:hidden bg-white text-slate-800">
-                        <div className="shrink-0 px-4 border-b border-slate-200 h-16 flex items-center justify-between">
+                    <SheetContent
+                        side="left"
+                        className="flex h-full max-h-[100dvh] w-72 flex-col gap-0 border-r-0 bg-white p-0 text-slate-800 md:hidden"
+                    >
+                        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-4">
                             <Link href="/sections" className="flex items-center gap-3">
-                                <div className="bg-emerald-50 p-1.5 rounded-lg flex items-center justify-center border border-emerald-100">
-                                    <img src="/logo.png" className="w-6 h-6 rounded-md object-contain" alt="Logo" />
+                                <div className="flex items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 p-1.5">
+                                    <img src="/logo.png" className="h-6 w-6 rounded-md object-contain" alt="Logo" />
                                 </div>
                                 <div className="leading-tight">
-                                    <p className="text-[14px] font-bold text-slate-800 tracking-wide">Mousumi ERP</p>
-                                    <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-widest">{activeSection?.title || 'System'}</p>
+                                    <p className="text-[14px] font-bold tracking-wide text-slate-800">Mousumi ERP</p>
+                                    <p className="text-[10px] font-semibold tracking-widest text-emerald-600 uppercase">
+                                        {activeSection?.title || 'System'}
+                                    </p>
                                 </div>
                             </Link>
                         </div>
 
-                        <div className="sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-5">
+                        <div className="sidebar-nav-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-5">
                             {sectionDashboardEntries.length > 0 && (
                                 <div className="mb-4 px-0">
-                                    <p className="mb-1.5 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dashboard</p>
+                                    <p className="mb-1.5 px-3 text-[10px] font-bold tracking-widest text-slate-400 uppercase">Dashboard</p>
                                     <div className="flex flex-col gap-1 px-3">
                                         {sectionDashboardEntries.map((d) => (
                                             <Link
@@ -1203,7 +1139,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                                     'flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-[12px] font-semibold tracking-wide transition-all duration-200',
                                                     isActive(d.path)
                                                         ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20'
-                                                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300',
+                                                        : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50',
                                                 )}
                                             >
                                                 <LayoutDashboard className="h-4 w-4 shrink-0 text-emerald-600" />
@@ -1214,9 +1150,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 </div>
                             )}
                             <div className="mb-3 px-3">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                    Main Menu
-                                </p>
+                                <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Main Menu</p>
                             </div>
                             <nav className="space-y-0.5">
                                 {visibleMenuItems.map((item, idx) => (
@@ -1225,12 +1159,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </nav>
                         </div>
 
-                        <div className="shrink-0 p-4 border-t border-slate-200 md:hidden">
+                        <div className="shrink-0 border-t border-slate-200 p-4 md:hidden">
                             <Link
                                 href="/logout"
                                 method="post"
                                 as="button"
-                                className="w-full flex items-center justify-center gap-2 rounded-lg bg-red-50 py-2.5 text-[13px] font-medium tracking-wide text-red-600 hover:bg-red-100 hover:text-red-700 transition-colors"
+                                className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-50 py-2.5 text-[13px] font-medium tracking-wide text-red-600 transition-colors hover:bg-red-100 hover:text-red-700"
                             >
                                 <LogOut className="h-[18px] w-[18px]" />
                                 Sign Out
@@ -1240,10 +1174,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 </Sheet>
 
                 {/* Main Content Area */}
-                <div className="flex flex-col flex-1 overflow-hidden">
+                <div className="flex flex-1 flex-col overflow-hidden">
                     {/* Top Header */}
-                        <header className="h-16 bg-white/90 backdrop-blur-md border-b border-emerald-900/15 shadow-sm px-4 lg:px-6 z-10 sticky top-0">
-                        <div className="h-full flex items-center justify-between gap-4">
+                    <header className="sticky top-0 z-10 h-16 border-b border-emerald-900/15 bg-white/90 px-4 shadow-sm backdrop-blur-md lg:px-6">
+                        <div className="flex h-full items-center justify-between gap-4">
                             {/* Left: Mobile Menu Button & Home Icon */}
                             <div className="flex items-center gap-2">
                                 <div className="md:hidden">
@@ -1253,7 +1187,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                         onClick={toggleMobileSidebar}
                                         className="text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
                                     >
-                                        <Menu className="w-5 h-5" />
+                                        <Menu className="h-5 w-5" />
                                     </Button>
                                 </div>
                                 <Button
@@ -1264,52 +1198,70 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     title="Go to Home (Sections)"
                                 >
                                     <Link href="/sections">
-                                        <Home className="w-5.5 h-5.5" />
+                                        <Home className="h-5.5 w-5.5" />
                                     </Link>
                                 </Button>
                             </div>
 
                             {/* Right: User Menu & Notifications */}
-                            <div className="flex items-center gap-4 ml-auto">
+                            <div className="ml-auto flex items-center gap-4">
                                 <NotificationDropdown />
 
-                                <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+                                <div className="hidden h-6 w-px bg-slate-200 sm:block"></div>
 
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="flex items-center gap-2.5 hover:bg-slate-100/80 px-2 rounded-full py-1 h-auto transition-colors">
-                                            <Avatar className="w-8 h-8 border-2 border-white shadow-sm ring-1 ring-slate-200">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="flex h-auto items-center gap-2.5 rounded-full px-2 py-1 transition-colors hover:bg-slate-100/80"
+                                        >
+                                            <Avatar className="h-8 w-8 border-2 border-white shadow-sm ring-1 ring-slate-200">
                                                 <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
-                                                <AvatarFallback className="bg-emerald-600 text-white text-[11px] font-bold tracking-wider">
+                                                <AvatarFallback className="bg-emerald-600 text-[11px] font-bold tracking-wider text-white">
                                                     {getInitials(auth.user.name)}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <div className="hidden sm:block text-left leading-tight pr-1">
-                                                <p className="text-[13px] font-bold text-slate-700 tracking-wide">{auth.user.name}</p>
+                                            <div className="hidden pr-1 text-left leading-tight sm:block">
+                                                <p className="text-[13px] font-bold tracking-wide text-slate-700">{auth.user.name}</p>
                                                 <p className="text-[11px] font-medium text-slate-500">{auth.user.email}</p>
                                             </div>
-                                            <ChevronDown className="w-4 h-4 text-slate-400 hidden sm:block" />
+                                            <ChevronDown className="hidden h-4 w-4 text-slate-400 sm:block" />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-xl shadow-slate-200/50">
-                                        <DropdownMenuLabel className="font-bold text-slate-700 text-[13px]">My Account</DropdownMenuLabel>
+                                        <DropdownMenuLabel className="text-[13px] font-bold text-slate-700">My Account</DropdownMenuLabel>
                                         <DropdownMenuSeparator className="bg-slate-100" />
-                                        <DropdownMenuItem asChild className="rounded-lg cursor-pointer hover:bg-slate-50 focus:bg-slate-50 transition-colors">
+                                        <DropdownMenuItem
+                                            asChild
+                                            className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"
+                                        >
                                             <Link href="/settings" className="flex items-center text-[13px] font-medium text-slate-600">
-                                                <Settings className="w-4 h-4 mr-2.5 text-slate-400" />
+                                                <Settings className="mr-2.5 h-4 w-4 text-slate-400" />
                                                 Settings
                                             </Link>
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem asChild className="rounded-lg cursor-pointer hover:bg-slate-50 focus:bg-slate-50 transition-colors">
+                                        <DropdownMenuItem
+                                            asChild
+                                            className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"
+                                        >
                                             <Link href="/settings/notifications" className="flex items-center text-[13px] font-medium text-slate-600">
-                                                <Bell className="w-4 h-4 mr-2.5 text-slate-400" />
+                                                <Bell className="mr-2.5 h-4 w-4 text-slate-400" />
                                                 Notifications
                                             </Link>
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator className="bg-slate-100" />
-                                        <DropdownMenuItem asChild className="rounded-lg cursor-pointer hover:bg-red-50 focus:bg-red-50 transition-colors">
-                                            <Link href="/logout" method="post" as="button" className="w-full text-left flex items-center text-[13px] font-medium text-red-600">
-                                                <LogOut className="w-4 h-4 mr-2.5 text-red-500" />
+                                        <DropdownMenuItem
+                                            asChild
+                                            className="cursor-pointer rounded-lg transition-colors hover:bg-red-50 focus:bg-red-50"
+                                        >
+                                            <Link
+                                                href="/logout"
+                                                method="post"
+                                                as="button"
+                                                className="flex w-full items-center text-left text-[13px] font-medium text-red-600"
+                                            >
+                                                <LogOut className="mr-2.5 h-4 w-4 text-red-500" />
                                                 Sign out
                                             </Link>
                                         </DropdownMenuItem>
@@ -1331,8 +1283,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     )}
 
                     {/* Main Content */}
-                    <main className="flex-1 overflow-auto bg-transparent px-4 lg:px-6 py-6 lg:py-8">
-                        <div className="w-full rounded-2xl border border-slate-200/70 bg-white/75 backdrop-blur shadow-sm shadow-slate-200/40 p-4 lg:p-6">
+                    <main className="flex-1 overflow-auto bg-transparent px-4 py-6 lg:px-6 lg:py-8">
+                        <div className="w-full rounded-2xl border border-slate-200/70 bg-white/75 p-4 shadow-sm shadow-slate-200/40 backdrop-blur lg:p-6">
                             {children}
                         </div>
                     </main>
@@ -1340,15 +1292,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             </div>
 
             {/* Flash Messages */}
-            <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none">
+            <div className="pointer-events-none fixed top-4 right-4 z-50 flex w-80 flex-col gap-2">
                 {showSuccess && (
-                    <Alert variant="default" className="bg-green-50 border-green-200 text-green-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
+                    <Alert
+                        variant="default"
+                        className="animate-in fade-in slide-in-from-top-5 pointer-events-auto border-green-200 bg-green-50 text-green-800 shadow-md"
+                    >
                         <CheckCircle className="h-4 w-4" />
                         <AlertDescription>{flash.success}</AlertDescription>
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-1 top-1 text-green-800 hover:bg-green-100 h-6 w-6"
+                            className="absolute top-1 right-1 h-6 w-6 text-green-800 hover:bg-green-100"
                             onClick={() => setShowSuccess(false)}
                         >
                             <X className="h-4 w-4" />
@@ -1356,13 +1311,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </Alert>
                 )}
                 {showError && (
-                    <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
+                    <Alert
+                        variant="destructive"
+                        className="animate-in fade-in slide-in-from-top-5 pointer-events-auto border-red-200 bg-red-50 text-red-800 shadow-md"
+                    >
                         <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>{flash.error || errors?.attendance || errors?.lat || errors?.lng || "Validation failed."}</AlertDescription>
+                        <AlertDescription>{flash.error || errors?.attendance || errors?.lat || errors?.lng || 'Validation failed.'}</AlertDescription>
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-1 top-1 text-red-800 hover:bg-red-100 h-6 w-6"
+                            className="absolute top-1 right-1 h-6 w-6 text-red-800 hover:bg-red-100"
                             onClick={() => setShowError(false)}
                         >
                             <X className="h-4 w-4" />
@@ -1370,13 +1328,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </Alert>
                 )}
                 {showWarning && (
-                    <Alert variant="default" className="bg-yellow-50 border-yellow-200 text-yellow-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
+                    <Alert
+                        variant="default"
+                        className="animate-in fade-in slide-in-from-top-5 pointer-events-auto border-yellow-200 bg-yellow-50 text-yellow-800 shadow-md"
+                    >
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>{flash.warning}</AlertDescription>
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-1 top-1 text-yellow-800 hover:bg-yellow-100 h-6 w-6"
+                            className="absolute top-1 right-1 h-6 w-6 text-yellow-800 hover:bg-yellow-100"
                             onClick={() => setShowWarning(false)}
                         >
                             <X className="h-4 w-4" />
@@ -1384,13 +1345,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </Alert>
                 )}
                 {showInfo && (
-                    <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-5 pointer-events-auto shadow-md">
+                    <Alert
+                        variant="default"
+                        className="animate-in fade-in slide-in-from-top-5 pointer-events-auto border-blue-200 bg-blue-50 text-blue-800 shadow-md"
+                    >
                         <Info className="h-4 w-4" />
                         <AlertDescription>{flash.info}</AlertDescription>
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-1 top-1 text-blue-800 hover:bg-blue-100 h-6 w-6"
+                            className="absolute top-1 right-1 h-6 w-6 text-blue-800 hover:bg-blue-100"
                             onClick={() => setShowInfo(false)}
                         >
                             <X className="h-4 w-4" />
@@ -1411,7 +1375,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     }
                 }}
             >
-                <DialogContent>
+                <DialogContent className="max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
                     <DialogHeader>
                         <DialogTitle>Close Movement</DialogTitle>
                         <DialogDescription>
@@ -1420,11 +1384,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     </DialogHeader>
 
                     <div className="space-y-4 py-2">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             By default, your return is recorded at <strong>the current time</strong> when you confirm.
                         </p>
 
-                        <div className="flex items-start space-x-3 rounded-md border p-3">
+                        <div className={`flex items-start space-x-3 rounded-md border p-4 transition-all duration-200 ${
+                            forgotReturnTime 
+                                ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-500' 
+                                : 'border-amber-200 bg-amber-50/20 hover:bg-amber-50/40'
+                        }`}>
                             <Checkbox
                                 id="forgotReturnTimeGlobal"
                                 checked={forgotReturnTime}
@@ -1435,13 +1403,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                         setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
                                     }
                                 }}
+                                className="mt-1 border-amber-400 data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
                             />
                             <div className="grid gap-1.5 leading-none">
-                                <Label htmlFor="forgotReturnTimeGlobal" className="cursor-pointer font-medium">
-                                    I forgot to close earlier — set actual return date &amp; time
+                                <Label htmlFor="forgotReturnTimeGlobal" className="cursor-pointer font-semibold text-amber-950">
+                                    আমি আগে ক্লোজ করতে ভুলে গিয়েছিলাম
                                 </Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Check this if you already returned but did not close the movement. Then pick when you actually came back.
+                                <p className="text-xs text-amber-800">
+                                    ইতিমধ্যে ফিরে এসে থাকলে, এটি টিক দিয়ে আপনার ফেরার সঠিক সময়টি সিলেক্ট করুন।
                                 </p>
                             </div>
                         </div>
@@ -1458,13 +1427,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </div>
                         )}
 
-                        {closeError && (
-                            <p className="text-sm font-medium text-red-600">{closeError}</p>
-                        )}
+                        {closeError && <p className="text-sm font-medium text-red-600">{closeError}</p>}
 
-                        <div className="bg-blue-50 p-3 rounded-md">
+                        <div className="rounded-md bg-blue-50 p-3 flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 text-blue-700 shrink-0 mt-0.5" />
                             <p className="text-sm text-blue-700">
-                                <AlertCircle className="h-4 w-4 inline mr-1" />
                                 This will mark your movement as completed and update your attendance records.
                             </p>
                         </div>
@@ -1474,11 +1441,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <Button variant="outline" onClick={() => setShowCloseMovementDialog(false)}>
                             Cancel
                         </Button>
-                        <Button
-                            onClick={handleCloseMovement}
-                            className="bg-green-600 hover:bg-green-700"
-                            disabled={closing}
-                        >
+                        <Button onClick={handleCloseMovement} className="bg-green-600 hover:bg-green-700" disabled={closing}>
                             {closing ? 'Processing...' : 'Confirm Return'}
                         </Button>
                     </DialogFooter>

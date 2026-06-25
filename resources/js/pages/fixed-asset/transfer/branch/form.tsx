@@ -21,7 +21,7 @@ export default function BranchTransferForm({
     assets,
 }: {
     prefillAsset: Prefill | null;
-    branches: BranchOpt[];
+    branches: BranchOpt[];  
     assets: AssetOpt[];
 }) {
     const { data, setData, post, processing, errors, transform } = useForm({

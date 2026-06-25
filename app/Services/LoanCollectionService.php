@@ -278,6 +278,51 @@ class LoanCollectionService
         };
     }
 
+    public function estimateInstallmentCollectionAmount(EmployeeLoan $loan, int $installmentCount): float
+    {
+        $loan->refresh();
+        $pending = $loan->installments()
+            ->where('status', 'pending')
+            ->orderBy('installment_no')
+            ->limit(max(1, $installmentCount))
+            ->get();
+
+        return $this->sumEffectiveInstallmentDues($pending, (float) $loan->outstanding_balance);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, EmployeeLoanInstallment>  $pending
+     */
+    protected function sumEffectiveInstallmentDues($pending, float $outstandingBalance): float
+    {
+        $remaining = SalaryStructureCalculator::roundTaka($outstandingBalance);
+        $total = 0.0;
+
+        foreach ($pending as $installment) {
+            $due = $this->effectiveInstallmentDue($installment, $remaining);
+            if ($due <= 0) {
+                break;
+            }
+
+            $total = SalaryStructureCalculator::roundTaka($total + $due);
+            $remaining = SalaryStructureCalculator::roundTaka($remaining - $due);
+        }
+
+        return $total;
+    }
+
+    protected function effectiveInstallmentDue(EmployeeLoanInstallment $installment, float $remainingOutstanding): float
+    {
+        if ($remainingOutstanding <= 0) {
+            return 0.0;
+        }
+
+        return SalaryStructureCalculator::roundTaka(min(
+            (float) $installment->total_amount,
+            $remainingOutstanding
+        ));
+    }
+
     protected function applyInstallmentCollection(
         EmployeeLoan $loan,
         int $installmentCount,
@@ -289,6 +334,8 @@ class LoanCollectionService
         ?int $createdBy,
         ?float $expectedAmount = null
     ): float {
+        $loan->refresh();
+
         $pending = $loan->installments()
             ->where('status', 'pending')
             ->orderBy('installment_no')
@@ -304,10 +351,30 @@ class LoanCollectionService
             ));
         }
 
-        $totalCollected = 0.0;
+        $remaining = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
+        $dues = [];
 
         foreach ($pending as $installment) {
-            $due = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
+            $due = $this->effectiveInstallmentDue($installment, $remaining);
+            if ($due <= 0) {
+                throw new InvalidArgumentException(sprintf(
+                    'Loan %s outstanding balance ৳%s is not enough to cover %d installment(s).',
+                    $loan->loan_number,
+                    number_format((float) $loan->outstanding_balance, 2, '.', ''),
+                    $installmentCount
+                ));
+            }
+
+            $dues[] = ['installment' => $installment, 'due' => $due];
+            $remaining = SalaryStructureCalculator::roundTaka($remaining - $due);
+        }
+
+        $totalCollected = 0.0;
+
+        foreach ($dues as $row) {
+            /** @var EmployeeLoanInstallment $installment */
+            $installment = $row['installment'];
+            $due = $row['due'];
 
             $this->loanService->postCollectionTransaction($loan, [
                 'transaction_type' => $transactionType,
@@ -436,6 +503,56 @@ class LoanCollectionService
         $this->loanService->refreshLoanStatusPublic($loan->fresh());
 
         return $amount;
+    }
+
+    /**
+     * Recover outstanding loan balances during final payment settlement.
+     *
+     * @param  list<int>  $loanIds
+     * @return list<int> Loan collection batch IDs created
+     */
+    public function processFinalPaymentRecovery(
+        array $loanIds,
+        Carbon $collectionDate,
+        string $notes,
+        ?string $referenceNo,
+        ?int $createdBy = null
+    ): array {
+        $batchIds = [];
+
+        foreach ($loanIds as $loanId) {
+            $loan = EmployeeLoan::query()->find($loanId);
+            if (! $loan || $loan->status !== 'active' || (float) $loan->outstanding_balance <= 0) {
+                continue;
+            }
+
+            $pendingCount = $loan->installments()->where('status', 'pending')->count();
+            if ($pendingCount > 0) {
+                $batch = $this->processSingle([
+                    'collection_date' => $collectionDate->toDateString(),
+                    'reference_no' => $referenceNo,
+                    'notes' => $notes,
+                    'employee_loan_id' => $loan->id,
+                    'installment_count' => $pendingCount,
+                ], $createdBy);
+                $batchIds[] = $batch->id;
+            }
+
+            $loan->refresh();
+            $remaining = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
+            if ($remaining > 0) {
+                $rebateBatch = $this->processRebate([
+                    'collection_date' => $collectionDate->toDateString(),
+                    'reference_no' => $referenceNo,
+                    'notes' => $notes.' — remaining balance',
+                    'employee_loan_id' => $loan->id,
+                    'amount' => $remaining,
+                ], $createdBy);
+                $batchIds[] = $rebateBatch->id;
+            }
+        }
+
+        return $batchIds;
     }
 
     public function canRollbackBatch(LoanCollectionBatch $batch): bool

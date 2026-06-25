@@ -34,7 +34,8 @@ import {
   CalendarDays,
   Timer,
   BarChart2,
-  AlertCircle
+  AlertCircle,
+  User
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -131,6 +132,12 @@ export default function AttendanceSettingsIndex({ settings, branches }: Attendan
             </div>
 
             <div className="flex items-center gap-2">
+              <Link href={route('attendance.settings.employee-times')}>
+                <Button variant="outline" size="sm" className="h-9 border-slate-200 text-slate-700 shadow-sm font-medium">
+                  <User className="mr-1 h-4 w-4" />
+                  Employee Times
+                </Button>
+              </Link>
               <Link href={route('attendance.settings.create')}>
                 <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-medium">
                   <Plus className="mr-1 h-4 w-4" />

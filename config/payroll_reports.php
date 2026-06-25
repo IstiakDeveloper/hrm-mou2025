@@ -1,7 +1,26 @@
 <?php
 
 return [
-    'company_name' => env('PAYROLL_REPORT_COMPANY', env('APP_NAME', 'Organization')),
+    'company_name' => "Mousumi",
+    'company_address' => "Ukilpara, Naogaon",
+    'signature_blocks' => [
+        ['label' => 'Prepared By', 'department' => 'HR department'],
+        ['label' => 'Verified By', 'department' => 'F & A Department'],
+        ['label' => 'Approved By', 'department' => 'Executive Director'],
+    ],
+    'print' => [
+        'rows_per_page' => 30,
+        'pdf_rows_per_page' => 30,
+        'margin_top_mm' => 4,
+        'margin_bottom_mm' => 4,
+        'margin_side_mm' => 3,
+        'margin_side_extra_px' => 10,
+        // Signature block offset from the bottom of each branch's last printed page.
+        'signature_bottom_offset_px' => 100,
+        'chrome_path' => env('PAYROLL_REPORT_CHROME_PATH'),
+        // Below this natural data width (ch sum), columns stretch proportionally to full page.
+        'landscape_page_capacity_ch' => 195,
+    ],
 
     'reports' => [
         'grade-step-calculation' => [
@@ -11,12 +30,13 @@ return [
             'template' => 'grade-step',
         ],
         'salary-sheet-posted' => [
-            'title' => 'Salary Sheet (Posted)',
+            'title' => 'Salary Sheet',
             'description' => 'Posted salary payroll for the selected period.',
             'filters' => ['year', 'month', 'branch_id', 'department_id', 'designation_id', 'program_id', 'project_id'],
             'status' => 'posted',
             'salary_type' => 'salary',
             'template' => 'salary-sheet',
+            'branch_wise' => true,
         ],
         'salary-sheet-unposted' => [
             'title' => 'Salary Sheet (Un-posted)',
@@ -25,6 +45,7 @@ return [
             'status' => 'processed',
             'salary_type' => 'salary',
             'template' => 'salary-sheet',
+            'branch_wise' => true,
         ],
         'salary-sheet-employee-posted' => [
             'title' => 'Salary Sheet (Employee Wise Posted)',
@@ -33,6 +54,7 @@ return [
             'status' => 'posted',
             'salary_type' => 'salary',
             'template' => 'salary-sheet',
+            'branch_wise' => true,
             'require_employee' => true,
         ],
         'salary-sheet-employee-unposted' => [
@@ -42,6 +64,7 @@ return [
             'status' => 'processed',
             'salary_type' => 'salary',
             'template' => 'salary-sheet',
+            'branch_wise' => true,
             'require_employee' => true,
         ],
         'salary-sheet-date-range' => [
@@ -50,6 +73,7 @@ return [
             'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'designation_id'],
             'salary_type' => 'salary',
             'template' => 'salary-sheet',
+            'branch_wise' => true,
             'date_range' => true,
         ],
         'salary-sheet-branch-wise' => [

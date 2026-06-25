@@ -160,27 +160,46 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                             <TableRow className="bg-zinc-50/80">
                                 <TableHead className="text-xs">#</TableHead>
                                 <TableHead className="text-xs">Due date</TableHead>
-                                <TableHead className="text-xs text-right">Amount</TableHead>
+                                <TableHead className="text-xs text-right">Installment amount</TableHead>
+                                <TableHead className="text-xs text-right">Paid amount</TableHead>
                                 <TableHead className="text-xs">Status</TableHead>
-                                <TableHead className="text-xs">Paid</TableHead>
+                                <TableHead className="text-xs">Paid date</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {schedule.map((row) => (
+                            {schedule.map((row) => {
+                                const hasPaid = row.paid_amount !== null && row.paid_amount > 0;
+                                const amountDiffers =
+                                    hasPaid &&
+                                    Math.round(row.paid_amount ?? 0) !== Math.round(row.total_amount);
+
+                                return (
                                 <TableRow key={row.id}>
                                     <TableCell className="text-xs font-mono">{row.installment_no}</TableCell>
                                     <TableCell className="text-xs">{row.due_date}</TableCell>
-                                    <TableCell className="text-xs text-right tabular-nums">{fmt(row.total_amount)}</TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums text-zinc-700">
+                                        {fmt(row.total_amount)}
+                                    </TableCell>
+                                    <TableCell
+                                        className={cn(
+                                            'text-xs text-right tabular-nums font-medium',
+                                            hasPaid ? 'text-emerald-800' : 'text-zinc-400',
+                                            amountDiffers && 'text-amber-800',
+                                        )}
+                                    >
+                                        {hasPaid ? fmt(row.paid_amount) : '—'}
+                                    </TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={cn('text-[10px] capitalize', installmentStatus(row.status))}>
                                             {row.status}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-xs text-zinc-500">
-                                        {row.paid_at ? `${row.paid_at} · ${fmt(row.paid_amount ?? 0)}` : '—'}
+                                        {row.paid_at ?? '—'}
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </CardContent>

@@ -30,7 +30,7 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     ? [
                         { label: 'HR dashboard', href: '/sections/human-resources' },
                         { label: 'Employees', href: '/employees' },
-                        { label: 'Organization Setup', href: '/branches' },
+                        { label: 'Organization Setup', href: '/organization-structure' },
                         { label: 'Transfers', href: '/transfers' },
                         { label: 'Holidays', href: '/holidays' },
                         { label: 'Employee report', href: '/reports/employee' },

@@ -20,7 +20,7 @@ export default function PayrollReportsIndex({ reports }: Props) {
             <PayrollPage>
                 <PayrollPageHeader
                     title="Payroll Reports"
-                    description="Simple black & white reports for A4 printing. Generate, print, download PDF or Excel (CSV)."
+                    description="Simple black & white reports for A4 printing. Generate, print, download PDF or Excel."
                 />
 
                 <PayrollSectionCard title="All reports" description="Select a report to set filters and generate.">

@@ -3,12 +3,13 @@
 namespace App\Services;
 
 use App\Models\Employee;
-use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
 use App\Models\SalaryHead;
 use App\Models\SalaryStep;
 use App\Models\SalaryStructure;
+use App\Support\BranchOrganogram;
+use App\Support\HeadOfficeOrganogram;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -180,8 +181,14 @@ class PayrollReportService
     protected function salarySheet(array $config, array $filters): array
     {
         $payslips = $this->fetchPayslips($config, $filters);
+        $sheet = $this->mapSalarySheet($payslips, $config);
+        $sheet['salary_month'] = $this->periodLabel($filters, $config);
 
-        return $this->mapSalarySheet($payslips, $config);
+        if ($config['branch_wise'] ?? false) {
+            return $this->groupSalarySheetRows($sheet, 'branch');
+        }
+
+        return $sheet;
     }
 
     /**
@@ -192,38 +199,61 @@ class PayrollReportService
     protected function salarySheetGrouped(array $config, array $filters): array
     {
         $payslips = $this->fetchPayslips($config, $filters);
-        $groupBy = $config['group_by'] ?? 'branch';
         $sheet = $this->mapSalarySheet($payslips, $config);
+        $sheet['salary_month'] = $this->periodLabel($filters, $config);
 
+        return $this->groupSalarySheetRows($sheet, $config['group_by'] ?? 'branch');
+    }
+
+    /**
+     * @param  array<string, mixed>  $sheet
+     * @return array<string, mixed>
+     */
+    protected function groupSalarySheetRows(array $sheet, string $groupBy = 'branch'): array
+    {
         $groups = [];
         foreach ($sheet['rows'] as $row) {
             $key = match ($groupBy) {
                 'month' => $row['period'] ?? 'Unknown',
                 'designation' => $row['designation'] ?? 'Unassigned',
-                default => $row['branch'] ?? 'Unassigned',
+                default => $row['branch_code'] ?? '__unassigned__',
             };
-            $groups[$key]['label'] = $key;
+
+            if (! isset($groups[$key])) {
+                $branch = $this->resolveSalarySheetBranch($row);
+                $groups[$key] = [
+                    'label' => $row['branch_label'] ?? $row['branch'] ?? 'Unassigned',
+                    'sort_tuple' => BranchOrganogram::branchHierarchySortTuple($branch),
+                    'rows' => [],
+                ];
+            }
+
             $groups[$key]['rows'][] = $row;
         }
 
+        uasort($groups, function (array $a, array $b) use ($groupBy) {
+            if ($groupBy === 'branch') {
+                return ($a['sort_tuple'] ?? []) <=> ($b['sort_tuple'] ?? []);
+            }
+
+            return strcmp($a['label'], $b['label']);
+        });
+
         $sections = [];
         foreach ($groups as $group) {
-            $totals = $this->sumSheetRows($group['rows'], $sheet['heads']);
             $sections[] = [
                 'label' => $group['label'],
                 'rows' => $group['rows'],
-                'totals' => $totals,
+                'totals' => $this->sumSheetRows($group['rows'], $sheet['heads']),
             ];
         }
 
-        usort($sections, fn ($a, $b) => strcmp($a['label'], $b['label']));
-
-        return [
+        return array_merge($sheet, [
             'template' => 'salary-sheet-grouped',
-            'heads' => $sheet['heads'],
             'sections' => $sections,
-            'meta' => $sheet['meta'],
-        ];
+            'rows' => [],
+            'totals' => null,
+        ]);
     }
 
     /**
@@ -233,40 +263,90 @@ class PayrollReportService
      */
     protected function mapSalarySheet(Collection $payslips, array $config): array
     {
-        $headNames = [];
+        $columnMeta = [
+            'Basic' => [
+                'label' => 'Basic',
+                'sort_order' => $this->salarySheetEarningSortOrder('Basic', 'Basic'),
+                'category' => 'earning',
+            ],
+        ];
+
         foreach ($payslips as $payslip) {
             foreach ($payslip->lines as $line) {
-                if ((float) $line->computed_amount !== 0.0 || $line->head_name === 'Basic') {
-                    $headNames[$line->head_name] = $line->sort_order;
+                if ((float) $line->computed_amount === 0.0 && $line->head_name !== 'Basic') {
+                    continue;
+                }
+
+                if ($line->head_name === 'Basic') {
+                    continue;
+                }
+
+                $key = $this->salarySheetColumnKey($line);
+                $label = $this->salarySheetColumnLabel($line);
+                $category = $this->salarySheetColumnCategory($line);
+                $sortOrder = $category === 'deduction'
+                    ? $this->salarySheetDeductionSortOrder($key, $label)
+                    : $this->salarySheetEarningSortOrder($key, $label);
+
+                if (! isset($columnMeta[$key]) || $sortOrder < $columnMeta[$key]['sort_order']) {
+                    $columnMeta[$key] = [
+                        'label' => $label,
+                        'sort_order' => $sortOrder,
+                        'category' => $category,
+                    ];
                 }
             }
         }
-        asort($headNames);
-        $heads = array_keys($headNames);
-        if (! in_array('Basic', $heads, true)) {
-            array_unshift($heads, 'Basic');
-        }
+
+        $earningMeta = array_filter($columnMeta, fn (array $meta) => ($meta['category'] ?? 'earning') === 'earning');
+        $deductionMeta = array_filter($columnMeta, fn (array $meta) => ($meta['category'] ?? '') === 'deduction');
+
+        $earningHeads = $this->orderSalarySheetHeads($earningMeta, 'earning');
+        $deductionHeads = $this->orderSalarySheetHeads($deductionMeta, 'deduction');
+        $heads = array_merge($earningHeads, $deductionHeads);
+        $headLabels = array_map(fn (array $meta) => $meta['label'], $columnMeta);
+
+        $banks = $this->loadPrimaryBanks($payslips->pluck('employee_id')->filter()->unique()->values());
 
         $rows = [];
         foreach ($payslips as $payslip) {
             $employee = $payslip->employee;
             $run = $payslip->payrollRun;
             $components = array_fill_keys($heads, 0.0);
+
             foreach ($payslip->lines as $line) {
-                if (isset($components[$line->head_name])) {
-                    $components[$line->head_name] += (float) $line->computed_amount;
+                if ($line->head_name === 'Basic') {
+                    continue;
                 }
+
+                $key = $this->salarySheetColumnKey($line);
+                if (! isset($components[$key])) {
+                    continue;
+                }
+
+                $components[$key] += (float) $line->computed_amount;
             }
+
             $components['Basic'] = (float) $payslip->basic_salary;
+            $bank = $banks[$payslip->employee_id] ?? null;
+            $branch = $employee?->branch ?? $run?->branch;
+            $branchName = $branch?->name;
+            $branchCode = $branch?->branch_code;
 
             $rows[] = [
                 'pin' => $employee?->pin,
                 'name' => $employee?->name_en,
                 'designation' => $employee?->designation?->name,
                 'department' => $employee?->department?->name,
-                'branch' => $employee?->branch?->name ?? $run?->branch?->name,
+                'branch' => $branchName,
+                'branch_code' => $branchCode,
+                'branch_id' => $branch?->id,
+                'branch_model' => $branch,
+                'branch_label' => $this->formatBranchLabel($branchName, $branchCode),
                 'grade' => $payslip->grade_label,
                 'step' => $payslip->step_number,
+                'grade_step' => $this->formatGradeStep($payslip->grade_label, $payslip->step_number),
+                'account_no' => $bank?->account_no,
                 'period' => $run ? sprintf('%s %d', date('F', mktime(0, 0, 0, (int) $run->month, 1)), $run->year) : '',
                 'components' => $components,
                 'gross' => (float) $payslip->gross_salary,
@@ -279,6 +359,9 @@ class PayrollReportService
         return [
             'template' => 'salary-sheet',
             'heads' => $heads,
+            'earning_heads' => $earningHeads,
+            'deduction_heads' => $deductionHeads,
+            'head_labels' => $headLabels,
             'rows' => $rows,
             'totals' => $this->sumSheetRows($rows, $heads),
             'meta' => [
@@ -287,6 +370,304 @@ class PayrollReportService
                 'salary_type' => $config['salary_type'] ?? 'salary',
             ],
         ];
+    }
+
+    protected function salarySheetColumnCategory(PayslipLine $line): string
+    {
+        if ($line->type === 'deduction' || $this->isLoanPayslipLine($line)) {
+            return 'deduction';
+        }
+
+        return 'earning';
+    }
+
+    protected function formatGradeStep(?string $grade, int|string|null $step): string
+    {
+        if ($grade && $step !== null && $step !== '') {
+            return sprintf('%s (%s)', $grade, $step);
+        }
+
+        if ($grade) {
+            return $grade;
+        }
+
+        if ($step !== null && $step !== '') {
+            return (string) $step;
+        }
+
+        return '';
+    }
+
+    protected function formatBranchLabel(?string $name, ?string $code): string
+    {
+        $name = trim((string) $name);
+        $code = trim((string) $code);
+
+        if ($name !== '' && $code !== '') {
+            return sprintf('%s (%s)', $name, $code);
+        }
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        if ($code !== '') {
+            return $code;
+        }
+
+        return 'Unassigned';
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function resolveSalarySheetBranch(array $row): ?\App\Models\Branch
+    {
+        $branch = null;
+
+        if (! empty($row['branch_model']) && $row['branch_model'] instanceof \App\Models\Branch) {
+            $branch = $row['branch_model'];
+        }
+
+        return $branch;
+    }
+
+    protected function isLoanPayslipLine(PayslipLine $line): bool
+    {
+        return (bool) ($line->head?->is_loan_head ?? preg_match('/\s—\sLN-/', $line->head_name));
+    }
+
+    protected function resolveLoanHeadType(PayslipLine $line): ?string
+    {
+        if (! $this->isLoanPayslipLine($line) || $line->type !== 'deduction') {
+            return null;
+        }
+
+        if (filled($line->head?->loan_head_type)) {
+            return $line->head->loan_head_type;
+        }
+
+        foreach (config('employee_loans.loan_types', []) as $type => $meta) {
+            $shortName = $meta['short_name'] ?? '';
+            if ($shortName !== '' && str_starts_with($line->head_name, $shortName)) {
+                return $type;
+            }
+        }
+
+        return 'other';
+    }
+
+    protected function loanTypeLabel(?string $loanHeadType): string
+    {
+        if (! $loanHeadType) {
+            return 'Loan';
+        }
+
+        return config("employee_loans.loan_types.{$loanHeadType}.label")
+            ?? ucfirst(str_replace('_', ' ', $loanHeadType));
+    }
+
+    protected function salarySheetColumnKey(PayslipLine $line): string
+    {
+        if ($this->isLoanPayslipLine($line)) {
+            return 'loan:'.($this->resolveLoanHeadType($line) ?? 'other');
+        }
+
+        if ($line->type === 'earning' && in_array($line->head_name, ['Fixed Salary', 'Probation Salary'], true)) {
+            return 'earn:others';
+        }
+
+        if ($line->salary_head_id) {
+            return $line->type.':head:'.$line->salary_head_id;
+        }
+
+        return $line->type.':name:'.$line->head_name;
+    }
+
+    protected function salarySheetColumnLabel(PayslipLine $line): string
+    {
+        if ($this->isLoanPayslipLine($line)) {
+            $type = $this->resolveLoanHeadType($line) ?? 'other';
+
+            return config("employee_loans.loan_types.{$type}.short_name")
+                ?? $this->loanTypeLabel($type);
+        }
+
+        if ($line->type === 'earning' && in_array($line->head_name, ['Fixed Salary', 'Probation Salary'], true)) {
+            return 'Others';
+        }
+
+        return $line->head?->name ?? $line->head_name;
+    }
+
+    /**
+     * @param  array<string, array{label: string, sort_order: int, category: string}>  $columnMeta
+     * @return list<string>
+     */
+    protected function orderSalarySheetHeads(array $columnMeta, string $category): array
+    {
+        $matchers = $category === 'earning'
+            ? [
+                fn (string $key, string $label) => $key === 'Basic',
+                fn (string $key, string $label) => str_contains($label, 'house rent'),
+                fn (string $key, string $label) => str_contains($label, 'medical'),
+                fn (string $key, string $label) => str_contains($label, 'conveyance'),
+                fn (string $key, string $label) => str_contains($label, 'entertainment'),
+                fn (string $key, string $label) => $key === 'earn:others' || $label === 'others',
+            ]
+            : [
+                fn (string $key, string $label) => ! str_starts_with($key, 'loan:')
+                    && (in_array($label, ['pf', 'provident fund'], true) || str_contains($label, 'provident fund')),
+                fn (string $key, string $label) => ! str_starts_with($key, 'loan:') && str_contains($label, 'welfare'),
+                fn (string $key, string $label) => ! str_starts_with($key, 'loan:')
+                    && (in_array($label, ['income tax', 'tax'], true) || str_contains($label, 'income tax')),
+                fn (string $key, string $label) => $key === 'loan:pf_loan',
+                fn (string $key, string $label) => $key === 'loan:motorcycle_loan',
+                fn (string $key, string $label) => $key === 'loan:laptop_loan',
+                fn (string $key, string $label) => $key === 'loan:other',
+            ];
+
+        $ordered = [];
+        $used = [];
+
+        foreach ($matchers as $matcher) {
+            foreach ($columnMeta as $key => $meta) {
+                if (isset($used[$key])) {
+                    continue;
+                }
+
+                $label = strtolower(trim($meta['label']));
+                if ($matcher($key, $label)) {
+                    $ordered[] = $key;
+                    $used[$key] = true;
+                    break;
+                }
+            }
+        }
+
+        foreach (array_keys($columnMeta) as $key) {
+            if (! isset($used[$key])) {
+                $ordered[] = $key;
+            }
+        }
+
+        return $ordered;
+    }
+
+    protected function salarySheetEarningSortOrder(string $key, string $label): int
+    {
+        if ($key === 'Basic') {
+            return 10;
+        }
+
+        if ($key === 'earn:others') {
+            return 60;
+        }
+
+        $normalized = strtolower(trim($label));
+
+        return match (true) {
+            str_contains($normalized, 'house rent') => 20,
+            str_contains($normalized, 'medical') => 30,
+            str_contains($normalized, 'conveyance') => 40,
+            str_contains($normalized, 'entertainment') => 50,
+            $normalized === 'others' => 60,
+            default => 100 + (abs(crc32($key)) % 900),
+        };
+    }
+
+    protected function salarySheetDeductionSortOrder(string $key, string $label): int
+    {
+        if (str_starts_with($key, 'loan:')) {
+            $type = substr($key, 5);
+
+            return match ($type) {
+                'pf_loan' => 410,
+                'motorcycle_loan' => 420,
+                'laptop_loan' => 430,
+                'other' => 440,
+                default => 450,
+            };
+        }
+
+        $normalized = strtolower(trim($label));
+
+        return match (true) {
+            in_array($normalized, ['pf', 'provident fund'], true) => 100,
+            str_contains($normalized, 'welfare') => 200,
+            in_array($normalized, ['income tax', 'tax'], true) => 300,
+            str_contains($normalized, 'income tax') => 300,
+            default => 350,
+        };
+    }
+
+    protected function loanColumnSortOrder(PayslipLine $line): int
+    {
+        $type = $this->resolveLoanHeadType($line) ?? 'other';
+        $order = ['pf_loan', 'motorcycle_loan', 'laptop_loan', 'other'];
+        $index = array_search($type, $order, true);
+
+        return 50_000 + (($index === false ? 99 : $index) * 100) + (int) $line->sort_order;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<string>  $heads
+     * @return array<string, mixed>
+     */
+    public function sumSalarySheetRows(array $rows, array $heads): array
+    {
+        return $this->sumSheetRows($rows, $heads);
+    }
+
+    /**
+     * Employee data rows per printed page (Sub Total / Total row reserved separately).
+     */
+    protected function salarySheetDataRowsForPage(): int
+    {
+        $rows = (int) (config('payroll_reports.print.rows_per_page') ?? 30);
+
+        return max(1, $rows);
+    }
+
+    /**
+     * Paginate branch rows for print/PDF. Fixed rows per page; Sub Total on each non-final page.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<string>  $heads
+     * @return list<array{rows: list<array<string, mixed>>, totals: array<string, mixed>|null, totals_label: string, serial_start: int}>
+     */
+    public function paginateSalarySheetSectionPages(array $rows, array $heads, ?array $sectionTotals, ?int $rowsPerPage = null): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $pages = [];
+        $offset = 0;
+        $serialStart = 0;
+        $total = count($rows);
+        $dataBudget = max(1, $rowsPerPage ?? $this->salarySheetDataRowsForPage());
+
+        while ($offset < $total) {
+            $remaining = $total - $offset;
+
+            $isLastPage = $remaining <= $dataBudget;
+            $take = $isLastPage ? $remaining : $dataBudget;
+            $chunk = array_slice($rows, $offset, $take);
+
+            $pages[] = [
+                'rows' => $chunk,
+                'totals' => $isLastPage ? $sectionTotals : $this->sumSalarySheetRows($chunk, $heads),
+                'totals_label' => $isLastPage ? 'Total' : 'Sub Total',
+                'serial_start' => $serialStart,
+            ];
+
+            $serialStart += $take;
+            $offset += $take;
+        }
+
+        return $pages;
     }
 
     /**
@@ -311,10 +692,10 @@ class PayrollReportService
         }
 
         return [
-            'components' => $components,
-            'gross' => round($gross, 2),
-            'deduction' => round($deduction, 2),
-            'net' => round($net, 2),
+            'components' => array_map(fn (float $v) => round($v, 0), $components),
+            'gross' => round($gross, 0),
+            'deduction' => round($deduction, 0),
+            'net' => round($net, 0),
         ];
     }
 
@@ -329,13 +710,15 @@ class PayrollReportService
 
         $query = Payslip::query()
             ->with([
-                'lines',
-                'payrollRun.branch:id,name',
+                'lines.head:id,name,short_name,type,is_loan_head,loan_head_type',
+                'payrollRun.branch:id,name,branch_code,is_head_office,regional_office_id',
+                'payrollRun.branch.regionalOffice.zone:id,code,name',
                 'payrollRun.bonusConfiguration:id,name',
                 'employee:id,pin,name_en,designation_id,department_id,current_branch_id',
                 'employee.designation:id,name',
                 'employee.department:id,name',
-                'employee.branch:id,name',
+                'employee.branch:id,name,branch_code,is_head_office,regional_office_id',
+                'employee.branch.regionalOffice.zone:id,code,name',
             ])
             ->whereHas('payrollRun', fn (Builder $q) => $runQuery($q))
             ->when($filters['employee_id'], fn ($q, $id) => $q->where('employee_id', $id))
@@ -355,7 +738,16 @@ class PayrollReportService
                 'employee',
                 fn (Builder $eq) => $eq->where('project_id', $id)
             ))
-            ->orderBy('id');
+            ->whereHas('employee', fn (Builder $eq) => $eq->whereHas(
+                'branch',
+                fn (Builder $bq) => $bq->where('is_active', true)
+            ))
+            ->whereHas('payrollRun', fn (Builder $rq) => $rq->whereHas(
+                'branch',
+                fn (Builder $bq) => $bq->where('is_active', true)
+            ));
+
+        HeadOfficeOrganogram::applyToPayslipQuery($query);
 
         if ($filters['branch_id']) {
             $branchId = $filters['branch_id'];

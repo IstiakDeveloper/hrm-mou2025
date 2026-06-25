@@ -4,6 +4,7 @@ export type EmployeeLookupOption = {
     id: number;
     pin?: string | null;
     name_en?: string | null;
+    name_bn?: string | null;
     employee_id?: string | null;
     pf_balance?: number | string | null;
 };
@@ -11,12 +12,20 @@ export type EmployeeLookupOption = {
 type UseEmployeeLookupOptions = {
     enabled?: boolean;
     branchId?: string | number | null;
+    selectedEmployeeId?: string | number | null;
     limit?: number;
     payrollReady?: boolean;
     forGratuity?: boolean;
 };
 
-export function useEmployeeLookup({ enabled = true, branchId, limit = 50, payrollReady = false, forGratuity = false }: UseEmployeeLookupOptions = {}) {
+export function useEmployeeLookup({
+    enabled = true,
+    branchId,
+    selectedEmployeeId,
+    limit = 50,
+    payrollReady = false,
+    forGratuity = false,
+}: UseEmployeeLookupOptions = {}) {
     const [employees, setEmployees] = useState<EmployeeLookupOption[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -34,6 +43,9 @@ export function useEmployeeLookup({ enabled = true, branchId, limit = 50, payrol
                 }
                 if (branchId) {
                     params.set('branch_id', String(branchId));
+                }
+                if (selectedEmployeeId) {
+                    params.set('employee_id', String(selectedEmployeeId));
                 }
                 if (payrollReady) {
                     params.set('payroll_ready', '1');
@@ -54,7 +66,7 @@ export function useEmployeeLookup({ enabled = true, branchId, limit = 50, payrol
                 setLoading(false);
             }
         },
-        [branchId, enabled, limit, payrollReady, forGratuity],
+        [branchId, enabled, forGratuity, limit, payrollReady, selectedEmployeeId],
     );
 
     useEffect(() => {

@@ -27,7 +27,7 @@ class SalaryStructureController extends Controller
 
     public function manual(Request $request)
     {
-        $payscales = Payscale::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $payscales = Payscale::query()->active()->orderBy('name')->get(['id', 'name']);
         $payscaleId = $request->integer('payscale_id') ?: null;
         $gradeId = $request->integer('salary_grade_id') ?: null;
         $stepId = $request->integer('salary_step_id') ?: null;

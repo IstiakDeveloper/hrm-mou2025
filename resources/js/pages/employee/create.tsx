@@ -25,6 +25,19 @@ import {
     toSerializableEmployeeForm,
     type EmployeeDocumentFormRow,
 } from '@/lib/employee-v2-form-persist';
+import {
+    emptyGuarantorFormRow,
+    emptyNomineeFormRow,
+    type GuarantorFormRow,
+    type NomineeFormRow,
+} from '@/lib/employee-nominee-guarantor-form';
+import {
+    DEFAULT_EMPLOYEE_BANK_ACCOUNT_TYPE,
+    DEFAULT_EMPLOYEE_BANK_BRANCH_NAME,
+    EMPLOYEE_BANK_ACCOUNT_TYPE_LABEL,
+    emptyEmployeeBankFormFields,
+} from '@/lib/employee-bank-defaults';
+import { csrfJsonPost, csrfJsonPostErrorMessage } from '@/lib/csrf';
 import { useLocationCascade, type LocationUnion } from '@/lib/location-cascade';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { cn } from '@/lib/utils';
@@ -79,11 +92,6 @@ function SignatureDemoGraphic({ className }: { className?: string }) {
     );
 }
 
-function getCsrfTokenFromPage(): string {
-    const el = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
-    return el?.content?.trim() ?? '';
-}
-
 interface Address {
     type: 'present' | 'permanent';
     division: string;
@@ -104,24 +112,8 @@ interface Education {
     result_value: string;
 }
 
-interface Nominee {
-    name: string;
-    relation: string;
-    mobile: string;
-    date_of_birth: string;
-    share_percentage: string | number;
-}
-
-interface Guarantor {
-    name: string;
-    father_name: string;
-    mobile: string;
-    address: string;
-    profession: string;
-    organization: string;
-    designation: string;
-    nid: string;
-}
+type Nominee = NomineeFormRow;
+type Guarantor = GuarantorFormRow;
 
 interface Cheque {
     bank_name: string;
@@ -297,7 +289,7 @@ function getCreateFormDefaults(): EmployeeCreateFormData {
         signature: null,
         addresses: [emptyFormAddress('present'), emptyFormAddress('permanent')],
         educations: [],
-        bank: { bank_name: '', branch_name: '', account_no: '', account_type: '', bank_address: '', remark: '' },
+        bank: emptyEmployeeBankFormFields(),
         nominees: [],
         guarantors: [],
         guarantor_cheques: [],
@@ -539,6 +531,7 @@ interface EmployeeCreateProps {
     payscales: PayrollPayscaleOption[];
     payrollGrades: PayrollGradeOption[];
     payrollSteps: PayrollStepOption[];
+    activePayscaleId?: number | null;
     oldInput?: Record<string, unknown>;
     errors?: Record<string, string>;
 }
@@ -559,6 +552,7 @@ export default function EmployeeCreate({
     payscales = [],
     payrollGrades = [],
     payrollSteps = [],
+    activePayscaleId = null,
     oldInput,
     errors: errorsProp = {},
 }: EmployeeCreateProps) {
@@ -614,11 +608,25 @@ export default function EmployeeCreate({
 
     const [addVillageModal, setAddVillageModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string; error: string; saving: boolean }>({ open: false, target: 'present', name: '', error: '', saving: false });
     const [addUnionModal, setAddUnionModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string; error: string; saving: boolean }>({ open: false, target: 'present', name: '', error: '', saving: false });
+    const blockMainSubmitRef = useRef(false);
+
+    const beginLocationSave = () => {
+        blockMainSubmitRef.current = true;
+    };
+
+    const endLocationSave = () => {
+        window.setTimeout(() => {
+            blockMainSubmitRef.current = false;
+        }, 600);
+    };
 
     useEffect(() => {
-        if (!data.bank?.bank_name) {
-            setData('bank', { ...data.bank, bank_name: defaultBankName });
-        }
+        setData('bank', {
+            ...data.bank,
+            bank_name: data.bank?.bank_name || defaultBankName,
+            branch_name: DEFAULT_EMPLOYEE_BANK_BRANCH_NAME,
+            account_type: DEFAULT_EMPLOYEE_BANK_ACCOUNT_TYPE,
+        });
         if (documentTypes.length > 0 && data.documents.length === 0) {
             setData('documents', documentTypes.map(type => newEmployeeDocumentFormRow(type)));
         }
@@ -797,25 +805,21 @@ export default function EmployeeCreate({
         const upazila = data.addresses[idx]?.upazila || '';
         const name = nameRaw.trim();
         if (!division || !district || !upazila || !name) return { ok: false, error: 'All fields are required.' };
-        const csrf = getCsrfTokenFromPage();
-        if (!csrf) return { ok: false, error: 'Security token missing.' };
+        beginLocationSave();
         try {
-            const res = await fetch(route('employees.unions.store'), {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
-                body: JSON.stringify({ _token: csrf, division, district, upazila, name }),
-            });
-            const j = await res.json().catch(() => ({}));
-            if (!res.ok) return { ok: false, error: j.message || 'Error occurred.' };
+            const j = await csrfJsonPost<{ name?: string }>(route('employees.unions.store'), { division, district, upazila, name });
             const createdName = j.name || name;
+            const createdUnion: LocationUnion = { name: createdName, type: 'union', villages: [] };
+            locationCascade.addUnion(upazila, createdUnion);
             const key = `${target === 'present' ? 'p' : 'r'}:${upazila}`;
-            setExtraUnions((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { name: createdName, type: 'union', villages: [] }] }));
+            setExtraUnions((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), createdUnion] }));
             if (target === 'present') setPresentAddress({ union: createdName, village: '' });
             else setPermanentAddress({ union: createdName, village: '' });
             return { ok: true };
-        } catch {
-            return { ok: false, error: 'Network error.' };
+        } catch (error) {
+            return { ok: false, error: csrfJsonPostErrorMessage(error) };
+        } finally {
+            endLocationSave();
         }
     };
 
@@ -827,26 +831,43 @@ export default function EmployeeCreate({
         const union = data.addresses[idx]?.union || '';
         const name = nameRaw.trim();
         if (!division || !district || !upazila || !union || !name) return { ok: false, error: 'All fields are required.' };
-        const csrf = getCsrfTokenFromPage();
-        if (!csrf) return { ok: false, error: 'Security token missing.' };
+        beginLocationSave();
         try {
-            const res = await fetch(route('employees.villages.store'), {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
-                body: JSON.stringify({ _token: csrf, division, district, upazila, union, name }),
-            });
-            const j = await res.json().catch(() => ({}));
-            if (!res.ok) return { ok: false, error: j.message || 'Error occurred.' };
+            const j = await csrfJsonPost<{ name?: string }>(route('employees.villages.store'), { division, district, upazila, union, name });
             const createdName = j.name || name;
+            locationCascade.addVillageToUnion(upazila, union, createdName);
             const key = `${target === 'present' ? 'p' : 'r'}:${upazila}:${union}`;
             setExtraVillages((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), createdName] }));
             if (target === 'present') setPresentAddress({ village: createdName });
             else setPermanentAddress({ village: createdName });
             return { ok: true };
-        } catch {
-            return { ok: false, error: 'Network error.' };
+        } catch (error) {
+            return { ok: false, error: csrfJsonPostErrorMessage(error) };
+        } finally {
+            endLocationSave();
         }
+    };
+
+    const saveUnionModal = async () => {
+        if (!addUnionModal.name.trim() || addUnionModal.saving) return;
+        setAddUnionModal((s) => ({ ...s, saving: true, error: '' }));
+        const res = await persistUnion(addUnionModal.target, addUnionModal.name);
+        if (res.ok) {
+            setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false });
+            return;
+        }
+        setAddUnionModal((s) => ({ ...s, saving: false, error: res.error || 'Failed to save union.' }));
+    };
+
+    const saveVillageModal = async () => {
+        if (!addVillageModal.name.trim() || addVillageModal.saving) return;
+        setAddVillageModal((s) => ({ ...s, saving: true, error: '' }));
+        const res = await persistVillage(addVillageModal.target, addVillageModal.name);
+        if (res.ok) {
+            setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false });
+            return;
+        }
+        setAddVillageModal((s) => ({ ...s, saving: false, error: res.error || 'Failed to save village.' }));
     };
 
     const setPresentAddress = (patch: Partial<Address>) => {
@@ -871,6 +892,11 @@ export default function EmployeeCreate({
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+        e.stopPropagation();
+        if (blockMainSubmitRef.current) return;
+        if (addUnionModal.open || addVillageModal.open || addUnionModal.saving || addVillageModal.saving) {
+            return;
+        }
         setTabStepBlockMessages(null);
         const nidErr = getNidOrSmartCardClientError(data.nid);
         if (nidErr) {
@@ -1007,7 +1033,15 @@ export default function EmployeeCreate({
                 ) : null}
 
                 {/* Main Setup Layout */}
-                <form onSubmit={submit}>
+                <form
+                    onSubmit={submit}
+                    onSubmitCapture={(e) => {
+                        if (blockMainSubmitRef.current || addUnionModal.open || addVillageModal.open || addUnionModal.saving || addVillageModal.saving) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                    }}
+                >
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                         {/* Sidebar Stepper */}
                         <div className="lg:col-span-3">
@@ -1441,6 +1475,7 @@ export default function EmployeeCreate({
                                                 payscales={payscales}
                                                 grades={payrollGrades}
                                                 steps={payrollSteps}
+                                                activePayscaleId={activePayscaleId ? String(activePayscaleId) : null}
                                                 payscaleId={data.payscale_id}
                                                 salaryGradeId={data.salary_grade_id}
                                                 salaryStepId={data.salary_step_id}
@@ -1470,10 +1505,12 @@ export default function EmployeeCreate({
                                                 <FormField label="Bank Name" error={errors['bank.bank_name']}>
                                                     <ComboSelect value={data.bank.bank_name || null} onChange={(v) => setData('bank', { ...data.bank, bank_name: v ?? '' })} items={banks.map(b => ({ value: b, label: b }))} placeholder="Select Bank" />
                                                 </FormField>
-                                                <FormField label="Branch Name" error={errors['bank.branch_name']}><Input value={data.bank.branch_name} onChange={(e) => setData('bank', { ...data.bank, branch_name: e.target.value })} placeholder="Branch Name" /></FormField>
+                                                <FormField label="Branch Name" error={errors['bank.branch_name']}>
+                                                    <Input value={DEFAULT_EMPLOYEE_BANK_BRANCH_NAME} disabled readOnly />
+                                                </FormField>
                                                 <FormField label="Account Number" error={errors['bank.account_no']}><Input value={data.bank.account_no} onChange={(e) => setData('bank', { ...data.bank, account_no: e.target.value })} placeholder="Account No" /></FormField>
                                                 <FormField label="Account Type" error={errors['bank.account_type']}>
-                                                    <ComboSelect value={data.bank.account_type || null} onChange={(v) => setData('bank', { ...data.bank, account_type: v ?? '' })} items={['Savings', 'Current', 'Salary', 'Joint'].map(t => ({ value: t, label: t }))} placeholder="Select Type" />
+                                                    <Input value={EMPLOYEE_BANK_ACCOUNT_TYPE_LABEL} disabled readOnly />
                                                 </FormField>
                                                 <FormField label="Bank Address" className="sm:col-span-2" error={errors['bank.bank_address']}><Input value={data.bank.bank_address} onChange={(e) => setData('bank', { ...data.bank, bank_address: e.target.value })} placeholder="Branch Address" /></FormField>
                                                 <FormField label="Remarks" className="sm:col-span-2" error={errors['bank.remark']}><Textarea value={data.bank.remark} onChange={(e) => setData('bank', { ...data.bank, remark: e.target.value })} placeholder="Additional routing information..." /></FormField>
@@ -1494,7 +1531,7 @@ export default function EmployeeCreate({
                                                 <p className="text-xs text-zinc-500 mt-1">Designate profile beneficiaries and allocation shares.</p>
                                             </div>
                                             {data.nominees.length > 0 && (
-                                                <Button type="button" variant="outline" size="sm" className="h-9 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('nominees', [...data.nominees, { name: '', relation: '', mobile: '', date_of_birth: '', share_percentage: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Row</Button>
+                                                <Button type="button" variant="outline" size="sm" className="h-9 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('nominees', [...data.nominees, emptyNomineeFormRow()])}><Plus className="mr-1.5 h-4 w-4" /> Add Row</Button>
                                             )}
                                         </div>
                                         <div className="p-6 md:p-8 space-y-6">
@@ -1503,7 +1540,7 @@ export default function EmployeeCreate({
                                                     <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center ring-8 ring-emerald-50/30 mb-4"><Users className="h-6 w-6" strokeWidth={1.5} /></div>
                                                     <h3 className="text-sm font-bold text-zinc-900">No Nominees Assigned</h3>
                                                     <p className="text-xs text-zinc-500 mt-1 max-w-xs">You have not added any nominees to this employee yet.</p>
-                                                    <Button type="button" variant="outline" size="sm" className="mt-4 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 rounded-lg font-semibold h-9" onClick={() => setData('nominees', [{ name: '', relation: '', mobile: '', date_of_birth: '', share_percentage: '' }])}><Plus className="mr-1.5 h-4 w-4" /> Add Nominee</Button>
+                                                    <Button type="button" variant="outline" size="sm" className="mt-4 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 rounded-lg font-semibold h-9" onClick={() => setData('nominees', [emptyNomineeFormRow()])}><Plus className="mr-1.5 h-4 w-4" /> Add Nominee</Button>
                                                 </div>
                                             ) : (
                                                 <div className="space-y-5">
@@ -1545,7 +1582,7 @@ export default function EmployeeCreate({
                                             <div className="space-y-4">
                                                 <div className="flex justify-between items-center">
                                                     <h3 className="text-sm font-bold text-zinc-800">1. References / Guarantors</h3>
-                                                    <Button type="button" variant="outline" size="sm" className="h-8.5 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('guarantors', [...data.guarantors, { name: '', father_name: '', mobile: '', address: '', profession: '', organization: '', designation: '', nid: '' }])}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Guarantor</Button>
+                                                    <Button type="button" variant="outline" size="sm" className="h-8.5 font-semibold text-emerald-700 border-emerald-600/35 hover:bg-emerald-50 rounded-lg" onClick={() => setData('guarantors', [...data.guarantors, emptyGuarantorFormRow()])}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Guarantor</Button>
                                                 </div>
 
                                                 {data.guarantors.length === 0 ? (
@@ -1890,46 +1927,60 @@ export default function EmployeeCreate({
             {/* Custom Modals */}
             {/* Add Union Modal */}
             <Dialog open={addUnionModal.open} onOpenChange={(op) => !op && setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false })}>
-                <DialogContent className="sm:max-w-md rounded-2xl p-6">
+                <DialogContent className="sm:max-w-md rounded-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle className="text-sm font-bold text-zinc-900">Add New Union</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 my-2">
                         <FormField label="Union Name" error={addUnionModal.error}>
-                            <Input value={addUnionModal.name} onChange={(e) => setAddUnionModal(s => ({ ...s, name: e.target.value, error: '' }))} placeholder="Type union name" autoFocus />
+                            <Input
+                                value={addUnionModal.name}
+                                onChange={(e) => setAddUnionModal(s => ({ ...s, name: e.target.value, error: '' }))}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        void saveUnionModal();
+                                    }
+                                }}
+                                placeholder="Type union name"
+                                autoFocus
+                            />
                         </FormField>
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-zinc-50 mt-4">
                         <Button type="button" variant="outline" className="rounded-lg h-9 text-xs" onClick={() => setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false })} disabled={addUnionModal.saving}>Cancel</Button>
-                        <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-9 text-xs" disabled={!addUnionModal.name.trim() || addUnionModal.saving} onClick={async () => {
-                            setAddUnionModal(s => ({ ...s, saving: true, error: '' }));
-                            const res = await persistUnion(addUnionModal.target, addUnionModal.name);
-                            if (res.ok) setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false });
-                            else setAddUnionModal(s => ({ ...s, saving: false, error: res.error || 'Failed to save union.' }));
-                        }}>{addUnionModal.saving ? 'Saving…' : 'Save Union'}</Button>
+                        <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-9 text-xs" disabled={!addUnionModal.name.trim() || addUnionModal.saving} onClick={() => void saveUnionModal()}>{addUnionModal.saving ? 'Saving…' : 'Save Union'}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
             {/* Add Village Modal */}
             <Dialog open={addVillageModal.open} onOpenChange={(op) => !op && setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })}>
-                <DialogContent className="sm:max-w-md rounded-2xl p-6">
+                <DialogContent className="sm:max-w-md rounded-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle className="text-sm font-bold text-zinc-900">Add New Village</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 my-2">
                         <FormField label="Village Name" error={addVillageModal.error}>
-                            <Input value={addVillageModal.name} onChange={(e) => setAddVillageModal(s => ({ ...s, name: e.target.value, error: '' }))} placeholder="Type village name" autoFocus />
+                            <Input
+                                value={addVillageModal.name}
+                                onChange={(e) => setAddVillageModal(s => ({ ...s, name: e.target.value, error: '' }))}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        void saveVillageModal();
+                                    }
+                                }}
+                                placeholder="Type village name"
+                                autoFocus
+                            />
                         </FormField>
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-zinc-50 mt-4">
                         <Button type="button" variant="outline" className="rounded-lg h-9 text-xs" onClick={() => setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })} disabled={addVillageModal.saving}>Cancel</Button>
-                        <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-9 text-xs" disabled={!addVillageModal.name.trim() || addVillageModal.saving} onClick={async () => {
-                            setAddVillageModal(s => ({ ...s, saving: true, error: '' }));
-                            const res = await persistVillage(addVillageModal.target, addVillageModal.name);
-                            if (res.ok) setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false });
-                            else setAddVillageModal(s => ({ ...s, saving: false, error: res.error || 'Failed to save village.' }));
-                        }}>{addVillageModal.saving ? 'Saving…' : 'Save Village'}</Button>
+                        <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-9 text-xs" disabled={!addVillageModal.name.trim() || addVillageModal.saving} onClick={() => void saveVillageModal()}>{addVillageModal.saving ? 'Saving…' : 'Save Village'}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -177,6 +177,15 @@ class BranchController extends Controller
             unset($validated['login_pin']);
         }
 
+        $wantsInactive = array_key_exists('is_active', $validated) && ! $validated['is_active'];
+        if ($wantsInactive && $branch->is_active && $branch->hasActiveEmployees()) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors([
+                    'is_active' => 'Cannot deactivate this branch while it has active employees. Transfer or inactivate them first.',
+                ]);
+        }
+
         $branch->update($validated);
         $branch->refresh();
 

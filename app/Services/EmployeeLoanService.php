@@ -34,7 +34,7 @@ class EmployeeLoanService
     {
         return Carbon::parse($disbursementDate)
             ->startOfMonth()
-            ->addMonths(max(1, $graceMonths))
+            ->addMonths(max(0, $graceMonths))
             ->endOfMonth();
     }
 
@@ -88,7 +88,7 @@ class EmployeeLoanService
                 'installment_amount' => $installmentAmount,
                 'disbursement_date' => $data['disbursement_date'],
                 'first_installment_date' => $data['first_installment_date'],
-                'outstanding_balance' => $principal,
+                'outstanding_balance' => 0,
                 'status' => 'active',
                 'is_legacy_import' => $isLegacy,
                 'legacy_paid_installments' => $isLegacy ? ($data['legacy_paid_installments'] ?? null) : null,
@@ -107,7 +107,7 @@ class EmployeeLoanService
 
             $this->postTransaction($loan, [
                 'transaction_type' => EmployeeLoanTransaction::TYPE_DISBURSEMENT,
-                'debit_amount' => $principal,
+                'debit_amount' => $totalPayable,
                 'credit_amount' => 0,
                 'transaction_date' => Carbon::parse($data['disbursement_date']),
                 'notes' => $disbursementNote,
@@ -230,9 +230,25 @@ class EmployeeLoanService
             throw new InvalidArgumentException('Disburse amount must be greater than zero.');
         }
 
-        $remainingMonths = max(1, (int) ceil($outTotal / $installAmount));
-        $totalInstallments = $passedMonths + $remainingMonths;
-        $totalPayable = SalaryStructureCalculator::roundTaka(($passedMonths * $installAmount) + $outTotal);
+        $useManual = ! empty($row['use_manual_terms']);
+
+        $policyInstallments = (int) ($policy->total_installments ?? $policy->max_tenure_months);
+        if ($policyInstallments < 1) {
+            $policyInstallments = max(1, (int) ($policy->tenure_years ?? 1) * 12);
+        }
+
+        if ($useManual) {
+            $serviceCharge = SalaryStructureCalculator::roundTaka((float) ($row['service_charge_amount'] ?? 0));
+            $totalPayable = SalaryStructureCalculator::roundTaka($disburseAmount + $serviceCharge);
+            $totalInstallments = $policyInstallments;
+        } elseif ($policy->loan_type === 'pf_loan') {
+            $totalInstallments = $policyInstallments;
+            $totalPayable = SalaryStructureCalculator::roundTaka(($passedMonths * $installAmount) + $outTotal);
+        } else {
+            $remainingMonths = max(1, (int) ceil($outTotal / $installAmount));
+            $totalInstallments = $passedMonths + $remainingMonths;
+            $totalPayable = SalaryStructureCalculator::roundTaka(($passedMonths * $installAmount) + $outTotal);
+        }
 
         $closing = Carbon::parse($migration->closing_date)->endOfMonth();
         $graceMonths = (int) ($policy->grace_months ?? 0);
@@ -268,7 +284,7 @@ class EmployeeLoanService
                 'installment_amount' => $installAmount,
                 'disbursement_date' => $row['disbursement_date'],
                 'first_installment_date' => $firstInstallmentDate->toDateString(),
-                'outstanding_balance' => $disburseAmount,
+                'outstanding_balance' => 0,
                 'status' => 'active',
                 'is_legacy_import' => true,
                 'legacy_paid_installments' => $passedMonths > 0 ? $passedMonths : null,
@@ -288,7 +304,7 @@ class EmployeeLoanService
 
             $this->postTransaction($loan, [
                 'transaction_type' => EmployeeLoanTransaction::TYPE_DISBURSEMENT,
-                'debit_amount' => $disburseAmount,
+                'debit_amount' => $totalPayable,
                 'credit_amount' => 0,
                 'transaction_date' => Carbon::parse($row['disbursement_date']),
                 'notes' => 'Legacy loan migration — original disbursement',
@@ -300,7 +316,6 @@ class EmployeeLoanService
                 $this->applyLegacyPrePaidInstallments($loan, ['legacy_paid_installments' => $passedMonths], $createdBy);
             }
 
-            $loan->update(['outstanding_balance' => $outTotal]);
             $this->refreshLoanStatus($loan->fresh());
 
             return $loan->fresh(['installments', 'employee', 'policy']);
@@ -315,7 +330,7 @@ class EmployeeLoanService
 
         $application->loadMissing('policy');
         $policy = $application->policy;
-        $graceMonths = (int) ($application->grace_months ?? $policy->grace_months ?? 0);
+        $graceMonths = (int) ($policy->grace_months ?? $application->grace_months ?? 0);
         $firstInstallment = $this->resolveFirstInstallmentDate($disbursementDate, $graceMonths);
 
         $loan = $this->createLoan([
@@ -393,15 +408,6 @@ class EmployeeLoanService
         $periodStart = Carbon::create($year, $month, 1)->startOfMonth();
         $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
 
-        $loans = EmployeeLoan::query()
-            ->whereIn('employee_id', $employeeIds)
-            ->where('status', 'active')
-            ->get();
-
-        foreach ($loans as $loan) {
-            $this->alignInstallmentSchedule($loan);
-        }
-
         $installments = EmployeeLoanInstallment::query()
             ->whereHas('loan', function ($q) use ($employeeIds) {
                 $q->whereIn('employee_id', $employeeIds)->where('status', 'active');
@@ -413,6 +419,8 @@ class EmployeeLoanService
             ->orderBy('installment_no')
             ->get();
 
+        $installments = $this->selectOneInstallmentPerLoan($installments);
+
         foreach ($installments as $installment) {
             $loan = $installment->loan;
             $employee = $loan->employee;
@@ -420,29 +428,12 @@ class EmployeeLoanService
                 continue;
             }
 
-            $asOf = $periodEnd;
-            if ($this->probationSalaryService->isOnProbation($employee, $asOf)) {
+            if ($this->probationSalaryService->isOnProbation($employee, $periodEnd)) {
                 continue;
             }
 
-            $head = $loan->salaryHead ?? $this->loanHeadsService->headForLoanType($loan->loan_type);
-            $amount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
-            $loanLabel = $loan->loan_number ?: ('Loan #'.$loan->id);
-
             $this->batchDeductionsByEmployee[$employee->id] ??= [];
-            $this->batchDeductionsByEmployee[$employee->id][] = [
-                'installment' => $installment,
-                'loan' => $loan,
-                'amount' => $amount,
-                'salary_head_id' => $head->id,
-                'head_name' => sprintf(
-                    '%s — %s (%d/%d)',
-                    $head->short_name ?? $head->name,
-                    $loanLabel,
-                    $installment->installment_no,
-                    $loan->installment_count
-                ),
-            ];
+            $this->batchDeductionsByEmployee[$employee->id][] = $this->payrollDeductionRowFromInstallment($installment);
         }
     }
 
@@ -451,27 +442,20 @@ class EmployeeLoanService
         $this->batchDeductionsByEmployee = null;
     }
 
-    public function deductionsForPayroll(Employee $employee, int $year, int $month): array
+    public function deductionsForPayroll(Employee $employee, int $year, int $month, ?int $payrollRunId = null): array
     {
         if ($this->batchDeductionsByEmployee !== null) {
             return $this->batchDeductionsByEmployee[$employee->id] ?? [];
         }
 
-        $asOf = Carbon::create($year, $month, 1)->endOfMonth();
-        if ($this->probationSalaryService->isOnProbation($employee, $asOf)) {
+        $periodStart = Carbon::create($year, $month, 1)->startOfMonth();
+        $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
+
+        if ($this->probationSalaryService->isOnProbation($employee, $periodEnd)) {
             return [];
         }
 
         $this->loanHeadsService->seed();
-
-        EmployeeLoan::query()
-            ->where('employee_id', $employee->id)
-            ->where('status', 'active')
-            ->get()
-            ->each(fn (EmployeeLoan $loan) => $this->alignInstallmentSchedule($loan));
-
-        $periodStart = Carbon::create($year, $month, 1)->startOfMonth();
-        $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
 
         $installments = EmployeeLoanInstallment::query()
             ->whereHas('loan', function ($q) use ($employee) {
@@ -484,42 +468,64 @@ class EmployeeLoanService
             ->orderBy('installment_no')
             ->get();
 
-        $deductions = [];
+        if ($payrollRunId !== null) {
+            $loanIdsWithInstallmentOnRun = EmployeeLoanInstallment::query()
+                ->whereIn('status', ['scheduled', 'paid'])
+                ->whereHas('payslip', fn ($q) => $q->where('payroll_run_id', $payrollRunId))
+                ->whereHas('loan', fn ($q) => $q->where('employee_id', $employee->id))
+                ->pluck('employee_loan_id');
 
-        foreach ($installments as $installment) {
-            $loan = $installment->loan;
-            $head = $loan->salaryHead ?? $this->loanHeadsService->headForLoanType($loan->loan_type);
-            $amount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
-
-            $loanLabel = $loan->loan_number ?: ('Loan #'.$loan->id);
-            $deductions[] = [
-                'installment' => $installment,
-                'loan' => $loan,
-                'amount' => $amount,
-                'salary_head_id' => $head->id,
-                'head_name' => sprintf(
-                    '%s — %s (%d/%d)',
-                    $head->short_name ?? $head->name,
-                    $loanLabel,
-                    $installment->installment_no,
-                    $loan->installment_count
-                ),
-            ];
+            $installments = $installments->reject(
+                fn (EmployeeLoanInstallment $installment) => $loanIdsWithInstallmentOnRun->contains($installment->employee_loan_id)
+            );
         }
 
-        return $deductions;
+        $installments = $this->selectOneInstallmentPerLoan($installments);
+
+        return $installments
+            ->map(fn (EmployeeLoanInstallment $installment) => $this->payrollDeductionRowFromInstallment($installment))
+            ->values()
+            ->all();
     }
 
     /**
-     * Re-align pending installment due dates from disbursement + grace (fixes legacy schedules).
+     * @return array{
+     *   installment: EmployeeLoanInstallment,
+     *   loan: EmployeeLoan,
+     *   amount: float,
+     *   salary_head_id: int,
+     *   head_name: string,
+     * }
      */
-    public function alignInstallmentSchedule(EmployeeLoan $loan): void
+    protected function payrollDeductionRowFromInstallment(EmployeeLoanInstallment $installment): array
     {
-        if ($loan->status !== 'active') {
-            return;
-        }
+        $loan = $installment->loan;
+        $head = $loan->salaryHead ?? $this->loanHeadsService->headForLoanType($loan->loan_type);
+        $amount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
+        $loanLabel = $loan->loan_number ?: ('Loan #'.$loan->id);
 
-        $loan->loadMissing(['policy', 'application']);
+        return [
+            'installment' => $installment,
+            'loan' => $loan,
+            'amount' => $amount,
+            'salary_head_id' => $head->id,
+            'head_name' => sprintf(
+                '%s — %s (%d/%d)',
+                $head->short_name ?? $head->name,
+                $loanLabel,
+                $installment->installment_no,
+                $loan->installment_count
+            ),
+        ];
+    }
+
+    /**
+     * Rebuild every installment due date from disbursement + grace (keeps status and amounts).
+     */
+    public function realignFullInstallmentSchedule(EmployeeLoan $loan): void
+    {
+        $loan->loadMissing(['policy', 'application', 'installments']);
+
         $graceMonths = (int) ($loan->application?->grace_months ?? $loan->policy?->grace_months ?? 0);
         $correctFirst = $this->resolveFirstInstallmentDate($loan->disbursement_date, $graceMonths);
 
@@ -530,19 +536,202 @@ class EmployeeLoanService
         $intervalMonths = max(1, (int) ($loan->policy?->interval_months ?? 1));
         $firstDue = $correctFirst->copy()->startOfMonth();
 
-        $loan->installments()
+        foreach ($loan->installments->sortBy('installment_no') as $installment) {
+            $newDue = $firstDue
+                ->copy()
+                ->addMonths(($installment->installment_no - 1) * $intervalMonths)
+                ->endOfMonth();
+
+            $installment->update(['due_date' => $newDue->toDateString()]);
+
+            if ($installment->status !== 'paid') {
+                continue;
+            }
+
+            $hasCollection = EmployeeLoanTransaction::query()
+                ->where('employee_loan_installment_id', $installment->id)
+                ->whereIn('transaction_type', EmployeeLoanTransaction::COLLECTION_TYPES)
+                ->exists();
+
+            if ($hasCollection || $installment->payslip_id) {
+                continue;
+            }
+
+            $installment->update(['paid_at' => $newDue]);
+
+            EmployeeLoanTransaction::query()
+                ->where('employee_loan_installment_id', $installment->id)
+                ->where('transaction_type', EmployeeLoanTransaction::TYPE_LEGACY_PAYMENT)
+                ->update([
+                    'transaction_date' => $newDue->toDateString(),
+                    'payroll_year' => $newDue->year,
+                    'payroll_month' => $newDue->month,
+                ]);
+        }
+    }
+
+    /**
+     * Re-align pending installment due dates from disbursement + grace (fixes legacy schedules).
+     * Pending rows continue month-by-month from the last paid or scheduled installment.
+     */
+    public function alignInstallmentSchedule(EmployeeLoan $loan): void
+    {
+        if ($loan->status !== 'active') {
+            return;
+        }
+
+        $loan->loadMissing(['policy', 'application']);
+        $graceMonths = (int) ($loan->policy?->grace_months ?? $loan->application?->grace_months ?? 0);
+        $correctFirst = $this->resolveFirstInstallmentDate($loan->disbursement_date, $graceMonths);
+
+        if ($loan->first_installment_date?->toDateString() !== $correctFirst->toDateString()) {
+            $loan->update(['first_installment_date' => $correctFirst->toDateString()]);
+        }
+
+        $intervalMonths = max(1, (int) ($loan->policy?->interval_months ?? 1));
+        $firstDue = $correctFirst->copy()->startOfMonth();
+
+        $pending = $loan->installments()
+            ->reorder()
             ->where('status', 'pending')
             ->orderBy('installment_no')
-            ->get()
-            ->each(function (EmployeeLoanInstallment $installment) use ($firstDue, $intervalMonths) {
+            ->get();
+
+        if ($pending->isEmpty()) {
+            return;
+        }
+
+        $lastSettled = $loan->installments()
+            ->reorder()
+            ->whereIn('status', ['paid', 'scheduled'])
+            ->orderByDesc('installment_no')
+            ->first();
+
+        if ($lastSettled) {
+            $cursor = Carbon::parse($lastSettled->due_date)->startOfMonth()->addMonths($intervalMonths);
+
+            foreach ($pending as $installment) {
                 $installment->update([
-                    'due_date' => $firstDue
-                        ->copy()
-                        ->addMonths(($installment->installment_no - 1) * $intervalMonths)
-                        ->endOfMonth()
-                        ->toDateString(),
+                    'due_date' => $cursor->copy()->endOfMonth()->toDateString(),
                 ]);
-            });
+                $cursor->addMonths($intervalMonths);
+            }
+
+            return;
+        }
+
+        foreach ($pending as $installment) {
+            $installment->update([
+                'due_date' => $firstDue
+                    ->copy()
+                    ->addMonths(($installment->installment_no - 1) * $intervalMonths)
+                    ->endOfMonth()
+                    ->toDateString(),
+            ]);
+        }
+    }
+
+    /**
+     * Drop scheduled installments linked to a payslip when their due month does not match the payroll month.
+     */
+    protected function releaseMisalignedScheduledInstallmentsForPayslip(Payslip $payslip, int $year, int $month): void
+    {
+        $periodStart = Carbon::create($year, $month, 1)->startOfMonth();
+        $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
+
+        $misaligned = EmployeeLoanInstallment::query()
+            ->where('payslip_id', $payslip->id)
+            ->where('status', 'scheduled')
+            ->with('loan')
+            ->where(function ($q) use ($periodStart, $periodEnd) {
+                $q->whereDate('due_date', '<', $periodStart)
+                    ->orWhereDate('due_date', '>', $periodEnd);
+            })
+            ->get();
+
+        if ($misaligned->isEmpty()) {
+            return;
+        }
+
+        foreach ($misaligned as $installment) {
+            $loan = $installment->loan;
+            $suffix = sprintf('(%d/%d)', $installment->installment_no, $loan->installment_count);
+
+            PayslipLine::query()
+                ->where('payslip_id', $payslip->id)
+                ->where('type', 'deduction')
+                ->where('head_name', 'like', '%'.$suffix)
+                ->delete();
+
+            $installment->update([
+                'status' => 'pending',
+                'payslip_id' => null,
+            ]);
+        }
+
+        $this->payslipTotals->syncPayslipFromLines($payslip->fresh('lines'));
+    }
+
+    /**
+     * Payroll should deduct at most one installment per loan per month.
+     *
+     * @param  Collection<int, EmployeeLoanInstallment>  $installments
+     * @return Collection<int, EmployeeLoanInstallment>
+     */
+    protected function selectOneInstallmentPerLoan(Collection $installments): Collection
+    {
+        return $installments
+            ->sortBy('installment_no')
+            ->groupBy('employee_loan_id')
+            ->map(fn (Collection $group) => $group->first())
+            ->values();
+    }
+
+    /**
+     * Remove duplicate loan installments that were attached to the same payslip.
+     */
+    protected function reconcileDuplicateLoanDeductionsOnPayslip(Payslip $payslip): bool
+    {
+        $scheduled = EmployeeLoanInstallment::query()
+            ->where('payslip_id', $payslip->id)
+            ->where('status', 'scheduled')
+            ->with('loan')
+            ->orderBy('installment_no')
+            ->get();
+
+        $changed = false;
+
+        foreach ($scheduled->groupBy('employee_loan_id') as $group) {
+            if ($group->count() <= 1) {
+                continue;
+            }
+
+            $keep = $group->sortBy('installment_no')->first();
+
+            foreach ($group->where('id', '!=', $keep->id) as $extra) {
+                $loan = $extra->loan;
+                $suffix = sprintf('(%d/%d)', $extra->installment_no, $loan->installment_count);
+
+                PayslipLine::query()
+                    ->where('payslip_id', $payslip->id)
+                    ->where('type', 'deduction')
+                    ->where('head_name', 'like', '%'.$suffix)
+                    ->delete();
+
+                $extra->update([
+                    'status' => 'pending',
+                    'payslip_id' => null,
+                ]);
+
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $this->payslipTotals->syncPayslipFromLines($payslip->fresh('lines'));
+        }
+
+        return $changed;
     }
 
     /**
@@ -555,8 +744,9 @@ class EmployeeLoanService
         }
 
         $added = 0;
+        $runTotalsDirty = false;
 
-        DB::transaction(function () use ($run, &$added) {
+        DB::transaction(function () use ($run, &$added, &$runTotalsDirty) {
             $run->load(['payslips.employee', 'payslips.lines']);
 
             foreach ($run->payslips as $payslip) {
@@ -569,13 +759,20 @@ class EmployeeLoanService
                     continue;
                 }
 
+                $this->releaseMisalignedScheduledInstallmentsForPayslip($payslip, $run->year, $run->month);
+
+                $payslipChanged = $this->reconcileDuplicateLoanDeductionsOnPayslip($payslip);
+                if ($payslipChanged) {
+                    $runTotalsDirty = true;
+                }
+
                 EmployeeLoan::query()
                     ->where('employee_id', $payslip->employee_id)
                     ->where('status', 'active')
                     ->get()
                     ->each(fn (EmployeeLoan $loan) => $this->alignInstallmentSchedule($loan));
 
-                $deductions = $this->deductionsForPayroll($payslip->employee, $run->year, $run->month);
+                $deductions = $this->deductionsForPayroll($payslip->employee, $run->year, $run->month, $run->id);
                 $linkedInstallmentIds = EmployeeLoanInstallment::query()
                     ->where('payslip_id', $payslip->id)
                     ->pluck('id');
@@ -621,10 +818,11 @@ class EmployeeLoanService
 
                 if ($payslipAdded) {
                     $this->payslipTotals->syncPayslipFromLines($payslip->fresh('lines'));
+                    $runTotalsDirty = true;
                 }
             }
 
-            if ($added > 0) {
+            if ($added > 0 || $runTotalsDirty) {
                 $this->payslipTotals->syncPayrollRunTotals($run->fresh('payslips'));
             }
         });
@@ -662,15 +860,114 @@ class EmployeeLoanService
 
         DB::transaction(function () use ($run) {
             foreach ($run->payslips as $payslip) {
-                $this->postPaymentsForPayslip($payslip, $run);
+                $this->postPaymentsForPayslip(
+                    Payslip::query()->with('lines')->findOrFail($payslip->id),
+                    $run
+                );
             }
+
+            $this->reconcilePayrollLoanCollectionsForRun($run);
         });
+    }
+
+    /**
+     * Align posted payroll loan collections with payslip deduction lines.
+     * Fixes cases where salary review amount differs from the scheduled installment.
+     */
+    public function reconcilePayrollLoanCollectionsForRun(PayrollRun $run): int
+    {
+        if ($run->salary_type !== 'salary') {
+            return 0;
+        }
+
+        $run->loadMissing('payslips');
+
+        return DB::transaction(function () use ($run) {
+            $fixed = 0;
+
+            foreach ($run->payslips as $payslip) {
+                $fixed += $this->reconcilePayrollLoanCollectionsForPayslip(
+                    Payslip::query()->with('lines')->findOrFail($payslip->id),
+                    $run
+                );
+            }
+
+            return $fixed;
+        });
+    }
+
+    protected function reconcilePayrollLoanCollectionsForPayslip(Payslip $payslip, PayrollRun $run): int
+    {
+        $fixed = 0;
+
+        $installments = EmployeeLoanInstallment::query()
+            ->where('payslip_id', $payslip->id)
+            ->whereIn('status', ['paid', 'scheduled'])
+            ->with('loan')
+            ->get();
+
+        foreach ($installments as $installment) {
+            $loan = $installment->loan;
+            if (! $loan) {
+                continue;
+            }
+
+            $scheduledAmount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
+            $expectedAmount = $this->resolvePayrollLoanDeductionAmount(
+                $payslip,
+                $loan,
+                $installment,
+                $scheduledAmount
+            );
+
+            $transaction = EmployeeLoanTransaction::query()
+                ->where('employee_loan_installment_id', $installment->id)
+                ->where('transaction_type', EmployeeLoanTransaction::TYPE_INSTALLMENT)
+                ->where('payroll_run_id', $run->id)
+                ->first();
+
+            if (! $transaction) {
+                continue;
+            }
+
+            $currentAmount = SalaryStructureCalculator::roundTaka((float) $transaction->credit_amount);
+            $currentPaid = SalaryStructureCalculator::roundTaka((float) ($installment->paid_amount ?? 0));
+
+            if ($currentAmount === $expectedAmount && $currentPaid === $expectedAmount) {
+                continue;
+            }
+
+            $oldVariance = SalaryStructureCalculator::roundTaka($currentAmount - $scheduledAmount);
+            if ($oldVariance !== 0.0) {
+                $this->applyPayrollVarianceToTailInstallment($loan, $installment, -$oldVariance);
+            }
+
+            $transaction->update(['credit_amount' => $expectedAmount]);
+
+            $newVariance = SalaryStructureCalculator::roundTaka($expectedAmount - $scheduledAmount);
+            if ($newVariance !== 0.0) {
+                $this->applyPayrollVarianceToTailInstallment($loan, $installment, $newVariance);
+            }
+
+            $installment->update([
+                'status' => 'paid',
+                'paid_amount' => $expectedAmount,
+            ]);
+
+            $this->recalculateLoanLedgerBalances($loan->fresh());
+            $this->refreshLoanStatus($loan->fresh());
+            $fixed++;
+        }
+
+        return $fixed;
     }
 
     public function postPaymentsForPayslip(Payslip $payslip, ?PayrollRun $run = null): void
     {
         $run ??= $payslip->payrollRun;
         $processDate = Carbon::create($run->year, $run->month, 1)->endOfMonth();
+
+        $payslip = Payslip::query()->with('lines')->findOrFail($payslip->id);
 
         $installments = EmployeeLoanInstallment::query()
             ->where('payslip_id', $payslip->id)
@@ -680,7 +977,8 @@ class EmployeeLoanService
 
         foreach ($installments as $installment) {
             $loan = $installment->loan;
-            $amount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
+            $scheduledAmount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
+            $amount = $this->resolvePayrollLoanDeductionAmount($payslip, $loan, $installment, $scheduledAmount);
 
             $this->postTransaction($loan, [
                 'transaction_type' => EmployeeLoanTransaction::TYPE_INSTALLMENT,
@@ -699,6 +997,11 @@ class EmployeeLoanService
                 ),
             ]);
 
+            $variance = SalaryStructureCalculator::roundTaka($amount - $scheduledAmount);
+            if ($variance !== 0.0) {
+                $this->applyPayrollVarianceToTailInstallment($loan, $installment, $variance);
+            }
+
             $installment->update([
                 'status' => 'paid',
                 'paid_at' => now(),
@@ -707,6 +1010,68 @@ class EmployeeLoanService
 
             $this->refreshLoanStatus($loan);
         }
+    }
+
+    /**
+     * Payroll review may deduct more or less than the scheduled installment.
+     * Keep the paid installment's schedule amount unchanged and absorb the
+     * difference on the last still-pending installment (the tail).
+     */
+    protected function applyPayrollVarianceToTailInstallment(
+        EmployeeLoan $loan,
+        EmployeeLoanInstallment $payingInstallment,
+        float $variance
+    ): void {
+        if ($variance === 0.0) {
+            return;
+        }
+
+        $lastPending = $loan->installments()
+            ->reorder()
+            ->where('status', 'pending')
+            ->orderByDesc('installment_no')
+            ->first();
+
+        if (! $lastPending || $lastPending->id === $payingInstallment->id) {
+            return;
+        }
+
+        $newTotal = SalaryStructureCalculator::roundTaka((float) $lastPending->total_amount - $variance);
+        $newTotal = max(0, $newTotal);
+
+        $lastPending->update([
+            'total_amount' => $newTotal,
+            'principal_amount' => $newTotal,
+        ]);
+    }
+
+    protected function resolvePayrollLoanDeductionAmount(
+        Payslip $payslip,
+        EmployeeLoan $loan,
+        EmployeeLoanInstallment $installment,
+        float $scheduledAmount
+    ): float {
+        $line = $this->findPayrollLoanPayslipLine($payslip, $loan, $installment);
+
+        if ($line === null) {
+            return $scheduledAmount;
+        }
+
+        return SalaryStructureCalculator::roundTaka((float) $line->computed_amount);
+    }
+
+    protected function findPayrollLoanPayslipLine(
+        Payslip $payslip,
+        EmployeeLoan $loan,
+        EmployeeLoanInstallment $installment
+    ): ?PayslipLine {
+        $suffix = sprintf('(%d/%d)', $installment->installment_no, $loan->installment_count);
+        $loanMarker = $loan->loan_number ?: ('Loan #'.$loan->id);
+
+        return $payslip->lines
+            ->first(fn (PayslipLine $line) => $line->type === 'deduction'
+                && str_contains((string) $line->head_name, $loanMarker)
+                && str_contains((string) $line->head_name, $suffix));
     }
 
     public function releaseScheduledInstallmentsForPayslip(Payslip $payslip): void
@@ -962,25 +1327,163 @@ class EmployeeLoanService
             ->get();
     }
 
+    public function isCorrectableTransaction(EmployeeLoanTransaction $transaction): bool
+    {
+        if ($transaction->payroll_run_id || $transaction->payslip_id) {
+            return false;
+        }
+
+        return in_array($transaction->transaction_type, EmployeeLoanTransaction::CORRECTABLE_TYPES, true);
+    }
+
+    public function deleteCorrectableTransaction(EmployeeLoanTransaction $transaction): void
+    {
+        if (! $this->isCorrectableTransaction($transaction)) {
+            throw new InvalidArgumentException(
+                'This entry cannot be removed here. Payroll deductions must be reversed via salary rollback.'
+            );
+        }
+
+        DB::transaction(function () use ($transaction) {
+            $loan = EmployeeLoan::query()->whereKey($transaction->employee_loan_id)->lockForUpdate()->firstOrFail();
+            $installment = $transaction->installment;
+
+            $transaction->delete();
+
+            if ($installment && in_array($installment->status, ['paid', 'scheduled'], true)) {
+                $stillPaid = EmployeeLoanTransaction::query()
+                    ->where('employee_loan_installment_id', $installment->id)
+                    ->whereIn('transaction_type', [
+                        EmployeeLoanTransaction::TYPE_LEGACY_PAYMENT,
+                        EmployeeLoanTransaction::TYPE_MANUAL_PAYMENT,
+                        EmployeeLoanTransaction::TYPE_COLLECTION,
+                        EmployeeLoanTransaction::TYPE_ADVANCE_COLLECTION,
+                    ])
+                    ->exists();
+
+                if (! $stillPaid) {
+                    $installment->update([
+                        'status' => 'pending',
+                        'payslip_id' => null,
+                        'paid_at' => null,
+                        'paid_amount' => null,
+                    ]);
+                }
+            }
+
+            $this->recalculateLoanLedgerBalances($loan);
+            $this->refreshLoanStatus($loan->fresh());
+        });
+    }
+
+    /**
+     * @param  array{
+     *   amount?: float,
+     *   transaction_date?: Carbon|string,
+     *   payroll_year?: int|null,
+     *   payroll_month?: int|null,
+     *   notes?: string|null,
+     *   reference_no?: string|null,
+     * }  $data
+     */
+    public function updateCorrectableTransaction(EmployeeLoanTransaction $transaction, array $data): EmployeeLoanTransaction
+    {
+        if (! $this->isCorrectableTransaction($transaction)) {
+            throw new InvalidArgumentException(
+                'This entry cannot be edited here. Payroll deductions must be reversed via salary rollback.'
+            );
+        }
+
+        return DB::transaction(function () use ($transaction, $data) {
+            $loan = EmployeeLoan::query()->whereKey($transaction->employee_loan_id)->lockForUpdate()->firstOrFail();
+            $amount = SalaryStructureCalculator::roundTaka((float) ($data['amount'] ?? 0));
+
+            if ($amount <= 0) {
+                throw new InvalidArgumentException('Amount must be greater than zero.');
+            }
+
+            $transactionDate = isset($data['transaction_date'])
+                ? ($data['transaction_date'] instanceof Carbon
+                    ? $data['transaction_date']
+                    : Carbon::parse($data['transaction_date']))
+                : $transaction->transaction_date;
+
+            $updates = [
+                'transaction_date' => $transactionDate->toDateString(),
+                'notes' => $data['notes'] ?? $transaction->notes,
+                'reference_no' => array_key_exists('reference_no', $data)
+                    ? $data['reference_no']
+                    : $transaction->reference_no,
+            ];
+
+            if ($transaction->transaction_type === EmployeeLoanTransaction::TYPE_DISBURSEMENT) {
+                $updates['debit_amount'] = $amount;
+                $updates['credit_amount'] = 0;
+            } else {
+                $updates['credit_amount'] = $amount;
+                $updates['debit_amount'] = 0;
+            }
+
+            if (array_key_exists('payroll_year', $data)) {
+                $updates['payroll_year'] = $data['payroll_year'];
+            }
+            if (array_key_exists('payroll_month', $data)) {
+                $updates['payroll_month'] = $data['payroll_month'];
+            }
+
+            $transaction->update($updates);
+
+            if ($transaction->installment && $transaction->credit_amount > 0) {
+                $transaction->installment->update([
+                    'paid_amount' => SalaryStructureCalculator::roundTaka((float) $transaction->credit_amount),
+                    'paid_at' => $transactionDate,
+                    'status' => 'paid',
+                ]);
+            }
+
+            $this->recalculateLoanLedgerBalances($loan);
+            $this->refreshLoanStatus($loan->fresh());
+
+            return $transaction->fresh();
+        });
+    }
+
+    public function recalculateLoanLedgerBalances(EmployeeLoan $loan): void
+    {
+        $balance = 0.0;
+
+        $transactions = $loan->transactions()
+            ->orderBy('transaction_date')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($transactions as $tx) {
+            $net = SalaryStructureCalculator::roundTaka((float) $tx->debit_amount - (float) $tx->credit_amount);
+            $balance = SalaryStructureCalculator::roundTaka($balance + $net);
+
+            if ($balance < 0) {
+                throw new InvalidArgumentException('Loan balance cannot go negative after correction.');
+            }
+
+            $tx->update(['balance_after' => $balance]);
+        }
+
+        $loan->update(['outstanding_balance' => $balance]);
+    }
+
     protected function reverseInstallmentTransaction(EmployeeLoanTransaction $tx): void
     {
         $loan = $tx->loan;
         $amount = SalaryStructureCalculator::roundTaka((float) $tx->credit_amount);
 
-        $this->postTransaction($loan, [
-            'transaction_type' => EmployeeLoanTransaction::TYPE_REVERSAL,
-            'employee_loan_installment_id' => $tx->employee_loan_installment_id,
-            'debit_amount' => $amount,
-            'credit_amount' => 0,
-            'payslip_id' => $tx->payslip_id,
-            'payroll_run_id' => $tx->payroll_run_id,
-            'payroll_year' => $tx->payroll_year,
-            'payroll_month' => $tx->payroll_month,
-            'transaction_date' => now(),
-            'notes' => 'Salary rollback — installment reversed',
-        ]);
-
         if ($tx->installment) {
+            $scheduledAmount = SalaryStructureCalculator::roundTaka((float) $tx->installment->total_amount);
+            $variance = SalaryStructureCalculator::roundTaka($amount - $scheduledAmount);
+
+            if ($variance !== 0.0) {
+                $this->applyPayrollVarianceToTailInstallment($loan, $tx->installment, -$variance);
+            }
+
             $tx->installment->update([
                 'status' => 'pending',
                 'payslip_id' => null,
@@ -990,6 +1493,7 @@ class EmployeeLoanService
         }
 
         $tx->delete();
+        $this->recalculateLoanLedgerBalances($loan->fresh());
         $this->refreshLoanStatus($loan->fresh());
     }
 

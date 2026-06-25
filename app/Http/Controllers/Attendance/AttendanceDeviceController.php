@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceDevice;
 use App\Models\Branch;
 use App\Models\Employee;
+use App\Support\HeadOfficeOrganogram;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
@@ -158,10 +159,12 @@ class AttendanceDeviceController extends Controller
      */
     public function biometricIds()
     {
-        $employees = Employee::select('id', 'employee_id', 'name_en', 'biometric_id', 'department_id', 'current_branch_id')
-            ->with(['department:id,name', 'branch:id,name'])
-            ->orderBy('name_en')
-            ->paginate(15);
+        $employeesQuery = Employee::select('id', 'employee_id', 'name_en', 'biometric_id', 'department_id', 'current_branch_id', 'designation_id')
+            ->with(['department:id,name', 'branch:id,name', 'designation:id,name']);
+
+        HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
+
+        $employees = $employeesQuery->paginate(15);
 
         return Inertia::render('attendance/devices/biometric-ids', [
             'employees' => $employees

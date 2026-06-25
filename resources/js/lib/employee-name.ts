@@ -1,6 +1,7 @@
 /** Fields commonly present on employee API payloads for display names. */
 export type EmployeeNameFields = {
     name_en?: string | null;
+    name_bn?: string | null;
     full_name_en?: string | null;
     full_name?: string | null;
     first_name?: string | null;
@@ -8,7 +9,7 @@ export type EmployeeNameFields = {
 };
 
 /**
- * Display name for an employee (English). Prefers name_en; never appends last_name.
+ * Display name for an employee. Prefers English name, then Bengali.
  */
 export function employeeDisplayName(
     employee: EmployeeNameFields | null | undefined,
@@ -21,6 +22,11 @@ export function employeeDisplayName(
     const fromEn = (employee.full_name_en ?? employee.name_en ?? '').trim();
     if (fromEn) {
         return fromEn;
+    }
+
+    const fromBn = (employee.name_bn ?? '').trim();
+    if (fromBn) {
+        return fromBn;
     }
 
     const fromFull = (employee.full_name ?? '').trim();

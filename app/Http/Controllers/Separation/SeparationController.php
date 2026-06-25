@@ -6,8 +6,8 @@ use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\Separation;
-use App\Models\SeparationHistory;
 use App\Models\User;
+use App\Services\SeparationCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +17,10 @@ use Inertia\Inertia;
 class SeparationController extends Controller
 {
     use PaginatesForInertia;
+
+    public function __construct(
+        private readonly SeparationCompletionService $separationCompletionService
+    ) {}
 
     public function index(Request $request)
     {
@@ -52,6 +56,7 @@ class SeparationController extends Controller
             'separations' => $separations,
             'employees' => Employee::where('status', 'active')->get(),
             'filters' => $request->only(['status', 'employee_id', 'from_date', 'to_date', 'search', 'per_page']),
+            'canEditSeparations' => $user->hasPermission('separations.edit'),
         ]);
     }
 
@@ -123,13 +128,70 @@ class SeparationController extends Controller
             ]);
 
             $effective = Carbon::parse($separation->separation_date);
-            if ($effective->isToday() || $effective->isPast()) {
-                $this->applySeparationAndLogHistory($separation, $user->id);
+            if ($this->separationCompletionService->shouldApplyImmediately($effective)) {
+                $this->separationCompletionService->apply($separation, $user->id);
                 $message = 'Separation completed successfully.';
             }
         });
 
         return redirect()->route('separations.index')->with('success', $message);
+    }
+
+    private function canEditSeparation(User $user, Separation $separation): bool
+    {
+        if (in_array($separation->status, ['rejected', 'cancelled'], true)) {
+            return false;
+        }
+
+        return $user->hasPermission('separations.edit');
+    }
+
+    public function edit(Separation $separation)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        if (! $this->canEditSeparation($user, $separation)) {
+            return redirect()->route('separations.show', $separation)
+                ->with('error', 'You do not have permission to edit this separation.');
+        }
+
+        $separation->load(['employee.department', 'employee.designation']);
+
+        return Inertia::render('separation/edit', [
+            'separation' => $separation,
+        ]);
+    }
+
+    public function update(Request $request, Separation $separation)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        if (! $this->canEditSeparation($user, $separation)) {
+            return redirect()->route('separations.show', $separation)
+                ->with('error', 'You do not have permission to edit this separation.');
+        }
+
+        $request->validate([
+            'separation_date' => 'required|date',
+            'final_payment_date' => 'nullable|date|after_or_equal:separation_date',
+            'reason' => 'nullable|string',
+        ]);
+
+        DB::transaction(function () use ($request, $separation, $user) {
+            $wasCompleted = $separation->status === 'completed';
+
+            $separation->separation_date = $request->separation_date;
+            $separation->final_payment_date = $request->final_payment_date;
+            $separation->reason = $request->reason;
+            $separation->save();
+
+            if ($wasCompleted) {
+                $this->syncEmployeeFromSeparation($separation);
+                $this->syncSeparationHistory($separation, $user->id);
+            }
+        });
+
+        return redirect()->route('separations.show', $separation)->with('success', 'Separation updated successfully.');
     }
 
     public function show(Separation $separation)
@@ -139,10 +201,22 @@ class SeparationController extends Controller
             'employee.designation',
             'employee.employeeType',
             'approver',
+            'finalPayment',
         ]);
+
+        if ($separation->status === 'completed' && ! $separation->finalPayment) {
+            app(\App\Services\FinalPaymentSettlementService::class)->ensureForSeparation($separation);
+            $separation->load('finalPayment');
+        }
 
         return Inertia::render('separation/show', [
             'separation' => $separation,
+            'canEdit' => (function () use ($separation) {
+                /** @var User $user */
+                $user = Auth::user();
+
+                return $this->canEditSeparation($user, $separation);
+            })(),
         ]);
     }
 
@@ -164,8 +238,8 @@ class SeparationController extends Controller
             $separation->save();
 
             $effective = $separation->separation_date ? Carbon::parse($separation->separation_date) : null;
-            if ($effective?->isToday() || $effective?->isPast()) {
-                $this->applySeparationAndLogHistory($separation, $user->id);
+            if ($this->separationCompletionService->shouldApplyImmediately($effective)) {
+                $this->separationCompletionService->apply($separation, $user->id);
             }
         });
 
@@ -223,45 +297,49 @@ class SeparationController extends Controller
         }
 
         DB::transaction(function () use ($separation, $user) {
-            $this->applySeparationAndLogHistory($separation, $user->id);
+            $this->separationCompletionService->apply($separation, $user->id);
         });
 
         return redirect()->route('separations.index')->with('success', 'Separation completed successfully.');
     }
 
-    private function applySeparationAndLogHistory(Separation $separation, ?int $actorUserId): void
+    private function syncEmployeeFromSeparation(Separation $separation): void
     {
         $separation->loadMissing('employee');
+        $employee = $separation->employee;
 
-        if ($separation->status === 'completed') {
+        if ($employee->status !== 'inactive') {
             return;
         }
 
-        $employee = $separation->employee;
         $separationDate = $separation->separation_date
             ? Carbon::parse($separation->separation_date)
             : now();
 
-        $employee->status = 'inactive';
         $employee->dropout_date = $separationDate;
         $employee->dropout_reason = $separation->reason;
-        if ($separation->final_payment_date) {
-            $employee->final_payment_date = Carbon::parse($separation->final_payment_date);
-        }
+        $employee->final_payment_date = $separation->final_payment_date
+            ? Carbon::parse($separation->final_payment_date)
+            : null;
         $employee->save();
+    }
 
-        SeparationHistory::create([
-            'separation_id' => $separation->id,
-            'employee_id' => $employee->id,
-            'separation_date' => $separationDate,
+    private function syncSeparationHistory(Separation $separation, ?int $actorUserId): void
+    {
+        $history = $separation->histories()->latest('id')->first();
+        if (! $history) {
+            return;
+        }
+
+        $history->update([
+            'separation_date' => $separation->separation_date
+                ? Carbon::parse($separation->separation_date)
+                : now(),
             'reason' => $separation->reason,
             'final_payment_date' => $separation->final_payment_date
                 ? Carbon::parse($separation->final_payment_date)
                 : null,
             'created_by' => $actorUserId,
         ]);
-
-        $separation->status = 'completed';
-        $separation->save();
     }
 }

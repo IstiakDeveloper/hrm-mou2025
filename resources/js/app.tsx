@@ -4,7 +4,9 @@ import InertiaNotificationGate from '@/components/inertia-notification-gate';
 import PWAManager from '@/components/PWAManager';
 import PwaRoot from '@/components/pwa-root';
 import { shouldHideGlobalChromeForInertiaPage } from '@/lib/print-only-inertia-pages';
-import { createInertiaApp, usePage } from '@inertiajs/react';
+import { syncCsrfMetaToken } from '@/lib/csrf';
+import { installPreventNumberInputWheelScroll } from '@/lib/prevent-number-input-wheel-scroll';
+import { createInertiaApp, router, usePage } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { route as routeFn } from 'ziggy-js';
@@ -30,6 +32,13 @@ function AppGlobalChrome() {
         </>
     );
 }
+
+router.on('navigate', (event) => {
+    const token = event.detail.page.props?.csrf_token;
+    if (typeof token === 'string' && token !== '') {
+        syncCsrfMetaToken(token);
+    }
+});
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
@@ -67,3 +76,5 @@ createInertiaApp({
 
 // This will set light / dark mode on load...
 initializeTheme();
+
+installPreventNumberInputWheelScroll();

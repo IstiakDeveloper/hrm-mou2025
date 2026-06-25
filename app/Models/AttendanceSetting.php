@@ -51,6 +51,41 @@ class AttendanceSetting extends Model
             return $setting;
         }
 
+        return static::defaultRules();
+    }
+
+    /**
+     * Attendance rules for a specific employee.
+     * Uses custom employee schedule when configured; otherwise global settings.
+     */
+    public static function forEmployee(?int $employeeId): self
+    {
+        $global = static::global();
+
+        if (! $employeeId) {
+            return $global;
+        }
+
+        $custom = EmployeeAttendanceTime::query()
+            ->where('employee_id', $employeeId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $custom?->isConfigured()) {
+            return $global;
+        }
+
+        return new static([
+            'work_start_time' => $custom->work_start_time,
+            'work_end_time' => $custom->work_end_time,
+            'late_threshold_minutes' => $custom->late_threshold_minutes ?? $global->late_threshold_minutes,
+            'half_day_hours' => $custom->half_day_hours ?? $global->half_day_hours,
+            'weekend_days' => $global->weekend_days,
+        ]);
+    }
+
+    private static function defaultRules(): self
+    {
         return new static([
             'work_start_time' => '09:00:00',
             'work_end_time' => '17:00:00',

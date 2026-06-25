@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -93,6 +94,21 @@ class Branch extends Model
     public function employees()
     {
         return $this->hasMany(Employee::class, 'current_branch_id');
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where($query->getModel()->getTable().'.is_active', true);
+    }
+
+    public function hasActiveEmployees(): bool
+    {
+        return $this->employees()->where('status', 'active')->exists();
+    }
+
+    public function activeEmployeesCount(): int
+    {
+        return (int) $this->employees()->where('status', 'active')->count();
     }
 
     public function departments()

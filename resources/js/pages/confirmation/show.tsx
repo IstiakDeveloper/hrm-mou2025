@@ -11,6 +11,8 @@ import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type Designation = { id: number; name: string };
+type SalaryGrade = { id: number; name: string };
+type SalaryStep = { id: number; step_number: number };
 type EmployeeType = { id: number; name: string; probation_months: number };
 type Employee = EmployeeNameFields & {
     id: number;
@@ -29,6 +31,13 @@ type Confirmation = {
     toDesignation?: Designation | null;
     fromEmployeeType?: EmployeeType | null;
     toEmployeeType?: EmployeeType | null;
+    fromSalaryGrade?: SalaryGrade | null;
+    toSalaryGrade?: SalaryGrade | null;
+    fromSalaryStep?: SalaryStep | null;
+    toSalaryStep?: SalaryStep | null;
+    from_basic_salary?: string | number | null;
+    to_basic_salary?: string | number | null;
+    promotion?: { id: number } | null;
 };
 
 type Props = { confirmation: Confirmation };
@@ -54,6 +63,11 @@ export default function ConfirmationShow({ confirmation }: Props) {
     const toDesignation = anyC.toDesignation ?? anyC.to_designation;
     const fromType = anyC.fromEmployeeType ?? anyC.from_employee_type;
     const toType = anyC.toEmployeeType ?? anyC.to_employee_type;
+    const fromGrade = anyC.fromSalaryGrade ?? anyC.from_salary_grade;
+    const toGrade = anyC.toSalaryGrade ?? anyC.to_salary_grade;
+    const fromStep = anyC.fromSalaryStep ?? anyC.from_salary_step;
+    const toStep = anyC.toSalaryStep ?? anyC.to_salary_step;
+    const promotion = anyC.promotion ?? null;
     const date = new Date(confirmation.confirmation_date);
 
     return (
@@ -95,13 +109,28 @@ export default function ConfirmationShow({ confirmation }: Props) {
                                         <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">From (probation)</p>
                                         <p className="mt-2 text-xs text-zinc-900"><span className="font-medium">Type:</span> {pickName(fromType)}</p>
                                         <p className="mt-1 text-xs text-zinc-900"><span className="font-medium">Designation:</span> {pickName(fromDesignation)}</p>
+                                        <p className="mt-1 text-xs text-zinc-900"><span className="font-medium">Grade:</span> {pickName(fromGrade)}</p>
+                                        <p className="mt-1 text-xs text-zinc-900"><span className="font-medium">Step:</span> {fromStep?.step_number != null ? `Step ${fromStep.step_number}` : '—'}</p>
+                                        <p className="mt-1 text-xs text-zinc-900"><span className="font-medium">Basic:</span> {confirmation.from_basic_salary ?? '—'}</p>
                                     </div>
                                     <div className="rounded-lg border border-zinc-200 bg-white p-3">
                                         <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">To (confirmed)</p>
                                         <p className="mt-2 text-xs text-zinc-900"><span className="font-medium">Type:</span> {pickName(toType)}</p>
                                         <p className="mt-1 text-xs text-zinc-900"><span className="font-medium">Designation:</span> {pickName(toDesignation)}</p>
+                                        <p className="mt-1 text-xs text-zinc-900"><span className="font-medium">Grade:</span> {pickName(toGrade)}</p>
+                                        <p className="mt-1 text-xs text-zinc-900"><span className="font-medium">Step:</span> {toStep?.step_number != null ? `Step ${toStep.step_number}` : '—'}</p>
+                                        <p className="mt-1 text-xs text-zinc-900"><span className="font-medium">Basic:</span> {confirmation.to_basic_salary ?? '—'}</p>
                                     </div>
                                 </div>
+
+                                {promotion?.id && (
+                                    <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900">
+                                        Linked promotion record:{' '}
+                                        <Link href={route('promotions.show', promotion.id)} className="font-medium underline">
+                                            #{promotion.id}
+                                        </Link>
+                                    </div>
+                                )}
 
                                 <Separator className="my-4" />
 

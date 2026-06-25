@@ -18,6 +18,7 @@
         "minishlink/web-push": "^10.0",
         "mpdf/mpdf": "^8.2",
         "shuchkin/simplexlsxgen": "^1.5",
+        "spatie/browsershot": "^5.4",
         "tightenco/ziggy": "^2.4"
     },
     "require-dev": {

@@ -1,5 +1,12 @@
 export type PayrollPostContext = 'bonus' | 'salary';
 
+export function payrollPostContextFromSalaryType(salaryType: string): PayrollPostContext | 'arrear' {
+    const normalized = salaryType.toLowerCase();
+    if (normalized === 'bonus') return 'bonus';
+    if (normalized === 'arrear') return 'arrear';
+    return 'salary';
+}
+
 export function payrollPostRoutes(context: PayrollPostContext) {
     const prefix = context === 'bonus' ? 'bonus-post' : 'salary-post';
 

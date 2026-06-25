@@ -13,6 +13,12 @@ import { addDays, format } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as UiCalendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import {
+    EmployeeSalaryAssignment,
+    type PayrollGradeOption,
+    type PayrollPayscaleOption,
+    type PayrollStepOption,
+} from '@/components/employee/EmployeeSalaryAssignment';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type EmployeeType = { id: number; name: string; probation_months: number };
@@ -32,11 +38,28 @@ type Props = {
     designations: Designation[];
     permanentEmployeeType?: { id: number; name: string } | null;
     suggestedOrderNo?: string;
+    payscales: PayrollPayscaleOption[];
+    payrollGrades: PayrollGradeOption[];
+    payrollSteps: PayrollStepOption[];
+    activePayscaleId?: number | null;
 };
 
-export default function CreateConfirmation({ employees, designations, permanentEmployeeType, suggestedOrderNo }: Props) {
+export default function CreateConfirmation({
+    employees,
+    designations,
+    permanentEmployeeType,
+    suggestedOrderNo,
+    payscales,
+    payrollGrades,
+    payrollSteps,
+    activePayscaleId = null,
+}: Props) {
     const [employeeId, setEmployeeId] = useState<number | null>(null);
     const [toDesignationId, setToDesignationId] = useState<number | null>(null);
+    const [toPayscaleId, setToPayscaleId] = useState<string>(activePayscaleId ? String(activePayscaleId) : '');
+    const [toSalaryGradeId, setToSalaryGradeId] = useState<string>('');
+    const [toSalaryStepId, setToSalaryStepId] = useState<string>('');
+    const [toBasicSalary, setToBasicSalary] = useState<string>('');
     const [confirmationDate, setConfirmationDate] = useState<Date | undefined>(addDays(new Date(), 1));
     const [confirmationDateOpen, setConfirmationDateOpen] = useState(false);
     const [confirmationOrderNo, setConfirmationOrderNo] = useState(suggestedOrderNo ?? '');
@@ -50,17 +73,24 @@ export default function CreateConfirmation({ employees, designations, permanentE
     useEffect(() => {
         if (!selectedEmployee) {
             setToDesignationId(null);
+            setToPayscaleId(activePayscaleId ? String(activePayscaleId) : '');
+            setToSalaryGradeId('');
+            setToSalaryStepId('');
+            setToBasicSalary('');
             return;
         }
         if (toDesignationId == null && selectedEmployee.designation_id) {
             setToDesignationId(selectedEmployee.designation_id);
         }
-    }, [selectedEmployee, toDesignationId]);
+    }, [selectedEmployee, toDesignationId, activePayscaleId]);
 
     const validate = () => {
         const e: Record<string, string> = {};
         if (!employeeId) e.employee_id = 'Employee is required';
         if (!toDesignationId) e.to_designation_id = 'Confirmation designation is required';
+        if (!toSalaryGradeId || !toSalaryStepId) {
+            e.to_salary_step_id = 'Confirmed salary grade and step are required';
+        }
         if (!confirmationDate) e.confirmation_date = 'Confirmation date is required';
         setErrors(e);
         return Object.keys(e).length === 0;
@@ -75,6 +105,10 @@ export default function CreateConfirmation({ employees, designations, permanentE
             {
                 employee_id: employeeId,
                 to_designation_id: toDesignationId,
+                to_payscale_id: toPayscaleId || null,
+                to_salary_grade_id: toSalaryGradeId || null,
+                to_salary_step_id: toSalaryStepId || null,
+                to_basic_salary: toBasicSalary ? Number(toBasicSalary) : null,
                 confirmation_date: confirmationDate ? format(confirmationDate, 'yyyy-MM-dd') : '',
                 confirmation_order_no: confirmationOrderNo,
                 reason,
@@ -87,6 +121,8 @@ export default function CreateConfirmation({ employees, designations, permanentE
         ?? designations.find((d) => d.id === selectedEmployee?.designation_id)?.name
         ?? '—';
     const newDesignationName = designations.find((d) => d.id === toDesignationId)?.name ?? '—';
+    const selectedStep = payrollSteps.find((s) => String(s.id) === toSalaryStepId) ?? null;
+    const selectedGrade = payrollGrades.find((g) => String(g.id) === toSalaryGradeId) ?? null;
 
     return (
         <Layout>
@@ -101,7 +137,7 @@ export default function CreateConfirmation({ employees, designations, permanentE
 
                 <div className="mb-6">
                     <h1 className="text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Create confirmation request</h1>
-                    <p className="mt-1 text-xs text-zinc-600">Probation employees become permanent immediately when confirmation date is today or earlier.</p>
+                    <p className="mt-1 text-xs text-zinc-600">Probation employees become permanent with a confirmed payscale, grade, and step. A promotion record is created automatically.</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -109,7 +145,7 @@ export default function CreateConfirmation({ employees, designations, permanentE
                         <Card className="border-zinc-200/90 shadow-sm">
                             <CardHeader className="border-b border-zinc-100 py-3">
                                 <CardTitle className="text-sm font-semibold text-zinc-900">Confirmation details</CardTitle>
-                                <CardDescription className="text-xs text-zinc-500">Select employee, confirmation designation, and date.</CardDescription>
+                                <CardDescription className="text-xs text-zinc-500">Select employee, confirmation designation, salary assignment, and date.</CardDescription>
                             </CardHeader>
                             <CardContent className="pt-4">
                                 <form onSubmit={onSubmit} className="space-y-5">
@@ -143,6 +179,29 @@ export default function CreateConfirmation({ employees, designations, permanentE
                                             }))}
                                         />
                                         {errors.to_designation_id && <p className="text-xs text-rose-600">{errors.to_designation_id}</p>}
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <EmployeeSalaryAssignment
+                                            payscales={payscales}
+                                            grades={payrollGrades}
+                                            steps={payrollSteps}
+                                            activePayscaleId={activePayscaleId ? String(activePayscaleId) : null}
+                                            payscaleId={toPayscaleId}
+                                            salaryGradeId={toSalaryGradeId}
+                                            salaryStepId={toSalaryStepId}
+                                            basicSalary={toBasicSalary}
+                                            onPayscaleIdChange={setToPayscaleId}
+                                            onSalaryGradeIdChange={setToSalaryGradeId}
+                                            onSalaryStepIdChange={setToSalaryStepId}
+                                            onBasicSalaryChange={setToBasicSalary}
+                                            errors={{
+                                                payscale_id: errors.to_payscale_id,
+                                                salary_grade_id: errors.to_salary_grade_id,
+                                                salary_step_id: errors.to_salary_step_id,
+                                                basic_salary: errors.to_basic_salary,
+                                            }}
+                                        />
                                     </div>
 
                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -219,6 +278,17 @@ export default function CreateConfirmation({ employees, designations, permanentE
                                                 <span className="font-medium text-zinc-900">{currentDesignationName}</span>
                                                 <ChevronRight className="h-4 w-4 text-zinc-300" />
                                                 <span className="font-medium text-zinc-900">{newDesignationName}</span>
+                                            </div>
+                                            <div className="mt-2 flex items-center justify-between gap-2">
+                                                <span className="text-zinc-600">Grade / Step</span>
+                                                <span className="font-medium text-zinc-900">
+                                                    {selectedGrade?.code ?? '—'}
+                                                    {selectedStep ? ` / Step ${selectedStep.step_number}` : ''}
+                                                </span>
+                                            </div>
+                                            <div className="mt-1 flex items-center justify-between gap-2">
+                                                <span className="text-zinc-600">Basic</span>
+                                                <span className="font-medium text-zinc-900">{toBasicSalary || '—'}</span>
                                             </div>
                                         </div>
                                     </div>

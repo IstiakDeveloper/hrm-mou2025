@@ -5,10 +5,11 @@ namespace App\Http\Controllers\Payroll\Concerns;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Designation;
-use App\Models\Employee;
+use App\Models\Payscale;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\SalaryHead;
+use App\Support\BranchOrganogram;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -21,8 +22,8 @@ trait ProvidesPayrollFilters
     {
         return [
             'branches' => Branch::query()
-                ->orderBy('branch_code')
-                ->orderBy('name')
+                ->active()
+                ->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))
                 ->get(['id', 'name', 'branch_code']),
             'departments' => Department::query()->orderBy('name')->get(['id', 'name']),
             'designations' => Designation::query()->orderBy('name')->get(['id', 'name']),
@@ -65,16 +66,40 @@ trait ProvidesPayrollFilters
             'salary_head_id' => $request->input('salary_head_id', ''),
             'salary_type' => $request->input('salary_type', 'salary'),
             'year' => $request->input('year', (string) date('Y')),
-            'month' => $request->input('month', ''),
+            'month' => $request->input('month', (string) (int) date('n')),
             'effective_from' => $request->input('effective_from', ''),
             'reason' => $request->input('reason', ''),
         ];
     }
 
-    protected function applyPayrollEmployeeFilters(Builder $query, Request $request, bool $payrollReadyOnly = false): Builder
-    {
-        $query = $query
-            ->where('status', 'active')
+    protected function applyPayrollEmployeeFilters(
+        Builder $query,
+        Request $request,
+        bool $payrollReadyOnly = false,
+        ?int $payrollYear = null,
+        ?int $payrollMonth = null,
+    ): Builder {
+        $year = $payrollYear ?? ($request->filled('year') ? (int) $request->input('year') : null);
+        $month = $payrollMonth ?? ($request->filled('month') ? (int) $request->input('month') : null);
+
+        if ($year && $month) {
+            $monthStart = sprintf('%04d-%02d-01', $year, $month);
+            $monthEnd = date('Y-m-t', strtotime($monthStart));
+
+            $query->where(function (Builder $q) use ($monthStart, $monthEnd) {
+                $q->where('status', 'active')
+                    ->orWhere(function (Builder $q2) use ($monthStart, $monthEnd) {
+                        $q2->where('status', 'inactive')
+                            ->whereNotNull('dropout_date')
+                            ->whereDate('dropout_date', '>=', $monthStart)
+                            ->whereDate('dropout_date', '<=', $monthEnd);
+                    });
+            });
+        } else {
+            $query->where('status', 'active');
+        }
+
+        $query
             ->when($request->filled('branch_id'), fn ($q) => $q->where('current_branch_id', $request->integer('branch_id')))
             ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
             ->when($request->filled('designation_id'), fn ($q) => $q->where('designation_id', $request->integer('designation_id')))
@@ -85,6 +110,14 @@ trait ProvidesPayrollFilters
 
         if ($payrollReadyOnly) {
             $this->applyPayrollReadyScope($query);
+
+            $activePayscaleId = Payscale::activeId();
+            if ($activePayscaleId) {
+                $query->where(function (Builder $q) use ($activePayscaleId) {
+                    $q->where(fn (Builder $q2) => $q2->withFullGradePayroll($activePayscaleId))
+                        ->orWhere(fn (Builder $q2) => $q2->nonGradePayrollPath());
+                });
+            }
         }
 
         return $query;

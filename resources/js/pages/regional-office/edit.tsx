@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ComboSelect } from '@/components/ComboSelect';
 import { ArrowLeft } from 'lucide-react';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
@@ -52,6 +53,16 @@ export default function RegionalOfficeEdit({ regionalOffice, zones, employees }:
     e.preventDefault();
     put(route('regional-offices.update', regionalOffice.id));
   };
+
+  const managerItems = useMemo(
+    () =>
+      employees.map((e) => ({
+        value: e.id,
+        label: `${e.employee_id} — ${employeeDisplayName(e)}`.trim(),
+        keywords: `${e.employee_id} ${employeeDisplayName(e)}`,
+      })),
+    [employees],
+  );
 
   return (
     <Layout>
@@ -127,22 +138,12 @@ export default function RegionalOfficeEdit({ regionalOffice, zones, employees }:
 
               <div className="space-y-2">
                 <Label htmlFor="regional_manager_employee_id">Regional Manager</Label>
-                <Select
-                  value={data.regional_manager_employee_id || 'none'}
-                  onValueChange={(value) => setData('regional_manager_employee_id', value === 'none' ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select regional manager (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {employees.map((e) => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        {employeeDisplayName(e)} ({e.employee_id})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ComboSelect<number>
+                  value={data.regional_manager_employee_id ? Number(data.regional_manager_employee_id) : null}
+                  onChange={(value) => setData('regional_manager_employee_id', value != null ? String(value) : null)}
+                  placeholder="Search employee (PIN / name)…"
+                  items={managerItems}
+                />
                 {(errors as any).regional_manager_employee_id && (
                   <p className="mt-1 text-sm text-red-500">{(errors as any).regional_manager_employee_id}</p>
                 )}

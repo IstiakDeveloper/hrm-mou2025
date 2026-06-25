@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
+use App\Models\Employee;
 use App\Models\SalaryWithheld;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,7 +16,7 @@ class SalaryWithheldController extends Controller
     public function index(Request $request)
     {
         $records = SalaryWithheld::query()
-            ->with(['employee:id,pin,name_en,employee_id', 'creator:id,name'])
+            ->with(['employee:id,pin,name_en,name_bn,employee_id', 'creator:id,name'])
             ->when($request->filled('salary_type'), fn ($q) => $q->where('salary_type', $request->input('salary_type')))
             ->when($request->filled('year'), fn ($q) => $q->where('year', $request->integer('year')))
             ->when($request->filled('month'), fn ($q) => $q->where('month', $request->integer('month')))
@@ -26,7 +27,7 @@ class SalaryWithheldController extends Controller
             ->get()
             ->map(fn (SalaryWithheld $w) => [
                 'id' => $w->id,
-                'employee_label' => trim(($w->employee?->pin ?? '').' — '.($w->employee?->name_en ?? '')),
+                'employee_label' => $this->employeeLabel($w->employee),
                 'year' => $w->year,
                 'month' => $w->month,
                 'salary_type' => strtoupper($w->salary_type),
@@ -75,5 +76,32 @@ class SalaryWithheldController extends Controller
         $salary_withheld->delete();
 
         return back()->with('success', 'Withheld record removed.');
+    }
+
+    private function employeeLabel(?Employee $employee): string
+    {
+        if (! $employee) {
+            return 'Unknown employee';
+        }
+
+        $pin = trim((string) ($employee->pin ?? $employee->employee_id ?? ''));
+        $name = trim((string) ($employee->name_en ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($employee->name_bn ?? ''));
+        }
+
+        if ($pin !== '' && $name !== '') {
+            return "{$pin} — {$name}";
+        }
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        if ($pin !== '') {
+            return $pin;
+        }
+
+        return "Employee #{$employee->id}";
     }
 }

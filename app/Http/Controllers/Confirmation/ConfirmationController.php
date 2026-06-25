@@ -5,20 +5,28 @@ namespace App\Http\Controllers\Confirmation;
 use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Http\Controllers\Controller;
 use App\Models\Confirmation;
-use App\Models\ConfirmationHistory;
 use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\EmployeeType;
+use App\Models\Payscale;
+use App\Models\SalaryGrade;
+use App\Models\SalaryStep;
 use App\Models\User;
+use App\Services\ConfirmationCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class ConfirmationController extends Controller
 {
     use PaginatesForInertia;
+
+    public function __construct(
+        private readonly ConfirmationCompletionService $confirmationCompletionService
+    ) {}
 
     private function generateConfirmationOrderNo(): string
     {
@@ -31,6 +39,106 @@ class ConfirmationController extends Controller
         }
 
         return $prefix.now()->format('His');
+    }
+
+    /**
+     * @return array{
+     *     activePayscaleId: int|null,
+     *     payscales: \Illuminate\Support\Collection,
+     *     payrollGrades: \Illuminate\Support\Collection,
+     *     payrollSteps: \Illuminate\Support\Collection
+     * }
+     */
+    private function payrollFormOptions(): array
+    {
+        $activePayscaleId = Payscale::activeId();
+
+        return [
+            'activePayscaleId' => $activePayscaleId,
+            'payscales' => Payscale::query()->active()->orderBy('name')->get(['id', 'name']),
+            'payrollGrades' => SalaryGrade::query()
+                ->where('is_active', true)
+                ->when($activePayscaleId, fn ($q) => $q->where('payscale_id', $activePayscaleId))
+                ->orderBy('sort_order')
+                ->orderBy('code')
+                ->get(['id', 'payscale_id', 'code', 'name']),
+            'payrollSteps' => SalaryStep::query()
+                ->where('is_active', true)
+                ->orderBy('step_number')
+                ->get(['id', 'salary_grade_id', 'step_number', 'basic_salary']),
+        ];
+    }
+
+    /**
+     * @return array{
+     *     to_payscale_id: int,
+     *     to_salary_grade_id: int,
+     *     to_salary_step_id: int,
+     *     to_basic_salary: float|null
+     * }
+     */
+    private function normalizeConfirmationPayrollInput(Request $request): array
+    {
+        $payscaleId = $request->input('to_payscale_id') ?: null;
+        $gradeId = $request->input('to_salary_grade_id') ?: null;
+        $stepId = $request->input('to_salary_step_id') ?: null;
+        $basicSalary = $request->input('to_basic_salary');
+        $activePayscaleId = Payscale::activeId();
+
+        if ($activePayscaleId && ! $payscaleId && $gradeId && $stepId) {
+            $payscaleId = $activePayscaleId;
+        }
+
+        if (! $payscaleId || ! $gradeId || ! $stepId) {
+            throw ValidationException::withMessages([
+                'to_salary_step_id' => 'Select payscale, grade, and step for the confirmed salary assignment.',
+            ]);
+        }
+
+        $grade = SalaryGrade::query()->find($gradeId);
+        if (! $grade || (int) $grade->payscale_id !== (int) $payscaleId) {
+            throw ValidationException::withMessages([
+                'to_salary_grade_id' => 'Grade does not belong to the selected payscale.',
+            ]);
+        }
+
+        if ($activePayscaleId && (int) $payscaleId !== (int) $activePayscaleId) {
+            throw ValidationException::withMessages([
+                'to_payscale_id' => 'Only the currently active payscale can be assigned.',
+            ]);
+        }
+
+        $step = SalaryStep::query()->find($stepId);
+        if (! $step || (int) $step->salary_grade_id !== (int) $gradeId) {
+            throw ValidationException::withMessages([
+                'to_salary_step_id' => 'Step does not belong to the selected grade.',
+            ]);
+        }
+
+        if ($basicSalary === null || $basicSalary === '') {
+            $basicSalary = $step->basic_salary;
+        }
+
+        return [
+            'to_payscale_id' => (int) $payscaleId,
+            'to_salary_grade_id' => (int) $gradeId,
+            'to_salary_step_id' => (int) $stepId,
+            'to_basic_salary' => $basicSalary !== null && $basicSalary !== '' ? (float) $basicSalary : null,
+        ];
+    }
+
+    private function resolveEmployeeFromBasicSalary(Employee $employee): ?float
+    {
+        $basic = $employee->resolveBasicSalary();
+        if ($basic > 0) {
+            return $basic;
+        }
+
+        if ($employee->probation_salary !== null && (float) $employee->probation_salary > 0) {
+            return (float) $employee->probation_salary;
+        }
+
+        return null;
     }
 
     private function probationEmployeeQuery()
@@ -54,6 +162,10 @@ class ConfirmationController extends Controller
             'toDesignation',
             'fromEmployeeType',
             'toEmployeeType',
+            'fromSalaryGrade',
+            'toSalaryGrade',
+            'fromSalaryStep',
+            'toSalaryStep',
             'approver',
         ]);
 
@@ -104,7 +216,7 @@ class ConfirmationController extends Controller
         $permanentTypeId = EmployeeType::resolvePermanentTypeId();
         $permanentType = $permanentTypeId ? EmployeeType::query()->find($permanentTypeId) : null;
 
-        return Inertia::render('confirmation/create', [
+        return Inertia::render('confirmation/create', array_merge($this->payrollFormOptions(), [
             'employees' => $employees,
             'designations' => Designation::query()->orderBy('name')->get(['id', 'name']),
             'permanentEmployeeType' => $permanentType ? [
@@ -112,7 +224,7 @@ class ConfirmationController extends Controller
                 'name' => $permanentType->name,
             ] : null,
             'suggestedOrderNo' => $this->generateConfirmationOrderNo(),
-        ]);
+        ]));
     }
 
     public function store(Request $request)
@@ -127,12 +239,17 @@ class ConfirmationController extends Controller
         $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'to_designation_id' => 'required|exists:designations,id',
+            'to_payscale_id' => 'nullable|exists:payscales,id',
+            'to_salary_grade_id' => 'nullable|exists:salary_grades,id',
+            'to_salary_step_id' => 'nullable|exists:salary_steps,id',
+            'to_basic_salary' => 'nullable|numeric|min:0',
             'confirmation_date' => 'required|date|after_or_equal:today',
             'confirmation_order_no' => 'nullable|string|max:50',
             'reason' => 'nullable|string',
         ]);
 
         $employee = Employee::with('employeeType')->findOrFail($request->employee_id);
+        $payroll = $this->normalizeConfirmationPayrollInput($request);
 
         if ($employee->status !== 'active') {
             return back()->withErrors(['employee_id' => 'Only active employees can be confirmed.'])->withInput();
@@ -167,13 +284,19 @@ class ConfirmationController extends Controller
 
         $message = 'Confirmation recorded successfully.';
 
-        DB::transaction(function () use ($request, $employee, $permanentTypeId, $orderNo, $user, &$message) {
+        DB::transaction(function () use ($request, $employee, $permanentTypeId, $orderNo, $user, $payroll, &$message) {
             $confirmation = Confirmation::create([
                 'employee_id' => $employee->id,
                 'from_designation_id' => $employee->designation_id,
                 'to_designation_id' => $request->to_designation_id,
                 'from_employee_type_id' => $employee->employee_type_id,
                 'to_employee_type_id' => $permanentTypeId,
+                'from_salary_grade_id' => $employee->salary_grade_id,
+                'to_salary_grade_id' => $payroll['to_salary_grade_id'],
+                'from_salary_step_id' => $employee->salary_step_id,
+                'to_salary_step_id' => $payroll['to_salary_step_id'],
+                'from_basic_salary' => $this->resolveEmployeeFromBasicSalary($employee),
+                'to_basic_salary' => $payroll['to_basic_salary'],
                 'confirmation_date' => $request->confirmation_date,
                 'confirmation_order_no' => $orderNo,
                 'reason' => $request->reason,
@@ -182,9 +305,9 @@ class ConfirmationController extends Controller
             ]);
 
             $effective = Carbon::parse($confirmation->confirmation_date);
-            if ($effective->isToday() || $effective->isPast()) {
-                $this->applyConfirmationAndLogHistory($confirmation, $user->id);
-                $message = 'Confirmation completed successfully.';
+            if ($this->confirmationCompletionService->shouldApplyImmediately($effective)) {
+                $this->confirmationCompletionService->apply($confirmation, $user->id, $payroll['to_payscale_id']);
+                $message = 'Confirmation and promotion completed successfully.';
             }
         });
 
@@ -201,6 +324,11 @@ class ConfirmationController extends Controller
             'toDesignation',
             'fromEmployeeType',
             'toEmployeeType',
+            'fromSalaryGrade',
+            'toSalaryGrade',
+            'fromSalaryStep',
+            'toSalaryStep',
+            'promotion',
             'approver',
         ]);
 
@@ -227,8 +355,11 @@ class ConfirmationController extends Controller
             $confirmation->save();
 
             $effective = $confirmation->confirmation_date ? Carbon::parse($confirmation->confirmation_date) : null;
-            if ($effective?->isToday()) {
-                $this->applyConfirmationAndLogHistory($confirmation, $user->id);
+            if ($this->confirmationCompletionService->shouldApplyImmediately($effective)) {
+                $toPayscaleId = $confirmation->toSalaryGrade?->payscale_id
+                    ? (int) $confirmation->toSalaryGrade->payscale_id
+                    : Payscale::activeId();
+                $this->confirmationCompletionService->apply($confirmation, $user->id, $toPayscaleId);
             }
         });
 
@@ -286,61 +417,13 @@ class ConfirmationController extends Controller
         }
 
         DB::transaction(function () use ($confirmation, $user) {
-            $this->applyConfirmationAndLogHistory($confirmation, $user->id);
+            $confirmation->loadMissing('toSalaryGrade');
+            $toPayscaleId = $confirmation->toSalaryGrade?->payscale_id
+                ? (int) $confirmation->toSalaryGrade->payscale_id
+                : Payscale::activeId();
+            $this->confirmationCompletionService->apply($confirmation, $user->id, $toPayscaleId);
         });
 
-        return redirect()->route('confirmations.index')->with('success', 'Confirmation completed successfully.');
-    }
-
-    private function applyConfirmationAndLogHistory(Confirmation $confirmation, ?int $actorUserId): void
-    {
-        $confirmation->loadMissing(['employee.employeeType']);
-
-        if ($confirmation->status === 'completed') {
-            return;
-        }
-
-        $employee = $confirmation->employee;
-
-        if ($employee->confirmation_date) {
-            $confirmation->status = 'completed';
-            $confirmation->save();
-
-            return;
-        }
-
-        $previousDate = $employee->confirmation_date;
-        $confirmationDate = $confirmation->confirmation_date
-            ? Carbon::parse($confirmation->confirmation_date)
-            : now();
-
-        $employee->confirmation_date = $confirmationDate;
-
-        if ($confirmation->to_designation_id) {
-            $employee->last_designation_id = $employee->designation_id;
-            $employee->designation_id = $confirmation->to_designation_id;
-        }
-
-        if ($confirmation->to_employee_type_id) {
-            $employee->employee_type_id = $confirmation->to_employee_type_id;
-            $employee->probation_period_days = 0;
-        }
-
-        $employee->save();
-
-        ConfirmationHistory::create([
-            'confirmation_id' => $confirmation->id,
-            'employee_id' => $employee->id,
-            'from_designation_id' => $confirmation->from_designation_id,
-            'to_designation_id' => $confirmation->to_designation_id,
-            'from_employee_type_id' => $confirmation->from_employee_type_id,
-            'to_employee_type_id' => $confirmation->to_employee_type_id,
-            'confirmation_date' => $confirmationDate,
-            'previous_confirmation_date' => $previousDate ? Carbon::parse($previousDate) : null,
-            'created_by' => $actorUserId,
-        ]);
-
-        $confirmation->status = 'completed';
-        $confirmation->save();
+        return redirect()->route('confirmations.index')->with('success', 'Confirmation and promotion completed successfully.');
     }
 }

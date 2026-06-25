@@ -10,6 +10,7 @@ use App\Models\Movement;
 use App\Models\AttendanceSetting;
 use App\Models\User;
 use App\Services\OrganogramAccessService;
+use App\Support\HeadOfficeOrganogram;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -93,11 +94,11 @@ class AttendanceReportController extends Controller
     private function employeesForReportDropdown(User $user)
     {
         $q = Employee::query()
-            ->select('id', 'employee_id', 'name_en')
-            ->where('status', 'active')
-            ->orderBy('name_en');
+            ->select('employees.id', 'employees.employee_id', 'employees.name_en')
+            ->where('employees.status', 'active');
 
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
+        HeadOfficeOrganogram::applyToEmployeeQuery($q, 'organogram', 'asc');
 
         return $q->get()->map(function ($employee) {
             $fullName = $employee->name_en ?? $employee->full_name_en ?? '';
@@ -288,18 +289,11 @@ class AttendanceReportController extends Controller
     private function getAttendanceSettings($attendance)
     {
         try {
-            // Get employee directly from ID
-            $employee = Employee::find($attendance->employee_id);
-            if (!$employee) {
-                return null;
+            if (! $attendance->employee_id) {
+                return AttendanceSetting::global();
             }
 
-            $branchId = $employee->current_branch_id;
-
-            // Get attendance settings for the branch
-            $settings = AttendanceSetting::where('branch_id', $branchId)->first();
-
-            return $settings;
+            return AttendanceSetting::forEmployee($attendance->employee_id);
         } catch (\Exception $e) {
             Log::error('Error getting attendance settings: ' . $e->getMessage());
             return null;

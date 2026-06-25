@@ -11,6 +11,7 @@ use App\Models\Department;
 use App\Models\Attendance;
 use App\Models\LeaveApplication;
 use App\Support\MonthlyAttendanceCalculator;
+use App\Support\HeadOfficeOrganogram;
 use Illuminate\Http\Request;
 use App\Models\AttendanceSetting;
 use Illuminate\Support\Facades\Auth;
@@ -49,8 +50,7 @@ class AttendanceExportController extends Controller
             // Apply filters based on user permissions and role
             $this->applyEmployeeFilters($employeesQuery, $user, $request);
 
-            // Order by designation hierarchy and then by name
-            $employeesQuery = $this->orderByDesignationHierarchy($employeesQuery);
+            HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
 
             // Limit to a reasonable number of employees for PDF generation
             $employees = $employeesQuery->take(50)->get();
@@ -244,52 +244,6 @@ class AttendanceExportController extends Controller
             \Log::error($e->getTraceAsString());
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
-    }
-
-    /**
-     * Order employees by designation hierarchy
-     */
-    protected function orderByDesignationHierarchy($query)
-    {
-        // Define designation hierarchy order based on your list (correct order)
-        $designationOrder = [
-            'Advisor' => 1,
-            'Executive Director' => 2,
-            'Deputy Executive Director' => 3,
-            'Director' => 4,
-            'Assistant Director' => 5,
-            'Deputy Assistant Director (Program)' => 6,
-            'Senior Manager' => 7,
-            'Manager' => 8,
-            'Assistant Manager' => 9,
-            'Co-Ordinator' => 10,
-            'Technical Officer' => 11,
-            'Environment & RECP' => 12,
-            'MIS & Documentation' => 13,
-            'Training Officer' => 14,
-            'M & E Officer' => 15,
-            'Case Management Officer' => 16,
-            'Officer LSED' => 17,
-            'Accounts Officer' => 18,
-            'Accountant III' => 19,
-            'VCF' => 20,
-            'Resident Physician' => 21,
-            'Office Assistant' => 22,
-            'Driver' => 23
-        ];
-
-        // Create a CASE WHEN statement for ordering
-        $orderCase = "CASE ";
-        foreach ($designationOrder as $designation => $order) {
-            $orderCase .= "WHEN designations.name = '$designation' THEN $order ";
-        }
-        $orderCase .= "ELSE 999 END";
-
-        return $query->leftJoin('designations', 'employees.designation_id', '=', 'designations.id')
-                    ->select('employees.*')
-                    ->orderByRaw($orderCase)
-                    ->orderBy('employees.created_at', 'asc')
-                    ->orderBy('employees.name_en');
     }
 
     /**

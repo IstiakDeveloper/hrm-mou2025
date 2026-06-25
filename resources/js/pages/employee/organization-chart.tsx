@@ -65,13 +65,26 @@ function roleBadgeShort(roleTitle: string): string {
   return roleTitle.length > 6 ? `${roleTitle.slice(0, 5)}…` : roleTitle;
 }
 
+interface HeadOfficeTier {
+  level: number;
+  label: string;
+  employees: Employee[];
+}
+
+interface BranchEmployeeTier {
+  level: number;
+  label: string;
+  employees: Employee[];
+}
+
 interface Branch {
   id: number;
   name: string;
   branch_code?: string | null;
   is_head_office: boolean;
-  head_employee: Employee | null;
-  employees: Employee[];
+  head_employee?: Employee | null;
+  employees?: Employee[];
+  employee_tiers?: BranchEmployeeTier[];
   employees_count?: number;
 }
 
@@ -93,6 +106,7 @@ interface Zone {
 
 interface OrganizationChartProps {
   headOffice: Branch | null;
+  headOfficeTiers?: HeadOfficeTier[];
   zones: Zone[];
 }
 
@@ -105,7 +119,7 @@ function fmtCount(n: number | undefined | null): string {
   return (n ?? 0).toLocaleString();
 }
 
-export default function OrganizationChart({ headOffice, zones }: OrganizationChartProps) {
+export default function OrganizationChart({ headOffice, headOfficeTiers = [], zones }: OrganizationChartProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterZoneId, setFilterZoneId] = useState('');
   const [filterRegionalId, setFilterRegionalId] = useState('');
@@ -129,18 +143,31 @@ export default function OrganizationChart({ headOffice, zones }: OrganizationCha
   }, [zones, filterZoneId]);
 
   const branchOptions = useMemo(() => {
-    const rows: { id: number; name: string; regionalId: number; zoneId: number }[] = [];
+    const rows: { id: number; name: string; branchCode: string; regionalId: number; zoneId: number }[] = [];
     for (const z of zones || []) {
       if (filterZoneId && String(z.id) !== filterZoneId) continue;
       for (const ro of z.regional_offices || []) {
         if (filterRegionalId && String(ro.id) !== filterRegionalId) continue;
         for (const b of ro.branches || []) {
           if (b.is_head_office) continue;
-          rows.push({ id: b.id, name: b.name, regionalId: ro.id, zoneId: z.id });
+          rows.push({
+            id: b.id,
+            name: b.name,
+            branchCode: String(b.branch_code ?? '').trim(),
+            regionalId: ro.id,
+            zoneId: z.id,
+          });
         }
       }
     }
-    return rows.sort((a, b) => a.name.localeCompare(b.name));
+    return rows.sort((a, b) => {
+      const numA = /^\d+$/.test(a.branchCode) ? Number(a.branchCode) : NaN;
+      const numB = /^\d+$/.test(b.branchCode) ? Number(b.branchCode) : NaN;
+      if (!Number.isNaN(numA) && !Number.isNaN(numB) && numA !== numB) return numA - numB;
+      const codeCmp = a.branchCode.localeCompare(b.branchCode);
+      if (codeCmp !== 0) return codeCmp;
+      return a.name.localeCompare(b.name);
+    });
   }, [zones, filterZoneId, filterRegionalId]);
 
   const filteredZones = useMemo(() => {
@@ -156,7 +183,9 @@ export default function OrganizationChart({ headOffice, zones }: OrganizationCha
 
     const branchSearchOk = (b: Branch) => {
       if (!hasSearch) return true;
-      const all = [b.head_employee, ...(b.employees || [])].filter(Boolean) as Employee[];
+      const tierEmployees = (b.employee_tiers ?? []).flatMap((t) => t.employees);
+      const legacy = [b.head_employee, ...(b.employees || [])].filter(Boolean) as Employee[];
+      const all = tierEmployees.length > 0 ? tierEmployees : legacy;
       return all.some((e) => employeeMatchesSearch(e, q));
     };
 
@@ -216,16 +245,26 @@ export default function OrganizationChart({ headOffice, zones }: OrganizationCha
     return out;
   }, [zones, searchTerm, filterZoneId, filterRegionalId, filterBranchId]);
 
+  const filteredHeadOfficeTiers = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return (headOfficeTiers || [])
+      .map((tier) => {
+        const employees =
+          q.length > 0
+            ? tier.employees.filter((e) => employeeMatchesSearch(e, q))
+            : tier.employees;
+        return { ...tier, employees };
+      })
+      .filter((tier) => tier.employees.length > 0);
+  }, [headOfficeTiers, searchTerm]);
+
   const showHeadOffice = useMemo(() => {
     if (!headOffice) return false;
     if (filterZoneId || filterRegionalId) return false;
     if (filterBranchId && String(headOffice.id) !== filterBranchId) return false;
-
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return true;
-    const all = [headOffice.head_employee, ...(headOffice.employees || [])].filter(Boolean) as Employee[];
-    return all.some((e) => employeeMatchesSearch(e, q));
-  }, [headOffice, searchTerm, filterZoneId, filterRegionalId, filterBranchId]);
+    if (filteredHeadOfficeTiers.length === 0) return false;
+    return true;
+  }, [headOffice, filterZoneId, filterRegionalId, filterBranchId, filteredHeadOfficeTiers.length]);
 
   const hasActiveFilters =
     filterZoneId !== '' || filterRegionalId !== '' || filterBranchId !== '' || searchTerm.trim() !== '';
@@ -352,25 +391,83 @@ export default function OrganizationChart({ headOffice, zones }: OrganizationCha
     );
   };
 
+  const renderHeadOffice = (branch: Branch, tiers: HeadOfficeTier[]) => {
+    const count = branch.employees_count ?? branch.employees?.length ?? 0;
+    const displayName = (branch.name || '').trim() || 'Head Office';
+    const code = (branch.branch_code || '').trim();
+
+    return (
+      <div className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-indigo-200 bg-white">
+        <div className="flex min-w-0 items-start gap-2 border-b border-indigo-100 bg-indigo-50/60 px-2 py-1.5">
+          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-100 text-indigo-700">
+            <Building2 className="h-3.5 w-3.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="whitespace-normal break-words text-left text-xs font-semibold leading-snug text-indigo-950">
+              {displayName}
+              <span className="ml-1 block font-normal text-[10px] text-indigo-600/90 sm:inline">
+                (Head Office · designation levels)
+              </span>
+            </h3>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] leading-none text-slate-500">
+              <span className="font-mono tabular-nums">{fmtCount(count)}</span>
+              <span className="text-slate-300">·</span>
+              <span>{tiers.length} level{tiers.length === 1 ? '' : 's'}</span>
+              {code ? (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="font-mono text-slate-400">{code}</span>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 space-y-2 border-t border-slate-100/80 bg-slate-50/40 p-2">
+          {tiers.map((tier) => (
+            <div
+              key={`${tier.level}-${tier.label}`}
+              className="overflow-hidden rounded-lg border border-slate-200/90 bg-white"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/90 px-2.5 py-1.5">
+                <h4 className="text-[11px] font-bold uppercase tracking-wide text-slate-700">{tier.label}</h4>
+                <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-indigo-700">
+                  {fmtCount(tier.employees.length)}
+                </span>
+              </div>
+              <div className="grid min-w-0 grid-cols-1 gap-1.5 p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {tier.employees.map((emp) => (
+                  <div key={emp.id} className="min-w-0">
+                    {renderEmployee(emp, tier.label, false, { comfortable: true })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const branchHeadcount = (branch: Branch) =>
     branch.employees_count ?? (branch.employees?.length ?? 0);
 
   const renderBranch = (branch: Branch) => {
-    const allEmployees = branch.employees || [];
-    const headEmpId = branch.head_employee?.id;
-    const staffRaw = allEmployees.filter((e) => e.id !== headEmpId);
     const qTrim = searchTerm.trim().toLowerCase();
-    const staff =
-      qTrim.length > 0
-        ? staffRaw.filter((e) => employeeMatchesSearch(e, qTrim))
-        : staffRaw;
-    const count = branchHeadcount(branch);
+    const tiers = (branch.employee_tiers ?? [])
+      .map((tier) => ({
+        ...tier,
+        employees:
+          qTrim.length > 0
+            ? tier.employees.filter((e) => employeeMatchesSearch(e, qTrim))
+            : tier.employees,
+      }))
+      .filter((tier) => tier.employees.length > 0);
 
+    const count = branchHeadcount(branch);
     const displayName = (branch.name || '').trim() || '—';
     const code = (branch.branch_code || '').trim();
-    const headShown =
-      !!branch.head_employee &&
-      (!qTrim.length || employeeMatchesSearch(branch.head_employee, qTrim));
+    const hasStaff = tiers.length > 0;
 
     return (
       <div
@@ -417,39 +514,34 @@ export default function OrganizationChart({ headOffice, zones }: OrganizationCha
           </div>
         </div>
 
-        <div
-          className={`min-w-0 space-y-1 border-t border-slate-100/80 bg-slate-50/40 ${
-            branch.is_head_office ? 'p-2' : 'p-1.5'
-          }`}
-        >
-          {headShown &&
-            renderEmployee(
-              branch.head_employee,
-              branch.is_head_office ? 'Head Office Manager' : 'Branch Manager',
-              true,
-              branch.is_head_office ? { comfortable: true } : undefined,
-            )}
-
-          {staff.length > 0 &&
-            (branch.is_head_office ? (
-              <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {staff.map((emp) => (
-                  <div key={emp.id} className="min-w-0">
-                    {renderEmployee(emp, 'Staff', false, { comfortable: true })}
+        <div className="min-w-0 space-y-1 border-t border-slate-100/80 bg-slate-50/40 p-1.5">
+          {hasStaff ? (
+            <div className="space-y-1.5">
+              {tiers.map((tier) => (
+                <div
+                  key={`${branch.id}-${tier.level}-${tier.label}`}
+                  className="overflow-hidden rounded-md border border-slate-200/80 bg-white"
+                >
+                  <div className="border-b border-slate-100 bg-slate-50/90 px-2 py-1">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                      {tier.label}
+                    </h4>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex w-full min-w-0 flex-col gap-1">
-                {staff.map((emp) => (
-                  <div key={emp.id} className="w-full min-w-0">
-                    {renderEmployee(emp, 'Staff')}
+                  <div className="flex w-full min-w-0 flex-col gap-1 p-1">
+                    {tier.employees.map((emp) => (
+                      <div key={emp.id} className="w-full min-w-0">
+                        {renderEmployee(
+                          emp,
+                          tier.label,
+                          tier.level === 1,
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ))}
-
-          {staff.length === 0 && !headShown && (
+                </div>
+              ))}
+            </div>
+          ) : (
             <div className="flex flex-col items-center justify-center py-4 text-[10px] text-slate-400">
               <Users className="mb-1 h-5 w-5 opacity-25" />
               {qTrim.length > 0 ? 'No matching employees' : 'No employees'}
@@ -557,7 +649,8 @@ export default function OrganizationChart({ headOffice, zones }: OrganizationCha
             <div>
               <h1 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">Organization chart</h1>
               <p className="mt-0.5 text-xs text-slate-500 md:text-sm">
-                Zones, regional offices, branches — headcounts in parentheses.{' '}
+                Head office by designation level; zones → regional offices → branches with branch
+                designation order (manager, accountant, officer…).{' '}
                 {zoneCount > 0 && (
                   <span className="text-slate-600">
                     {zoneCount} zone{zoneCount === 1 ? '' : 's'}, {fmtCount(totalUnderZones)} staff under zones.
@@ -664,7 +757,7 @@ export default function OrganizationChart({ headOffice, zones }: OrganizationCha
           {headOffice && showHeadOffice && (
             <section>
               <h2 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Corporate</h2>
-              {renderBranch(headOffice)}
+              {renderHeadOffice(headOffice, filteredHeadOfficeTiers)}
             </section>
           )}
 

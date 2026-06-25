@@ -20,7 +20,13 @@ type Payscale = {
     is_active: boolean;
 };
 
-export default function PayscaleEdit({ payscale }: { payscale: Payscale }) {
+export default function PayscaleEdit({
+    payscale,
+    hasOtherActivePayscale = false,
+}: {
+    payscale: Payscale;
+    hasOtherActivePayscale?: boolean;
+}) {
     const { data, setData, put, processing, errors, transform } = useForm({
         name: payscale.name,
         description: payscale.description || '',
@@ -65,9 +71,16 @@ export default function PayscaleEdit({ payscale }: { payscale: Payscale }) {
                                 <Label>Description</Label>
                                 <Textarea value={data.description} onChange={(e) => setData('description', e.target.value)} rows={3} />
                             </div>
-                            <div className="flex items-center gap-2">
-                                <Checkbox checked={data.is_active} onCheckedChange={(v) => setData('is_active', Boolean(v))} />
-                                <Label>Active</Label>
+                            <div className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                                <Checkbox checked={data.is_active} onCheckedChange={(v) => setData('is_active', Boolean(v))} className="mt-0.5" />
+                                <div>
+                                    <Label>Set as active payscale</Label>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Only one payscale can be active for payroll. Activating this deactivates all others.
+                                        {payscale.is_active && !hasOtherActivePayscale && ' You cannot deactivate the only payscale from here — add another payscale first.'}
+                                    </p>
+                                    {errors.is_active && <p className="text-sm text-red-500 mt-1">{errors.is_active}</p>}
+                                </div>
                             </div>
                         </CardContent>
                         <CardFooter className="justify-end gap-2">

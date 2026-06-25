@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\Admin\AdminNoticeController;
 use App\Http\Controllers\Admin\ActiveSessionController;
+use App\Http\Controllers\Admin\AdminNoticeController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Attendance\AttendanceController;
@@ -12,6 +12,7 @@ use App\Http\Controllers\Attendance\SelfAttendanceController;
 use App\Http\Controllers\AttendanceExportController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Branch\BranchController;
+use App\Http\Controllers\Confirmation\ConfirmationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Department\DepartmentController;
 use App\Http\Controllers\Designation\DesignationController;
@@ -36,8 +37,8 @@ use App\Http\Controllers\FixedAsset\AssetInsuranceController;
 use App\Http\Controllers\FixedAsset\AssetMaintenanceController;
 use App\Http\Controllers\FixedAsset\AssetNotInUseController;
 use App\Http\Controllers\FixedAsset\AssetPurchaseController;
-use App\Http\Controllers\FixedAsset\AssetStockController;
 use App\Http\Controllers\FixedAsset\AssetRevaluationController;
+use App\Http\Controllers\FixedAsset\AssetStockController;
 use App\Http\Controllers\FixedAsset\AssetSubCategoryController;
 use App\Http\Controllers\FixedAsset\AssetTrackingController;
 use App\Http\Controllers\FixedAsset\AssetTransferController;
@@ -47,11 +48,11 @@ use App\Http\Controllers\FixedAsset\FixedAssetController;
 use App\Http\Controllers\FixedAsset\FixedAssetDashboardController;
 use App\Http\Controllers\FixedAsset\FixedAssetImportController;
 use App\Http\Controllers\FixedAsset\FixedAssetReportController;
+use App\Http\Controllers\Holiday\HolidayController;
 use App\Http\Controllers\Inventory\InventoryDashboardController;
 use App\Http\Controllers\Inventory\InventoryOperationsController;
 use App\Http\Controllers\Inventory\InventoryProductController;
 use App\Http\Controllers\Inventory\InventoryReportController;
-use App\Http\Controllers\Holiday\HolidayController;
 use App\Http\Controllers\Leave\LeaveApplicationController;
 use App\Http\Controllers\Leave\LeaveBalanceController;
 use App\Http\Controllers\Leave\LeaveSettingController;
@@ -60,6 +61,7 @@ use App\Http\Controllers\Movement\MovementController;
 use App\Http\Controllers\MyNoticeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Organization\EmployeeTypeController;
+use App\Http\Controllers\Organization\OrganizationStructureController;
 use App\Http\Controllers\Organization\ProgramController;
 use App\Http\Controllers\Organization\ProjectController;
 use App\Http\Controllers\Payroll\BonusCalculationController;
@@ -73,10 +75,10 @@ use App\Http\Controllers\Payroll\SalaryHeadController;
 use App\Http\Controllers\Payroll\SalaryStepController;
 use App\Http\Controllers\Payroll\SalaryStructureController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Demotion\DemotionController;
+use App\Http\Controllers\Promotion\PromotionController;
 use App\Http\Controllers\RegionalOffice\RegionalOfficeController;
 use App\Http\Controllers\Report\ReportController;
-use App\Http\Controllers\Confirmation\ConfirmationController;
-use App\Http\Controllers\Promotion\PromotionController;
 use App\Http\Controllers\Separation\SeparationController;
 use App\Http\Controllers\Transfer\TransferController;
 use App\Http\Controllers\ZKTeco\ZKDeviceController;
@@ -555,6 +557,16 @@ Route::middleware(['auth'])->group(function () {
     // ORGANIZATION SETUP
     // ====================
 
+    Route::middleware(['permission:branches.view'])->prefix('organization-structure')->name('organization-structure.')->group(function () {
+        Route::get('/', [OrganizationStructureController::class, 'index'])->name('index');
+        Route::patch('/branches/{branch}/regional-office', [OrganizationStructureController::class, 'updateBranchRegionalOffice'])
+            ->name('branches.regional-office')
+            ->middleware('permission:branches.edit');
+        Route::patch('/regional-offices/{regionalOffice}/zone', [OrganizationStructureController::class, 'updateRegionalOfficeZone'])
+            ->name('regional-offices.zone')
+            ->middleware('permission:regional-offices.edit');
+    });
+
     // Branch Management
     Route::middleware(['permission:branches.view'])->prefix('branches')->name('branches.')->group(function () {
         Route::get('/', [BranchController::class, 'index'])->name('index');
@@ -726,6 +738,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/', [PayscaleController::class, 'store'])->name('store')->middleware('permission:payroll.create');
             Route::get('/{payscale}/edit', [PayscaleController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
             Route::put('/{payscale}', [PayscaleController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::patch('/{payscale}/status', [PayscaleController::class, 'updateStatus'])
+                ->name('update-status')
+                ->middleware('permission:payroll.edit');
             Route::delete('/{payscale}', [PayscaleController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
         });
 
@@ -831,6 +846,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'index'])->name('salary-rollback.index');
         Route::post('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'rollback'])->name('salary-rollback.rollback')->middleware('permission:payroll.edit');
 
+        Route::get('/final-payments', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'index'])->name('final-payments.index');
+        Route::get('/final-payments/{final_payment}', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'show'])->name('final-payments.show');
+        Route::post('/final-payments/{final_payment}/refresh', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'refresh'])->name('final-payments.refresh')->middleware('permission:payroll.edit');
+        Route::post('/final-payments/{final_payment}/mark-paid', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'markPaid'])->name('final-payments.mark-paid')->middleware('permission:payroll.edit');
+
         Route::prefix('loan-committees')->name('loan-committees.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'create'])->name('create')->middleware('permission:payroll.create');
@@ -908,6 +928,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/calculate-preview', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'calculatePreview'])->name('calculate-preview');
             Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'store'])->name('store')->middleware('permission:payroll.create');
             Route::get('/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'show'])->name('show');
+            Route::put('/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::put('/items/{loan_migration_item}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'updateItem'])->name('items.update')->middleware('permission:payroll.edit');
         });
 
         Route::prefix('loan-policies')->name('loan-policies.')->group(function () {
@@ -926,6 +948,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{employee_loan}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'show'])->name('show');
             Route::get('/{employee_loan}/ledger', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'ledger'])->name('ledger');
             Route::post('/{employee_loan}/manual-payment', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'storeManualPayment'])->name('manual-payment.store')->middleware('permission:payroll.edit');
+            Route::put('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'updateTransaction'])->name('transactions.update')->middleware('permission:payroll.edit');
+            Route::delete('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'destroyTransaction'])->name('transactions.destroy')->middleware('permission:payroll.edit');
             Route::post('/{employee_loan}/cancel', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'cancel'])->name('cancel')->middleware('permission:payroll.edit');
         });
 
@@ -1326,6 +1350,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/', [AttendanceSettingController::class, 'index'])->name('index');
             Route::get('/create', [AttendanceSettingController::class, 'create'])->name('create');
             Route::post('/', [AttendanceSettingController::class, 'store'])->name('store');
+            Route::get('/employee-times', [\App\Http\Controllers\Attendance\EmployeeAttendanceTimeController::class, 'index'])->name('employee-times');
+            Route::put('/employee-times/{employee}', [\App\Http\Controllers\Attendance\EmployeeAttendanceTimeController::class, 'upsert'])->name('employee-times.upsert');
+            Route::delete('/employee-times/{employee}', [\App\Http\Controllers\Attendance\EmployeeAttendanceTimeController::class, 'destroy'])->name('employee-times.destroy');
             Route::get('/{setting}/edit', [AttendanceSettingController::class, 'edit'])->name('edit');
             Route::put('/{setting}', [AttendanceSettingController::class, 'update'])->name('update');
             Route::delete('/{setting}', [AttendanceSettingController::class, 'destroy'])->name('destroy');
@@ -1592,6 +1619,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{separation}', [SeparationController::class, 'show'])->name('show');
 
         Route::middleware(['permission:separations.edit'])->group(function () {
+            Route::get('/{separation}/edit', [SeparationController::class, 'edit'])->name('edit');
+            Route::put('/{separation}', [SeparationController::class, 'update'])->name('update');
             Route::post('/{separation}/cancel', [SeparationController::class, 'cancel'])->name('cancel');
             Route::post('/{separation}/complete', [SeparationController::class, 'complete'])->name('complete');
         });
@@ -1603,6 +1632,31 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ====================
+    // DEMOTION MANAGEMENT
+    // ===================
+    Route::middleware(['permission:demotions.view'])->prefix('demotions')->name('demotions.')->group(function () {
+        Route::get('/', [DemotionController::class, 'index'])->name('index');
+
+        Route::middleware(['permission:demotions.create'])->group(function () {
+            Route::get('/create', [DemotionController::class, 'create'])->name('create');
+            Route::post('/', [DemotionController::class, 'store'])->name('store');
+        });
+
+        Route::get('/{demotion}', [DemotionController::class, 'show'])->name('show');
+
+        Route::middleware(['permission:demotions.edit'])->group(function () {
+            Route::get('/{demotion}/edit', [DemotionController::class, 'edit'])->name('edit');
+            Route::put('/{demotion}', [DemotionController::class, 'update'])->name('update');
+            Route::post('/{demotion}/cancel', [DemotionController::class, 'cancel'])->name('cancel');
+            Route::post('/{demotion}/complete', [DemotionController::class, 'complete'])->name('complete');
+        });
+
+        Route::middleware(['permission:demotions.approve'])->group(function () {
+            Route::post('/{demotion}/approve', [DemotionController::class, 'approve'])->name('approve');
+            Route::post('/{demotion}/reject', [DemotionController::class, 'reject'])->name('reject');
+        });
+    });
+
     // PROMOTION MANAGEMENT
     // ====================
     Route::middleware(['permission:promotions.view'])->prefix('promotions')->name('promotions.')->group(function () {
@@ -1616,6 +1670,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{promotion}', [PromotionController::class, 'show'])->name('show');
 
         Route::middleware(['permission:promotions.edit'])->group(function () {
+            Route::get('/{promotion}/edit', [PromotionController::class, 'edit'])->name('edit');
+            Route::put('/{promotion}', [PromotionController::class, 'update'])->name('update');
             Route::post('/{promotion}/cancel', [PromotionController::class, 'cancel'])->name('cancel');
             Route::post('/{promotion}/complete', [PromotionController::class, 'complete'])->name('complete');
         });

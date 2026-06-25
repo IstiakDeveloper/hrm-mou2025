@@ -284,17 +284,28 @@ class LoanCollectionController extends Controller
             ->orderByDesc('disbursement_date')
             ->limit(500)
             ->get()
-            ->map(fn (EmployeeLoan $loan) => [
-                'id' => $loan->id,
-                'loan_number' => $loan->loan_number,
-                'employee_id' => $loan->employee_id,
-                'employee_label' => trim(($loan->employee?->pin ?? '').' — '.($loan->employee?->name_en ?? '')),
-                'policy_name' => $loan->policy?->name,
-                'outstanding_balance' => (float) $loan->outstanding_balance,
-                'installment_amount' => (float) $loan->installment_amount,
-                'pending_installments' => $loan->installments()->where('status', 'pending')->count(),
-                'disbursement_date' => $loan->disbursement_date?->format('d-M-Y'),
-            ]);
+            ->map(function (EmployeeLoan $loan) {
+                $pendingInstallmentAmounts = $loan->installments()
+                    ->where('status', 'pending')
+                    ->orderBy('installment_no')
+                    ->pluck('total_amount')
+                    ->map(fn ($amount) => (float) $amount)
+                    ->values()
+                    ->all();
+
+                return [
+                    'id' => $loan->id,
+                    'loan_number' => $loan->loan_number,
+                    'employee_id' => $loan->employee_id,
+                    'employee_label' => trim(($loan->employee?->pin ?? '').' — '.($loan->employee?->name_en ?? '')),
+                    'policy_name' => $loan->policy?->name,
+                    'outstanding_balance' => (float) $loan->outstanding_balance,
+                    'installment_amount' => (float) $loan->installment_amount,
+                    'pending_installments' => count($pendingInstallmentAmounts),
+                    'pending_installment_amounts' => $pendingInstallmentAmounts,
+                    'disbursement_date' => $loan->disbursement_date?->format('d-M-Y'),
+                ];
+            });
 
         return [
             ...$this->payrollFilterOptions(),

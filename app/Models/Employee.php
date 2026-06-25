@@ -347,6 +347,16 @@ class Employee extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function attendanceTime()
+    {
+        return $this->hasOne(EmployeeAttendanceTime::class);
+    }
+
+    public function hasCustomAttendanceTime(): bool
+    {
+        return (bool) $this->attendanceTime?->isConfigured();
+    }
+
     public function leaveBalances()
     {
         return $this->hasMany(LeaveBalance::class);
@@ -410,6 +420,31 @@ class Employee extends Model
     }
 
     /**
+     * Probation or fixed salary path — no active payscale / grade / step required.
+     */
+    public function scopeNonGradePayrollPath(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where(function (Builder $q2) {
+                $q2->whereNotNull('probation_salary')->where('probation_salary', '>', 0);
+            })->orWhereHas('employeeType', function (Builder $et) {
+                $et->where('probation_months', '>', 0);
+            })->orWhere(function (Builder $q2) {
+                $q2->whereNotNull('fixed_salary')->where('fixed_salary', '>', 0);
+            });
+        });
+    }
+
+    public function scopeWithFullGradePayroll(Builder $query, ?int $activePayscaleId = null): Builder
+    {
+        return $query
+            ->whereNotNull('payscale_id')
+            ->whereNotNull('salary_grade_id')
+            ->whereNotNull('salary_step_id')
+            ->when($activePayscaleId, fn (Builder $q) => $q->where('payscale_id', $activePayscaleId));
+    }
+
+    /**
      * Permanent employees with payscale, grade, and step assigned (gratuity scope).
      */
     public function scopeForGratuity(Builder $query): Builder
@@ -419,5 +454,30 @@ class Employee extends Model
             ->whereNotNull('payscale_id')
             ->whereNotNull('salary_grade_id')
             ->whereNotNull('salary_step_id');
+    }
+
+    /**
+     * Sync linked login account(s) active/inactive with this employee's employment status.
+     */
+    public function syncLinkedUserActiveStatus(): void
+    {
+        $status = $this->status;
+        if ($status === null || $status === '') {
+            $status = static::query()->whereKey($this->id)->value('status') ?? 'active';
+        }
+
+        $isActive = $status === 'active';
+        $email = strtolower(trim((string) ($this->email ?? '')));
+
+        User::query()
+            ->where(function (Builder $query) use ($email) {
+                $query->where('employee_id', $this->id);
+                if ($email !== '') {
+                    $query->orWhere(function (Builder $inner) use ($email) {
+                        $inner->whereNull('employee_id')->whereRaw('LOWER(email) = ?', [$email]);
+                    });
+                }
+            })
+            ->update(['active_status' => $isActive]);
     }
 }

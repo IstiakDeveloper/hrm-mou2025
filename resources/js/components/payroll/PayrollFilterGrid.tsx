@@ -1,17 +1,29 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
+import { DatePicker } from '@/components/ui/date-picker';
 import { useEmployeeLookup } from '@/lib/employee-lookup';
+import { employeeDisplayName } from '@/lib/employee-name';
 import { Label } from '@/components/ui/label';
 import { branchComboSelectItems, type PayrollBranchOption } from '@/lib/payroll-branches';
+import { DISPLAY_DATE_FMT, parseFormDateValue } from '@/lib/display-date';
+import { cn } from '@/lib/utils';
 
 type Option = { id: number; name: string | null };
 type EmpOption = {
     id: number;
     pin?: string | null;
     name_en?: string | null;
+    name_bn?: string | null;
     employee_id?: string | null;
     pf_balance?: number;
 };
+
+function employeeSelectLabel(e: EmpOption): string {
+    const pin = e.pin || e.employee_id || '';
+    const name = employeeDisplayName(e, '');
+    return [pin, name].filter(Boolean).join(' — ') || `Employee #${e.id}`;
+}
 
 const ALL_VALUE = '';
 
@@ -153,8 +165,27 @@ export function PayrollEmployeeSelect({
     forGratuity?: boolean;
 }) {
     const useLookup = employees.length === 0;
-    const lookup = useEmployeeLookup({ enabled: useLookup, branchId, limit: 50, payrollReady, forGratuity });
+    const [searchQuery, setSearchQuery] = useState('');
+    const lookup = useEmployeeLookup({
+        enabled: useLookup,
+        branchId,
+        selectedEmployeeId: value || null,
+        limit: 50,
+        payrollReady,
+        forGratuity,
+    });
     const employeeSource = useLookup ? lookup.employees : employees;
+
+    useEffect(() => {
+        if (!useLookup) {
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            void lookup.reload(searchQuery);
+        }, 300);
+
+        return () => window.clearTimeout(timer);
+    }, [lookup.reload, searchQuery, useLookup]);
 
     const items = useMemo(() => {
         const list: ComboSelectItem<string>[] = [];
@@ -165,8 +196,8 @@ export function PayrollEmployeeSelect({
         }
         for (const e of employeeSource) {
             const pin = e.pin || e.employee_id || '';
-            const name = e.name_en || '';
-            const base = [pin, name].filter(Boolean).join(' — ') || `Employee #${e.id}`;
+            const name = employeeDisplayName(e, '');
+            const base = employeeSelectLabel(e);
             const balance = Number(e.pf_balance ?? 0);
             const balanceSuffix =
                 showPfBalance && balance > 0
@@ -177,7 +208,7 @@ export function PayrollEmployeeSelect({
             list.push({
                 value: String(e.id),
                 label: base + balanceSuffix,
-                keywords: [pin, name, String(e.id), String(balance)].filter(Boolean).join(' '),
+                keywords: [pin, name, e.name_bn ?? '', String(e.id), String(balance)].filter(Boolean).join(' '),
                 disabled: disableZeroPfBalance && balance <= 0,
             });
         }
@@ -193,6 +224,7 @@ export function PayrollEmployeeSelect({
                 placeholder={required ? 'Search employee…' : allLabel}
                 disabled={disabled}
                 portal={comboPortal}
+                onQueryChange={useLookup ? setSearchQuery : undefined}
                 className="h-8.5 bg-white text-xs"
             />
         </PayrollField>
@@ -245,6 +277,13 @@ export function PayrollYearSelect({
     );
 }
 
+function monthsWithCurrentFirst(months: { value: number; label: string }[]): { value: number; label: string }[] {
+    const current = new Date().getMonth() + 1;
+    const idx = months.findIndex((m) => m.value === current);
+    if (idx <= 0) return months;
+    return [...months.slice(idx), ...months.slice(0, idx)];
+}
+
 export function PayrollMonthSelect({
     value,
     onChange,
@@ -264,6 +303,8 @@ export function PayrollMonthSelect({
     disabled?: boolean;
     label?: string;
 }) {
+    const orderedMonths = useMemo(() => monthsWithCurrentFirst(months), [months]);
+
     const items = useMemo(() => {
         const list: ComboSelectItem<string>[] = [];
         if (allowAll) {
@@ -271,11 +312,11 @@ export function PayrollMonthSelect({
         } else if (required) {
             list.push({ value: ALL_VALUE, label: 'Select month', disabled: true });
         }
-        for (const m of months) {
+        for (const m of orderedMonths) {
             list.push({ value: String(m.value), label: m.label });
         }
         return list;
-    }, [allLabel, allowAll, months, required]);
+    }, [allLabel, allowAll, orderedMonths, required]);
 
     return (
         <PayrollField label={label} required={required}>
@@ -400,14 +441,22 @@ export function PayrollFilterGrid({
     projects,
     employees,
     employeeTypes,
+    years,
+    months,
+    salaryTypes,
+    processDate,
+    onProcessDateChange,
     showEmployee = true,
     showEmployeeType = false,
     showProgram = true,
     showProject = true,
     showBranch = true,
     branchRequired = false,
+    branchAllLabel,
     payrollReadyEmployees = false,
     forGratuityEmployees = false,
+    fieldErrors = {},
+    columns = 3,
 }: {
     filters: Record<string, string>;
     setFilter: (key: string, value: string) => void;
@@ -418,25 +467,69 @@ export function PayrollFilterGrid({
     projects: Option[];
     employees: EmpOption[];
     employeeTypes?: Option[];
+    years?: number[];
+    months?: { value: number; label: string }[];
+    salaryTypes?: { value: string; label: string }[];
+    processDate?: string;
+    onProcessDateChange?: (value: string) => void;
     showEmployee?: boolean;
     showEmployeeType?: boolean;
     showProgram?: boolean;
     showProject?: boolean;
     showBranch?: boolean;
     branchRequired?: boolean;
+    branchAllLabel?: string;
     payrollReadyEmployees?: boolean;
     forGratuityEmployees?: boolean;
+    fieldErrors?: Record<string, string | undefined>;
+    columns?: 3 | 4;
 }) {
+    const gridCols = columns === 4 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-2 lg:grid-cols-3';
+
     return (
-        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {showBranch && (
-                <PayrollBranchSelect
-                    value={filters.branch_id}
-                    onChange={(v) => setFilter('branch_id', v)}
-                    branches={branches}
-                    required={branchRequired}
-                    allowAll={!branchRequired}
+        <div className={cn('grid w-full grid-cols-1 gap-2.5', gridCols)}>
+            {years ? (
+                <PayrollYearSelect value={filters.year} onChange={(v) => setFilter('year', v)} years={years} required />
+            ) : null}
+            {months ? (
+                <div>
+                    <PayrollMonthSelect value={filters.month} onChange={(v) => setFilter('month', v)} months={months} required />
+                    {fieldErrors.month && <p className="text-[10px] text-red-500 mt-0.5">{fieldErrors.month}</p>}
+                </div>
+            ) : null}
+            {salaryTypes ? (
+                <PayrollComboField
+                    label="Pay type"
+                    required
+                    value={filters.salary_type}
+                    onChange={(v) => setFilter('salary_type', v)}
+                    items={salaryTypes.map((t) => ({ value: t.value, label: t.label }))}
+                    placeholder="Select pay type"
                 />
+            ) : null}
+            {processDate !== undefined && onProcessDateChange ? (
+                <div>
+                    <PayrollField label="Calculation date" required>
+                        <DatePicker
+                            selected={parseFormDateValue(processDate)}
+                            onSelect={(d) => onProcessDateChange(d ? format(d, DISPLAY_DATE_FMT) : '')}
+                        />
+                    </PayrollField>
+                    {fieldErrors.process_date && <p className="text-[10px] text-red-500 mt-0.5">{fieldErrors.process_date}</p>}
+                </div>
+            ) : null}
+            {showBranch && (
+                <div>
+                    <PayrollBranchSelect
+                        value={filters.branch_id}
+                        onChange={(v) => setFilter('branch_id', v)}
+                        branches={branches}
+                        required={branchRequired}
+                        allowAll={!branchRequired}
+                        allLabel={branchAllLabel}
+                    />
+                    {fieldErrors.branch_id && <p className="text-[10px] text-red-500 mt-0.5">{fieldErrors.branch_id}</p>}
+                </div>
             )}
             {showProgram && (
                 <FilterSelect label="Program" value={filters.program_id} onChange={(v) => setFilter('program_id', v)} options={programs} placeholder="All programs" />

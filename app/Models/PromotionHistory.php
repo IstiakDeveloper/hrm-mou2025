@@ -16,6 +16,8 @@ class PromotionHistory extends Model
         'to_designation_id',
         'from_salary_grade_id',
         'to_salary_grade_id',
+        'from_salary_step_id',
+        'to_salary_step_id',
         'from_basic_salary',
         'to_basic_salary',
         'promotion_date',
@@ -58,9 +60,18 @@ class PromotionHistory extends Model
         return $this->belongsTo(SalaryGrade::class, 'to_salary_grade_id');
     }
 
+    public function fromSalaryStep()
+    {
+        return $this->belongsTo(SalaryStep::class, 'from_salary_step_id');
+    }
+
+    public function toSalaryStep()
+    {
+        return $this->belongsTo(SalaryStep::class, 'to_salary_step_id');
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 }
-

@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-    BonusPayslipEmployeeCard,
-    PayslipEmployeeCard,
+    BonusPayslipReviewTable,
+    PayslipReviewTable,
     buildAmountsMap,
     previewTotals,
     type PayslipRow,
 } from '@/components/payroll/PayslipReviewPanels';
-import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
+import { PayrollPage, PayrollPageHeader, PayrollSectionCard, payrollBtnPrimary, payrollFilterActive } from '@/components/payroll/PayrollPageShell';
 import { cn } from '@/lib/utils';
 import { payrollPostLabels, payrollPostRoutes, type PayrollPostContext } from '@/lib/payroll-post-routes';
 import { ArrowLeft, CheckCircle2, Save, Trash2, Search, Users, Coins, SlidersHorizontal } from 'lucide-react';
@@ -69,7 +69,6 @@ export default function SalaryPostShow({
 
     const [employeeQuery, setEmployeeQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'on_hold' | 'has_loan' | 'with_deductions'>('all');
-    const [expandAll, setExpandAll] = useState<boolean | null>(null);
 
     React.useEffect(() => {
         setRun(initialRun);
@@ -82,17 +81,21 @@ export default function SalaryPostShow({
         setDirty(true);
     }, []);
 
-    const saveLines = () => {
+    const buildLinesPayload = useCallback(() => {
         const lineIds = isBonus
             ? initialPayslips.map((p) => p.bonus_review?.line_id).filter((id): id is number => id != null)
             : null;
 
-        const lines = Object.entries(amounts)
+        return Object.entries(amounts)
             .filter(([id]) => !lineIds || lineIds.includes(Number(id)))
             .map(([id, computed_amount]) => ({
                 id: Number(id),
                 computed_amount: Number(computed_amount),
             }));
+    }, [amounts, initialPayslips, isBonus]);
+
+    const saveLines = () => {
+        const lines = buildLinesPayload();
 
         setSaving(true);
         router.put(
@@ -107,12 +110,14 @@ export default function SalaryPostShow({
     };
 
     const post = () => {
-        if (dirty && !confirm('You have unsaved amount changes. Save first or continue posting without saving?')) {
-            return;
-        }
         if (!confirm(pageContext === 'bonus' ? 'Finalize this bonus payroll? The period will be locked.' : 'Finalize this payroll? The period will be locked.')) return;
         setPosting(true);
-        router.post(routes.post(run.id), {}, { onFinish: () => setPosting(false) });
+        const payload = dirty && canEdit ? { lines: buildLinesPayload() } : {};
+        router.post(routes.post(run.id), payload, {
+            preserveScroll: true,
+            onSuccess: () => setDirty(false),
+            onFinish: () => setPosting(false),
+        });
     };
 
     const cancelRun = () => {
@@ -149,6 +154,7 @@ export default function SalaryPostShow({
 
     // Live active branch totals calculation based on client amounts edits
     const liveTotals = useMemo(() => {
+        let basic = 0;
         let gross = 0;
         let deduction = 0;
         let net = 0;
@@ -160,12 +166,13 @@ export default function SalaryPostShow({
                 net += p.is_withheld ? 0 : amt;
             } else {
                 const totals = previewTotals(p, amounts);
+                basic += totals.basic || p.basic;
                 gross += totals.gross;
                 deduction += totals.deduction;
                 net += totals.net;
             }
         }
-        return { gross, deduction, net };
+        return { basic, gross, deduction, net };
     }, [initialPayslips, amounts, isBonus]);
 
     return (
@@ -202,7 +209,7 @@ export default function SalaryPostShow({
                                 <Button 
                                     onClick={post} 
                                     disabled={posting || cancelling} 
-                                    className="cursor-pointer font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 shadow-2xs h-8.5 text-xs"
+                                    className={cn('cursor-pointer font-semibold rounded-lg shadow-2xs h-8.5 text-xs', payrollBtnPrimary)}
                                 >
                                     <CheckCircle2 className="mr-1.5 h-4 w-4" />
                                     {posting ? copy.postingButton : copy.finalizeButton}
@@ -252,7 +259,7 @@ export default function SalaryPostShow({
                     </Alert>
                 )}
 
-                <div className={cn('mb-6 grid gap-4', isBonus ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4')}>
+                <div className={cn('mb-6 grid gap-4', isBonus ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 lg:grid-cols-5')}>
                     {(isBonus
                         ? [
                               { label: 'Employees', value: run.employee_count.toLocaleString() },
@@ -260,8 +267,9 @@ export default function SalaryPostShow({
                           ]
                         : [
                               { label: 'Employees', value: run.employee_count.toLocaleString() },
+                              { label: 'Basic salary (৳) (Live)', value: liveTotals.basic.toLocaleString() },
                               { label: 'Gross (৳) (Live)', value: liveTotals.gross.toLocaleString() },
-                              { label: 'Deductions (৳) (Live)', value: liveTotals.deduction.toLocaleString() },
+                              { label: 'Total deduction (৳) (Live)', value: liveTotals.deduction.toLocaleString() },
                               { label: 'Net payable (৳) (Live)', value: liveTotals.net.toLocaleString(), highlight: true },
                           ]
                     ).map((s) => (
@@ -284,8 +292,8 @@ export default function SalaryPostShow({
                     title={isBonus ? 'Employee bonus breakdown' : 'Employee salary breakdown'}
                     description={
                         canEdit && !isPosted
-                            ? 'Expand each employee to review components. Save amounts, then finalize to post.'
-                            : 'Expand each employee to see every salary component.'
+                            ? 'Review all components in one row per employee. Edit amounts inline, save, then finalize.'
+                            : 'All salary components shown in one row per employee.'
                     }
                 >
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50 border border-slate-100 p-3 rounded-xl mb-4">
@@ -308,7 +316,7 @@ export default function SalaryPostShow({
                                 className={cn(
                                     "px-2.5 py-1 rounded-md text-[11px] font-semibold cursor-pointer border transition-colors",
                                     statusFilter === 'all'
-                                        ? "bg-slate-900 border-slate-900 text-white"
+                                        ? payrollFilterActive
                                         : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                 )}
                             >
@@ -352,58 +360,29 @@ export default function SalaryPostShow({
                                 </>
                             )}
                         </div>
-
-                        {/* Toggle Expand/Collapse */}
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setExpandAll((v) => (v === true ? false : true))}
-                            className="text-[11px] h-8 font-semibold text-slate-600 bg-white border-slate-200 hover:bg-slate-50 cursor-pointer shadow-3xs"
-                        >
-                            {expandAll === true ? 'Collapse All' : 'Expand All'}
-                        </Button>
                     </div>
 
-                    <div className="space-y-3.5">
-                        {filteredPayslips.length === 0 ? (
-                            <div className="py-12 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/40">
-                                <Users className="mx-auto h-8 w-8 text-slate-300 stroke-1 mb-2" />
-                               <p className="text-xs font-semibold text-slate-600">No employees match this filter</p>
-                                <p className="text-[10px] text-slate-400 mt-1">Try clearing filters or search keyword</p>
-                            </div>
-                        ) : (
-                            filteredPayslips.map((p, idx) =>
-                                isBonus && p.bonus_review ? (
-                                    <BonusPayslipEmployeeCard
-                                        key={p.id}
-                                        payslip={p}
-                                        canEdit={canEdit && !isPosted}
-                                        amount={
-                                            p.bonus_review.line_id
-                                                ? amounts[p.bonus_review.line_id] ?? String(p.bonus_review.bonus_amount)
-                                                : String(p.bonus_review.bonus_amount)
-                                        }
-                                        onAmountChange={(value) => {
-                                            if (p.bonus_review?.line_id) onAmountChange(p.bonus_review.line_id, value);
-                                        }}
-                                        defaultOpen={idx === 0}
-                                        expandAll={expandAll}
-                                    />
-                                ) : (
-                                    <PayslipEmployeeCard
-                                        key={p.id}
-                                        payslip={p}
-                                        canEdit={canEdit && !isPosted}
-                                        amounts={amounts}
-                                        onAmountChange={onAmountChange}
-                                        defaultOpen={idx === 0}
-                                        expandAll={expandAll}
-                                    />
-                                ),
-                            )
-                        )}
-                    </div>
+                    {filteredPayslips.length === 0 ? (
+                        <div className="py-12 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/40">
+                            <Users className="mx-auto h-8 w-8 text-slate-300 stroke-1 mb-2" />
+                           <p className="text-xs font-semibold text-slate-600">No employees match this filter</p>
+                            <p className="text-[10px] text-slate-400 mt-1">Try clearing filters or search keyword</p>
+                        </div>
+                    ) : isBonus ? (
+                        <BonusPayslipReviewTable
+                            payslips={filteredPayslips.filter((p) => p.bonus_review)}
+                            canEdit={canEdit && !isPosted}
+                            amounts={amounts}
+                            onAmountChange={onAmountChange}
+                        />
+                    ) : (
+                        <PayslipReviewTable
+                            payslips={filteredPayslips}
+                            canEdit={canEdit && !isPosted}
+                            amounts={amounts}
+                            onAmountChange={onAmountChange}
+                        />
+                    )}
                 </PayrollSectionCard>
             </PayrollPage>
         </Layout>

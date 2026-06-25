@@ -36,6 +36,7 @@ class PayrollCalculationService
         protected EmployeeLoanService $loanService,
         protected ProbationSalaryService $probationSalaryService,
         protected FixedSalaryService $fixedSalaryService,
+        protected SeparationPayrollService $separationPayrollService,
     ) {}
 
     /**
@@ -84,7 +85,7 @@ class PayrollCalculationService
                 $result['warnings'][] = 'Employee is on probation but no probation salary matched (configure rules or override in Payroll → Probation Salary).';
             }
 
-            return $result;
+            return $this->finalizePayrollResult($employee, $salaryType, $payrollYear, $payrollMonth, $result);
         }
 
         if ($this->fixedSalaryService->applies($employee, $processDate)) {
@@ -100,7 +101,7 @@ class PayrollCalculationService
                 $result['warnings'][] = 'Employee has no grade assignment and no fixed salary (configure in Payroll → Fixed Salary).';
             }
 
-            return $result;
+            return $this->finalizePayrollResult($employee, $salaryType, $payrollYear, $payrollMonth, $result);
         }
 
         $structure = null;
@@ -239,7 +240,7 @@ class PayrollCalculationService
 
         $net = $isWithheld ? 0.0 : SalaryStructureCalculator::roundTaka($gross - $deduction);
 
-        return [
+        return $this->finalizePayrollResult($employee, $salaryType, $payrollYear, $payrollMonth, [
             'basic_salary' => $basic,
             'gross_salary' => $gross,
             'total_deduction' => SalaryStructureCalculator::roundTaka($deduction),
@@ -253,7 +254,7 @@ class PayrollCalculationService
             'step_number' => $stepNumber,
             'is_withheld' => $isWithheld,
             'warnings' => $warnings,
-        ];
+        ]);
     }
 
     /**
@@ -468,8 +469,6 @@ class PayrollCalculationService
 
         $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType);
 
-        $employee->loadMissing(['salaryGrade', 'salaryStep']);
-
         return [
             'basic_salary' => $basic,
             'gross_salary' => $gross,
@@ -480,8 +479,8 @@ class PayrollCalculationService
             'income_tax' => $incomeTax,
             'loan_deductions' => $loanDeductions,
             'lines' => $lines,
-            'grade_label' => $employee->salaryGrade?->name,
-            'step_number' => $employee->salaryStep?->step_number,
+            'grade_label' => $headLabel,
+            'step_number' => null,
             'is_withheld' => $isWithheld,
             'warnings' => $warnings,
         ];
@@ -670,5 +669,125 @@ class PayrollCalculationService
             ->get()
             ->unique('salary_head_id')
             ->keyBy('salary_head_id');
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     * @return array<string, mixed>
+     */
+    protected function finalizePayrollResult(
+        Employee $employee,
+        string $salaryType,
+        ?int $payrollYear,
+        ?int $payrollMonth,
+        array $result,
+    ): array {
+        if ($salaryType !== 'salary' || ! $payrollYear || ! $payrollMonth) {
+            return $result;
+        }
+
+        $proration = $this->separationPayrollService->resolveForPayrollMonth($employee, $payrollYear, $payrollMonth);
+
+        if (! $proration['eligible']) {
+            $result['warnings'][] = 'Employee has no payable days in this salary month due to separation timing.';
+            $result['basic_salary'] = 0.0;
+            $result['gross_salary'] = 0.0;
+            $result['total_deduction'] = 0.0;
+            $result['net_payable'] = 0.0;
+            $result['pf_employee_contribution'] = 0.0;
+            $result['pf_employer_contribution'] = 0.0;
+            $result['income_tax'] = 0.0;
+            $result['loan_deductions'] = [];
+            $result['lines'] = [];
+
+            return $result;
+        }
+
+        if ($proration['factor'] >= 1.0) {
+            return $result;
+        }
+
+        return $this->scalePayrollResultBySeparationFactor($result, $proration);
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     * @param  array<string, mixed>  $proration
+     * @return array<string, mixed>
+     */
+    protected function scalePayrollResultBySeparationFactor(array $result, array $proration): array
+    {
+        $factor = (float) $proration['factor'];
+
+        foreach ($result['lines'] as &$line) {
+            $line['computed_amount'] = SalaryStructureCalculator::roundTaka((float) $line['computed_amount'] * $factor);
+            if (($line['amount_type'] ?? '') === 'fixed') {
+                $line['input_value'] = SalaryStructureCalculator::roundTaka((float) $line['input_value'] * $factor);
+            }
+        }
+        unset($line);
+
+        $gross = 0.0;
+        $deduction = 0.0;
+        $pfEmployee = 0.0;
+        $incomeTax = 0.0;
+
+        foreach ($result['lines'] as $line) {
+            if ($line['type'] === 'earning') {
+                $gross += (float) $line['computed_amount'];
+            } elseif ($line['type'] === 'deduction') {
+                $deduction += (float) $line['computed_amount'];
+            }
+        }
+
+        $gross = SalaryStructureCalculator::roundTaka($gross);
+        $deduction = SalaryStructureCalculator::roundTaka($deduction);
+
+        foreach ($result['lines'] as $line) {
+            $headName = strtolower((string) ($line['head_name'] ?? ''));
+            if ($line['type'] !== 'deduction') {
+                continue;
+            }
+            if (str_contains($headName, 'pf') || str_contains($headName, 'provident')) {
+                $pfEmployee += (float) $line['computed_amount'];
+            }
+            if (str_contains($headName, 'tax')) {
+                $incomeTax += (float) $line['computed_amount'];
+            }
+        }
+
+        $loanDeductions = [];
+        foreach ($result['loan_deductions'] ?? [] as $loanRow) {
+            $loanDeductions[] = array_merge($loanRow, [
+                'amount' => SalaryStructureCalculator::roundTaka((float) $loanRow['amount'] * $factor),
+            ]);
+        }
+
+        $isWithheld = (bool) ($result['is_withheld'] ?? false);
+        $net = $isWithheld ? 0.0 : SalaryStructureCalculator::roundTaka($gross - $deduction);
+
+        $warnings = $result['warnings'] ?? [];
+        if (! empty($proration['note'])) {
+            $warnings[] = (string) $proration['note'];
+        }
+
+        $basic = SalaryStructureCalculator::roundTaka((float) ($result['basic_salary'] ?? 0) * $factor);
+
+        return array_merge($result, [
+            'basic_salary' => $basic,
+            'gross_salary' => $gross,
+            'total_deduction' => $deduction,
+            'net_payable' => $net,
+            'pf_employee_contribution' => SalaryStructureCalculator::roundTaka($pfEmployee),
+            'pf_employer_contribution' => SalaryStructureCalculator::roundTaka((float) ($result['pf_employer_contribution'] ?? 0) * $factor),
+            'income_tax' => SalaryStructureCalculator::roundTaka($incomeTax),
+            'loan_deductions' => $loanDeductions,
+            'lines' => $result['lines'],
+            'warnings' => $warnings,
+            'payable_days' => $proration['payable_days'],
+            'days_in_month' => $proration['days_in_month'],
+            'separation_proration_factor' => $factor,
+            'payroll_remark' => $proration['payroll_remark'] ?? $proration['note'] ?? null,
+        ]);
     }
 }

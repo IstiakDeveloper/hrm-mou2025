@@ -30,6 +30,16 @@ class EmployeeLoanTransaction extends Model
     public const TYPE_REVERSAL = 'reversal';
 
     /** @var list<string> */
+    public const CORRECTABLE_TYPES = [
+        self::TYPE_DISBURSEMENT,
+        self::TYPE_LEGACY_PAYMENT,
+        self::TYPE_MANUAL_PAYMENT,
+        self::TYPE_COLLECTION,
+        self::TYPE_ADVANCE_COLLECTION,
+        self::TYPE_ADJUSTMENT,
+    ];
+
+    /** @var list<string> */
     public const COLLECTION_TYPES = [
         self::TYPE_MANUAL_PAYMENT,
         self::TYPE_COLLECTION,

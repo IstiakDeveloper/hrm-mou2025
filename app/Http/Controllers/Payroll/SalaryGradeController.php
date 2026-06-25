@@ -31,7 +31,7 @@ class SalaryGradeController extends Controller
 
         return Inertia::render('payroll/salary-grades/index', [
             'grades' => $this->inertiaPagination($paginator),
-            'payscales' => Payscale::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'payscales' => Payscale::query()->active()->orderBy('name')->get(['id', 'name']),
             'filters' => $request->only(['search', 'per_page', 'payscale_id']),
         ]);
     }

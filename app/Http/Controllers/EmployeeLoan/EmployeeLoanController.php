@@ -5,6 +5,7 @@ namespace App\Http\Controllers\EmployeeLoan;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\EmployeeLoan;
+use App\Models\EmployeeLoanTransaction;
 use App\Models\LoanPolicy;
 use App\Services\EmployeeLoanService;
 use Carbon\Carbon;
@@ -206,17 +207,62 @@ class EmployeeLoanController extends Controller
                 'id' => $tx->id,
                 'transaction_type' => $tx->transaction_type,
                 'transaction_type_label' => $this->transactionTypeLabel($tx->transaction_type),
+                'can_correct' => $this->loanService->isCorrectableTransaction($tx),
                 'debit_amount' => (float) $tx->debit_amount,
                 'credit_amount' => (float) $tx->credit_amount,
                 'balance_after' => (float) $tx->balance_after,
+                'amount' => (float) ($tx->debit_amount > 0 ? $tx->debit_amount : $tx->credit_amount),
                 'transaction_date' => $tx->transaction_date?->format('d-m-Y'),
+                'transaction_date_iso' => $tx->transaction_date?->format('Y-m-d'),
+                'payroll_year' => $tx->payroll_year,
+                'payroll_month' => $tx->payroll_month,
                 'payroll_period' => $tx->payroll_year && $tx->payroll_month
                     ? date('F Y', mktime(0, 0, 0, $tx->payroll_month, 1, $tx->payroll_year))
                     : null,
                 'notes' => $tx->notes,
                 'reference_no' => $tx->reference_no,
             ])->values(),
+            'months' => $this->payrollFilterOptions()['months'] ?? [],
+            'years' => $this->payrollFilterOptions()['years'] ?? [],
         ]);
+    }
+
+    public function updateTransaction(Request $request, EmployeeLoanTransaction $transaction)
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'transaction_date' => 'required|date',
+            'year' => 'nullable|integer|min:2000|max:2100',
+            'month' => 'nullable|integer|min:1|max:12',
+            'reference_no' => 'nullable|string|max:80',
+            'notes' => 'nullable|string|max:2000',
+        ]);
+
+        try {
+            $this->loanService->updateCorrectableTransaction($transaction, [
+                'amount' => (float) $validated['amount'],
+                'transaction_date' => Carbon::parse($validated['transaction_date']),
+                'payroll_year' => $validated['year'] ?? null,
+                'payroll_month' => $validated['month'] ?? null,
+                'reference_no' => $validated['reference_no'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['amount' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Ledger entry updated.');
+    }
+
+    public function destroyTransaction(EmployeeLoanTransaction $transaction)
+    {
+        try {
+            $this->loanService->deleteCorrectableTransaction($transaction);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['transaction' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Ledger entry removed.');
     }
 
     public function storeManualPayment(Request $request, EmployeeLoan $employee_loan)

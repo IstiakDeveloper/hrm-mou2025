@@ -3,7 +3,7 @@
 return [
     'loan_types' => [
         'pf_loan' => [
-            'label' => 'Provident Fund',
+            'label' => 'PF Loan',
             'salary_head_code' => 'LOAN_PF',
             'short_name' => 'PF Loan',
         ],

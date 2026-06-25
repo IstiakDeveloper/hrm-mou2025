@@ -11,6 +11,8 @@ use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
 use App\Services\BonusCalculationService;
+use App\Support\BranchOrganogram;
+use App\Support\HeadOfficeOrganogram;
 use App\Support\PayrollFormHelper;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -261,9 +263,19 @@ class BonusCalculationController extends Controller
         return $this->applyPayrollEmployeeFilters(Employee::query(), $request, payrollReadyOnly: true)
             ->whereNotNull('current_branch_id')
             ->distinct()
-            ->orderBy('current_branch_id')
             ->pluck('current_branch_id')
             ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->pipe(function ($ids) {
+                if ($ids->isEmpty()) {
+                    return collect();
+                }
+
+                return Branch::query()
+                    ->whereIn('branches.id', $ids)
+                    ->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))
+                    ->pluck('branches.id');
+            })
             ->values()
             ->all();
     }
@@ -303,8 +315,12 @@ class BonusCalculationController extends Controller
 
         $activeCount = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest)->count();
 
-        $employees = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest, payrollReadyOnly: true)
-            ->with(['salaryGrade', 'salaryStep', 'payscale'])
+        $employeesQuery = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest, payrollReadyOnly: true)
+            ->with(['salaryGrade', 'salaryStep', 'payscale']);
+
+        HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
+
+        $employees = $employeesQuery
             ->get()
             ->filter(fn (Employee $employee) => $this->calculator->employeeMatchesConfiguration($employee, $configuration))
             ->values();

@@ -25,7 +25,9 @@ type Employee = EmployeeNameFields & {
     id: number;
     employee_id: string;
     designation_id: number | null;
+    payscale_id: number | null;
     salary_grade_id: number | null;
+    salary_step_id: number | null;
     basic_salary: number | string;
 };
 
@@ -40,6 +42,7 @@ type Props = {
     payscales: PayrollPayscaleOption[];
     payrollGrades: PayrollGradeOption[];
     payrollSteps: PayrollStepOption[];
+    activePayscaleId?: number | null;
 };
 
 export default function CreatePromotion({
@@ -50,10 +53,11 @@ export default function CreatePromotion({
     payscales,
     payrollGrades,
     payrollSteps,
+    activePayscaleId = null,
 }: Props) {
     const [employeeId, setEmployeeId] = useState<number | null>(null);
     const [toDesignationId, setToDesignationId] = useState<number | null>(null);
-    const [toPayscaleId, setToPayscaleId] = useState<string>('');
+    const [toPayscaleId, setToPayscaleId] = useState<string>(activePayscaleId ? String(activePayscaleId) : '');
     const [toSalaryGradeId, setToSalaryGradeId] = useState<string>('');
     const [toSalaryStepId, setToSalaryStepId] = useState<string>('');
     const [toBasicSalary, setToBasicSalary] = useState<string>('');
@@ -72,7 +76,7 @@ export default function CreatePromotion({
     useEffect(() => {
         if (!selectedEmployee) {
             setToDesignationId(null);
-            setToPayscaleId('');
+            setToPayscaleId(activePayscaleId ? String(activePayscaleId) : '');
             setToSalaryGradeId('');
             setToSalaryStepId('');
             setToBasicSalary('');
@@ -82,8 +86,19 @@ export default function CreatePromotion({
         if (toDesignationId == null && selectedEmployee.designation_id) {
             setToDesignationId(selectedEmployee.designation_id);
         }
-        if (!toSalaryGradeId && selectedEmployee.salary_grade_id) {
+        const payscaleDefault = selectedEmployee.payscale_id
+            ? String(selectedEmployee.payscale_id)
+            : activePayscaleId
+              ? String(activePayscaleId)
+              : '';
+        if (payscaleDefault) {
+            setToPayscaleId(payscaleDefault);
+        }
+        if (selectedEmployee.salary_grade_id) {
             setToSalaryGradeId(String(selectedEmployee.salary_grade_id));
+        }
+        if (selectedEmployee.salary_step_id) {
+            setToSalaryStepId(String(selectedEmployee.salary_step_id));
         }
         if (!toBasicSalary && selectedEmployee.basic_salary !== null && selectedEmployee.basic_salary !== undefined) {
             setToBasicSalary(String(selectedEmployee.basic_salary));
@@ -110,6 +125,7 @@ export default function CreatePromotion({
             {
                 employee_id: employeeId,
                 to_designation_id: toDesignationId,
+                to_payscale_id: toPayscaleId || null,
                 to_salary_grade_id: toSalaryGradeId || null,
                 to_salary_step_id: toSalaryStepId || null,
                 to_basic_salary: toBasicSalary ? Number(toBasicSalary) : null,
@@ -186,6 +202,7 @@ export default function CreatePromotion({
                                                 payscales={payscales}
                                                 grades={payrollGrades}
                                                 steps={payrollSteps}
+                                                activePayscaleId={activePayscaleId ? String(activePayscaleId) : null}
                                                 payscaleId={toPayscaleId}
                                                 salaryGradeId={toSalaryGradeId}
                                                 salaryStepId={toSalaryStepId}
@@ -225,11 +242,6 @@ export default function CreatePromotion({
                                                         onSelect={(d) => {
                                                             setEffectiveDate(d ?? undefined);
                                                             setEffectiveDateOpen(false);
-                                                        }}
-                                                        disabled={(date) => {
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            return date < today;
                                                         }}
                                                     />
                                                 </PopoverContent>

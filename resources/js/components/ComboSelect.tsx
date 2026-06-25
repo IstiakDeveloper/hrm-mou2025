@@ -25,6 +25,8 @@ type Props<TValue extends string | number = string> = {
     creatable?: boolean;
     onCreate?: (label: string) => void;
     createLabel?: (query: string) => string;
+    /** Fired when the user types in the search box (e.g. server-side employee lookup). */
+    onQueryChange?: (query: string) => void;
 };
 
 export function ComboSelect<TValue extends string | number = string>({
@@ -39,6 +41,7 @@ export function ComboSelect<TValue extends string | number = string>({
     creatable = false,
     onCreate,
     createLabel = (q) => `Add "${q}"`,
+    onQueryChange,
 }: Props<TValue>) {
     const [query, setQuery] = useState('');
 
@@ -96,7 +99,11 @@ export function ComboSelect<TValue extends string | number = string>({
                             className="placeholder:text-muted-foreground/50 w-full min-w-0 bg-transparent py-0.5 text-xs outline-none md:text-sm"
                             displayValue={(item) => (item as ComboSelectItem<TValue> | null)?.label ?? ''}
                             autoComplete="off"
-                            onChange={(event) => setQuery(event.target.value)}
+                            onChange={(event) => {
+                                const next = event.target.value;
+                                setQuery(next);
+                                onQueryChange?.(next);
+                            }}
                             onFocus={(event) => event.target.select()}
                             placeholder={placeholder}
                         />

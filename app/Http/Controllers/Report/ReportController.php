@@ -207,7 +207,7 @@ class ReportController extends Controller
             'filters' => $filters,
             'filterLabels' => $filterLabels,
             'roleOptions' => Role::query()->orderBy('name')->get(['id', 'name']),
-            'branchOptions' => Branch::query()->orderBy('name')->get(['id', 'name', 'branch_code']),
+            'branchOptions' => Branch::query()->active()->orderBy('name')->get(['id', 'name', 'branch_code']),
             'summary' => [
                 'total_users' => $filteredUsers->count(),
                 'active_accounts' => $filteredUsers->where('active_status', true)->count(),
@@ -275,6 +275,7 @@ class ReportController extends Controller
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
 
         $query = Attendance::with(['employee.department', 'employee.designation', 'employee.branch'])
+            ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
             ->whereBetween('date', [$startDate, $endDate])
             ->when($request->branch_id, function ($query, $branchId) {
                 $query->whereHas('employee', function ($q) use ($branchId) {
@@ -299,7 +300,7 @@ class ReportController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        $branches = Branch::query()->orderBy('name')->get(['id', 'name']);
+        $branches = Branch::query()->active()->orderBy('name')->get(['id', 'name']);
         $departments = Department::query()->orderBy('name')->get(['id', 'name']);
 
         $statusCounts = $summaryQuery
@@ -372,6 +373,7 @@ class ReportController extends Controller
             'employee.currentBranch', // Add branch relation if needed
             'leaveType',
         ])
+            ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
             ->whereBetween('start_date', [$startDate, $endDate])
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
@@ -424,7 +426,7 @@ class ReportController extends Controller
 
         $leaveTypes = LeaveType::select('id', 'name', 'days_allowed', 'is_paid')->orderBy('name')->get();
 
-        $branches = Branch::select('id', 'name', 'branch_code')->orderBy('name')->get();
+        $branches = Branch::query()->active()->select('id', 'name', 'branch_code')->orderBy('name')->get();
 
         return Inertia::render('report/leave', [
             'applications' => $applications,
@@ -450,6 +452,7 @@ class ReportController extends Controller
             'employee.currentBranch',
             'leaveType',
         ])
+            ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
             ->whereBetween('start_date', [$startDate, $endDate])
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
@@ -496,7 +499,7 @@ class ReportController extends Controller
                 return $employee;
             });
         $leaveTypes = LeaveType::select('id', 'name')->get()->keyBy('id');
-        $branches = Branch::select('id', 'name', 'branch_code')->get()->keyBy('id');
+        $branches = Branch::query()->active()->select('id', 'name', 'branch_code')->get()->keyBy('id');
 
         // Prepare filter labels for display
         $filterLabels = [];
@@ -610,6 +613,8 @@ class ReportController extends Controller
             'toDepartment',
             'approver',
         ])
+            ->whereHas('fromBranch', fn ($q) => $q->where('is_active', true))
+            ->whereHas('toBranch', fn ($q) => $q->where('is_active', true))
             ->whereDate('effective_date', '>=', $startDate->format('Y-m-d'))
             ->whereDate('effective_date', '<=', $endDate->format('Y-m-d'))
             ->when($request->filled('status'), function ($query) use ($request) {
@@ -654,7 +659,7 @@ class ReportController extends Controller
             'completed' => (clone $query)->where('status', 'completed')->count(),
         ];
 
-        $branches = Branch::orderBy('name')->get(['id', 'name']);
+        $branches = Branch::query()->active()->orderBy('name')->get(['id', 'name']);
         $departments = Department::orderBy('name')->get(['id', 'name']);
         $employees = Employee::where('status', 'active')->orderBy('name_en')->get(['id', 'employee_id', 'name_en']);
 
@@ -730,6 +735,7 @@ class ReportController extends Controller
     public function employee(Request $request)
     {
         $query = Employee::with(['department', 'designation', 'branch', 'manager'])
+            ->whereHas('branch', fn ($q) => $q->where('is_active', true))
             ->when($request->branch_id, function ($query, $branchId) {
                 $query->where('current_branch_id', $branchId);
             })
@@ -775,7 +781,7 @@ class ReportController extends Controller
             'female' => (clone $query)->where('gender', 'female')->count(),
         ];
 
-        $branches = Branch::all();
+        $branches = Branch::query()->active()->orderBy('name')->get(['id', 'name', 'branch_code']);
         $departments = Department::all();
 
         // Designations are no longer scoped to departments (see migrations). Frontend still expects

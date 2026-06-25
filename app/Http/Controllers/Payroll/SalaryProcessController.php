@@ -12,8 +12,12 @@ use App\Models\PayslipLine;
 use App\Services\EmployeeLoanService;
 use App\Services\EmployeeProvidentFundService;
 use App\Services\PayrollCalculationService;
+use App\Services\SeparationPayrollService;
+use App\Support\BranchOrganogram;
+use App\Support\HeadOfficeOrganogram;
 use App\Support\PayrollFormHelper;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -28,34 +32,20 @@ class SalaryProcessController extends Controller
         protected PayrollCalculationService $calculator,
         protected EmployeeProvidentFundService $pfService,
         protected EmployeeLoanService $loanService,
+        protected SeparationPayrollService $separationPayrollService,
     ) {}
 
     public function index(Request $request)
     {
-        $recentRuns = PayrollRun::query()
-            ->with('branch:id,name,branch_code')
-            ->whereIn('status', ['processed', 'posted'])
-            ->orderByDesc('processed_at')
-            ->limit(20)
-            ->get()
-            ->map(fn (PayrollRun $r) => [
-                'id' => $r->id,
-                'year' => $r->year,
-                'month' => $r->month,
-                'label' => sprintf(
-                    '%s / %s %d — %s',
-                    strtoupper($r->salary_type),
-                    $r->branch
-                        ? trim($r->branch->name.(filled($r->branch->branch_code) ? ' ('.$r->branch->branch_code.')' : ''))
-                        : 'All',
-                    $r->month,
-                    $r->year
-                ),
-                'status' => $r->status,
-                'employee_count' => $r->employee_count,
-                'total_net' => (float) $r->total_net,
-                'processed_at' => $r->processed_at?->format('d-m-Y H:i'),
-            ]);
+        $baseQuery = PayrollRun::query()
+            ->with(['branch:id,name,branch_code', 'bonusConfiguration.bonusType:id,name'])
+            ->when($request->filled('year'), fn ($q) => $q->where('year', $request->integer('year')))
+            ->when($request->filled('month'), fn ($q) => $q->where('month', $request->integer('month')))
+            ->when($request->filled('branch_id'), fn ($q) => $q->where('branch_id', $request->integer('branch_id')));
+
+        $pendingBatches = $this->groupRunsIntoProcessBatches(
+            (clone $baseQuery)->where('status', 'processed')->orderByDesc('processed_at')->get()
+        );
 
         return Inertia::render('payroll/salary-process/index', [
             ...$this->payrollFilterOptions(payrollReadyEmployeesOnly: true),
@@ -63,7 +53,7 @@ class SalaryProcessController extends Controller
                 'process_date' => $request->input('process_date', date('d-m-Y')),
                 'is_partial' => $request->boolean('is_partial'),
             ]),
-            'recentRuns' => $recentRuns,
+            'pendingBatches' => $pendingBatches,
             'canProcess' => $request->user()?->hasPermission('payroll.edit') ?? false,
         ]);
     }
@@ -102,6 +92,11 @@ class SalaryProcessController extends Controller
             if ($processAllBranches) {
                 $summary = $this->processAllBranches($request, $validated, $processDate, $isPartial);
 
+                if (($summary['status'] ?? 'success') !== 'success') {
+                    return $this->redirectToSalaryProcessIndex($request)
+                        ->with('warning', $summary['message']);
+                }
+
                 return redirect()
                     ->route('salary-post.index', [
                         'year' => $validated['year'],
@@ -120,15 +115,18 @@ class SalaryProcessController extends Controller
             ));
 
             if ($result['status'] === 'skipped_exists') {
-                throw ValidationException::withMessages([
-                    'month' => "Salary already processed for {$result['branch_label']} in this period. Use Salary Rollback first.",
-                ]);
+                $periodLabel = $this->payrollPeriodLabel((int) $validated['year'], (int) $validated['month']);
+
+                return $this->redirectToSalaryProcessIndex($request)
+                    ->with(
+                        'warning',
+                        "Salary for {$periodLabel} has already been calculated for {$result['branch_label']}. Roll back from Salary Post to recalculate, or choose another month."
+                    );
             }
 
             if ($result['status'] === 'skipped_no_employees') {
-                throw ValidationException::withMessages([
-                    'branch_id' => $result['message'] ?? 'No eligible employees for this branch.',
-                ]);
+                return $this->redirectToSalaryProcessIndex($request)
+                    ->with('warning', $result['message'] ?? 'No eligible employees for this branch.');
             }
 
             return redirect()
@@ -156,16 +154,18 @@ class SalaryProcessController extends Controller
 
     /**
      * @param  array<string, mixed>  $validated
-     * @return array{message: string, detail: string|null}
+     * @return array{status: string, message: string, detail?: string|null}
      */
     private function processAllBranches(Request $request, array $validated, string $processDate, bool $isPartial): array
     {
         $branchIds = $this->resolveBranchIdsForBulkProcess($request, $validated);
+        $periodLabel = $this->payrollPeriodLabel((int) $validated['year'], (int) $validated['month']);
 
         if ($branchIds === []) {
-            throw ValidationException::withMessages([
-                'branch_id' => 'No branches with eligible employees (active, with payscale/grade/step) match your filters.',
-            ]);
+            return [
+                'status' => 'no_eligible_employees',
+                'message' => "No branches with payroll-eligible employees match your filters for {$periodLabel}.",
+            ];
         }
 
         $processed = [];
@@ -190,17 +190,24 @@ class SalaryProcessController extends Controller
         });
 
         if ($processed === []) {
-            $parts = [];
-            if ($skippedExists !== []) {
-                $parts[] = 'Already processed: '.implode(', ', $skippedExists);
-            }
-            if ($skippedEmpty !== []) {
-                $parts[] = 'No eligible employees: '.implode(', ', $skippedEmpty);
+            if ($skippedExists !== [] && $skippedEmpty === []) {
+                return [
+                    'status' => 'all_already_processed',
+                    'message' => "Salary for {$periodLabel} has already been calculated for all selected branches. Roll back from Salary Post to recalculate, or choose the next month.",
+                ];
             }
 
-            throw ValidationException::withMessages([
-                'branch_id' => 'Could not process any branch. '.implode(' · ', $parts),
-            ]);
+            if ($skippedExists === [] && $skippedEmpty !== []) {
+                return [
+                    'status' => 'no_eligible_employees',
+                    'message' => "No payroll-eligible employees match your filters for {$periodLabel}.",
+                ];
+            }
+
+            return [
+                'status' => 'nothing_processed',
+                'message' => "Could not calculate salary for {$periodLabel}. Some branches are already processed and others have no eligible employees. Roll back existing runs or adjust your filters, then try again.",
+            ];
         }
 
         $message = 'Processed '.count($processed).' branch(es), '.$totalEmployees.' employee(s).';
@@ -216,9 +223,36 @@ class SalaryProcessController extends Controller
         }
 
         return [
+            'status' => 'success',
             'message' => $message,
             'detail' => implode(' | ', $details),
         ];
+    }
+
+    private function payrollPeriodLabel(int $year, int $month): string
+    {
+        $monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+        return ($monthNames[$month] ?? (string) $month).' '.$year;
+    }
+
+    private function redirectToSalaryProcessIndex(Request $request): RedirectResponse
+    {
+        return redirect()->route('salary-process.index', array_filter(
+            $request->only([
+                'branch_id',
+                'department_id',
+                'designation_id',
+                'program_id',
+                'project_id',
+                'employee_id',
+                'year',
+                'month',
+                'salary_type',
+                'process_date',
+            ]),
+            fn ($value) => $value !== null && $value !== ''
+        ));
     }
 
     /**
@@ -230,18 +264,44 @@ class SalaryProcessController extends Controller
         if (! empty($validated['employee_id'])) {
             $branchId = Employee::query()
                 ->where('id', $validated['employee_id'])
-                ->where('status', 'active')
+                ->where(function ($q) use ($validated) {
+                    $monthStart = sprintf('%04d-%02d-01', (int) $validated['year'], (int) $validated['month']);
+                    $monthEnd = date('Y-m-t', strtotime($monthStart));
+                    $q->where('status', 'active')
+                        ->orWhere(function ($q2) use ($monthStart, $monthEnd) {
+                            $q2->where('status', 'inactive')
+                                ->whereNotNull('dropout_date')
+                                ->whereDate('dropout_date', '>=', $monthStart)
+                                ->whereDate('dropout_date', '<=', $monthEnd);
+                        });
+                })
                 ->value('current_branch_id');
 
             return $branchId ? [(int) $branchId] : [];
         }
 
-        return $this->applyPayrollEmployeeFilters(Employee::query(), $request, payrollReadyOnly: true)
+        return $this->applyPayrollEmployeeFilters(
+            Employee::query(),
+            $request,
+            payrollReadyOnly: true,
+            payrollYear: (int) $validated['year'],
+            payrollMonth: (int) $validated['month'],
+        )
             ->whereNotNull('current_branch_id')
             ->distinct()
-            ->orderBy('current_branch_id')
             ->pluck('current_branch_id')
             ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->pipe(function ($ids) {
+                if ($ids->isEmpty()) {
+                    return collect();
+                }
+
+                return Branch::query()
+                    ->whereIn('branches.id', $ids)
+                    ->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))
+                    ->pluck('branches.id');
+            })
             ->values()
             ->all();
     }
@@ -279,16 +339,40 @@ class SalaryProcessController extends Controller
         $branchRequest = clone $request;
         $branchRequest->merge(['branch_id' => $branchId]);
 
-        $activeCount = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest)->count();
+        $payrollYear = (int) $validated['year'];
+        $payrollMonth = (int) $validated['month'];
 
-        $employees = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest, payrollReadyOnly: true)
-            ->with(['salaryGrade', 'salaryStep', 'payscale'])
-            ->get();
+        $activeCount = $this->applyPayrollEmployeeFilters(
+            Employee::query(),
+            $branchRequest,
+            payrollReadyOnly: true,
+            payrollYear: $payrollYear,
+            payrollMonth: $payrollMonth,
+        )->count();
+
+        $employeesQuery = $this->applyPayrollEmployeeFilters(
+            Employee::query(),
+            $branchRequest,
+            payrollReadyOnly: true,
+            payrollYear: $payrollYear,
+            payrollMonth: $payrollMonth,
+        )
+            ->with(['salaryGrade', 'salaryStep', 'payscale', 'employeeType']);
+
+        HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
+
+        $employees = $employeesQuery
+            ->get()
+            ->filter(function (Employee $employee) use ($payrollYear, $payrollMonth) {
+                return $this->separationPayrollService
+                    ->resolveForPayrollMonth($employee, $payrollYear, $payrollMonth)['eligible'];
+            })
+            ->values();
 
         if ($employees->isEmpty()) {
             $message = $activeCount > 0
-                ? "{$activeCount} active employee(s) in {$branchLabel}, but none have payscale, grade, and step assigned."
-                : "No active employees in {$branchLabel} for the selected filters.";
+                ? "{$activeCount} payroll-eligible employee(s) in {$branchLabel}, but none could be processed for this month (check payscale/grade/step, probation/fixed salary, or separation timing)."
+                : "No eligible employees in {$branchLabel} for the selected filters and salary month.";
 
             return [
                 'status' => 'skipped_no_employees',
@@ -416,7 +500,7 @@ class SalaryProcessController extends Controller
         $skipped = max(0, $activeCount - $employees->count());
         $message = "Salary processed for {$count} employee(s) at {$branchLabel}.";
         if ($skipped > 0) {
-            $message .= " {$skipped} active employee(s) skipped (missing payscale/grade/step).";
+            $message .= " {$skipped} payroll-eligible employee(s) skipped (no payable days or missing salary setup).";
         }
 
         return [
@@ -456,5 +540,56 @@ class SalaryProcessController extends Controller
                 $request->merge([$field => null]);
             }
         }
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, PayrollRun>  $runs
+     * @return list<array<string, mixed>>
+     */
+    private function groupRunsIntoProcessBatches($runs): array
+    {
+        $monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+        return $runs
+            ->groupBy(fn (PayrollRun $r) => $r->year.'-'.$r->month.'-'.$r->salary_type)
+            ->map(function ($periodRuns) use ($monthNames) {
+                /** @var \Illuminate\Support\Collection<int, PayrollRun> $periodRuns */
+                $first = $periodRuns->first();
+                $branches = $periodRuns
+                    ->sort(function (PayrollRun $a, PayrollRun $b) {
+                        return BranchOrganogram::compareBranches($a->branch, $b->branch);
+                    })
+                    ->values()
+                    ->map(fn (PayrollRun $r) => [
+                        'id' => $r->id,
+                        'branch' => $r->branch
+                            ? trim($r->branch->name.(filled($r->branch->branch_code) ? ' ('.$r->branch->branch_code.')' : ''))
+                            : '—',
+                        'status' => $r->status,
+                        'employee_count' => $r->employee_count,
+                        'total_net' => (float) $r->total_net,
+                        'processed_at' => $r->processed_at?->format('d-m-Y H:i'),
+                        'posted_at' => $r->posted_at?->format('d-m-Y H:i'),
+                    ])->values()->all();
+
+                return [
+                    'year' => $first->year,
+                    'month' => $first->month,
+                    'period_label' => ($monthNames[$first->month] ?? $first->month).' '.$first->year,
+                    'salary_type' => strtoupper($first->salary_type),
+                    'bonus_label' => $first->salary_type === 'bonus' && $first->bonusConfiguration
+                        ? trim(($first->bonusConfiguration->bonusType?->name ?? 'Bonus').' — '.$first->bonusConfiguration->name)
+                        : null,
+                    'branch_count' => count($branches),
+                    'employee_count' => (int) $periodRuns->sum('employee_count'),
+                    'total_net' => (float) $periodRuns->sum('total_net'),
+                    'processed_at' => $periodRuns->max('processed_at')?->format('d-m-Y H:i'),
+                    'posted_at' => $periodRuns->max('posted_at')?->format('d-m-Y H:i'),
+                    'branches' => $branches,
+                ];
+            })
+            ->sortByDesc(fn (array $batch) => sprintf('%04d-%02d-%s', $batch['year'], $batch['month'], $batch['salary_type']))
+            ->values()
+            ->all();
     }
 }

@@ -3,6 +3,14 @@ import type { LucideIcon } from 'lucide-react';
 import { PageSurface } from '@/components/page-surface';
 import { cn } from '@/lib/utils';
 
+/** Green primary action — matches payroll module theme */
+export const payrollBtnPrimary = 'bg-emerald-600 text-white hover:bg-emerald-700';
+
+/** Active filter / sidebar selection */
+export const payrollFilterActive = 'bg-emerald-600 border-emerald-600 text-white';
+
+export const payrollBadgePrimary = 'bg-emerald-600 text-white border-none font-bold';
+
 export function PayrollPageHeader({
     title,
     description,

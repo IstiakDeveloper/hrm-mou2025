@@ -71,5 +71,9 @@ class Promotion extends Model
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
-}
 
+    public function histories()
+    {
+        return $this->hasMany(PromotionHistory::class);
+    }
+}

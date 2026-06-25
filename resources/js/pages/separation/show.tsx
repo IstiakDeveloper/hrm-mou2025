@@ -5,7 +5,7 @@ import { PageSurface } from '@/components/page-surface';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, Check, UserX } from 'lucide-react';
+import { ArrowLeft, Calendar, Check, HandCoins, Pencil, UserX } from 'lucide-react';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
@@ -17,9 +17,15 @@ type Separation = {
     status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
     reason: string | null;
     employee: Employee;
+    final_payment?: {
+        id: number;
+        status: 'pending' | 'paid';
+        net_payable: number;
+        payment_date: string | null;
+    } | null;
 };
 
-type Props = { separation: Separation };
+type Props = { separation: Separation; canEdit?: boolean };
 
 function statusBadge(status: Separation['status']) {
     switch (status) {
@@ -32,7 +38,7 @@ function statusBadge(status: Separation['status']) {
     }
 }
 
-export default function SeparationShow({ separation }: Props) {
+export default function SeparationShow({ separation, canEdit = false }: Props) {
     const sepDate = new Date(separation.separation_date);
 
     return (
@@ -51,11 +57,21 @@ export default function SeparationShow({ separation }: Props) {
                         <h1 className="text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Separation record</h1>
                         <p className="mt-1 text-xs text-zinc-600">Request #{separation.id} — Obbahoti</p>
                     </div>
-                    {separation.status === 'approved' && (
+                    <div className="flex flex-wrap gap-2">
+                        {canEdit && (
+                            <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+                                <Link href={route('separations.edit', separation.id)}>
+                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                    Edit
+                                </Link>
+                            </Button>
+                        )}
+                        {separation.status === 'approved' && (
                         <Button size="sm" className="h-8 bg-rose-600 text-xs hover:bg-rose-700" onClick={() => confirm('Apply separation now? Employee will become inactive.') && router.post(route('separations.complete', separation.id))}>
                             <Check className="mr-1.5 h-3.5 w-3.5" />Apply now
                         </Button>
                     )}
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -70,7 +86,27 @@ export default function SeparationShow({ separation }: Props) {
                             </CardHeader>
                             <CardContent className="space-y-4 pt-4 text-xs">
                                 <div className="rounded-lg border border-zinc-200 bg-white p-3">
-                                    <p><span className="font-medium">Final payment:</span> {separation.final_payment_date ? format(new Date(separation.final_payment_date), 'dd MMM yyyy') : '—'}</p>
+                                    <p><span className="font-medium">Final payment:</span>{' '}
+                                        {separation.final_payment_date
+                                            ? format(new Date(separation.final_payment_date), 'dd MMM yyyy')
+                                            : separation.final_payment?.status === 'pending'
+                                              ? 'Pending settlement'
+                                              : '—'}
+                                    </p>
+                                    {separation.final_payment && (
+                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${separation.final_payment.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                {separation.final_payment.status === 'paid' ? 'Paid' : 'Pending'}
+                                            </span>
+                                            <Link
+                                                href={route('final-payments.show', separation.final_payment.id)}
+                                                className="inline-flex items-center text-[11px] font-medium text-sky-700 hover:text-sky-900"
+                                            >
+                                                <HandCoins className="mr-1 h-3 w-3" />
+                                                View settlement (৳{Number(separation.final_payment.net_payable || 0).toLocaleString('en-BD')})
+                                            </Link>
+                                        </div>
+                                    )}
                                     <p className="mt-2 rounded-md border border-rose-100 bg-rose-50 p-2 text-rose-800">On apply, employee status becomes inactive and dropout date is recorded.</p>
                                 </div>
                                 <div>

@@ -66,8 +66,25 @@ function employeeLabel(e: { id: number; pin?: string; name_en?: string; employee
 
 export default function LoanApplicationForm({ employees, policies, committees, nextApplicationNumber, application }: Props) {
     const isEdit = Boolean(application?.id);
-    const employeeLookup = useEmployeeLookup({ enabled: employees.length === 0, limit: 50 });
-    const employeeSource = employees.length > 0 ? employees : employeeLookup.employees;
+    const useLookup = employees.length === 0;
+    const [searchQuery, setSearchQuery] = useState('');
+    const employeeLookup = useEmployeeLookup({
+        enabled: useLookup,
+        limit: 50,
+        selectedEmployeeId: application?.employee_id ?? null,
+    });
+    const employeeSource = useLookup ? employeeLookup.employees : employees;
+
+    useEffect(() => {
+        if (!useLookup) {
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            void employeeLookup.reload(searchQuery);
+        }, 300);
+
+        return () => window.clearTimeout(timer);
+    }, [employeeLookup.reload, searchQuery, useLookup]);
 
     const form = useForm({
         application_number: application?.application_number ?? nextApplicationNumber,
@@ -202,9 +219,14 @@ export default function LoanApplicationForm({ employees, policies, committees, n
                                     items={employeeItems}
                                     placeholder="Search employee (PIN / name)…"
                                     clearable={false}
+                                    onQueryChange={useLookup ? setSearchQuery : undefined}
                                 />
                                 {form.errors.employee_id && <p className="text-xs text-rose-600">{form.errors.employee_id}</p>}
-                                <p className="text-[11px] text-zinc-500">{employeeSource.length} active employees available</p>
+                                <p className="text-[11px] text-zinc-500">
+                                    {useLookup
+                                        ? 'Type PIN or name to search all active employees'
+                                        : `${employeeSource.length} active employees available`}
+                                </p>
                             </div>
                         </CardContent>
                     </Card>

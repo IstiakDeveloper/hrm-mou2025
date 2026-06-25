@@ -78,28 +78,73 @@ class PayrollReportCsvExporter
      */
     protected static function salarySheetRows(array $payload): array
     {
-        $heads = $payload['heads'] ?? [];
-        $headers = array_merge(['PIN', 'Name', 'Designation', 'Branch', 'Grade', 'Step'], $heads, ['Gross', 'Deduction', 'Net']);
+        $earningHeads = $payload['earning_heads'] ?? [];
+        $deductionHeads = $payload['deduction_heads'] ?? [];
+        $headLabels = $payload['head_labels'] ?? [];
+        $earningHeaders = array_map(fn (string $head) => $headLabels[$head] ?? $head, $earningHeads);
+        $deductionHeaders = array_map(fn (string $head) => $headLabels[$head] ?? $head, $deductionHeads);
+        $headers = array_merge(
+            ['#', 'Name (Pin)', 'Designation', 'Grade (Step)'],
+            $earningHeaders,
+            ['Gross'],
+            $deductionHeaders,
+            ['Ded.'],
+            ['Net', 'Bank Account No.']
+        );
         $rows = [];
-        foreach ($payload['rows'] ?? [] as $row) {
-            $line = [
-                $row['pin'] ?? '',
-                $row['name'] ?? '',
-                $row['designation'] ?? '',
-                $row['branch'] ?? '',
-                $row['grade'] ?? '',
-                $row['step'] ?? '',
-            ];
-            foreach ($heads as $head) {
-                $line[] = $row['components'][$head] ?? 0;
-            }
-            $line[] = $row['gross'] ?? 0;
-            $line[] = $row['deduction'] ?? 0;
-            $line[] = $row['net'] ?? 0;
-            $rows[] = $line;
+        foreach ($payload['rows'] ?? [] as $index => $row) {
+            $rows[] = self::salarySheetDataLine($row, $earningHeads, $deductionHeads, $index + 1);
         }
 
         return [$headers, $rows];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  list<string>  $earningHeads
+     * @param  list<string>  $deductionHeads
+     * @return list<string|int|float|null>
+     */
+    protected static function salarySheetRound(mixed $value): int
+    {
+        return (int) round((float) $value);
+    }
+
+    protected static function salarySheetDataLine(array $row, array $earningHeads, array $deductionHeads, int $serial = 1): array
+    {
+        $line = [
+            $serial,
+            self::salarySheetNameWithPin($row),
+            $row['designation'] ?? '',
+            $row['grade_step'] ?? '',
+        ];
+        foreach ($earningHeads as $head) {
+            $line[] = self::salarySheetRound($row['components'][$head] ?? 0);
+        }
+        $line[] = self::salarySheetRound($row['gross'] ?? 0);
+        foreach ($deductionHeads as $head) {
+            $line[] = self::salarySheetRound($row['components'][$head] ?? 0);
+        }
+        $line[] = self::salarySheetRound($row['deduction'] ?? 0);
+        $line[] = self::salarySheetRound($row['net'] ?? 0);
+        $line[] = $row['account_no'] ?? '';
+
+        return $line;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected static function salarySheetNameWithPin(array $row): string
+    {
+        $name = trim((string) ($row['name'] ?? ''));
+        $pin = trim((string) ($row['pin'] ?? ''));
+
+        if ($name !== '' && $pin !== '') {
+            return sprintf('%s (%s)', $name, $pin);
+        }
+
+        return $name !== '' ? $name : $pin;
     }
 
     /**
@@ -109,27 +154,18 @@ class PayrollReportCsvExporter
     protected static function salarySheetGroupedRows(array $payload): array
     {
         [$headers, $rows] = self::salarySheetRows([
+            'earning_heads' => $payload['earning_heads'] ?? [],
+            'deduction_heads' => $payload['deduction_heads'] ?? [],
             'heads' => $payload['heads'] ?? [],
+            'head_labels' => $payload['head_labels'] ?? [],
             'rows' => [],
         ]);
+        $earningHeads = $payload['earning_heads'] ?? [];
+        $deductionHeads = $payload['deduction_heads'] ?? [];
         foreach ($payload['sections'] ?? [] as $section) {
             $rows[] = array_merge([$section['label'] ?? 'Section'], array_fill(0, count($headers) - 1, ''));
-            foreach ($section['rows'] ?? [] as $row) {
-                $line = [
-                    $row['pin'] ?? '',
-                    $row['name'] ?? '',
-                    $row['designation'] ?? '',
-                    $row['branch'] ?? '',
-                    $row['grade'] ?? '',
-                    $row['step'] ?? '',
-                ];
-                foreach ($payload['heads'] ?? [] as $head) {
-                    $line[] = $row['components'][$head] ?? 0;
-                }
-                $line[] = $row['gross'] ?? 0;
-                $line[] = $row['deduction'] ?? 0;
-                $line[] = $row['net'] ?? 0;
-                $rows[] = $line;
+            foreach ($section['rows'] ?? [] as $index => $row) {
+                $rows[] = self::salarySheetDataLine($row, $earningHeads, $deductionHeads, $index + 1);
             }
         }
 
