@@ -56,18 +56,18 @@ class ImportLaptopLoanFromXlsxCommand extends Command
         $verification = $result['verification'];
         if ($dryRun) {
             $this->warn('Dry run: no database changes were written.');
-            $this->line('XLSX disburse total: '.number_format((float) $verification['xlsx_disburse_total'], 0));
-            $this->line('XLSX outstanding total: '.number_format((float) $verification['xlsx_outstanding_total'], 0));
+            $this->line('XLSX disburse total: '.taka_fmt($verification['xlsx_disburse_total'], 0));
+            $this->line('XLSX outstanding total: '.taka_fmt($verification['xlsx_outstanding_total'], 0));
         } else {
             $perfect = $verification['perfect'] ?? false;
             if ($perfect) {
                 $this->info('Verification: PERFECT — database totals match spreadsheet.');
             } else {
                 $this->warn('Verification: MISMATCH — review log for details.');
-                $this->line('XLSX disburse: '.number_format((float) ($verification['xlsx_disburse_total'] ?? 0), 0));
-                $this->line('DB disburse: '.number_format((float) ($verification['db_disburse_total'] ?? 0), 0));
-                $this->line('XLSX outstanding: '.number_format((float) ($verification['xlsx_outstanding_total'] ?? 0), 0));
-                $this->line('DB outstanding: '.number_format((float) ($verification['db_outstanding_total'] ?? 0), 0));
+                $this->line('XLSX disburse: '.taka_fmt(($verification['xlsx_disburse_total'] ?? 0), 0));
+                $this->line('DB disburse: '.taka_fmt(($verification['db_disburse_total'] ?? 0), 0));
+                $this->line('XLSX outstanding: '.taka_fmt(($verification['xlsx_outstanding_total'] ?? 0), 0));
+                $this->line('DB outstanding: '.taka_fmt(($verification['db_outstanding_total'] ?? 0), 0));
             }
         }
 

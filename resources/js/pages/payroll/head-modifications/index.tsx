@@ -13,6 +13,7 @@ import { PayrollComboField, PayrollField, PayrollBranchSelect, PayrollEmployeeSe
 import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { DISPLAY_DATE_FMT, parseFormDateValue } from '@/lib/display-date';
 import { Pencil, Search, Save } from 'lucide-react';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 
 type Row = {
     employee_id: number;
@@ -254,7 +255,7 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                                     <Input className="h-8 w-28 pl-5.5 pr-2.5 text-right font-mono text-xs bg-white" type="number" min={0} step="any" value={row.amount} onChange={(e) => patchRow(row.employee_id, { amount: e.target.value })} />
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-right font-mono text-xs text-slate-700 font-semibold pr-5 py-2">৳{row.computed.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs text-slate-700 font-semibold pr-5 py-2">{formatTakaWithSymbol(row.computed)}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

@@ -16,22 +16,36 @@
             </p>
         @endif
 
-        @include('payroll.reports.partials.header', [
-            'companyName' => $companyName,
-            'companyAddress' => $companyAddress ?? '',
-            'title' => $title,
-        ])
-
         @php $template = $payload['template'] ?? 'generic'; @endphp
+
+        @if (! in_array($template, ['salary-sheet', 'salary-sheet-grouped'], true))
+            @include('payroll.reports.partials.header', [
+                'companyName' => $companyName,
+                'companyAddress' => $companyAddress ?? '',
+                'title' => $title,
+            ])
+        @endif
 
         @if (!empty($payload['meta']['message']))
             <p>{{ $payload['meta']['message'] }}</p>
         @elseif ($template === 'grade-step')
             @include('payroll.reports.templates.grade-step', ['payload' => $payload])
         @elseif ($template === 'salary-sheet')
-            @include('payroll.reports.templates.salary-sheet', ['payload' => $payload, 'pdfMode' => $pdfMode ?? false])
+            @include('payroll.reports.templates.salary-sheet', [
+                'payload' => $payload,
+                'pdfMode' => $pdfMode ?? false,
+                'companyName' => $companyName,
+                'companyAddress' => $companyAddress ?? '',
+                'title' => $title,
+            ])
         @elseif ($template === 'salary-sheet-grouped')
-            @include('payroll.reports.templates.salary-sheet-grouped', ['payload' => $payload, 'pdfMode' => $pdfMode ?? false])
+            @include('payroll.reports.templates.salary-sheet-grouped', [
+                'payload' => $payload,
+                'pdfMode' => $pdfMode ?? false,
+                'companyName' => $companyName,
+                'companyAddress' => $companyAddress ?? '',
+                'title' => $title,
+            ])
         @elseif ($template === 'bank-advice')
             @include('payroll.reports.templates.bank-advice', ['payload' => $payload])
         @elseif ($template === 'head-register')

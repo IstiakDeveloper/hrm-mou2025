@@ -14,6 +14,7 @@ import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components
 import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
 import { WordTableReport } from '@/components/reports/WordTableReport';
 import { gratuityReportPath } from '@/lib/gratuity-reports';
+import { formatTakaWhole } from '@/lib/taka-format';
 import { staffFundPath } from '@/lib/staff-fund-nav';
 import { Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
@@ -82,10 +83,7 @@ export default function GratuityReportShow({
         };
     }, [report.filters]);
 
-    const fmt = (n: unknown) => {
-        const v = Math.round(Number(n ?? 0));
-        return Number.isFinite(v) ? v.toLocaleString() : '0';
-    };
+    const fmt = (n: unknown) => formatTakaWhole(n);
 
     const employeeBlock = payload?.employee as
         | {

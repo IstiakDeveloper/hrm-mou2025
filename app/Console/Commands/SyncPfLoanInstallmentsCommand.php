@@ -57,10 +57,10 @@ class SyncPfLoanInstallmentsCommand extends Command
                 '%s (%s): installment %s → %s | outstanding %s → %s | paid %d/%d',
                 $change['loan_number'],
                 $change['pin'],
-                number_format($change['old_installment_amount'], 0),
-                number_format($change['new_installment_amount'], 0),
-                number_format($change['old_outstanding'], 0),
-                number_format($change['new_outstanding'], 0),
+                taka_fmt($change['old_installment_amount'], 0),
+                taka_fmt($change['new_installment_amount'], 0),
+                taka_fmt($change['old_outstanding'], 0),
+                taka_fmt($change['new_outstanding'], 0),
                 $change['passed_months'],
                 $change['total_installments']
             ));
@@ -72,7 +72,7 @@ class SyncPfLoanInstallmentsCommand extends Command
                 ->where('loan_type', 'pf_loan')
                 ->where('status', 'active')
                 ->sum('outstanding_balance');
-            $this->info('Active PF outstanding total (DB): '.number_format($dbOutstanding, 0));
+            $this->info('Active PF outstanding total (DB): '.taka_fmt($dbOutstanding, 0));
             $dupes = DB::table('employee_loan_installments as i')
                 ->join('employee_loans as l', 'l.id', '=', 'i.employee_loan_id')
                 ->where('l.loan_type', 'pf_loan')

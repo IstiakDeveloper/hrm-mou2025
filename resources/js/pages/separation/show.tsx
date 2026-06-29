@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Calendar, Check, HandCoins, Pencil, UserX } from 'lucide-react';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 
 type Employee = EmployeeNameFields & { id: number; employee_id: string; joining_date?: string | null };
 type Separation = {
@@ -103,7 +104,7 @@ export default function SeparationShow({ separation, canEdit = false }: Props) {
                                                 className="inline-flex items-center text-[11px] font-medium text-sky-700 hover:text-sky-900"
                                             >
                                                 <HandCoins className="mr-1 h-3 w-3" />
-                                                View settlement (৳{Number(separation.final_payment.net_payable || 0).toLocaleString('en-BD')})
+                                                View settlement ({formatTakaWithSymbol(separation.final_payment.net_payable || 0)})
                                             </Link>
                                         </div>
                                     )}

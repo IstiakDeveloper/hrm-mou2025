@@ -1,8 +1,8 @@
 <?php
 
 return [
-    'company_name' => "Mousumi",
-    'company_address' => "Ukilpara, Naogaon",
+    'company_name' => 'Mousumi',
+    'company_address' => 'Ukilpara, Naogaon',
     'signature_blocks' => [
         ['label' => 'Prepared By', 'department' => 'HR department'],
         ['label' => 'Verified By', 'department' => 'F & A Department'],
@@ -16,7 +16,9 @@ return [
         'margin_side_mm' => 3,
         'margin_side_extra_px' => 10,
         // Signature block offset from the bottom of each branch's last printed page.
-        'signature_bottom_offset_px' => 100,
+        'signature_bottom_offset_px' => 45,
+        // Blank space above each signature line for signing.
+        'signature_gap_px' => 72,
         'chrome_path' => env('PAYROLL_REPORT_CHROME_PATH'),
         // Below this natural data width (ch sum), columns stretch proportionally to full page.
         'landscape_page_capacity_ch' => 195,

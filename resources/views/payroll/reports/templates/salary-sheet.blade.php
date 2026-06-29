@@ -7,4 +7,7 @@
         ]],
     ]),
     'pdfMode' => $pdfMode ?? false,
+    'companyName' => $companyName ?? '',
+    'companyAddress' => $companyAddress ?? '',
+    'title' => $title ?? '',
 ])

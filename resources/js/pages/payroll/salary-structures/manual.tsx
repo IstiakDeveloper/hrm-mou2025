@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FolderOpen, Search, Save, SlidersHorizontal, Scale, Calculator } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type SavedStructure = {
     id: number;
@@ -136,7 +137,7 @@ function StructureTable({
                             headLabel="Basic Salary"
                             headSub={
                                 stepBasicSalary > 0 ? (
-                                    <>Step default: ৳{Math.round(stepBasicSalary).toLocaleString('en-BD')}</>
+                                    <>Step default: ৳{formatTakaWhole(stepBasicSalary)}</>
                                 ) : undefined
                             }
                             amountType={
@@ -204,7 +205,7 @@ function StructureTable({
                                         </div>
                                         {isPercentage && (
                                             <div className="text-[10px] text-right font-bold text-indigo-500 font-mono mt-0.5">
-                                                ≈ ৳{evaluated.toLocaleString('en-BD')}
+                                                ≈ ৳{formatTakaWhole(evaluated)}
                                             </div>
                                         )}
                                     </div>
@@ -217,7 +218,7 @@ function StructureTable({
                 <div className="mt-auto flex flex-row items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold text-slate-700">
                     <span className="uppercase tracking-wider">Total {title}</span>
                     <span className="font-mono text-sm">
-                        ৳{Math.round(total).toLocaleString('en-BD')}
+                        ৳{formatTakaWhole(Math.round(total))}
                     </span>
                 </div>
             </CardContent>
@@ -377,10 +378,10 @@ export default function SalaryStructureManual({
                                         <TableRow key={s.id} className="border-b border-sky-100/30 hover:bg-sky-50/30 transition-colors">
                                             <TableCell className="text-xs font-semibold text-slate-800 py-2.5 pl-6">{s.name}</TableCell>
                                             <TableCell className="text-right font-mono text-xs font-bold text-slate-700 py-2.5">
-                                                ৳{Math.round(s.basic_salary).toLocaleString('en-BD')}
+                                                ৳{formatTakaWhole(s.basic_salary)}
                                             </TableCell>
                                             <TableCell className="text-right font-mono text-xs font-bold text-emerald-800 py-2.5">
-                                                ৳{Math.round(s.net_payable).toLocaleString('en-BD')}
+                                                ৳{formatTakaWhole(s.net_payable)}
                                             </TableCell>
                                             <TableCell className="text-center text-xs text-slate-500 font-medium py-2.5">{s.lines_count}</TableCell>
                                             <TableCell className="text-[10px] text-slate-400 py-2.5">{s.updated_at ?? '—'}</TableCell>
@@ -474,7 +475,7 @@ export default function SalaryStructureManual({
                             {searched && stepBasicSalary > 0 && (
                                 <div className="text-center sm:text-left sm:col-span-2 lg:col-span-1 pb-1">
                                     <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
-                                        Step Basic: <strong className="font-mono text-slate-700">৳{Math.round(stepBasicSalary).toLocaleString('en-BD')}</strong>
+                                        Step Basic: <strong className="font-mono text-slate-700">৳{formatTakaWhole(stepBasicSalary)}</strong>
                                     </span>
                                 </div>
                             )}
@@ -520,20 +521,20 @@ export default function SalaryStructureManual({
                                     <div className="flex justify-between items-center gap-3 sm:block">
                                         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Addition</div>
                                         <div className="font-mono text-sm font-extrabold text-slate-800 mt-0.5">
-                                            ৳{Math.round(liveTotals.total_addition).toLocaleString('en-BD')}
+                                            ৳{formatTakaWhole(liveTotals.total_addition)}
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center gap-3 sm:block">
                                         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Deduction</div>
                                         <div className="font-mono text-sm font-extrabold text-slate-800 mt-0.5">
-                                            ৳{Math.round(liveTotals.total_deduction).toLocaleString('en-BD')}
+                                            ৳{formatTakaWhole(liveTotals.total_deduction)}
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center gap-3 sm:block">
                                         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Net Payable</div>
                                         <div className="font-mono text-base font-extrabold text-emerald-700 mt-0.5 flex items-center gap-1.5">
                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                            ৳{Math.round(liveTotals.net_payable).toLocaleString('en-BD')}
+                                            ৳{formatTakaWhole(liveTotals.net_payable)}
                                         </div>
                                     </div>
                                 </div>

@@ -9,6 +9,7 @@ import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Plus, Search, Trash2, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
 
 type Head = {
@@ -26,7 +27,7 @@ type Paginated = { data: Head[]; meta: PaginationMeta; links: any };
 function formatDefault(type: string, amount: string | number): string {
     const n = Number(amount);
     if (type === 'percentage') return `${n}% of basic`;
-    return `৳ ${n.toLocaleString()}`;
+    return formatTakaWithSymbol(n);
 }
 
 export default function SalaryHeadIndex({ heads, filters }: { heads: Paginated; filters: { search?: string } }) {

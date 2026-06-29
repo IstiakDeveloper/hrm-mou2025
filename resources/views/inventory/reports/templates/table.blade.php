@@ -33,7 +33,7 @@
                             default => '',
                         };
                         if (! empty($col['numeric']) && is_numeric($val)) {
-                            $val = number_format((float) $val, 0);
+                            $val = taka_fmt($val);
                         }
                     @endphp
                     <td class="{{ $class }}">{{ $val === '' ? '—' : $val }}</td>

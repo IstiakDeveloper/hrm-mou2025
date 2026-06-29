@@ -11,6 +11,7 @@ import { PageSurface } from '@/components/page-surface';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Gift, Save } from 'lucide-react';
 import { staffFundPath } from '@/lib/staff-fund-nav';
+import { formatTakaWhole } from '@/lib/taka-format';
 import type { SharedData } from '@/types';
 
 type Props = {
@@ -50,9 +51,6 @@ type Props = {
     }[];
     has_paid: boolean;
 };
-
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 export default function GratuityShow({ employee, filters, calculation, payments, has_paid }: Props) {
     const { flash } = usePage<SharedData & { flash?: { success?: string } }>().props;
@@ -149,7 +147,7 @@ export default function GratuityShow({ employee, filters, calculation, payments,
                                 </div>
                                 <div className="flex justify-between">
                                     <dt className="text-slate-600">Basic salary</dt>
-                                    <dd className="tabular-nums">{fmt(calculation.basic_salary)}</dd>
+                                    <dd className="tabular-nums">{formatTakaWhole(calculation.basic_salary)}</dd>
                                 </div>
                                 <div className="flex justify-between">
                                     <dt className="text-slate-600">Gratuity rate</dt>
@@ -158,14 +156,14 @@ export default function GratuityShow({ employee, filters, calculation, payments,
                                 <div className="flex justify-between text-xs text-slate-500">
                                     <dt>Formula</dt>
                                     <dd className="tabular-nums">
-                                        {fmt(calculation.basic_salary)} × {calculation.completed_years} ×{' '}
+                                        {formatTakaWhole(calculation.basic_salary)} × {calculation.completed_years} ×{' '}
                                         {calculation.basic_multiplier}
                                     </dd>
                                 </div>
                                 <div className="flex justify-between border-t border-violet-200 pt-2">
                                     <dt className="font-bold text-violet-900">Payable</dt>
                                     <dd className="text-xl font-bold tabular-nums text-violet-900">
-                                        {calculation.eligible ? fmt(calculation.gratuity_amount) : '—'}
+                                        {calculation.eligible ? formatTakaWhole(calculation.gratuity_amount) : '—'}
                                     </dd>
                                 </div>
                             </dl>
@@ -271,7 +269,7 @@ export default function GratuityShow({ employee, filters, calculation, payments,
                                                 <TableCell className="text-sm">{p.service_end_date}</TableCell>
                                                 <TableCell className="text-sm">{p.completed_years}</TableCell>
                                                 <TableCell className="text-right text-sm tabular-nums font-medium">
-                                                    {fmt(p.gratuity_amount)}
+                                                    {formatTakaWhole(p.gratuity_amount)}
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge

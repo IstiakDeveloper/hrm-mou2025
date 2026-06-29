@@ -11,6 +11,7 @@ import { PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState }
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { Eye, HandCoins, Search } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type Employee = EmployeeNameFields & {
     id: number;
@@ -41,9 +42,6 @@ type Props = {
     filters: Record<string, string>;
     branches: { id: number; name: string; branch_code?: string | null }[];
 };
-
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 function statusBadge(status: FinalPaymentRow['status']) {
     if (status === 'paid') {
@@ -149,10 +147,10 @@ export default function FinalPaymentIndex({ records, pendingCount, filters: init
                                         <TableCell className="text-sm text-slate-600">
                                             {format(new Date(row.separation.separation_date), 'dd MMM yyyy')}
                                         </TableCell>
-                                        <TableCell className="text-right font-mono text-sm">৳{fmt(row.pf_balance)}</TableCell>
-                                        <TableCell className="text-right font-mono text-sm">৳{fmt(row.gratuity_amount)}</TableCell>
-                                        <TableCell className="text-right font-mono text-sm text-rose-700">৳{fmt(row.loan_outstanding)}</TableCell>
-                                        <TableCell className="text-right font-mono text-sm font-semibold">৳{fmt(row.net_payable)}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm">৳{formatTakaWhole(row.pf_balance)}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm">৳{formatTakaWhole(row.gratuity_amount)}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm text-rose-700">৳{formatTakaWhole(row.loan_outstanding)}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm font-semibold">৳{formatTakaWhole(row.net_payable)}</TableCell>
                                         <TableCell>{statusBadge(row.status)}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" asChild>

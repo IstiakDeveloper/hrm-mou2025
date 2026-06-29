@@ -293,9 +293,9 @@ class EmployeeLoanService
                     'Closing %s — passed %d mo, out PR %s, out SC %s, out total %s',
                     $closing->format('d-M-Y'),
                     $passedMonths,
-                    number_format((float) $row['outstanding_principal'], 2),
-                    number_format((float) $row['outstanding_service_charge'], 2),
-                    number_format($outTotal, 2)
+                    taka_fmt($row['outstanding_principal'], 2),
+                    taka_fmt($row['outstanding_service_charge'], 2),
+                    taka_fmt($outTotal, 2)
                 ),
                 'created_by' => $createdBy ?? auth()->id(),
             ]);
@@ -919,6 +919,10 @@ class EmployeeLoanService
                 $installment,
                 $scheduledAmount
             );
+            $expectedAmount = $this->capPayrollCollectionAmount(
+                $this->freshLoanOutstanding($loan),
+                $expectedAmount
+            );
 
             $transaction = EmployeeLoanTransaction::query()
                 ->where('employee_loan_installment_id', $installment->id)
@@ -962,6 +966,42 @@ class EmployeeLoanService
         return $fixed;
     }
 
+    /**
+     * Cap payroll loan collection so rounding drift or review edits cannot exceed outstanding.
+     */
+    public function alignPayrollLoanLinesForPayslip(Payslip $payslip): bool
+    {
+        $payslip = Payslip::query()->with('lines')->findOrFail($payslip->id);
+        $changed = false;
+
+        $installments = EmployeeLoanInstallment::query()
+            ->where('payslip_id', $payslip->id)
+            ->where('status', 'scheduled')
+            ->with('loan')
+            ->get();
+
+        foreach ($installments as $installment) {
+            $loan = $installment->loan;
+            if (! $loan) {
+                continue;
+            }
+
+            $scheduledAmount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
+            $requested = $this->resolvePayrollLoanDeductionAmount($payslip, $loan, $installment, $scheduledAmount);
+            $amount = $this->capPayrollCollectionAmount($this->freshLoanOutstanding($loan), $requested);
+
+            if ($this->syncPayrollLoanPayslipLineAmount($payslip, $loan, $installment, $amount)) {
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $this->payslipTotals->syncPayslipFromLines($payslip->fresh('lines'));
+        }
+
+        return $changed;
+    }
+
     public function postPaymentsForPayslip(Payslip $payslip, ?PayrollRun $run = null): void
     {
         $run ??= $payslip->payrollRun;
@@ -976,9 +1016,22 @@ class EmployeeLoanService
             ->get();
 
         foreach ($installments as $installment) {
-            $loan = $installment->loan;
+            $loan = $this->freshLoanOutstanding($installment->loan);
             $scheduledAmount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
             $amount = $this->resolvePayrollLoanDeductionAmount($payslip, $loan, $installment, $scheduledAmount);
+            $amount = $this->capPayrollCollectionAmount($loan, $amount);
+
+            if ($amount <= 0) {
+                $this->detachScheduledInstallmentFromPayslip($installment, $payslip);
+                $payslip = Payslip::query()->with('lines')->findOrFail($payslip->id);
+
+                continue;
+            }
+
+            if ($this->syncPayrollLoanPayslipLineAmount($payslip, $loan, $installment, $amount)) {
+                $this->payslipTotals->syncPayslipFromLines($payslip->fresh('lines'));
+                $payslip = Payslip::query()->with('lines')->findOrFail($payslip->id);
+            }
 
             $this->postTransaction($loan, [
                 'transaction_type' => EmployeeLoanTransaction::TYPE_INSTALLMENT,
@@ -1043,6 +1096,68 @@ class EmployeeLoanService
             'total_amount' => $newTotal,
             'principal_amount' => $newTotal,
         ]);
+    }
+
+    protected function freshLoanOutstanding(EmployeeLoan $loan): EmployeeLoan
+    {
+        $fresh = EmployeeLoan::query()->whereKey($loan->id)->firstOrFail();
+        $this->recalculateLoanLedgerBalances($fresh);
+
+        return $fresh->fresh();
+    }
+
+    protected function capPayrollCollectionAmount(EmployeeLoan $loan, float $amount): float
+    {
+        $amount = SalaryStructureCalculator::roundTaka($amount);
+        $outstanding = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
+
+        if ($amount <= 0 || $outstanding <= 0) {
+            return 0.0;
+        }
+
+        return SalaryStructureCalculator::roundTaka(min($amount, $outstanding));
+    }
+
+    protected function syncPayrollLoanPayslipLineAmount(
+        Payslip $payslip,
+        EmployeeLoan $loan,
+        EmployeeLoanInstallment $installment,
+        float $amount
+    ): bool {
+        $line = $this->findPayrollLoanPayslipLine($payslip, $loan, $installment);
+        if (! $line) {
+            return false;
+        }
+
+        $rounded = SalaryStructureCalculator::roundTaka($amount);
+        if (SalaryStructureCalculator::roundTaka((float) $line->computed_amount) === $rounded) {
+            return false;
+        }
+
+        $line->update([
+            'computed_amount' => $rounded,
+            'input_value' => $rounded,
+        ]);
+
+        return true;
+    }
+
+    protected function detachScheduledInstallmentFromPayslip(
+        EmployeeLoanInstallment $installment,
+        Payslip $payslip
+    ): void {
+        $loan = $installment->loan;
+        if ($loan) {
+            $line = $this->findPayrollLoanPayslipLine($payslip, $loan, $installment);
+            $line?->delete();
+        }
+
+        $installment->update([
+            'status' => 'pending',
+            'payslip_id' => null,
+        ]);
+
+        $this->payslipTotals->syncPayslipFromLines($payslip->fresh('lines'));
     }
 
     protected function resolvePayrollLoanDeductionAmount(

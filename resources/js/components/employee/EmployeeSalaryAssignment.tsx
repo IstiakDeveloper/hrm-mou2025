@@ -43,11 +43,7 @@ function gradeLabel(g: PayrollGradeOption): string {
     return g.name ? `${code} — ${g.name}` : code || '—';
 }
 
-function formatMoney(value: string | number): string {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return String(value);
-    return n.toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
+import { formatTakaWhole } from '@/lib/taka-format';
 
 function formatAmountDisplay(value: string, amountType: string): string {
     const n = parseFloat(value);
@@ -131,7 +127,7 @@ function SalaryComponentsTable({
                                 <td className="px-3 py-2">
                                     <div className="font-semibold text-zinc-800">Basic</div>
                                     {stepBasicSalary > 0 && (
-                                        <div className="text-[10px] text-zinc-400">Step: ৳{formatMoney(stepBasicSalary)}</div>
+                                        <div className="text-[10px] text-zinc-400">Step: ৳{formatTakaWhole(stepBasicSalary)}</div>
                                     )}
                                 </td>
                                 <td className="px-2 py-2">
@@ -150,7 +146,7 @@ function SalaryComponentsTable({
                                     />
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono font-semibold text-zinc-700">
-                                    ৳{formatMoney(basicAmount || 0)}
+                                    ৳{formatTakaWhole(basicAmount || 0)}
                                 </td>
                             </tr>
                         )}
@@ -183,7 +179,7 @@ function SalaryComponentsTable({
                                         />
                                     </td>
                                     <td className="px-3 py-2 text-right font-mono text-[11px] font-semibold text-indigo-600">
-                                        ৳{evaluated.toLocaleString('en-BD')}
+                                        ৳{formatTakaWhole(evaluated)}
                                     </td>
                                 </tr>
                             );
@@ -194,7 +190,7 @@ function SalaryComponentsTable({
 
             <div className="flex items-center justify-between border-t border-zinc-100 bg-zinc-50/60 px-3 py-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Total {title}</span>
-                <span className="font-mono text-[12px] font-bold text-zinc-800">৳{formatMoney(total)}</span>
+                <span className="font-mono text-[12px] font-bold text-zinc-800">৳{formatTakaWhole(total)}</span>
             </div>
         </div>
     );
@@ -291,7 +287,7 @@ export function EmployeeSalaryAssignment({
         () =>
             filteredSteps.map((s) => ({
                 value: String(s.id),
-                label: `Step ${s.step_number} — ৳${formatMoney(s.basic_salary)}`,
+                label: `Step ${s.step_number} — ৳${formatTakaWhole(s.basic_salary)}`,
             })),
         [filteredSteps],
     );
@@ -485,15 +481,15 @@ export function EmployeeSalaryAssignment({
                     <div className="grid grid-cols-3 gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5">
                         <div>
                             <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Gross</p>
-                            <p className="font-mono text-[12px] font-bold text-zinc-800">৳{formatMoney(liveTotals.total_addition)}</p>
+                            <p className="font-mono text-[12px] font-bold text-zinc-800">৳{formatTakaWhole(liveTotals.total_addition)}</p>
                         </div>
                         <div>
                             <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Deduction</p>
-                            <p className="font-mono text-[12px] font-bold text-zinc-800">৳{formatMoney(liveTotals.total_deduction)}</p>
+                            <p className="font-mono text-[12px] font-bold text-zinc-800">৳{formatTakaWhole(liveTotals.total_deduction)}</p>
                         </div>
                         <div>
                             <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Net</p>
-                            <p className="font-mono text-[12px] font-bold text-emerald-700">৳{formatMoney(liveTotals.net_payable)}</p>
+                            <p className="font-mono text-[12px] font-bold text-emerald-700">৳{formatTakaWhole(liveTotals.net_payable)}</p>
                         </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground">

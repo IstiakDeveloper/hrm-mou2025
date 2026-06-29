@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type Row = {
     id: number;
@@ -47,8 +48,8 @@ export default function LoanDisburseIndex({ applications }: { applications: Row[
                                     <TableCell className="text-xs font-mono">{row.application_number}</TableCell>
                                     <TableCell className="text-xs">{row.employee_label}</TableCell>
                                     <TableCell className="text-xs">{row.policy_name}</TableCell>
-                                    <TableCell className="text-xs text-right tabular-nums">{row.principal_amount.toLocaleString()}</TableCell>
-                                    <TableCell className="text-xs text-right tabular-nums">{row.installment_amount_monthly.toLocaleString()}</TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums">{formatTakaWhole(row.principal_amount)}</TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums">{formatTakaWhole(row.installment_amount_monthly)}</TableCell>
                                     <TableCell className="text-xs text-center">{row.total_installments}</TableCell>
                                     <TableCell className="text-xs">{row.approved_at}</TableCell>
                                     <TableCell>

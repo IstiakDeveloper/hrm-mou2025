@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { hasAppPermission } from '@/lib/permissions';
 import { usePage } from '@inertiajs/react';
 import type { SharedData } from '@/types';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type Row = {
     id: number;
@@ -42,8 +43,8 @@ export default function LoanApprovalIndex({ applications }: { applications: Row[
                                 <TableCell className="text-xs font-mono">{row.application_number}</TableCell>
                                 <TableCell className="text-xs">{row.employee_label}</TableCell>
                                 <TableCell className="text-xs">{row.policy_name}</TableCell>
-                                <TableCell className="text-xs text-right tabular-nums">{row.applied_amount.toLocaleString()}</TableCell>
-                                <TableCell className="text-xs text-right tabular-nums">{row.total_payable.toLocaleString()}</TableCell>
+                                <TableCell className="text-xs text-right tabular-nums">{formatTakaWhole(row.applied_amount)}</TableCell>
+                                <TableCell className="text-xs text-right tabular-nums">{formatTakaWhole(row.total_payable)}</TableCell>
                                 <TableCell className="text-xs capitalize">{row.status}</TableCell>
                                 <TableCell>
                                     {canEdit && row.status === 'pending' && (

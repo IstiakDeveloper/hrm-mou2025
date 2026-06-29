@@ -14,6 +14,7 @@ import {
 } from '@/components/payroll/PayrollFilterGrid';
 import { ChevronRight, Filter, Gift, Search, X } from 'lucide-react';
 import { staffFundPath } from '@/lib/staff-fund-nav';
+import { formatTakaWhole } from '@/lib/taka-format';
 import { cn } from '@/lib/utils';
 
 type Row = {
@@ -46,9 +47,6 @@ type Props = {
     departments: { id: number; name: string }[];
     employees: { id: number; pin?: string; name_en?: string }[];
 };
-
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 function EmployeeCell({ pin, nameEn, designation, branch, department }: {
     pin: string | null;
@@ -172,7 +170,7 @@ export default function GratuityIndex({ filters: init, rows, tiers, branches, de
                 </div>
                 <div className="rounded-lg border border-emerald-250 bg-emerald-50/50 p-2.5 shadow-2xs">
                     <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-800">Total Gratuity Pool (৳)</p>
-                    <p className="text-base font-extrabold text-emerald-900 tabular-nums mt-0.5">{fmt(summary.gratuity)}</p>
+                    <p className="text-base font-extrabold text-emerald-900 tabular-nums mt-0.5">{formatTakaWhole(summary.gratuity)}</p>
                 </div>
             </div>
 
@@ -329,7 +327,7 @@ export default function GratuityIndex({ filters: init, rows, tiers, branches, de
                                                 <span className="font-bold text-zinc-800">{r.completed_years}</span>
                                                 <span className="text-[10px] text-zinc-400"> yrs</span>
                                             </TableCell>
-                                            <TableCell className="text-right py-1.5 tabular-nums text-zinc-600">{fmt(r.basic_salary)}</TableCell>
+                                            <TableCell className="text-right py-1.5 tabular-nums text-zinc-600">{formatTakaWhole(r.basic_salary)}</TableCell>
                                             <TableCell className="text-center py-1.5">
                                                 {r.basic_multiplier > 0 ? (
                                                     <span className="inline-flex items-center rounded bg-emerald-50 px-1 py-0.2 font-mono text-[9px] font-bold text-emerald-800 border border-emerald-100">
@@ -341,7 +339,7 @@ export default function GratuityIndex({ filters: init, rows, tiers, branches, de
                                             </TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums">
                                                 <span className={cn("font-extrabold", r.eligible ? "text-emerald-700" : "text-zinc-400")}>
-                                                    {r.eligible ? fmt(r.gratuity_amount) : '—'}
+                                                    {r.eligible ? formatTakaWhole(r.gratuity_amount) : '—'}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="py-1.5">
@@ -392,7 +390,7 @@ export default function GratuityIndex({ filters: init, rows, tiers, branches, de
                                     ))}
                                     <TableRow className="bg-zinc-50/80 font-bold border-t border-zinc-200">
                                         <TableCell colSpan={6} className="pl-3 py-2 text-zinc-700 uppercase text-[9px] tracking-wider">Total (eligible only)</TableCell>
-                                        <TableCell className="text-right py-2 tabular-nums text-emerald-700">{fmt(summary.gratuity)}</TableCell>
+                                        <TableCell className="text-right py-2 tabular-nums text-emerald-700">{formatTakaWhole(summary.gratuity)}</TableCell>
                                         <TableCell colSpan={3} />
                                     </TableRow>
                                 </TableBody>

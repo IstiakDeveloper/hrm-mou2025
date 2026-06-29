@@ -4,8 +4,7 @@
     $sideMargin = (float) (config('payroll_reports.print.margin_side_mm') ?? 3);
     $sideExtraPx = (int) (config('payroll_reports.print.margin_side_extra_px') ?? 10);
     $signatureBottomPx = (int) (config('payroll_reports.print.signature_bottom_offset_px') ?? 100);
-    $landscapePageHeightMm = 210;
-    $pageContentHeightMm = $landscapePageHeightMm - $topMargin - $bottomMargin;
+    $signatureGapPx = (int) (config('payroll_reports.print.signature_gap_px') ?? 72);
     $horizontalMargin = "calc({$sideMargin}mm + {$sideExtraPx}px)";
 @endphp
 <style>
@@ -202,6 +201,16 @@
         page-break-inside: avoid;
     }
 
+    .salary-sheet-page .payroll-report-header {
+        margin-bottom: 6px;
+        padding-bottom: 0;
+    }
+
+    .salary-sheet-page .section-title-table {
+        margin-top: 0;
+        margin-bottom: 4px;
+    }
+
     table.salary-sheet-table {
         table-layout: fixed;
         width: auto;
@@ -320,6 +329,20 @@
         text-align: right;
     }
 
+    .salary-sheet-footer {
+        margin-top: 4px;
+        page-break-inside: avoid;
+    }
+
+    .salary-sheet-in-words {
+        font-size: 7.5pt;
+        font-weight: bold;
+        line-height: 1.2;
+        padding: 0 4px 2px;
+        page-break-inside: avoid;
+        page-break-after: avoid;
+    }
+
     .text-center {
         text-align: center;
     }
@@ -347,20 +370,15 @@
     }
 
     .salary-sheet-page-final {
-        display: flex;
-        flex-direction: column;
-        min-height: {{ $pageContentHeightMm }}mm;
         page-break-inside: avoid;
         page-break-after: auto;
-        box-sizing: border-box;
     }
 
     .payroll-signature-section {
-        margin-top: auto;
+        margin-top: 16px;
         margin-bottom: {{ $signatureBottomPx }}px;
-        padding-top: 8px;
+        padding-top: 0;
         page-break-inside: avoid;
-        flex-shrink: 0;
     }
 
     .payroll-signature-table {
@@ -378,7 +396,7 @@
     }
 
     .payroll-signature-gap {
-        height: 36px;
+        height: {{ $signatureGapPx }}px;
     }
 
     .payroll-signature-label {
@@ -403,16 +421,12 @@
     }
 
     body.pdf-export .salary-sheet-page-final {
-        display: flex;
-        flex-direction: column;
-        min-height: {{ $pageContentHeightMm }}mm;
-        box-sizing: border-box;
+        page-break-inside: avoid;
     }
 
     body.pdf-export .payroll-signature-section {
-        margin-top: auto;
+        margin-top: 16px;
         margin-bottom: {{ $signatureBottomPx }}px;
-        flex-shrink: 0;
     }
 
     .no-print-hint {

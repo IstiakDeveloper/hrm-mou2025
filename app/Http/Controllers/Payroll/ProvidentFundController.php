@@ -437,7 +437,7 @@ class ProvidentFundController extends Controller
                 'PF interest for %d posted to %d employees (total %s).',
                 $run->interest_year,
                 $run->employee_count,
-                number_format((float) $run->total_interest, 0)
+                taka_fmt($run->total_interest)
             ));
     }
 
@@ -534,7 +534,7 @@ class ProvidentFundController extends Controller
 
         if ($amount > $balance) {
             throw ValidationException::withMessages([
-                'amount' => sprintf('Payment cannot exceed current PF balance (%s).', number_format($balance, 0)),
+                'amount' => sprintf('Payment cannot exceed current PF balance (%s).', taka_fmt($balance)),
             ]);
         }
 
@@ -555,7 +555,7 @@ class ProvidentFundController extends Controller
             ->route('provident-fund.withdrawals.index')
             ->with('success', sprintf(
                 'PF payment of %s recorded for %s.',
-                number_format($amount, 0),
+                taka_fmt($amount),
                 trim(($employee->pin ?? '').' — '.($employee->name_en ?? ''))
             ));
     }

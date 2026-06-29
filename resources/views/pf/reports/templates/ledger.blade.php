@@ -22,12 +22,12 @@
             </tr>
             <tr>
                 <th style="text-align: left;">Current balance</th>
-                <td class="num">{{ number_format((float) ($employee['pf_balance'] ?? 0), 0) }}</td>
+                <td class="num">{{ taka_fmt($employee['pf_balance'] ?? 0) }}</td>
                 <th style="text-align: left;">Own / Org contribution</th>
                 <td class="num">
-                    {{ number_format((float) ($employee['own_contribution'] ?? 0), 0) }}
+                    {{ taka_fmt($employee['own_contribution'] ?? 0) }}
                     /
-                    {{ number_format((float) ($employee['org_contribution'] ?? 0), 0) }}
+                    {{ taka_fmt($employee['org_contribution'] ?? 0) }}
                 </td>
             </tr>
         </tbody>

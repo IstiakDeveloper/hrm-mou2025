@@ -17,6 +17,7 @@ import {
 import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { DISPLAY_DATE_FMT, parseFormDateValue } from '@/lib/display-date';
 import { Award, ChevronRight } from 'lucide-react';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 
 type ConfigOption = {
     id: number;
@@ -225,7 +226,7 @@ export default function BonusCalculationIndex({ filters: init, configurations, r
                                     <div>
                                         <p className="text-sm font-medium">{r.label}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            {r.employee_count} employees · Net ৳{r.total_net.toLocaleString()}
+                                            {r.employee_count} employees · Net {formatTakaWithSymbol(r.total_net)}
                                             {r.processed_at ? ` · ${r.processed_at}` : ''}
                                         </p>
                                     </div>

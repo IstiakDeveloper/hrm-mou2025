@@ -14,6 +14,7 @@ import {
 } from '@/components/payroll/PayslipReviewPanels';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard, payrollBtnPrimary, payrollFilterActive } from '@/components/payroll/PayrollPageShell';
 import { cn } from '@/lib/utils';
+import { formatTakaWhole } from '@/lib/taka-format';
 import { payrollPostLabels, payrollPostRoutes, type PayrollPostContext } from '@/lib/payroll-post-routes';
 import { ArrowLeft, CheckCircle2, Save, Trash2, Search, Users, Coins, SlidersHorizontal, RefreshCw } from 'lucide-react';
 
@@ -290,14 +291,14 @@ export default function SalaryPostShow({
                     {(isBonus
                         ? [
                               { label: 'Employees', value: run.employee_count.toLocaleString() },
-                              { label: 'Total bonus (৳) (Live)', value: liveTotals.net.toLocaleString(), highlight: true },
+                              { label: 'Total bonus (৳) (Live)', value: formatTakaWhole(liveTotals.net), highlight: true },
                           ]
                         : [
                               { label: 'Employees', value: run.employee_count.toLocaleString() },
-                              { label: 'Basic salary (৳) (Live)', value: liveTotals.basic.toLocaleString() },
-                              { label: 'Gross (৳) (Live)', value: liveTotals.gross.toLocaleString() },
-                              { label: 'Total deduction (৳) (Live)', value: liveTotals.deduction.toLocaleString() },
-                              { label: 'Net payable (৳) (Live)', value: liveTotals.net.toLocaleString(), highlight: true },
+                              { label: 'Basic salary (৳) (Live)', value: formatTakaWhole(liveTotals.basic) },
+                              { label: 'Gross (৳) (Live)', value: formatTakaWhole(liveTotals.gross) },
+                              { label: 'Total deduction (৳) (Live)', value: formatTakaWhole(liveTotals.deduction) },
+                              { label: 'Net payable (৳) (Live)', value: formatTakaWhole(liveTotals.net), highlight: true },
                           ]
                     ).map((s) => (
                         <div

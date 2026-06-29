@@ -13,6 +13,7 @@ import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { hasAppPermission } from '@/lib/permissions';
 import { type SharedData } from '@/types';
 import { Boxes, Edit, Eye, Plus, Search } from 'lucide-react';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 type BranchOpt = { id: number; name: string; branch_code: string | null; is_head_office: boolean };
@@ -209,7 +210,7 @@ export default function FixedAssetIndex({
                                         </TableCell>
                                         <TableCell className="text-right font-mono text-xs font-semibold text-zinc-800 tabular-nums">
                                             {row.book_value != null || row.purchase_cost != null ? (
-                                                `৳${Number(row.book_value ?? row.purchase_cost).toLocaleString()}`
+                                                formatTakaWithSymbol(row.book_value ?? row.purchase_cost)
                                             ) : (
                                                 '—'
                                             )}

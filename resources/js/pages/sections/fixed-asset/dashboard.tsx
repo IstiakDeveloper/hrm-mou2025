@@ -14,6 +14,7 @@ import Layout from '@/layouts/AdminLayout';
 import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed-asset/AssetPageShell';
 import { hasAppPermission } from '@/lib/permissions';
 import { FIXED_ASSET_NAV_GROUPS } from '@/lib/fixed-asset-nav';
+import { formatTakaWhole } from '@/lib/taka-format';
 import { type SharedData } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -41,10 +42,6 @@ type Props = {
 
 const section = '?section=fixed-asset';
 const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4';
-
-function fmtMoney(n: number) {
-    return Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
 
 function KpiCard({
     label,
@@ -139,8 +136,8 @@ export default function FixedAssetDashboard({ stats, branchScoped }: Props) {
                     <h2 className="mb-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Key Performance Metrics</h2>
                     <div className={kpiGrid}>
                         <KpiCard label="Total assets" value={stats.totalAssets} href={`/fixed-asset/assets/tracking${section}`} icon={Boxes} />
-                        <KpiCard label="Purchase value" value={fmtMoney(stats.purchaseValue)} sub="৳ total" icon={Layers} />
-                        <KpiCard label="Book value" value={fmtMoney(stats.bookValue)} sub="৳ total" icon={TrendingDown} />
+                        <KpiCard label="Purchase value" value={formatTakaWhole(stats.purchaseValue)} sub="৳ total" icon={Layers} />
+                        <KpiCard label="Book value" value={formatTakaWhole(stats.bookValue)} sub="৳ total" icon={TrendingDown} />
                         <KpiCard label="Active" value={stats.active} href={`/fixed-asset/assets/tracking${section}&status=active`} icon={Boxes} />
                         <KpiCard label="Pending disposal" value={stats.pendingDisposals} href={`/fixed-asset/disposal/requests${section}&status=pending`} icon={Trash2} />
                         <KpiCard label="Depreciable" value={stats.depreciableAssets} href={`/fixed-asset/depreciation/calculation${section}`} icon={TrendingDown} />

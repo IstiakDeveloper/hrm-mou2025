@@ -6,6 +6,7 @@ use App\Http\Concerns\EmployedEmployeeUniqueIdentifiers;
 use App\Http\Concerns\ResolvesEmployeeNidSmartCard;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\DemotionHistory;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
@@ -16,7 +17,6 @@ use App\Models\LocationVillage;
 use App\Models\Payscale;
 use App\Models\Program;
 use App\Models\Project;
-use App\Models\DemotionHistory;
 use App\Models\PromotionHistory;
 use App\Models\RegionalOffice;
 use App\Models\Role;
@@ -27,9 +27,9 @@ use App\Models\User;
 use App\Models\Zone;
 use App\Services\EmployeeSalaryAssignmentService;
 use App\Services\OrganogramAccessService;
+use App\Support\BranchOrganogram;
 use App\Support\EmployeeImportCsv;
 use App\Support\EmployeeImportTemplateExporter;
-use App\Support\BranchOrganogram;
 use App\Support\HeadOfficeOrganogram;
 use App\Support\ImportDateParser;
 use App\Support\SimpleXlsxReader;
@@ -2205,7 +2205,7 @@ class EmployeeController extends Controller
         $locations = $this->buildLocationsBasePayload();
 
         // Load new tabbed relational data (so edit does not wipe on update)
-        $employeePayload = $employee->toArray();
+        $employeePayload = $employee->toInertiaArray();
         $employeePayload['pin'] = $employee->pin;
         $employeePayload['addresses'] = DB::table('employee_addresses')->where('employee_id', $employee->id)->get()->all();
         $employeePayload['educations'] = DB::table('employee_educations')->where('employee_id', $employee->id)->get()->all();
@@ -2813,7 +2813,7 @@ class EmployeeController extends Controller
             ->get();
 
         return Inertia::render('employee/show', [
-            'employee' => $employee,
+            'employee' => $employee->toInertiaArray(),
             'currentYearLeaveBalances' => $currentYearLeaveBalances,
             'recentLeaveApplications' => $recentLeaveApplications,
             'recentMovements' => $recentMovements,

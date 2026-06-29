@@ -10,6 +10,7 @@ import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Layers, Search } from 'lucide-react';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type StockRow = {
     category_id: number;
@@ -22,10 +23,6 @@ type StockRow = {
     purchase_total: number;
     book_total: number;
 };
-
-function fmt(n: number) {
-    return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-}
 
 export default function StockCategoryWise({
     rows,
@@ -151,16 +148,16 @@ export default function StockCategoryWise({
                                     <TableCell className="font-medium text-zinc-800 py-3.5 pl-6">{row.category_code ? `${row.category_code} — ${row.category_name}` : row.category_name}</TableCell>
                                     <TableCell className="text-zinc-600 text-xs">{row.sub_category_name ? `${row.sub_category_code} — ${row.sub_category_name}` : '—'}</TableCell>
                                     <TableCell className="text-right font-mono text-xs font-semibold text-zinc-800 tabular-nums">{row.asset_count}</TableCell>
-                                    <TableCell className="text-right font-mono text-xs font-semibold text-zinc-800 tabular-nums">৳{fmt(row.purchase_total)}</TableCell>
-                                    <TableCell className="text-right font-mono text-xs font-semibold text-zinc-800 tabular-nums pr-6">৳{fmt(row.book_total)}</TableCell>
+                                    <TableCell className="text-right font-mono text-xs font-semibold text-zinc-800 tabular-nums">৳{formatTakaWhole(row.purchase_total)}</TableCell>
+                                    <TableCell className="text-right font-mono text-xs font-semibold text-zinc-800 tabular-nums pr-6">৳{formatTakaWhole(row.book_total)}</TableCell>
                                 </TableRow>
                             ))}
                             {rows.length > 0 && (
                                 <TableRow className="bg-zinc-50 font-bold border-t border-zinc-200">
                                     <TableCell colSpan={2} className="py-4 pl-6 text-zinc-900">Total</TableCell>
                                     <TableCell className="text-right font-mono text-xs font-bold text-zinc-950 tabular-nums">{totals.asset_count}</TableCell>
-                                    <TableCell className="text-right font-mono text-xs font-bold text-zinc-950 tabular-nums">৳{fmt(totals.purchase_total)}</TableCell>
-                                    <TableCell className="text-right font-mono text-xs font-bold text-zinc-950 tabular-nums pr-6">৳{fmt(totals.book_total)}</TableCell>
+                                    <TableCell className="text-right font-mono text-xs font-bold text-zinc-950 tabular-nums">৳{formatTakaWhole(totals.purchase_total)}</TableCell>
+                                    <TableCell className="text-right font-mono text-xs font-bold text-zinc-950 tabular-nums pr-6">৳{formatTakaWhole(totals.book_total)}</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>

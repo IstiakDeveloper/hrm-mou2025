@@ -22,13 +22,13 @@
                 <td>{{ $row['payscale'] }}</td>
                 <td>{{ $row['grade'] }}</td>
                 <td class="num">{{ $row['step'] }}</td>
-                <td class="num">{{ number_format($row['basic'], 2) }}</td>
+                <td class="num">{{ taka_fmt($row['basic'], 2) }}</td>
                 @foreach ($heads as $head)
-                    <td class="num">{{ number_format($row['components'][$head] ?? 0, 2) }}</td>
+                    <td class="num">{{ taka_fmt($row['components'][$head] ?? 0, 2) }}</td>
                 @endforeach
-                <td class="num">{{ number_format($row['gross'], 2) }}</td>
-                <td class="num">{{ number_format($row['deduction'], 2) }}</td>
-                <td class="num">{{ number_format($row['net'], 2) }}</td>
+                <td class="num">{{ taka_fmt($row['gross'], 2) }}</td>
+                <td class="num">{{ taka_fmt($row['deduction'], 2) }}</td>
+                <td class="num">{{ taka_fmt($row['net'], 2) }}</td>
             </tr>
         @empty
             <tr>

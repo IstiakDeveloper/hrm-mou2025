@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { Plus } from 'lucide-react';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type Row = {
     id: number;
@@ -46,8 +47,8 @@ export default function LoanApplicationsIndex({ applications }: { applications: 
                                 <TableCell className="text-xs">{row.application_date}</TableCell>
                                 <TableCell className="text-xs">{row.employee_label}</TableCell>
                                 <TableCell className="text-xs">{row.policy_name}</TableCell>
-                                <TableCell className="text-xs text-right tabular-nums">{row.applied_amount.toLocaleString()}</TableCell>
-                                <TableCell className="text-xs text-right tabular-nums">{row.installment_amount_monthly.toLocaleString()}</TableCell>
+                                <TableCell className="text-xs text-right tabular-nums">{formatTakaWhole(row.applied_amount)}</TableCell>
+                                <TableCell className="text-xs text-right tabular-nums">{formatTakaWhole(row.installment_amount_monthly)}</TableCell>
                                 <TableCell className="text-xs text-center">{row.total_installments}</TableCell>
                                 <TableCell><Badge variant="outline" className="text-[10px] capitalize">{row.status}</Badge></TableCell>
                                 <TableCell>

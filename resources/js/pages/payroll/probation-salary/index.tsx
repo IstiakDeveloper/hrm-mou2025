@@ -18,6 +18,7 @@ import {
 import { PayrollComboField, PayrollField, PayrollBranchSelect, PayrollEmployeeSelect } from '@/components/payroll/PayrollFilterGrid';
 import { PayrollPage, PayrollPageHeader, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { Banknote, Pencil, Plus, Save, Settings2, Trash2, SlidersHorizontal, ArrowRight } from 'lucide-react';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type RuleRow = {
     id?: number;
@@ -55,12 +56,6 @@ type Props = FilterOptions & {
     rows: EmployeeRow[];
     rules: RuleRow[];
 };
-
-function formatMoney(value: number | string | null | undefined): string {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return '—';
-    return n.toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
 
 function ruleLabel(maxMonths: number): string {
     if (maxMonths >= 999) return 'Above threshold';
@@ -254,7 +249,7 @@ export default function ProbationSalaryIndex({
                                                 {ruleLabel(max)}
                                             </span>
                                             <span className="text-sm font-extrabold font-mono text-slate-800 mt-0.5">
-                                                ৳{formatMoney(rule.salary_amount)}
+                                                ৳{formatTakaWhole(rule.salary_amount)}
                                             </span>
                                         </div>
                                     </div>
@@ -370,18 +365,18 @@ export default function ProbationSalaryIndex({
                                                         {row.service_months} {row.service_months === 1 ? 'month' : 'months'}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="text-xs font-semibold font-mono text-slate-600 py-2.5">৳{formatMoney(row.default_salary)}</TableCell>
+                                                <TableCell className="text-xs font-semibold font-mono text-slate-600 py-2.5">৳{formatTakaWhole(row.default_salary)}</TableCell>
                                                 <TableCell className="py-2.5">
                                                     {row.has_override ? (
                                                         <div className="inline-flex flex-col">
                                                             <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-0.5 text-xs font-bold font-mono text-amber-800 shadow-3xs">
                                                                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                                                ৳{formatMoney(row.effective_salary)}
+                                                                ৳{formatTakaWhole(row.effective_salary)}
                                                             </span>
                                                             <span className="text-[9px] text-amber-600 font-bold uppercase tracking-wider mt-0.5 ml-1">Custom Override</span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-xs font-bold font-mono text-slate-800">৳{formatMoney(row.effective_salary)}</span>
+                                                        <span className="text-xs font-bold font-mono text-slate-800">৳{formatTakaWhole(row.effective_salary)}</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="py-2.5 pr-6 text-right">
@@ -535,7 +530,7 @@ export default function ProbationSalaryIndex({
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Default Rule Salary</p>
-                                        <p className="font-bold text-slate-700 mt-1 font-mono">৳{formatMoney(editingEmployee.default_salary)}</p>
+                                        <p className="font-bold text-slate-700 mt-1 font-mono">৳{formatTakaWhole(editingEmployee.default_salary)}</p>
                                     </div>
                                 </div>
                                 <div>
@@ -547,7 +542,7 @@ export default function ProbationSalaryIndex({
                                             min={0}
                                             value={overrideAmount}
                                             onChange={(e) => setOverrideAmount(e.target.value)}
-                                            placeholder={`Leave blank to use rule (৳${formatMoney(editingEmployee.default_salary)})`}
+                                            placeholder={`Leave blank to use rule (৳${formatTakaWhole(editingEmployee.default_salary)})`}
                                             className="h-9 pl-6 text-xs bg-white border-slate-200 font-mono focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
                                         />
                                     </div>

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Search, Wallet, X } from 'lucide-react';
 import { staffFundPath } from '@/lib/staff-fund-nav';
+import { formatTakaAmount } from '@/lib/taka-format';
 import { cn } from '@/lib/utils';
 
 type Record = {
@@ -27,9 +28,6 @@ type Props = {
     records: Record[];
     filters: { status: string };
 };
-
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function GratuityPayments({ records, filters: init }: Props) {
     const [status, setStatus] = useState(init.status || 'all');
@@ -119,7 +117,7 @@ export default function GratuityPayments({ records, filters: init }: Props) {
                                                     {r.basic_multiplier}x
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="text-right py-1.5 tabular-nums font-bold text-zinc-850">{fmt(r.gratuity_amount)}</TableCell>
+                                            <TableCell className="text-right py-1.5 tabular-nums font-bold text-zinc-850">{formatTakaAmount(r.gratuity_amount, 2)}</TableCell>
                                             <TableCell className="py-1.5">
                                                 <span className={cn(
                                                     "inline-flex items-center rounded px-1.5 py-0.2 text-[9px] font-bold border uppercase tracking-wide",

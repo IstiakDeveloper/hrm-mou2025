@@ -28,7 +28,7 @@ class LoanPolicyService
         if ($principal < (float) $policy->min_amount) {
             throw new InvalidArgumentException(sprintf(
                 'Loan amount must be at least %s under policy "%s".',
-                number_format((float) $policy->min_amount, 2),
+                taka_fmt($policy->min_amount, 2),
                 $policy->name
             ));
         }
@@ -36,7 +36,7 @@ class LoanPolicyService
         if ($principal > (float) $policy->max_amount) {
             throw new InvalidArgumentException(sprintf(
                 'Loan amount cannot exceed %s under policy "%s".',
-                number_format((float) $policy->max_amount, 2),
+                taka_fmt($policy->max_amount, 2),
                 $policy->name
             ));
         }

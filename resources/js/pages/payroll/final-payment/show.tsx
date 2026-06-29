@@ -11,6 +11,7 @@ import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard 
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { ArrowLeft, HandCoins, RefreshCw, Save } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatTakaWhole } from '@/lib/taka-format';
 import type { SharedData } from '@/types';
 
 type Employee = EmployeeNameFields & {
@@ -71,9 +72,6 @@ type Props = {
     };
     canProcess: boolean;
 };
-
-const fmt = (n: number) =>
-    Number(n || 0).toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 export default function FinalPaymentShow({ finalPayment, settlementDetails, canProcess }: Props) {
     const { flash } = usePage<SharedData & { flash?: { success?: string; error?: string } }>().props;
@@ -155,7 +153,7 @@ export default function FinalPaymentShow({ finalPayment, settlementDetails, canP
                                     <p className="text-slate-600">
                                         {pfInfo.enrolled === false
                                             ? 'Employee is not enrolled in PF.'
-                                            : `Current PF balance: ৳${fmt(finalPayment.pf_balance)}`}
+                                            : `Current PF balance: ৳${formatTakaWhole(finalPayment.pf_balance)}`}
                                     </p>
                                 </div>
 
@@ -165,7 +163,7 @@ export default function FinalPaymentShow({ finalPayment, settlementDetails, canP
                                         <p className="text-slate-600">Gratuity already paid separately.</p>
                                     ) : finalPayment.gratuity_eligible ? (
                                         <p className="text-slate-600">
-                                            Eligible — ৳{fmt(finalPayment.gratuity_amount)}
+                                            Eligible — ৳{formatTakaWhole(finalPayment.gratuity_amount)}
                                             {gratuityInfo.label ? ` (${gratuityInfo.label})` : ''}
                                         </p>
                                     ) : (
@@ -195,7 +193,7 @@ export default function FinalPaymentShow({ finalPayment, settlementDetails, canP
                                                         <TableCell>{loan.loan_number ?? `#${loan.id}`}</TableCell>
                                                         <TableCell>{loan.type_label}</TableCell>
                                                         <TableCell className="text-right font-mono">
-                                                            ৳{fmt(loan.outstanding_balance)}
+                                                            ৳{formatTakaWhole(loan.outstanding_balance)}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -203,7 +201,7 @@ export default function FinalPaymentShow({ finalPayment, settlementDetails, canP
                                         </Table>
                                     )}
                                     <p className="mt-2 text-slate-600">
-                                        Total loan recovery: ৳{fmt(finalPayment.loan_outstanding)}
+                                        Total loan recovery: ৳{formatTakaWhole(finalPayment.loan_outstanding)}
                                     </p>
                                 </div>
                             </div>
@@ -240,19 +238,19 @@ export default function FinalPaymentShow({ finalPayment, settlementDetails, canP
 
                     <div>
                         <PayrollSectionCard title="Net payable">
-                            <div className="mb-4 text-3xl font-bold text-emerald-700">৳{fmt(finalPayment.net_payable)}</div>
+                            <div className="mb-4 text-3xl font-bold text-emerald-700">৳{formatTakaWhole(finalPayment.net_payable)}</div>
                             <dl className="space-y-2 text-sm text-slate-600">
                                 <div className="flex justify-between">
                                     <dt>PF refund</dt>
-                                    <dd className="font-mono">+৳{fmt(breakdown.components?.pf_refund ?? finalPayment.pf_balance)}</dd>
+                                    <dd className="font-mono">+৳{formatTakaWhole(breakdown.components?.pf_refund ?? finalPayment.pf_balance)}</dd>
                                 </div>
                                 <div className="flex justify-between">
                                     <dt>Gratuity</dt>
-                                    <dd className="font-mono">+৳{fmt(breakdown.components?.gratuity_payable ?? finalPayment.gratuity_amount)}</dd>
+                                    <dd className="font-mono">+৳{formatTakaWhole(breakdown.components?.gratuity_payable ?? finalPayment.gratuity_amount)}</dd>
                                 </div>
                                 <div className="flex justify-between text-rose-700">
                                     <dt>Loan recovery</dt>
-                                    <dd className="font-mono">−৳{fmt(breakdown.components?.loan_recovery ?? finalPayment.loan_outstanding)}</dd>
+                                    <dd className="font-mono">−৳{formatTakaWhole(breakdown.components?.loan_recovery ?? finalPayment.loan_outstanding)}</dd>
                                 </div>
                             </dl>
 

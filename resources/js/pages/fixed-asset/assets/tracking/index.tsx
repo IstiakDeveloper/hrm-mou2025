@@ -11,6 +11,7 @@ import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { Eye, Search, MapPin } from 'lucide-react';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 
 type AssetRow = {
     id: number;
@@ -198,7 +199,7 @@ export default function AssetTrackingIndex({
                                         <TableCell className="text-zinc-500 text-xs">{[row.floor_no, row.room_no].filter(Boolean).join(' / ') || '—'}</TableCell>
                                         <TableCell>{getStatusBadge(row.status)}</TableCell>
                                         <TableCell className="text-right font-mono text-xs font-semibold text-zinc-800 tabular-nums">
-                                            {row.book_value != null ? `৳${Number(row.book_value).toLocaleString()}` : '—'}
+                                            {row.book_value != null ? formatTakaWithSymbol(row.book_value) : '—'}
                                         </TableCell>
                                         <TableCell className="text-right py-3.5 pr-6">
                                             <Link href={route('fixed-assets.show', row.id)}>

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Edit, Layers, Plus, Trash2, Search, X } from 'lucide-react';
 import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type PayscaleOption = { id: number; name: string; code: string | null };
 type GradeOption = { id: number; payscale_id: number; code: string; name: string | null; payscale?: { id: number; name: string } };
@@ -52,10 +53,7 @@ export default function SalaryStepIndex({
         if (confirm('Delete this salary step?')) router.delete(route('salary-steps.destroy', id));
     };
 
-    const formatSalary = (value: string) => {
-        const n = Number(value);
-        return Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : value;
-    };
+    const formatSalary = (value: string) => formatTakaWhole(value);
 
     return (
         <Layout>

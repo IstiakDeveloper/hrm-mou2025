@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
 import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
 import { formatEmployeeDocumentTypeLabel } from '@/lib/employee-v2-form-persist';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 
 interface Department { id: number; name: string; }
 interface Designation { id: number; name: string; }
@@ -109,7 +110,7 @@ function parseCertificateLevels(raw: unknown): string[] {
 
 function formatCurrency(value: string | number | null | undefined): string {
     if (value == null || value === '') return '';
-    return `৳ ${value}`;
+    return formatTakaWithSymbol(value);
 }
 
 interface Employee extends EmployeeNameFields {

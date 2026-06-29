@@ -206,6 +206,18 @@ class PayrollReportXlsxExporter
                     $line[$col] = self::styled('', border: true);
                     $r = $addRow($line);
                     $merges[] = [0, $employeeCols - 1, $r];
+
+                    if ($totalsLabel === 'Total') {
+                        $line = array_fill(0, $totalCols, self::styled('', border: true));
+                        $line[0] = self::styled(
+                            'In Words: '.AmountInWords::taka($totals['net'] ?? 0),
+                            bold: true,
+                            align: 'left',
+                            fontSize: 8,
+                        );
+                        $r = $addRow($line);
+                        $merges[] = [0, $lastCol, $r];
+                    }
                 }
 
                 $addBlank();

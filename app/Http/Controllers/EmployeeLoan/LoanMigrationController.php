@@ -283,8 +283,8 @@ class LoanMigrationController extends Controller
 
         $message = sprintf(
             'Recalculated from policy — installment %s, outstanding %s.',
-            number_format((float) $item->installment_amount, 0),
-            number_format((float) $item->outstanding_total, 0),
+            taka_fmt($item->installment_amount),
+            taka_fmt($item->outstanding_total),
         );
 
         if ($request->expectsJson()) {

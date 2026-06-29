@@ -1,5 +1,6 @@
 @php
     use App\Support\PayrollReportTableWidths;
+    use App\Support\TakaFormat;
 
     $earningHeads = $payload['earning_heads'] ?? [];
     $deductionHeads = $payload['deduction_heads'] ?? [];
@@ -12,11 +13,7 @@
     $deductionCols = count($deductionHeads) + 1;
     $summaryCols = 2;
     $totalCols = $employeeCols + $earningCols + $deductionCols + $summaryCols;
-    $fmtAmt = static function ($value) {
-        $n = (int) round((float) $value);
-
-        return $n === 0 ? '-' : number_format($n, 0);
-    };
+    $fmtAmt = static fn ($value) => TakaFormat::sheetCell($value);
     if (! empty($tableLayout)) {
         $colWidths = $tableLayout['colWidths'];
         $fillPage = $tableLayout['fillPage'];

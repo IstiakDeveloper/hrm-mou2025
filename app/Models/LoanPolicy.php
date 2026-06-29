@@ -69,6 +69,6 @@ class LoanPolicy extends Model
 
     public function amountLabel(): string
     {
-        return number_format((float) $this->min_amount, 0).' – '.number_format((float) $this->max_amount, 0).' ৳';
+        return taka_fmt($this->min_amount).' – '.taka_fmt($this->max_amount).' ৳';
     }
 }

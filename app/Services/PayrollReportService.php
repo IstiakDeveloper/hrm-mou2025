@@ -621,7 +621,7 @@ class PayrollReportService
     }
 
     /**
-     * Employee data rows per printed page (Sub Total / Total row reserved separately).
+     * Employee data rows per printed page (Sub Total / Total, In Words, and signature footer reserved separately).
      */
     protected function salarySheetDataRowsForPage(): int
     {
@@ -647,13 +647,23 @@ class PayrollReportService
         $offset = 0;
         $serialStart = 0;
         $total = count($rows);
-        $dataBudget = max(1, $rowsPerPage ?? $this->salarySheetDataRowsForPage());
+        $regularBudget = max(1, $rowsPerPage ?? $this->salarySheetDataRowsForPage());
+        $lastPageBudget = max(1, $regularBudget - 1);
 
         while ($offset < $total) {
             $remaining = $total - $offset;
 
-            $isLastPage = $remaining <= $dataBudget;
-            $take = $isLastPage ? $remaining : $dataBudget;
+            if ($remaining <= $lastPageBudget) {
+                $take = $remaining;
+                $isLastPage = true;
+            } elseif ($remaining <= $regularBudget) {
+                $take = $remaining;
+                $isLastPage = true;
+            } else {
+                $take = $regularBudget;
+                $isLastPage = false;
+            }
+
             $chunk = array_slice($rows, $offset, $take);
 
             $pages[] = [

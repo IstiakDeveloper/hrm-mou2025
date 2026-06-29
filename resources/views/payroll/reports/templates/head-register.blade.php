@@ -11,7 +11,7 @@
             @foreach ($payload['summary'] as $item)
                 <tr>
                     <td>{{ $item['head_name'] }}</td>
-                    <td class="num">{{ number_format($item['total'], 2) }}</td>
+                    <td class="num">{{ taka_fmt($item['total'], 2) }}</td>
                 </tr>
             @endforeach
         </tbody>
@@ -39,7 +39,7 @@
                 <td>{{ $row['branch'] }}</td>
                 <td>{{ $row['period'] }}</td>
                 <td>{{ $row['head_name'] }}</td>
-                <td class="num">{{ number_format($row['amount'], 2) }}</td>
+                <td class="num">{{ taka_fmt($row['amount'], 2) }}</td>
             </tr>
         @empty
             <tr>

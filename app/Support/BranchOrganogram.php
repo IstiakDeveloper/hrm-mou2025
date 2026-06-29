@@ -66,6 +66,8 @@ final class BranchOrganogram
         return "CASE
             WHEN {$normalized} REGEXP '(^| )officer[ -]*[0-9]+($| )'
                 THEN CAST(REGEXP_SUBSTR({$normalized}, '[0-9]+') AS UNSIGNED)
+            WHEN {$normalized} REGEXP '(^| )accountant[ -]*[0-9]+($| )'
+                THEN CAST(REGEXP_SUBSTR({$normalized}, '[0-9]+') AS UNSIGNED)
             ELSE 0
         END";
     }
@@ -336,10 +338,11 @@ final class BranchOrganogram
         $like = static fn (string $needle): string => "{$normalizedExpr} LIKE '%".str_replace("'", "''", $needle)."%'";
 
         return match ($tierLabel) {
-            'Branch Manager' => "({$like('branch manager')} AND {$normalizedExpr} NOT LIKE '%assistant branch manager%')",
-            'Assistant Branch Manager' => $like('assistant branch manager'),
-            'Accountant' => "({$normalizedExpr} LIKE '%accountant%' AND {$normalizedExpr} NOT LIKE '%accounts officer%' AND {$normalizedExpr} NOT LIKE '%accountant iii%' AND {$normalizedExpr} NOT LIKE '%accountant 3%')",
-            'Officer' => "({$normalizedExpr} LIKE '%officer%' AND {$normalizedExpr} NOT LIKE '%accounts officer%' AND {$normalizedExpr} NOT LIKE '%branch manager%' AND {$normalizedExpr} NOT LIKE '%assistant branch manager%')",
+            'Branch Manager' => "({$like('branch manager')} AND {$normalizedExpr} NOT LIKE '%assistant branch manager%' AND {$normalizedExpr} NOT LIKE '%probationary%')",
+            'Assistant Branch Manager' => "({$like('assistant branch manager')} AND {$normalizedExpr} NOT LIKE '%probationary%')",
+            'Officer' => "({$normalizedExpr} LIKE '%officer%' AND {$normalizedExpr} NOT LIKE '%probationary%' AND {$normalizedExpr} NOT LIKE '%trainee%' AND {$normalizedExpr} NOT LIKE '%accounts officer%' AND {$normalizedExpr} NOT LIKE '%branch manager%' AND {$normalizedExpr} NOT LIKE '%assistant branch manager%')",
+            'Accountant' => "({$normalizedExpr} LIKE '%accountant%' AND {$normalizedExpr} NOT LIKE '%probationary%' AND {$normalizedExpr} NOT LIKE '%trainee%' AND {$normalizedExpr} NOT LIKE '%accounts officer%' AND {$normalizedExpr} NOT LIKE '%accountant iii%' AND {$normalizedExpr} NOT LIKE '%accountant 3%')",
+            'Probationary Staff' => "({$normalizedExpr} LIKE '%probationary%' OR {$normalizedExpr} LIKE '%trainee%')",
             default => null,
         };
     }
@@ -357,16 +360,24 @@ final class BranchOrganogram
     {
         return match ($tierLabel) {
             'Branch Manager' => self::containsPhrase($normalized, 'branch manager')
-                && ! self::containsPhrase($normalized, 'assistant branch manager'),
-            'Assistant Branch Manager' => self::containsPhrase($normalized, 'assistant branch manager'),
-            'Accountant' => self::containsPhrase($normalized, 'accountant')
-                && ! self::containsPhrase($normalized, 'accounts officer')
-                && ! self::containsPhrase($normalized, 'accountant iii')
-                && ! self::containsPhrase($normalized, 'accountant 3'),
+                && ! self::containsPhrase($normalized, 'assistant branch manager')
+                && ! self::containsPhrase($normalized, 'probationary'),
+            'Assistant Branch Manager' => self::containsPhrase($normalized, 'assistant branch manager')
+                && ! self::containsPhrase($normalized, 'probationary'),
             'Officer' => str_contains($normalized, 'officer')
+                && ! self::containsPhrase($normalized, 'probationary')
+                && ! self::containsPhrase($normalized, 'trainee')
                 && ! self::containsPhrase($normalized, 'accounts officer')
                 && ! self::containsPhrase($normalized, 'branch manager')
                 && ! self::containsPhrase($normalized, 'assistant branch manager'),
+            'Accountant' => self::containsPhrase($normalized, 'accountant')
+                && ! self::containsPhrase($normalized, 'probationary')
+                && ! self::containsPhrase($normalized, 'trainee')
+                && ! self::containsPhrase($normalized, 'accounts officer')
+                && ! self::containsPhrase($normalized, 'accountant iii')
+                && ! self::containsPhrase($normalized, 'accountant 3'),
+            'Probationary Staff' => self::containsPhrase($normalized, 'probationary')
+                || self::containsPhrase($normalized, 'trainee'),
             default => false,
         };
     }
@@ -395,6 +406,9 @@ final class BranchOrganogram
     {
         $normalized = self::normalizeDesignationName($designation);
         if (preg_match('/(^| )officer[ -]*(\d+)($| )/u', $normalized, $matches) === 1) {
+            return (int) $matches[2];
+        }
+        if (preg_match('/(^| )accountant[ -]*(\d+)($| )/u', $normalized, $matches) === 1) {
             return (int) $matches[2];
         }
 

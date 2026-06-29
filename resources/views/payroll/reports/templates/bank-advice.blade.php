@@ -21,7 +21,7 @@
                 <td>{{ $row['bank_branch'] }}</td>
                 <td>{{ $row['account_no'] }}</td>
                 <td>{{ $row['account_type'] }}</td>
-                <td class="num">{{ number_format($row['amount'], 2) }}</td>
+                <td class="num">{{ taka_fmt($row['amount'], 2) }}</td>
             </tr>
         @empty
             <tr>
@@ -31,7 +31,7 @@
         @if (!empty($payload['meta']['total']))
             <tr class="totals-row">
                 <td colspan="7" class="text-right">Grand Total</td>
-                <td class="num">{{ number_format($payload['meta']['total'], 2) }}</td>
+                <td class="num">{{ taka_fmt($payload['meta']['total'], 2) }}</td>
             </tr>
         @endif
     </tbody>

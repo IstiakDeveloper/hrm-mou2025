@@ -149,7 +149,7 @@ class EmployeeV2Controller extends Controller
 
         $employee->loadMissing(['department', 'designation', 'branch']);
 
-        $payload = $employee->toArray();
+        $payload = $employee->toInertiaArray();
         $payload['pin'] = $employee->pin;
 
         $payload['addresses'] = DB::table('employee_addresses')->where('employee_id', $employee->id)->get()->all();

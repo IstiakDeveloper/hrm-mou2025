@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 export type ReportColumn = {
     key: string;
@@ -19,7 +20,7 @@ type TablePayload = {
 
 function fmt(n: unknown) {
     const v = Number(n);
-    return Number.isFinite(v) ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : String(n ?? '—');
+    return Number.isFinite(v) ? formatTakaWhole(v) : String(n ?? '—');
 }
 
 function cellAlign(align?: string) {

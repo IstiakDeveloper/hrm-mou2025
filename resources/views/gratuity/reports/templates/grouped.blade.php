@@ -17,16 +17,16 @@
             <tr>
                 <td>{{ $section['title'] ?? '—' }}</td>
                 <td class="text-center">{{ $section['employee_count'] ?? 0 }}</td>
-                <td class="num">{{ number_format((float) ($section['total_basic'] ?? 0), 0) }}</td>
-                <td class="num">{{ number_format((float) ($section['total_gratuity'] ?? 0), 0) }}</td>
+                <td class="num">{{ taka_fmt($section['total_basic'] ?? 0) }}</td>
+                <td class="num">{{ taka_fmt($section['total_gratuity'] ?? 0) }}</td>
             </tr>
         @endforeach
         @if ($totals)
             <tr class="totals-row">
                 <td>{{ $totals['title'] ?? 'Grand total' }}</td>
                 <td class="text-center">{{ $totals['employee_count'] ?? 0 }}</td>
-                <td class="num">{{ number_format((float) ($totals['total_basic'] ?? 0), 0) }}</td>
-                <td class="num">{{ number_format((float) ($totals['total_gratuity'] ?? 0), 0) }}</td>
+                <td class="num">{{ taka_fmt($totals['total_basic'] ?? 0) }}</td>
+                <td class="num">{{ taka_fmt($totals['total_gratuity'] ?? 0) }}</td>
             </tr>
         @endif
     </tbody>

@@ -45,18 +45,18 @@ class ImportPfOpeningBalanceFromXlsxCommand extends Command
         $verification = $result['verification'];
         if ($dryRun) {
             $this->warn('Dry run: no database changes were written.');
-            $this->line('XLSX totals — Own: '.number_format((float) $verification['xlsx_own_total'], 0)
-                .', Org: '.number_format((float) $verification['xlsx_org_total'], 0)
-                .', Grand: '.number_format((float) $verification['xlsx_grand_total'], 0));
+            $this->line('XLSX totals — Own: '.taka_fmt($verification['xlsx_own_total'], 0)
+                .', Org: '.taka_fmt($verification['xlsx_org_total'], 0)
+                .', Grand: '.taka_fmt($verification['xlsx_grand_total'], 0));
         } else {
             $perfect = $verification['perfect'] ?? false;
             if ($perfect) {
                 $this->info('Verification: PERFECT — database totals match spreadsheet.');
             } else {
                 $this->warn('Verification: MISMATCH — review log for details.');
-                $this->line('XLSX grand total: '.number_format((float) ($verification['xlsx_grand_total'] ?? 0), 0));
-                $this->line('DB opening grand total: '.number_format((float) ($verification['db_opening_grand_total'] ?? 0), 0));
-                $this->line('DB employee pf_balance sum: '.number_format((float) ($verification['db_employee_pf_balance_total'] ?? 0), 0));
+                $this->line('XLSX grand total: '.taka_fmt(($verification['xlsx_grand_total'] ?? 0), 0));
+                $this->line('DB opening grand total: '.taka_fmt(($verification['db_opening_grand_total'] ?? 0), 0));
+                $this->line('DB employee pf_balance sum: '.taka_fmt(($verification['db_employee_pf_balance_total'] ?? 0), 0));
             }
         }
 

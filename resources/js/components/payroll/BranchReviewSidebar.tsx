@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { payrollFilterActive } from '@/components/payroll/PayrollPageShell';
 import { cn } from '@/lib/utils';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 import { Building2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
 const DEFAULT_STORAGE_KEY = 'payroll-review-branch-sidebar';
@@ -176,7 +177,7 @@ export function BranchReviewSidebar({
                                                     )}
                                                 >
                                                     <span>{block.run.employee_count} employees</span>
-                                                    <span className="font-mono font-bold">৳{block.run.total_net.toLocaleString()}</span>
+                                                    <span className="font-mono font-bold">{formatTakaWithSymbol(block.run.total_net)}</span>
                                                 </div>
 
                                                 <div className="flex items-center justify-between mt-1 pt-1 border-t border-slate-100/10">

@@ -26,7 +26,7 @@
                         $align = $col['align'] ?? 'left';
                         $class = $align === 'right' ? 'num' : ($align === 'center' ? 'text-center' : '');
                         if (! empty($col['numeric']) && is_numeric($val)) {
-                            $val = number_format((float) $val, 0);
+                            $val = taka_fmt($val);
                         }
                     @endphp
                     <td class="{{ $class }}">{{ $val }}</td>
@@ -42,7 +42,7 @@
                         $align = $col['align'] ?? 'left';
                         $class = $align === 'right' ? 'num' : ($align === 'center' ? 'text-center' : '');
                         if (! empty($col['numeric']) && is_numeric($val)) {
-                            $val = number_format((float) $val, 0);
+                            $val = taka_fmt($val);
                         }
                     @endphp
                     <td class="{{ $class }}">{{ $val }}</td>

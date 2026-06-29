@@ -7,6 +7,7 @@ import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { DepreciationPeriodFilters, type FinancialYearOpt, type FyPeriod } from '@/components/fixed-asset/DepreciationPeriodFilters';
 import { Calculator } from 'lucide-react';
+import { formatTakaAmount } from '@/lib/taka-format';
 
 type CalcRow = {
     asset_id: number;
@@ -20,10 +21,6 @@ type CalcRow = {
     will_post: boolean;
     skip_reason: string | null;
 };
-
-function fmt(n: number) {
-    return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
 
 export default function DepreciationCalculation({
     rows,
@@ -67,7 +64,7 @@ export default function DepreciationCalculation({
                         <p className="text-sm text-muted-foreground">Eligible: <strong>{summary.eligible}</strong></p>
                         <p className="text-sm text-muted-foreground">Will post: <strong>{summary.will_post}</strong></p>
                         <p className="text-sm text-muted-foreground">Skipped: <strong>{summary.skipped}</strong></p>
-                        <p className="text-sm text-muted-foreground">Total amount: <strong>{fmt(summary.total_amount)}</strong></p>
+                        <p className="text-sm text-muted-foreground">Total amount: <strong>{formatTakaAmount(summary.total_amount, 2)}</strong></p>
                     </PayrollSectionCard>
                     <PayrollSectionCard title="Period" className="md:col-span-2">
                         <DepreciationPeriodFilters
@@ -110,7 +107,7 @@ export default function DepreciationCalculation({
                                     </TableCell>
                                     <TableCell>{row.branch_name ?? '—'}</TableCell>
                                     <TableCell className="text-xs">{row.depreciation_method?.replace('_', ' ') ?? '—'}</TableCell>
-                                    <TableCell className="text-right tabular-nums">{fmt(row.amount)}</TableCell>
+                                    <TableCell className="text-right tabular-nums">{formatTakaAmount(row.amount, 2)}</TableCell>
                                     <TableCell>
                                         {row.will_post ? (
                                             <Badge>Will post</Badge>

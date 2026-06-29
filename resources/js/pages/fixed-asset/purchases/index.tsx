@@ -12,6 +12,7 @@ import { Plus, Search, ShoppingCart } from 'lucide-react';
 import { hasAppPermission } from '@/lib/permissions';
 import { formatDisplayDate } from '@/lib/display-date';
 import type { SharedData } from '@/types';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type PurchaseRow = {
     id: number;
@@ -97,7 +98,7 @@ export default function AssetPurchaseIndex({
                                     <TableCell>{row.vendor?.name || '—'}</TableCell>
                                     <TableCell><Badge variant="outline">{row.purchase_type}</Badge></TableCell>
                                     <TableCell>{row.items_count}</TableCell>
-                                    <TableCell className="text-right tabular-nums">{Number(row.total_amount).toLocaleString()}</TableCell>
+                                    <TableCell className="text-right tabular-nums">{formatTakaWhole(row.total_amount)}</TableCell>
                                     <TableCell className="text-right">
                                         <Link href={route('fixed-asset.purchases.show', row.id)}><Button variant="ghost" size="sm">View</Button></Link>
                                     </TableCell>

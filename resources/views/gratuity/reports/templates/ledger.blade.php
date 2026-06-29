@@ -37,17 +37,17 @@
                 </td>
                 <th style="text-align: left;">Years × Basic × Multiplier</th>
                 <td>
-                    {{ $employee['years'] ?? 0 }} × {{ number_format((float) ($employee['basic'] ?? 0), 0) }} × {{ $employee['multiplier'] ?? 0 }}
+                    {{ $employee['years'] ?? 0 }} × {{ taka_fmt($employee['basic'] ?? 0) }} × {{ $employee['multiplier'] ?? 0 }}
                 </td>
             </tr>
             <tr>
                 <th style="text-align: left;">Projected gratuity</th>
-                <td class="num">{{ number_format((float) ($employee['gratuity'] ?? 0), 0) }}</td>
+                <td class="num">{{ taka_fmt($employee['gratuity'] ?? 0) }}</td>
                 <th style="text-align: left;">Paid / Outstanding</th>
                 <td class="num">
-                    {{ number_format((float) ($employee['paid_total'] ?? 0), 0) }}
+                    {{ taka_fmt($employee['paid_total'] ?? 0) }}
                     /
-                    {{ number_format((float) ($employee['outstanding'] ?? 0), 0) }}
+                    {{ taka_fmt($employee['outstanding'] ?? 0) }}
                 </td>
             </tr>
         </tbody>

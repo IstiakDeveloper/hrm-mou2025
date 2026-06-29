@@ -14,15 +14,15 @@
         </tr>
         <tr>
             <th style="text-align: left;">Opening (before period)</th>
-            <td class="text-center">{{ number_format((int) ($summary['opening'] ?? 0), 0) }}</td>
+            <td class="text-center">{{ taka_fmt($summary['opening'] ?? 0) }}</td>
             <th style="text-align: left;">Closing (after period)</th>
-            <td class="text-center">{{ number_format((int) ($summary['closing'] ?? 0), 0) }}</td>
+            <td class="text-center">{{ taka_fmt($summary['closing'] ?? 0) }}</td>
         </tr>
         <tr>
             <th style="text-align: left;">Stock in (period)</th>
-            <td class="text-center">{{ number_format((int) ($summary['period_stock_in'] ?? 0), 0) }}</td>
+            <td class="text-center">{{ taka_fmt($summary['period_stock_in'] ?? 0) }}</td>
             <th style="text-align: left;">Disburse (period)</th>
-            <td class="text-center">{{ number_format((int) ($summary['period_disburse'] ?? 0), 0) }}</td>
+            <td class="text-center">{{ taka_fmt($summary['period_disburse'] ?? 0) }}</td>
         </tr>
     </tbody>
 </table>

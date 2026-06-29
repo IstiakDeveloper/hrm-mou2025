@@ -4,6 +4,7 @@ import { ComboSelect, type ComboSelectItem } from '@/components/ComboSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 import { useEmployeeLookup } from '@/lib/employee-lookup';
 import { employeeDisplayName } from '@/lib/employee-name';
+import { formatTakaWhole } from '@/lib/taka-format';
 import { Label } from '@/components/ui/label';
 import { branchComboSelectItems, type PayrollBranchOption } from '@/lib/payroll-branches';
 import { DISPLAY_DATE_FMT, parseFormDateValue } from '@/lib/display-date';
@@ -201,7 +202,7 @@ export function PayrollEmployeeSelect({
             const balance = Number(e.pf_balance ?? 0);
             const balanceSuffix =
                 showPfBalance && balance > 0
-                    ? ` · Balance ${balance.toLocaleString('en-BD', { maximumFractionDigits: 0 })}`
+                    ? ` · Balance ${formatTakaWhole(balance)}`
                     : showPfBalance && balance <= 0
                       ? ' · No PF balance'
                       : '';

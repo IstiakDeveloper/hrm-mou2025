@@ -15,6 +15,7 @@ import {
 import { PayrollPage, PayrollPageHeader, payrollBtnPrimary, payrollFilterActive } from '@/components/payroll/PayrollPageShell';
 import { BranchReviewSidebar } from '@/components/payroll/BranchReviewSidebar';
 import { cn } from '@/lib/utils';
+import { formatTakaWhole, formatTakaWithSymbol } from '@/lib/taka-format';
 import { payrollPostLabels, payrollPostRoutes, type PayrollPostContext } from '@/lib/payroll-post-routes';
 import { ArrowLeft, CheckCircle2, ChevronDown, Save, Trash2, Search, Users, Coins, Building, ShieldAlert, Check, X, SlidersHorizontal, RefreshCw } from 'lucide-react';
 
@@ -96,14 +97,27 @@ export default function SalaryPostPeriod({
 
     const buildBranchLinesPayload = useCallback(
         (block: (typeof initialBranches)[number]) => {
-            const lineIds = isBonus
-                ? block.payslips.map((p) => p.bonus_review?.line_id).filter((id): id is number => id != null)
-                : block.payslips.flatMap((p) => p.lines.map((l) => l.id));
+            const lines: { id: number; computed_amount: number }[] = [];
 
-            return lineIds.map((id) => ({
-                id,
-                computed_amount: Number(amounts[id] ?? 0),
-            }));
+            for (const p of block.payslips) {
+                if (isBonus && p.bonus_review?.line_id) {
+                    const id = p.bonus_review.line_id;
+                    lines.push({
+                        id,
+                        computed_amount: Number(amounts[id] ?? p.bonus_review.bonus_amount),
+                    });
+                    continue;
+                }
+
+                for (const line of p.lines) {
+                    lines.push({
+                        id: line.id,
+                        computed_amount: Number(amounts[line.id] ?? line.computed_amount),
+                    });
+                }
+            }
+
+            return lines;
         },
         [amounts, isBonus],
     );
@@ -408,13 +422,13 @@ export default function SalaryPostPeriod({
                         { label: 'Employees', value: summary.employee_count.toLocaleString(), icon: Users, color: 'text-indigo-500 bg-indigo-50/50 border-indigo-100', isMoney: false },
                         ...(isBonus
                             ? [
-                                  { label: 'Total Bonus (Live)', value: livePeriodTotals.net.toLocaleString(), icon: Coins, color: 'text-emerald-700 bg-emerald-50/50 border-emerald-100', highlight: true, isMoney: true },
+                                  { label: 'Total Bonus (Live)', value: formatTakaWhole(livePeriodTotals.net), icon: Coins, color: 'text-emerald-700 bg-emerald-50/50 border-emerald-100', highlight: true, isMoney: true },
                               ]
                             : [
-                                  { label: 'Basic Salary (Live)', value: livePeriodTotals.basic.toLocaleString(), icon: Coins, color: 'text-violet-500 bg-violet-50/50 border-violet-100', isMoney: true },
-                                  { label: 'Gross (Live)', value: livePeriodTotals.gross.toLocaleString(), icon: Coins, color: 'text-slate-500 bg-slate-50/50 border-slate-100', isMoney: true },
-                                  { label: 'Total Deduction (Live)', value: livePeriodTotals.deduction.toLocaleString(), icon: Coins, color: 'text-red-500 bg-red-50/50 border-red-100', isMoney: true },
-                                  { label: 'Net Payable (Live)', value: livePeriodTotals.net.toLocaleString(), icon: Coins, color: 'text-emerald-700 bg-emerald-50/50 border-emerald-100', highlight: true, isMoney: true },
+                                  { label: 'Basic Salary (Live)', value: formatTakaWhole(livePeriodTotals.basic), icon: Coins, color: 'text-violet-500 bg-violet-50/50 border-violet-100', isMoney: true },
+                                  { label: 'Gross (Live)', value: formatTakaWhole(livePeriodTotals.gross), icon: Coins, color: 'text-slate-500 bg-slate-50/50 border-slate-100', isMoney: true },
+                                  { label: 'Total Deduction (Live)', value: formatTakaWhole(livePeriodTotals.deduction), icon: Coins, color: 'text-red-500 bg-red-50/50 border-red-100', isMoney: true },
+                                  { label: 'Net Payable (Live)', value: formatTakaWhole(livePeriodTotals.net), icon: Coins, color: 'text-emerald-700 bg-emerald-50/50 border-emerald-100', highlight: true, isMoney: true },
                               ]),
                     ].map((s) => {
                         const Icon = s.icon;
@@ -539,25 +553,25 @@ export default function SalaryPostPeriod({
                                             <>
                                                 <div className="rounded-lg border border-slate-50 bg-slate-50/30 px-3.5 py-2.5">
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Basic Salary (Live)</span>
-                                                    <p className="mt-1 text-sm font-bold text-slate-700 font-mono">৳{liveActiveBranchTotals.basic.toLocaleString()}</p>
+                                                    <p className="mt-1 text-sm font-bold text-slate-700 font-mono">{formatTakaWithSymbol(liveActiveBranchTotals.basic)}</p>
                                                 </div>
                                                 <div className="rounded-lg border border-slate-50 bg-slate-50/30 px-3.5 py-2.5">
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gross (Live)</span>
-                                                    <p className="mt-1 text-sm font-bold text-slate-700 font-mono">৳{liveActiveBranchTotals.gross.toLocaleString()}</p>
+                                                    <p className="mt-1 text-sm font-bold text-slate-700 font-mono">{formatTakaWithSymbol(liveActiveBranchTotals.gross)}</p>
                                                 </div>
                                                 <div className="rounded-lg border border-red-50/60 bg-red-50/10 px-3.5 py-2.5">
                                                     <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider">Total Deduction (Live)</span>
-                                                    <p className="mt-1 text-sm font-bold text-red-900 font-mono">৳{liveActiveBranchTotals.deduction.toLocaleString()}</p>
+                                                    <p className="mt-1 text-sm font-bold text-red-900 font-mono">{formatTakaWithSymbol(liveActiveBranchTotals.deduction)}</p>
                                                 </div>
                                                 <div className="rounded-lg border border-emerald-50/60 bg-emerald-50/15 px-3.5 py-2.5 col-span-2 md:col-span-1">
                                                     <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Net Payable (Live)</span>
-                                                    <p className="mt-1 text-sm font-bold text-emerald-950 font-mono">৳{liveActiveBranchTotals.net.toLocaleString()}</p>
+                                                    <p className="mt-1 text-sm font-bold text-emerald-950 font-mono">{formatTakaWithSymbol(liveActiveBranchTotals.net)}</p>
                                                 </div>
                                             </>
                                         ) : (
                                             <div className="rounded-lg border border-emerald-50/60 bg-emerald-50/15 px-3.5 py-2.5 col-span-2 md:col-span-4">
                                                 <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Total Bonus (Live)</span>
-                                                <p className="mt-1 text-sm font-bold text-emerald-950 font-mono">৳{liveActiveBranchTotals.net.toLocaleString()}</p>
+                                                <p className="mt-1 text-sm font-bold text-emerald-950 font-mono">{formatTakaWithSymbol(liveActiveBranchTotals.net)}</p>
                                             </div>
                                         )}
                                     </div>

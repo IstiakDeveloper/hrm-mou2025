@@ -13,6 +13,7 @@ import {
 } from '@/components/payroll/PayrollFilterGrid';
 import { PayrollFormActions, PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { RotateCcw, Search } from 'lucide-react';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 
 type Row = {
     payslip_id: number;
@@ -179,7 +180,7 @@ export default function SalaryRollbackIndex({ filters: init, rows, ...options }:
                                             <TableCell className="text-sm font-semibold text-slate-800 py-3">{r.name}</TableCell>
                                             <TableCell className="text-xs text-slate-600 font-medium py-3">{r.grade ?? '—'}</TableCell>
                                             <TableCell className="text-xs text-slate-600 font-medium py-3">{r.step ?? '—'}</TableCell>
-                                            <TableCell className="text-right font-mono text-xs text-slate-700 font-semibold pr-6 py-3">৳{r.net.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs text-slate-700 font-semibold pr-6 py-3">{formatTakaWithSymbol(r.net)}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

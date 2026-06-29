@@ -8,6 +8,7 @@ import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components
 import { ArrowLeft, ShoppingCart } from 'lucide-react';
 import { employeeDisplayName } from '@/lib/employee-name';
 import { formatDisplayDate } from '@/lib/display-date';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type AssetRef = { id: number; asset_tag: string; manual_asset_code: string | null; name: string; purchase_cost: string; status: string };
 type ItemRow = {
@@ -64,7 +65,7 @@ export default function AssetPurchaseShow({ purchase }: { purchase: Record<strin
                             <div className="flex justify-between"><dt className="text-muted-foreground">Type</dt><dd>{p.purchase_type_label}</dd></div>
                             <div className="flex justify-between"><dt className="text-muted-foreground">Voucher / Ledger</dt><dd>{[p.voucher_no, p.ledger_no].filter(Boolean).join(' / ') || '—'}</dd></div>
                             <div className="flex justify-between"><dt className="text-muted-foreground">Account head</dt><dd>{p.account_head || '—'}</dd></div>
-                            <div className="flex justify-between"><dt className="text-muted-foreground">Total</dt><dd className="font-semibold tabular-nums">{Number(p.total_amount).toLocaleString()}</dd></div>
+                            <div className="flex justify-between"><dt className="text-muted-foreground">Total</dt><dd className="font-semibold tabular-nums">{formatTakaWhole(p.total_amount)}</dd></div>
                             {p.description && <div><dt className="text-muted-foreground">Description</dt><dd className="mt-1">{p.description}</dd></div>}
                         </dl>
                     </PayrollSectionCard>
@@ -73,7 +74,7 @@ export default function AssetPurchaseShow({ purchase }: { purchase: Record<strin
                     <PayrollSectionCard key={item.id} title={`${item.category?.name}${item.sub_category ? ` / ${item.sub_category.name}` : ''}`} className="mb-4">
                         <div className="mb-3 flex flex-wrap gap-2 text-sm text-muted-foreground">
                             <span>Qty: {item.quantity}</span>
-                            <span>Rate: {Number(item.unit_purchase_amount).toLocaleString()}</span>
+                            <span>Rate: {formatTakaWhole(item.unit_purchase_amount)}</span>
                             <span>Depreciation: {item.depreciation_rate ?? '—'}%</span>
                             {item.is_insurance && <Badge variant="outline">Insurance</Badge>}
                             {item.is_warranty && <Badge variant="outline">Warranty</Badge>}
@@ -92,7 +93,7 @@ export default function AssetPurchaseShow({ purchase }: { purchase: Record<strin
                                         <TableCell className="font-mono text-xs">{a.manual_asset_code || '—'}</TableCell>
                                         <TableCell className="font-mono text-xs">{a.asset_tag}</TableCell>
                                         <TableCell>{a.name}</TableCell>
-                                        <TableCell className="text-right tabular-nums">{Number(a.purchase_cost).toLocaleString()}</TableCell>
+                                        <TableCell className="text-right tabular-nums">{formatTakaWhole(a.purchase_cost)}</TableCell>
                                         <TableCell className="text-right">
                                             <Link href={route('fixed-assets.show', a.id)}><Button variant="ghost" size="sm">Open</Button></Link>
                                         </TableCell>

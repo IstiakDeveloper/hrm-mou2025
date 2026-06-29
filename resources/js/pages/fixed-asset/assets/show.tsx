@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, ArrowRightLeft, Boxes, Edit, Trash2, TrendingDown, UserCheck, Wrench, Calendar, DollarSign, History } from 'lucide-react';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 import { formatDisplayDate } from '@/lib/display-date';
 
 type TransferRow = {
@@ -207,7 +208,7 @@ export default function FixedAssetShow({
                             <div className="flex justify-between items-center py-2.5">
                                 <span className="text-zinc-500 font-medium text-xs">Book Value</span>
                                 <span className="font-mono text-zinc-900 font-bold text-xs">
-                                    {asset.book_value != null ? `৳${Number(asset.book_value).toLocaleString()}` : asset.purchase_cost != null ? `৳${Number(asset.purchase_cost).toLocaleString()}` : '—'}
+                                    {asset.book_value != null ? formatTakaWithSymbol(asset.book_value) : asset.purchase_cost != null ? formatTakaWithSymbol(asset.purchase_cost) : '—'}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center py-2.5">
@@ -323,7 +324,7 @@ export default function FixedAssetShow({
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell className="font-mono text-xs font-semibold text-zinc-800">
-                                                        {m.cost != null ? `৳${Number(m.cost).toLocaleString()}` : '—'}
+                                                        {m.cost != null ? formatTakaWithSymbol(m.cost) : '—'}
                                                     </TableCell>
                                                     <TableCell className="text-zinc-500 text-xs max-w-xs truncate pr-6">{m.description}</TableCell>
                                                 </TableRow>
@@ -379,8 +380,8 @@ export default function FixedAssetShow({
                                                 {asset.depreciation_entries!.map((e) => (
                                                     <TableRow key={e.id} className="border-zinc-100 hover:bg-zinc-50/40">
                                                         <TableCell className="py-3 pl-6 text-zinc-900 font-semibold text-xs">{e.period_month}/{e.period_year}</TableCell>
-                                                        <TableCell className="font-mono text-xs text-zinc-600">৳{Number(e.depreciation_amount).toLocaleString()}</TableCell>
-                                                        <TableCell className="font-mono text-xs font-semibold text-zinc-800 pr-6">৳{Number(e.book_value_after).toLocaleString()}</TableCell>
+                                                        <TableCell className="font-mono text-xs text-zinc-600">{formatTakaWithSymbol(e.depreciation_amount)}</TableCell>
+                                                        <TableCell className="font-mono text-xs font-semibold text-zinc-800 pr-6">{formatTakaWithSymbol(e.book_value_after)}</TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
@@ -405,8 +406,8 @@ export default function FixedAssetShow({
                                                 {asset.revaluations!.map((r) => (
                                                     <TableRow key={r.id} className="border-zinc-100 hover:bg-zinc-50/40">
                                                         <TableCell className="py-3 pl-6 text-zinc-900 font-semibold text-xs">{formatDisplayDate(r.revaluation_date)}</TableCell>
-                                                        <TableCell className="font-mono text-xs text-zinc-600">৳{Number(r.previous_book_value).toLocaleString()}</TableCell>
-                                                        <TableCell className="font-mono text-xs font-semibold text-zinc-800">৳{Number(r.new_book_value).toLocaleString()}</TableCell>
+                                                        <TableCell className="font-mono text-xs text-zinc-600">{formatTakaWithSymbol(r.previous_book_value)}</TableCell>
+                                                        <TableCell className="font-mono text-xs font-semibold text-zinc-800">{formatTakaWithSymbol(r.new_book_value)}</TableCell>
                                                         <TableCell className="text-zinc-500 text-xs pr-6 truncate max-w-[120px]" title={r.reason ?? undefined}>{r.reason ?? '—'}</TableCell>
                                                     </TableRow>
                                                 ))}

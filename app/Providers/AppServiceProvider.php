@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Holiday;
 use App\Observers\HolidayObserver;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
 
@@ -23,6 +24,14 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Holiday::observe(HolidayObserver::class);
+
+        Blade::directive('taka', function (string $expression) {
+            return "<?php echo \\App\\Support\\TakaFormat::amount($expression); ?>";
+        });
+
+        Blade::directive('takaWhole', function (string $expression) {
+            return "<?php echo \\App\\Support\\TakaFormat::whole($expression); ?>";
+        });
 
         Validator::extend('english_only', function ($attribute, $value, $parameters, $validator) {
             // If value is empty, let required rule handle it

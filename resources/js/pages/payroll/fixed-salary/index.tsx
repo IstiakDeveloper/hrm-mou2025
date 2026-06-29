@@ -18,6 +18,8 @@ import { ComboSelect } from '@/components/ComboSelect';
 import { PayrollComboField, PayrollField, PayrollBranchSelect, PayrollEmployeeSelect } from '@/components/payroll/PayrollFilterGrid';
 import { PayrollPage, PayrollPageHeader, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { Banknote, Pencil, Plus, Save, UserRound, SlidersHorizontal } from 'lucide-react';
+import { formatTakaWhole } from '@/lib/taka-format';
+import { formatTakaWhole } from '@/lib/taka-format';
 
 type EmployeeRow = {
     employee_id: number;
@@ -45,12 +47,6 @@ type Props = FilterOptions & {
     filters: Record<string, string | boolean>;
     rows: EmployeeRow[];
 };
-
-function formatMoney(value: number | string | null | undefined): string {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return '—';
-    return n.toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
 
 export default function FixedSalaryIndex({
     filters: initialFilters,
@@ -353,7 +349,7 @@ export default function FixedSalaryIndex({
                                                 </TableCell>
                                                 <TableCell className="py-2.5">
                                                     {row.has_salary ? (
-                                                        <span className="text-xs font-bold font-mono text-slate-800">৳{formatMoney(row.fixed_salary)}</span>
+                                                        <span className="text-xs font-bold font-mono text-slate-800">৳{formatTakaWhole(row.fixed_salary)}</span>
                                                     ) : (
                                                         <div className="inline-flex flex-col">
                                                             <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-0.5 text-xs font-bold text-amber-800 shadow-3xs">

@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatTakaWhole, formatTakaWithSymbol } from '@/lib/taka-format';
 import { cn } from '@/lib/utils';
 import { ChevronDown, HandCoins, UserX } from 'lucide-react';
 
@@ -124,7 +125,7 @@ function ComponentRow({
                     />
                 </div>
             ) : (
-                <span className="text-xs font-semibold font-mono text-slate-800">৳{Number(value).toLocaleString()}</span>
+                <span className="text-xs font-semibold font-mono text-slate-800">{formatTakaWithSymbol(value)}</span>
             )}
         </div>
     );
@@ -301,7 +302,7 @@ function GroupedAmountCell({
     const breakdown = lines
         .map((line) => {
             const raw = amounts[line.id] ?? String(line.computed_amount);
-            return `${line.head_name}: ৳${Number(raw).toLocaleString()}`;
+            return `${line.head_name}: ${formatTakaWithSymbol(raw)}`;
         })
         .join('\n');
 
@@ -351,7 +352,7 @@ function GroupedAmountCell({
             className={cn('inline-block text-[11px] font-mono font-semibold text-slate-700 text-center', isLoan && 'text-amber-800')}
             title={lines.length > 1 ? breakdown : undefined}
         >
-            ৳{total.toLocaleString()}
+            {formatTakaWithSymbol(total)}
         </span>
     );
 }
@@ -392,7 +393,7 @@ function AmountCell({
 
     return (
         <span className={cn('inline-block text-[11px] font-mono font-semibold text-slate-700 text-center', line.is_loan && 'text-amber-800')}>
-            ৳{Number(value).toLocaleString()}
+            {formatTakaWithSymbol(value)}
         </span>
     );
 }
@@ -491,9 +492,6 @@ function ReviewTableScroller({
 const stickyHeadTh = 'sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm shadow-[0_1px_0_0_rgba(15,23,42,0.06)]';
 const stickyFootTd = 'sticky bottom-0 z-30 bg-slate-50/95 backdrop-blur-sm shadow-[0_-1px_0_0_rgba(15,23,42,0.06)]';
 
-function formatMoneyTotal(value: number): string {
-    return `৳${value.toLocaleString()}`;
-}
 
 export function PayslipReviewTable({
     payslips,
@@ -666,7 +664,7 @@ export function PayslipReviewTable({
                                     );
                                 })}
                                 <TableCell className={cn(moneyCell, 'font-semibold text-slate-700 bg-slate-50/20')}>
-                                    ৳{preview.gross.toLocaleString()}
+                                    {formatTakaWithSymbol(preview.gross)}
                                 </TableCell>
                                 {deductions.map((head) => {
                                     const lines = linesForDeductionColumn(payslip, head);
@@ -686,10 +684,10 @@ export function PayslipReviewTable({
                                     );
                                 })}
                                 <TableCell className={cn(moneyCell, 'font-semibold text-red-700 bg-slate-50/20')}>
-                                    ৳{preview.deduction.toLocaleString()}
+                                    {formatTakaWithSymbol(preview.deduction)}
                                 </TableCell>
                                 <TableCell className={cn(moneyCell, 'font-bold text-emerald-700 bg-emerald-50/20')}>
-                                    ৳{preview.net.toLocaleString()}
+                                    {formatTakaWithSymbol(preview.net)}
                                 </TableCell>
                             </TableRow>
                         );
@@ -705,25 +703,25 @@ export function PayslipReviewTable({
                             <TableCell className={cn(stickyFootTd, 'text-center text-[10px] text-slate-400')}>—</TableCell>
                             {earnings.map((head) => (
                                 <TableCell key={`foot-${head.columnKey}`} className={cn(moneyCell, stickyFootTd, 'font-semibold text-emerald-800')}>
-                                    {formatMoneyTotal(columnTotals.earningTotals[head.columnKey] ?? 0)}
+                                    {formatTakaWithSymbol(columnTotals.earningTotals[head.columnKey] ?? 0)}
                                 </TableCell>
                             ))}
                             <TableCell className={cn(moneyCell, stickyFootTd, 'font-bold text-slate-800')}>
-                                {formatMoneyTotal(footerTotals.gross)}
+                                {formatTakaWithSymbol(footerTotals.gross)}
                             </TableCell>
                             {deductions.map((head) => (
                                 <TableCell
                                     key={`foot-${head.columnKey}`}
                                     className={cn(moneyCell, stickyFootTd, 'font-semibold', head.is_loan ? 'text-amber-800' : 'text-red-800')}
                                 >
-                                    {formatMoneyTotal(columnTotals.deductionTotals[head.columnKey] ?? 0)}
+                                    {formatTakaWithSymbol(columnTotals.deductionTotals[head.columnKey] ?? 0)}
                                 </TableCell>
                             ))}
                             <TableCell className={cn(moneyCell, stickyFootTd, 'font-bold text-red-800')}>
-                                {formatMoneyTotal(footerTotals.deduction)}
+                                {formatTakaWithSymbol(footerTotals.deduction)}
                             </TableCell>
                             <TableCell className={cn(moneyCell, stickyFootTd, 'font-bold text-emerald-800')}>
-                                {formatMoneyTotal(footerTotals.net)}
+                                {formatTakaWithSymbol(footerTotals.net)}
                             </TableCell>
                         </TableRow>
                     </TableFooter>
@@ -822,7 +820,7 @@ export function BonusPayslipReviewTable({
                                     </div>
                                     <p className="text-[10px] text-slate-400 mt-0.5">{review.configuration_name}</p>
                                 </TableCell>
-                                <TableCell className={cn(moneyCell, 'text-slate-700')}>৳{payslip.basic.toLocaleString()}</TableCell>
+                                <TableCell className={cn(moneyCell, 'text-slate-700')}>{formatTakaWithSymbol(payslip.basic)}</TableCell>
                                 <TableCell className={cn('text-[11px] text-slate-600 text-center align-middle')}>{review.basic_percentage}%</TableCell>
                                 <TableCell className={amountCell}>
                                     <AmountCellWrap>
@@ -836,12 +834,12 @@ export function BonusPayslipReviewTable({
                                                 onChange={(e) => onAmountChange(review.line_id!, e.target.value)}
                                             />
                                         ) : (
-                                            <span className={cn(moneyCell, 'font-semibold text-violet-700')}>৳{review.bonus_amount.toLocaleString()}</span>
+                                            <span className={cn(moneyCell, 'font-semibold text-violet-700')}>{formatTakaWithSymbol(review.bonus_amount)}</span>
                                         )}
                                     </AmountCellWrap>
                                 </TableCell>
                                 <TableCell className={cn(moneyCell, 'font-bold text-emerald-700 bg-emerald-50/20')}>
-                                    ৳{net.toLocaleString()}
+                                    {formatTakaWithSymbol(net)}
                                 </TableCell>
                             </TableRow>
                         );
@@ -853,14 +851,14 @@ export function BonusPayslipReviewTable({
                                 Totals ({payslips.length})
                             </TableCell>
                             <TableCell className={cn(moneyCell, stickyFootTd, 'font-semibold text-slate-800')}>
-                                {formatMoneyTotal(footerTotals.basic)}
+                                {formatTakaWithSymbol(footerTotals.basic)}
                             </TableCell>
                             <TableCell className={cn(stickyFootTd, 'text-center text-[10px] text-slate-400')}>—</TableCell>
                             <TableCell className={cn(moneyCell, stickyFootTd, 'font-semibold text-violet-800')}>
-                                {formatMoneyTotal(footerTotals.bonus)}
+                                {formatTakaWithSymbol(footerTotals.bonus)}
                             </TableCell>
                             <TableCell className={cn(moneyCell, stickyFootTd, 'font-bold text-emerald-800')}>
-                                {formatMoneyTotal(footerTotals.net)}
+                                {formatTakaWithSymbol(footerTotals.net)}
                             </TableCell>
                         </TableRow>
                     </TableFooter>
@@ -907,10 +905,10 @@ export function BonusPayslipEmployeeCard({
                         {payslip.is_withheld && <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-amber-600 border-amber-200 bg-amber-50">On hold</Badge>}
                     </div>
                     <p className="mt-1 text-[11px] text-slate-400/90 font-medium">
-                        Basic ৳{payslip.basic.toLocaleString()} · {review.basic_percentage}% → bonus
+                        Basic {formatTakaWithSymbol(payslip.basic)} · {review.basic_percentage}% → bonus
                     </p>
                 </div>
-                <span className="shrink-0 font-mono text-sm font-bold text-emerald-700">৳{net.toLocaleString()}</span>
+                <span className="shrink-0 font-mono text-sm font-bold text-emerald-700">{formatTakaWithSymbol(net)}</span>
             </CollapsibleTrigger>
             <CollapsibleContent>
                 <div className="border-t border-slate-100/60 px-5 py-5 bg-slate-50/20">
@@ -921,7 +919,7 @@ export function BonusPayslipEmployeeCard({
                         <div className="mt-5 grid gap-4 sm:grid-cols-3 border-t border-violet-100/60 pt-4">
                             <div>
                                 <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Basic salary</p>
-                                <p className="text-xs font-semibold font-mono text-slate-700 mt-1">৳{payslip.basic.toLocaleString()}</p>
+                                <p className="text-xs font-semibold font-mono text-slate-700 mt-1">{formatTakaWithSymbol(payslip.basic)}</p>
                             </div>
                             <div>
                                 <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Rate</p>
@@ -942,7 +940,7 @@ export function BonusPayslipEmployeeCard({
                                         />
                                     </div>
                                 ) : (
-                                    <p className="text-xs font-bold font-mono text-emerald-700 mt-1">৳{review.bonus_amount.toLocaleString()}</p>
+                                    <p className="text-xs font-bold font-mono text-emerald-700 mt-1">{formatTakaWithSymbol(review.bonus_amount)}</p>
                                 )}
                             </div>
                         </div>
@@ -1010,9 +1008,9 @@ export function PayslipEmployeeCard({
                     )}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-4 text-right text-xs sm:text-sm">
-                    <span className="text-slate-500 font-medium"><span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mr-0.5">Gross</span> <span className="font-mono">৳{preview.gross.toLocaleString()}</span></span>
-                    <span className="text-slate-500 font-medium"><span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mr-0.5">Ded.</span> <span className="font-mono">৳{preview.deduction.toLocaleString()}</span></span>
-                    <span className="font-bold text-emerald-700 font-mono">Net ৳{preview.net.toLocaleString()}</span>
+                    <span className="text-slate-500 font-medium"><span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mr-0.5">Gross</span> <span className="font-mono">{formatTakaWithSymbol(preview.gross)}</span></span>
+                    <span className="text-slate-500 font-medium"><span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mr-0.5">Ded.</span> <span className="font-mono">{formatTakaWithSymbol(preview.deduction)}</span></span>
+                    <span className="font-bold text-emerald-700 font-mono">Net {formatTakaWithSymbol(preview.net)}</span>
                 </div>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -1053,7 +1051,7 @@ export function PayslipEmployeeCard({
                                         {loanDeductions.map((loan) => (
                                             <div key={loan.head_name} className="flex justify-between gap-2 text-xs">
                                                 <span className="text-amber-800 font-medium">{loan.head_name}</span>
-                                                <span className="font-semibold font-mono text-amber-900">৳{loan.amount.toLocaleString()}</span>
+                                                <span className="font-semibold font-mono text-amber-900">{formatTakaWithSymbol(loan.amount)}</span>
                                             </div>
                                         ))}
                                     </div>

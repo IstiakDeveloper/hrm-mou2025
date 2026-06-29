@@ -101,6 +101,42 @@ class Employee extends Model
     ];
 
     /**
+     * Date-only columns serialized for Inertia/API (Y-m-d, no UTC ISO shift in browsers).
+     *
+     * @return list<string>
+     */
+    public static function dateOnlyAttributes(): array
+    {
+        return [
+            'date_of_birth',
+            'joining_date',
+            'confirmation_date',
+            'resignation_date',
+            'dropout_date',
+            'final_payment_date',
+            'last_promotion_date',
+            'pf_enrollment_date',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toInertiaArray(): array
+    {
+        $data = $this->toArray();
+
+        foreach (self::dateOnlyAttributes() as $attribute) {
+            $value = $this->getAttribute($attribute);
+            if ($value instanceof \DateTimeInterface) {
+                $data[$attribute] = $value->format('Y-m-d');
+            }
+        }
+
+        return $data;
+    }
+
+    /**
      * Employees in these statuses still "hold" unique identifiers (PIN, NID, employee_id, mobile, etc.).
      * Inactive employees may share values with a new hire.
      *

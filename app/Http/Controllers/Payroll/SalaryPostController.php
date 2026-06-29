@@ -412,6 +412,10 @@ class SalaryPostController extends Controller
                 }
 
                 $this->payslipTotals->syncPayslipFromLines($payslip);
+
+                if ($payroll_run->salary_type === 'salary') {
+                    $this->loanService->alignPayrollLoanLinesForPayslip($payslip);
+                }
             }
 
             $this->payslipTotals->syncPayrollRunTotals($payroll_run);
@@ -427,6 +431,7 @@ class SalaryPostController extends Controller
         }
 
         if ($payroll_run->salary_type === 'salary') {
+            $this->loanService->syncLoanDeductionsForPayrollRun($payroll_run);
             $this->loanService->postPaymentsForPayrollRun($payroll_run);
         }
 

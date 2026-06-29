@@ -10,6 +10,7 @@ import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader'
 import { PayrollField, PayrollMonthSelect, PayrollYearSelect } from '@/components/payroll/PayrollFilterGrid';
 import { FormDateField } from '@/components/fixed-asset/FormDateField';
 import { displayDateToServer, toFormDisplayDate } from '@/lib/display-date';
+import { formatTakaAmount, formatTakaWhole } from '@/lib/taka-format';
 import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
 type ReportMeta = {
@@ -50,7 +51,7 @@ type Props = {
 
 function fmt(n: unknown) {
     const v = Number(n);
-    return Number.isFinite(v) ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    return Number.isFinite(v) ? formatTakaAmount(v, 2) : '—';
 }
 
 function columnKeys(template: string, firstRow: Record<string, unknown>, payload?: Record<string, unknown>): string[] {

@@ -50,6 +50,7 @@ import {
     type SalaryComponentRow,
 } from '@/components/employee/EmployeeSalaryAssignment';
 import { format } from 'date-fns';
+import { SERVER_DATE_FMT, toServerYmdDate } from '@/lib/display-date';
 import {
     ArrowLeft,
     Plus,
@@ -72,18 +73,6 @@ import {
     Sparkles,
     RotateCcw,
 } from 'lucide-react';
-
-const SERVER_DATE_FMT = 'yyyy-MM-dd';
-
-function toYmdDate(value: unknown): string {
-    if (value == null || value === '') return '';
-    const s = String(value).trim();
-    if (!s) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    const datePart = s.includes('T') ? (s.split('T')[0] ?? s) : s;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
-    return '';
-}
 
 function SignatureDemoGraphic({ className }: { className?: string }) {
     return (
@@ -312,13 +301,13 @@ function withHydratedDocuments(form: EmployeeCreateFormData): EmployeeCreateForm
 
 function normalizeFormDates(form: EmployeeCreateFormData): EmployeeCreateFormData {
     const out = { ...form };
-    out.date_of_birth = toYmdDate(form.date_of_birth);
-    out.joining_date = toYmdDate(form.joining_date) || format(new Date(), SERVER_DATE_FMT);
-    out.confirmation_date = toYmdDate(form.confirmation_date);
-    out.nominees = (form.nominees ?? []).map((n) => ({ ...n, date_of_birth: toYmdDate(n.date_of_birth) }));
-    out.collateral = { ...(form.collateral ?? {}), collateral_date: toYmdDate(form.collateral?.collateral_date) };
-    out.experiences = (form.experiences ?? []).map((ex) => ({ ...ex, from_date: toYmdDate(ex.from_date), to_date: toYmdDate(ex.to_date) }));
-    out.documents = (form.documents ?? []).map((doc) => ({ ...doc, expiry_date: toYmdDate(doc.expiry_date) }));
+    out.date_of_birth = toServerYmdDate(form.date_of_birth);
+    out.joining_date = toServerYmdDate(form.joining_date) || format(new Date(), SERVER_DATE_FMT);
+    out.confirmation_date = toServerYmdDate(form.confirmation_date);
+    out.nominees = (form.nominees ?? []).map((n) => ({ ...n, date_of_birth: toServerYmdDate(n.date_of_birth) }));
+    out.collateral = { ...(form.collateral ?? {}), collateral_date: toServerYmdDate(form.collateral?.collateral_date) };
+    out.experiences = (form.experiences ?? []).map((ex) => ({ ...ex, from_date: toServerYmdDate(ex.from_date), to_date: toServerYmdDate(ex.to_date) }));
+    out.documents = (form.documents ?? []).map((doc) => ({ ...doc, expiry_date: toServerYmdDate(doc.expiry_date) }));
     return out;
 }
 

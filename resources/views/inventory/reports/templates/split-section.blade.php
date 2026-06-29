@@ -38,7 +38,7 @@
                                 default => '',
                             };
                             if (! empty($col['numeric']) && is_numeric($val)) {
-                                $val = number_format((float) $val, 0);
+                                $val = taka_fmt($val);
                             }
                         @endphp
                         <td class="{{ $class }}">{{ $val === '' ? '—' : $val }}</td>
@@ -51,7 +51,7 @@
             @endforelse
             @if ($total !== null)
                 <tr class="totals-row">
-                    <td colspan="{{ count($columns) }}" class="text-center">Total qty: {{ number_format((int) $total, 0) }}</td>
+                    <td colspan="{{ count($columns) }}" class="text-center">Total qty: {{ taka_fmt($total) }}</td>
                 </tr>
             @endif
         </tbody>

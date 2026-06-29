@@ -15,6 +15,8 @@ import {
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { PayrollReportDocumentHeader } from '@/components/payroll/PayrollReportDocumentHeader';
 import { PayrollReportSignatureSection } from '@/components/payroll/PayrollReportSignatureSection';
+import { formatTakaAmount, formatTakaSheetCell } from '@/lib/taka-format';
+import { takaInWords } from '@/lib/taka-in-words';
 import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
 type ReportMeta = {
@@ -57,14 +59,11 @@ type Props = {
 
 function fmt(n: unknown) {
     const v = Number(n);
-    return Number.isFinite(v) ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    return Number.isFinite(v) ? formatTakaAmount(v, 2) : '—';
 }
 
 function fmtSheet(n: unknown) {
-    const v = Number(n);
-    if (!Number.isFinite(v)) return '-';
-    const rounded = Math.round(v);
-    return rounded === 0 ? '-' : rounded.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return formatTakaSheetCell(n);
 }
 
 function nameWithPin(row: Record<string, unknown>): string {
@@ -119,12 +118,14 @@ function SalarySheetTable({
     headLabels,
     rows,
     totals,
+    totalsLabel = 'Total',
 }: {
     earningHeads: string[];
     deductionHeads: string[];
     headLabels: Record<string, string>;
     rows: Record<string, unknown>[];
     totals?: Record<string, unknown>;
+    totalsLabel?: string;
 }) {
     const labelFor = (key: string) => headLabels[key] ?? key;
     const employeeCols = 4;
@@ -140,7 +141,7 @@ function SalarySheetTable({
 
     const dataWidths = useMemo(() => {
         const nameTexts = rows.map(nameWithPin);
-        if (totals) nameTexts.push('Total');
+        if (totals) nameTexts.push(totalsLabel);
 
         return {
             serial: maxTextLen(rows.map((_, i) => String(i + 1)), 2),
@@ -308,7 +309,7 @@ function SalarySheetTable({
                     {totals && (
                         <tr className="font-bold">
                             <td colSpan={employeeCols} className={`${tdClass} text-right`}>
-                                Total
+                                {totalsLabel}
                             </td>
                             {earningHeads.map((h) => (
                                 <td key={h} className={amountClass}>
@@ -328,6 +329,27 @@ function SalarySheetTable({
                     )}
                 </tbody>
             </table>
+        </div>
+    );
+}
+
+function SalarySheetFooter({
+    net,
+    showInWords,
+    signatureBlocks,
+}: {
+    net?: unknown;
+    showInWords?: boolean;
+    signatureBlocks: SignatureBlock[];
+}) {
+    return (
+        <div className="mt-1 print:break-inside-avoid">
+            {showInWords && net !== undefined && (
+                <p className="px-1 py-0.5 text-left text-[9px] font-bold leading-snug text-black print:text-[8px]">
+                    In Words: {takaInWords(net)}
+                </p>
+            )}
+            <PayrollReportSignatureSection blocks={signatureBlocks} className="mt-4 print:mb-11" />
         </div>
     );
 }
@@ -437,7 +459,7 @@ function ReportPreview({
                                 <span>{section.label}</span>
                                 {salaryMonth !== '' && <span className="shrink-0">Salary Month: {salaryMonth}</span>}
                             </div>
-                            <div className="flex flex-col print:min-h-[calc(210mm-8mm)]">
+                            <div className="flex flex-col">
                                 <SalarySheetTable
                                     earningHeads={earningHeads}
                                     deductionHeads={deductionHeads}
@@ -445,7 +467,11 @@ function ReportPreview({
                                     rows={section.rows ?? []}
                                     totals={section.totals}
                                 />
-                                <PayrollReportSignatureSection blocks={signatureBlocks} className="mt-8 shrink-0 pt-2 print:mt-auto print:mb-[100px]" />
+                                <SalarySheetFooter
+                                    net={section.totals?.net}
+                                    showInWords
+                                    signatureBlocks={signatureBlocks}
+                                />
                             </div>
                         </div>
                     ))}
@@ -456,13 +482,18 @@ function ReportPreview({
         const rows = (payload.rows as Record<string, unknown>[]) ?? [];
         const totals = payload.totals as Record<string, unknown> | undefined;
         return (
-            <SalarySheetTable
-                earningHeads={earningHeads}
-                deductionHeads={deductionHeads}
-                headLabels={headLabels}
-                rows={rows}
-                totals={totals}
-            />
+            <div>
+                <SalarySheetTable
+                    earningHeads={earningHeads}
+                    deductionHeads={deductionHeads}
+                    headLabels={headLabels}
+                    rows={rows}
+                    totals={totals}
+                />
+                {totals && (
+                    <SalarySheetFooter net={totals.net} showInWords signatureBlocks={signatureBlocks} />
+                )}
+            </div>
         );
     }
 

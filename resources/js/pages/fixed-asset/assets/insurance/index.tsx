@@ -10,6 +10,7 @@ import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { hasAppPermission } from '@/lib/permissions';
 import { Edit, Plus, Search, Shield, Trash2 } from 'lucide-react';
 import { formatDisplayDate } from '@/lib/display-date';
+import { formatTakaWhole } from '@/lib/taka-format';
 import type { SharedData } from '@/types';
 
 type RecordRow = {
@@ -58,7 +59,7 @@ export default function AssetInsuranceIndex({ records, filters, branchScoped }: 
                                     <TableCell>
                                         {[row.start_date, row.end_date].filter(Boolean).map((d) => formatDisplayDate(d)).join(' → ') || '—'}
                                     </TableCell>
-                                    <TableCell className="text-right tabular-nums">{row.coverage_amount != null ? Number(row.coverage_amount).toLocaleString() : '—'}</TableCell>
+                                    <TableCell className="text-right tabular-nums">{row.coverage_amount != null ? formatTakaWhole(row.coverage_amount) : '—'}</TableCell>
                                     <TableCell className="text-right">
                                         {canEdit && <Link href={route('fixed-asset.assets.insurance.edit', row.id)}><Button variant="ghost" size="sm"><Edit className="h-4 w-4" /></Button></Link>}
                                         {canDelete && <Button variant="ghost" size="sm" onClick={() => confirm('Delete?') && router.delete(route('fixed-asset.assets.insurance.destroy', row.id))}><Trash2 className="h-4 w-4 text-red-500" /></Button>}

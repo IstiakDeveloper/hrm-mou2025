@@ -11,6 +11,7 @@ import { PayrollBranchSelect, PayrollMonthSelect, PayrollYearSelect } from '@/co
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard, PayrollEmptyState, payrollBtnPrimary, payrollBadgePrimary } from '@/components/payroll/PayrollPageShell';
 import { payrollPostLabels, payrollPostRoutes, type PayrollPostContext } from '@/lib/payroll-post-routes';
 import { cn } from '@/lib/utils';
+import { formatTakaWithSymbol } from '@/lib/taka-format';
 import { CheckCircle2, ChevronDown, Eye, Search, FolderOpen, Archive, Users, Building, Coins } from 'lucide-react';
 
 type BranchRun = {
@@ -84,7 +85,7 @@ function PeriodBatchCard({
                         <p className="mt-1.5 text-xs text-slate-400 font-medium flex flex-wrap items-center gap-x-2.5 gap-y-1">
                             <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5 text-slate-300" /> {batch.employee_count} employees</span>
                             <span>·</span>
-                            <span className="flex items-center gap-1"><Coins className="h-3.5 w-3.5 text-slate-300" /> Net <span className="font-mono font-bold text-slate-600">৳{batch.total_net.toLocaleString()}</span></span>
+                            <span className="flex items-center gap-1"><Coins className="h-3.5 w-3.5 text-slate-300" /> Net <span className="font-mono font-bold text-slate-600">{formatTakaWithSymbol(batch.total_net)}</span></span>
                             <span>·</span>
                             <span>{showPostedAt ? `Posted ${batch.posted_at ?? '—'}` : `Calculated ${batch.processed_at ?? '—'}`}</span>
                         </p>
@@ -109,7 +110,7 @@ function PeriodBatchCard({
                                 <div className="min-w-0">
                                     <p className="text-xs font-bold text-slate-700">{branch.branch}</p>
                                     <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                                        {branch.employee_count} employees · Net <span className="font-mono font-bold text-slate-500">৳{branch.total_net.toLocaleString()}</span>
+                                        {branch.employee_count} employees · Net <span className="font-mono font-bold text-slate-500">{formatTakaWithSymbol(branch.total_net)}</span>
                                     </p>
                                 </div>
                                 <Button asChild size="sm" variant="ghost" className="h-8 rounded-lg border border-slate-100 bg-white text-slate-600 hover:text-slate-900 shadow-3xs cursor-pointer hover:bg-slate-50 text-xs font-semibold">

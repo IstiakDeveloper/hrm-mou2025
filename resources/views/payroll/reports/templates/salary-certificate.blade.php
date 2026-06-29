@@ -34,29 +34,29 @@
             <tbody>
                 <tr>
                     <td>Basic Salary</td>
-                    <td class="num">{{ number_format($payload['basic'] ?? 0, 2) }}</td>
+                    <td class="num">{{ taka_fmt($payload['basic'] ?? 0, 2) }}</td>
                 </tr>
                 @foreach ($payload['earnings'] ?? [] as $line)
                     @if (($line['name'] ?? '') !== 'Basic')
                         <tr>
                             <td>{{ $line['name'] }}</td>
-                            <td class="num">{{ number_format($line['amount'], 2) }}</td>
+                            <td class="num">{{ taka_fmt($line['amount'], 2) }}</td>
                         </tr>
                     @endif
                 @endforeach
                 <tr class="totals-row">
                     <td>Gross Salary</td>
-                    <td class="num">{{ number_format($payload['gross'] ?? 0, 2) }}</td>
+                    <td class="num">{{ taka_fmt($payload['gross'] ?? 0, 2) }}</td>
                 </tr>
                 @foreach ($payload['deductions'] ?? [] as $line)
                     <tr>
                         <td>{{ $line['name'] }} (Deduction)</td>
-                        <td class="num">{{ number_format($line['amount'], 2) }}</td>
+                        <td class="num">{{ taka_fmt($line['amount'], 2) }}</td>
                     </tr>
                 @endforeach
                 <tr class="totals-row">
                     <td>Net Payable</td>
-                    <td class="num">{{ number_format($payload['net'] ?? 0, 2) }}</td>
+                    <td class="num">{{ taka_fmt($payload['net'] ?? 0, 2) }}</td>
                 </tr>
             </tbody>
         </table>
