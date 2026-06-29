@@ -18,6 +18,7 @@ export function payrollPostRoutes(context: PayrollPostContext) {
         cancelPeriod: (year: number, month: number) => route(`${prefix}.period.cancel`, { year, month }),
         show: (id: number) => route(`${prefix}.show`, id),
         updatePayslips: (id: number) => route(`${prefix}.update-payslips`, id),
+        recall: (id: number) => route(`${prefix}.recall`, id),
         post: (id: number) => route(`${prefix}.post`, id),
         cancel: (id: number) => route(`${prefix}.cancel`, id),
     };

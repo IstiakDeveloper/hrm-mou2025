@@ -15,7 +15,7 @@ import {
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard, payrollBtnPrimary, payrollFilterActive } from '@/components/payroll/PayrollPageShell';
 import { cn } from '@/lib/utils';
 import { payrollPostLabels, payrollPostRoutes, type PayrollPostContext } from '@/lib/payroll-post-routes';
-import { ArrowLeft, CheckCircle2, Save, Trash2, Search, Users, Coins, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Save, Trash2, Search, Users, Coins, SlidersHorizontal, RefreshCw } from 'lucide-react';
 
 type BonusConfigInfo = {
     name: string;
@@ -63,6 +63,7 @@ export default function SalaryPostShow({
     const [saving, setSaving] = useState(false);
     const [posting, setPosting] = useState(false);
     const [cancelling, setCancelling] = useState(false);
+    const [recalling, setRecalling] = useState(false);
     const [dirty, setDirty] = useState(false);
     const isPosted = run.status === 'posted';
     const [amounts, setAmounts] = useState<Record<number, string>>(() => buildAmountsMap(initialPayslips, isBonus));
@@ -124,6 +125,20 @@ export default function SalaryPostShow({
         if (!confirm('Cancel this payroll? It will be removed and you can run calculation again for this branch.')) return;
         setCancelling(true);
         router.post(routes.cancel(run.id), {}, { onFinish: () => setCancelling(false) });
+    };
+
+    const recallRun = () => {
+        if (!confirm('Recall this branch payroll with the latest employee salary data? Manual edits will be replaced.')) return;
+        setRecalling(true);
+        router.post(
+            routes.recall(run.id),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => setDirty(false),
+                onFinish: () => setRecalling(false),
+            },
+        );
     };
 
     // Filter employees
@@ -191,6 +206,18 @@ export default function SalaryPostShow({
                         </Button>
                         {canEdit && !isPosted && (
                             <>
+                                {!isBonus && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={recallRun}
+                                        disabled={recalling || saving || posting || cancelling}
+                                        className="cursor-pointer font-semibold rounded-lg shadow-2xs h-8.5 text-xs border-indigo-100 text-indigo-700 hover:bg-indigo-50/60"
+                                    >
+                                        <RefreshCw className={cn('mr-1.5 h-4 w-4', recalling && 'animate-spin')} />
+                                        {recalling ? 'Recalling…' : 'Recall Branch'}
+                                    </Button>
+                                )}
                                 <Button 
                                     variant="outline" 
                                     size="sm" 

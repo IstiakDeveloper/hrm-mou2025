@@ -106,6 +106,7 @@ class PayrollCalculationService
 
         $structure = null;
         $basic = $employee->resolveBasicSalary();
+        $hasCustomSalary = $employee->custom_salary_assigned_at !== null;
         $gradeLabel = null;
         $stepNumber = null;
         $hasPayrollAssignment = $employee->payscale_id
@@ -113,12 +114,16 @@ class PayrollCalculationService
             && $employee->salary_step_id;
 
         if ($hasPayrollAssignment) {
-            $structure = $this->resolveSalaryStructure($employee);
+            $structure = $hasCustomSalary ? null : $this->resolveSalaryStructure($employee);
 
             $gradeLabel = $structure?->grade?->name ?? $employee->salaryGrade?->name;
             $stepNumber = $structure?->step?->step_number ?? $employee->salaryStep?->step_number;
 
-            if ($structure) {
+            if ($hasCustomSalary) {
+                $basic = SalaryStructureCalculator::roundTaka((float) ($employee->basic_salary ?? 0));
+            } elseif ($employee->basic_salary !== null && (float) $employee->basic_salary > 0) {
+                $basic = (float) $employee->basic_salary;
+            } elseif ($structure) {
                 $basic = $structure->basic_salary !== null
                     ? (float) $structure->basic_salary
                     : (float) ($structure->step?->basic_salary ?? $basic);
@@ -141,34 +146,59 @@ class PayrollCalculationService
             'sort_order' => $sort++,
         ];
 
-        $modifications = $this->activeModifications($employee->id, $processDate);
-
-        if ($structure) {
-            foreach ($structure->lines as $line) {
-                $head = $line->head;
-                if (! $head || $head->is_basic_head || $this->isStatutoryHead($head)) {
+        if ($hasCustomSalary && $hasPayrollAssignment) {
+            foreach ($this->activeAssignmentModifications($employee->id, $processDate) as $mod) {
+                $head = $mod->relationLoaded('head') ? $mod->head : $mod->head()->first();
+                if (! $head || $head->is_basic_head) {
                     continue;
                 }
 
-                $mod = $modifications->get($head->id);
                 $lines[] = $this->buildComponentLine(
                     $head,
-                    $mod?->amount_type ?? ($line->amount_type ?? 'fixed'),
-                    $mod ? (float) $mod->amount : (float) $line->value,
+                    $mod->amount_type,
+                    (float) $mod->amount,
                     $basic,
                     $sort++
                 );
             }
-        } elseif ($hasPayrollAssignment) {
-            foreach ($this->activeComponentHeads() as $head) {
-                $mod = $modifications->get($head->id);
-                $lines[] = $this->buildComponentLine(
-                    $head,
-                    $mod?->amount_type ?? ($head->default_amount_type ?? 'fixed'),
-                    $mod ? (float) $mod->amount : (float) $head->default_amount,
-                    $basic,
-                    $sort++
-                );
+        } else {
+            $modifications = $this->activeModifications($employee->id, $processDate);
+
+            if ($structure) {
+                foreach ($structure->lines as $line) {
+                    $head = $line->head;
+                    if (! $head || $head->is_basic_head || $this->isStatutoryHead($head)) {
+                        continue;
+                    }
+
+                    $mod = $modifications->get($head->id);
+                    if ($mod && $mod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
+                        continue;
+                    }
+
+                    $lines[] = $this->buildComponentLine(
+                        $head,
+                        $mod?->amount_type ?? ($line->amount_type ?? 'fixed'),
+                        $mod ? (float) $mod->amount : (float) $line->value,
+                        $basic,
+                        $sort++
+                    );
+                }
+            } elseif ($hasPayrollAssignment) {
+                foreach ($this->activeComponentHeads() as $head) {
+                    $mod = $modifications->get($head->id);
+                    if ($mod && $mod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
+                        continue;
+                    }
+
+                    $lines[] = $this->buildComponentLine(
+                        $head,
+                        $mod?->amount_type ?? ($head->default_amount_type ?? 'fixed'),
+                        $mod ? (float) $mod->amount : (float) $head->default_amount,
+                        $basic,
+                        $sort++
+                    );
+                }
             }
         }
 
@@ -181,36 +211,61 @@ class PayrollCalculationService
         $gross = SalaryStructureCalculator::roundTaka($gross);
 
         $pf = ['employee' => 0.0, 'employer' => 0.0];
-        if ($this->pfService->isEligible($employee)) {
-            $pf = $this->pfService->contributionFromBasic($basic);
-            $pfHead = $this->resolvePfHead();
-            $lines[] = [
-                'salary_head_id' => $pfHead->id,
-                'head_name' => $pfHead->short_name ?? $pfHead->name,
-                'type' => 'deduction',
-                'amount_type' => 'percentage',
-                'input_value' => (float) config('payroll.pf_employee_percent', 10),
-                'computed_amount' => $pf['employee'],
-                'sort_order' => $sort++,
-            ];
-        }
+        $incomeTax = 0.0;
 
-        $incomeTax = $this->taxSlabService->taxForGross($gross);
-        if ($incomeTax > 0) {
+        if ($hasCustomSalary) {
+            $pfHead = $this->resolvePfHead();
             $taxHead = $this->resolveTaxHead();
-            $lines[] = [
-                'salary_head_id' => $taxHead->id,
-                'head_name' => $taxHead->short_name ?? $taxHead->name,
-                'type' => 'deduction',
-                'amount_type' => 'fixed',
-                'input_value' => $incomeTax,
-                'computed_amount' => $incomeTax,
-                'sort_order' => $sort++,
-            ];
+
+            foreach ($lines as $line) {
+                if (($line['salary_head_id'] ?? null) === $pfHead->id) {
+                    $pf['employee'] = (float) $line['computed_amount'];
+                    $pf['employer'] = $this->pfService->employerMatchingContribution($pf['employee']);
+                }
+
+                if (($line['salary_head_id'] ?? null) === $taxHead->id) {
+                    $incomeTax = (float) $line['computed_amount'];
+                }
+            }
+        } else {
+            if ($this->pfService->isEligible($employee)) {
+                $pf = $this->pfService->contributionFromBasic($basic);
+                $pfHead = $this->resolvePfHead();
+                $lines[] = [
+                    'salary_head_id' => $pfHead->id,
+                    'head_name' => $pfHead->short_name ?? $pfHead->name,
+                    'type' => 'deduction',
+                    'amount_type' => 'percentage',
+                    'input_value' => (float) config('payroll.pf_employee_percent', 10),
+                    'computed_amount' => $pf['employee'],
+                    'sort_order' => $sort++,
+                ];
+            }
+
+            $incomeTax = $this->taxSlabService->taxForGross($gross);
+            if ($incomeTax > 0) {
+                $taxHead = $this->resolveTaxHead();
+                $lines[] = [
+                    'salary_head_id' => $taxHead->id,
+                    'head_name' => $taxHead->short_name ?? $taxHead->name,
+                    'type' => 'deduction',
+                    'amount_type' => 'fixed',
+                    'input_value' => $incomeTax,
+                    'computed_amount' => $incomeTax,
+                    'sort_order' => $sort++,
+                ];
+            }
         }
 
         $loanYear = $payrollYear ?? (int) $processDate->year;
         $loanMonth = $payrollMonth ?? (int) $processDate->month;
+
+        $customAssignmentHeadIds = $hasCustomSalary
+            ? $this->activeAssignmentModifications($employee->id, $processDate)
+                ->pluck('salary_head_id')
+                ->map(fn ($id) => (int) $id)
+                ->all()
+            : [];
 
         $loanDeductions = $this->loanService->deductionsForPayroll(
             $employee,
@@ -218,6 +273,10 @@ class PayrollCalculationService
             $loanMonth
         );
         foreach ($loanDeductions as $loanRow) {
+            if ($hasCustomSalary && in_array((int) $loanRow['salary_head_id'], $customAssignmentHeadIds, true)) {
+                continue;
+            }
+
             $lines[] = [
                 'salary_head_id' => $loanRow['salary_head_id'],
                 'head_name' => $loanRow['head_name'],
@@ -650,6 +709,30 @@ class PayrollCalculationService
             'computed' => $computed,
             'basic_salary' => $basic,
         ];
+    }
+
+    /**
+     * @return Collection<int, SalaryHeadModification>
+     */
+    protected function activeAssignmentModifications(int $employeeId, Carbon $asOfDate): Collection
+    {
+        if ($this->batchModificationsByEmployee !== null) {
+            return $this->batchModificationsByEmployee
+                ->get($employeeId, collect())
+                ->filter(fn (SalaryHeadModification $mod) => $mod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON)
+                ->values();
+        }
+
+        return SalaryHeadModification::query()
+            ->with('head')
+            ->where('employee_id', $employeeId)
+            ->where('is_active', true)
+            ->where('reason', EmployeeSalaryAssignmentService::ASSIGNMENT_REASON)
+            ->whereDate('effective_from', '<=', $asOfDate)
+            ->orderByDesc('effective_from')
+            ->get()
+            ->unique('salary_head_id')
+            ->values();
     }
 
     /**

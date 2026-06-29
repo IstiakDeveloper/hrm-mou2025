@@ -269,6 +269,40 @@ class LoanMigrationController extends Controller
         return back()->with('success', $message);
     }
 
+    public function recalculateItem(Request $request, LoanMigrationItem $loan_migration_item)
+    {
+        try {
+            $item = $this->migrationService->recalculateItemFromPolicy($loan_migration_item);
+        } catch (\InvalidArgumentException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            throw ValidationException::withMessages(['migration' => $e->getMessage()]);
+        }
+
+        $message = sprintf(
+            'Recalculated from policy — installment %s, outstanding %s.',
+            number_format((float) $item->installment_amount, 0),
+            number_format((float) $item->outstanding_total, 0),
+        );
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'item' => [
+                    'id' => $item->id,
+                    'installment_amount' => (float) $item->installment_amount,
+                    'outstanding_principal' => (float) $item->outstanding_principal,
+                    'outstanding_service_charge' => (float) $item->outstanding_service_charge,
+                    'outstanding_total' => (float) $item->outstanding_total,
+                ],
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
     /**
      * @return array<string, mixed>
      */

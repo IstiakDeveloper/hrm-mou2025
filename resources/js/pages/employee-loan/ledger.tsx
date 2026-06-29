@@ -39,6 +39,8 @@ type Tx = {
     reference_no: string | null;
 };
 
+type HeaderRow = { label: string; value: string | number | null | undefined };
+
 type Props = {
     loan: {
         id: number;
@@ -46,7 +48,31 @@ type Props = {
         loan_type_label: string;
         status: string;
         outstanding_balance: number;
-        employee: { id: number; label: string };
+        principal_amount: number;
+        service_charge_amount: number;
+        total_payable: number;
+        interest_rate: number;
+        installment_count: number;
+        disbursement_date: string | null;
+        first_installment_date: string | null;
+        last_installment_date: string | null;
+        loan_close_date: string | null;
+        rebate_amount: number;
+        policy: { code: string; name: string; label: string } | null;
+        loan_cycle: number;
+        application_number: string | null;
+        employee: {
+            id: number;
+            pin: string | null;
+            name: string | null;
+            label: string;
+            department: string | null;
+            designation: string | null;
+            program: string | null;
+            unit: string | null;
+            project: string | null;
+            branch: string | null;
+        };
     };
     transactions: Tx[];
     months: { value: number; label: string }[];
@@ -54,6 +80,30 @@ type Props = {
 };
 
 const fmt = fmtLoanAmount;
+
+const display = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined || value === '') return '—';
+    return String(value);
+};
+
+function LedgerHeaderTable({ rows }: { rows: HeaderRow[] }) {
+    return (
+        <table className="w-full border-collapse text-xs">
+            <tbody>
+                {rows.map((row) => (
+                    <tr key={row.label} className="border border-zinc-300">
+                        <td className="w-[42%] border border-zinc-300 bg-zinc-100 px-2 py-1 font-medium text-zinc-700">
+                            {row.label}
+                        </td>
+                        <td className="border border-zinc-300 bg-white px-2 py-1 text-zinc-900">
+                            {display(row.value)}
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+}
 
 export default function EmployeeLoanLedger({ loan, transactions, months, years }: Props) {
     const { auth } = usePage<SharedData>().props;
@@ -76,6 +126,36 @@ export default function EmployeeLoanLedger({ loan, transactions, months, years }
         reference_no: '',
         notes: '',
     });
+
+    const employeeRows: HeaderRow[] = [
+        { label: 'Employee Id', value: loan.employee.pin },
+        { label: 'Employee Name', value: loan.employee.name },
+        { label: 'Department', value: loan.employee.department },
+        { label: 'Designation', value: loan.employee.designation },
+        { label: 'Program', value: loan.employee.program },
+        { label: 'Unit', value: loan.employee.unit ?? 'N/A' },
+        { label: 'Project', value: loan.employee.project },
+    ];
+
+    const policyRows: HeaderRow[] = [
+        { label: 'Policy', value: loan.policy?.label },
+        { label: 'Loan Cycle', value: loan.loan_cycle },
+        { label: 'Application No', value: loan.application_number },
+        { label: 'Rate', value: loan.interest_rate },
+        { label: 'Total Install', value: loan.installment_count },
+        { label: 'Install Start Date', value: loan.first_installment_date },
+        { label: 'Install End Date', value: loan.last_installment_date },
+    ];
+
+    const financialRows: HeaderRow[] = [
+        { label: 'Disburse Date', value: loan.disbursement_date },
+        { label: 'Disburse Branch', value: loan.employee.branch },
+        { label: 'Loan Amount (PR)', value: fmt(loan.principal_amount) },
+        { label: 'Loan Amount (SC)', value: fmt(loan.service_charge_amount) },
+        { label: 'Loan Amount (Total)', value: fmt(loan.total_payable) },
+        { label: 'Rebate Amt', value: fmt(loan.rebate_amount) },
+        { label: 'Loan Close Date', value: loan.loan_close_date },
+    ];
 
     const submitPayment = (e: React.FormEvent) => {
         e.preventDefault();
@@ -134,6 +214,12 @@ export default function EmployeeLoanLedger({ loan, transactions, months, years }
                         <Plus className="mr-1 h-3 w-3" /> Manual payment
                     </Button>
                 )}
+            </div>
+
+            <div className="mb-3 grid gap-3 lg:grid-cols-3">
+                <LedgerHeaderTable rows={employeeRows} />
+                <LedgerHeaderTable rows={policyRows} />
+                <LedgerHeaderTable rows={financialRows} />
             </div>
 
             <Card className="mb-3 border-amber-200 bg-amber-50/20 shadow-2xs">

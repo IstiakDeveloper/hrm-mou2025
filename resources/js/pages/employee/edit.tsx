@@ -47,9 +47,12 @@ import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { cn } from '@/lib/utils';
 import {
     EmployeeSalaryAssignment,
+    buildSalaryLinesJson,
     type PayrollGradeOption,
     type PayrollPayscaleOption,
     type PayrollStepOption,
+    type SalaryAssignmentPreview,
+    type SalaryComponentRow,
 } from '@/components/employee/EmployeeSalaryAssignment';
 import { format } from 'date-fns';
 import {
@@ -180,6 +183,7 @@ interface EmployeeEditFormData {
     salary_grade_id: string;
     salary_step_id: string;
     basic_salary: string;
+    salary_lines_json: string;
     nid: string;
     nid_number: string;
     smart_card_number: string;
@@ -360,6 +364,7 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         salary_grade_id: employee.salary_grade_id ? String(employee.salary_grade_id) : '',
         salary_step_id: employee.salary_step_id ? String(employee.salary_step_id) : '',
         basic_salary: employee.basic_salary != null && employee.basic_salary !== '' ? String(employee.basic_salary) : '',
+        salary_lines_json: '',
         nid: combinedNidOrSmartCardDisplay(employee.nid, employee.smart_card_number).replace(/\D/g, '').slice(0, 17),
         nid_number: '',
         smart_card_number: '',
@@ -593,6 +598,7 @@ interface EmployeeEditProps {
     payrollGrades: PayrollGradeOption[];
     payrollSteps: PayrollStepOption[];
     activePayscaleId?: number | null;
+    salaryAssignment?: SalaryAssignmentPreview;
     oldInput?: Record<string, unknown>;
     errors?: Record<string, string>;
 }
@@ -615,6 +621,7 @@ export default function EmployeeEdit({
     payrollGrades = [],
     payrollSteps = [],
     activePayscaleId = null,
+    salaryAssignment,
     oldInput,
     errors: errorsProp = {},
 }: EmployeeEditProps) {
@@ -698,6 +705,27 @@ export default function EmployeeEdit({
     }, [setData, existingSignatureUrl]);
 
     const [addVillageModal, setAddVillageModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string; error: string; saving: boolean }>({ open: false, target: 'present', name: '', error: '', saving: false });
+    const [salaryAdditionRows, setSalaryAdditionRows] = useState<SalaryComponentRow[]>(salaryAssignment?.addition_rows ?? []);
+    const [salaryDeductionRows, setSalaryDeductionRows] = useState<SalaryComponentRow[]>(salaryAssignment?.deduction_rows ?? []);
+
+    useEffect(() => {
+        setData('salary_lines_json', buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows));
+    }, [salaryAdditionRows, salaryDeductionRows, setData]);
+
+    const salaryAssignmentSnapshot = useMemo(
+        () => JSON.stringify({
+            basic: salaryAssignment?.basic_salary,
+            addition: salaryAssignment?.addition_rows ?? [],
+            deduction: salaryAssignment?.deduction_rows ?? [],
+        }),
+        [salaryAssignment],
+    );
+
+    useEffect(() => {
+        if (!salaryAssignment) return;
+        setSalaryAdditionRows(salaryAssignment.addition_rows ?? []);
+        setSalaryDeductionRows(salaryAssignment.deduction_rows ?? []);
+    }, [salaryAssignmentSnapshot]);
     const [addUnionModal, setAddUnionModal] = useState<{ open: boolean; target: 'present' | 'permanent'; name: string; error: string; saving: boolean }>({ open: false, target: 'present', name: '', error: '', saving: false });
     const blockMainSubmitRef = useRef(false);
 
@@ -997,6 +1025,10 @@ export default function EmployeeEdit({
         post(route('employees.update', employee.id), {
             preserveScroll: true,
             forceFormData: true,
+            transform: (formData) => ({
+                ...formData,
+                salary_lines_json: buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows),
+            }),
             onSuccess: () => {
                 clearEmployeeDraft(editDraftKey);
                 setTabStepBlockMessages(null);
@@ -1576,6 +1608,14 @@ export default function EmployeeEdit({
                                                 onSalaryGradeIdChange={(v) => setData('salary_grade_id', v)}
                                                 onSalaryStepIdChange={(v) => setData('salary_step_id', v)}
                                                 onBasicSalaryChange={(v) => setData('basic_salary', v)}
+                                                showSalaryComponents
+                                                additionRows={salaryAdditionRows}
+                                                deductionRows={salaryDeductionRows}
+                                                onAdditionRowsChange={setSalaryAdditionRows}
+                                                onDeductionRowsChange={setSalaryDeductionRows}
+                                                previewUrl={route('employees.salary-assignment-preview')}
+                                                employeeId={employee.id}
+                                                stepBasicSalary={salaryAssignment?.step_basic_salary ?? 0}
                                                 errors={errors}
                                             />
                                         </div>

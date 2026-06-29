@@ -74,6 +74,8 @@ class Employee extends Model
         'payscale_id',
         'salary_grade_id',
         'salary_step_id',
+        'basic_salary',
+        'custom_salary_assigned_at',
         'probation_salary',
         'fixed_salary',
         'signature',
@@ -89,6 +91,8 @@ class Employee extends Model
         'last_promotion_date' => 'date',
         'probation_salary' => 'decimal:2',
         'fixed_salary' => 'decimal:2',
+        'basic_salary' => 'decimal:2',
+        'custom_salary_assigned_at' => 'datetime',
         'pf_balance' => 'decimal:2',
         'pf_enrolled' => 'boolean',
         'pf_enrollment_date' => 'date',
@@ -161,6 +165,14 @@ class Employee extends Model
 
     public function resolveBasicSalary(): float
     {
+        if ($this->custom_salary_assigned_at !== null) {
+            return (float) ($this->basic_salary ?? 0);
+        }
+
+        if ($this->basic_salary !== null && (float) $this->basic_salary > 0) {
+            return (float) $this->basic_salary;
+        }
+
         if ($this->payscale_id && $this->salary_grade_id && $this->salary_step_id) {
             $structure = SalaryStructure::query()
                 ->where('payscale_id', $this->payscale_id)

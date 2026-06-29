@@ -189,6 +189,7 @@ class LegacyLoanRebuildService
             'loan_policy_id' => $policy->id,
             'loan_type' => $policy->loan_type,
             'principal_amount' => $disburseAmount,
+            'interest_rate' => (float) $policy->default_interest_rate,
             'disbursement_date' => $item->disbursement_date->toDateString(),
             'installment_count' => $totalInstallments,
             'installment_amount' => $installAmount,

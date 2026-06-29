@@ -16,7 +16,7 @@ import { PayrollPage, PayrollPageHeader, payrollBtnPrimary, payrollFilterActive 
 import { BranchReviewSidebar } from '@/components/payroll/BranchReviewSidebar';
 import { cn } from '@/lib/utils';
 import { payrollPostLabels, payrollPostRoutes, type PayrollPostContext } from '@/lib/payroll-post-routes';
-import { ArrowLeft, CheckCircle2, ChevronDown, Save, Trash2, Search, Users, Coins, Building, ShieldAlert, Check, X, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, Save, Trash2, Search, Users, Coins, Building, ShieldAlert, Check, X, SlidersHorizontal, RefreshCw } from 'lucide-react';
 
 type BranchBlock = {
     run: {
@@ -81,6 +81,7 @@ export default function SalaryPostPeriod({
     const [finalizingAll, setFinalizingAll] = useState(false);
     const [cancellingAll, setCancellingAll] = useState(false);
     const [cancellingRunId, setCancellingRunId] = useState<number | null>(null);
+    const [recallingRunId, setRecallingRunId] = useState<number | null>(null);
 
     useEffect(() => {
         const payslips = initialBranches.flatMap((b) => b.payslips);
@@ -213,6 +214,25 @@ export default function SalaryPostPeriod({
         if (!confirm(`Cancel payroll for ${name}? You can run calculation again for this branch.`)) return;
         setCancellingRunId(runId);
         router.post(routes.cancel(runId), {}, { onFinish: () => setCancellingRunId(null) });
+    };
+
+    const recallBranch = (runId: number) => {
+        const block = initialBranches.find((b) => b.run.id === runId);
+        const name = block?.run.branch ?? 'this branch';
+        if (!confirm(`Recall payroll for ${name} with the latest employee salary data? Manual edits on this branch will be replaced.`)) return;
+        setRecallingRunId(runId);
+
+        router.post(
+            routes.recall(runId),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setDirtyRuns((prev) => ({ ...prev, [runId]: false }));
+                },
+                onFinish: () => setRecallingRunId(null),
+            },
+        );
     };
 
     // Filter branches list (Left Panel)
@@ -454,6 +474,23 @@ export default function SalaryPostPeriod({
 
                                         {canEdit && status !== 'posted' && (
                                             <div className="flex flex-wrap items-center gap-2">
+                                                {!isBonus && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => recallBranch(activeBlock.run.id)}
+                                                        disabled={
+                                                            recallingRunId === activeBlock.run.id
+                                                            || saving === activeBlock.run.id
+                                                            || postingRunId === activeBlock.run.id
+                                                            || cancellingRunId === activeBlock.run.id
+                                                        }
+                                                        className="cursor-pointer font-semibold rounded-lg shadow-2xs h-8 text-xs border-indigo-100 text-indigo-700 hover:bg-indigo-50/60"
+                                                    >
+                                                        <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', recallingRunId === activeBlock.run.id && 'animate-spin')} />
+                                                        {recallingRunId === activeBlock.run.id ? 'Recalling…' : 'Recall Branch'}
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     size="sm"
                                                     variant="outline"

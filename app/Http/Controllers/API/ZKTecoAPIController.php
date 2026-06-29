@@ -294,44 +294,14 @@ class ZKTecoAPIController extends Controller
 
             $date = $timestamp->format('Y-m-d');
             $time = $timestamp->format('H:i:s');
-            $hour = (int) $timestamp->format('H');
 
-            // Log the parsed components
             Log::info('ZKTeco sync: Parsed timestamp components', [
                 'date' => $date,
                 'time' => $time,
-                'hour' => $hour,
-                'full_datetime' => $timestamp->format('Y-m-d H:i:s')
+                'full_datetime' => $timestamp->format('Y-m-d H:i:s'),
             ]);
 
-            // Get employee department for check-in/check-out logic
-            $departmentId = $employee->department_id;
-            $isCustomerService = ($departmentId == 13);
-
-            // Determine check-in or check-out based on department and time
-            if ($isCustomerService) {
-                // Customer Service Department: 2:00 PM - 7:30 PM working hours
-                // Check-in: 1:00 PM - 4:00 PM (13:00 - 16:00)
-                // Check-out: 4:01 PM - 11:59 PM (16:01 - 23:59)
-                $isCheckIn = ($hour >= 13 && $hour <= 16);
-
-                Log::info('ZKTeco sync: Customer Service time-based determination', [
-                    'employee_id' => $employee->id,
-                    'hour' => $hour,
-                    'isCheckIn' => $isCheckIn
-                ]);
-            } else {
-                // Regular departments: Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
-                $isCheckIn = ($hour < 12);
-
-                Log::info('ZKTeco sync: Regular department time-based determination', [
-                    'employee_id' => $employee->id,
-                    'hour' => $hour,
-                    'isCheckIn' => $isCheckIn
-                ]);
-            }
-
-            return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
+            return $this->saveAttendanceRecord($employee, $device, $date, $time);
         } catch (\Exception $e) {
             Log::error('ZKTeco sync: Error parsing timestamp', [
                 'timestamp' => $record['timestamp'],
@@ -376,44 +346,14 @@ class ZKTecoAPIController extends Controller
 
             $date = $timestamp->format('Y-m-d');
             $time = $timestamp->format('H:i:s');
-            $hour = (int) $timestamp->format('H');
 
-            // Log the parsed components
             Log::info('ZKTeco sync: Parsed timestamp components', [
                 'date' => $date,
                 'time' => $time,
-                'hour' => $hour,
-                'full_datetime' => $timestamp->format('Y-m-d H:i:s')
+                'full_datetime' => $timestamp->format('Y-m-d H:i:s'),
             ]);
 
-            // Get employee department for check-in/check-out logic
-            $departmentId = $employee->department_id;
-            $isCustomerService = ($departmentId == 13);
-
-            // Determine check-in or check-out based on department and time
-            if ($isCustomerService) {
-                // Customer Service Department: 2:00 PM - 7:30 PM working hours
-                // Check-in: 1:00 PM - 4:00 PM (13:00 - 16:00)
-                // Check-out: 4:01 PM - 11:59 PM (16:01 - 23:59)
-                $isCheckIn = ($hour >= 13 && $hour <= 16);
-
-                Log::info('ZKTeco sync: Customer Service time-based determination', [
-                    'employee_id' => $employee->id,
-                    'hour' => $hour,
-                    'isCheckIn' => $isCheckIn
-                ]);
-            } else {
-                // Regular departments: Before noon (0-11 hours) is check-in, after noon (12-23 hours) is check-out
-                $isCheckIn = ($hour < 12);
-
-                Log::info('ZKTeco sync: Regular department time-based determination', [
-                    'employee_id' => $employee->id,
-                    'hour' => $hour,
-                    'isCheckIn' => $isCheckIn
-                ]);
-            }
-
-            return $this->saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn);
+            return $this->saveAttendanceRecord($employee, $device, $date, $time);
         } catch (\Exception $e) {
             Log::error('ZKTeco sync: Error parsing timestamp', [
                 'timestamp' => $record['timestamp'],
@@ -527,19 +467,15 @@ class ZKTecoAPIController extends Controller
     /**
      * Save attendance record to database
      */
-    private function saveAttendanceRecord($employee, $device, $date, $time, $isCheckIn)
+    private function saveAttendanceRecord($employee, $device, $date, $time)
     {
-        // Use database transaction for data integrity
-        return DB::transaction(function () use ($employee, $device, $date, $time, $isCheckIn) {
-            // Find existing attendance for this date
+        return DB::transaction(function () use ($employee, $device, $date, $time) {
             $attendance = Attendance::where('employee_id', $employee->id)
                 ->where('date', $date)
                 ->first();
 
-            // Check for movement
             $isOnMovement = $this->isEmployeeOnMovement($employee->id, $date);
 
-            // Get movement record if exists
             $movement = null;
             if ($isOnMovement) {
                 $movement = \App\Models\Movement::where('employee_id', $employee->id)
@@ -550,79 +486,9 @@ class ZKTecoAPIController extends Controller
                     ->first();
             }
 
-            // Get employee department for special logic
-            $departmentId = $employee->department_id;
-            $isCustomerService = ($departmentId == 13);
-
             if ($attendance) {
-                // Update existing attendance
-                $updated = false;
+                $updated = $this->applyPunchToAttendance($attendance, $device, $time);
 
-                if ($isCustomerService) {
-                    // Customer Service Department Logic: First record is check-in, last is check-out
-                    if ($isCheckIn && (!$attendance->check_in || Carbon::parse($time)->format('H:i') < Carbon::parse($attendance->check_in)->format('H:i'))) {
-                        $attendance->check_in = $time;
-                        $attendance->device_id = $device->id;
-                        $updated = true;
-
-                        Log::info('ZKTeco sync: Updated Customer Service check-in (first/earliest)', [
-                            'employee_id' => $employee->id,
-                            'date' => $date,
-                            'time' => $time,
-                            'previous_check_in' => $attendance->getOriginal('check_in')
-                        ]);
-                    } elseif (!$isCheckIn && (!$attendance->check_out || Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_out)->format('H:i'))) {
-                        $attendance->check_out = $time;
-                        $updated = true;
-
-                        Log::info('ZKTeco sync: Updated Customer Service check-out (last/latest)', [
-                            'employee_id' => $employee->id,
-                            'date' => $date,
-                            'time' => $time,
-                            'previous_check_out' => $attendance->getOriginal('check_out')
-                        ]);
-                    }
-
-                    // For Customer Service, also consider any punch within working hours
-                    $hour = (int) Carbon::parse($time)->format('H');
-
-                    // If punch is between 2 PM (14) and 7:30 PM (19), determine based on existing records
-                    if ($hour >= 14 && $hour <= 19) {
-                        if (!$attendance->check_in) {
-                            // No check-in yet, make this check-in
-                            $attendance->check_in = $time;
-                            $attendance->device_id = $device->id;
-                            $updated = true;
-
-                            Log::info('ZKTeco sync: Set Customer Service check-in (no previous check-in)', [
-                                'employee_id' => $employee->id,
-                                'time' => $time
-                            ]);
-                        } elseif (!$attendance->check_out && Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_in)->format('H:i')) {
-                            // Has check-in, no check-out, and this time is later - make it check-out
-                            $attendance->check_out = $time;
-                            $updated = true;
-
-                            Log::info('ZKTeco sync: Set Customer Service check-out (after check-in)', [
-                                'employee_id' => $employee->id,
-                                'time' => $time,
-                                'check_in_time' => $attendance->check_in
-                            ]);
-                        }
-                    }
-                } else {
-                    // Regular Department Logic: Time-based determination
-                    if ($isCheckIn && (!$attendance->check_in || Carbon::parse($time)->format('H:i') < Carbon::parse($attendance->check_in)->format('H:i'))) {
-                        $attendance->check_in = $time;
-                        $attendance->device_id = $device->id;
-                        $updated = true;
-                    } elseif (!$isCheckIn && (!$attendance->check_out || Carbon::parse($time)->format('H:i') > Carbon::parse($attendance->check_out)->format('H:i'))) {
-                        $attendance->check_out = $time;
-                        $updated = true;
-                    }
-                }
-
-                // Link to movement if exists and not already linked
                 if ($movement && !$attendance->movement_id) {
                     $attendance->movement_id = $movement->id;
                     $updated = true;
@@ -634,58 +500,18 @@ class ZKTecoAPIController extends Controller
 
                     Log::info('ZKTeco sync: Updated existing attendance record', [
                         'employee_id' => $employee->id,
-                        'department_id' => $departmentId,
-                        'is_customer_service' => $isCustomerService,
                         'check_in' => $attendance->check_in,
                         'check_out' => $attendance->check_out,
-                        'status' => $attendance->status
+                        'status' => $attendance->status,
                     ]);
                 }
             } else {
-                // Create new attendance record
                 $attendance = new Attendance();
                 $attendance->employee_id = $employee->id;
                 $attendance->date = $date;
                 $attendance->device_id = $device->id;
+                $attendance->check_in = $time;
 
-                if ($isCustomerService) {
-                    // Customer Service: Determine based on time and context
-                    $hour = (int) Carbon::parse($time)->format('H');
-
-                    // If it's within working hours (2 PM to 7:30 PM), start with check-in
-                    if ($hour >= 14 && $hour <= 19) {
-                        $attendance->check_in = $time;
-
-                        Log::info('ZKTeco sync: Created Customer Service attendance with check-in', [
-                            'employee_id' => $employee->id,
-                            'time' => $time,
-                            'hour' => $hour
-                        ]);
-                    } else {
-                        // Outside working hours - still record but determine type based on time
-                        if ($isCheckIn) {
-                            $attendance->check_in = $time;
-                        } else {
-                            $attendance->check_out = $time;
-                        }
-
-                        Log::info('ZKTeco sync: Created Customer Service attendance outside working hours', [
-                            'employee_id' => $employee->id,
-                            'time' => $time,
-                            'hour' => $hour,
-                            'is_check_in' => $isCheckIn
-                        ]);
-                    }
-                } else {
-                    // Regular departments: Use time-based logic
-                    if ($isCheckIn) {
-                        $attendance->check_in = $time;
-                    } else {
-                        $attendance->check_out = $time;
-                    }
-                }
-
-                // Link to movement if exists
                 if ($movement) {
                     $attendance->movement_id = $movement->id;
                 }
@@ -695,16 +521,41 @@ class ZKTecoAPIController extends Controller
 
                 Log::info('ZKTeco sync: Created new attendance record', [
                     'employee_id' => $employee->id,
-                    'department_id' => $departmentId,
-                    'is_customer_service' => $isCustomerService,
                     'check_in' => $attendance->check_in,
                     'check_out' => $attendance->check_out,
-                    'status' => $attendance->status
+                    'status' => $attendance->status,
                 ]);
             }
 
             return true;
         });
+    }
+
+    /**
+     * Earliest punch = check-in, latest punch after check-in = check-out.
+     * Late/half-day status uses per-employee attendance settings via applyPunchStatus().
+     */
+    private function applyPunchToAttendance(Attendance $attendance, $device, string $time): bool
+    {
+        $updated = false;
+        $punchTime = Carbon::parse($time)->format('H:i:s');
+
+        if (!$attendance->check_in || $punchTime < Carbon::parse($attendance->check_in)->format('H:i:s')) {
+            $attendance->check_in = $time;
+            $attendance->device_id = $device->id;
+            $updated = true;
+        }
+
+        $checkInTime = Carbon::parse($attendance->check_in)->format('H:i:s');
+
+        if ($punchTime > $checkInTime) {
+            if (!$attendance->check_out || $punchTime > Carbon::parse($attendance->check_out)->format('H:i:s')) {
+                $attendance->check_out = $time;
+                $updated = true;
+            }
+        }
+
+        return $updated;
     }
 
 
@@ -747,9 +598,8 @@ class ZKTecoAPIController extends Controller
     }
 
     /**
-     * Process absent employees for today
-     * This creates attendance records for employees who didn't clock in
-     * Also handles auto attendance for Employee ID 1 (ED)
+     * Process absent employees for today.
+     * Creates attendance records for employees who did not clock in.
      */
     private function processAbsentEmployees($device)
     {
@@ -760,9 +610,6 @@ class ZKTecoAPIController extends Controller
             Log::warning('ZKTeco sync: Device not associated with a branch, skipping absent processing');
             return;
         }
-
-        // First, handle auto attendance for Employee ID 1 (ED)
-        $this->processAutoAttendanceForED($today, $device);
 
         // Get all active employees in this branch
         $employees = Employee::where('status', 'active')
@@ -864,119 +711,6 @@ class ZKTecoAPIController extends Controller
                 }
             })
             ->exists();
-    }
-
-    /**
-     * Process auto attendance for Employee ID 1 (ED)
-     * Auto check-in at 09:00 AM and auto check-out at 07:30 PM
-     */
-    private function processAutoAttendanceForED($date, $device)
-    {
-        // Find Employee with ID 1 (ED)
-        $edEmployee = Employee::find(1);
-
-        if (!$edEmployee) {
-            Log::warning('ZKTeco sync: Employee ID 1 (ED) not found for auto attendance');
-            return;
-        }
-
-        // Check if employee is active
-        if ($edEmployee->status !== 'active') {
-            Log::info('ZKTeco sync: Employee ID 1 (ED) is not active, skipping auto attendance');
-            return;
-        }
-
-        // Check if attendance record already exists for today
-        $attendance = Attendance::where('employee_id', 1)
-            ->where('date', $date)
-            ->first();
-
-        // Auto attendance times
-        $autoCheckIn = '09:00:00';    // 9:00 AM
-        $autoCheckOut = '19:30:00';   // 7:30 PM
-
-        if ($attendance) {
-            // Update existing attendance record
-            $updated = false;
-
-            // Set auto check-in if not already set
-            if (!$attendance->check_in) {
-                $attendance->check_in = $autoCheckIn;
-                $attendance->device_id = $device->id;
-                $updated = true;
-                Log::info('ZKTeco sync: Auto check-in set for Employee ID 1 (ED)', [
-                    'date' => $date,
-                    'check_in' => $autoCheckIn
-                ]);
-            }
-
-            // Set auto check-out if not already set
-            if (!$attendance->check_out) {
-                $attendance->check_out = $autoCheckOut;
-                $updated = true;
-                Log::info('ZKTeco sync: Auto check-out set for Employee ID 1 (ED)', [
-                    'date' => $date,
-                    'check_out' => $autoCheckOut
-                ]);
-            }
-
-            if ($updated) {
-                // Check if employee is on leave first
-                if ($this->isEmployeeOnLeave(1, $date)) {
-                    $attendance->status = 'leave';
-                }
-                // Check if employee is on movement
-                else if ($this->isEmployeeOnMovement(1, $date)) {
-                    $attendance->status = 'on_duty';
-                } else {
-                    // Update status normally
-                    $this->updateAttendanceStatus($attendance);
-                }
-
-                $attendance->save();
-            }
-        } else {
-            // Create new attendance record with auto times
-            $attendance = new Attendance();
-            $attendance->employee_id = 1;
-            $attendance->date = $date;
-            $attendance->check_in = $autoCheckIn;
-            $attendance->check_out = $autoCheckOut;
-            $attendance->device_id = $device->id;
-
-            // Check if employee is on leave
-            if ($this->isEmployeeOnLeave(1, $date)) {
-                $attendance->status = 'leave';
-            }
-            // Check if employee is on movement
-            else if ($this->isEmployeeOnMovement(1, $date)) {
-                $attendance->status = 'on_duty';
-
-                // Find the relevant movement
-                $movement = \App\Models\Movement::where('employee_id', 1)
-                    ->whereIn('status', ['approved', 'completed'])
-                    ->where('movement_type', 'official')
-                    ->where('from_datetime', '<=', Carbon::parse($date)->endOfDay())
-                    ->where('to_datetime', '>=', Carbon::parse($date)->startOfDay())
-                    ->first();
-
-                if ($movement) {
-                    $attendance->movement_id = $movement->id;
-                }
-            } else {
-                // Set status normally (will be 'present' since both check-in and check-out are set)
-                $this->updateAttendanceStatus($attendance);
-            }
-
-            $attendance->save();
-
-            Log::info('ZKTeco sync: Auto attendance created for Employee ID 1 (ED)', [
-                'date' => $date,
-                'check_in' => $autoCheckIn,
-                'check_out' => $autoCheckOut,
-                'status' => $attendance->status
-            ]);
-        }
     }
 
     /**

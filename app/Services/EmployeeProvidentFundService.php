@@ -48,6 +48,22 @@ class EmployeeProvidentFundService
         ];
     }
 
+    public function employerMatchingContribution(float $employeeContribution): float
+    {
+        if ($employeeContribution <= 0) {
+            return 0.0;
+        }
+
+        $employeeRate = (float) config('payroll.pf_employee_percent', 10);
+        $employerRate = (float) config('payroll.pf_employer_percent', 10);
+
+        if ($employeeRate <= 0) {
+            return 0.0;
+        }
+
+        return SalaryStructureCalculator::roundTaka($employeeContribution * ($employerRate / $employeeRate));
+    }
+
     public function isEligible(Employee $employee, ?Carbon $asOfDate = null): bool
     {
         if (! ($employee->pf_enrolled ?? true)) {

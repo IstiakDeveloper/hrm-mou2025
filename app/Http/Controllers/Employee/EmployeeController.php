@@ -25,6 +25,7 @@ use App\Models\SalaryStep;
 use App\Models\TransferHistory;
 use App\Models\User;
 use App\Models\Zone;
+use App\Services\EmployeeSalaryAssignmentService;
 use App\Services\OrganogramAccessService;
 use App\Support\EmployeeImportCsv;
 use App\Support\EmployeeImportTemplateExporter;
@@ -49,6 +50,10 @@ class EmployeeController extends Controller
 {
     use EmployedEmployeeUniqueIdentifiers;
     use ResolvesEmployeeNidSmartCard;
+
+    public function __construct(
+        protected EmployeeSalaryAssignmentService $employeeSalaryAssignmentService,
+    ) {}
 
     private const EMPLOYEE_IMPORT_MAX_ROWS = 5000;
 
@@ -649,6 +654,78 @@ class EmployeeController extends Controller
 
     }
 
+    public function salaryAssignmentPreview(Request $request)
+    {
+        $validated = $request->validate([
+            'payscale_id' => 'required|exists:payscales,id',
+            'salary_grade_id' => 'required|exists:salary_grades,id',
+            'salary_step_id' => 'required|exists:salary_steps,id',
+            'employee_id' => 'nullable|exists:employees,id',
+        ]);
+
+        $employee = isset($validated['employee_id'])
+            ? Employee::query()->find($validated['employee_id'])
+            : null;
+
+        return response()->json(
+            $this->employeeSalaryAssignmentService->resolveRows(
+                (int) $validated['payscale_id'],
+                (int) $validated['salary_grade_id'],
+                (int) $validated['salary_step_id'],
+                $employee,
+            )
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncEmployeeSalaryComponents(Employee $employee, array $validated): void
+    {
+        if (! $employee->payscale_id || ! $employee->salary_grade_id || ! $employee->salary_step_id) {
+            return;
+        }
+
+        $basic = array_key_exists('basic_salary', $validated) && $validated['basic_salary'] !== '' && $validated['basic_salary'] !== null
+            ? (float) $validated['basic_salary']
+            : null;
+
+        $lines = is_array($validated['salary_lines'] ?? null) ? $validated['salary_lines'] : [];
+
+        $effectiveFrom = $employee->joining_date ? Carbon::parse($employee->joining_date) : Carbon::today();
+
+        $this->employeeSalaryAssignmentService->syncEmployeeSalary(
+            $employee,
+            $basic,
+            $lines,
+            $effectiveFrom,
+        );
+    }
+
+    private function mergeSalaryLinesFromRequest(Request $request): void
+    {
+        $request->merge([
+            'salary_lines' => $this->parseSalaryLinesFromRequest($request),
+        ]);
+    }
+
+    /**
+     * @return list<array{salary_head_id: int, amount_type: string, amount: float|int|string}>
+     */
+    private function parseSalaryLinesFromRequest(Request $request): array
+    {
+        if ($request->filled('salary_lines_json')) {
+            $decoded = json_decode((string) $request->input('salary_lines_json'), true);
+            if (is_array($decoded)) {
+                return array_values(array_filter($decoded, fn ($row) => is_array($row) && isset($row['salary_head_id'])));
+            }
+        }
+
+        $lines = $request->input('salary_lines');
+
+        return is_array($lines) ? array_values($lines) : [];
+    }
+
     private function normalizeEmployeeRequestPayload(Request $request): void
     {
         $nullableEmptiesToNull = [
@@ -660,7 +737,7 @@ class EmployeeController extends Controller
             'marital_status', 'spouse_name', 'spouse_mobile',
             'dropout_date', 'dropout_reason', 'final_payment_date', 'last_promotion_date',
             'reporting_to', 'last_branch_id',
-            'payscale_id', 'salary_grade_id', 'salary_step_id',
+            'payscale_id', 'salary_grade_id', 'salary_step_id', 'basic_salary',
         ];
 
         foreach ($nullableEmptiesToNull as $field) {
@@ -1678,6 +1755,7 @@ class EmployeeController extends Controller
 
         try {
             $this->normalizeEmployeeRequestPayload($request);
+            $this->mergeSalaryLinesFromRequest($request);
             $this->resolveNidAndSmartCardFromRequest($request);
 
             $maritalStatuses = [
@@ -1741,6 +1819,12 @@ class EmployeeController extends Controller
                 'payscale_id' => 'nullable|exists:payscales,id',
                 'salary_grade_id' => 'nullable|exists:salary_grades,id',
                 'salary_step_id' => 'nullable|exists:salary_steps,id',
+                'basic_salary' => 'nullable|numeric|min:0',
+                'salary_lines' => 'nullable|array',
+                'salary_lines.*.salary_head_id' => 'required_with:salary_lines|exists:salary_heads,id',
+                'salary_lines.*.amount_type' => 'required_with:salary_lines|in:percentage,fixed',
+                'salary_lines.*.amount' => 'required_with:salary_lines|numeric|min:0',
+                'salary_lines_json' => 'nullable|string',
 
                 // Nested tab payloads
                 'addresses' => 'nullable|array',
@@ -1874,6 +1958,8 @@ class EmployeeController extends Controller
                 'documents',
                 'photo',
                 'signature',
+                'salary_lines',
+                'salary_lines_json',
             ]);
 
             $employeeData['employee_id'] = $employeeData['pin'];
@@ -2076,6 +2162,7 @@ class EmployeeController extends Controller
                 }
 
                 $this->syncEmployeeDocumentsFromTabbedForm($request, $createdEmployee, true);
+                $this->syncEmployeeSalaryComponents($createdEmployee, $validated);
             });
 
             return redirect()->route('employees.index')
@@ -2185,6 +2272,12 @@ class EmployeeController extends Controller
             'defaultBankName' => 'Prime Bank PLC',
             'documentTypes' => $this->employeeTabDocumentTypes(),
             ...$this->employeePayrollFormOptions(),
+            'salaryAssignment' => $this->employeeSalaryAssignmentService->resolveRows(
+                $employee->payscale_id ? (int) $employee->payscale_id : null,
+                $employee->salary_grade_id ? (int) $employee->salary_grade_id : null,
+                $employee->salary_step_id ? (int) $employee->salary_step_id : null,
+                $employee,
+            ),
         ]);
     }
 
@@ -2195,6 +2288,7 @@ class EmployeeController extends Controller
     {
         try {
             $this->normalizeEmployeeRequestPayload($request);
+            $this->mergeSalaryLinesFromRequest($request);
             $this->resolveNidAndSmartCardFromRequest($request);
 
             $validated = $request->validate([
@@ -2248,6 +2342,12 @@ class EmployeeController extends Controller
                 'payscale_id' => 'nullable|exists:payscales,id',
                 'salary_grade_id' => 'nullable|exists:salary_grades,id',
                 'salary_step_id' => 'nullable|exists:salary_steps,id',
+                'basic_salary' => 'nullable|numeric|min:0',
+                'salary_lines' => 'nullable|array',
+                'salary_lines.*.salary_head_id' => 'required_with:salary_lines|exists:salary_heads,id',
+                'salary_lines.*.amount_type' => 'required_with:salary_lines|in:percentage,fixed',
+                'salary_lines.*.amount' => 'required_with:salary_lines|numeric|min:0',
+                'salary_lines_json' => 'nullable|string',
 
                 // Nested tab payloads
                 'addresses' => 'nullable|array',
@@ -2376,6 +2476,8 @@ class EmployeeController extends Controller
                 'documents',
                 'photo',
                 'signature',
+                'salary_lines',
+                'salary_lines_json',
             ]);
 
             $employeeData['employee_id'] = $employeeData['pin'];
@@ -2585,6 +2687,8 @@ class EmployeeController extends Controller
                 }
 
                 $this->syncEmployeeDocumentsFromTabbedForm($request, $employee, false);
+                $employee->refresh();
+                $this->syncEmployeeSalaryComponents($employee, $validated);
             });
 
             return redirect()

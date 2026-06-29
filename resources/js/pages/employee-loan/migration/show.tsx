@@ -18,7 +18,7 @@ import {
 import { PayrollComboField, PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
-import { ArrowLeft, Pencil, Save } from 'lucide-react';
+import { ArrowLeft, Pencil, RefreshCw, Save } from 'lucide-react';
 import axios from 'axios';
 import { jsonCsrfHeaders } from '@/lib/csrf';
 import { cn } from '@/lib/utils';
@@ -160,6 +160,8 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
     const [saveLoading, setSaveLoading] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+    const [recalcItemId, setRecalcItemId] = useState<number | null>(null);
+    const [recalcError, setRecalcError] = useState<string | null>(null);
     const [previewMeta, setPreviewMeta] = useState<Pick<RowPreview, 'remaining_installments' | 'total_installments' | 'total_payable'> | null>(null);
     const calcGeneration = useRef(0);
 
@@ -376,6 +378,45 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
         });
     };
 
+    const recalculateRow = async (row: Item) => {
+        if (row.use_manual_terms) {
+            setRecalcError('Manual legacy terms — Edit দিয়ে হাতে ঠিক করুন।');
+            return;
+        }
+
+        if (
+            !confirm(
+                'Policy অনুযায়ী installment ও outstanding আবার calculate হবে (policy-র reducing/declining method)। Linked loan schedule refresh হবে। Continue?',
+            )
+        ) {
+            return;
+        }
+
+        setRecalcItemId(row.id);
+        setRecalcError(null);
+
+        try {
+            const { data } = await axios.post(
+                route('loan-migration.items.recalculate', row.id),
+                {},
+                {
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...jsonCsrfHeaders(),
+                    },
+                },
+            );
+
+            setSaveSuccess(data.message ?? 'Recalculated from policy.');
+            router.reload({ only: ['batch'], preserveScroll: true });
+        } catch (err: unknown) {
+            setRecalcError(extractSaveError(err));
+        } finally {
+            setRecalcItemId(null);
+        }
+    };
+
     const submitItem = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editItem || saveLoading || calcLoading) return;
@@ -460,6 +501,12 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                 </div>
             )}
 
+            {recalcError && (
+                <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    {recalcError}
+                </div>
+            )}
+
             <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Card className="shadow-2xs">
                     <CardContent className="p-3">
@@ -502,7 +549,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                             <TableHead className="text-xs text-right">Out SC</TableHead>
                             <TableHead className="text-xs text-right">Out total</TableHead>
                             <TableHead className="text-xs">Loan no</TableHead>
-                            <TableHead className="text-xs w-28" />
+                            <TableHead className="text-xs w-36" />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -523,15 +570,35 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                 <TableCell>
                                     <div className="flex flex-wrap items-center gap-1">
                                         {canEdit && (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-6 px-1.5 text-[10px]"
-                                                onClick={() => openItemEdit(row)}
-                                            >
-                                                <Pencil className="mr-0.5 h-3 w-3" /> Edit
-                                            </Button>
+                                            <>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-6 px-1.5 text-[10px]"
+                                                    onClick={() => openItemEdit(row)}
+                                                >
+                                                    <Pencil className="mr-0.5 h-3 w-3" /> Edit
+                                                </Button>
+                                                {!row.use_manual_terms && (
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-6 px-1.5 text-[10px] text-amber-800 hover:text-amber-900"
+                                                        onClick={() => recalculateRow(row)}
+                                                        disabled={recalcItemId === row.id}
+                                                    >
+                                                        <RefreshCw
+                                                            className={cn(
+                                                                'mr-0.5 h-3 w-3',
+                                                                recalcItemId === row.id && 'animate-spin',
+                                                            )}
+                                                        />
+                                                        {recalcItemId === row.id ? '…' : 'Recalculate'}
+                                                    </Button>
+                                                )}
+                                            </>
                                         )}
                                         {row.employee_loan_id && (
                                             <Link
@@ -777,7 +844,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                         onClick={triggerRecalc}
                                         disabled={calcLoading}
                                     >
-                                        {calcLoading ? 'Calculating…' : 'Calculate'}
+                                        {calcLoading ? 'Calculating…' : 'Recalculate from policy'}
                                     </Button>
                                 </div>
                                 <div className="grid grid-cols-3 gap-3">
@@ -853,7 +920,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                 <p className="mt-2 text-[10px] text-amber-800/80">
                                     {itemForm.data.use_manual_terms
                                         ? 'Manual: total payable − (passed × installment) থেকে Out PR/SC auto হবে। প্রয়োজনে Out SC/PR হাতে ঠিক করুন।'
-                                        : 'Policy থেকে auto calculate — Calculate চাপুন বা disburse/passed months বদলান।'}
+                                        : 'Policy থেকে auto calculate — Recalculate from policy চাপুন বা disburse/passed months বদলান। Save করলেও policy অনুযায়ী আবার calculate হবে।'}
                                 </p>
                             </div>
 

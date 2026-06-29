@@ -285,6 +285,24 @@ class LoanMigrationService
                     $merged['outstanding_service_charge'] = $snapshot['outstanding_service_charge'];
                     $merged['outstanding_total'] = $snapshot['outstanding_total'];
                 }
+            } else {
+                $policy = isset($data['loan_policy_id'])
+                    ? LoanPolicy::query()->findOrFail($data['loan_policy_id'])
+                    : ($item->policy ?? LoanPolicy::query()->findOrFail($item->loan_policy_id));
+
+                $snapshot = $this->calculator->calculateMigrationSnapshot(
+                    $policy,
+                    (float) $merged['disburse_amount'],
+                    (int) $merged['passed_months'],
+                );
+
+                $merged = [
+                    ...$merged,
+                    'installment_amount' => $snapshot['installment_amount'],
+                    'outstanding_principal' => $snapshot['outstanding_principal'],
+                    'outstanding_service_charge' => $snapshot['outstanding_service_charge'],
+                    'outstanding_total' => $snapshot['outstanding_total'],
+                ];
             }
 
             $this->assertRowTotals($merged, 1);
@@ -308,6 +326,49 @@ class LoanMigrationService
             }
 
             $item->update($updates);
+
+            if ($item->employee_loan_id) {
+                $this->rebuildService->rebuildLoanIds([$item->employee_loan_id]);
+            }
+
+            return $item->fresh(['employee', 'policy', 'employeeLoan']);
+        });
+    }
+
+    /**
+     * Re-apply current policy rules (reducing balance / declining balance) to a migration row
+     * and refresh the linked employee loan schedule.
+     */
+    public function recalculateItemFromPolicy(LoanMigrationItem $item): LoanMigrationItem
+    {
+        return DB::transaction(function () use ($item) {
+            $item = LoanMigrationItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();
+            $item->load('employeeLoan');
+
+            if ($item->use_manual_terms) {
+                throw new InvalidArgumentException(
+                    'Manual legacy terms cannot be recalculated from policy. Edit the row or turn off manual mode.'
+                );
+            }
+
+            $policy = $item->policy ?? LoanPolicy::query()->findOrFail($item->loan_policy_id);
+
+            if (! $policy->is_active) {
+                throw new InvalidArgumentException(sprintf('Policy "%s" is not active.', $policy->name));
+            }
+
+            $snapshot = $this->calculator->calculateMigrationSnapshot(
+                $policy,
+                (float) $item->disburse_amount,
+                (int) $item->passed_months,
+            );
+
+            $item->update([
+                'installment_amount' => SalaryStructureCalculator::roundTaka($snapshot['installment_amount']),
+                'outstanding_principal' => SalaryStructureCalculator::roundTaka($snapshot['outstanding_principal']),
+                'outstanding_service_charge' => SalaryStructureCalculator::roundTaka($snapshot['outstanding_service_charge']),
+                'outstanding_total' => SalaryStructureCalculator::roundTaka($snapshot['outstanding_total']),
+            ]);
 
             if ($item->employee_loan_id) {
                 $this->rebuildService->rebuildLoanIds([$item->employee_loan_id]);

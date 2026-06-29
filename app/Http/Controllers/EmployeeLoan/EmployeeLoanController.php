@@ -8,6 +8,7 @@ use App\Models\EmployeeLoan;
 use App\Models\EmployeeLoanTransaction;
 use App\Models\LoanPolicy;
 use App\Services\EmployeeLoanService;
+use App\Services\SalaryStructureCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -187,9 +188,41 @@ class EmployeeLoanController extends Controller
 
     public function ledger(EmployeeLoan $employee_loan)
     {
-        $employee_loan->load(['employee:id,pin,name_en']);
+        $employee_loan->load([
+            'employee:id,pin,name_en,department_id,designation_id,program_id,project_id,current_branch_id',
+            'employee.department:id,name',
+            'employee.designation:id,name',
+            'employee.program:id,name',
+            'employee.project:id,name',
+            'employee.branch:id,name',
+            'policy:id,code,name',
+            'application:id,application_number,loan_cycle,employee_loan_id',
+            'installments' => fn ($q) => $q->orderBy('installment_no'),
+        ]);
 
         $transactions = $this->loanService->ledgerForLoan($employee_loan);
+
+        $lastInstallment = $employee_loan->installments->last();
+        $serviceCharge = SalaryStructureCalculator::roundTaka(
+            (float) $employee_loan->total_payable - (float) $employee_loan->principal_amount
+        );
+        $rebateAmount = (float) $employee_loan->transactions()
+            ->where('transaction_type', EmployeeLoanTransaction::TYPE_REBATE)
+            ->sum('credit_amount');
+
+        $closeDate = null;
+        if ($employee_loan->status === 'completed') {
+            $lastPayment = $employee_loan->transactions()
+                ->where('credit_amount', '>', 0)
+                ->orderByDesc('transaction_date')
+                ->orderByDesc('id')
+                ->value('transaction_date');
+            $closeDate = $lastPayment ?? $employee_loan->updated_at;
+        }
+
+        $formatLedgerDate = static fn ($date) => $date
+            ? strtoupper($date->format('d-M-Y'))
+            : null;
 
         return Inertia::render('employee-loan/ledger', [
             'loan' => [
@@ -198,9 +231,35 @@ class EmployeeLoanController extends Controller
                 'loan_type_label' => $employee_loan->typeLabel(),
                 'status' => $employee_loan->status,
                 'outstanding_balance' => (float) $employee_loan->outstanding_balance,
+                'principal_amount' => (float) $employee_loan->principal_amount,
+                'service_charge_amount' => $serviceCharge,
+                'total_payable' => (float) $employee_loan->total_payable,
+                'interest_rate' => (float) $employee_loan->interest_rate,
+                'installment_count' => $employee_loan->installment_count,
+                'disbursement_date' => $formatLedgerDate($employee_loan->disbursement_date),
+                'first_installment_date' => $formatLedgerDate($employee_loan->first_installment_date),
+                'last_installment_date' => $formatLedgerDate($lastInstallment?->due_date),
+                'loan_close_date' => $formatLedgerDate($closeDate),
+                'rebate_amount' => $rebateAmount,
+                'policy' => $employee_loan->policy ? [
+                    'code' => $employee_loan->policy->code,
+                    'name' => $employee_loan->policy->name,
+                    'label' => trim($employee_loan->policy->code.' '.$employee_loan->policy->name),
+                ] : null,
+                'loan_cycle' => $employee_loan->application?->loan_cycle ?? 1,
+                'application_number' => $employee_loan->application?->application_number
+                    ?? $employee_loan->reference_no,
                 'employee' => [
                     'id' => $employee_loan->employee->id,
+                    'pin' => $employee_loan->employee->pin,
+                    'name' => $employee_loan->employee->name_en,
                     'label' => trim(($employee_loan->employee->pin ?? '').' — '.($employee_loan->employee->name_en ?? '')),
+                    'department' => $employee_loan->employee->department?->name,
+                    'designation' => $employee_loan->employee->designation?->name,
+                    'program' => $employee_loan->employee->program?->name,
+                    'unit' => null,
+                    'project' => $employee_loan->employee->project?->name,
+                    'branch' => $employee_loan->employee->branch?->name,
                 ],
             ],
             'transactions' => $transactions->map(fn ($tx) => [

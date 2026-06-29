@@ -470,6 +470,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('employees/locations/unions', [EmployeeController::class, 'locationsUnions'])
         ->name('employees.locations.unions');
 
+    Route::get('employees/salary-assignment-preview', [EmployeeController::class, 'salaryAssignmentPreview'])
+        ->name('employees.salary-assignment-preview')
+        ->middleware('permission:employees.view');
+
     Route::middleware(['permission:employees.view'])->group(function () {
         Route::resource('employees', EmployeeController::class)->parameters(['employees' => 'employee']);
 
@@ -840,6 +844,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/salary-post/period/{year}/{month}/cancel', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'cancelPeriod'])->name('salary-post.period.cancel')->where(['year' => '[0-9]+', 'month' => '[0-9]+'])->middleware('permission:payroll.edit');
         Route::get('/salary-post/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'show'])->name('salary-post.show');
         Route::put('/salary-post/{payroll_run}/payslips', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'updatePayslips'])->name('salary-post.update-payslips')->middleware('permission:payroll.edit');
+        Route::post('/salary-post/{payroll_run}/recall', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'recall'])->name('salary-post.recall')->middleware('permission:payroll.edit');
         Route::post('/salary-post/{payroll_run}/cancel', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'cancel'])->name('salary-post.cancel')->middleware('permission:payroll.edit');
         Route::post('/salary-post/{payroll_run}', [\App\Http\Controllers\Payroll\SalaryPostController::class, 'post'])->name('salary-post.post')->middleware('permission:payroll.edit');
 
@@ -930,6 +935,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'show'])->name('show');
             Route::put('/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
             Route::put('/items/{loan_migration_item}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'updateItem'])->name('items.update')->middleware('permission:payroll.edit');
+            Route::post('/items/{loan_migration_item}/recalculate', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'recalculateItem'])->name('items.recalculate')->middleware('permission:payroll.edit');
         });
 
         Route::prefix('loan-policies')->name('loan-policies.')->group(function () {

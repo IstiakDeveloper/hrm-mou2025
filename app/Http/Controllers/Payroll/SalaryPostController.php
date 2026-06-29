@@ -8,6 +8,7 @@ use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
 use App\Services\EmployeeLoanService;
+use App\Services\PayrollRunRecalculateService;
 use App\Services\PayrollRunRollbackService;
 use App\Services\PayslipTotalsService;
 use App\Services\SeparationPayrollService;
@@ -26,6 +27,7 @@ class SalaryPostController extends Controller
         protected PayslipTotalsService $payslipTotals,
         protected EmployeeLoanService $loanService,
         protected PayrollRunRollbackService $rollbackService,
+        protected PayrollRunRecalculateService $recalculateService,
         protected SeparationPayrollService $separationPayrollService,
     ) {}
 
@@ -186,6 +188,31 @@ class SalaryPostController extends Controller
                 'basic_percentage' => (float) $bonusConfig->basic_percentage,
             ] : null,
         ]);
+    }
+
+    public function recall(Request $request, PayrollRun $payroll_run)
+    {
+        $redirect = $this->redirectIfWrongPostSection($request, $payroll_run);
+        if ($redirect) {
+            return $redirect;
+        }
+
+        if (! $request->user()?->hasPermission('payroll.edit')) {
+            throw ValidationException::withMessages([
+                'run' => 'You do not have permission to recall payroll.',
+            ]);
+        }
+
+        $this->recalculateService->recalculate($payroll_run);
+
+        $prefix = $this->routePrefixForContext($this->resolvePostContext($request, $payroll_run));
+
+        return redirect()
+            ->route("{$prefix}.period", [
+                'year' => $payroll_run->year,
+                'month' => $payroll_run->month,
+            ])
+            ->with('success', 'Branch payroll recalculated with the latest employee salary data.');
     }
 
     public function updatePayslips(Request $request, PayrollRun $payroll_run)
