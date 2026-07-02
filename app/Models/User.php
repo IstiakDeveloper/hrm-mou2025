@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -119,6 +120,15 @@ class User extends Authenticatable
             ['leave-types.create', 'leaves_type.create'],
             ['leave-types.edit', 'leaves_type.edit'],
             ['leave-types.delete', 'leaves_type.delete'],
+            ['employee-loan.view', 'payroll.view'],
+            ['employee-loan.create', 'payroll.create'],
+            ['employee-loan.edit', 'payroll.edit'],
+            ['employee-loan.delete', 'payroll.delete'],
+            ['staff-fund.view', 'payroll.view'],
+            ['staff-fund.create', 'payroll.create'],
+            ['staff-fund.edit', 'payroll.edit'],
+            ['staff-fund.delete', 'payroll.delete'],
+            ['employees.view', 'employee-loan.view', 'staff-fund.view', 'payroll.view'],
         ];
     }
 
@@ -156,6 +166,37 @@ class User extends Authenticatable
         return $this->resolvedPermissions;
     }
 
+    /** @return list<string> */
+    public static function payrollModulePermissions(): array
+    {
+        return [
+            'payroll.view', 'payroll.create', 'payroll.edit', 'payroll.delete',
+            'employee-loan.view', 'employee-loan.create', 'employee-loan.edit', 'employee-loan.delete',
+            'staff-fund.view', 'staff-fund.create', 'staff-fund.edit', 'staff-fund.delete',
+        ];
+    }
+
+    private static function isPayrollModulePermission(string $permission): bool
+    {
+        return in_array($permission, self::payrollModulePermissions(), true);
+    }
+
+    /**
+     * Role-granted permission only (no alias expansion). Used by organogram scoping to avoid recursion.
+     */
+    public function hasDirectPermission(string $permission): bool
+    {
+        if ($permission === '') {
+            return false;
+        }
+
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return in_array($permission, $this->allPermissionsFromRoles(), true);
+    }
+
     // Helper method to check permissions
     public function hasPermission($permission)
     {
@@ -171,6 +212,17 @@ class User extends Authenticatable
 
         if (in_array($permission, $granted, true)) {
             return true;
+        }
+
+        // Check payroll guard first — short-circuit before calling isDepartmentHead / hasOrganogramLineRole.
+        if (self::isPayrollModulePermission($permission)) {
+            if ($this->isDepartmentHead()) {
+                return false;
+            }
+
+            if (OrganogramAccessService::hasOrganogramLineRole($this)) {
+                return false;
+            }
         }
 
         foreach (self::permissionAliasGroups() as $group) {
@@ -195,6 +247,75 @@ class User extends Authenticatable
     public function isStaffAccount(): bool
     {
         return $this->account_type !== 'branch';
+    }
+
+    /** @var list<string> */
+    public const ACCOUNTANT_SECTION_IDS = [
+        'employee-loan',
+        'staff-fund',
+        'fixed-asset',
+        'inventory',
+    ];
+
+    public function isAccountant(): bool
+    {
+        $this->loadMissing(['role', 'roles']);
+
+        if ($this->role?->name === 'Accountant') {
+            return true;
+        }
+
+        return $this->roles->contains(static fn ($role) => $role->name === 'Accountant');
+    }
+
+    public function isAccountsDeskOnly(): bool
+    {
+        if ($this->isSuperAdmin() || $this->isAccountant()) {
+            return $this->isAccountant();
+        }
+
+        $hasAccountsModule = $this->hasPermission('employee-loan.view')
+            || $this->hasPermission('staff-fund.view')
+            || $this->hasPermission('fixed-assets.view')
+            || $this->hasPermission('inventory.view');
+
+        $hasHrModule = $this->hasPermission('employees.admin')
+            || $this->hasPermission('employees.create')
+            || $this->hasPermission('employees.edit')
+            || $this->hasPermission('transfers.view')
+            || $this->hasPermission('leave-applications.approve');
+
+        return $hasAccountsModule && ! $hasHrModule;
+    }
+
+    /** @var list<string> */
+    public const DEPARTMENT_HEAD_DENIED_SECTION_IDS = [
+        'employee-loan',
+        'staff-fund',
+        'payroll',
+    ];
+
+    public function canAccessSection(string $sectionId): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($this->isAccountant()) {
+            return in_array($sectionId, self::ACCOUNTANT_SECTION_IDS, true);
+        }
+
+        if ($this->isDepartmentHead()) {
+            return ! in_array($sectionId, self::DEPARTMENT_HEAD_DENIED_SECTION_IDS, true);
+        }
+
+        return true;
+    }
+
+    /** Head-office Department Head (department-scoped oversight, not branch). */
+    public function isDepartmentHead(): bool
+    {
+        return OrganogramAccessService::isHeadOfficeDepartmentHead($this);
     }
 
     /**

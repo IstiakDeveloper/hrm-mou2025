@@ -33,6 +33,65 @@ class OrganogramAccessService
         return array_values(array_unique($names));
     }
 
+    /** Department Head oversight applies only to head-office staff. */
+    public static function isHeadOfficeUser(User $user): bool
+    {
+        $user->loadMissing('employee.branch');
+        $branch = $user->employee?->branch;
+        if (! $branch) {
+            return true;
+        }
+
+        return (bool) $branch->is_head_office;
+    }
+
+    /** @return list<int> */
+    public static function headedDepartmentIdsForUser(User $user): array
+    {
+        $eid = $user->employee_id;
+        if (! $eid) {
+            return [];
+        }
+
+        return Department::query()
+            ->where('head_employee_id', $eid)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /** User has Department Head permission and works at head office. */
+    public static function isHeadOfficeDepartmentHead(User $user): bool
+    {
+        if (! $user->hasPermission('department_head')) {
+            return false;
+        }
+
+        return self::isHeadOfficeUser($user);
+    }
+
+    /**
+     * Department IDs a head-office Department Head may oversee.
+     *
+     * @return list<int>
+     */
+    public static function departmentIdsForDepartmentHeadScope(User $user): array
+    {
+        if (! self::isHeadOfficeDepartmentHead($user)) {
+            return [];
+        }
+
+        $headed = self::headedDepartmentIdsForUser($user);
+        if ($headed !== []) {
+            return $headed;
+        }
+
+        $deptId = $user->employee?->department_id;
+
+        return $deptId ? [(int) $deptId] : [];
+    }
+
     /**
      * Roles that imply a narrowed employee directory (even if the role also has employees.view).
      *
@@ -54,16 +113,20 @@ class OrganogramAccessService
 
     public static function hasOrganogramLineRole(User $user): bool
     {
+        if ($user->hasDirectPermission('employees.admin')) {
+            return false;
+        }
+
         // Prefer permission-based detection so organogram scoping still applies
         // even if role names differ (e.g. localized or legacy role records).
         if (
-            $user->hasPermission('branch_manager')
-            || $user->hasPermission('department_head')
-            || $user->hasPermission('organogram.zonal_manager')
-            || $user->hasPermission('organogram.regional_manager')
-            || $user->hasPermission('organogram.microfinance_director')
-            || $user->hasPermission('organogram.microfinance_assistant_director')
-            || $user->hasPermission('organogram.executive_director')
+            $user->hasDirectPermission('branch_manager')
+            || $user->hasDirectPermission('department_head')
+            || $user->hasDirectPermission('organogram.zonal_manager')
+            || $user->hasDirectPermission('organogram.regional_manager')
+            || $user->hasDirectPermission('organogram.microfinance_director')
+            || $user->hasDirectPermission('organogram.microfinance_assistant_director')
+            || $user->hasDirectPermission('organogram.executive_director')
         ) {
             return true;
         }
@@ -79,11 +142,89 @@ class OrganogramAccessService
     }
 
     /**
+     * HR / leave-desk users who may see all leave applications (not organogram-limited).
+     */
+    public static function hasUnrestrictedLeaveApplicationAccess(User $user): bool
+    {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($user->hasPermission('employees.admin')
+            || $user->hasPermission('leave-applications.edit')
+            || $user->hasPermission('leave-balances.admin')
+            || $user->hasPermission('leave-types.create')
+            || $user->hasPermission('leave-types.edit')) {
+            return true;
+        }
+
+        if ($user->hasPermission('employees.view')
+            && ($user->hasPermission('leave-applications.view') || $user->hasPermission('reports.view'))
+            && ! self::hasOrganogramLineRole($user)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /** Whether $user may see the given employee under organogram + HR rules. */
+    public static function userCanSeeEmployee(User $user, int $employeeId): bool
+    {
+        if ($employeeId <= 0) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin() || self::hasUnrestrictedLeaveApplicationAccess($user)) {
+            return true;
+        }
+
+        if ($user->employee_id && (int) $user->employee_id === $employeeId) {
+            return true;
+        }
+
+        $q = Employee::query()->whereKey($employeeId);
+        self::constrainVisibleEmployees($q, $user);
+
+        return $q->exists();
+    }
+
+    /**
+     * Limit a LeaveApplication query to rows visible to $user.
+     *
+     * @param  Builder<\App\Models\LeaveApplication>  $query
+     */
+    public static function constrainLeaveApplications(Builder $query, User $user): void
+    {
+        if (self::hasUnrestrictedLeaveApplicationAccess($user)) {
+            return;
+        }
+
+        if ($user->hasPermission('leave-applications.view') || $user->hasPermission('leave-applications.approve')) {
+            self::constrainViaEmployeeRelation($query, $user, 'employee');
+
+            return;
+        }
+
+        if ($user->employee_id) {
+            $query->where('employee_id', $user->employee_id);
+
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
+    }
+
+    /**
      * HR-style full directory (all employees) — not organogram-limited roles.
      */
     public static function hasGlobalEmployeeDirectoryAccess(User $user): bool
     {
         if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($user->hasPermission('employees.admin')
+            || self::userBypassesOrganogramEmployeeScope($user)) {
             return true;
         }
 
@@ -120,6 +261,10 @@ class OrganogramAccessService
 
     public static function shouldApplyBranchOnlyEmployeeScope(User $user): bool
     {
+        if ($user->hasPermission('employees.admin')) {
+            return false;
+        }
+
         $user->loadMissing(['employee.designation']);
 
         $roleNames = self::mergedRoleNames($user);
@@ -138,13 +283,31 @@ class OrganogramAccessService
     }
 
     /**
+     * HR / payroll module permissions must not widen employee directory for organogram line roles
+     * (e.g. employees.view aliased to employee-loan.view for Department Head).
+     */
+    public static function userBypassesOrganogramEmployeeScope(User $user): bool
+    {
+        if ($user->isSuperAdmin() || $user->hasPermission('employees.admin')) {
+            return true;
+        }
+
+        if (self::hasOrganogramLineRole($user)) {
+            return false;
+        }
+
+        return $user->hasDirectPermission('employee-loan.view')
+            || $user->hasDirectPermission('staff-fund.view');
+    }
+
+    /**
      * Limit an Employee query to rows visible to $user under organogram + HR rules.
      *
      * @param  Builder<\App\Models\Employee>  $query
      */
     public static function constrainVisibleEmployees(Builder $query, User $user): void
     {
-        if ($user->isSuperAdmin()) {
+        if (self::userBypassesOrganogramEmployeeScope($user)) {
             return;
         }
 
@@ -216,13 +379,13 @@ class OrganogramAccessService
             return;
         }
 
-        $headDeptIds = $eid
-            ? Department::query()->where('head_employee_id', $eid)->pluck('id')
-            : collect();
-        if ($headDeptIds->isNotEmpty()) {
-            $query->whereIn('department_id', $headDeptIds->all());
+        if (self::isHeadOfficeUser($user) && $eid) {
+            $headDeptIds = self::headedDepartmentIdsForUser($user);
+            if ($headDeptIds !== []) {
+                $query->whereIn('department_id', $headDeptIds);
 
-            return;
+                return;
+            }
         }
 
         if (in_array('Team Leader', $roleNames, true) && $user->employee?->department_id) {
@@ -231,8 +394,9 @@ class OrganogramAccessService
             return;
         }
 
-        if ($user->hasPermission('department_head') && $user->employee?->department_id) {
-            $query->where('department_id', $user->employee->department_id);
+        $deptHeadScope = self::departmentIdsForDepartmentHeadScope($user);
+        if ($deptHeadScope !== []) {
+            $query->whereIn('department_id', $deptHeadScope);
 
             return;
         }
@@ -320,23 +484,24 @@ class OrganogramAccessService
             return $ids;
         }
 
-        $headDeptIds = $eid
-            ? Department::query()->where('head_employee_id', $eid)->pluck('id')
-            : collect();
-        if ($headDeptIds->isNotEmpty()) {
-            return Employee::query()
-                ->whereIn('department_id', $headDeptIds->all())
-                ->distinct()
-                ->pluck('current_branch_id')
-                ->filter()
-                ->map(fn ($id) => (int) $id)
-                ->values()
-                ->all();
+        if (self::isHeadOfficeUser($user) && $eid) {
+            $headDeptIds = self::headedDepartmentIdsForUser($user);
+            if ($headDeptIds !== []) {
+                return Employee::query()
+                    ->whereIn('department_id', $headDeptIds)
+                    ->distinct()
+                    ->pluck('current_branch_id')
+                    ->filter()
+                    ->map(fn ($id) => (int) $id)
+                    ->values()
+                    ->all();
+            }
         }
 
-        if ($user->hasPermission('department_head') && $user->employee?->department_id) {
+        $deptHeadScope = self::departmentIdsForDepartmentHeadScope($user);
+        if ($deptHeadScope !== []) {
             return Employee::query()
-                ->where('department_id', $user->employee->department_id)
+                ->whereIn('department_id', $deptHeadScope)
                 ->distinct()
                 ->pluck('current_branch_id')
                 ->filter()
@@ -447,19 +612,20 @@ class OrganogramAccessService
                 ->all();
         }
 
-        $headDeptIds = $eid
-            ? Department::query()->where('head_employee_id', $eid)->pluck('id')->map(fn ($id) => (int) $id)->values()->all()
-            : [];
-        if ($headDeptIds !== []) {
-            return $headDeptIds;
+        if (self::isHeadOfficeUser($user) && $eid) {
+            $headDeptIds = self::headedDepartmentIdsForUser($user);
+            if ($headDeptIds !== []) {
+                return $headDeptIds;
+            }
         }
 
         if (in_array('Team Leader', $roleNames, true) && $user->employee?->department_id) {
             return [(int) $user->employee->department_id];
         }
 
-        if ($user->hasPermission('department_head') && $user->employee?->department_id) {
-            return [(int) $user->employee->department_id];
+        $deptHeadScope = self::departmentIdsForDepartmentHeadScope($user);
+        if ($deptHeadScope !== []) {
+            return $deptHeadScope;
         }
 
         if ($eid && $user->branch_id) {
@@ -494,7 +660,11 @@ class OrganogramAccessService
         if ($user->isSuperAdmin()) {
             return true;
         }
-        if ($user->hasPermission('attendance.admin')) {
+        if ($user->hasPermission('attendance.admin')
+            || $user->hasPermission('employees.admin')) {
+            return true;
+        }
+        if (self::userBypassesOrganogramEmployeeScope($user)) {
             return true;
         }
         if (in_array('Executive Director', self::mergedRoleNames($user), true)) {

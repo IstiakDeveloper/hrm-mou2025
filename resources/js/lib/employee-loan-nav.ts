@@ -47,10 +47,10 @@ export const EMPLOYEE_LOAN_NAV_GROUPS: EmployeeLoanNavGroup[] = [
         icon: Send,
         defaultPath: '/loan-applications',
         items: [
-            { title: 'New Application', path: '/loan-applications/create', permission: 'payroll.create', description: 'Start a new loan request' },
+            { title: 'New Application', path: '/loan-applications/create', permission: 'employee-loan.create', description: 'Start a new loan request' },
             { title: 'Application List', path: '/loan-applications', description: 'All loan applications' },
-            { title: 'Loan Approval', path: '/loan-approval', permission: 'payroll.edit', description: 'Approve or reject applications' },
-            { title: 'Loan Disburse', path: '/loan-disburse', permission: 'payroll.create', description: 'Disburse approved applications → active loan' },
+            { title: 'Loan Approval', path: '/loan-approval', permission: 'employee-loan.edit', description: 'Approve or reject applications' },
+            { title: 'Loan Disburse', path: '/loan-disburse', permission: 'employee-loan.create', description: 'Disburse approved applications → active loan' },
         ],
     },
     {
@@ -60,9 +60,9 @@ export const EMPLOYEE_LOAN_NAV_GROUPS: EmployeeLoanNavGroup[] = [
         defaultPath: '/employee-loans',
         items: [
             { title: 'Loan Register', path: '/employee-loans', description: 'Active loans, schedules & ledger' },
-            { title: 'Loan Migration', path: '/loan-migration', permission: 'payroll.create', description: 'Bulk import pre-system loans at closing date' },
-            { title: 'Loan Rollback', path: '/loan-rollback', permission: 'payroll.edit', description: 'Undo disbursement or migration before payroll deduction' },
-            { title: 'Loan Transfer', path: '/loan-transfer', permission: 'payroll.edit', description: 'Transfer active loan from one employee to another' },
+            { title: 'Loan Migration', path: '/loan-migration', permission: 'employee-loan.create', description: 'Bulk import pre-system loans at closing date' },
+            { title: 'Loan Rollback', path: '/loan-rollback', permission: 'employee-loan.edit', description: 'Undo disbursement or migration before payroll deduction' },
+            { title: 'Loan Transfer', path: '/loan-transfer', permission: 'employee-loan.edit', description: 'Transfer active loan from one employee to another' },
         ],
     },
     {
@@ -72,12 +72,12 @@ export const EMPLOYEE_LOAN_NAV_GROUPS: EmployeeLoanNavGroup[] = [
         defaultPath: '/loan-collection',
         items: [
             { title: 'Collection List', path: '/loan-collection', description: 'All loan collections & batches' },
-            { title: 'Single Collection', path: '/loan-collection/single', permission: 'payroll.edit', description: 'Collect one loan installment off-payroll' },
-            { title: 'Batch Collection', path: '/loan-collection/batch', permission: 'payroll.edit', description: 'Collect multiple loans in one batch' },
-            { title: 'Advance Collection', path: '/loan-collection/advance', permission: 'payroll.edit', description: 'Collect future installments in advance' },
-            { title: 'Loan Waive', path: '/loan-collection/waive', permission: 'payroll.edit', description: 'Waive pending installments' },
-            { title: 'Loan Rebate', path: '/loan-collection/rebate', permission: 'payroll.edit', description: 'Rebate / discount on outstanding balance' },
-            { title: 'Collection Rollback', path: '/loan-collection/rollback', permission: 'payroll.edit', description: 'Undo collection, waive or rebate batch' },
+            { title: 'Single Collection', path: '/loan-collection/single', permission: 'employee-loan.edit', description: 'Collect one loan installment off-payroll' },
+            { title: 'Batch Collection', path: '/loan-collection/batch', permission: 'employee-loan.edit', description: 'Collect multiple loans in one batch' },
+            { title: 'Advance Collection', path: '/loan-collection/advance', permission: 'employee-loan.edit', description: 'Collect future installments in advance' },
+            { title: 'Loan Waive', path: '/loan-collection/waive', permission: 'employee-loan.edit', description: 'Waive pending installments' },
+            { title: 'Loan Rebate', path: '/loan-collection/rebate', permission: 'employee-loan.edit', description: 'Rebate / discount on outstanding balance' },
+            { title: 'Collection Rollback', path: '/loan-collection/rollback', permission: 'employee-loan.edit', description: 'Undo collection, waive or rebate batch' },
         ],
     },
 ];

@@ -31,6 +31,7 @@ use App\Models\User;
 use App\Models\Zone;
 use App\Services\ActiveSessionService;
 use App\Services\EmployeeLoanDashboardService;
+use App\Services\OrganogramAccessService;
 use App\Services\SalaryStructureCalculator;
 use App\Support\SafeSchema;
 use Carbon\Carbon;
@@ -57,17 +58,21 @@ class DashboardController extends Controller
         $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
         $today = Carbon::today();
 
+        if (! $user->canAccessSection('attendance-movement')) {
+            abort(403);
+        }
+
         if ($user->isBranchAccount()) {
             return redirect('/attendance/daily-branch-summary?section=attendance-movement');
         }
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
-        // Only HR / platform admins see the operational (org-wide or branch-scoped) dashboard.
-        // Users who merely have attendance.view / movements.view / reports.view should see their own data here.
+        // HR / platform admins and head-office Department Heads see the operational dashboard.
         $seesOperationalAttendanceMovementDashboard = $hasPermission($user, 'attendance.admin')
             || $hasPermission($user, 'admin.access')
-            || $hasPermission($user, 'employees.admin');
+            || $hasPermission($user, 'employees.admin')
+            || OrganogramAccessService::isHeadOfficeDepartmentHead($user);
 
         if (! $seesOperationalAttendanceMovementDashboard) {
             $employeeDashboard = $this->buildAttendanceMovementEmployeeDashboardProps($user, $today);
@@ -122,6 +127,10 @@ class DashboardController extends Controller
         $today = Carbon::today();
         $currentMonth = Carbon::now()->format('m');
         $currentYear = Carbon::now()->format('Y');
+
+        if (! $user->canAccessSection('leave')) {
+            abort(403);
+        }
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
@@ -186,10 +195,9 @@ class DashboardController extends Controller
             'roles.view',
             'users.view',
             'sessions.view',
-            'reports.view',
         ])->contains(fn ($p) => $user->can($p) || $hasPermission($user, $p));
 
-        if (! $isAdminLike) {
+        if (! $isAdminLike || ! $user->canAccessSection('administration')) {
             abort(403);
         }
 
@@ -244,6 +252,10 @@ class DashboardController extends Controller
             abort(403);
         }
 
+        if (! $user->canAccessSection('payroll')) {
+            abort(403);
+        }
+
         $roles = $user->roles;
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
 
@@ -281,7 +293,13 @@ class DashboardController extends Controller
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
-        if (! $hasPermission($user, 'payroll.view') && ! $hasPermission($user, 'admin.access')) {
+        if (! $hasPermission($user, 'payroll.view')
+            && ! $hasPermission($user, 'staff-fund.view')
+            && ! $hasPermission($user, 'admin.access')) {
+            abort(403);
+        }
+
+        if (! $user->canAccessSection('staff-fund')) {
             abort(403);
         }
 
@@ -345,7 +363,13 @@ class DashboardController extends Controller
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
-        if (! $hasPermission($user, 'payroll.view') && ! $hasPermission($user, 'admin.access')) {
+        if (! $hasPermission($user, 'payroll.view')
+            && ! $hasPermission($user, 'employee-loan.view')
+            && ! $hasPermission($user, 'admin.access')) {
+            abort(403);
+        }
+
+        if (! $user->canAccessSection('employee-loan')) {
             abort(403);
         }
 
@@ -370,6 +394,10 @@ class DashboardController extends Controller
         }
         /** @var User $user */
         $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
+
+        if (! $user->canAccessSection('human-resources')) {
+            abort(403);
+        }
         $today = Carbon::today();
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
@@ -409,9 +437,7 @@ class DashboardController extends Controller
         $branchId = $user->branch_id;
 
         $activeEmployeeBase = Employee::query()->where('status', 'active');
-        if ($isBranchManager && $branchId) {
-            $activeEmployeeBase->where('current_branch_id', $branchId);
-        }
+        OrganogramAccessService::constrainVisibleEmployees($activeEmployeeBase, $user);
 
         $activeCoreEmployees = (clone $activeEmployeeBase)
             ->where(function ($q) {
@@ -424,8 +450,9 @@ class DashboardController extends Controller
             ->where('employees.status', 'active')
             ->where('employees.is_project_employee', true)
             ->whereNotNull('employees.project_id')
-            ->where('projects.is_active', true)
-            ->when($isBranchManager && $branchId, fn ($q) => $q->where('employees.current_branch_id', $branchId))
+            ->where('projects.is_active', true);
+        OrganogramAccessService::constrainVisibleEmployees($activeProjectCounts, $user);
+        $activeProjectCounts = $activeProjectCounts
             ->groupBy('projects.id', 'projects.name')
             ->orderBy('projects.name')
             ->get([
@@ -768,6 +795,10 @@ class DashboardController extends Controller
 
         $user->loadMissing(['role', 'roles']);
 
+        if (OrganogramAccessService::isHeadOfficeDepartmentHead($user)) {
+            return true;
+        }
+
         $roleNames = collect([$user->role?->name])
             ->merge($user->roles->pluck('name'))
             ->filter()
@@ -823,15 +854,14 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get filtered statistics based on user role and branch
+     * Get filtered statistics based on user role and organogram scope.
      */
     private function getFilteredStats($user)
     {
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
+        $employeeBase = Employee::query();
+        OrganogramAccessService::constrainVisibleEmployees($employeeBase, $user);
 
-        $employeeStats = Employee::query()
-            ->when($isBranchManager && $branchId, fn ($q) => $q->where('current_branch_id', $branchId))
+        $employeeStats = (clone $employeeBase)
             ->selectRaw("
                 COUNT(*) as total_employees,
                 SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as employee_active,
@@ -842,8 +872,9 @@ class DashboardController extends Controller
             ")
             ->first();
 
+        $accessibleBranches = OrganogramAccessService::accessibleBranchIdList($user);
         $branchStats = Branch::query()
-            ->when($isBranchManager && $branchId, fn ($q) => $q->where('id', $branchId))
+            ->when($accessibleBranches !== null, fn ($q) => $q->whereIn('id', $accessibleBranches))
             ->selectRaw("
                 COUNT(*) as branches_total,
                 SUM(CASE WHEN is_head_office = 1 THEN 1 ELSE 0 END) as branches_head_office,
@@ -851,11 +882,12 @@ class DashboardController extends Controller
             ")
             ->first();
 
+        $accessibleDepts = OrganogramAccessService::accessibleDepartmentIdList($user);
         $departmentCount = Department::query()
-            ->when($isBranchManager && $branchId, function ($q) use ($branchId) {
-                $q->whereHas('employees', fn ($inner) => $inner->where('current_branch_id', $branchId));
-            })
+            ->when($accessibleDepts !== null, fn ($q) => $q->whereIn('id', $accessibleDepts))
             ->count();
+
+        $scopedGlobally = $accessibleBranches === null && $accessibleDepts === null;
 
         $totalEmployees = (int) ($employeeStats->total_employees ?? 0);
         $employeeActive = (int) ($employeeStats->employee_active ?? 0);
@@ -867,9 +899,9 @@ class DashboardController extends Controller
             'branchesOperational' => (int) ($branchStats->branches_operational ?? 0),
             'branchesHeadOffice' => (int) ($branchStats->branches_head_office ?? 0),
             'totalDepartments' => $departmentCount,
-            'totalDesignations' => Designation::query()->count(),
-            'totalZones' => $isBranchManager && $branchId ? 0 : Zone::query()->count(),
-            'totalRegionalOffices' => $isBranchManager && $branchId ? 0 : RegionalOffice::query()->count(),
+            'totalDesignations' => $scopedGlobally ? Designation::query()->count() : 0,
+            'totalZones' => $scopedGlobally ? Zone::query()->count() : 0,
+            'totalRegionalOffices' => $scopedGlobally ? RegionalOffice::query()->count() : 0,
             'employeeActive' => $employeeActive,
             'employeeTerminated' => (int) ($employeeStats->employee_terminated ?? 0),
             'employeeInactive' => (int) ($employeeStats->employee_inactive ?? 0),
@@ -969,16 +1001,11 @@ class DashboardController extends Controller
      */
     private function getRecentEmployeesForHr(User $user): array
     {
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
-
         $query = Employee::query()
             ->with(['department:id,name', 'branch:id,name'])
             ->orderByDesc('created_at');
 
-        if ($isBranchManager && $branchId) {
-            $query->where('current_branch_id', $branchId);
-        }
+        OrganogramAccessService::constrainVisibleEmployees($query, $user);
 
         return $query->take(8)->get()->map(fn (Employee $e) => [
             'id' => $e->id,
@@ -998,13 +1025,7 @@ class DashboardController extends Controller
     private function activeEmployeesQueryForDashboard(User $user)
     {
         $query = Employee::query()->where('status', 'active');
-
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
-
-        if ($isBranchManager && $branchId) {
-            $query->where('current_branch_id', $branchId);
-        }
+        OrganogramAccessService::constrainVisibleEmployees($query, $user);
 
         return $query;
     }
@@ -1022,8 +1043,7 @@ class DashboardController extends Controller
             ? $today->toDateString()
             : Carbon::parse($today)->toDateString();
 
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
+        $visibleIds = $this->dashboardVisibleEmployeeIds($user);
 
         $row = DB::table('employees as e')
             ->leftJoin('attendances as a', function ($join) use ($date) {
@@ -1031,7 +1051,7 @@ class DashboardController extends Controller
                     ->whereDate('a.date', $date);
             })
             ->where('e.status', 'active')
-            ->when($isBranchManager && $branchId, fn ($q) => $q->where('e.current_branch_id', $branchId))
+            ->when($visibleIds !== null, fn ($q) => $q->whereIn('e.id', $visibleIds))
             ->selectRaw("
                 COUNT(*) as total_active,
                 SUM(CASE
@@ -1064,23 +1084,8 @@ class DashboardController extends Controller
      */
     private function getLeaveStats($user, $today, $currentMonth, $currentYear)
     {
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
-        $isDepartmentHead = (bool) call_user_func([$user, 'hasPermission'], 'department_head');
-        $departmentId = $user->employee->department_id ?? null;
-
         $baseQuery = LeaveApplication::query();
-
-        // Apply filters based on user role
-        if ($isBranchManager && $branchId) {
-            $baseQuery->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('current_branch_id', $branchId);
-            });
-        } elseif ($isDepartmentHead && $departmentId) {
-            $baseQuery->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
+        $this->applyDashboardBranchOrDepartmentScope($baseQuery, $user);
 
         return [
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
@@ -1102,23 +1107,8 @@ class DashboardController extends Controller
      */
     private function getMovementStats($user, $today)
     {
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
-        $isDepartmentHead = (bool) call_user_func([$user, 'hasPermission'], 'department_head');
-        $departmentId = $user->employee->department_id ?? null;
-
         $baseQuery = Movement::query();
-
-        // Apply filters based on user role
-        if ($isBranchManager && $branchId) {
-            $baseQuery->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('current_branch_id', $branchId);
-            });
-        } elseif ($isDepartmentHead && $departmentId) {
-            $baseQuery->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
+        $this->applyDashboardBranchOrDepartmentScope($baseQuery, $user);
 
         return [
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
@@ -1163,23 +1153,10 @@ class DashboardController extends Controller
      */
     private function getRecentLeaves($user)
     {
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
-        $isDepartmentHead = (bool) call_user_func([$user, 'hasPermission'], 'department_head');
-        $departmentId = $user->employee->department_id ?? null;
-
         $query = LeaveApplication::with(['employee', 'leaveType'])
             ->orderBy('created_at', 'desc');
 
-        if ($isBranchManager && $branchId) {
-            $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('current_branch_id', $branchId);
-            });
-        } elseif ($isDepartmentHead && $departmentId) {
-            $query->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
+        $this->applyDashboardBranchOrDepartmentScope($query, $user);
 
         return $query->take(5)->get();
     }
@@ -1189,25 +1166,45 @@ class DashboardController extends Controller
      */
     private function getRecentMovements($user)
     {
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
-        $isDepartmentHead = (bool) call_user_func([$user, 'hasPermission'], 'department_head');
-        $departmentId = $user->employee->department_id ?? null;
-
         $query = Movement::with('employee')
             ->orderBy('created_at', 'desc');
 
-        if ($isBranchManager && $branchId) {
-            $query->whereHas('employee', function ($q) use ($branchId) {
-                $q->where('current_branch_id', $branchId);
-            });
-        } elseif ($isDepartmentHead && $departmentId) {
-            $query->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
+        $this->applyDashboardBranchOrDepartmentScope($query, $user);
 
         return $query->take(5)->get();
+    }
+
+    /**
+     * Active employee IDs for organogram-scoped dashboards; null = no filter (full visibility).
+     *
+     * @return list<int>|null
+     */
+    private function dashboardVisibleEmployeeIds(User $user): ?array
+    {
+        if ($user->isSuperAdmin()
+            || (bool) call_user_func([$user, 'hasPermission'], 'employees.admin')
+            || (bool) call_user_func([$user, 'hasPermission'], 'attendance.admin')) {
+            return null;
+        }
+
+        $q = Employee::query()->where('status', 'active');
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        return $q->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+    }
+
+    /**
+     * Scope dashboard queries to branch (Branch Manager) or department (Head Office Department Head).
+     */
+    private function applyDashboardBranchOrDepartmentScope($query, User $user): void
+    {
+        if (OrganogramAccessService::hasUnrestrictedLeaveApplicationAccess($user)) {
+            return;
+        }
+
+        $query->whereHas('employee', function ($q) use ($user) {
+            OrganogramAccessService::constrainVisibleEmployees($q, $user);
+        });
     }
 
     /**

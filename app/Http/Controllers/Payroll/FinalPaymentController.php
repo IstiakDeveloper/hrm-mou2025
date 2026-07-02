@@ -93,7 +93,7 @@ class FinalPaymentController extends Controller
         return Inertia::render('payroll/final-payment/show', [
             'finalPayment' => $final_payment,
             'settlementDetails' => $settlementDetails,
-            'canProcess' => Auth::user()?->hasPermission('payroll.edit') ?? false,
+            'canProcess' => Auth::user()?->hasPermission('staff-fund.edit') ?? false,
         ]);
     }
 
@@ -143,7 +143,7 @@ class FinalPaymentController extends Controller
 
     public function refresh(SeparationFinalPayment $final_payment)
     {
-        if (! Auth::user()?->hasPermission('payroll.edit')) {
+        if (! Auth::user()?->hasPermission('staff-fund.edit')) {
             return back()->with('error', 'You do not have permission to refresh final payment calculations.');
         }
 
@@ -158,7 +158,7 @@ class FinalPaymentController extends Controller
 
     public function markPaid(Request $request, SeparationFinalPayment $final_payment)
     {
-        if (! Auth::user()?->hasPermission('payroll.edit')) {
+        if (! Auth::user()?->hasPermission('staff-fund.edit')) {
             return back()->with('error', 'You do not have permission to process final payments.');
         }
 

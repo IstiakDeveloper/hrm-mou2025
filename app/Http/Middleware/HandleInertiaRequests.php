@@ -110,6 +110,7 @@ class HandleInertiaRequests extends Middleware
                     'employee_id' => $user->employee_id,
                     'account_type' => $user->account_type,
                     'branch_id' => $user->branch_id,
+                    'is_department_head' => $user->isDepartmentHead(),
                     'role' => $user->role,
                     'roles' => $user->roles,
                 ] : null,

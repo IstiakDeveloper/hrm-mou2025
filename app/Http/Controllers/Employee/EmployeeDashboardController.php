@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Employee;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\AttendanceSetting;
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
@@ -122,6 +123,8 @@ class EmployeeDashboardController extends Controller
         $years = range($currentYear - 5, $currentYear + 1);
 
         // Return Inertia view with data
+        $dashboardContext = $this->buildDashboardContext($user, $employees);
+
         return Inertia::render('employee/dashboard', [
             'employees' => $employees,
             'selectedEmployee' => $selectedEmployee,
@@ -134,14 +137,16 @@ class EmployeeDashboardController extends Controller
             'years' => $years,
             'attendanceSummary' => $attendanceSummary,
             'leaveSummary' => $leaveSummary,
+            'dashboardContext' => $dashboardContext,
             'userPermissions' => [
                 'canCreate' => $user->hasPermission('attendance.create'),
                 'canEdit' => $user->hasPermission('attendance.edit'),
                 'canDelete' => $user->hasPermission('attendance.delete'),
                 'canViewReports' => $user->hasPermission('reports.view'),
-                'isEmployee' => $user->employee_id ? true : false,
+                'isEmployee' => (bool) $user->employee_id,
                 'isBranchManager' => $user->hasPermission('branch_manager'),
-                'isDepartmentHead' => $user->hasPermission('department_head'),
+                'isDepartmentHead' => OrganogramAccessService::isHeadOfficeDepartmentHead($user),
+                'hasOrganogramLineRole' => OrganogramAccessService::hasOrganogramLineRole($user),
             ],
         ]);
     }
@@ -1532,6 +1537,56 @@ class EmployeeDashboardController extends Controller
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->exists();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, array{id: int, employee_id: string, name: string, department: string, designation: string}>  $employees
+     * @return array{mode: string, label: string, scopedEmployeeCount: int, departmentNames: list<string>}
+     */
+    private function buildDashboardContext(User $user, $employees): array
+    {
+        $count = $employees->count();
+
+        if (OrganogramAccessService::isHeadOfficeDepartmentHead($user)) {
+            $deptIds = OrganogramAccessService::departmentIdsForDepartmentHeadScope($user);
+            $names = $deptIds === []
+                ? []
+                : Department::query()->whereIn('id', $deptIds)->orderBy('name')->pluck('name')->map(fn ($n) => (string) $n)->values()->all();
+
+            return [
+                'mode' => 'department_head',
+                'label' => $names === []
+                    ? 'Department head — your department team'
+                    : 'Department head — '.implode(', ', $names),
+                'scopedEmployeeCount' => $count,
+                'departmentNames' => $names,
+            ];
+        }
+
+        if ($user->hasPermission('branch_manager')) {
+            return [
+                'mode' => 'branch_manager',
+                'label' => 'Branch manager — employees in your branch',
+                'scopedEmployeeCount' => $count,
+                'departmentNames' => [],
+            ];
+        }
+
+        if (OrganogramAccessService::hasOrganogramLineRole($user) && $count > 1) {
+            return [
+                'mode' => 'organogram',
+                'label' => 'Team view — employees in your organogram scope',
+                'scopedEmployeeCount' => $count,
+                'departmentNames' => [],
+            ];
+        }
+
+        return [
+            'mode' => 'self',
+            'label' => 'Your employee profile',
+            'scopedEmployeeCount' => $count,
+            'departmentNames' => [],
+        ];
     }
 
     /**

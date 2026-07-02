@@ -51,7 +51,7 @@ import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee
 import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
-import { hasAppPermission, isBranchAccount } from '@/lib/permissions';
+import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead } from '@/lib/permissions';
 import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { cn } from '@/lib/utils';
@@ -128,19 +128,19 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
             return EMPLOYEE_LOAN_REPORT_NAV.map((r) => ({
                 title: r.title,
                 path: employeeLoanReportPath(r.slug),
-                permission: 'payroll.view',
+                permission: 'employee-loan.view',
             }));
         case 'staff-fund':
             return [
                 ...PF_REPORT_NAV.map((r) => ({
                     title: r.title,
                     path: pfReportPath(r.slug),
-                    permission: 'payroll.view',
+                    permission: 'staff-fund.view',
                 })),
                 ...GRATUITY_REPORT_NAV.map((r) => ({
                     title: r.title,
                     path: gratuityReportPath(r.slug),
-                    permission: 'payroll.view',
+                    permission: 'staff-fund.view',
                 })),
             ];
         case 'payroll':
@@ -205,6 +205,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const activeSection = getSectionById(activeSectionId);
     const employee = auth?.employee;
     const branchAccount = isBranchAccount(auth);
+    const departmentHead = isDepartmentHead(auth);
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
 
     // Toggle functions
@@ -244,6 +245,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         'attendance.admin',
         'admin.access',
     ].some((p) => hasPermission(p));
+
+    const isAccountsDeskUser =
+        isAccountant(auth) ||
+        (['employee-loan.view', 'staff-fund.view', 'fixed-assets.view', 'inventory.view'] as const).some((p) => hasPermission(p));
+
+    const canSeeHrOnlyMenu = isHRUser || isAccountsDeskUser;
 
     const hasOwnActiveMovement = Boolean(activeMovement?.id && auth?.employee?.id && activeMovement.employee_id === auth.employee.id);
 
@@ -318,7 +325,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const payrollSectionDashboardAny: string[] = ['payroll.view', 'payroll.create', 'payroll.edit', 'admin.access'];
 
-    const staffFundSectionDashboardAny: string[] = ['payroll.view', 'payroll.edit', 'admin.access'];
+    const staffFundSectionDashboardAny: string[] = ['staff-fund.view', 'payroll.view', 'payroll.edit', 'admin.access'];
 
     const fixedAssetSectionDashboardAny: string[] = ['fixed-assets.view', 'fixed-assets.create', 'fixed-assets.edit', 'admin.access'];
 
@@ -477,7 +484,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 permission: 'payroll.view',
                 hrOnly: true,
                 submenu: [
-                    { title: 'Final Payment', path: '/final-payments', permission: 'payroll.view' },
                     { title: 'Head Modification', path: '/salary-head-modifications', permission: 'payroll.view' },
                     { title: 'Salary Withheld', path: '/salary-withheld', permission: 'payroll.view' },
                     { title: 'Salary Process', path: '/salary-process', permission: 'payroll.view' },
@@ -496,8 +502,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             icon: <GroupIcon className="h-5 w-5" />,
                             path: employeeLoanPath(item.path),
                             hasSubmenu: false as const,
-                            permission: item.permission ?? 'payroll.view',
-                            hrOnly: true,
+                            permission: item.permission ?? 'employee-loan.view',
                         },
                     ];
                 }
@@ -509,12 +514,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         icon: <GroupIcon className="h-5 w-5" />,
                         path: employeeLoanPath(group.defaultPath),
                         hasSubmenu: true as const,
-                        permission: 'payroll.view',
-                        hrOnly: true,
+                        permission: 'employee-loan.view',
                         submenu: group.items.map((item) => ({
                             title: item.title,
                             path: employeeLoanPath(item.path),
-                            permission: item.permission ?? 'payroll.view',
+                            permission: item.permission ?? 'employee-loan.view',
                         })),
                     },
                 ];
@@ -530,8 +534,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             icon: <GroupIcon className="h-5 w-5" />,
                             path: staffFundPath(item.path),
                             hasSubmenu: false as const,
-                            permission: 'payroll.view',
-                            hrOnly: true,
+                            permission: item.permission ?? 'staff-fund.view',
                         },
                     ];
                 }
@@ -543,12 +546,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         icon: <GroupIcon className="h-5 w-5" />,
                         path: staffFundPath(group.defaultPath),
                         hasSubmenu: true as const,
-                        permission: 'payroll.view',
-                        hrOnly: true,
+                        permission: 'staff-fund.view',
                         submenu: group.items.map((item) => ({
                             title: item.title,
                             path: staffFundPath(item.path),
-                            permission: item.permission ?? 'payroll.view',
+                            permission: item.permission ?? 'staff-fund.view',
                         })),
                     },
                 ];
@@ -564,7 +566,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         path: fixedAssetPath(group.defaultPath),
                         hasSubmenu: true as const,
                         permission: 'fixed-assets.view',
-                        hrOnly: true,
                         submenu: group.items.map((item) => ({
                             title: item.title,
                             path: fixedAssetPath(item.path),
@@ -778,11 +779,17 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             case 'administration':
                 return hasAnyDashboardPerm(administrationSectionDashboardAny) ? [{ title: 'Administration', path: '/sections/administration' }] : [];
             case 'payroll':
-                return hasAnyDashboardPerm(payrollSectionDashboardAny) ? [{ title: 'Payroll', path: '/sections/payroll' }] : [];
+                return !departmentHead && hasAnyDashboardPerm(payrollSectionDashboardAny)
+                    ? [{ title: 'Payroll', path: '/sections/payroll' }]
+                    : [];
             case 'staff-fund':
-                return hasAnyDashboardPerm(staffFundSectionDashboardAny) ? [{ title: 'Staff Fund', path: '/sections/staff-fund' }] : [];
+                return !departmentHead && hasAnyDashboardPerm(staffFundSectionDashboardAny)
+                    ? [{ title: 'Staff Fund', path: '/sections/staff-fund' }]
+                    : [];
             case 'employee-loan':
-                return hasPermission('payroll.view') ? [{ title: 'Employee Loan', path: '/sections/employee-loan' }] : [];
+                return !departmentHead && hasAnyDashboardPerm(['employee-loan.view', 'payroll.view', 'admin.access'])
+                    ? [{ title: 'Employee Loan', path: '/sections/employee-loan' }]
+                    : [];
             case 'fixed-asset':
                 return hasAnyDashboardPerm(fixedAssetSectionDashboardAny) ? [{ title: 'Fixed Asset', path: '/sections/fixed-asset' }] : [];
             case 'inventory':
@@ -803,7 +810,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     }, [currentPath, currentSearch, visibleMenuItems, isActive]);
 
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
-        if (item.hrOnly && !isHRUser) return null;
+        if (item.hrOnly && !canSeeHrOnlyMenu) return null;
         if (item.employeeOnly && !employee?.id) return null;
         if (item.anyPermissions?.length) {
             if (!item.anyPermissions.some((p) => hasPermission(p))) return null;
@@ -815,7 +822,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             ?.filter(
                 (subItem) =>
                     subItem.isGroupLabel ||
-                    ((!subItem.hrOnly || isHRUser) &&
+                    ((!subItem.hrOnly || canSeeHrOnlyMenu) &&
                         (!subItem.permission || hasPermission(subItem.permission)) &&
                         (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
                         (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p)))),

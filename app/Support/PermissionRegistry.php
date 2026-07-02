@@ -46,13 +46,38 @@ class PermissionRegistry
     }
 
     /**
-     * @param  list<string>|'*'  $permissions
+     * @param  list<string>|string  $permissions  catalog keys, '*', '*-no-delete', '*-no-delete-no-admin', or 'sections:a,b,c'
      * @return list<string>
      */
     public static function resolvePermissionList(array|string $permissions): array
     {
         if ($permissions === '*') {
             return self::keys();
+        }
+
+        if (is_string($permissions)) {
+            if ($permissions === '*-no-delete') {
+                return self::withoutDeletePermissions(self::keys());
+            }
+
+            if ($permissions === '*-no-delete-no-admin') {
+                return self::withoutOrganogramScopePermissions(
+                    self::withoutAdminPermissions(self::withoutDeletePermissions(self::keys()))
+                );
+            }
+
+            if (str_starts_with($permissions, 'sections:')) {
+                $sectionIds = array_values(array_filter(array_map(
+                    'trim',
+                    explode(',', substr($permissions, strlen('sections:')))
+                )));
+
+                return self::permissionsForSections($sectionIds);
+            }
+        }
+
+        if (! is_array($permissions)) {
+            return [];
         }
 
         $resolved = [];
@@ -62,6 +87,90 @@ class PermissionRegistry
             }
             if (in_array($permission, self::keys(), true)) {
                 $resolved[] = $permission;
+            }
+        }
+
+        return array_values(array_unique($resolved));
+    }
+
+    /**
+     * Line-authority markers (branch/zone/organogram) — not for HR Admin-style full-directory roles.
+     *
+     * @param  list<string>  $permissions
+     * @return list<string>
+     */
+    public static function withoutOrganogramScopePermissions(array $permissions): array
+    {
+        return array_values(array_filter($permissions, static function (string $p): bool {
+            if ($p === 'branch_manager' || $p === 'department_head') {
+                return false;
+            }
+
+            return ! str_starts_with($p, 'organogram.');
+        }));
+    }
+
+    /**
+     * @param  list<string>  $permissions
+     * @return list<string>
+     */
+    public static function withoutDeletePermissions(array $permissions): array
+    {
+        return array_values(array_filter(
+            $permissions,
+            static fn (string $p) => ! str_ends_with($p, '.delete')
+        ));
+    }
+
+    /**
+     * System user/role/session management (Super Admin only).
+     *
+     * @param  list<string>  $permissions
+     * @return list<string>
+     */
+    public static function withoutAdminPermissions(array $permissions): array
+    {
+        return array_values(array_filter($permissions, static function (string $p): bool {
+            if ($p === 'admin.access') {
+                return false;
+            }
+
+            return ! str_starts_with($p, 'users.')
+                && ! str_starts_with($p, 'roles.')
+                && ! str_starts_with($p, 'sessions.');
+        }));
+    }
+
+    /**
+     * @param  list<string>  $sectionIds
+     * @return list<string>
+     */
+    public static function permissionsForSections(array $sectionIds): array
+    {
+        $resolved = [
+            'profile.view',
+            'profile.edit',
+            'reports.view',
+            'reports.export',
+        ];
+
+        foreach ($sectionIds as $sectionId) {
+            $prefix = match ($sectionId) {
+                'employee-loan' => 'employee-loan.',
+                'staff-fund' => 'staff-fund.',
+                'fixed-asset' => 'fixed-assets.',
+                'inventory' => 'inventory.',
+                default => null,
+            };
+
+            if ($prefix === null) {
+                continue;
+            }
+
+            foreach (self::keys() as $key) {
+                if (str_starts_with($key, $prefix) && ! str_ends_with($key, '.delete')) {
+                    $resolved[] = $key;
+                }
             }
         }
 
@@ -158,8 +267,8 @@ class PermissionRegistry
 
         foreach ($definitions as $name => $definition) {
             $permissionInput = $definition['permissions'] ?? [];
-            $permissions = is_string($permissionInput) && $permissionInput === '*'
-                ? '*'
+            $permissions = is_string($permissionInput)
+                ? $permissionInput
                 : (is_array($permissionInput) ? $permissionInput : []);
 
             $roles[$name] = \App\Models\Role::updateOrCreate(

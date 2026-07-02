@@ -80,6 +80,7 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     { label: 'PF Register', href: '/provident-fund' },
                     { label: 'Gratuity entitlements', href: '/gratuity' },
                     { label: 'Gratuity payments', href: '/gratuity/payments' },
+                    { label: 'Final Payment', href: '/final-payments' },
                 ];
             case 'employee-loan':
                 return [];

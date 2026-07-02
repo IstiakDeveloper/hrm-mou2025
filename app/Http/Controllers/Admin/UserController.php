@@ -17,6 +17,30 @@ use Inertia\Inertia;
 
 class UserController extends Controller
 {
+    private const AUTO_EMAIL_DOMAIN_ENV = 'HRM_AUTO_EMAIL_DOMAIN';
+
+    private function getAutoEmailDomain(): string
+    {
+        $domain = trim((string) env(self::AUTO_EMAIL_DOMAIN_ENV, 'auto.local'));
+
+        return $domain !== '' ? $domain : 'auto.local';
+    }
+
+    private function resolveEmailForEmployee(Employee $employee): string
+    {
+        $email = trim((string) ($employee->email ?? ''));
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $email;
+        }
+
+        $pin = trim((string) ($employee->getRawOriginal('pin') ?? $employee->getRawOriginal('employee_id') ?? ''));
+        if ($pin === '') {
+            return '';
+        }
+
+        return strtolower($pin).'@'.$this->getAutoEmailDomain();
+    }
+
     private function employeeFullName(Employee $employee): string
     {
         $name = trim((string) ($employee->name_en ?? ''));
@@ -79,7 +103,7 @@ class UserController extends Controller
      */
     public function create()
     {
-        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'name_en', 'email')->get();
+        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'name_en', 'email', 'pin')->get();
         $roles = Role::all();
         $branches = Branch::all();
 
@@ -87,6 +111,7 @@ class UserController extends Controller
             'roles' => $roles,
             'employees' => $employees,
             'branches' => $branches,
+            'autoEmailDomain' => $this->getAutoEmailDomain(),
         ]);
     }
 
@@ -113,7 +138,7 @@ class UserController extends Controller
         }
 
         $employee = Employee::findOrFail($request->employee_id);
-        if ($employee->email !== $request->email) {
+        if ($this->resolveEmailForEmployee($employee) !== $request->email) {
             return back()->withErrors(['email' => 'The email must match the selected employee\'s email'])->withInput();
         }
 
@@ -173,7 +198,7 @@ class UserController extends Controller
     public function edit(User $user)
     {
         $roles = Role::all();
-        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'name_en', 'email')->get();
+        $employees = Employee::select('id', 'employee_id', 'biometric_id', 'name_en', 'email', 'pin')->get();
         $branches = Branch::all();
 
         $user->load('roles');
@@ -183,6 +208,7 @@ class UserController extends Controller
             'roles' => $roles,
             'employees' => $employees,
             'branches' => $branches,
+            'autoEmailDomain' => $this->getAutoEmailDomain(),
         ]);
     }
 
@@ -233,7 +259,7 @@ class UserController extends Controller
             $employee = null;
             if ($request->employee_id) {
                 $employee = Employee::find($request->employee_id);
-                if ($employee && $employee->email !== $request->email) {
+                if ($employee && $this->resolveEmailForEmployee($employee) !== $request->email) {
                     return back()->withErrors(['email' => 'The email must match the selected employee\'s email'])->withInput();
                 }
             }

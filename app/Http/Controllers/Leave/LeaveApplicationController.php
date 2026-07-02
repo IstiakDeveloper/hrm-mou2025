@@ -169,8 +169,26 @@ class LeaveApplicationController extends Controller
         if ($approverType === 'department_head') {
             $department = $employee->department_id ? Department::find($employee->department_id) : null;
             $headEmployee = $department?->head_employee_id ? Employee::find($department->head_employee_id) : null;
+            $recipientUserIds = collect();
             if ($headEmployee) {
-                $recipients = User::where('employee_id', $headEmployee->id)->get();
+                $recipientUserIds = User::where('employee_id', $headEmployee->id)->pluck('id');
+            }
+            $hoDeptHeadUserIds = User::query()
+                ->whereNotNull('employee_id')
+                ->get()
+                ->filter(function (User $u) use ($employee) {
+                    if (! OrganogramAccessService::isHeadOfficeDepartmentHead($u)) {
+                        return false;
+                    }
+                    $deptIds = OrganogramAccessService::departmentIdsForDepartmentHeadScope($u);
+
+                    return in_array((int) $employee->department_id, $deptIds, true);
+                })
+                ->pluck('id');
+            $recipients = User::query()
+                ->whereIn('id', $recipientUserIds->merge($hoDeptHeadUserIds)->unique()->all())
+                ->get();
+            if ($headEmployee) {
                 $addressee = [
                     'type' => 'department_head',
                     'title' => $headEmployee->designation?->name ?? 'Department Head',
@@ -279,7 +297,12 @@ class LeaveApplicationController extends Controller
         foreach ($tiers as $tier) {
             $type = (string) $tier->approver_type;
 
-            if ($type === 'department_head' && $user->employee_id) {
+            if ($type === 'department_head' && OrganogramAccessService::isHeadOfficeDepartmentHead($user)) {
+                $deptIds = OrganogramAccessService::departmentIdsForDepartmentHeadScope($user);
+                if (in_array((int) $applicant->department_id, $deptIds, true)) {
+                    return true;
+                }
+            } elseif ($type === 'department_head' && $user->employee_id) {
                 $dept = $applicant->department_id ? Department::find($applicant->department_id) : null;
                 if ($dept && (int) $dept->head_employee_id === (int) $user->employee_id) {
                     return true;
@@ -385,14 +408,16 @@ class LeaveApplicationController extends Controller
             $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
         }
 
-        $isDepartmentHead = false;
-        $userDepartmentId = null;
-        if ($userEmployeeId) {
+        $isDepartmentHead = OrganogramAccessService::isHeadOfficeDepartmentHead($user);
+        $userDepartmentId = $isDepartmentHead
+            ? (OrganogramAccessService::departmentIdsForDepartmentHeadScope($user)[0] ?? null)
+            : null;
+        if ($userEmployeeId && ! $isDepartmentHead) {
             $employee = Employee::find($userEmployeeId);
             if ($employee && $employee->department_id) {
-                $userDepartmentId = $employee->department_id;
                 $department = Department::find($employee->department_id);
                 $isDepartmentHead = $department && $department->head_employee_id == $userEmployeeId;
+                $userDepartmentId = $employee->department_id;
             }
         }
 
@@ -403,7 +428,7 @@ class LeaveApplicationController extends Controller
                 $query->whereRaw('1 = 0');
             }
         } else {
-            OrganogramAccessService::constrainViaEmployeeRelation($query, $user, 'employee');
+            OrganogramAccessService::constrainLeaveApplications($query, $user);
         }
 
         // Apply user-selected filters
@@ -531,100 +556,23 @@ class LeaveApplicationController extends Controller
     }
 
     /**
-     * Check if user can view a specific leave application
+     * Check if user can view a specific leave application.
      */
     private function canViewApplication($user, $application)
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->employee_id && (int) $application->employee_id === (int) $user->employee_id) {
             return true;
         }
 
-        if (in_array('Executive Director', OrganogramAccessService::mergedRoleNames($user), true)) {
+        if (OrganogramAccessService::hasUnrestrictedLeaveApplicationAccess($user)) {
             return true;
         }
 
-        if ($user->hasPermission('organogram.executive_director')) {
-            return true;
+        if (! $user->hasPermission('leave-applications.view') && ! $user->hasPermission('leave-applications.approve')) {
+            return false;
         }
 
-        // Check if user is branch head (designation-based)
-        $isBranchHead = false;
-        if ($user->employee_id && $user->branch_id) {
-            $branch = Branch::find($user->branch_id);
-            $employee = Employee::find($user->employee_id);
-            $isBranchHead = $branch && $employee && $branch->isEmployeeBranchHead($employee);
-        }
-
-        // Users with leave-applications.view (organogram line roles use branch/dept rules below)
-        if ($user->hasPermission('leave-applications.view')) {
-            // Branch managers / branch heads: only their branch (use same branch id resolution as employee index)
-            if (OrganogramAccessService::shouldApplyBranchOnlyEmployeeScope($user)) {
-                $branchScopeId = OrganogramAccessService::branchOnlyScopeBranchId($user);
-                if ($branchScopeId !== null) {
-                    $employee = Employee::find($application->employee_id);
-
-                    return $employee && (int) $employee->current_branch_id === $branchScopeId;
-                }
-
-                return false;
-            }
-
-            if ($isBranchHead && $user->branch_id) {
-                $employee = Employee::find($application->employee_id);
-
-                return $employee && (int) $employee->current_branch_id === (int) $user->branch_id;
-            }
-
-            // And department heads to their department
-            if (! $user->hasPermission('employees.view') && $user->employee && $user->employee->department_id) {
-                $employee = Employee::find($application->employee_id);
-                $department = Department::find($user->employee->department_id);
-                $isDepartmentHead = $department && $department->head_employee_id == $user->employee->id;
-
-                if ($isDepartmentHead) {
-                    return $employee && $employee->department_id == $user->employee->department_id;
-                }
-            }
-
-            return true;
-        }
-
-        // Employees can view their own applications
-        if ($user->employee && $application->employee_id == $user->employee->id) {
-            return true;
-        }
-
-        // Branch heads can view applications from their branch
-        if ($isBranchHead && $user->branch_id) {
-            $employee = Employee::find($application->employee_id);
-
-            return $employee && $employee->current_branch_id == $user->branch_id;
-        }
-
-        // Users with approval permission can view applications they need to approve
-        if ($user->hasPermission('leave-applications.approve')) {
-            // Department heads
-            if ($user->employee && $user->employee->department_id) {
-                $employee = Employee::find($application->employee_id);
-                $department = Department::find($user->employee->department_id);
-                $isDepartmentHead = $department && $department->head_employee_id == $user->employee->id;
-
-                if ($isDepartmentHead) {
-                    return $employee && $employee->department_id == $user->employee->department_id;
-                }
-            }
-
-            // Team leaders can view their direct reports' applications
-            if ($user->employee) {
-                $employee = Employee::find($application->employee_id);
-
-                return $employee && $employee->reporting_to == $user->employee->id;
-            }
-
-            return true;
-        }
-
-        return false;
+        return OrganogramAccessService::userCanSeeEmployee($user, (int) $application->employee_id);
     }
 
     /**
@@ -674,7 +622,11 @@ class LeaveApplicationController extends Controller
                 $resolved = $this->resolveTierApprovers($applicant, (int) $application->days);
                 $recipientIds = $resolved['recipients']->pluck('id')->map(fn ($id) => (int) $id)->all();
 
-                return $recipientIds !== [] && in_array((int) $user->id, $recipientIds, true);
+                if ($recipientIds === [] || ! in_array((int) $user->id, $recipientIds, true)) {
+                    return false;
+                }
+
+                return OrganogramAccessService::userCanSeeEmployee($user, (int) $application->employee_id);
             }
 
             if ($globalTiersExist) {
@@ -712,21 +664,22 @@ class LeaveApplicationController extends Controller
         if ($isBranchHead) {
             $employee = Employee::find($employeeId);
             if ($employee && (int) $employee->current_branch_id === (int) $userBranchId) {
-                return true;
+                return OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
             }
         }
 
         if ($isDepartmentHead) {
             $employee = Employee::find($employeeId);
             if ($employee && $userDeptId && (int) $employee->department_id === (int) $userDeptId) {
-                return (int) $application->days <= 3;
+                return (int) $application->days <= 3
+                    && OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
             }
         }
 
         if ($user->hasPermission('branch_manager') && $userBranchId) {
             $employee = Employee::find($employeeId);
             if ($employee && (int) $employee->current_branch_id === (int) $userBranchId) {
-                return true;
+                return OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
             }
         }
 
@@ -734,14 +687,11 @@ class LeaveApplicationController extends Controller
             if ($userEmployeeId) {
                 $employee = Employee::find($employeeId);
                 if ($employee && (int) $employee->reporting_to === (int) $userEmployeeId) {
-                    return true;
-                }
-                if ($userDeptId && $employee && (int) $employee->department_id === (int) $userDeptId) {
-                    return true;
+                    return OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
                 }
             }
 
-            return true;
+            return OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId);
         }
 
         return false;
@@ -1499,35 +1449,19 @@ class LeaveApplicationController extends Controller
     public function report(Request $request)
     {
         $user = Auth::user();
-        \Log::info('User accessing leave reports:', [
-            'user_id' => $user->id,
-            'user_name' => $user->name,
-            'employee_id' => $user->employee_id,
-        ]);
 
-        // Check if user has permission to access reports
+        if (! $user->hasPermission('reports.view') && ! $user->hasPermission('leave-applications.view')) {
+            abort(403);
+        }
+
         $hasViewPermission = $user->hasPermission('leave-applications.view');
         $hasReportPermission = $user->hasPermission('reports.view');
-        $hasEmployeeViewPermission = $user->hasPermission('employees.view');
-        $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
         $userEmployeeId = $user->employee_id;
-
-        // Special handling for regular employees with view permission
-        $isRegularEmployeeWithViewPermission = $userEmployeeId && $hasViewPermission &&
-            ! $hasReportPermission && ! $isBranchManager &&
-            ! $hasEmployeeViewPermission;
-
-        // Determine if user is a department head
-        $isDepartmentHead = false;
-        $userDepartmentId = null;
-        if ($userEmployeeId) {
-            $employee = Employee::find($userEmployeeId);
-            if ($employee && $employee->department_id) {
-                $userDepartmentId = $employee->department_id;
-                $department = Department::find($employee->department_id);
-                $isDepartmentHead = $department && $department->head_employee_id == $userEmployeeId;
-            }
-        }
+        $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
+        $isDepartmentHead = OrganogramAccessService::isHeadOfficeDepartmentHead($user);
+        $userDepartmentId = $isDepartmentHead
+            ? (OrganogramAccessService::departmentIdsForDepartmentHeadScope($user)[0] ?? $user->employee?->department_id)
+            : null;
 
         $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
@@ -1535,56 +1469,7 @@ class LeaveApplicationController extends Controller
         $query = LeaveApplication::with(['employee.department', 'employee.designation', 'leaveType'])
             ->whereBetween('start_date', [$startDate, $endDate]);
 
-        // Apply permission-based filters
-        if (
-            ($userEmployeeId && ! $hasViewPermission && ! $hasReportPermission && ! $isBranchManager && ! $isDepartmentHead) ||
-            $isRegularEmployeeWithViewPermission
-        ) {
-            // Regular employee - only see their own applications
-            $query->where('employee_id', $userEmployeeId);
-            \Log::info('Regular employee - report showing only their applications', [
-                'employee_id' => $userEmployeeId,
-            ]);
-        } elseif ($isBranchManager) {
-            // Branch manager - see applications from their branch
-            $query->whereHas('employee', function ($q) use ($user) {
-                $q->where('current_branch_id', $user->branch_id);
-            });
-            \Log::info('Branch manager - report filtered by branch', [
-                'branch_id' => $user->branch_id,
-            ]);
-        } elseif ($isDepartmentHead) {
-            // Department head - see applications from their department
-            if ($userDepartmentId) {
-                $query->whereHas('employee', function ($q) use ($userDepartmentId) {
-                    $q->where('department_id', $userDepartmentId);
-                });
-                \Log::info('Department head - report filtered by department', [
-                    'department_id' => $userDepartmentId,
-                ]);
-            } else {
-                // Fallback to own applications if no department association
-                $query->where('employee_id', $userEmployeeId);
-            }
-        } elseif ($userEmployeeId && $userDepartmentId && ! $hasEmployeeViewPermission) {
-            // Users with department associations but not full employee view
-            $query->whereHas('employee', function ($q) use ($userDepartmentId) {
-                $q->where('department_id', $userDepartmentId);
-            });
-            \Log::info('User with department restriction - report filtered by department', [
-                'department_id' => $userDepartmentId,
-            ]);
-        } elseif ($hasReportPermission || ($hasViewPermission && $hasEmployeeViewPermission)) {
-            // Full admin or user with reports permission - no filtering
-            \Log::info('Admin user - showing all applications in report');
-        } else {
-            // Edge case - if no other conditions match, default to showing only their applications
-            if ($userEmployeeId) {
-                $query->where('employee_id', $userEmployeeId);
-            } else {
-                $query->where('id', 0); // No results
-            }
-        }
+        OrganogramAccessService::constrainLeaveApplications($query, $user);
 
         // Apply user-selected filters
         $query->when($request->status, function ($query, $status) {

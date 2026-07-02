@@ -35,7 +35,7 @@ export default function LoanCommitteesIndex({ committees }: { committees: Commit
     const { auth } = usePage<SharedData>().props;
     const canCreate = hasAppPermission(auth, 'payroll.create');
     const canEdit = hasAppPermission(auth, 'payroll.edit');
-    const canDelete = hasAppPermission(auth, 'payroll.delete');
+    const canDelete = hasAppPermission(auth, 'employee-loan.delete');
     const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
     return (

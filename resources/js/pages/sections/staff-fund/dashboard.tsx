@@ -243,6 +243,23 @@ export default function StaffFundDashboard({ stats, userRole }: Props) {
                     </section>
                 </div>
 
+                <section className="space-y-2 mt-4">
+                    <div className="flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                        <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Separation Settlement</h2>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {STAFF_FUND_DASHBOARD_SHORTCUTS.settlement.map((item) => (
+                            <ShortcutTile
+                                key={item.href}
+                                href={staffFundPath(item.href)}
+                                title={item.title}
+                                icon={item.icon}
+                            />
+                        ))}
+                    </div>
+                </section>
+
                 {/* Quick Map and Info Guide */}
                 <Card className="border-zinc-200/80 bg-white mt-4 shadow-2xs rounded-lg overflow-hidden">
                     <CardHeader className="pb-2 pt-3 px-4 border-b border-zinc-100 bg-zinc-50/50">

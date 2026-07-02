@@ -1802,9 +1802,10 @@ class AttendanceController extends Controller
             return $employee->current_branch_id == $user->branch_id;
         }
 
-        // If department head, can manage employees in their department
-        if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            return $employee->department_id == $user->employee->department_id;
+        // If department head (head office), can manage employees in scoped departments
+        $deptIds = OrganogramAccessService::departmentIdsForDepartmentHeadScope($user);
+        if ($deptIds !== [] && in_array((int) $employee->department_id, $deptIds, true)) {
+            return true;
         }
 
         // If employee, can only manage their own attendance if they have permission

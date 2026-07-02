@@ -12,11 +12,9 @@ import { Switch } from '@/components/ui/switch';
 import { EyeIcon, EyeOffIcon, ArrowLeft, User as UserIcon, Lock, Building, Users, Briefcase, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
+import { resolveEmployeeEmail, type UserFormEmployee } from '@/lib/user-employee-email';
 
-interface Employee {
-  id: number;
-  employee_id: string;
-  biometric_id?: string | null;
+interface Employee extends UserFormEmployee {
   first_name?: string | null;
   last_name?: string | null;
   name_en?: string | null;
@@ -78,12 +76,13 @@ interface UserEditProps {
   roles: Role[];
   employees: Employee[];
   branches: Branch[];
+  autoEmailDomain: string;
   errors: {
     [key: string]: string;
   };
 }
 
-export default function UserEdit({ user, roles, employees, branches, errors }: UserEditProps) {
+export default function UserEdit({ user, roles, employees, branches, autoEmailDomain, errors }: UserEditProps) {
   // Extract role IDs from user.roles
   const userRoleIds = user.roles ? user.roles.map(role => role.id) : [];
 
@@ -92,11 +91,14 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
     user.username != null && String(user.username).trim() !== ''
       ? String(user.username).trim()
       : previewLoginUsername(linkedEmployeeOnLoad);
+  const initialEmail = linkedEmployeeOnLoad
+    ? resolveEmployeeEmail(linkedEmployeeOnLoad, autoEmailDomain)
+    : (user.email || '');
 
   const { data, setData, put, processing } = useForm({
     name: user.name || '',
     username: initialUsername,
-    email: user.email || '',
+    email: initialEmail,
     password: '',
     password_confirmation: '',
     role_ids: userRoleIds, // Use the array of role IDs
@@ -191,6 +193,10 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
       if (fullName) {
         setData('name', fullName);
       }
+      const resolvedEmail = resolveEmployeeEmail(selectedEmployee, autoEmailDomain);
+      if (resolvedEmail) {
+        setData('email', resolvedEmail);
+      }
     }
   };
 
@@ -283,8 +289,15 @@ export default function UserEdit({ user, roles, employees, branches, errors }: U
                       value={data.email}
                       onChange={e => setData('email', e.target.value)}
                       placeholder="user@example.com"
+                      readOnly={!!data.employee_id}
+                      className={data.employee_id ? 'bg-gray-50' : ''}
                     />
                     {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+                    {!!data.employee_id && (
+                      <p className="text-xs text-gray-500">
+                        Email is taken from the linked employee, or auto-generated if none is set
+                      </p>
+                    )}
                   </div>
 
                   <Separator className="my-2" />

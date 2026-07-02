@@ -283,6 +283,10 @@ Route::middleware(['auth'])->group(function () {
         }
 
         $user = $request->user();
+        if ($user instanceof User && ! $user->canAccessSection($section)) {
+            abort(403);
+        }
+
         $perm = fn (string $p): bool => $user instanceof User
             && ($user->can($p) || $user->hasPermission($p));
 
@@ -850,47 +854,47 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'index'])->name('salary-rollback.index');
         Route::post('/salary-rollback', [\App\Http\Controllers\Payroll\SalaryRollbackController::class, 'rollback'])->name('salary-rollback.rollback')->middleware('permission:payroll.edit');
+    });
 
-        Route::get('/final-payments', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'index'])->name('final-payments.index');
-        Route::get('/final-payments/{final_payment}', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'show'])->name('final-payments.show');
-        Route::post('/final-payments/{final_payment}/refresh', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'refresh'])->name('final-payments.refresh')->middleware('permission:payroll.edit');
-        Route::post('/final-payments/{final_payment}/mark-paid', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'markPaid'])->name('final-payments.mark-paid')->middleware('permission:payroll.edit');
-
+    // ====================
+    // EMPLOYEE LOAN
+    // ====================
+    Route::middleware(['permission:employee-loan.view'])->group(function () {
         Route::prefix('loan-committees')->name('loan-committees.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'index'])->name('index');
-            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'create'])->name('create')->middleware('permission:payroll.create');
-            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'store'])->name('store')->middleware('permission:payroll.create');
-            Route::get('/{loan_committee}/edit', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
-            Route::put('/{loan_committee}', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
-            Route::delete('/{loan_committee}', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'create'])->name('create')->middleware('permission:employee-loan.create');
+            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'store'])->name('store')->middleware('permission:employee-loan.create');
+            Route::get('/{loan_committee}/edit', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'edit'])->name('edit')->middleware('permission:employee-loan.edit');
+            Route::put('/{loan_committee}', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'update'])->name('update')->middleware('permission:employee-loan.edit');
+            Route::delete('/{loan_committee}', [\App\Http\Controllers\EmployeeLoan\LoanCommitteeController::class, 'destroy'])->name('destroy')->middleware('permission:employee-loan.delete');
         });
 
         Route::prefix('loan-applications')->name('loan-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'index'])->name('index');
-            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'create'])->name('create')->middleware('permission:payroll.create');
-            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'create'])->name('create')->middleware('permission:employee-loan.create');
+            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'store'])->name('store')->middleware('permission:employee-loan.create');
             Route::get('/employee-preview/{employee}', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'employeePreview'])->name('employee-preview');
             Route::post('/calculate-preview', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'calculatePreview'])->name('calculate-preview');
             Route::get('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'show'])->name('show');
-            Route::get('/{loan_application}/edit', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
-            Route::put('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
+            Route::get('/{loan_application}/edit', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'edit'])->name('edit')->middleware('permission:employee-loan.edit');
+            Route::put('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanApplicationController::class, 'update'])->name('update')->middleware('permission:employee-loan.edit');
         });
 
         Route::prefix('loan-approval')->name('loan-approval.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanApprovalController::class, 'index'])->name('index');
-            Route::post('/{loan_application}/approve', [\App\Http\Controllers\EmployeeLoan\LoanApprovalController::class, 'approve'])->name('approve')->middleware('permission:payroll.edit');
-            Route::post('/{loan_application}/reject', [\App\Http\Controllers\EmployeeLoan\LoanApprovalController::class, 'reject'])->name('reject')->middleware('permission:payroll.edit');
+            Route::post('/{loan_application}/approve', [\App\Http\Controllers\EmployeeLoan\LoanApprovalController::class, 'approve'])->name('approve')->middleware('permission:employee-loan.edit');
+            Route::post('/{loan_application}/reject', [\App\Http\Controllers\EmployeeLoan\LoanApprovalController::class, 'reject'])->name('reject')->middleware('permission:employee-loan.edit');
         });
 
         Route::prefix('loan-disburse')->name('loan-disburse.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanDisburseController::class, 'index'])->name('index');
-            Route::post('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanDisburseController::class, 'disburse'])->name('disburse')->middleware('permission:payroll.create');
+            Route::post('/{loan_application}', [\App\Http\Controllers\EmployeeLoan\LoanDisburseController::class, 'disburse'])->name('disburse')->middleware('permission:employee-loan.create');
         });
 
         Route::prefix('loan-rollback')->name('loan-rollback.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanRollbackController::class, 'index'])->name('index');
-            Route::post('/loans', [\App\Http\Controllers\EmployeeLoan\LoanRollbackController::class, 'rollbackLoans'])->name('loans')->middleware('permission:payroll.edit');
-            Route::post('/migrations/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanRollbackController::class, 'rollbackMigration'])->name('migrations')->middleware('permission:payroll.edit');
+            Route::post('/loans', [\App\Http\Controllers\EmployeeLoan\LoanRollbackController::class, 'rollbackLoans'])->name('loans')->middleware('permission:employee-loan.edit');
+            Route::post('/migrations/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanRollbackController::class, 'rollbackMigration'])->name('migrations')->middleware('permission:employee-loan.edit');
         });
 
         Route::prefix('employee-loan/reports')->name('employee-loan.reports.')->group(function () {
@@ -905,60 +909,65 @@ Route::middleware(['auth'])->group(function () {
 
         Route::prefix('loan-transfer')->name('loan-transfer.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanTransferController::class, 'index'])->name('index');
-            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanTransferController::class, 'create'])->name('create')->middleware('permission:payroll.edit');
-            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanTransferController::class, 'store'])->name('store')->middleware('permission:payroll.edit');
+            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanTransferController::class, 'create'])->name('create')->middleware('permission:employee-loan.edit');
+            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanTransferController::class, 'store'])->name('store')->middleware('permission:employee-loan.edit');
             Route::get('/{loan_transfer}', [\App\Http\Controllers\EmployeeLoan\LoanTransferController::class, 'show'])->name('show');
         });
 
         Route::prefix('loan-collection')->name('loan-collection.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'index'])->name('index');
-            Route::get('/single', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createSingle'])->name('single.create')->middleware('permission:payroll.edit');
-            Route::post('/single', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeSingle'])->name('single.store')->middleware('permission:payroll.edit');
-            Route::get('/batch', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createBatch'])->name('batch.create')->middleware('permission:payroll.edit');
-            Route::post('/batch', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeBatch'])->name('batch.store')->middleware('permission:payroll.edit');
-            Route::get('/advance', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createAdvance'])->name('advance.create')->middleware('permission:payroll.edit');
-            Route::post('/advance', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeAdvance'])->name('advance.store')->middleware('permission:payroll.edit');
-            Route::get('/waive', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createWaive'])->name('waive.create')->middleware('permission:payroll.edit');
-            Route::post('/waive', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeWaive'])->name('waive.store')->middleware('permission:payroll.edit');
-            Route::get('/rebate', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createRebate'])->name('rebate.create')->middleware('permission:payroll.edit');
-            Route::post('/rebate', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeRebate'])->name('rebate.store')->middleware('permission:payroll.edit');
-            Route::get('/rollback', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'rollbackIndex'])->name('rollback.index')->middleware('permission:payroll.edit');
-            Route::post('/{loan_collection}/rollback', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'rollback'])->name('rollback')->middleware('permission:payroll.edit');
+            Route::get('/single', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createSingle'])->name('single.create')->middleware('permission:employee-loan.edit');
+            Route::post('/single', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeSingle'])->name('single.store')->middleware('permission:employee-loan.edit');
+            Route::get('/batch', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createBatch'])->name('batch.create')->middleware('permission:employee-loan.edit');
+            Route::post('/batch', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeBatch'])->name('batch.store')->middleware('permission:employee-loan.edit');
+            Route::get('/advance', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createAdvance'])->name('advance.create')->middleware('permission:employee-loan.edit');
+            Route::post('/advance', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeAdvance'])->name('advance.store')->middleware('permission:employee-loan.edit');
+            Route::get('/waive', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createWaive'])->name('waive.create')->middleware('permission:employee-loan.edit');
+            Route::post('/waive', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeWaive'])->name('waive.store')->middleware('permission:employee-loan.edit');
+            Route::get('/rebate', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createRebate'])->name('rebate.create')->middleware('permission:employee-loan.edit');
+            Route::post('/rebate', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeRebate'])->name('rebate.store')->middleware('permission:employee-loan.edit');
+            Route::get('/rollback', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'rollbackIndex'])->name('rollback.index')->middleware('permission:employee-loan.edit');
+            Route::post('/{loan_collection}/rollback', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'rollback'])->name('rollback')->middleware('permission:employee-loan.edit');
             Route::get('/{loan_collection}', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'show'])->name('show');
         });
 
         Route::prefix('loan-migration')->name('loan-migration.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'index'])->name('index');
-            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'create'])->name('create')->middleware('permission:payroll.create');
+            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'create'])->name('create')->middleware('permission:employee-loan.create');
             Route::post('/calculate-preview', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'calculatePreview'])->name('calculate-preview');
-            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'store'])->name('store')->middleware('permission:employee-loan.create');
             Route::get('/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'show'])->name('show');
-            Route::put('/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
-            Route::put('/items/{loan_migration_item}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'updateItem'])->name('items.update')->middleware('permission:payroll.edit');
-            Route::post('/items/{loan_migration_item}/recalculate', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'recalculateItem'])->name('items.recalculate')->middleware('permission:payroll.edit');
+            Route::put('/{loan_migration}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'update'])->name('update')->middleware('permission:employee-loan.edit');
+            Route::put('/items/{loan_migration_item}', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'updateItem'])->name('items.update')->middleware('permission:employee-loan.edit');
+            Route::post('/items/{loan_migration_item}/recalculate', [\App\Http\Controllers\EmployeeLoan\LoanMigrationController::class, 'recalculateItem'])->name('items.recalculate')->middleware('permission:employee-loan.edit');
         });
 
         Route::prefix('loan-policies')->name('loan-policies.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'index'])->name('index');
-            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'create'])->name('create')->middleware('permission:payroll.create');
-            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'store'])->name('store')->middleware('permission:payroll.create');
-            Route::get('/{loan_policy}/edit', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
-            Route::put('/{loan_policy}', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
-            Route::delete('/{loan_policy}', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');
+            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'create'])->name('create')->middleware('permission:employee-loan.create');
+            Route::post('/', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'store'])->name('store')->middleware('permission:employee-loan.create');
+            Route::get('/{loan_policy}/edit', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'edit'])->name('edit')->middleware('permission:employee-loan.edit');
+            Route::put('/{loan_policy}', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'update'])->name('update')->middleware('permission:employee-loan.edit');
+            Route::delete('/{loan_policy}', [\App\Http\Controllers\EmployeeLoan\LoanPolicyController::class, 'destroy'])->name('destroy')->middleware('permission:employee-loan.delete');
         });
 
         Route::prefix('employee-loans')->name('employee-loans.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'index'])->name('index');
-            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'create'])->name('create')->middleware('permission:payroll.create');
-            Route::post('/', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::get('/create', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'create'])->name('create')->middleware('permission:employee-loan.create');
+            Route::post('/', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'store'])->name('store')->middleware('permission:employee-loan.create');
             Route::get('/{employee_loan}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'show'])->name('show');
             Route::get('/{employee_loan}/ledger', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'ledger'])->name('ledger');
-            Route::post('/{employee_loan}/manual-payment', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'storeManualPayment'])->name('manual-payment.store')->middleware('permission:payroll.edit');
-            Route::put('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'updateTransaction'])->name('transactions.update')->middleware('permission:payroll.edit');
-            Route::delete('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'destroyTransaction'])->name('transactions.destroy')->middleware('permission:payroll.edit');
-            Route::post('/{employee_loan}/cancel', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'cancel'])->name('cancel')->middleware('permission:payroll.edit');
+            Route::post('/{employee_loan}/manual-payment', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'storeManualPayment'])->name('manual-payment.store')->middleware('permission:employee-loan.edit');
+            Route::put('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'updateTransaction'])->name('transactions.update')->middleware('permission:employee-loan.edit');
+            Route::delete('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'destroyTransaction'])->name('transactions.destroy')->middleware('permission:employee-loan.edit');
+            Route::post('/{employee_loan}/cancel', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'cancel'])->name('cancel')->middleware('permission:employee-loan.edit');
         });
+    });
 
+    // ====================
+    // STAFF FUND (PF & Gratuity)
+    // ====================
+    Route::middleware(['permission:staff-fund.view'])->group(function () {
         Route::prefix('provident-fund')->name('provident-fund.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'index'])->name('index');
             Route::get('/summary', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'summary'])->name('summary');
@@ -972,15 +981,15 @@ Route::middleware(['auth'])->group(function () {
                 });
             });
             Route::get('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestIndex'])->name('interest.index');
-            Route::post('/interest/preview', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestPreview'])->name('interest.preview')->middleware('permission:payroll.edit');
-            Route::post('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestStore'])->name('interest.store')->middleware('permission:payroll.edit');
+            Route::post('/interest/preview', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestPreview'])->name('interest.preview')->middleware('permission:staff-fund.edit');
+            Route::post('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestStore'])->name('interest.store')->middleware('permission:staff-fund.edit');
             Route::get('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'withdrawalsIndex'])->name('withdrawals.index');
-            Route::post('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeWithdrawal'])->name('withdrawals.store')->middleware('permission:payroll.edit');
+            Route::post('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeWithdrawal'])->name('withdrawals.store')->middleware('permission:staff-fund.edit');
             Route::get('/{employee}/ledger', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'ledger'])->name('ledger');
-            Route::post('/opening-balance', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeOpening'])->name('opening.store')->middleware('permission:payroll.edit');
-            Route::post('/manual', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeManual'])->name('manual.store')->middleware('permission:payroll.edit');
-            Route::put('/transactions/{transaction}', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'updateTransaction'])->name('transactions.update')->middleware('permission:payroll.edit');
-            Route::delete('/transactions/{transaction}', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'destroyTransaction'])->name('transactions.destroy')->middleware('permission:payroll.edit');
+            Route::post('/opening-balance', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeOpening'])->name('opening.store')->middleware('permission:staff-fund.edit');
+            Route::post('/manual', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeManual'])->name('manual.store')->middleware('permission:staff-fund.edit');
+            Route::put('/transactions/{transaction}', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'updateTransaction'])->name('transactions.update')->middleware('permission:staff-fund.edit');
+            Route::delete('/transactions/{transaction}', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'destroyTransaction'])->name('transactions.destroy')->middleware('permission:staff-fund.edit');
         });
 
         Route::prefix('gratuity')->name('gratuity.')->group(function () {
@@ -997,9 +1006,16 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/rules', [\App\Http\Controllers\Payroll\GratuityController::class, 'rules'])->name('rules');
             Route::get('/payments', [\App\Http\Controllers\Payroll\GratuityController::class, 'payments'])->name('payments');
             Route::get('/{employee}', [\App\Http\Controllers\Payroll\GratuityController::class, 'show'])->name('show');
-            Route::post('/{employee}/payments', [\App\Http\Controllers\Payroll\GratuityController::class, 'storePayment'])->name('payments.store')->middleware('permission:payroll.edit');
+            Route::post('/{employee}/payments', [\App\Http\Controllers\Payroll\GratuityController::class, 'storePayment'])->name('payments.store')->middleware('permission:staff-fund.edit');
         });
 
+        Route::get('/final-payments', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'index'])->name('final-payments.index');
+        Route::get('/final-payments/{final_payment}', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'show'])->name('final-payments.show');
+        Route::post('/final-payments/{final_payment}/refresh', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'refresh'])->name('final-payments.refresh')->middleware('permission:staff-fund.edit');
+        Route::post('/final-payments/{final_payment}/mark-paid', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'markPaid'])->name('final-payments.mark-paid')->middleware('permission:staff-fund.edit');
+    });
+
+    Route::middleware(['permission:payroll.view'])->group(function () {
         Route::prefix('payroll/reports')->name('payroll.reports.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'index'])->name('index');
             Route::get('/{report}', [\App\Http\Controllers\Payroll\PayrollReportController::class, 'show'])->name('show');

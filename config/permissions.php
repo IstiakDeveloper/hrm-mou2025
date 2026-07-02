@@ -71,6 +71,16 @@ return [
             'description' => 'Salary structures, processing, bonus, and payroll reports',
             'color' => 'violet',
         ],
+        'employee-loan' => [
+            'label' => 'Employee Loan',
+            'description' => 'Loan policies, applications, disbursement, and collection',
+            'color' => 'amber',
+        ],
+        'staff-fund' => [
+            'label' => 'Staff Fund',
+            'description' => 'Provident fund and gratuity',
+            'color' => 'cyan',
+        ],
         'fixed-assets' => [
             'label' => 'Fixed Asset Management',
             'description' => 'Asset register, categories, and branch transfers',
@@ -201,6 +211,16 @@ return [
         'payroll.create' => ['label' => 'Create / Process Payroll', 'category' => 'payroll'],
         'payroll.edit' => ['label' => 'Edit Payroll Records', 'category' => 'payroll'],
         'payroll.delete' => ['label' => 'Delete Payroll Records', 'category' => 'payroll'],
+
+        'employee-loan.view' => ['label' => 'View Employee Loans', 'category' => 'employee-loan'],
+        'employee-loan.create' => ['label' => 'Create Employee Loan Records', 'category' => 'employee-loan'],
+        'employee-loan.edit' => ['label' => 'Edit Employee Loan Records', 'category' => 'employee-loan'],
+        'employee-loan.delete' => ['label' => 'Delete Employee Loan Records', 'category' => 'employee-loan'],
+
+        'staff-fund.view' => ['label' => 'View Staff Fund (PF & Gratuity)', 'category' => 'staff-fund'],
+        'staff-fund.create' => ['label' => 'Create Staff Fund Records', 'category' => 'staff-fund'],
+        'staff-fund.edit' => ['label' => 'Edit Staff Fund Records', 'category' => 'staff-fund'],
+        'staff-fund.delete' => ['label' => 'Delete Staff Fund Records', 'category' => 'staff-fund'],
 
         'fixed-assets.view' => ['label' => 'View Fixed Assets', 'category' => 'fixed-assets'],
         'fixed-assets.create' => ['label' => 'Register Fixed Assets', 'category' => 'fixed-assets'],

@@ -11,15 +11,12 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { EyeIcon, EyeOffIcon, ArrowLeft, User as UserIcon, Lock, Building, Users, Briefcase } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { resolveEmployeeEmail, type UserFormEmployee } from '@/lib/user-employee-email';
 
-interface Employee {
-    id: number;
-    employee_id: string;
-    biometric_id?: string | null;
+interface Employee extends UserFormEmployee {
     first_name?: string | null;
     last_name?: string | null;
     name_en?: string | null;
-    email?: string;
 }
 
 function employeeFullName(employee: Employee): string {
@@ -64,12 +61,13 @@ interface UserCreateProps {
     roles: Role[];
     employees: Employee[];
     branches: Branch[];
+    autoEmailDomain: string;
     errors: {
         [key: string]: string;
     };
 }
 
-export default function UserCreate({ roles, employees, branches, errors }: UserCreateProps) {
+export default function UserCreate({ roles, employees, branches, autoEmailDomain, errors }: UserCreateProps) {
     const { data, setData, post, processing } = useForm({
         name: '',
         email: '',
@@ -105,8 +103,9 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
             const selectedEmployee = employees.find(emp => emp.id.toString() === employeeId);
             if (selectedEmployee) {
                 setData('name', employeeFullName(selectedEmployee));
-                if (selectedEmployee.email) {
-                    setData('email', selectedEmployee.email);
+                const resolvedEmail = resolveEmployeeEmail(selectedEmployee, autoEmailDomain);
+                if (resolvedEmail) {
+                    setData('email', resolvedEmail);
                 }
             }
         }
@@ -402,7 +401,7 @@ export default function UserCreate({ roles, employees, branches, errors }: UserC
                                         {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
                                         {!!data.employee_id && (
                                             <p className="text-xs text-gray-500">
-                                                Email is auto-populated from the selected employee
+                                                Email is taken from the selected employee, or auto-generated if none is set
                                             </p>
                                         )}
                                     </div>

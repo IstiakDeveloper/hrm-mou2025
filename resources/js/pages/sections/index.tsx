@@ -5,7 +5,7 @@ import { CheckCircle2, Lock, XCircle, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
-import { hasAppPermission, isBranchAccount, isSuperAdmin } from '@/lib/permissions';
+import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead, isSuperAdmin } from '@/lib/permissions';
 
 // Curated themes for each module to create a vibrant, professional layout
 const SECTION_THEMES: Record<string, {
@@ -278,17 +278,37 @@ export default function SectionsIndex() {
                                 return true;
                             }
 
+                            if (isAccountant(auth)) {
+                                return (
+                                    section.id === 'employee-loan' ||
+                                    section.id === 'staff-fund' ||
+                                    section.id === 'fixed-asset' ||
+                                    section.id === 'inventory'
+                                );
+                            }
+
+                            if (isDepartmentHead(auth)) {
+                                if (
+                                    section.id === 'employee-loan' ||
+                                    section.id === 'staff-fund' ||
+                                    section.id === 'payroll'
+                                ) {
+                                    return false;
+                                }
+                            }
+
                             switch (section.id) {
                                 case 'human-resources':
                                     return (
-                                        hasAppPermission(auth, 'employees.view') ||
+                                        hasAppPermission(auth, 'employees.admin') ||
+                                        hasAppPermission(auth, 'employees.create') ||
+                                        hasAppPermission(auth, 'employees.edit') ||
                                         hasAppPermission(auth, 'transfers.view') ||
                                         hasAppPermission(auth, 'holidays.view') ||
                                         hasAppPermission(auth, 'branches.view') ||
                                         hasAppPermission(auth, 'departments.view') ||
                                         hasAppPermission(auth, 'designations.view') ||
                                         hasAppPermission(auth, 'attendance.admin') ||
-                                        hasAppPermission(auth, 'employees.admin') ||
                                         hasAppPermission(auth, 'admin.access')
                                     );
                                 case 'attendance-movement':
@@ -299,8 +319,7 @@ export default function SectionsIndex() {
                                     return (
                                         hasAppPermission(auth, 'admin.access') ||
                                         hasAppPermission(auth, 'users.view') ||
-                                        hasAppPermission(auth, 'roles.view') ||
-                                        hasAppPermission(auth, 'reports.view')
+                                        hasAppPermission(auth, 'roles.view')
                                     );
                                 case 'payroll':
                                     return (
@@ -322,8 +341,14 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'admin.access')
                                     );
                                 case 'staff-fund':
+                                    return (
+                                        hasAppPermission(auth, 'staff-fund.view') ||
+                                        hasAppPermission(auth, 'payroll.view') ||
+                                        hasAppPermission(auth, 'admin.access')
+                                    );
                                 case 'employee-loan':
                                     return (
+                                        hasAppPermission(auth, 'employee-loan.view') ||
                                         hasAppPermission(auth, 'payroll.view') ||
                                         hasAppPermission(auth, 'admin.access')
                                     );

@@ -37,7 +37,7 @@ export default function LoanPoliciesIndex({ policies, filters }: Props) {
     const { auth } = usePage<SharedData>().props;
     const canCreate = hasAppPermission(auth, 'payroll.create');
     const canEdit = hasAppPermission(auth, 'payroll.edit');
-    const canDelete = hasAppPermission(auth, 'payroll.delete');
+    const canDelete = hasAppPermission(auth, 'employee-loan.delete');
     const [search, setSearch] = useState(filters.search || '');
 
     const applySearch = () => {

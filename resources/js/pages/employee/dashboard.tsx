@@ -178,6 +178,12 @@ interface EmployeeDashboardProps {
     years: number[];
     attendanceSummary: AttendanceSummary | null;
     leaveSummary: LeaveSummary | null;
+    dashboardContext?: {
+        mode: 'self' | 'department_head' | 'branch_manager' | 'organogram';
+        label: string;
+        scopedEmployeeCount: number;
+        departmentNames: string[];
+    };
     userPermissions: {
         canCreate: boolean;
         canEdit: boolean;
@@ -186,6 +192,7 @@ interface EmployeeDashboardProps {
         isEmployee: boolean;
         isBranchManager: boolean;
         isDepartmentHead: boolean;
+        hasOrganogramLineRole?: boolean;
     };
 }
 
@@ -201,8 +208,17 @@ export default function EmployeeDashboard({
     years,
     attendanceSummary,
     leaveSummary,
+    dashboardContext,
     userPermissions,
 }: EmployeeDashboardProps) {
+    const canPickEmployees = employees.length > 1;
+    const scopeLabel = dashboardContext?.label ?? (
+        userPermissions.isDepartmentHead
+            ? 'Department head — your department team'
+            : userPermissions.isBranchManager
+              ? 'Branch manager — employees in your branch'
+              : 'Your employee profile'
+    );
     const [activeTab, setActiveTab] = useState('summary');
 
     // State for filter form
@@ -217,6 +233,15 @@ export default function EmployeeDashboard({
     const [searchQuery, setSearchQuery] = useState('');
     const [filteredEmployees, setFilteredEmployees] = useState(employees);
     const [showSearchResults, setShowSearchResults] = useState(false);
+
+    useEffect(() => {
+        if (employees.length !== 1 || selectedEmployee) {
+            return;
+        }
+        const only = employees[0];
+        setFilters((prev) => ({ ...prev, employeeId: only.id }));
+        setSearchQuery(only.name);
+    }, [employees, selectedEmployee]);
 
     useEffect(() => {
         if (!selectedEmployee) {
@@ -443,12 +468,19 @@ export default function EmployeeDashboard({
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Employee report</h1>
                         <p className="mt-1 text-sm text-zinc-600">
-                            Attendance, leave, and movements for one employee. Dates cannot extend past today.
+                            {userPermissions.isDepartmentHead
+                                ? 'View attendance, leave, and movements for employees in your department.'
+                                : userPermissions.isBranchManager
+                                  ? 'View attendance, leave, and movements for employees in your branch.'
+                                  : 'Attendance, leave, and movements for one employee. Dates cannot extend past today.'}
                         </p>
                     </div>
-                    {userPermissions.isEmployee && (
+                    {(userPermissions.hasOrganogramLineRole || userPermissions.isEmployee) && (
                         <Badge variant="outline" className="w-fit text-xs text-zinc-600">
-                            Your access is limited to employees in your organogram scope.
+                            {scopeLabel}
+                            {dashboardContext && dashboardContext.scopedEmployeeCount > 0
+                                ? ` (${dashboardContext.scopedEmployeeCount})`
+                                : ''}
                         </Badge>
                     )}
                 </div>
@@ -472,7 +504,10 @@ export default function EmployeeDashboard({
                     <CardContent className="p-5">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
                             <div className="space-y-1.5 relative">
-                                <Label htmlFor="employee_search" className="text-xs font-semibold text-slate-600">Employee</Label>
+                                <Label htmlFor="employee_search" className="text-xs font-semibold text-slate-600">
+                                    {canPickEmployees ? 'Employee' : 'Profile'}
+                                </Label>
+                                {canPickEmployees ? (
                                 <div id="search-container" className="relative">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                     <Input
@@ -505,7 +540,16 @@ export default function EmployeeDashboard({
                                         </div>
                                     )}
                                 </div>
-                                <p className="text-[10px] text-slate-400">Pick an employee from the dropdown list, then apply dates.</p>
+                                ) : (
+                                    <div className="flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                                        {employees[0]?.name ?? 'Your profile'}
+                                    </div>
+                                )}
+                                <p className="text-[10px] text-slate-400">
+                                    {canPickEmployees
+                                        ? 'Pick an employee from the list, then apply dates.'
+                                        : 'Your own profile is selected automatically.'}
+                                </p>
                             </div>
 
                             <div className="space-y-1.5">

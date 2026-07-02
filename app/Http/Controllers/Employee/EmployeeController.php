@@ -1571,6 +1571,10 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
+        if ($user instanceof User && $user->isAccountsDeskOnly()) {
+            abort(403);
+        }
+
         $query = Employee::with([
             'department',
             'designation',

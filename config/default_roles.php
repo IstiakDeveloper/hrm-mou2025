@@ -12,6 +12,14 @@ return [
             'description' => 'Full system access including all destructive actions (only this role should hold *.delete and admin/roles/users management).',
             'permissions' => '*',
         ],
+        'HR Admin' => [
+            'description' => 'Full operational access across all ERP modules (all sections). Cannot delete records or manage system users/roles.',
+            'permissions' => '*-no-delete-no-admin',
+        ],
+        'Accountant' => [
+            'description' => 'Accounts modules: Employee Loan, Staff Fund, Fixed Asset, and Inventory. Cannot delete records.',
+            'permissions' => 'sections:employee-loan,staff-fund,fixed-asset,inventory',
+        ],
         'Administrator' => [
             'description' => 'Read-only oversight (no user/role admin, no deletes, no master-data edits).',
             'permissions' => [
@@ -151,7 +159,7 @@ return [
             ],
         ],
         'Department Head' => [
-            'description' => 'Head office: department employees and approvals (department scope in app logic).',
+            'description' => 'Head office only: oversee own department (employees, attendance, leave, movement). Assign with Employee role for self-service + team view.',
             'permissions' => [
                 'department_head',
                 'employees.view',

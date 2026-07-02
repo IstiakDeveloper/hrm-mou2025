@@ -15,6 +15,7 @@ use App\Models\Role;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Services\ActiveSessionService;
+use App\Services\OrganogramAccessService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -364,36 +365,12 @@ class ReportController extends Controller
 
     public function leave(Request $request)
     {
-        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
-        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+        $user = $request->user();
+        if (! $user instanceof User) {
+            abort(403);
+        }
 
-        $baseQuery = LeaveApplication::with([
-            'employee.department',
-            'employee.designation',
-            'employee.currentBranch', // Add branch relation if needed
-            'leaveType',
-        ])
-            ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
-            ->whereBetween('start_date', [$startDate, $endDate])
-            ->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
-            })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                });
-            })
-            ->when($request->leave_type_id, function ($query, $leaveTypeId) {
-                $query->where('leave_type_id', $leaveTypeId);
-            })
-            ->when($request->employee_id, function ($query, $employeeId) {
-                $query->where('employee_id', $employeeId);
-            })
-            ->when($request->branch_id, function ($query, $branchId) {
-                $query->whereHas('employee', function ($q) use ($branchId) {
-                    $q->where('current_branch_id', $branchId);
-                });
-            });
+        [$baseQuery, $startDate, $endDate] = $this->leaveReportBaseQuery($request, $user);
 
         // Get paginated results
         $applications = $baseQuery->clone()
@@ -410,23 +387,10 @@ class ReportController extends Controller
             'totalDays' => $baseQuery->clone()->where('status', 'approved')->sum('days'),
         ];
 
-        // Get filter data
-        $departments = Department::select('id', 'name')->orderBy('name')->get();
-
-        $employees = Employee::select('id', 'name_en', 'employee_id', 'department_id')
-            ->with('department:id,name')
-            ->where('status', 'active')
-            ->orderBy('name_en')
-            ->get()
-            ->map(function ($employee) {
-                $employee->full_name = trim((string) ($employee->name_en ?? $employee->full_name_en ?? ''));
-
-                return $employee;
-            });
-
+        $departments = $this->accessibleDepartmentsForLeaveReport($user);
+        $employees = $this->accessibleEmployeesForLeaveReport($user);
         $leaveTypes = LeaveType::select('id', 'name', 'days_allowed', 'is_paid')->orderBy('name')->get();
-
-        $branches = Branch::query()->active()->select('id', 'name', 'branch_code')->orderBy('name')->get();
+        $branches = $this->accessibleBranchesForLeaveReport($user);
 
         return Inertia::render('report/leave', [
             'applications' => $applications,
@@ -443,38 +407,12 @@ class ReportController extends Controller
 
     public function downloadLeaveReportPdf(Request $request)
     {
-        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
-        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+        $user = $request->user();
+        if (! $user instanceof User) {
+            abort(403);
+        }
 
-        $baseQuery = LeaveApplication::with([
-            'employee.department',
-            'employee.designation',
-            'employee.currentBranch',
-            'leaveType',
-        ])
-            ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
-            ->whereBetween('start_date', [$startDate, $endDate])
-            ->when($request->status, function ($query, $status) {
-                $query->where('status', $status);
-            })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->whereHas('employee', function ($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                });
-            })
-            ->when($request->leave_type_id, function ($query, $leaveTypeId) {
-                $query->where('leave_type_id', $leaveTypeId);
-            })
-            ->when($request->employee_id, function ($query, $employeeId) {
-                $query->where('employee_id', $employeeId);
-            })
-            ->when($request->branch_id, function ($query, $branchId) {
-                $query->whereHas('employee', function ($q) use ($branchId) {
-                    $q->where('current_branch_id', $branchId);
-                });
-            });
-
-        // Get all applications (no pagination for PDF)
+        [$baseQuery, $startDate, $endDate] = $this->leaveReportBaseQuery($request, $user);
         $applications = $baseQuery->clone()
             ->orderBy('start_date', 'desc')
             ->get();
@@ -488,18 +426,11 @@ class ReportController extends Controller
             'totalDays' => $baseQuery->clone()->where('status', 'approved')->sum('days'),
         ];
 
-        // Get filter data for display
-        $departments = Department::select('id', 'name')->get()->keyBy('id');
-        $employees = Employee::select('id', 'name_en', 'employee_id')
-            ->get()
-            ->keyBy('id')
-            ->map(function ($employee) {
-                $employee->full_name = trim((string) ($employee->name_en ?? $employee->full_name_en ?? ''));
-
-                return $employee;
-            });
+        // Get filter data for display (scoped to visible employees)
+        $departments = $this->accessibleDepartmentsForLeaveReport($user)->keyBy('id');
+        $employees = $this->accessibleEmployeesForLeaveReport($user)->keyBy('id');
         $leaveTypes = LeaveType::select('id', 'name')->get()->keyBy('id');
-        $branches = Branch::query()->active()->select('id', 'name', 'branch_code')->get()->keyBy('id');
+        $branches = $this->accessibleBranchesForLeaveReport($user)->keyBy('id');
 
         // Prepare filter labels for display
         $filterLabels = [];
@@ -510,7 +441,8 @@ class ReportController extends Controller
             $filterLabels[] = 'Department: '.$departments[$request->department_id]->name;
         }
         if ($request->employee_id && isset($employees[$request->employee_id])) {
-            $filterLabels[] = 'Employee: '.$employees[$request->employee_id]->full_name;
+            $emp = $employees[$request->employee_id];
+            $filterLabels[] = 'Employee: '.trim((string) ($emp->full_name ?? $emp->name_en ?? $emp->employee_id ?? ''));
         }
         if ($request->leave_type_id && isset($leaveTypes[$request->leave_type_id])) {
             $filterLabels[] = 'Leave Type: '.$leaveTypes[$request->leave_type_id]->name;
@@ -818,6 +750,96 @@ class ReportController extends Controller
             'genders' => ['male', 'female', 'other'],
             'summary' => $summary,
         ]);
+    }
+
+    /**
+     * @return array{0: \Illuminate\Database\Eloquent\Builder, 1: Carbon, 2: Carbon}
+     */
+    private function leaveReportBaseQuery(Request $request, User $user): array
+    {
+        $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
+        $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
+
+        $query = LeaveApplication::with([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch',
+            'leaveType',
+        ])
+            ->whereHas('employee.branch', fn ($q) => $q->where('is_active', true))
+            ->whereBetween('start_date', [$startDate, $endDate]);
+
+        OrganogramAccessService::constrainLeaveApplications($query, $user);
+
+        $query
+            ->when($request->status, function ($query, $status) {
+                $query->where('status', $status);
+            })
+            ->when($request->department_id, function ($query, $departmentId) {
+                $query->whereHas('employee', function ($q) use ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                });
+            })
+            ->when($request->leave_type_id, function ($query, $leaveTypeId) {
+                $query->where('leave_type_id', $leaveTypeId);
+            })
+            ->when($request->employee_id, function ($query, $employeeId) use ($user) {
+                if (OrganogramAccessService::userCanSeeEmployee($user, (int) $employeeId)) {
+                    $query->where('employee_id', $employeeId);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            })
+            ->when($request->branch_id, function ($query, $branchId) {
+                $query->whereHas('employee', function ($q) use ($branchId) {
+                    $q->where('current_branch_id', $branchId);
+                });
+            });
+
+        return [$query, $startDate, $endDate];
+    }
+
+    private function accessibleDepartmentsForLeaveReport(User $user)
+    {
+        $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
+        if ($ids === null) {
+            return Department::query()->select('id', 'name')->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
+        }
+
+        return Department::query()->select('id', 'name')->whereIn('id', $ids)->orderBy('name')->get();
+    }
+
+    private function accessibleBranchesForLeaveReport(User $user)
+    {
+        $ids = OrganogramAccessService::accessibleBranchIdList($user);
+        if ($ids === null) {
+            return Branch::query()->active()->select('id', 'name', 'branch_code')->orderBy('name')->get();
+        }
+        if ($ids === []) {
+            return collect([]);
+        }
+
+        return Branch::query()->active()->select('id', 'name', 'branch_code')->whereIn('id', $ids)->orderBy('name')->get();
+    }
+
+    private function accessibleEmployeesForLeaveReport(User $user)
+    {
+        $q = Employee::query()
+            ->select('id', 'name_en', 'employee_id', 'department_id')
+            ->with('department:id,name')
+            ->where('status', 'active')
+            ->orderBy('name_en');
+
+        OrganogramAccessService::constrainVisibleEmployees($q, $user);
+
+        return $q->get()->map(function ($employee) {
+            $employee->full_name = trim((string) ($employee->name_en ?? $employee->full_name_en ?? ''));
+
+            return $employee;
+        });
     }
 
     /**

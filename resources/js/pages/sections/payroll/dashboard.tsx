@@ -169,7 +169,6 @@ export default function PayrollDashboard({ stats, userRole }: Props) {
                 <section className="mb-6">
                     <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Salary</h2>
                     <div className={cn(shortcutGrid)}>
-                        {can('payroll.view') && <ShortcutTile href={`/final-payments${section}`} title="Final payment" icon={HandCoins} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-head-modifications${section}`} title="Head modification" icon={Pencil} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-withheld${section}`} title="Salary withheld" icon={Banknote} />}
                         {can('payroll.view') && <ShortcutTile href={`/salary-process${section}`} title="Salary process" icon={Calculator} />}

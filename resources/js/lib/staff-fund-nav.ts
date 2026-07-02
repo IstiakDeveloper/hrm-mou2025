@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { FileBarChart2, Gift, Landmark, List, Percent, Wallet } from 'lucide-react';
+import { FileBarChart2, Gift, HandCoins, Landmark, List, Percent, Wallet } from 'lucide-react';
 
 export const STAFF_FUND_SECTION_ID = 'staff-fund' as const;
 
@@ -11,7 +11,7 @@ export type StaffFundNavItem = {
 };
 
 export type StaffFundNavGroup = {
-    id: 'pf' | 'gratuity';
+    id: 'pf' | 'gratuity' | 'settlement';
     title: string;
     icon: LucideIcon;
     defaultPath: string;
@@ -72,6 +72,19 @@ export const STAFF_FUND_NAV_GROUPS: StaffFundNavGroup[] = [
             },
         ],
     },
+    {
+        id: 'settlement',
+        title: 'Settlement',
+        icon: HandCoins,
+        defaultPath: '/final-payments',
+        items: [
+            {
+                title: 'Final Payment',
+                path: '/final-payments',
+                description: 'Separation settlement — PF, gratuity & loan clearance',
+            },
+        ],
+    },
 ];
 
 export const STAFF_FUND_DASHBOARD_SHORTCUTS = {
@@ -85,4 +98,5 @@ export const STAFF_FUND_DASHBOARD_SHORTCUTS = {
         { title: 'Payment records', href: '/gratuity/payments', icon: Wallet },
         { title: 'Gratuity rules', href: '/gratuity/rules', icon: FileBarChart2 },
     ],
+    settlement: [{ title: 'Final Payment', href: '/final-payments', icon: HandCoins }],
 } as const;

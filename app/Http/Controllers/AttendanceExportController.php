@@ -12,6 +12,7 @@ use App\Models\Attendance;
 use App\Models\LeaveApplication;
 use App\Support\MonthlyAttendanceCalculator;
 use App\Support\HeadOfficeOrganogram;
+use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
 use App\Models\AttendanceSetting;
 use Illuminate\Support\Facades\Auth;
@@ -252,17 +253,19 @@ class AttendanceExportController extends Controller
      */
     protected function applyEmployeeFilters($query, $user, $request)
     {
+        $deptHeadScope = OrganogramAccessService::departmentIdsForDepartmentHeadScope($user);
+
         // If user is an employee, show only their data unless they have manager permissions
-        if ($user->employee_id && !$user->hasPermission('branch_manager') && !$user->hasPermission('department_head')) {
+        if ($user->employee_id && ! $user->hasPermission('branch_manager') && $deptHeadScope === []) {
             $query->where('employees.id', $user->employee_id);
         }
         // If user is a branch manager, show only employees from their branch
-        else if ($user->hasPermission('branch_manager') && $user->branch_id) {
+        elseif ($user->hasPermission('branch_manager') && $user->branch_id) {
             $query->where('employees.current_branch_id', $user->branch_id);
         }
-        // If user is a department head, show only employees from their department
-        else if ($user->hasPermission('department_head') && $user->employee && $user->employee->department_id) {
-            $query->where('employees.department_id', $user->employee->department_id);
+        // Head-office department head: employees in scoped departments
+        elseif ($deptHeadScope !== []) {
+            $query->whereIn('employees.department_id', $deptHeadScope);
         }
 
         // Apply search filter if provided
@@ -282,7 +285,7 @@ class AttendanceExportController extends Controller
 
         // Apply department filter if provided and user has permission
         if ($request->department_id &&
-            ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager') || $user->hasPermission('department_head'))) {
+            ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager') || OrganogramAccessService::isHeadOfficeDepartmentHead($user))) {
             $query->where('employees.department_id', $request->department_id);
         }
 

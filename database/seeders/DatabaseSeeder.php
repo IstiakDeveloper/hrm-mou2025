@@ -35,10 +35,19 @@ class DatabaseSeeder extends Seeder
         $zonalManagerRole = $roles['Zonal Manager'];
         $regionalManagerRole = $roles['Regional Manager'];
 
+        $hrAdminRole = $roles['HR Admin'];
+        $accountantRole = $roles['Accountant'];
+
         $this->seedUser('admin@mail.com', 'Super Admin', $superAdminRole->id, [$superAdminRole->id]);
+        $this->seedUser('hradmin@mail.com', 'HR Admin User', $hrAdminRole->id, [$hrAdminRole->id]);
+        $this->seedUser('accountant@mail.com', 'Accountant User', $accountantRole->id, [$accountantRole->id]);
         $this->seedUser('hr@mail.com', 'HR Manager', $hrManagerRole->id, [$hrManagerRole->id, $departmentHeadRole->id]);
         $this->seedUser('branch@mail.com', 'Branch Manager', $branchManagerRole->id, [$branchManagerRole->id, $teamLeaderRole->id]);
         $this->seedUser('employee@mail.com', 'Regular Employee', $employeeRole->id, [$employeeRole->id]);
+        $this->seedUser('depthead@mail.com', 'Department Head (HO)', $employeeRole->id, [
+            $employeeRole->id,
+            $departmentHeadRole->id,
+        ]);
         $this->seedUser('manager@mail.com', 'Department Manager', $departmentHeadRole->id, [
             $departmentHeadRole->id,
             $teamLeaderRole->id,
