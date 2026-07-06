@@ -62,8 +62,8 @@ class BonusCalculationService
 
         $isWithheld = SalaryWithheld::query()
             ->where('employee_id', $employee->id)
-            ->where('year', $processDate->year)
-            ->where('month', $processDate->month)
+            ->where('year', $configuration->year)
+            ->where('month', $configuration->month)
             ->where('salary_type', 'bonus')
             ->exists();
 

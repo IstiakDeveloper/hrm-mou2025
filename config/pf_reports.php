@@ -1,7 +1,8 @@
 <?php
 
 return [
-    'company_name' => env('PF_REPORT_COMPANY', env('PAYROLL_REPORT_COMPANY', env('APP_NAME', 'Organization'))),
+    'company_name' => env('PF_REPORT_COMPANY') ?: config('payroll_reports.company_name', env('APP_NAME', 'Organization')),
+    'company_address' => env('PF_REPORT_COMPANY_ADDRESS') ?: config('payroll_reports.company_address', ''),
 
     'reports' => [
         'pf-ledger' => [
@@ -56,8 +57,8 @@ return [
         ],
         'pf-balance-by-branch' => [
             'title' => 'PF Balance Register (Branch Wise)',
-            'description' => 'Total PF balance grouped by branch.',
-            'filters' => ['branch_id'],
+            'description' => 'Branch-wise PF balance with own and organization contribution, interest and totals as of the selected end date.',
+            'filters' => ['date_to', 'branch_id'],
             'template' => 'pf-grouped',
             'report' => 'pf_balance_by_branch',
         ],

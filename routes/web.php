@@ -983,6 +983,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestIndex'])->name('interest.index');
             Route::post('/interest/preview', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestPreview'])->name('interest.preview')->middleware('permission:staff-fund.edit');
             Route::post('/interest', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestStore'])->name('interest.store')->middleware('permission:staff-fund.edit');
+            Route::post('/interest/{interest_run}/rollback', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'interestRollback'])->name('interest.rollback')->middleware('permission:staff-fund.edit');
             Route::get('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'withdrawalsIndex'])->name('withdrawals.index');
             Route::post('/withdrawals', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'storeWithdrawal'])->name('withdrawals.store')->middleware('permission:staff-fund.edit');
             Route::get('/{employee}/ledger', [\App\Http\Controllers\Payroll\ProvidentFundController::class, 'ledger'])->name('ledger');

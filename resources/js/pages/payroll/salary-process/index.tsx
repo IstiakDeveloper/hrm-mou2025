@@ -181,7 +181,7 @@ export default function SalaryProcessIndex({ filters: init, pendingBatches, canP
         project_id: String(init.project_id || ''),
         employee_id: String(init.employee_id || ''),
         year: String(init.year || new Date().getFullYear()),
-        month: String(init.month || new Date().getMonth() + 1),
+        month: String(init.month || ''),
         salary_type: String(init.salary_type || 'salary'),
         process_date: String(init.process_date || format(new Date(), DISPLAY_DATE_FMT)),
     });
@@ -311,7 +311,7 @@ export default function SalaryProcessIndex({ filters: init, pendingBatches, canP
                 <div className="flex flex-col gap-6">
                     <PayrollSectionCard
                         title="Calculate payroll"
-                        description="Choose pay period and scope, then run calculation."
+                        description="Calculate payroll for active employees. After undoing one employee, run again with that employee selected — others already in payroll are skipped automatically."
                     >
                         <PayrollFilterGrid
                             filters={filters}

@@ -11,6 +11,8 @@ use App\Services\EmployeeProvidentFundService;
 use App\Services\PfInterestDistributionService;
 use App\Services\PfReportService;
 use App\Services\SalaryStructureCalculator;
+use App\Support\FiscalYear;
+use App\Support\HeadOfficeOrganogram;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -30,7 +32,7 @@ class ProvidentFundController extends Controller
     {
         $search = trim((string) $request->input('search', ''));
 
-        $rows = Employee::query()
+        $rowsQuery = Employee::query()
             ->with(['branch:id,name', 'department:id,name'])
             ->withSum(['pfTransactions as own_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employee_contribution')
             ->withSum(['pfTransactions as org_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employer_contribution')
@@ -43,10 +45,14 @@ class ProvidentFundController extends Controller
                 $q->where(function ($inner) use ($search) {
                     $inner->where('pin', 'like', "%{$search}%")
                         ->orWhere('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
                         ->orWhere('employee_id', 'like', "%{$search}%");
                 });
-            })
-            ->orderBy('pin')
+            });
+
+        HeadOfficeOrganogram::applyToEmployeeQuery($rowsQuery, 'organogram', 'asc');
+
+        $rows = $rowsQuery
             ->get()
             ->map(function (Employee $e) {
                 $own = SalaryStructureCalculator::roundTaka((float) ($e->own_contribution ?? 0));
@@ -344,7 +350,8 @@ class ProvidentFundController extends Controller
 
     public function interestIndex(Request $request)
     {
-        $defaultYear = (int) date('Y') - 1;
+        $defaultYear = FiscalYear::lastCompletedStartYear();
+        $fiscalYears = FiscalYear::selectOptions($defaultYear - 8, $defaultYear + 1);
 
         $runs = PfInterestRun::query()
             ->with('creator:id,name')
@@ -354,6 +361,7 @@ class ProvidentFundController extends Controller
             ->map(fn (PfInterestRun $run) => [
                 'id' => $run->id,
                 'interest_year' => $run->interest_year,
+                'interest_year_label' => FiscalYear::label((int) $run->interest_year),
                 'total_interest' => SalaryStructureCalculator::roundTaka((float) $run->total_interest),
                 'total_pf_balance' => SalaryStructureCalculator::roundTaka((float) $run->total_pf_balance),
                 'employee_count' => $run->employee_count,
@@ -366,10 +374,14 @@ class ProvidentFundController extends Controller
         $preview = null;
         if ($request->session()->has('pf_interest_preview')) {
             $preview = $request->session()->get('pf_interest_preview');
+            if (is_array($preview) && isset($preview['year'])) {
+                $preview['year_label'] = FiscalYear::label((int) $preview['year']);
+            }
         }
 
         return Inertia::render('payroll/provident-fund/interest', [
             'pastRuns' => $runs,
+            'fiscalYears' => $fiscalYears,
             'defaultYear' => (string) ($request->old('year', $defaultYear)),
             'formDefaults' => [
                 'year' => (string) ($request->old('year', $defaultYear)),
@@ -384,24 +396,38 @@ class ProvidentFundController extends Controller
     public function interestPreview(Request $request)
     {
         $validated = $request->validate([
-            'year' => 'required|integer|min:2000|max:2100',
-            'total_interest' => 'required|numeric|min:0.01',
+            'year' => 'required|string',
+            'total_interest' => 'required|integer|min:1',
             'transaction_date' => 'required|date',
             'notes' => 'nullable|string|max:2000',
         ]);
 
+        $startYear = FiscalYear::parseStartYear($validated['year']);
+        if ($startYear === null) {
+            throw ValidationException::withMessages([
+                'year' => 'Enter a valid interest year (e.g. 2025-2026).',
+            ]);
+        }
+
         try {
             $preview = $this->interestService->preview(
-                (int) $validated['year'],
+                $startYear,
                 (float) $validated['total_interest']
             );
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages(['total_interest' => $e->getMessage()]);
         }
 
+        if ($preview['employee_count'] === 0) {
+            throw ValidationException::withMessages([
+                'total_interest' => 'No employees with PF balance found to receive interest.',
+            ]);
+        }
+
         return redirect()
             ->route('provident-fund.interest.index')
             ->with('pf_interest_preview', array_merge($preview, [
+                'year_label' => FiscalYear::label($startYear),
                 'transaction_date' => $validated['transaction_date'],
                 'notes' => $validated['notes'] ?? '',
             ]))
@@ -411,15 +437,22 @@ class ProvidentFundController extends Controller
     public function interestStore(Request $request)
     {
         $validated = $request->validate([
-            'year' => 'required|integer|min:2000|max:2100',
-            'total_interest' => 'required|numeric|min:0.01',
+            'year' => 'required|string',
+            'total_interest' => 'required|integer|min:1',
             'transaction_date' => 'required|date',
             'notes' => 'nullable|string|max:2000',
         ]);
 
+        $startYear = FiscalYear::parseStartYear($validated['year']);
+        if ($startYear === null) {
+            throw ValidationException::withMessages([
+                'year' => 'Enter a valid interest year (e.g. 2025-2026).',
+            ]);
+        }
+
         try {
             $run = $this->interestService->distribute(
-                (int) $validated['year'],
+                $startYear,
                 (float) $validated['total_interest'],
                 Carbon::parse($validated['transaction_date']),
                 $validated['notes'] ?? null,
@@ -434,11 +467,24 @@ class ProvidentFundController extends Controller
         return redirect()
             ->route('provident-fund.interest.index')
             ->with('success', sprintf(
-                'PF interest for %d posted to %d employees (total %s).',
-                $run->interest_year,
+                'PF interest for %s posted to %d employees (total %s).',
+                FiscalYear::label((int) $run->interest_year),
                 $run->employee_count,
                 taka_fmt($run->total_interest)
             ));
+    }
+
+    public function interestRollback(PfInterestRun $interest_run, Request $request)
+    {
+        $yearLabel = FiscalYear::label((int) $interest_run->interest_year);
+
+        $this->interestService->rollback($interest_run);
+
+        $request->session()->forget('pf_interest_preview');
+
+        return redirect()
+            ->route('provident-fund.interest.index')
+            ->with('success', sprintf('PF interest for %s rolled back.', $yearLabel));
     }
 
     /**
@@ -446,10 +492,13 @@ class ProvidentFundController extends Controller
      */
     protected function pfPaymentEmployeeOptions(): array
     {
-        return Employee::query()
+        $query = Employee::query()
             ->with(['branch:id,name'])
-            ->where('pf_balance', '>', 0)
-            ->orderBy('pin')
+            ->where('pf_balance', '>', 0);
+
+        HeadOfficeOrganogram::applyToEmployeeQuery($query, 'organogram', 'asc');
+
+        return $query
             ->get(['id', 'pin', 'name_en', 'employee_id', 'pf_balance', 'current_branch_id'])
             ->map(fn (Employee $e) => [
                 'id' => $e->id,

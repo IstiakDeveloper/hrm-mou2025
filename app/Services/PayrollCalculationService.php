@@ -63,7 +63,7 @@ class PayrollCalculationService
         ?int $payrollMonth = null,
     ): array {
         if ($salaryType !== 'salary') {
-            return $this->calculateWithoutStatutory($employee, $processDate, $salaryType);
+            return $this->calculateWithoutStatutory($employee, $processDate, $salaryType, $payrollYear, $payrollMonth);
         }
 
         $warnings = [];
@@ -95,6 +95,8 @@ class PayrollCalculationService
                 $processDate,
                 $fixedAmount,
                 $salaryType,
+                $payrollYear,
+                $payrollMonth,
             );
 
             if ($fixedAmount <= 0) {
@@ -295,9 +297,9 @@ class PayrollCalculationService
             }
         }
 
-        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType);
+        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType, $payrollYear, $payrollMonth);
 
-        $net = $isWithheld ? 0.0 : SalaryStructureCalculator::roundTaka($gross - $deduction);
+        $net = SalaryStructureCalculator::roundTaka($gross - $deduction);
 
         return $this->finalizePayrollResult($employee, $salaryType, $payrollYear, $payrollMonth, [
             'basic_salary' => $basic,
@@ -375,8 +377,8 @@ class PayrollCalculationService
 
         $this->batchWithheldEmployeeIds = SalaryWithheld::query()
             ->whereIn('employee_id', $employeeIds)
-            ->where('year', $processDate->year)
-            ->where('month', $processDate->month)
+            ->where('year', $year)
+            ->where('month', $month)
             ->where('salary_type', $salaryType)
             ->pluck('employee_id')
             ->mapWithKeys(fn ($id) => [(int) $id => true])
@@ -414,16 +416,24 @@ class PayrollCalculationService
             ->first();
     }
 
-    protected function isSalaryWithheld(int $employeeId, Carbon $processDate, string $salaryType): bool
-    {
+    protected function isSalaryWithheld(
+        int $employeeId,
+        Carbon $processDate,
+        string $salaryType,
+        ?int $payrollYear = null,
+        ?int $payrollMonth = null,
+    ): bool {
         if ($this->batchMode) {
             return isset($this->batchWithheldEmployeeIds[$employeeId]);
         }
 
+        $year = $payrollYear ?? (int) $processDate->year;
+        $month = $payrollMonth ?? (int) $processDate->month;
+
         return SalaryWithheld::query()
             ->where('employee_id', $employeeId)
-            ->where('year', $processDate->year)
-            ->where('month', $processDate->month)
+            ->where('year', $year)
+            ->where('month', $month)
             ->where('salary_type', $salaryType)
             ->exists();
     }
@@ -462,6 +472,8 @@ class PayrollCalculationService
             $salaryType,
             'Probation Salary',
             $probationAmount > 0 ? 'Probation salary only — no salary components or deductions.' : null,
+            $payrollYear,
+            $payrollMonth,
         );
     }
 
@@ -470,6 +482,8 @@ class PayrollCalculationService
         Carbon $processDate,
         float $fixedAmount,
         string $salaryType,
+        ?int $payrollYear = null,
+        ?int $payrollMonth = null,
     ): array {
         return $this->calculateFlatMonthlySalary(
             $employee,
@@ -478,6 +492,8 @@ class PayrollCalculationService
             $salaryType,
             'Fixed Salary',
             $fixedAmount > 0 ? 'Fixed salary only — no grade structure, components, or deductions.' : null,
+            $payrollYear,
+            $payrollMonth,
         );
     }
 
@@ -505,6 +521,8 @@ class PayrollCalculationService
         string $salaryType,
         string $headLabel,
         ?string $warningNote,
+        ?int $payrollYear = null,
+        ?int $payrollMonth = null,
     ): array {
         $warnings = $warningNote ? [$warningNote] : [];
         $sort = 0;
@@ -526,13 +544,13 @@ class PayrollCalculationService
         $loanDeductions = [];
         $deduction = 0.0;
 
-        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType);
+        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType, $payrollYear, $payrollMonth);
 
-        return [
+        $result = [
             'basic_salary' => $basic,
             'gross_salary' => $gross,
             'total_deduction' => SalaryStructureCalculator::roundTaka($deduction),
-            'net_payable' => $isWithheld ? 0.0 : SalaryStructureCalculator::roundTaka($gross - $deduction),
+            'net_payable' => SalaryStructureCalculator::roundTaka($gross - $deduction),
             'pf_employee_contribution' => $pf['employee'],
             'pf_employer_contribution' => $pf['employer'],
             'income_tax' => $incomeTax,
@@ -543,6 +561,8 @@ class PayrollCalculationService
             'is_withheld' => $isWithheld,
             'warnings' => $warnings,
         ];
+
+        return $isWithheld ? $this->zeroOutWithheldPayroll($result) : $result;
     }
 
     /**
@@ -562,9 +582,14 @@ class PayrollCalculationService
      *   warnings: list<string>
      * }
      */
-    protected function calculateWithoutStatutory(Employee $employee, Carbon $processDate, string $salaryType): array
-    {
-        $result = $this->calculateForEmployee($employee, $processDate, 'salary');
+    protected function calculateWithoutStatutory(
+        Employee $employee,
+        Carbon $processDate,
+        string $salaryType,
+        ?int $payrollYear = null,
+        ?int $payrollMonth = null,
+    ): array {
+        $result = $this->calculateForEmployee($employee, $processDate, 'salary', $payrollYear, $payrollMonth);
         // Strip statutory lines for non-salary types — reuse core earnings only
         $earningLines = array_values(array_filter(
             $result['lines'],
@@ -572,13 +597,13 @@ class PayrollCalculationService
         ));
 
         $gross = SalaryStructureCalculator::roundTaka(array_sum(array_column($earningLines, 'computed_amount')));
-        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType);
+        $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType, $payrollYear, $payrollMonth);
 
-        return [
+        $bonusResult = [
             'basic_salary' => $result['basic_salary'],
             'gross_salary' => $gross,
             'total_deduction' => 0.0,
-            'net_payable' => $isWithheld ? 0.0 : $gross,
+            'net_payable' => $gross,
             'pf_employee_contribution' => 0.0,
             'pf_employer_contribution' => 0.0,
             'income_tax' => 0.0,
@@ -589,6 +614,8 @@ class PayrollCalculationService
             'is_withheld' => $isWithheld,
             'warnings' => $result['warnings'],
         ];
+
+        return $isWithheld ? $this->zeroOutWithheldPayroll($bonusResult) : $bonusResult;
     }
 
     /**
@@ -766,7 +793,9 @@ class PayrollCalculationService
         array $result,
     ): array {
         if ($salaryType !== 'salary' || ! $payrollYear || ! $payrollMonth) {
-            return $result;
+            return ($result['is_withheld'] ?? false)
+                ? $this->zeroOutWithheldPayroll($result)
+                : $result;
         }
 
         $proration = $this->separationPayrollService->resolveForPayrollMonth($employee, $payrollYear, $payrollMonth);
@@ -787,10 +816,37 @@ class PayrollCalculationService
         }
 
         if ($proration['factor'] >= 1.0) {
-            return $result;
+            return ($result['is_withheld'] ?? false)
+                ? $this->zeroOutWithheldPayroll($result)
+                : $result;
         }
 
-        return $this->scalePayrollResultBySeparationFactor($result, $proration);
+        $result = $this->scalePayrollResultBySeparationFactor($result, $proration);
+
+        return ($result['is_withheld'] ?? false)
+            ? $this->zeroOutWithheldPayroll($result)
+            : $result;
+    }
+
+    /**
+     * Withheld salary is not payable and must not accrue PF, tax, loans, or sheet components.
+     *
+     * @param  array<string, mixed>  $result
+     * @return array<string, mixed>
+     */
+    protected function zeroOutWithheldPayroll(array $result): array
+    {
+        return array_merge($result, [
+            'basic_salary' => 0.0,
+            'gross_salary' => 0.0,
+            'total_deduction' => 0.0,
+            'net_payable' => 0.0,
+            'pf_employee_contribution' => 0.0,
+            'pf_employer_contribution' => 0.0,
+            'income_tax' => 0.0,
+            'loan_deductions' => [],
+            'lines' => [],
+        ]);
     }
 
     /**
@@ -846,8 +902,7 @@ class PayrollCalculationService
             ]);
         }
 
-        $isWithheld = (bool) ($result['is_withheld'] ?? false);
-        $net = $isWithheld ? 0.0 : SalaryStructureCalculator::roundTaka($gross - $deduction);
+        $net = SalaryStructureCalculator::roundTaka($gross - $deduction);
 
         $warnings = $result['warnings'] ?? [];
         if (! empty($proration['note'])) {

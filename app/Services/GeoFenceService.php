@@ -47,21 +47,13 @@ class GeoFenceService
             return ['ok' => false, 'reason' => 'Branch geofence is not configured.'];
         }
 
-        $maxAcc = $branch->geofence_max_accuracy_meters ?? 50;
+        $accuracyCap = max((int) ($branch->geofence_max_accuracy_meters ?? 150), 100);
 
-        if ($accuracyMeters === null) {
+        if ($accuracyMeters !== null && $accuracyMeters > 500) {
             return [
                 'ok' => false,
-                'reason' => 'Location accuracy missing.',
-                'max_accuracy_meters' => (int) $maxAcc,
-            ];
-        }
-
-        if ($accuracyMeters > $maxAcc) {
-            return [
-                'ok' => false,
-                'reason' => 'Location accuracy is too low.',
-                'max_accuracy_meters' => (int) $maxAcc,
+                'reason' => 'Location signal is too unreliable. Please try again near a window or open area.',
+                'max_accuracy_meters' => $accuracyCap,
             ];
         }
 
@@ -73,13 +65,17 @@ class GeoFenceService
         );
 
         $radius = (int) $branch->geofence_radius_meters;
+        $accuracyBuffer = min($accuracyMeters ?? $accuracyCap, $accuracyCap);
+        $effectiveRadius = $radius + $accuracyBuffer;
 
-        if ($distance > $radius) {
+        if ($distance > $effectiveRadius) {
             return [
                 'ok' => false,
                 'reason' => 'Outside allowed branch area.',
                 'distance_meters' => $distance,
                 'radius_meters' => $radius,
+                'effective_radius_meters' => $effectiveRadius,
+                'accuracy_meters' => $accuracyMeters,
             ];
         }
 
@@ -87,7 +83,9 @@ class GeoFenceService
             'ok' => true,
             'distance_meters' => $distance,
             'radius_meters' => $radius,
-            'max_accuracy_meters' => (int) $maxAcc,
+            'effective_radius_meters' => $effectiveRadius,
+            'accuracy_meters' => $accuracyMeters,
+            'max_accuracy_meters' => $accuracyCap,
         ];
     }
 
@@ -158,26 +156,38 @@ class GeoFenceService
         iterable $branches,
         float $lat,
         float $lng,
-        ?float $accuracyMeters
+        ?float $accuracyMeters,
+        ?array $samples = null
     ): array {
         $bestFailure = null;
 
         foreach ($branches as $branch) {
-            $result = $this->validateBranchLocation($branch, $lat, $lng, $accuracyMeters);
+            foreach ($this->locationAttempts($lat, $lng, $accuracyMeters, $samples) as $attempt) {
+                $result = $this->validateBranchLocation(
+                    $branch,
+                    $attempt['lat'],
+                    $attempt['lng'],
+                    $attempt['accuracy'],
+                );
 
-            if ($result['ok']) {
-                return array_merge($result, [
-                    'branch' => $branch,
-                    'branch_id' => $branch->id,
-                    'branch_name' => $branch->name,
-                ]);
-            }
+                if ($result['ok']) {
+                    return array_merge($result, [
+                        'branch' => $branch,
+                        'branch_id' => $branch->id,
+                        'branch_name' => $branch->name,
+                    ]);
+                }
 
-            if ($this->isMeaningfulGeofenceFailure($result)) {
-                $bestFailure = array_merge($result, [
-                    'branch_id' => $branch->id,
-                    'branch_name' => $branch->name,
-                ]);
+                if ($this->isMeaningfulGeofenceFailure($result)) {
+                    $candidate = array_merge($result, [
+                        'branch_id' => $branch->id,
+                        'branch_name' => $branch->name,
+                    ]);
+
+                    if ($this->isCloserGeofenceFailure($candidate, $bestFailure)) {
+                        $bestFailure = $candidate;
+                    }
+                }
             }
         }
 
@@ -189,6 +199,68 @@ class GeoFenceService
             'ok' => false,
             'reason' => 'No geofence-enabled branch is available for your account.',
         ];
+    }
+
+    /**
+     * @return list<array{lat: float, lng: float, accuracy: ?float}>
+     */
+    private function locationAttempts(float $lat, float $lng, ?float $accuracyMeters, ?array $samples): array
+    {
+        $attempts = [];
+        $seen = [];
+
+        $push = function (float $attemptLat, float $attemptLng, ?float $attemptAccuracy) use (&$attempts, &$seen): void {
+            $key = round($attemptLat, 5).','.round($attemptLng, 5).','.($attemptAccuracy ?? 'null');
+
+            if (isset($seen[$key])) {
+                return;
+            }
+
+            $seen[$key] = true;
+            $attempts[] = [
+                'lat' => $attemptLat,
+                'lng' => $attemptLng,
+                'accuracy' => $attemptAccuracy,
+            ];
+        };
+
+        $push($lat, $lng, $accuracyMeters);
+
+        foreach ($samples ?? [] as $sample) {
+            if (! is_array($sample)) {
+                continue;
+            }
+
+            $sampleLat = $sample['lat'] ?? null;
+            $sampleLng = $sample['lng'] ?? null;
+
+            if (! is_numeric($sampleLat) || ! is_numeric($sampleLng)) {
+                continue;
+            }
+
+            $sampleAccuracy = $sample['accuracy'] ?? null;
+            $push(
+                (float) $sampleLat,
+                (float) $sampleLng,
+                is_numeric($sampleAccuracy) ? (float) $sampleAccuracy : null,
+            );
+        }
+
+        return $attempts;
+    }
+
+    private function isCloserGeofenceFailure(array $candidate, ?array $currentBest): bool
+    {
+        if ($currentBest === null) {
+            return true;
+        }
+
+        $candidateDistance = (float) ($candidate['distance_meters'] ?? PHP_FLOAT_MAX);
+        $currentDistance = (float) ($currentBest['distance_meters'] ?? PHP_FLOAT_MAX);
+        $candidateRadius = (float) ($candidate['effective_radius_meters'] ?? $candidate['radius_meters'] ?? 0);
+        $currentRadius = (float) ($currentBest['effective_radius_meters'] ?? $currentBest['radius_meters'] ?? 0);
+
+        return ($candidateDistance - $candidateRadius) < ($currentDistance - $currentRadius);
     }
 
     private function isMeaningfulGeofenceFailure(array $result): bool

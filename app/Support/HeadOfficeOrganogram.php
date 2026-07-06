@@ -187,6 +187,37 @@ final class HeadOfficeOrganogram
         self::applyOrganogramHierarchyOrder($query);
     }
 
+    /**
+     * @param  Builder<\App\Models\EmployeePfTransaction>|Relation<\App\Models\EmployeePfTransaction, *, *>  $query
+     */
+    public static function applyToPfTransactionQuery(Builder|Relation $query): void
+    {
+        if ($query instanceof Relation) {
+            $query = $query->getQuery();
+        }
+
+        $joins = $query->getQuery()->joins ?? [];
+        $hasEmployees = false;
+
+        foreach ($joins as $join) {
+            if (($join->table ?? null) === 'employees') {
+                $hasEmployees = true;
+                break;
+            }
+        }
+
+        if (! $hasEmployees) {
+            $query->join('employees', 'employee_pf_transactions.employee_id', '=', 'employees.id');
+
+            if ($query->getQuery()->columns === null) {
+                $query->select('employee_pf_transactions.*');
+            }
+        }
+
+        $query->orderByRaw(self::employmentStatusBucketSql('employees.status').' ASC');
+        self::applyOrganogramHierarchyOrder($query);
+    }
+
     public static function employmentStatusBucketSql(string $statusColumn = 'employees.status'): string
     {
         return "CASE

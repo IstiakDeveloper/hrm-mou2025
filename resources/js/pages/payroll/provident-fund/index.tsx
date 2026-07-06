@@ -242,7 +242,7 @@ export default function ProvidentFundIndex({
         Boolean(filters.search || filters.branch_id || filters.department_id || filters.employee_id || filters.enrolled_only);
 
     return (
-        <StaffFundLayout title="PF Register" activeTab="pf-register" description="Provident Fund registry for all employees with a PF balance, including inactive staff.">
+        <StaffFundLayout title="PF Register" activeTab="pf-register" description="Provident Fund registry for employees with PF balance greater than zero.">
             {/* Search & Actions Bar - Compact */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
                 <div className="flex items-center gap-1.5 w-full sm:w-auto">
@@ -335,6 +335,8 @@ export default function ProvidentFundIndex({
                                 value={filters.employee_id}
                                 onChange={(v) => applyFilters({ employee_id: v })}
                                 employees={employees}
+                                forPf
+                                branchId={filters.branch_id || undefined}
                             />
                         </div>
                         <div className="flex items-end h-full py-1">
@@ -399,9 +401,7 @@ export default function ProvidentFundIndex({
                                                         Recorded
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center rounded bg-amber-50 px-1 py-0.2 text-[10px] font-medium text-amber-800 border border-amber-100">
-                                                        Pending
-                                                    </span>
+                                                    <span className="text-zinc-400">—</span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="py-1.5 pr-3 text-right">
@@ -491,6 +491,7 @@ export default function ProvidentFundIndex({
                             allowAll={false}
                             disabled={openingEditId !== null}
                             comboPortal={false}
+                            forPf
                         />
                         <div className="grid grid-cols-2 gap-2.5">
                             <div className="space-y-0.5">
@@ -586,6 +587,7 @@ export default function ProvidentFundIndex({
                             required
                             allowAll={false}
                             comboPortal={false}
+                            forPf
                         />
                         <div className="grid grid-cols-2 gap-2.5">
                             <PayrollYearSelect

@@ -74,7 +74,7 @@ export function useSelfAttendanceCheck() {
         router.clearErrors();
     }, []);
 
-    const getBestLocation = useCallback(async (sampleCount = 3) => {
+    const getBestLocation = useCallback(async (sampleCount = 5) => {
         const samples: GeoSample[] = [];
         let lastError: unknown = null;
         setLocationProgress(5);
@@ -83,78 +83,68 @@ export function useSelfAttendanceCheck() {
             sampleCount: 0,
         });
 
+        const recordSample = (lat: number, lng: number, accuracy: number | null) => {
+            samples.push({
+                lat,
+                lng,
+                accuracy,
+                at: new Date().toISOString(),
+            });
+            setLocationPreview((prev) => {
+                const currentBest =
+                    prev.bestAccuracy === null ? Number.POSITIVE_INFINITY : prev.bestAccuracy;
+                const nextBest = accuracy === null ? Number.POSITIVE_INFINITY : accuracy;
+                const isBetter = nextBest < currentBest;
+
+                return {
+                    bestAccuracy: isBetter ? accuracy : prev.bestAccuracy,
+                    sampleCount: prev.sampleCount + 1,
+                };
+            });
+        };
+
+        const tryLowAccuracyFallback = async () => {
+            const pos = await getCurrentPositionOnce({
+                enableHighAccuracy: false,
+                timeout: 20000,
+                maximumAge: 30000,
+            });
+
+            recordSample(
+                pos.coords.latitude,
+                pos.coords.longitude,
+                typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null,
+            );
+        };
+
         for (let i = 0; i < sampleCount; i++) {
             setLocationStatus(`Locking GPS signal... (${i + 1}/${sampleCount})`);
             setLocationProgress(10 + Math.round((i / sampleCount) * 60));
 
             try {
                 const pos = await getCurrentPositionOnce({
-                    enableHighAccuracy: true,
-                    timeout: 30000,
-                    maximumAge: 0,
+                    enableHighAccuracy: i < 2,
+                    timeout: 25000,
+                    maximumAge: i === 0 ? 0 : 10000,
                 });
 
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
-                const accuracy = typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
-
-                samples.push({
-                    lat,
-                    lng,
-                    accuracy,
-                    at: new Date(pos.timestamp).toISOString(),
-                });
-                setLocationPreview((prev) => {
-                    const currentBest =
-                        prev.bestAccuracy === null ? Number.POSITIVE_INFINITY : prev.bestAccuracy;
-                    const nextBest = accuracy === null ? Number.POSITIVE_INFINITY : accuracy;
-                    const isBetter = nextBest < currentBest;
-
-                    return {
-                        bestAccuracy: isBetter ? accuracy : prev.bestAccuracy,
-                        sampleCount: prev.sampleCount + 1,
-                    };
-                });
+                recordSample(
+                    pos.coords.latitude,
+                    pos.coords.longitude,
+                    typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null,
+                );
             } catch (e: unknown) {
                 lastError = e;
-                const code = e && typeof e === "object" && "code" in e ? (e as { code?: number }).code : undefined;
-                if (code === 3) {
-                    try {
-                        const pos = await getCurrentPositionOnce({
-                            enableHighAccuracy: false,
-                            timeout: 15000,
-                            maximumAge: 15000,
-                        });
 
-                        const lat = pos.coords.latitude;
-                        const lng = pos.coords.longitude;
-                        const acc = typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
-
-                        samples.push({
-                            lat,
-                            lng,
-                            accuracy: acc,
-                            at: new Date(pos.timestamp).toISOString(),
-                        });
-                        setLocationPreview((prev) => {
-                            const currentBest =
-                                prev.bestAccuracy === null ? Number.POSITIVE_INFINITY : prev.bestAccuracy;
-                            const nextBest = acc === null ? Number.POSITIVE_INFINITY : acc;
-                            const isBetter = nextBest < currentBest;
-
-                            return {
-                                bestAccuracy: isBetter ? acc : prev.bestAccuracy,
-                                sampleCount: prev.sampleCount + 1,
-                            };
-                        });
-                    } catch (e2: unknown) {
-                        lastError = e2;
-                    }
+                try {
+                    await tryLowAccuracyFallback();
+                } catch (e2: unknown) {
+                    lastError = e2;
                 }
             }
 
             if (i < sampleCount - 1) {
-                await sleep(800);
+                await sleep(samples.length > 0 ? 500 : 800);
             }
         }
 
@@ -177,7 +167,7 @@ export function useSelfAttendanceCheck() {
         setLocationProgress(0);
 
         try {
-            const { best, samples } = await getBestLocation(3);
+            const { best, samples } = await getBestLocation(5);
             setLocationStatus("Syncing with branch database...");
             setLocationProgress(90);
 
@@ -234,7 +224,7 @@ export function useSelfAttendanceCheck() {
         setLocationProgress(0);
 
         try {
-            const { best, samples } = await getBestLocation(3);
+            const { best, samples } = await getBestLocation(5);
             setLocationStatus("Syncing with branch database...");
             setLocationProgress(90);
 

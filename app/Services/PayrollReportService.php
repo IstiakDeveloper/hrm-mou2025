@@ -272,6 +272,10 @@ class PayrollReportService
         ];
 
         foreach ($payslips as $payslip) {
+            if ($payslip->is_withheld) {
+                continue;
+            }
+
             foreach ($payslip->lines as $line) {
                 if ((float) $line->computed_amount === 0.0 && $line->head_name !== 'Basic') {
                     continue;
@@ -310,6 +314,10 @@ class PayrollReportService
 
         $rows = [];
         foreach ($payslips as $payslip) {
+            if ($payslip->is_withheld) {
+                continue;
+            }
+
             $employee = $payslip->employee;
             $run = $payslip->payrollRun;
             $components = array_fill_keys($heads, 0.0);
@@ -870,7 +878,8 @@ class PayrollReportService
             ->where('computed_amount', '>', 0)
             ->when($filters['salary_head_id'], fn ($q, $id) => $q->where('salary_head_id', $id))
             ->whereHas('payslip', function (Builder $q) use ($runQuery, $filters) {
-                $q->whereHas('payrollRun', $runQuery);
+                $q->where('is_withheld', false)
+                    ->whereHas('payrollRun', $runQuery);
                 if ($filters['branch_id']) {
                     $branchId = $filters['branch_id'];
                     $q->where(function (Builder $inner) use ($branchId) {
@@ -939,7 +948,8 @@ class PayrollReportService
                     ->orWhere('head_name', 'like', '%advance%');
             })
             ->whereHas('payslip', function (Builder $q) use ($runQuery, $filters) {
-                $q->whereHas('payrollRun', $runQuery);
+                $q->where('is_withheld', false)
+                    ->whereHas('payrollRun', $runQuery);
                 if ($filters['employee_id']) {
                     $q->where('employee_id', $filters['employee_id']);
                 }
@@ -994,10 +1004,14 @@ class PayrollReportService
         $total = 0.0;
 
         foreach ($payslips as $payslip) {
+            if ($payslip->is_withheld) {
+                continue;
+            }
+
             $employee = $payslip->employee;
             $run = $payslip->payrollRun;
             $bonusLine = $payslip->lines->where('type', 'earning')->sortByDesc('computed_amount')->first();
-            $amount = $payslip->is_withheld ? 0.0 : (float) $payslip->net_payable;
+            $amount = (float) $payslip->net_payable;
 
             $rows[] = [
                 'pin' => $employee?->pin,

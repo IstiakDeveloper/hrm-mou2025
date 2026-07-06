@@ -32,7 +32,7 @@ const fmt = formatPfAmount;
 export default function ProvidentFundSummary({ filters: init, monthly, balances, branches, months, years }: Props) {
     const [filters, setFilters] = useState({
         year: init.year || String(new Date().getFullYear()),
-        month: init.month || String(new Date().getMonth() + 1),
+        month: init.month || '',
         branch_id: init.branch_id || '',
         department_id: init.department_id || '',
     });

@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Services\EmployeeProvidentFundService;
 use App\Services\PfReportService;
-use App\Support\PfReportCsvExporter;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\PayrollReportPrintPdf;
+use App\Support\PfReportXlsxExporter;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Mpdf\HTMLParserMode;
+use Mpdf\Mpdf;
+use Symfony\Component\HttpFoundation\Response;
 
 class PfReportController extends Controller
 {
@@ -36,12 +38,16 @@ class PfReportController extends Controller
         if ($generated) {
             $needsEmployee = (bool) ($config['require_employee'] ?? false);
             $needsRange = in_array('date_from', $config['filters'] ?? [], true);
+            $needsEndDate = in_array('date_to', $config['filters'] ?? [], true)
+                && ! $needsRange;
             $needsYear = in_array('year', $config['filters'] ?? [], true);
 
             if ($needsEmployee && ! $filters['employee_id']) {
                 $error = 'Please select an employee.';
             } elseif ($needsRange && ! $filters['date_from'] && ! $filters['date_to']) {
                 $error = 'Please select a date range (from and/or to).';
+            } elseif ($needsEndDate && ! $filters['date_to']) {
+                $error = 'Please select an end date.';
             } elseif ($needsYear && ! $filters['year']) {
                 $error = 'Please select a year.';
             } else {
@@ -51,6 +57,7 @@ class PfReportController extends Controller
 
         return Inertia::render('payroll/provident-fund/reports/show', [
             'companyName' => config('pf_reports.company_name'),
+            'companyAddress' => config('pf_reports.company_address'),
             'report' => [
                 'slug' => $report,
                 'title' => $config['title'],
@@ -70,8 +77,6 @@ class PfReportController extends Controller
             'filters' => array_merge($this->payrollFilterValues($request), [
                 'date_from' => $request->input('date_from', ''),
                 'date_to' => $request->input('date_to', ''),
-                'year' => $request->input('year', (string) date('Y')),
-                'month' => $request->input('month', (string) date('n')),
                 'transaction_type' => $request->input('transaction_type', ''),
             ]),
             'generated' => $generated,
@@ -94,23 +99,45 @@ class PfReportController extends Controller
     public function pdf(Request $request, string $report)
     {
         $data = $this->documentData($request, $report);
-
-        $pdf = Pdf::loadView('pf.reports.document', $data)
-            ->setPaper('a4', $data['orientation'] ?? 'portrait');
-
+        $viewData = array_merge($data, ['pdfMode' => true]);
+        $html = view('pf.reports.document', $viewData)->render();
         $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.pdf';
 
-        return $pdf->download($filename);
+        try {
+            if (! PayrollReportPrintPdf::canGenerate()) {
+                throw new \RuntimeException('Chrome is not available for PDF export.');
+            }
+
+            $pdf = PayrollReportPrintPdf::generate($html);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->downloadPdfViaMpdf($data, $filename);
+        }
+
+        return response()->make(
+            $pdf,
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                'Cache-Control' => 'public, must-revalidate, max-age=0',
+            ]
+        );
     }
 
-    public function excel(Request $request, string $report): StreamedResponse
+    public function excel(Request $request, string $report): Response
     {
         $data = $this->documentData($request, $report);
         $template = $data['payload']['template'] ?? 'pf-table';
-        [$headers, $rows] = PfReportCsvExporter::rowsFromPayload($template, $data['payload']);
-        $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.csv';
+        $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.xlsx';
 
-        return PfReportCsvExporter::download($filename, $headers, $rows);
+        return PfReportXlsxExporter::download($filename, $template, $data['payload'], [
+            'companyName' => $data['companyName'],
+            'companyAddress' => $data['companyAddress'],
+            'title' => $data['title'],
+            'periodLabel' => $data['periodLabel'],
+        ]);
     }
 
     /**
@@ -133,17 +160,87 @@ class PfReportController extends Controller
         $filters = $this->reports->filtersFromRequest($request);
         $payload = $this->reports->build($report, $config, $filters);
 
-        $template = $payload['template'] ?? 'pf-table';
-        $colCount = count($payload['columns'] ?? $payload['group_columns'] ?? []);
-
         return [
             'companyName' => config('pf_reports.company_name'),
+            'companyAddress' => config('pf_reports.company_address'),
             'title' => $config['title'],
             'periodLabel' => $this->reports->periodLabel($filters, $config),
             'generatedAt' => now()->format('d M Y H:i'),
             'payload' => $payload,
-            'orientation' => $colCount > 9 ? 'landscape' : 'portrait',
+            'orientation' => $this->reportOrientation($payload),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    protected function reportOrientation(array $payload): string
+    {
+        if (PfReportXlsxExporter::isBranchBalanceGrouped($payload)) {
+            return 'landscape';
+        }
+
+        $colCount = count($payload['columns'] ?? $payload['group_columns'] ?? []);
+
+        return $colCount > 9 ? 'landscape' : 'portrait';
+    }
+
+    protected function downloadPdfViaMpdf(array $data, string $filename): Response
+    {
+        $isLandscape = ($data['orientation'] ?? 'portrait') === 'landscape';
+        $isBranchBalance = PfReportXlsxExporter::isBranchBalanceGrouped($data['payload'] ?? []);
+
+        $mpdf = new Mpdf([
+            'mode' => 'utf-8',
+            'format' => $isLandscape ? 'A4-L' : 'A4',
+            'margin_left' => $this->printSideMarginMm(),
+            'margin_right' => $this->printSideMarginMm(),
+            'margin_top' => (float) (config('payroll_reports.print.margin_top_mm') ?? 4),
+            'margin_bottom' => (float) (config('payroll_reports.print.margin_bottom_mm') ?? 4),
+            'default_font' => 'dejavusans',
+            'shrink_tables_to_fit' => $isBranchBalance ? 1.0 : 1.4,
+        ]);
+
+        $mpdf->SetTitle($data['title']);
+        $mpdf->SetAuthor(config('app.name'));
+        $this->writeReportHtml($mpdf, view('pf.reports.document', array_merge($data, ['pdfMode' => true]))->render());
+
+        return response()->make(
+            $mpdf->Output($filename, 'S'),
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                'Cache-Control' => 'public, must-revalidate, max-age=0',
+            ]
+        );
+    }
+
+    protected function writeReportHtml(Mpdf $mpdf, string $html): void
+    {
+        if (function_exists('ini_set')) {
+            @ini_set('pcre.backtrack_limit', '10000000');
+        }
+
+        if (preg_match('/<style\b[^>]*>.*?<\/style>/is', $html, $styleMatch)) {
+            $mpdf->WriteHTML($styleMatch[0], HTMLParserMode::HEADER_CSS);
+        }
+
+        if (! preg_match('/<body[^>]*>(.*)<\/body>/is', $html, $bodyMatch)) {
+            $mpdf->WriteHTML($html);
+
+            return;
+        }
+
+        $mpdf->WriteHTML(trim($bodyMatch[1]));
+    }
+
+    protected function printSideMarginMm(): float
+    {
+        $mm = (float) (config('payroll_reports.print.margin_side_mm') ?? 3);
+        $extraPx = (int) (config('payroll_reports.print.margin_side_extra_px') ?? 10);
+
+        return $mm + ($extraPx * 25.4 / 96);
     }
 
     /**

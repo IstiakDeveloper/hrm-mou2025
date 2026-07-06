@@ -505,6 +505,18 @@ class Employee extends Model
     }
 
     /**
+     * Employees in PF scope: enrolled, with balance, or any PF ledger activity.
+     */
+    public function scopeForPf(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where('pf_enrolled', true)
+                ->orWhere('pf_balance', '>', 0)
+                ->orWhereHas('pfTransactions');
+        });
+    }
+
+    /**
      * Sync linked login account(s) active/inactive with this employee's employment status.
      */
     public function syncLinkedUserActiveStatus(): void

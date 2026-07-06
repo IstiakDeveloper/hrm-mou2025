@@ -113,7 +113,8 @@ class PayrollRunRecalculateService
                     }
 
                     if (
-                        $this->pfService->isEligible($employee, $processCarbon)
+                        ! ($calc['is_withheld'] ?? false)
+                        && $this->pfService->isEligible($employee, $processCarbon)
                         && ($calc['pf_employee_contribution'] ?? 0) > 0
                     ) {
                         $this->pfService->recordForPayslip(

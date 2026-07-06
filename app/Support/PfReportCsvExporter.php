@@ -33,7 +33,12 @@ class PfReportCsvExporter
     {
         if ($template === 'pf-grouped') {
             $columns = $payload['group_columns'] ?? [];
-            $headers = array_map(fn ($c) => $c['label'] ?? $c['key'] ?? '', $columns);
+            $headers = array_map(function (array $col) {
+                $label = $col['label'] ?? $col['key'] ?? '';
+                $group = $col['group'] ?? null;
+
+                return $group ? "{$group} — {$label}" : $label;
+            }, $columns);
             $rows = [];
             foreach ($payload['sections'] ?? [] as $section) {
                 $line = [];
@@ -44,9 +49,13 @@ class PfReportCsvExporter
             }
             if (! empty($payload['totals'])) {
                 $line = [];
-                foreach ($columns as $i => $col) {
+                foreach ($columns as $col) {
                     $key = $col['key'] ?? '';
-                    $line[] = $i === 0 ? ($payload['totals']['title'] ?? 'Grand total') : ($payload['totals'][$key] ?? '');
+                    if ($key === 'branch') {
+                        $line[] = $payload['totals']['title'] ?? 'Grand total';
+                    } else {
+                        $line[] = $payload['totals'][$key] ?? '';
+                    }
                 }
                 $rows[] = $line;
             }

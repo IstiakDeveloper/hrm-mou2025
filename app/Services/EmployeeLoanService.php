@@ -1224,6 +1224,30 @@ class EmployeeLoanService
         });
     }
 
+    public function reversePaymentsForPayslip(Payslip $payslip): void
+    {
+        $transactions = EmployeeLoanTransaction::query()
+            ->where('payslip_id', $payslip->id)
+            ->where('transaction_type', EmployeeLoanTransaction::TYPE_INSTALLMENT)
+            ->with(['loan', 'installment'])
+            ->orderByDesc('id')
+            ->get();
+
+        DB::transaction(function () use ($transactions, $payslip) {
+            foreach ($transactions as $tx) {
+                $this->reverseInstallmentTransaction($tx);
+            }
+
+            EmployeeLoanInstallment::query()
+                ->where('payslip_id', $payslip->id)
+                ->where('status', 'scheduled')
+                ->update([
+                    'status' => 'pending',
+                    'payslip_id' => null,
+                ]);
+        });
+    }
+
     public function recordManualPayment(
         EmployeeLoan $loan,
         float $amount,

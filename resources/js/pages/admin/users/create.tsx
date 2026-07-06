@@ -70,6 +70,7 @@ interface UserCreateProps {
 export default function UserCreate({ roles, employees, branches, autoEmailDomain, errors }: UserCreateProps) {
     const { data, setData, post, processing } = useForm({
         name: '',
+        username: '',
         email: '',
         password: '',
         password_confirmation: '',
@@ -79,6 +80,8 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
         branch_id: '',
         active_status: true,
     });
+
+    const hasLinkedEmployee = !!data.employee_id;
 
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -98,7 +101,6 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
         const employeeId = value === 'none' ? '' : value;
         setData('employee_id', employeeId);
 
-        // Find the selected employee
         if (employeeId) {
             const selectedEmployee = employees.find(emp => emp.id.toString() === employeeId);
             if (selectedEmployee) {
@@ -107,6 +109,7 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
                 if (resolvedEmail) {
                     setData('email', resolvedEmail);
                 }
+                setData('username', previewLoginUsername(selectedEmployee));
             }
         }
     };
@@ -224,7 +227,7 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
                                     </div>
                                     <div>
                                         <CardTitle>Employee Association</CardTitle>
-                                        <CardDescription>Link this user to an employee record</CardDescription>
+                                        <CardDescription>Optionally link this user to an employee record</CardDescription>
                                     </div>
                                 </div>
                             </CardHeader>
@@ -233,16 +236,17 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
                                     <div className="space-y-2">
                                         <Label htmlFor="employee_id" className="flex items-center gap-1">
                                             <Briefcase className="h-4 w-4" />
-                                            <span>Select Employee <span className="text-red-500">*</span></span>
+                                            <span>Link to Employee (Optional)</span>
                                         </Label>
                                         <Select
-                                            value={data.employee_id ? data.employee_id.toString() : undefined}
+                                            value={data.employee_id ? data.employee_id.toString() : 'none'}
                                             onValueChange={handleEmployeeChange}
                                         >
                                             <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select an employee" />
+                                                <SelectValue placeholder="Select an employee (optional)" />
                                             </SelectTrigger>
                                             <SelectContent>
+                                                <SelectItem value="none">None — standalone user account</SelectItem>
                                                 {employees.map(employee => (
                                                     <SelectItem key={employee.id} value={employee.id.toString()}>
                                                         {employeeFullName(employee)} ({employee.employee_id})
@@ -252,7 +256,7 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
                                         </Select>
                                         {errors.employee_id && <p className="mt-1 text-sm text-red-500">{errors.employee_id}</p>}
                                         <p className="text-xs text-gray-500">
-                                            Select an employee to link with this user account. Email will be auto-populated.
+                                            Link an employee for self-service access, or leave empty for a standalone admin/desk account.
                                         </p>
                                     </div>
 
@@ -370,18 +374,35 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="login-username-preview">Login username</Label>
-                                        <Input
-                                            id="login-username-preview"
-                                            type="text"
-                                            readOnly
-                                            value={loginUsernamePreview}
-                                            placeholder="Select an employee first"
-                                            className="bg-gray-50 font-mono text-sm"
-                                            spellCheck={false}
-                                        />
+                                        <Label htmlFor="login-username">
+                                            Login username {!hasLinkedEmployee && <span className="text-red-500">*</span>}
+                                        </Label>
+                                        {hasLinkedEmployee ? (
+                                            <Input
+                                                id="login-username"
+                                                type="text"
+                                                readOnly
+                                                value={loginUsernamePreview}
+                                                className="bg-gray-50 font-mono text-sm"
+                                                spellCheck={false}
+                                            />
+                                        ) : (
+                                            <Input
+                                                id="login-username"
+                                                type="text"
+                                                value={data.username}
+                                                onChange={e => setData('username', e.target.value)}
+                                                placeholder="Enter login username"
+                                                className="font-mono text-sm"
+                                                spellCheck={false}
+                                                autoComplete="username"
+                                            />
+                                        )}
+                                        {errors.username && <p className="mt-1 text-sm text-red-500">{errors.username}</p>}
                                         <p className="text-xs text-gray-500">
-                                            Same as the employee&apos;s ID in the system (e.g. 5 → username 5). If ID is empty, biometric PIN is used.
+                                            {hasLinkedEmployee
+                                                ? 'Taken from the linked employee ID (or biometric PIN).'
+                                                : 'Choose a unique username for login when no employee is linked.'}
                                         </p>
                                     </div>
 
@@ -395,11 +416,11 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
                                             value={data.email}
                                             onChange={e => setData('email', e.target.value)}
                                             placeholder="user@example.com"
-                                            readOnly={!!data.employee_id} // Make it read-only if an employee is selected
-                                            className={data.employee_id ? "bg-gray-50" : ""}
+                                            readOnly={hasLinkedEmployee}
+                                            className={hasLinkedEmployee ? 'bg-gray-50' : ''}
                                         />
                                         {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
-                                        {!!data.employee_id && (
+                                        {hasLinkedEmployee && (
                                             <p className="text-xs text-gray-500">
                                                 Email is taken from the selected employee, or auto-generated if none is set
                                             </p>
@@ -504,7 +525,7 @@ export default function UserCreate({ roles, employees, branches, autoEmailDomain
                                 Cancel
                             </Button>
                         </Link>
-                        <Button type="submit" disabled={processing || !data.employee_id}>
+                        <Button type="submit" disabled={processing}>
                             {processing ? 'Creating...' : 'Create User'}
                         </Button>
                     </div>

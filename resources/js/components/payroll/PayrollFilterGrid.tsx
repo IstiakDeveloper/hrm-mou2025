@@ -149,6 +149,7 @@ export function PayrollEmployeeSelect({
     branchId,
     payrollReady = false,
     forGratuity = false,
+    forPf = false,
 }: {
     label?: string;
     value: string;
@@ -164,6 +165,7 @@ export function PayrollEmployeeSelect({
     branchId?: string;
     payrollReady?: boolean;
     forGratuity?: boolean;
+    forPf?: boolean;
 }) {
     const useLookup = employees.length === 0;
     const [searchQuery, setSearchQuery] = useState('');
@@ -174,6 +176,7 @@ export function PayrollEmployeeSelect({
         limit: 50,
         payrollReady,
         forGratuity,
+        forPf,
     });
     const employeeSource = useLookup ? lookup.employees : employees;
 
@@ -271,6 +274,46 @@ export function PayrollYearSelect({
                 onChange={(v) => onChange(v ?? '')}
                 items={items}
                 placeholder={allowAll ? allLabel : 'Select year'}
+                disabled={disabled}
+                className="h-8.5 bg-white text-xs"
+            />
+        </PayrollField>
+    );
+}
+
+export function PayrollFiscalYearSelect({
+    value,
+    onChange,
+    options,
+    required = false,
+    disabled,
+    label = 'Year',
+}: {
+    value: string;
+    onChange: (v: string) => void;
+    options: { value: string; label: string }[];
+    required?: boolean;
+    disabled?: boolean;
+    label?: string;
+}) {
+    const items = useMemo(() => {
+        const list: ComboSelectItem<string>[] = [];
+        if (required) {
+            list.push({ value: ALL_VALUE, label: 'Select year', disabled: true });
+        }
+        for (const option of options) {
+            list.push({ value: option.value, label: option.label });
+        }
+        return list;
+    }, [options, required]);
+
+    return (
+        <PayrollField label={label} required={required}>
+            <ComboSelect
+                value={value || (required ? null : ALL_VALUE)}
+                onChange={(v) => onChange(v ?? '')}
+                items={items}
+                placeholder="Select year"
                 disabled={disabled}
                 className="h-8.5 bg-white text-xs"
             />

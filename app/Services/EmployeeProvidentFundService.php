@@ -220,11 +220,19 @@ class EmployeeProvidentFundService
         Carbon $transactionDate,
         ?string $notes = null,
         ?int $createdBy = null,
-        ?int $pfInterestRunId = null
+        ?int $pfInterestRunId = null,
+        ?float $creditAmount = null,
     ): EmployeePfTransaction {
         $employeeAmount = SalaryStructureCalculator::roundTaka(max(0, $employeeAmount));
         $employerAmount = SalaryStructureCalculator::roundTaka(max(0, $employerAmount));
-        $total = SalaryStructureCalculator::roundTaka($employeeAmount + $employerAmount);
+        $total = $creditAmount !== null
+            ? SalaryStructureCalculator::roundTaka($creditAmount)
+            : SalaryStructureCalculator::roundTaka($employeeAmount + $employerAmount);
+
+        $splitSum = SalaryStructureCalculator::roundTaka($employeeAmount + $employerAmount);
+        if ($splitSum !== $total) {
+            $employerAmount = SalaryStructureCalculator::roundTaka($total - $employeeAmount);
+        }
 
         if ($total <= 0) {
             throw new InvalidArgumentException('Interest amount must be greater than zero.');

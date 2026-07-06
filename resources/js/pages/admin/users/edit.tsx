@@ -452,7 +452,7 @@ export default function UserEdit({ user, roles, employees, branches, autoEmailDo
                       <span>Link to Employee (Optional)</span>
                     </Label>
                     <Select
-                      value={data.employee_id ? data.employee_id.toString() : undefined}
+                      value={data.employee_id ? data.employee_id.toString() : 'none'}
                       onValueChange={handleEmployeeChange}
                     >
                       <SelectTrigger className="w-full">

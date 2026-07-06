@@ -12,6 +12,7 @@ use App\Models\PayslipLine;
 use App\Services\EmployeeLoanService;
 use App\Services\EmployeeProvidentFundService;
 use App\Services\PayrollCalculationService;
+use App\Services\PayslipTotalsService;
 use App\Services\SeparationPayrollService;
 use App\Support\BranchOrganogram;
 use App\Support\HeadOfficeOrganogram;
@@ -33,6 +34,7 @@ class SalaryProcessController extends Controller
         protected EmployeeProvidentFundService $pfService,
         protected EmployeeLoanService $loanService,
         protected SeparationPayrollService $separationPayrollService,
+        protected PayslipTotalsService $payslipTotals,
     ) {}
 
     public function index(Request $request)
@@ -120,7 +122,7 @@ class SalaryProcessController extends Controller
                 return $this->redirectToSalaryProcessIndex($request)
                     ->with(
                         'warning',
-                        "Salary for {$periodLabel} has already been calculated for {$result['branch_label']}. Roll back from Salary Post to recalculate, or choose another month."
+                        $result['message'] ?? "Salary for {$periodLabel} has already been calculated for {$result['branch_label']}. Use Undo payroll for specific employees, or filter by employee to add missing staff."
                     );
             }
 
@@ -328,7 +330,33 @@ class SalaryProcessController extends Controller
             ? trim($branch->name.(filled($branch->branch_code) ? ' ('.$branch->branch_code.')' : ''))
             : "Branch #{$branchId}";
 
-        if ($this->payrollRunAlreadyExists($validated, $branchId)) {
+        $payrollYear = (int) $validated['year'];
+        $payrollMonth = (int) $validated['month'];
+        $salaryType = $validated['salary_type'];
+        $targetEmployeeId = ! empty($validated['employee_id']) ? (int) $validated['employee_id'] : null;
+
+        $existingRun = $this->resolveActiveBranchRun($payrollYear, $payrollMonth, $salaryType, $branchId);
+        $alreadyPaidEmployeeIds = $this->employeeIdsAlreadyInPayroll($payrollYear, $payrollMonth, $salaryType);
+
+        if ($targetEmployeeId !== null && in_array($targetEmployeeId, $alreadyPaidEmployeeIds, true)) {
+            $existingBranch = $this->existingPayrollBranchLabel(
+                $targetEmployeeId,
+                $payrollYear,
+                $payrollMonth,
+                $salaryType,
+            );
+
+            return [
+                'status' => 'skipped_exists',
+                'employee_count' => 0,
+                'branch_label' => $branchLabel,
+                'message' => $existingBranch
+                    ? "This employee already has payroll for the selected month at {$existingBranch}. Roll back that payslip first if you need to recalculate."
+                    : 'This employee already has payroll for the selected month. Roll back that payslip first if you need to recalculate.',
+            ];
+        }
+
+        if ($existingRun === null && $this->payrollRunAlreadyExists($validated, $branchId)) {
             return [
                 'status' => 'skipped_exists',
                 'employee_count' => 0,
@@ -338,9 +366,6 @@ class SalaryProcessController extends Controller
 
         $branchRequest = clone $request;
         $branchRequest->merge(['branch_id' => $branchId]);
-
-        $payrollYear = (int) $validated['year'];
-        $payrollMonth = (int) $validated['month'];
 
         $activeCount = $this->applyPayrollEmployeeFilters(
             Employee::query(),
@@ -361,7 +386,7 @@ class SalaryProcessController extends Controller
 
         HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
 
-        $employees = $employeesQuery
+        $eligibleEmployees = $employeesQuery
             ->get()
             ->filter(function (Employee $employee) use ($payrollYear, $payrollMonth) {
                 return $this->separationPayrollService
@@ -369,7 +394,28 @@ class SalaryProcessController extends Controller
             })
             ->values();
 
+        $employees = $eligibleEmployees
+            ->reject(fn (Employee $employee) => in_array($employee->id, $alreadyPaidEmployeeIds, true))
+            ->values();
+
+        $skippedAlreadyPaid = $eligibleEmployees->count() - $employees->count();
+
         if ($employees->isEmpty()) {
+            if ($skippedAlreadyPaid > 0) {
+                $message = $targetEmployeeId !== null
+                    ? 'This employee already has payroll for the selected month.'
+                    : ($skippedAlreadyPaid === 1
+                        ? '1 eligible employee already has payroll for this month (possibly at another branch). Roll back that payslip first.'
+                        : "{$skippedAlreadyPaid} eligible employee(s) already have payroll for this month (including at other branches). Roll back specific payslips from Undo payroll, then calculate again.");
+
+                return [
+                    'status' => 'skipped_exists',
+                    'employee_count' => 0,
+                    'branch_label' => $branchLabel,
+                    'message' => $message,
+                ];
+            }
+
             $message = $activeCount > 0
                 ? "{$activeCount} payroll-eligible employee(s) in {$branchLabel}, but none could be processed for this month (check payscale/grade/step, probation/fixed salary, or separation timing)."
                 : "No eligible employees in {$branchLabel} for the selected filters and salary month.";
@@ -382,27 +428,30 @@ class SalaryProcessController extends Controller
             ];
         }
 
-        $run = PayrollRun::query()->create([
-            'year' => $validated['year'],
-            'month' => $validated['month'],
-            'salary_type' => $validated['salary_type'],
-            'branch_id' => $branchId,
-            'program_id' => $validated['program_id'] ?? null,
-            'project_id' => $validated['project_id'] ?? null,
-            'department_id' => $validated['department_id'] ?? null,
-            'designation_id' => $validated['designation_id'] ?? null,
-            'employee_id' => $validated['employee_id'] ?? null,
-            'process_date' => $processDate,
-            'is_partial' => $isPartial,
-            'status' => 'processed',
-            'processed_by' => auth()->id(),
-            'processed_at' => now(),
-        ]);
+        $appendingToExistingRun = $existingRun !== null;
+        $newEmployeeCount = $employees->count();
 
-        $totalGross = 0.0;
-        $totalDeduction = 0.0;
-        $totalNet = 0.0;
-        $count = 0;
+        if ($appendingToExistingRun) {
+            $run = $existingRun;
+        } else {
+            $run = PayrollRun::query()->create([
+                'year' => $validated['year'],
+                'month' => $validated['month'],
+                'salary_type' => $salaryType,
+                'branch_id' => $branchId,
+                'program_id' => $validated['program_id'] ?? null,
+                'project_id' => $validated['project_id'] ?? null,
+                'department_id' => $validated['department_id'] ?? null,
+                'designation_id' => $validated['designation_id'] ?? null,
+                'employee_id' => $targetEmployeeId,
+                'process_date' => $processDate,
+                'is_partial' => $isPartial || $targetEmployeeId !== null,
+                'status' => 'processed',
+                'processed_by' => auth()->id(),
+                'processed_at' => now(),
+            ]);
+        }
+
         $processCarbon = Carbon::parse($processDate);
         $payslipLineRows = [];
         $now = now();
@@ -410,9 +459,9 @@ class SalaryProcessController extends Controller
         $this->calculator->preloadBatch(
             $employees,
             $processCarbon,
-            $validated['salary_type'],
-            (int) $validated['year'],
-            (int) $validated['month'],
+            $salaryType,
+            $payrollYear,
+            $payrollMonth,
         );
 
         try {
@@ -457,6 +506,7 @@ class SalaryProcessController extends Controller
 
                 if (
                     $validated['salary_type'] === 'salary'
+                    && ! ($calc['is_withheld'] ?? false)
                     && $this->pfService->isEligible($employee, $processCarbon)
                     && ($calc['pf_employee_contribution'] ?? 0) > 0
                 ) {
@@ -475,12 +525,11 @@ class SalaryProcessController extends Controller
                     && ! ($calc['is_withheld'] ?? false)
                 ) {
                     $this->loanService->scheduleInstallmentsForPayslip($payslip, $calc['loan_deductions']);
-                }
 
-                $totalGross += $calc['gross_salary'];
-                $totalDeduction += $calc['total_deduction'];
-                $totalNet += $calc['net_payable'];
-                $count++;
+                    if ($run->status === 'posted') {
+                        $this->loanService->postPaymentsForPayslip($payslip, $run);
+                    }
+                }
             }
         } finally {
             $this->calculator->clearBatch();
@@ -490,26 +539,88 @@ class SalaryProcessController extends Controller
             PayslipLine::query()->insert($chunk);
         }
 
-        $run->update([
-            'employee_count' => $count,
-            'total_gross' => round($totalGross, 2),
-            'total_deduction' => round($totalDeduction, 2),
-            'total_net' => round($totalNet, 2),
-        ]);
+        $this->payslipTotals->syncPayrollRunTotals($run->fresh());
 
-        $skipped = max(0, $activeCount - $employees->count());
-        $message = "Salary processed for {$count} employee(s) at {$branchLabel}.";
-        if ($skipped > 0) {
-            $message .= " {$skipped} payroll-eligible employee(s) skipped (no payable days or missing salary setup).";
+        $skippedOtherReasons = max(0, $activeCount - $eligibleEmployees->count());
+        if ($appendingToExistingRun) {
+            $message = "Added {$newEmployeeCount} employee(s) to existing payroll at {$branchLabel}.";
+            if ($skippedAlreadyPaid > 0 && $targetEmployeeId === null) {
+                $message .= " {$skippedAlreadyPaid} employee(s) skipped — already have payroll for this month.";
+            }
+        } else {
+            $message = "Salary processed for {$newEmployeeCount} employee(s) at {$branchLabel}.";
+        }
+        if ($skippedAlreadyPaid > 0 && ! $appendingToExistingRun && $targetEmployeeId === null) {
+            $message .= " {$skippedAlreadyPaid} employee(s) skipped — already have payroll for this month.";
+        }
+        if ($skippedOtherReasons > 0) {
+            $message .= " {$skippedOtherReasons} payroll-eligible employee(s) skipped (no payable days or missing salary setup).";
         }
 
         return [
             'status' => 'processed',
             'run_id' => $run->id,
-            'employee_count' => $count,
+            'employee_count' => $newEmployeeCount,
             'branch_label' => $branchLabel,
             'message' => $message,
         ];
+    }
+
+    /**
+     * Employees who already have a payslip for this period in any branch.
+     *
+     * @return list<int>
+     */
+    private function employeeIdsAlreadyInPayroll(int $year, int $month, string $salaryType): array
+    {
+        return Payslip::query()
+            ->whereHas('payrollRun', fn ($q) => $q
+                ->where('year', $year)
+                ->where('month', $month)
+                ->where('salary_type', $salaryType)
+                ->whereIn('status', ['processed', 'posted']))
+            ->pluck('employee_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function existingPayrollBranchLabel(
+        int $employeeId,
+        int $year,
+        int $month,
+        string $salaryType,
+    ): ?string {
+        $payslip = Payslip::query()
+            ->where('employee_id', $employeeId)
+            ->whereHas('payrollRun', fn ($q) => $q
+                ->where('year', $year)
+                ->where('month', $month)
+                ->where('salary_type', $salaryType)
+                ->whereIn('status', ['processed', 'posted']))
+            ->with('payrollRun.branch:id,name,branch_code')
+            ->first();
+
+        $branch = $payslip?->payrollRun?->branch;
+        if (! $branch) {
+            return null;
+        }
+
+        return trim($branch->name.(filled($branch->branch_code) ? ' ('.$branch->branch_code.')' : ''));
+    }
+
+    private function resolveActiveBranchRun(int $year, int $month, string $salaryType, int $branchId): ?PayrollRun
+    {
+        return PayrollRun::query()
+            ->where('year', $year)
+            ->where('month', $month)
+            ->where('salary_type', $salaryType)
+            ->where('branch_id', $branchId)
+            ->whereNull('employee_id')
+            ->whereIn('status', ['processed', 'posted'])
+            ->orderByDesc('processed_at')
+            ->first();
     }
 
     /**

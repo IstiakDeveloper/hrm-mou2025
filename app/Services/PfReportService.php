@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\EmployeePfTransaction;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
+use App\Support\HeadOfficeOrganogram;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -30,7 +31,7 @@ class PfReportService
             'pf_transaction_register' => $this->buildPfTransactionRegister($filters),
             'pf_refund_register', 'pf_withdrawal_register' => $this->buildPfRefundRegister($filters),
             'pf_interest_register' => $this->buildPfInterestRegister($filters),
-            'pf_balance_by_branch' => $this->buildPfBalanceGrouped($filters, 'branch'),
+            'pf_balance_by_branch' => $this->buildPfBalanceByBranch($filters),
             'pf_balance_by_department' => $this->buildPfBalanceGrouped($filters, 'department'),
             default => $this->tablePayload([], [], ['row_count' => 0, 'message' => 'Unknown report.']),
         };
@@ -45,7 +46,7 @@ class PfReportService
             'date_from' => $request->input('date_from', ''),
             'date_to' => $request->input('date_to', ''),
             'year' => $request->input('year', (string) date('Y')),
-            'month' => $request->input('month', (string) date('n')),
+            'month' => $request->input('month', ''),
             'branch_id' => $request->input('branch_id', ''),
             'department_id' => $request->input('department_id', ''),
             'employee_id' => $request->input('employee_id', ''),
@@ -79,7 +80,13 @@ class PfReportService
             return "From {$from} to {$to}";
         }
 
-        if (in_array($report, ['pf_balance_by_branch', 'pf_balance_by_department', 'pf_balance_register', 'pf_balance_register_details'], true)) {
+        if (in_array($report, ['pf_balance_by_branch'], true)) {
+            $end = $filters['date_to'] ?: now()->toDateString();
+
+            return 'As of '.Carbon::parse($end)->format('d M Y');
+        }
+
+        if (in_array($report, ['pf_balance_by_department', 'pf_balance_register', 'pf_balance_register_details'], true)) {
             return 'Current balances';
         }
 
@@ -134,12 +141,15 @@ class PfReportService
      */
     public function balanceSummary(?int $branchId = null, ?int $departmentId = null): array
     {
-        return Employee::query()
+        $query = Employee::query()
             ->with(['branch:id,name', 'department:id,name'])
             ->when($branchId, fn (Builder $q) => $q->where('current_branch_id', $branchId))
             ->when($departmentId, fn (Builder $q) => $q->where('department_id', $departmentId))
-            ->where('pf_balance', '>', 0)
-            ->orderBy('pin')
+            ->where('pf_balance', '>', 0);
+
+        HeadOfficeOrganogram::applyToEmployeeQuery($query, 'organogram', 'asc');
+
+        return $query
             ->get()
             ->map(fn (Employee $e) => [
                 'employee_id' => $e->id,
@@ -288,16 +298,18 @@ class PfReportService
             ['key' => 'enrolled', 'label' => 'Enrolled', 'align' => 'center'],
         ];
 
-        $employees = Employee::query()
+        $employeesQuery = Employee::query()
             ->with(['branch:id,name', 'department:id,name'])
             ->withSum(['pfTransactions as own_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employee_contribution')
             ->withSum(['pfTransactions as org_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employer_contribution')
             ->when($filters['branch_id'], fn (Builder $q) => $q->where('current_branch_id', $filters['branch_id']))
             ->when($filters['department_id'], fn (Builder $q) => $q->where('department_id', $filters['department_id']))
             ->when($filters['employee_id'], fn (Builder $q) => $q->whereKey($filters['employee_id']))
-            ->where('pf_balance', '>', 0)
-            ->orderBy('pin')
-            ->get();
+            ->where('pf_balance', '>', 0);
+
+        HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
+
+        $employees = $employeesQuery->get();
 
         $rows = $employees->map(fn (Employee $e, int $i) => [
             'sl' => $i + 1,
@@ -341,7 +353,7 @@ class PfReportService
             ['key' => 'balance', 'label' => 'Current balance', 'align' => 'right', 'numeric' => true],
         ];
 
-        $employees = Employee::query()
+        $employeesQuery = Employee::query()
             ->with(['branch:id,name', 'department:id,name'])
             ->withSum(['pfTransactions as opening_credit' => fn ($q) => $q->where('transaction_type', EmployeeProvidentFundService::TYPE_OPENING)], 'credit_amount')
             ->withSum(['pfTransactions as payroll_own' => fn ($q) => $q->where('transaction_type', EmployeeProvidentFundService::TYPE_PAYROLL)], 'employee_contribution')
@@ -355,9 +367,11 @@ class PfReportService
             ->when($filters['branch_id'], fn (Builder $q) => $q->where('current_branch_id', $filters['branch_id']))
             ->when($filters['department_id'], fn (Builder $q) => $q->where('department_id', $filters['department_id']))
             ->when($filters['employee_id'], fn (Builder $q) => $q->whereKey($filters['employee_id']))
-            ->where('pf_balance', '>', 0)
-            ->orderBy('pin')
-            ->get();
+            ->where('pf_balance', '>', 0);
+
+        HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
+
+        $employees = $employeesQuery->get();
 
         $rows = $employees->map(function (Employee $e, int $i) {
             return [
@@ -513,7 +527,7 @@ class PfReportService
      */
     protected function payslipsForMonth(int $year, int $month, array $filters): Collection
     {
-        return Payslip::query()
+        $query = Payslip::query()
             ->with([
                 'employee.branch:id,name',
                 'employee.department:id,name',
@@ -528,9 +542,11 @@ class PfReportService
             })
             ->when($filters['branch_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('current_branch_id', $filters['branch_id'])))
             ->when($filters['department_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $filters['department_id'])))
-            ->when($filters['employee_id'], fn (Builder $q) => $q->where('employee_id', $filters['employee_id']))
-            ->orderBy('employee_id')
-            ->get();
+            ->when($filters['employee_id'], fn (Builder $q) => $q->where('employee_id', $filters['employee_id']));
+
+        HeadOfficeOrganogram::applyToPayslipQuery($query);
+
+        return $query->get();
     }
 
     protected function pfDeductionFromPayslip(Payslip $payslip): float
@@ -734,13 +750,16 @@ class PfReportService
             ['key' => 'date', 'label' => 'Posted date'],
         ];
 
-        $rows = EmployeePfTransaction::query()
+        $transactionsQuery = EmployeePfTransaction::query()
             ->with(['employee.branch', 'employee.department', 'pfInterestRun'])
             ->where('transaction_type', EmployeeProvidentFundService::TYPE_INTEREST)
             ->whereHas('pfInterestRun', fn (Builder $q) => $q->where('interest_year', $year))
             ->when($filters['branch_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('current_branch_id', $filters['branch_id'])))
-            ->when($filters['department_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $filters['department_id'])))
-            ->orderBy('employee_id')
+            ->when($filters['department_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $filters['department_id'])));
+
+        HeadOfficeOrganogram::applyToPfTransactionQuery($transactionsQuery);
+
+        $rows = $transactionsQuery
             ->get()
             ->map(fn (EmployeePfTransaction $tx, int $i) => [
                 'sl' => $i + 1,
@@ -760,6 +779,152 @@ class PfReportService
             'org' => array_sum(array_column($rows, 'org')),
             'credit' => array_sum(array_column($rows, 'credit')),
         ]);
+    }
+
+    /**
+     * @param  array<string, string>  $filters
+     * @return array<string, mixed>
+     */
+    protected function buildPfBalanceByBranch(array $filters): array
+    {
+        $endDate = $filters['date_to'] ?: now()->toDateString();
+
+        $columns = [
+            ['key' => 'sl', 'label' => 'SL', 'align' => 'center'],
+            ['key' => 'branch', 'label' => 'Branch'],
+            ['key' => 'employee_count', 'label' => 'Employees', 'align' => 'center'],
+            ['key' => 'own_contribution', 'label' => 'Contribution', 'align' => 'right', 'numeric' => true, 'group' => 'Own'],
+            ['key' => 'own_interest', 'label' => 'Interest', 'align' => 'right', 'numeric' => true, 'group' => 'Own'],
+            ['key' => 'own_total', 'label' => 'Total', 'align' => 'right', 'numeric' => true, 'group' => 'Own'],
+            ['key' => 'org_contribution', 'label' => 'Contribution', 'align' => 'right', 'numeric' => true, 'group' => 'Organization'],
+            ['key' => 'org_interest', 'label' => 'Interest', 'align' => 'right', 'numeric' => true, 'group' => 'Organization'],
+            ['key' => 'org_total', 'label' => 'Total', 'align' => 'right', 'numeric' => true, 'group' => 'Organization'],
+            ['key' => 'total_balance', 'label' => 'Total balance', 'align' => 'right', 'numeric' => true],
+        ];
+
+        $headerGroups = [
+            ['label' => 'SL', 'rowspan' => 2, 'align' => 'center'],
+            ['label' => 'Branch', 'rowspan' => 2, 'align' => 'center'],
+            ['label' => 'Employees', 'rowspan' => 2, 'align' => 'center'],
+            ['label' => 'Own', 'colspan' => 3, 'align' => 'center'],
+            ['label' => 'Organization', 'colspan' => 3, 'align' => 'center'],
+            ['label' => 'Total balance', 'rowspan' => 2, 'align' => 'center'],
+        ];
+
+        $dateFilter = fn (Builder $query) => $query->whereDate('transaction_date', '<=', $endDate);
+
+        $employees = Employee::query()
+            ->with(['branch:id,name,branch_code'])
+            ->withSum(['pfTransactions as own_contribution' => fn (Builder $q) => $dateFilter($q)
+                ->whereNotIn('transaction_type', [
+                    EmployeeProvidentFundService::TYPE_WITHDRAWAL,
+                    EmployeeProvidentFundService::TYPE_INTEREST,
+                ])], 'employee_contribution')
+            ->withSum(['pfTransactions as own_interest' => fn (Builder $q) => $dateFilter($q)
+                ->where('transaction_type', EmployeeProvidentFundService::TYPE_INTEREST)], 'employee_contribution')
+            ->withSum(['pfTransactions as own_withdrawal' => fn (Builder $q) => $dateFilter($q)
+                ->where('transaction_type', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employee_contribution')
+            ->withSum(['pfTransactions as org_contribution' => fn (Builder $q) => $dateFilter($q)
+                ->whereNotIn('transaction_type', [
+                    EmployeeProvidentFundService::TYPE_WITHDRAWAL,
+                    EmployeeProvidentFundService::TYPE_INTEREST,
+                ])], 'employer_contribution')
+            ->withSum(['pfTransactions as org_interest' => fn (Builder $q) => $dateFilter($q)
+                ->where('transaction_type', EmployeeProvidentFundService::TYPE_INTEREST)], 'employer_contribution')
+            ->withSum(['pfTransactions as org_withdrawal' => fn (Builder $q) => $dateFilter($q)
+                ->where('transaction_type', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employer_contribution')
+            ->withSum(['pfTransactions as pf_credits' => $dateFilter], 'credit_amount')
+            ->withSum(['pfTransactions as pf_debits' => $dateFilter], 'debit_amount')
+            ->when($filters['branch_id'], fn (Builder $q) => $q->where('current_branch_id', $filters['branch_id']))
+            ->whereHas('pfTransactions', $dateFilter)
+            ->get()
+            ->filter(function (Employee $employee) {
+                $balance = (float) ($employee->pf_credits ?? 0) - (float) ($employee->pf_debits ?? 0);
+
+                return $balance > 0;
+            });
+
+        $grouped = $employees->groupBy(fn (Employee $employee) => $employee->current_branch_id ?? 0);
+
+        $branchMeta = $employees
+            ->pluck('branch')
+            ->filter()
+            ->unique('id')
+            ->keyBy('id');
+
+        $branchIds = $grouped->keys()->sort(function ($leftId, $rightId) use ($branchMeta) {
+            $leftCode = (string) ($branchMeta->get($leftId)?->branch_code ?? 'zzz');
+            $rightCode = (string) ($branchMeta->get($rightId)?->branch_code ?? 'zzz');
+
+            return strnatcasecmp($leftCode, $rightCode);
+        })->values();
+
+        $sections = [];
+        $sl = 0;
+        foreach ($branchIds as $branchId) {
+            /** @var Collection<int, Employee> $items */
+            $items = $grouped->get($branchId, collect());
+            if ($items->isEmpty()) {
+                continue;
+            }
+
+            $sl++;
+            $branch = $branchMeta->get($branchId);
+
+            $ownContribution = $items->sum(fn (Employee $employee) => (float) ($employee->own_contribution ?? 0));
+            $ownInterest = $items->sum(fn (Employee $employee) => (float) ($employee->own_interest ?? 0));
+            $ownWithdrawal = $items->sum(fn (Employee $employee) => (float) ($employee->own_withdrawal ?? 0));
+            $ownTotal = $ownContribution + $ownInterest - $ownWithdrawal;
+
+            $orgContribution = $items->sum(fn (Employee $employee) => (float) ($employee->org_contribution ?? 0));
+            $orgInterest = $items->sum(fn (Employee $employee) => (float) ($employee->org_interest ?? 0));
+            $orgWithdrawal = $items->sum(fn (Employee $employee) => (float) ($employee->org_withdrawal ?? 0));
+            $orgTotal = $orgContribution + $orgInterest - $orgWithdrawal;
+
+            $totalBalance = $items->sum(
+                fn (Employee $employee) => (float) ($employee->pf_credits ?? 0) - (float) ($employee->pf_debits ?? 0)
+            );
+
+            $branchLabel = $branch
+                ? trim($branch->name.(filled($branch->branch_code) ? ' ('.$branch->branch_code.')' : ''))
+                : 'No branch';
+
+            $sections[] = [
+                'sl' => $sl,
+                'branch' => $branchLabel,
+                'employee_count' => $items->count(),
+                'own_contribution' => $ownContribution,
+                'own_interest' => $ownInterest,
+                'own_total' => $ownTotal,
+                'org_contribution' => $orgContribution,
+                'org_interest' => $orgInterest,
+                'org_total' => $orgTotal,
+                'total_balance' => $totalBalance,
+            ];
+        }
+
+        $totals = [
+            'title' => 'Grand total',
+            'sl' => '',
+            'branch' => 'Grand total',
+            'employee_count' => $employees->count(),
+            'own_contribution' => array_sum(array_column($sections, 'own_contribution')),
+            'own_interest' => array_sum(array_column($sections, 'own_interest')),
+            'own_total' => array_sum(array_column($sections, 'own_total')),
+            'org_contribution' => array_sum(array_column($sections, 'org_contribution')),
+            'org_interest' => array_sum(array_column($sections, 'org_interest')),
+            'org_total' => array_sum(array_column($sections, 'org_total')),
+            'total_balance' => array_sum(array_column($sections, 'total_balance')),
+        ];
+
+        return [
+            'template' => 'pf-grouped',
+            'header_groups' => $headerGroups,
+            'group_columns' => $columns,
+            'sections' => $this->roundRows($columns, $sections),
+            'totals' => $this->roundTotals($columns, $totals),
+            'meta' => ['row_count' => count($sections), 'as_of' => $endDate],
+        ];
     }
 
     /**

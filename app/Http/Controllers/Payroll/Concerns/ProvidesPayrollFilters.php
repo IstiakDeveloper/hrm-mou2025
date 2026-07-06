@@ -66,7 +66,7 @@ trait ProvidesPayrollFilters
             'salary_head_id' => $request->input('salary_head_id', ''),
             'salary_type' => $request->input('salary_type', 'salary'),
             'year' => $request->input('year', (string) date('Y')),
-            'month' => $request->input('month', (string) (int) date('n')),
+            'month' => $request->input('month', ''),
             'effective_from' => $request->input('effective_from', ''),
             'reason' => $request->input('reason', ''),
         ];

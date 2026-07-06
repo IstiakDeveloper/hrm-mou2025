@@ -480,15 +480,18 @@ class EmployeeController extends Controller
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             'payroll_ready' => ['nullable', 'boolean'],
             'for_gratuity' => ['nullable', 'boolean'],
+            'for_pf' => ['nullable', 'boolean'],
         ]);
 
         $search = trim((string) ($validated['q'] ?? ''));
         $limit = (int) ($validated['limit'] ?? 25);
         $selectedEmployeeId = isset($validated['employee_id']) ? (int) $validated['employee_id'] : null;
+        $forPf = $request->boolean('for_pf');
 
         $query = Employee::query()
             ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance'])
-            ->where('status', 'active')
+            ->when(! $forPf, fn ($q) => $q->where('status', 'active'))
+            ->when($forPf, fn ($q) => $q->forPf())
             ->when($validated['branch_id'] ?? null, fn ($q, $branchId) => $q->where('current_branch_id', $branchId))
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
@@ -517,7 +520,8 @@ class EmployeeController extends Controller
             $selected = Employee::query()
                 ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance'])
                 ->where('id', $selectedEmployeeId)
-                ->where('status', 'active')
+                ->when(! $forPf, fn ($q) => $q->where('status', 'active'))
+                ->when($forPf, fn ($q) => $q->forPf())
                 ->first();
 
             if ($selected) {

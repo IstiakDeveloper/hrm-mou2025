@@ -72,4 +72,10 @@ class SalaryStructureCalculator
     {
         return (float) (int) round($amount, 0);
     }
+
+    /** Two decimal places (paisa) — PF interest and ledger amounts. */
+    public static function roundPaisa(float $amount): float
+    {
+        return round($amount, 2);
+    }
 }

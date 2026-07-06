@@ -115,17 +115,44 @@ export function WordTableReport({ payload }: { payload: TablePayload }) {
         const columns = payload.group_columns ?? [];
         const sections = payload.sections ?? [];
         const totals = payload.totals;
+        const headerGroups = (payload as { header_groups?: { label?: string; colspan?: number; rowspan?: number; align?: string }[] }).header_groups ?? [];
+        const childColumns = columns.filter((col) => Boolean((col as { group?: string }).group));
+        const hasGroupedHeaders = headerGroups.length > 0 && childColumns.length > 0;
         return (
             <div className="overflow-x-auto border border-black bg-white">
                 <table className="w-full border-collapse text-[11px] text-black">
                     <thead>
-                        <tr className="border-b border-black bg-emerald-50/80">
-                            {columns.map((col) => (
-                                <th key={col.key} className={`border-r border-black p-1 last:border-r-0 ${cellAlign(col.align)}`}>
-                                    {col.label}
-                                </th>
-                            ))}
-                        </tr>
+                        {hasGroupedHeaders ? (
+                            <>
+                                <tr className="border-b border-black bg-emerald-50/80">
+                                    {headerGroups.map((group, index) => (
+                                        <th
+                                            key={`group-${index}`}
+                                            colSpan={group.colspan}
+                                            rowSpan={group.rowspan}
+                                            className="border-r border-black p-1 text-center last:border-r-0"
+                                        >
+                                            {group.label ?? ''}
+                                        </th>
+                                    ))}
+                                </tr>
+                                <tr className="border-b border-black bg-emerald-50/80">
+                                    {childColumns.map((col) => (
+                                        <th key={col.key} className="border-r border-black p-1 text-center last:border-r-0">
+                                            {col.label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </>
+                        ) : (
+                            <tr className="border-b border-black bg-emerald-50/80">
+                                {columns.map((col) => (
+                                    <th key={col.key} className="border-r border-black p-1 text-center last:border-r-0">
+                                        {col.label}
+                                    </th>
+                                ))}
+                            </tr>
+                        )}
                     </thead>
                     <tbody>
                         {sections.map((s, i) => (
@@ -141,7 +168,10 @@ export function WordTableReport({ payload }: { payload: TablePayload }) {
                             <tr className="border-t-2 border-black font-bold bg-emerald-50/50">
                                 {columns.map((col) => (
                                     <td key={col.key} className={`border-r border-black p-1 last:border-r-0 ${cellAlign(col.align)}`}>
-                                        {renderCell(totals[col.key], col.numeric)}
+                                        {renderCell(
+                                            col.key === 'branch' && totals.title ? totals.title : totals[col.key],
+                                            col.numeric,
+                                        )}
                                     </td>
                                 ))}
                             </tr>

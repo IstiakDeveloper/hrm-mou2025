@@ -120,16 +120,22 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $rules = [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:4|confirmed',
             'role_ids' => 'required|array',
             'role_ids.*' => 'exists:roles,id',
-            'employee_id' => 'required|exists:employees,id',
+            'employee_id' => 'nullable|exists:employees,id',
             'branch_id' => 'nullable|exists:branches,id',
             'active_status' => 'boolean',
-        ]);
+        ];
+
+        if (! $request->filled('employee_id')) {
+            $rules['username'] = 'required|string|max:191|unique:users,username';
+        }
+
+        $request->validate($rules);
 
         $primaryRoleId = $request->primary_role_id ?? ($request->role_ids[0] ?? null);
 
@@ -137,26 +143,34 @@ class UserController extends Controller
             return back()->withErrors(['role_ids' => 'At least one role must be selected'])->withInput();
         }
 
-        $employee = Employee::findOrFail($request->employee_id);
-        if ($this->resolveEmailForEmployee($employee) !== $request->email) {
-            return back()->withErrors(['email' => 'The email must match the selected employee\'s email'])->withInput();
-        }
-
         $plainPassword = $request->password;
 
-        $resolvedUsername = $this->ensureUniqueUsername(
-            $this->usernameFromEmployee($employee),
-            null,
-        );
+        if ($request->filled('employee_id')) {
+            $employee = Employee::findOrFail($request->employee_id);
+            if ($this->resolveEmailForEmployee($employee) !== $request->email) {
+                return back()->withErrors(['email' => 'The email must match the selected employee\'s email'])->withInput();
+            }
+
+            $name = $this->employeeFullName($employee);
+            $resolvedUsername = $this->ensureUniqueUsername(
+                $this->usernameFromEmployee($employee),
+                null,
+            );
+            $employeeId = (int) $employee->id;
+        } else {
+            $name = $request->name;
+            $resolvedUsername = $this->ensureUniqueUsername(trim((string) $request->username), null);
+            $employeeId = null;
+        }
 
         $user = User::create([
-            'name' => $this->employeeFullName($employee),
+            'name' => $name,
             'username' => $resolvedUsername,
             'email' => $request->email,
             'password' => Hash::make($plainPassword),
             'role_id' => $primaryRoleId,
-            'employee_id' => $request->employee_id,
-            'branch_id' => $request->branch_id,
+            'employee_id' => $employeeId,
+            'branch_id' => $request->branch_id ?: null,
             'active_status' => $request->active_status ?? true,
         ]);
 
@@ -235,7 +249,7 @@ class UserController extends Controller
             'password' => 'nullable|string|min:4|confirmed',
             'role_ids' => 'required|array',
             'role_ids.*' => 'exists:roles,id',
-            'employee_id' => 'required|exists:employees,id',
+            'employee_id' => 'nullable|exists:employees,id',
             'branch_id' => 'nullable|exists:branches,id',
             'active_status' => 'boolean',
         ];
@@ -267,8 +281,8 @@ class UserController extends Controller
             $user->name = $employee ? $this->employeeFullName($employee) : $request->name;
             $user->username = trim((string) $request->username);
             $user->email = $request->email;
-            $user->employee_id = $request->employee_id;
-            $user->branch_id = $request->branch_id;
+            $user->employee_id = $request->filled('employee_id') ? $request->employee_id : null;
+            $user->branch_id = $request->filled('branch_id') ? $request->branch_id : null;
             $user->active_status = $request->active_status ?? $user->active_status;
 
             if ($request->filled('password')) {

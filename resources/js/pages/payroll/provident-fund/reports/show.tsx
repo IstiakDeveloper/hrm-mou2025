@@ -13,6 +13,7 @@ import {
     PayrollYearSelect,
 } from '@/components/payroll/PayrollFilterGrid';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
+import { PayrollReportDocumentHeader } from '@/components/payroll/PayrollReportDocumentHeader';
 import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
 import { WordTableReport } from '@/components/reports/WordTableReport';
 import { formatPfAmount } from '@/lib/pf-format';
@@ -31,6 +32,7 @@ type ReportMeta = {
 
 type Props = {
     companyName?: string;
+    companyAddress?: string;
     report: ReportMeta;
     filterOptions: {
         branches: { id: number; name: string; branch_code?: string | null }[];
@@ -51,6 +53,7 @@ const TX_TYPE_ITEMS = [{ value: '', label: 'All transaction types' }];
 
 export default function PfReportShow({
     companyName,
+    companyAddress,
     report,
     filterOptions,
     transactionTypeOptions,
@@ -70,6 +73,7 @@ export default function PfReportShow({
         const f = report.filters;
         return {
             dateRange: f.includes('date_from'),
+            endDate: f.includes('date_to') && !f.includes('date_from'),
             employee: f.includes('employee_id'),
             year: f.includes('year'),
             month: f.includes('month'),
@@ -109,6 +113,10 @@ export default function PfReportShow({
               org_contribution?: number;
           }
         | undefined;
+
+    const isBranchBalanceReport =
+        report.slug === 'pf-balance-by-branch' ||
+        Boolean((payload as { header_groups?: unknown[] } | null)?.header_groups?.length);
 
     return (
         <Layout>
@@ -159,6 +167,16 @@ export default function PfReportShow({
                                     </PayrollField>
                                 </>
                             )}
+                            {show.endDate && (
+                                <PayrollField label="End date">
+                                    <Input
+                                        type="date"
+                                        className="h-9 border-emerald-200 bg-white text-xs"
+                                        value={filters.date_to}
+                                        onChange={(e) => setFilter('date_to', e.target.value)}
+                                    />
+                                </PayrollField>
+                            )}
                             {show.year && (
                                 <PayrollYearSelect
                                     value={filters.year}
@@ -187,6 +205,8 @@ export default function PfReportShow({
                                     employees={filterOptions.employees}
                                     value={filters.employee_id}
                                     onChange={(v) => setFilter('employee_id', v)}
+                                    forPf
+                                    branchId={filters.branch_id || undefined}
                                 />
                             )}
                         </div>
@@ -226,19 +246,37 @@ export default function PfReportShow({
                                     </Button>
                                     <Button asChild variant="outline" size="sm" className="border-emerald-200">
                                         <a href={excelUrl}>
-                                            <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel (CSV)
+                                            <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel
                                         </a>
                                     </Button>
                                 </>
                             )}
                     </div>
 
-                    <ReportDocumentHeader
-                        companyName={companyName}
-                        title={report.title}
-                        periodLabel={periodLabel}
-                        rowCount={(payload.meta as { row_count?: number } | undefined)?.row_count}
-                    />
+                    {isBranchBalanceReport ? (
+                        <>
+                            <PayrollReportDocumentHeader
+                                companyName={companyName}
+                                companyAddress={companyAddress}
+                                title={report.title}
+                            />
+                            <table className="mb-1 w-full border-collapse text-[9px] font-bold text-black">
+                                <tbody>
+                                    <tr>
+                                        <td className="p-0 text-left" />
+                                        <td className="p-0 text-right">{periodLabel}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </>
+                    ) : (
+                        <ReportDocumentHeader
+                            companyName={companyName}
+                            title={report.title}
+                            periodLabel={periodLabel}
+                            rowCount={(payload.meta as { row_count?: number } | undefined)?.row_count}
+                        />
+                    )}
 
                     {employeeBlock && (
                         <div className="mb-3 overflow-x-auto border border-black bg-white text-[11px] text-black">

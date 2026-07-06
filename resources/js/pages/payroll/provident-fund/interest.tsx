@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import StaffFundLayout from '@/layouts/StaffFundLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,10 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
-import { ArrowLeft, Calculator, Save } from 'lucide-react';
+import { PayrollFiscalYearSelect } from '@/components/payroll/PayrollFilterGrid';
+import { ArrowLeft, Calculator, RotateCcw, Save } from 'lucide-react';
 import { hasAppPermission } from '@/lib/permissions';
-import { formatPfAmount } from '@/lib/pf-format';
+import { formatFiscalYear } from '@/lib/fiscal-year';
+import { formatPfAmount, roundPfAmount } from '@/lib/pf-format';
 import { staffFundPath } from '@/lib/staff-fund-nav';
 import type { SharedData } from '@/types';
 import { cn } from '@/lib/utils';
@@ -19,7 +20,7 @@ type PreviewRow = {
     employee_id: number;
     label: string;
     pf_balance: number;
-    share_percent: number;
+    interest_percent: number;
     interest_total: number;
     own_amount: number;
     org_amount: number;
@@ -28,6 +29,7 @@ type PreviewRow = {
 type PastRun = {
     id: number;
     interest_year: number;
+    interest_year_label: string;
     total_interest: number;
     total_pf_balance: number;
     employee_count: number;
@@ -39,8 +41,13 @@ type PastRun = {
 
 type Preview = {
     year: number;
+    year_label?: string;
     total_interest: number;
+    distributed_interest?: number;
     total_pf_balance: number;
+    fund_total_before?: number;
+    expected_fund_total_after?: number;
+    interest_percent: number;
     employee_count: number;
     already_posted: boolean;
     transaction_date?: string;
@@ -50,6 +57,7 @@ type Preview = {
 
 type Props = {
     pastRuns: PastRun[];
+    fiscalYears: { value: string; label: string }[];
     defaultYear: string;
     formDefaults: {
         year: string;
@@ -62,7 +70,16 @@ type Props = {
 
 const fmt = formatPfAmount;
 
-export default function ProvidentFundInterest({ pastRuns, formDefaults, preview }: Props) {
+function fmtInterestPercent(n: number | string | null | undefined): string {
+    const value = Number(n ?? 0);
+    if (!Number.isFinite(value)) {
+        return '0.00%';
+    }
+
+    return `${value.toFixed(2)}%`;
+}
+
+export default function ProvidentFundInterest({ pastRuns, fiscalYears, formDefaults, preview }: Props) {
     const { auth, flash } = usePage<SharedData & { flash?: { success?: string } }>().props;
     const canEdit = hasAppPermission(auth, 'payroll.edit');
 
@@ -94,8 +111,16 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
         form.post(route('provident-fund.interest.store'));
     };
 
+    const rollbackRun = (run: PastRun) => {
+        if (!confirm(`Rollback PF interest for ${run.interest_year_label}?`)) {
+            return;
+        }
+
+        router.post(route('provident-fund.interest.rollback', run.id));
+    };
+
     return (
-        <StaffFundLayout title="PF Interest" activeTab="pf-interest" description="Post and distribute yearly interest proportionally based on accumulated PF balances.">
+        <StaffFundLayout title="PF Interest" activeTab="pf-interest" description="Post and distribute yearly interest proportionally to every employee with a PF balance.">
             {/* Header info */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
                 <div className="flex items-center gap-2">
@@ -119,30 +144,25 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                     <CardHeader className="border-b border-zinc-100 px-3 py-2 bg-zinc-50/50">
                         <CardTitle className="text-xs font-bold text-zinc-800 uppercase tracking-wide">Distribute Interest</CardTitle>
                         <p className="text-[10px] text-zinc-400 mt-0.5">
-                            All PF-enrolled employees with balance &gt; 0 receive a proportional share. Limit one posting per year.
+                            Every employee with PF balance &gt; 0 receives interest (active or inactive). Limit one posting per year.
                         </p>
                     </CardHeader>
                     <CardContent className="p-3">
                         <form onSubmit={submitPreview} className="space-y-3">
                             <div className="grid gap-2.5 sm:grid-cols-3">
-                                <div className="space-y-0.5">
-                                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Interest Year</label>
-                                    <Input
-                                        type="number"
-                                        min={2000}
-                                        max={2100}
-                                        value={form.data.year}
-                                        onChange={(e) => form.setData('year', e.target.value)}
-                                        className="h-8 text-xs border-zinc-200 focus-visible:ring-emerald-500 rounded bg-white"
-                                        required
-                                    />
-                                </div>
+                                <PayrollFiscalYearSelect
+                                    label="Interest Year"
+                                    value={form.data.year}
+                                    onChange={(v) => form.setData('year', v)}
+                                    options={fiscalYears}
+                                    required
+                                />
                                 <div className="space-y-0.5">
                                     <label className="text-[10px] font-bold text-zinc-500 uppercase">Total Interest Amount (৳)</label>
                                     <Input
                                         type="number"
                                         step="1"
-                                        min="0.01"
+                                        min="1"
                                         value={form.data.total_interest}
                                         onChange={(e) => form.setData('total_interest', e.target.value)}
                                         className="h-8 text-xs border-zinc-200 focus-visible:ring-emerald-500 rounded bg-white"
@@ -187,7 +207,7 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                                         disabled={form.processing}
                                         onClick={submitPost}
                                     >
-                                        <Save className="mr-1.5 h-3.5 w-3.5" /> Post Interest for {preview.year}
+                                        <Save className="mr-1.5 h-3.5 w-3.5" /> Post Interest for {preview.year_label ?? formatFiscalYear(preview.year)}
                                     </Button>
                                 )}
                             </div>
@@ -201,7 +221,7 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                     <CardHeader className="border-b border-zinc-100 px-3 py-2 bg-zinc-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                         <div className="flex items-center gap-2">
                             <CardTitle className="text-xs font-bold text-zinc-800 uppercase tracking-wide">
-                                Distribution Preview — {preview.year}
+                                Distribution Preview — {preview.year_label ?? formatFiscalYear(preview.year)}
                             </CardTitle>
                             {preview.already_posted ? (
                                 <span className="inline-flex items-center rounded bg-amber-50 px-1.5 py-0.2 text-[10px] font-medium text-amber-800 border border-amber-100">
@@ -214,7 +234,15 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                             )}
                         </div>
                         <p className="text-[10px] text-zinc-400">
-                            Pool: <strong className="text-zinc-700">{fmt(preview.total_interest)}</strong> · PF fund total: <strong className="text-zinc-700">{fmt(preview.total_pf_balance)}</strong> · <strong className="text-zinc-700">{preview.employee_count}</strong> employees
+                            Pool: <strong className="text-zinc-700">{fmt(preview.total_interest)}</strong> · Distributed: <strong className="text-zinc-700">{fmt(preview.distributed_interest ?? preview.total_interest)}</strong>
+                            {preview.fund_total_before != null && preview.expected_fund_total_after != null ? (
+                                <>
+                                    {' '}· Fund now: <strong className="text-zinc-700">{fmt(preview.fund_total_before)}</strong> → after post: <strong className="text-emerald-700">{fmt(preview.expected_fund_total_after)}</strong>
+                                </>
+                            ) : (
+                                <> · PF fund total: <strong className="text-zinc-700">{fmt(preview.total_pf_balance)}</strong></>
+                            )}
+                            {' '}· Rate: <strong className="text-zinc-700">{fmtInterestPercent(preview.interest_percent)}</strong> on balance · <strong className="text-zinc-700">{preview.employee_count}</strong> employees
                         </p>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -224,8 +252,8 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                                     <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50 border-b border-zinc-200/60">
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider pl-3">Employee</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">PF Balance</TableHead>
-                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Share %</TableHead>
-                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Interest Share</TableHead>
+                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Interest %</TableHead>
+                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Interest Amount</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Own (50%)</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right pr-3">Org (50%)</TableHead>
                                     </TableRow>
@@ -235,7 +263,7 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                                         <TableRow key={r.employee_id} className="hover:bg-emerald-50/10 border-b border-zinc-100/80 transition-colors">
                                             <TableCell className="pl-3 py-1.5 font-medium text-zinc-800">{r.label}</TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums text-zinc-600">{fmt(r.pf_balance)}</TableCell>
-                                            <TableCell className="text-right py-1.5 tabular-nums text-zinc-600">{fmt(r.share_percent)}%</TableCell>
+                                            <TableCell className="text-right py-1.5 tabular-nums text-zinc-600">{fmtInterestPercent(r.interest_percent)}</TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums font-bold text-emerald-600">{fmt(r.interest_total)}</TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums text-zinc-650">{fmt(r.own_amount)}</TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums text-zinc-650 pr-3">{fmt(r.org_amount)}</TableCell>
@@ -243,7 +271,8 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                                     ))}
                                     {previewTotals && (
                                         <TableRow className="bg-zinc-50/80 font-bold border-t border-zinc-200">
-                                            <TableCell colSpan={3} className="pl-3 py-2 text-zinc-700 uppercase text-[9px] tracking-wider">Total Sum</TableCell>
+                                            <TableCell colSpan={2} className="pl-3 py-2 text-zinc-700 uppercase text-[9px] tracking-wider">Total Sum</TableCell>
+                                            <TableCell className="text-right py-2 tabular-nums text-zinc-700">{fmtInterestPercent(preview.interest_percent)}</TableCell>
                                             <TableCell className="text-right py-2 tabular-nums text-emerald-700">{fmt(previewTotals.interest)}</TableCell>
                                             <TableCell className="text-right py-2 tabular-nums text-zinc-800">{fmt(previewTotals.own)}</TableCell>
                                             <TableCell className="text-right py-2 tabular-nums text-zinc-800 pr-3">{fmt(previewTotals.org)}</TableCell>
@@ -274,21 +303,37 @@ export default function ProvidentFundInterest({ pastRuns, formDefaults, preview 
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Fund Balance (at post)</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Employees</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Date</TableHead>
-                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider pr-3">Posted By</TableHead>
+                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Posted By</TableHead>
+                                        {canEdit && (
+                                            <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right pr-3">Action</TableHead>
+                                        )}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {pastRuns.map((r) => (
                                         <TableRow key={r.id} className="hover:bg-emerald-50/10 border-b border-zinc-100/80 transition-colors">
-                                            <TableCell className="pl-3 py-1.5 font-bold text-zinc-700">{r.interest_year}</TableCell>
+                                            <TableCell className="pl-3 py-1.5 font-bold text-zinc-700">{r.interest_year_label}</TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums text-zinc-800">{fmt(r.total_interest)}</TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums text-zinc-600">{fmt(r.total_pf_balance)}</TableCell>
                                             <TableCell className="text-right py-1.5 text-zinc-600">{r.employee_count}</TableCell>
                                             <TableCell className="py-1.5 text-zinc-500 whitespace-nowrap">{r.transaction_date}</TableCell>
-                                            <TableCell className="py-1.5 text-zinc-500 pr-3">
+                                            <TableCell className="py-1.5 text-zinc-500">
                                                 {r.created_by || '—'}
                                                 {r.created_at ? ` · ${r.created_at}` : ''}
                                             </TableCell>
+                                            {canEdit && (
+                                                <TableCell className="py-1.5 text-right pr-3">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 text-[10px] px-2 border-red-200 text-red-700 hover:bg-red-50"
+                                                        onClick={() => rollbackRun(r)}
+                                                    >
+                                                        <RotateCcw className="mr-1 h-3 w-3" /> Rollback
+                                                    </Button>
+                                                </TableCell>
+                                            )}
                                         </TableRow>
                                     ))}
                                 </TableBody>

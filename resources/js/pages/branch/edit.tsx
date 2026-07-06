@@ -49,7 +49,7 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
     geofence_latitude: branch.geofence_latitude ?? '',
     geofence_longitude: branch.geofence_longitude ?? '',
     geofence_radius_meters: branch.geofence_radius_meters ?? '',
-    geofence_max_accuracy_meters: branch.geofence_max_accuracy_meters ?? 50,
+    geofence_max_accuracy_meters: branch.geofence_max_accuracy_meters ?? 150,
   });
 
   React.useEffect(() => {
@@ -386,7 +386,7 @@ export default function BranchEdit({ branch, zones, regionalOffices, designation
                       <p className="mt-1 text-sm text-red-500">{(errors as any).geofence_max_accuracy_meters}</p>
                     )}
                     <p className="text-xs text-gray-500">
-                      Smaller value = stricter GPS quality (recommended 30–50m).
+                      Extra GPS margin added to branch radius (recommended 100–150m).
                     </p>
                   </div>
                 </div>

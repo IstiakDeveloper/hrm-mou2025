@@ -75,6 +75,7 @@ class SelfAttendanceController extends Controller
             (float) $validated['lat'],
             (float) $validated['lng'],
             $accuracy,
+            $validated['samples'] ?? null,
         );
 
         /** @var Branch|null $matchedBranch */

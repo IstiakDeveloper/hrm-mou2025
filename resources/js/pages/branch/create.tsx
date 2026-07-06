@@ -32,7 +32,7 @@ export default function BranchCreate({ zones, regionalOffices, designations }: B
     geofence_latitude: '' as string | number,
     geofence_longitude: '' as string | number,
     geofence_radius_meters: '' as string | number,
-    geofence_max_accuracy_meters: 50 as string | number,
+    geofence_max_accuracy_meters: 150 as string | number,
   });
 
   const submit = (e: React.FormEvent) => {
@@ -344,7 +344,7 @@ export default function BranchCreate({ zones, regionalOffices, designations }: B
                       <p className="mt-1 text-sm text-red-500">{(errors as any).geofence_max_accuracy_meters}</p>
                     )}
                     <p className="text-xs text-gray-500">
-                      Smaller value = stricter GPS quality (recommended 30–50m).
+                      Extra GPS margin added to branch radius (recommended 100–150m).
                     </p>
                   </div>
                 </div>
