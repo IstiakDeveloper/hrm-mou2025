@@ -5,7 +5,7 @@ import { PageSurface } from '@/components/page-surface';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, Check, HandCoins, Pencil, UserX } from 'lucide-react';
+import { ArrowLeft, Calendar, Check, HandCoins, Pencil, Trash2, UserX } from 'lucide-react';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { formatTakaWithSymbol } from '@/lib/taka-format';
@@ -26,7 +26,7 @@ type Separation = {
     } | null;
 };
 
-type Props = { separation: Separation; canEdit?: boolean };
+type Props = { separation: Separation; canEdit?: boolean; canDelete?: boolean };
 
 function statusBadge(status: Separation['status']) {
     switch (status) {
@@ -39,8 +39,18 @@ function statusBadge(status: Separation['status']) {
     }
 }
 
-export default function SeparationShow({ separation, canEdit = false }: Props) {
+export default function SeparationShow({ separation, canEdit = false, canDelete = false }: Props) {
     const sepDate = new Date(separation.separation_date);
+
+    const confirmDelete = () => {
+        const message = separation.status === 'completed'
+            ? 'Delete this completed separation?\n\nThis will restore the employee to active, clear dropout details, reverse final-payment settlements (PF / gratuity / loans when applied), and remove the separation record.'
+            : 'Delete this separation record?';
+        if (!confirm(message)) {
+            return;
+        }
+        router.delete(route('separations.destroy', separation.id));
+    };
 
     return (
         <Layout>
@@ -72,6 +82,12 @@ export default function SeparationShow({ separation, canEdit = false }: Props) {
                             <Check className="mr-1.5 h-3.5 w-3.5" />Apply now
                         </Button>
                     )}
+                        {canDelete && (
+                            <Button size="sm" variant="outline" className="h-8 border-rose-200 text-xs text-rose-700 hover:bg-rose-50" onClick={confirmDelete}>
+                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                Delete
+                            </Button>
+                        )}
                     </div>
                 </div>
 

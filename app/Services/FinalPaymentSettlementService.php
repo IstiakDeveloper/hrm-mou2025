@@ -5,10 +5,13 @@ namespace App\Services;
 use App\Models\Employee;
 use App\Models\EmployeeGratuityPayment;
 use App\Models\EmployeeLoan;
+use App\Models\EmployeePfTransaction;
+use App\Models\LoanCollectionBatch;
 use App\Models\Separation;
 use App\Models\SeparationFinalPayment;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class FinalPaymentSettlementService
 {
@@ -335,6 +338,80 @@ class FinalPaymentSettlementService
 
         $finalPayment->settlement_refs = $refs;
         $finalPayment->settlement_applied_at = now();
+        $finalPayment->breakdown = $breakdown;
+        $finalPayment->save();
+    }
+
+    /**
+     * Reverse PF / gratuity / loan settlements applied for a final payment, then delete the record.
+     */
+    public function undoAndDelete(SeparationFinalPayment $finalPayment, ?int $actorUserId = null): void
+    {
+        DB::transaction(function () use ($finalPayment, $actorUserId) {
+            $finalPayment = SeparationFinalPayment::query()
+                ->whereKey($finalPayment->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($finalPayment->settlementsApplied()) {
+                $this->undoSettlements($finalPayment, $actorUserId);
+            }
+
+            $finalPayment->delete();
+        });
+    }
+
+    public function undoSettlements(SeparationFinalPayment $finalPayment, ?int $actorUserId = null): void
+    {
+        $refs = $finalPayment->settlement_refs ?? [];
+        if ($refs === [] && is_array($finalPayment->breakdown['settlement_refs'] ?? null)) {
+            $refs = $finalPayment->breakdown['settlement_refs'];
+        }
+
+        $pfTransactionId = isset($refs['pf_transaction_id']) ? (int) $refs['pf_transaction_id'] : null;
+        if ($pfTransactionId) {
+            $pfTx = EmployeePfTransaction::query()->find($pfTransactionId);
+            if ($pfTx) {
+                if ($pfTx->transaction_type !== EmployeeProvidentFundService::TYPE_WITHDRAWAL) {
+                    throw new InvalidArgumentException(
+                        'Cannot undo final payment: linked PF transaction is not a withdrawal.'
+                    );
+                }
+
+                DB::transaction(function () use ($pfTx) {
+                    $employee = Employee::query()->whereKey($pfTx->employee_id)->lockForUpdate()->firstOrFail();
+                    $pfTx->delete();
+                    $this->pfService->recalculateEmployeeBalances($employee);
+                });
+            }
+        }
+
+        $gratuityPaymentId = isset($refs['gratuity_payment_id']) ? (int) $refs['gratuity_payment_id'] : null;
+        if ($gratuityPaymentId) {
+            EmployeeGratuityPayment::query()->whereKey($gratuityPaymentId)->delete();
+        }
+
+        $batchIds = collect($refs['loan_collection_batch_ids'] ?? [])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        foreach (array_reverse($batchIds) as $batchId) {
+            $batch = LoanCollectionBatch::query()->find($batchId);
+            if (! $batch || $batch->isRolledBack()) {
+                continue;
+            }
+
+            $this->loanCollectionService->rollbackBatch($batch, $actorUserId);
+        }
+
+        $breakdown = $finalPayment->breakdown ?? [];
+        unset($breakdown['settlement_refs']);
+
+        $finalPayment->settlement_refs = null;
+        $finalPayment->settlement_applied_at = null;
         $finalPayment->breakdown = $breakdown;
         $finalPayment->save();
     }

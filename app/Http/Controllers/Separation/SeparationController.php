@@ -57,6 +57,7 @@ class SeparationController extends Controller
             'employees' => Employee::where('status', 'active')->get(),
             'filters' => $request->only(['status', 'employee_id', 'from_date', 'to_date', 'search', 'per_page']),
             'canEditSeparations' => $user->hasPermission('separations.edit'),
+            'canDeleteSeparations' => $user->isSuperAdmin(),
         ]);
     }
 
@@ -209,14 +210,13 @@ class SeparationController extends Controller
             $separation->load('finalPayment');
         }
 
+        /** @var User $user */
+        $user = Auth::user();
+
         return Inertia::render('separation/show', [
             'separation' => $separation,
-            'canEdit' => (function () use ($separation) {
-                /** @var User $user */
-                $user = Auth::user();
-
-                return $this->canEditSeparation($user, $separation);
-            })(),
+            'canEdit' => $this->canEditSeparation($user, $separation),
+            'canDelete' => $user->isSuperAdmin(),
         ]);
     }
 
@@ -301,6 +301,26 @@ class SeparationController extends Controller
         });
 
         return redirect()->route('separations.index')->with('success', 'Separation completed successfully.');
+    }
+
+    public function destroy(Separation $separation)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        if (! $user || ! $user->isSuperAdmin()) {
+            return redirect()->route('separations.index')
+                ->with('error', 'Only Super Admin can delete separations.');
+        }
+
+        try {
+            $this->separationCompletionService->deleteAndRestore($separation, $user->id);
+        } catch (\Throwable $e) {
+            return redirect()->route('separations.index')
+                ->with('error', 'Could not delete separation: '.$e->getMessage());
+        }
+
+        return redirect()->route('separations.index')
+            ->with('success', 'Separation deleted and employee restored successfully.');
     }
 
     private function syncEmployeeFromSeparation(Separation $separation): void

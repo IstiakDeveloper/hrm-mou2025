@@ -81,4 +81,63 @@ class SeparationCompletionService
 
         return $activated;
     }
+
+    /**
+     * Hard-delete a separation and reverse employee / settlement side effects when completed.
+     */
+    public function deleteAndRestore(Separation $separation, ?int $actorUserId = null): void
+    {
+        DB::transaction(function () use ($separation, $actorUserId) {
+            $separation = Separation::query()
+                ->whereKey($separation->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $separation->loadMissing(['employee', 'finalPayment', 'histories']);
+
+            if ($separation->finalPayment) {
+                if ($separation->status === 'completed') {
+                    $this->finalPaymentSettlementService->undoAndDelete(
+                        $separation->finalPayment,
+                        $actorUserId
+                    );
+                } else {
+                    $separation->finalPayment->delete();
+                }
+            }
+
+            if ($separation->status === 'completed') {
+                $this->restoreEmployeeFromSeparation($separation);
+            }
+
+            $separation->histories()->delete();
+            $separation->delete();
+        });
+    }
+
+    private function restoreEmployeeFromSeparation(Separation $separation): void
+    {
+        $employee = $separation->employee;
+        if (! $employee) {
+            return;
+        }
+
+        $otherCompletedExists = Separation::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', 'completed')
+            ->where('id', '!=', $separation->id)
+            ->exists();
+
+        if ($otherCompletedExists) {
+            return;
+        }
+
+        $employee->status = 'active';
+        $employee->dropout_date = null;
+        $employee->dropout_reason = null;
+        $employee->final_payment_date = null;
+        $employee->save();
+
+        $employee->syncLinkedUserActiveStatus();
+    }
 }

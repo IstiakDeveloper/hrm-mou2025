@@ -180,8 +180,18 @@ class FixedAssetReportService
 
         $this->applyAssetFilters($query, $filters);
 
-        if ($filters['date_from'] ?? null && $filters['date_to'] ?? null) {
-            $query->whereBetween('purchase_date', [$filters['date_from'], $filters['date_to']]);
+        // Register for a FY/period: assets owned in the window (not only purchased inside it).
+        if (($filters['date_from'] ?? null) && ($filters['date_to'] ?? null)) {
+            $from = $filters['date_from'];
+            $to = $filters['date_to'];
+            $query->where(function ($q) use ($from, $to) {
+                $q->whereNull('purchase_date')
+                    ->orWhereDate('purchase_date', '<=', $to);
+            })->where(function ($q) use ($from) {
+                $q->where('status', '!=', FixedAsset::STATUS_DISPOSED)
+                    ->orWhereNull('disposal_date')
+                    ->orWhereDate('disposal_date', '>=', $from);
+            });
         }
 
         $assets = $query->orderBy('branch_id')->orderBy('asset_tag')->limit(5000)->get();
@@ -561,14 +571,25 @@ class FixedAssetReportService
             $id = $g->$groupCol;
             $assetQuery = FixedAsset::query()->where($groupCol, $id)->where('purchase_cost', '>', 0);
             $this->applyAssetFilters($assetQuery, $filters);
-            $assets = $assetQuery->get(['id', 'purchase_cost', 'accumulated_depreciation', 'book_value', 'depreciation_rate', 'disposal_date', 'status']);
+            $assets = $assetQuery->get([
+                'id',
+                'purchase_date',
+                'purchase_cost',
+                'accumulated_depreciation',
+                'book_value',
+                'depreciation_rate',
+                'disposal_date',
+                'status',
+                'last_depreciation_date',
+            ]);
 
-            $openingCost = $assets->sum(fn ($a) => $this->openingValueAt($a, $from));
+            // Gross cost opening (assets already purchased before FY start).
+            $openingCost = $assets->sum(fn ($a) => $this->grossCostOpeningAt($a, $from));
             $addition = $assets->sum(fn ($a) => $this->purchaseAdditionBetween($a, $from, $to));
             $salesAdj = $assets->sum(fn ($a) => $this->disposalValue($a, $from, $to));
             $closingCost = max(0, $openingCost + $addition - $salesAdj);
 
-            $openingDep = $assets->sum(fn ($a) => $this->depreciationBefore($a->id, $from));
+            $openingDep = $assets->sum(fn ($a) => $this->depreciationBefore($a->id, $from, $a));
             $charged = $assets->sum(fn ($a) => $this->depreciationBetween($a->id, $from, $to));
             $depSalesAdj = $salesAdj > 0 ? $assets->where('status', FixedAsset::STATUS_DISPOSED)->sum('accumulated_depreciation') : 0;
             $closingDep = max(0, $openingDep + $charged - $depSalesAdj);
@@ -630,9 +651,33 @@ class FixedAssetReportService
             return 0;
         }
 
-        $depBefore = $this->depreciationBefore($asset->id, $fyStart);
+        if ($asset->status === FixedAsset::STATUS_DISPOSED
+            && $asset->disposal_date
+            && $asset->disposal_date->lt($fyStart)) {
+            return 0;
+        }
+
+        $depBefore = $this->depreciationBefore($asset->id, $fyStart, $asset);
 
         return max(0, (float) ($asset->purchase_cost ?? 0) - $depBefore);
+    }
+
+    /**
+     * Gross (purchase) cost still on books at FY start — for audit cost columns.
+     */
+    private function grossCostOpeningAt(FixedAsset $asset, Carbon $fyStart): float
+    {
+        if (! $asset->purchase_date || $asset->purchase_date->gte($fyStart)) {
+            return 0;
+        }
+
+        if ($asset->status === FixedAsset::STATUS_DISPOSED
+            && $asset->disposal_date
+            && $asset->disposal_date->lt($fyStart)) {
+            return 0;
+        }
+
+        return (float) ($asset->purchase_cost ?? 0);
     }
 
     private function purchaseAdditionBetween(FixedAsset $asset, Carbon $from, Carbon $to): float
@@ -646,9 +691,9 @@ class FixedAssetReportService
             : 0;
     }
 
-    private function depreciationBefore(int $assetId, Carbon $before): float
+    private function depreciationBefore(int $assetId, Carbon $before, ?FixedAsset $asset = null): float
     {
-        return (float) AssetDepreciationEntry::query()
+        $fromEntries = (float) AssetDepreciationEntry::query()
             ->where('fixed_asset_id', $assetId)
             ->where(function ($q) use ($before) {
                 $q->where('period_year', '<', $before->year)
@@ -658,6 +703,25 @@ class FixedAssetReportService
                     });
             })
             ->sum('depreciation_amount');
+
+        if ($fromEntries > 0) {
+            return $fromEntries;
+        }
+
+        // Legacy opening import: stamped accumulated depreciation is as-of last_depreciation_date.
+        $asset ??= FixedAsset::query()->find($assetId, [
+            'id', 'accumulated_depreciation', 'last_depreciation_date',
+        ]);
+
+        if (! $asset || ! $asset->last_depreciation_date) {
+            return 0;
+        }
+
+        if ($asset->last_depreciation_date->lt($before)) {
+            return (float) ($asset->accumulated_depreciation ?? 0);
+        }
+
+        return 0;
     }
 
     private function depreciationBetween(int $assetId, Carbon $from, Carbon $to): float

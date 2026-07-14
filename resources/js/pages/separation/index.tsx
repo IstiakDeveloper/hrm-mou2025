@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Check, ChevronLeft, ChevronRight, Eye, Pencil, Plus, Search, UserX } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eye, Pencil, Plus, Search, Trash2, UserX } from 'lucide-react';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
@@ -32,6 +32,7 @@ type Props = {
     employees: Employee[];
     filters: { status?: string; employee_id?: string; search?: string; per_page?: string };
     canEditSeparations?: boolean;
+    canDeleteSeparations?: boolean;
 };
 
 function statusBadge(status: Separation['status']) {
@@ -45,7 +46,7 @@ function statusBadge(status: Separation['status']) {
     }
 }
 
-export default function SeparationIndex({ separations, employees, filters, canEditSeparations = false }: Props) {
+export default function SeparationIndex({ separations, employees, filters, canEditSeparations = false, canDeleteSeparations = false }: Props) {
     const [status, setStatus] = useState(filters.status || 'all');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
     const [search, setSearch] = useState(filters.search || '');
@@ -62,6 +63,17 @@ export default function SeparationIndex({ separations, employees, filters, canEd
     const reset = () => {
         setStatus('all'); setEmployeeId('all'); setSearch(''); setPerPage('10');
         router.get(route('separations.index'), { per_page: '10' }, { preserveState: true });
+    };
+
+    const confirmDelete = (s: Separation) => {
+        const name = employeeDisplayName(s.employee);
+        const message = s.status === 'completed'
+            ? `Delete this completed separation for ${name}?\n\nThis will restore the employee to active, clear dropout details, reverse final-payment settlements (PF / gratuity / loans when applied), and remove the separation record.`
+            : `Delete this separation record for ${name}?`;
+        if (!confirm(message)) {
+            return;
+        }
+        router.delete(route('separations.destroy', s.id));
     };
 
     return (
@@ -144,6 +156,9 @@ export default function SeparationIndex({ separations, employees, filters, canEd
                                                 )}
                                                 {s.status === 'approved' && (
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600" title="Apply separation now" onClick={() => confirm('Apply separation now? Employee will become inactive.') && router.post(route('separations.complete', s.id))}><Check className="h-4 w-4" /></Button>
+                                                )}
+                                                {canDeleteSeparations && (
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-rose-50 text-rose-600" title="Delete separation" onClick={() => confirmDelete(s)}><Trash2 className="h-4 w-4" /></Button>
                                                 )}
                                             </div>
                                         </TableCell>

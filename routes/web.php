@@ -1672,6 +1672,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{separation}/complete', [SeparationController::class, 'complete'])->name('complete');
         });
 
+        Route::delete('/{separation}', [SeparationController::class, 'destroy'])->name('destroy');
+
         Route::middleware(['permission:separations.approve'])->group(function () {
             Route::post('/{separation}/approve', [SeparationController::class, 'approve'])->name('approve');
             Route::post('/{separation}/reject', [SeparationController::class, 'reject'])->name('reject');
