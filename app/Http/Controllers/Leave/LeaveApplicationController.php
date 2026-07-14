@@ -472,6 +472,7 @@ class LeaveApplicationController extends Controller
 
         $applications->getCollection()->transform(function (LeaveApplication $app) use ($user) {
             $app->setAttribute('can_approve_action', $this->canApproveApplication($user, $app));
+            $app->setAttribute('approver_display', $this->approverDisplayForIndex($app));
 
             return $app;
         });
@@ -551,6 +552,101 @@ class LeaveApplicationController extends Controller
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->get();
+    }
+
+    /**
+     * Label for the Approver column on the leave applications index.
+     * Pending → current tier addressee / recipients; decided → who actioned it.
+     *
+     * @return array{label: string, title: ?string, name: ?string, status: string}
+     */
+    private function approverDisplayForIndex(LeaveApplication $application): array
+    {
+        $status = (string) $application->status;
+
+        if (in_array($status, ['approved', 'rejected'], true)) {
+            $name = $application->approver?->name;
+            if (! $name && $application->relationLoaded('approvals')) {
+                $latest = $application->approvals->sortByDesc('id')->first();
+                $name = $latest?->approver?->name;
+            }
+
+            return [
+                'label' => $name ?: '—',
+                'title' => $status === 'approved' ? 'Approved by' : 'Rejected by',
+                'name' => $name,
+                'status' => $status,
+            ];
+        }
+
+        if ($status !== 'pending') {
+            return [
+                'label' => '—',
+                'title' => null,
+                'name' => null,
+                'status' => $status,
+            ];
+        }
+
+        $applicant = ($application->relationLoaded('employee') && $application->employee)
+            ? $application->employee
+            : Employee::query()->with(['currentBranch', 'branch', 'department', 'designation'])->find($application->employee_id);
+
+        if (! $applicant) {
+            return [
+                'label' => '—',
+                'title' => null,
+                'name' => null,
+                'status' => $status,
+            ];
+        }
+
+        if (! $applicant->relationLoaded('currentBranch')) {
+            $applicant->load(['currentBranch', 'branch', 'department', 'designation']);
+        }
+
+        if (! LeaveApprovalTier::query()->where('is_active', true)->exists()) {
+            return [
+                'label' => 'Approver',
+                'title' => 'Approver',
+                'name' => null,
+                'status' => $status,
+            ];
+        }
+
+        $resolved = $this->resolveTierApprovers($applicant, (int) $application->days);
+        $addressee = $resolved['addressee'] ?? [];
+        $title = trim((string) ($addressee['title'] ?? ''));
+        $name = trim((string) ($addressee['name'] ?? ''));
+
+        if ($name === '' && $resolved['recipients']->isNotEmpty()) {
+            $names = $resolved['recipients']
+                ->map(fn (User $u) => trim((string) $u->name))
+                ->filter()
+                ->unique()
+                ->values();
+            $name = $names->take(2)->implode(', ');
+            if ($names->count() > 2) {
+                $name .= ' +'.($names->count() - 2);
+            }
+        }
+
+        if ($name !== '' && $title !== '') {
+            $label = "{$name} ({$title})";
+        } elseif ($name !== '') {
+            $label = $name;
+        } elseif ($title !== '') {
+            $label = $title;
+        } else {
+            $label = 'Unassigned';
+        }
+
+        return [
+            'label' => $label,
+            'title' => $title !== '' ? $title : null,
+            'name' => $name !== '' ? $name : null,
+            'status' => $status,
+        ];
     }
 
     /**

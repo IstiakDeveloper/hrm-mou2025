@@ -98,6 +98,13 @@ interface LeaveApplication {
     approver: LeaveApproverUser | null;
     /** Set by server: current user may approve/reject this row (tier + legacy rules). */
     can_approve_action?: boolean;
+    /** Pending: current tier target; approved/rejected: who actioned it. */
+    approver_display?: {
+        label: string;
+        title: string | null;
+        name: string | null;
+        status: string;
+    };
 }
 
 interface PaginationLinks {
@@ -437,6 +444,7 @@ export default function ApplicationsIndex({
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Duration</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Days</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Approver</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Applied On</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
                                     </TableRow>
@@ -482,6 +490,18 @@ export default function ApplicationsIndex({
                                                 </TableCell>
                                                 <TableCell>
                                                     {getStatusBadge(application.status)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="max-w-[220px]">
+                                                        <div className="text-[13px] font-medium text-slate-800 truncate" title={application.approver_display?.label || '—'}>
+                                                            {application.approver_display?.label || '—'}
+                                                        </div>
+                                                        {application.status === 'pending' && application.approver_display?.title && application.approver_display?.name && (
+                                                            <div className="text-[11px] text-slate-500 truncate">
+                                                                {application.approver_display.title}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="text-sm">
@@ -551,7 +571,7 @@ export default function ApplicationsIndex({
                                         ))
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-24 text-center">
+                                            <TableCell colSpan={8} className="h-24 text-center">
                                                 No leave applications found.
                                                 {(search || status !== 'all' || departmentId !== 'all' || employeeId !== 'all' || fromDate || toDate) && (
                                                     <Button
