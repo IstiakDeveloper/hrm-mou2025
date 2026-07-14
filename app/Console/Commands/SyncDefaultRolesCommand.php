@@ -18,7 +18,7 @@ class SyncDefaultRolesCommand extends Command
         $this->info('Synced '.count($roles).' default role(s) from config/default_roles.php.');
 
         foreach ($roles as $name => $role) {
-            $count = count(json_decode($role->permissions, true) ?? []);
+            $count = count(PermissionRegistry::permissionsFromStorage($role->permissions));
             $this->line("  • {$name}: {$count} permission(s)");
         }
 

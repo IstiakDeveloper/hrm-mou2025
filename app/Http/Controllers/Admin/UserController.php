@@ -175,10 +175,22 @@ class UserController extends Controller
         ]);
 
         $user->roles()->sync($request->role_ids);
-        $this->sendWelcomeEmail($user, $plainPassword);
 
-        return redirect()->route('admin.users.index')
-            ->with('success', 'User created successfully and welcome email sent.');
+        try {
+            $this->sendWelcomeEmail($user, $plainPassword);
+
+            return redirect()->route('admin.users.index')
+                ->with('success', 'User created successfully and welcome email sent.');
+        } catch (\Throwable $e) {
+            Log::error('Failed to send welcome email after user creation.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('admin.users.index')
+                ->with('warning', 'User created successfully, but welcome email could not be sent. Please check mail configuration.');
+        }
     }
 
     /**

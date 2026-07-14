@@ -180,6 +180,15 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     if (p.startsWith('/attendance') || p.startsWith('/movements') || p.startsWith('/zkteco')) {
         return 'attendance-movement';
     }
+    if (p.startsWith('/sections/staff-fund') || p.startsWith('/provident-fund') || p.startsWith('/gratuity') || p.startsWith('/final-payments') || p.startsWith('/employee/staff-fund')) {
+        return 'staff-fund';
+    }
+    if (p.startsWith('/sections/payroll') || p.startsWith('/employee/payroll')) {
+        return 'payroll';
+    }
+    if (p.startsWith('/employee/loan')) {
+        return 'employee-loan';
+    }
     if (
         p.startsWith('/employees') ||
         p.startsWith('/confirmations') ||
@@ -243,11 +252,9 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     ) {
         return 'payroll';
     }
-    if (p.startsWith('/sections/staff-fund') || p.startsWith('/provident-fund') || p.startsWith('/gratuity') || p.startsWith('/final-payments')) {
-        return 'staff-fund';
-    }
     if (
         p.startsWith('/employee-loans')
+        || p.startsWith('/employee/loan')
         || p.startsWith('/loan-policies')
         || p.startsWith('/loan-committees')
         || p.startsWith('/loan-applications')

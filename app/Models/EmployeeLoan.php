@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class EmployeeLoan extends Model
 {
@@ -63,6 +64,11 @@ class EmployeeLoan extends Model
     public function migration(): BelongsTo
     {
         return $this->belongsTo(LoanMigration::class, 'loan_migration_id');
+    }
+
+    public function migrationItem(): HasOne
+    {
+        return $this->hasOne(LoanMigrationItem::class, 'employee_loan_id');
     }
 
     public function salaryHead(): BelongsTo

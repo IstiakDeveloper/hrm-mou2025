@@ -8,6 +8,10 @@ use App\Models\EmployeeLoan;
 use App\Models\EmployeeLoanTransaction;
 use App\Models\LoanPolicy;
 use App\Services\EmployeeLoanService;
+use App\Services\LoanCalculationService;
+use App\Services\LoanCollectionService;
+use App\Services\LoanMigrationService;
+use App\Services\LoanRebateService;
 use App\Services\SalaryStructureCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -21,6 +25,10 @@ class EmployeeLoanController extends Controller
 
     public function __construct(
         protected EmployeeLoanService $loanService,
+        protected LoanCalculationService $calculator,
+        protected LoanMigrationService $migrationService,
+        protected LoanCollectionService $collectionService,
+        protected LoanRebateService $rebateService,
     ) {}
 
     public function index(Request $request)
@@ -33,6 +41,8 @@ class EmployeeLoanController extends Controller
                 'employee.branch:id,name',
                 'employee.department:id,name',
                 'policy:id,name,code',
+                'installments',
+                'transactions',
             ])
             ->when($request->filled('branch_id'), function ($q) use ($request) {
                 $q->whereHas('employee', fn ($eq) => $eq->where('current_branch_id', $request->integer('branch_id')));
@@ -55,9 +65,13 @@ class EmployeeLoanController extends Controller
             })
             ->orderByDesc('disbursement_date')
             ->orderByDesc('id')
-            ->limit(500)
-            ->get()
-            ->map(fn (EmployeeLoan $loan) => $this->mapLoanSummary($loan));
+            ->get();
+
+        $breakdowns = $this->loanService->breakdownSummariesForLoans($loans);
+
+        $loans = $loans
+            ->map(fn (EmployeeLoan $loan) => $this->mapLoanSummary($loan, $breakdowns))
+            ->values();
 
         return Inertia::render('employee-loan/index', [
             ...$this->payrollFilterOptions(),
@@ -132,12 +146,25 @@ class EmployeeLoanController extends Controller
             'employee.branch:id,name',
             'employee.department:id,name',
             'employee.designation:id,name',
+            'application:id,loan_cycle',
             'installments' => fn ($q) => $q->orderBy('installment_no'),
             'salaryHead:id,name,short_name',
             'policy:id,name,code,loan_type',
         ]);
 
+        $breakdown = $this->loanService->breakdownForLoan($employee_loan);
         $paidCount = $employee_loan->installments->where('status', 'paid')->count();
+        $exactCalc = null;
+        if ($employee_loan->loan_policy_id) {
+            $policy = LoanPolicy::query()->find($employee_loan->loan_policy_id);
+            if ($policy) {
+                $exactCalc = $this->calculator->calculate(
+                    $policy,
+                    (float) $employee_loan->principal_amount,
+                    (int) ($employee_loan->application?->loan_cycle ?? 1),
+                );
+            }
+        }
 
         return Inertia::render('employee-loan/show', [
             'loan' => [
@@ -156,10 +183,21 @@ class EmployeeLoanController extends Controller
                 'legacy_paid_installments' => $employee_loan->legacy_paid_installments,
                 'status' => $employee_loan->status,
                 'principal_amount' => (float) $employee_loan->principal_amount,
+                'service_charge_amount' => $breakdown['service_charge_amount'],
                 'total_payable' => (float) $employee_loan->total_payable,
                 'installment_count' => $employee_loan->installment_count,
                 'installment_amount' => (float) $employee_loan->installment_amount,
+                'installment_amount_exact' => $exactCalc
+                    ? (float) $exactCalc['installment_amount_monthly_exact']
+                    : (float) $employee_loan->installment_amount,
+                'service_charge_amount_exact' => $exactCalc
+                    ? (float) $exactCalc['service_charge_amount_exact']
+                    : $breakdown['service_charge_amount'],
                 'outstanding_balance' => (float) $employee_loan->outstanding_balance,
+                'outstanding_principal' => $breakdown['outstanding_principal'],
+                'outstanding_service_charge' => $breakdown['outstanding_service_charge'],
+                'recovered_principal' => $breakdown['recovered_principal'],
+                'recovered_service_charge' => $breakdown['recovered_service_charge'],
                 'paid_installments' => $paidCount,
                 'disbursement_date' => $employee_loan->disbursement_date?->format('d-m-Y'),
                 'first_installment_date' => $employee_loan->first_installment_date?->format('d-m-Y'),
@@ -173,20 +211,11 @@ class EmployeeLoanController extends Controller
                     'designation' => $employee_loan->employee->designation?->name,
                 ],
             ],
-            'schedule' => $employee_loan->installments->map(fn ($row) => [
-                'id' => $row->id,
-                'installment_no' => $row->installment_no,
-                'due_date' => $row->due_date?->format('d-m-Y'),
-                'due_date_iso' => $row->due_date?->format('Y-m-d'),
-                'total_amount' => (float) $row->total_amount,
-                'status' => $row->status,
-                'paid_at' => $row->paid_at?->format('d-m-Y H:i'),
-                'paid_amount' => $row->paid_amount !== null ? (float) $row->paid_amount : null,
-            ])->values(),
+            'schedule' => collect($breakdown['schedule'])->values(),
         ]);
     }
 
-    public function ledger(EmployeeLoan $employee_loan)
+    public function ledger(EmployeeLoan $employee_loan, Request $request)
     {
         $employee_loan->load([
             'employee:id,pin,name_en,department_id,designation_id,program_id,project_id,current_branch_id',
@@ -197,15 +226,17 @@ class EmployeeLoanController extends Controller
             'employee.branch:id,name',
             'policy:id,code,name',
             'application:id,application_number,loan_cycle,employee_loan_id',
+            'migrationItem',
             'installments' => fn ($q) => $q->orderBy('installment_no'),
         ]);
 
-        $transactions = $this->loanService->ledgerForLoan($employee_loan);
+        $this->loanService->refreshLoanStatusPublic($employee_loan->fresh());
+        $employee_loan->refresh();
+
+        $breakdown = $this->loanService->breakdownForLoan($employee_loan);
+        $editTerms = $this->loanService->ledgerEditSnapshot($employee_loan);
 
         $lastInstallment = $employee_loan->installments->last();
-        $serviceCharge = SalaryStructureCalculator::roundTaka(
-            (float) $employee_loan->total_payable - (float) $employee_loan->principal_amount
-        );
         $rebateAmount = (float) $employee_loan->transactions()
             ->where('transaction_type', EmployeeLoanTransaction::TYPE_REBATE)
             ->sum('credit_amount');
@@ -224,7 +255,36 @@ class EmployeeLoanController extends Controller
             ? strtoupper($date->format('d-M-Y'))
             : null;
 
+        $policyIds = collect([$employee_loan->loan_policy_id, $editTerms['loan_policy_id'] ?? null])
+            ->filter()
+            ->unique()
+            ->values();
+
+        $policies = LoanPolicy::query()
+            ->where(function ($query) use ($policyIds) {
+                $query->where('is_active', true);
+                if ($policyIds->isNotEmpty()) {
+                    $query->orWhereIn('id', $policyIds);
+                }
+            })
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'loan_type', 'calculation_method'])
+            ->map(fn (LoanPolicy $p) => [
+                'id' => $p->id,
+                'code' => $p->code,
+                'name' => $p->name,
+                'label' => "{$p->name} ({$p->code})",
+                'loan_type' => $p->loan_type,
+                'calculation_method' => $p->calculation_method,
+            ]);
+
         return Inertia::render('employee-loan/ledger', [
+            'canEdit' => $request->user()?->hasPermission('employee-loan.edit') ?? false,
+            'defaultIncludeCurrentMonth' => (bool) config('employee_loans.rebate.default_include_current_month', false),
+            'employeeLoans' => $this->ledgerNavLoansForEmployee($employee_loan->employee_id),
+            'policies' => $policies,
+            'editTerms' => $editTerms,
             'loan' => [
                 'id' => $employee_loan->id,
                 'loan_number' => $employee_loan->loan_number,
@@ -232,7 +292,11 @@ class EmployeeLoanController extends Controller
                 'status' => $employee_loan->status,
                 'outstanding_balance' => (float) $employee_loan->outstanding_balance,
                 'principal_amount' => (float) $employee_loan->principal_amount,
-                'service_charge_amount' => $serviceCharge,
+                'service_charge_amount' => $breakdown['service_charge_amount'],
+                'outstanding_principal' => $breakdown['outstanding_principal'],
+                'outstanding_service_charge' => $breakdown['outstanding_service_charge'],
+                'recovered_principal' => $breakdown['recovered_principal'],
+                'recovered_service_charge' => $breakdown['recovered_service_charge'],
                 'total_payable' => (float) $employee_loan->total_payable,
                 'interest_rate' => (float) $employee_loan->interest_rate,
                 'installment_count' => $employee_loan->installment_count,
@@ -262,27 +326,18 @@ class EmployeeLoanController extends Controller
                     'branch' => $employee_loan->employee->branch?->name,
                 ],
             ],
-            'transactions' => $transactions->map(fn ($tx) => [
-                'id' => $tx->id,
-                'transaction_type' => $tx->transaction_type,
-                'transaction_type_label' => $this->transactionTypeLabel($tx->transaction_type),
-                'can_correct' => $this->loanService->isCorrectableTransaction($tx),
-                'debit_amount' => (float) $tx->debit_amount,
-                'credit_amount' => (float) $tx->credit_amount,
-                'balance_after' => (float) $tx->balance_after,
-                'amount' => (float) ($tx->debit_amount > 0 ? $tx->debit_amount : $tx->credit_amount),
-                'transaction_date' => $tx->transaction_date?->format('d-m-Y'),
-                'transaction_date_iso' => $tx->transaction_date?->format('Y-m-d'),
-                'payroll_year' => $tx->payroll_year,
-                'payroll_month' => $tx->payroll_month,
-                'payroll_period' => $tx->payroll_year && $tx->payroll_month
-                    ? date('F Y', mktime(0, 0, 0, $tx->payroll_month, 1, $tx->payroll_year))
-                    : null,
-                'notes' => $tx->notes,
-                'reference_no' => $tx->reference_no,
-            ])->values(),
-            'months' => $this->payrollFilterOptions()['months'] ?? [],
-            'years' => $this->payrollFilterOptions()['years'] ?? [],
+            'schedule' => collect($breakdown['schedule'])->values(),
+        ]);
+    }
+
+    public function ledgerLookup(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|integer|exists:employees,id',
+        ]);
+
+        return response()->json([
+            'loans' => $this->ledgerNavLoansForEmployee((int) $validated['employee_id']),
         ]);
     }
 
@@ -324,31 +379,142 @@ class EmployeeLoanController extends Controller
         return back()->with('success', 'Ledger entry removed.');
     }
 
-    public function storeManualPayment(Request $request, EmployeeLoan $employee_loan)
+    public function fullPaidPreview(Request $request, EmployeeLoan $employee_loan)
     {
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:1',
-            'transaction_date' => 'required|date',
-            'reference_no' => 'nullable|string|max:80',
-            'notes' => 'required|string|max:500',
+            'collection_date' => 'required|date',
+            'include_current_month' => 'nullable|boolean',
         ]);
 
         try {
-            $this->loanService->recordManualPayment(
+            $preview = $this->rebateService->suggest(
                 $employee_loan,
-                (float) $validated['amount'],
-                Carbon::parse($validated['transaction_date']),
-                $validated['notes'],
-                $validated['reference_no'] ?? null,
-                auth()->id()
+                Carbon::parse($validated['collection_date']),
+                array_key_exists('include_current_month', $validated)
+                    ? (bool) $validated['include_current_month']
+                    : null,
             );
         } catch (\InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['amount' => $e->getMessage()]);
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($preview);
+    }
+
+    public function storeFullPaidWithRebate(Request $request, EmployeeLoan $employee_loan)
+    {
+        $validated = $request->validate([
+            'collection_date' => 'required|date',
+            'reference_no' => 'nullable|string|max:80',
+            'notes' => 'required|string|max:500',
+            'include_current_month' => 'nullable|boolean',
+            'rebate_amount' => 'nullable|numeric|min:0',
+        ]);
+
+        $includeCurrentMonth = $request->has('include_current_month')
+            ? $request->boolean('include_current_month')
+            : (bool) config('employee_loans.rebate.default_include_current_month', false);
+
+        try {
+            $result = $this->collectionService->processFullPaidWithRebate([
+                'employee_loan_id' => $employee_loan->id,
+                'collection_date' => $validated['collection_date'],
+                'reference_no' => $validated['reference_no'] ?? null,
+                'notes' => $validated['notes'],
+                'include_current_month' => $includeCurrentMonth,
+                'rebate_amount' => $validated['rebate_amount'] ?? null,
+            ], auth()->id());
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['full_paid' => $e->getMessage()]);
+        }
+
+        $employee_loan->refresh();
+        $totalRebate = SalaryStructureCalculator::roundTaka(
+            (float) $result['rebate_amount'] + (float) $result['tail_rebate_amount']
+        );
+
+        return redirect()
+            ->route('employee-loans.ledger', $employee_loan)
+            ->with('success', sprintf(
+                'Loan %s closed. Rebate ৳%s, collection ৳%s.',
+                $employee_loan->loan_number,
+                number_format($totalRebate, 2, '.', ''),
+                number_format((float) $result['collection_amount'], 2, '.', ''),
+            ));
+    }
+
+    public function updateLedgerTerms(Request $request, EmployeeLoan $employee_loan)
+    {
+        $useManual = $request->boolean('use_manual_terms');
+
+        $request->merge([
+            'use_manual_terms' => $useManual,
+            'loan_policy_id' => $request->filled('loan_policy_id') ? (int) $request->input('loan_policy_id') : null,
+            'service_charge_amount' => $useManual
+                ? ($request->input('service_charge_amount') ?? 0)
+                : null,
+        ]);
+
+        $validated = $request->validate([
+            'loan_policy_id' => 'nullable|integer|exists:loan_policies,id',
+            'use_manual_terms' => 'boolean',
+            'service_charge_amount' => $useManual ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'disbursement_date' => 'required|date',
+            'disburse_amount' => 'required|numeric|min:1',
+            'installment_amount' => 'required|numeric|min:1',
+            'passed_months' => 'required|integer|min:0|max:360',
+            'outstanding_principal' => 'required|numeric|min:0',
+            'outstanding_service_charge' => 'required|numeric|min:0',
+            'outstanding_total' => 'required|numeric|min:0.01',
+            'calculation_method' => 'nullable|in:reducing,flat',
+        ]);
+
+        $validated['use_manual_terms'] = $useManual;
+        if (array_key_exists('calculation_method', $validated) && $validated['calculation_method'] === null) {
+            unset($validated['calculation_method']);
+        }
+
+        try {
+            $this->migrationService->updateLoanFromLedger($employee_loan, $validated);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages([
+                'loan' => $e->getMessage(),
+                'outstanding_total' => $e->getMessage(),
+            ]);
+        }
+
+        $message = 'Loan terms updated and ledger schedule refreshed.';
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message]);
         }
 
         return redirect()
             ->route('employee-loans.ledger', $employee_loan)
-            ->with('success', 'Manual loan payment recorded.');
+            ->with('success', $message);
+    }
+
+    public function recalculateLedgerTerms(Request $request, EmployeeLoan $employee_loan)
+    {
+        try {
+            $this->migrationService->recalculateLoanFromPolicy($employee_loan->fresh());
+        } catch (\InvalidArgumentException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            throw ValidationException::withMessages(['loan' => $e->getMessage()]);
+        }
+
+        $message = 'Loan terms recalculated from policy and ledger schedule refreshed.';
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message]);
+        }
+
+        return redirect()
+            ->route('employee-loans.ledger', $employee_loan)
+            ->with('success', $message);
     }
 
     public function cancel(EmployeeLoan $employee_loan)
@@ -375,9 +541,48 @@ class EmployeeLoanController extends Controller
             ->all();
     }
 
-    protected function mapLoanSummary(EmployeeLoan $loan): array
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function ledgerNavLoansForEmployee(int $employeeId): array
     {
-        $paid = $loan->installments()->where('status', 'paid')->count();
+        return EmployeeLoan::query()
+            ->with('policy:id,name,code')
+            ->where('employee_id', $employeeId)
+            ->orderByDesc('disbursement_date')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (EmployeeLoan $loan) => $this->mapLedgerNavLoan($loan))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function mapLedgerNavLoan(EmployeeLoan $loan): array
+    {
+        $pending = $loan->relationLoaded('installments')
+            ? $loan->installments->whereIn('status', ['pending', 'scheduled'])->count()
+            : $loan->installments()->whereIn('status', ['pending', 'scheduled'])->count();
+
+        return [
+            'id' => $loan->id,
+            'loan_number' => $loan->loan_number,
+            'status' => $loan->status,
+            'loan_type_label' => $loan->typeLabel(),
+            'policy_name' => $loan->policy?->name,
+            'outstanding_balance' => (float) $loan->outstanding_balance,
+            'pending_installments' => $pending,
+        ];
+    }
+
+    protected function mapLoanSummary(EmployeeLoan $loan, array $breakdowns = []): array
+    {
+        $paid = $loan->relationLoaded('installments')
+            ? $loan->installments->where('status', 'paid')->count()
+            : $loan->installments()->where('status', 'paid')->count();
+        $summary = $breakdowns[$loan->id] ?? $this->loanService->breakdownSummaryForLoan($loan);
 
         return [
             'id' => $loan->id,
@@ -388,7 +593,11 @@ class EmployeeLoanController extends Controller
             'is_legacy_import' => (bool) $loan->is_legacy_import,
             'status' => $loan->status,
             'principal_amount' => (float) $loan->principal_amount,
+            'service_charge_amount' => (float) $summary['service_charge_amount'],
+            'total_payable' => (float) $summary['total_payable'],
             'outstanding_balance' => (float) $loan->outstanding_balance,
+            'outstanding_principal' => (float) $summary['outstanding_principal'],
+            'outstanding_service_charge' => (float) $summary['outstanding_service_charge'],
             'installment_count' => $loan->installment_count,
             'paid_installments' => $paid,
             'disbursement_date' => $loan->disbursement_date?->format('d-m-Y'),

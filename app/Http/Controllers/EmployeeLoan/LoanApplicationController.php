@@ -194,6 +194,7 @@ class LoanApplicationController extends Controller
                 'calculation' => [
                     'rate_yearly' => (float) $application->rate_yearly,
                     'installment_amount_monthly' => (float) $application->installment_amount_monthly,
+                    'installment_amount_monthly_exact' => $this->exactCalculationForApplication($application)['installment_amount_monthly_exact'],
                     'total_installments' => $application->total_installments,
                     'grace_months' => $application->grace_months,
                     'interval_months' => $application->interval_months,
@@ -254,6 +255,8 @@ class LoanApplicationController extends Controller
      */
     protected function mapApplicationDetail(LoanApplication $a): array
     {
+        $exact = $this->exactCalculationForApplication($a);
+
         return [
             'id' => $a->id,
             'application_number' => $a->application_number,
@@ -263,6 +266,9 @@ class LoanApplicationController extends Controller
             'applied_amount' => (float) $a->applied_amount,
             'rate_yearly' => (float) $a->rate_yearly,
             'installment_amount_monthly' => (float) $a->installment_amount_monthly,
+            'installment_amount_monthly_exact' => $exact['installment_amount_monthly_exact'],
+            'service_charge_amount_exact' => $exact['service_charge_amount_exact'],
+            'total_payable_exact' => $exact['total_payable_exact'],
             'total_installments' => $a->total_installments,
             'grace_months' => $a->grace_months,
             'interval_months' => $a->interval_months,
@@ -289,6 +295,45 @@ class LoanApplicationController extends Controller
                 'name' => $a->policy->name,
             ] : null,
             'committee_name' => $a->committee?->committee_name,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   installment_amount_monthly_exact: float,
+     *   service_charge_amount_exact: float,
+     *   total_payable_exact: float,
+     * }
+     */
+    protected function exactCalculationForApplication(LoanApplication $application): array
+    {
+        if (! $application->loan_policy_id) {
+            return [
+                'installment_amount_monthly_exact' => (float) $application->installment_amount_monthly,
+                'service_charge_amount_exact' => (float) $application->service_charge_amount,
+                'total_payable_exact' => (float) $application->total_payable,
+            ];
+        }
+
+        $policy = LoanPolicy::query()->find($application->loan_policy_id);
+        if (! $policy) {
+            return [
+                'installment_amount_monthly_exact' => (float) $application->installment_amount_monthly,
+                'service_charge_amount_exact' => (float) $application->service_charge_amount,
+                'total_payable_exact' => (float) $application->total_payable,
+            ];
+        }
+
+        $calc = $this->calculator->calculate(
+            $policy,
+            (float) $application->principal_amount,
+            (int) $application->loan_cycle,
+        );
+
+        return [
+            'installment_amount_monthly_exact' => (float) $calc['installment_amount_monthly_exact'],
+            'service_charge_amount_exact' => (float) $calc['service_charge_amount_exact'],
+            'total_payable_exact' => (float) $calc['total_payable_exact'],
         ];
     }
 

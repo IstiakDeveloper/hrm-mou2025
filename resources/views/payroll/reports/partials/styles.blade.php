@@ -325,6 +325,14 @@
         font-weight: bold;
     }
 
+    table.data.loan-statement-employee tr.statement-header th {
+        background: #3d3d3d;
+        color: #fbbf24;
+        text-align: center;
+        font-weight: 600;
+        vertical-align: middle;
+    }
+
     table.salary-sheet-table tr.totals-row td:first-child {
         text-align: right;
     }

@@ -5,7 +5,6 @@
 export const SUPER_ADMIN_ROLE_NAMES = ['Super Admin'];
 export const ACCOUNTANT_ROLE_NAMES = ['Accountant'];
 export const ACCOUNTANT_SECTION_IDS = ['employee-loan', 'staff-fund', 'fixed-asset', 'inventory'] as const;
-export const DEPARTMENT_HEAD_DENIED_SECTION_IDS = ['employee-loan', 'staff-fund', 'payroll'] as const;
 
 const PAYROLL_MODULE_PERMISSIONS = new Set([
   'payroll.view', 'payroll.create', 'payroll.edit', 'payroll.delete',

@@ -29,62 +29,37 @@ interface AvailablePermissions {
   [key: string]: string;
 }
 
+interface AvailableSections {
+  [key: string]: {
+    label: string;
+    description: string;
+  };
+}
+
 interface RoleCreateProps {
   permissions: AvailablePermissions;
+  permissions_by_category: Record<string, AvailablePermissions>;
   permission_categories: PermissionCategories;
+  sections: AvailableSections;
+  supports_section_locks: boolean;
   errors: {
     [key: string]: string;
   };
 }
 
-export default function RoleCreate({ permissions, permission_categories, errors }: RoleCreateProps) {
+export default function RoleCreate({ permissions, permissions_by_category, permission_categories, sections, supports_section_locks, errors }: RoleCreateProps) {
   const { data, setData, post, processing } = useForm({
     name: '',
     description: '',
     permissions: [] as string[],
+    blocked_sections: [] as string[],
   });
 
   const [activeTab, setActiveTab] = useState<string>(Object.keys(permission_categories)[0] || 'admin');
 
-  // Group permissions by category based on the controller logic
+  // Full catalog from config/permissions.php (via PermissionRegistry)
   const getPermissionsByCategory = (category: string): AvailablePermissions => {
-    const categoryMap: { [key: string]: string[] } = {
-      admin: ['admin.access'],
-      users: ['users.view', 'users.create', 'users.edit', 'users.delete'],
-      roles: ['roles.view', 'roles.create', 'roles.edit', 'roles.delete'],
-      employees: ['employees.view', 'employees.create', 'employees.edit', 'employees.delete'],
-      organization: [
-        'branches.view', 'branches.create', 'branches.edit', 'branches.delete',
-        'departments.view', 'departments.create', 'departments.edit', 'departments.delete',
-        'designations.view', 'designations.create', 'designations.edit', 'designations.delete'
-      ],
-      attendance: [
-        'attendance.view', 'attendance.create', 'attendance.edit', 'attendance.delete',
-        'attendance.sync', 'attendance.admin'
-      ],
-      leave: [
-        'leave-types.view', 'leave-types.create', 'leave-types.edit', 'leave-types.delete',
-        'leave-balances.view', 'leave-balances.create', 'leave-balances.edit', 'leave-balances.delete', 'leave-balances.admin',
-        'leave-applications.view', 'leave-applications.create', 'leave-applications.edit', 'leave-applications.cancel', 'leave-applications.approve'
-      ],
-      movement: [
-        'movements.view', 'movements.create', 'movements.edit', 'movements.cancel', 'movements.complete', 'movements.approve',
-        'transfers.view', 'transfers.create', 'transfers.edit', 'transfers.approve'
-      ],
-      holidays: ['holidays.view', 'holidays.create', 'holidays.edit', 'holidays.delete'],
-      reports: ['reports.view', 'reports.export']
-    };
-
-    const categoryPermissions: AvailablePermissions = {};
-    const permissionKeys = categoryMap[category] || [];
-
-    permissionKeys.forEach(key => {
-      if (permissions[key]) {
-        categoryPermissions[key] = permissions[key];
-      }
-    });
-
-    return categoryPermissions;
+    return permissions_by_category[category] || {};
   };
 
   const handlePermissionChange = (permission: string, checked: boolean) => {
@@ -93,6 +68,14 @@ export default function RoleCreate({ permissions, permission_categories, errors 
       : data.permissions.filter(p => p !== permission);
 
     setData('permissions', newPermissions);
+  };
+
+  const handleSectionChange = (sectionId: string, checked: boolean) => {
+    const newSections = checked
+      ? [...data.blocked_sections, sectionId]
+      : data.blocked_sections.filter(id => id !== sectionId);
+
+    setData('blocked_sections', newSections);
   };
 
   const handleSelectAllInCategory = (category: string, checked: boolean) => {
@@ -168,11 +151,15 @@ export default function RoleCreate({ permissions, permission_categories, errors 
     const cleanPermissions = data.permissions.filter(p =>
       typeof p === 'string' && p.trim() !== '' && Object.keys(permissions).includes(p)
     );
+    const cleanBlockedSections = data.blocked_sections.filter(id =>
+      typeof id === 'string' && id.trim() !== '' && Object.keys(sections).includes(id)
+    );
 
     const submitData = {
       name: data.name.trim(),
       description: data.description.trim(),
-      permissions: cleanPermissions
+      permissions: cleanPermissions,
+      blocked_sections: cleanBlockedSections,
     };
 
     // Debug log to check data
@@ -292,6 +279,20 @@ export default function RoleCreate({ permissions, permission_categories, errors 
                     </p>
                   </div>
 
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-amber-900">Section Locks</span>
+                      <Badge variant="outline" className="bg-white/70 border-amber-200 text-amber-800">
+                        {data.blocked_sections.length} blocked
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-amber-700">
+                      {supports_section_locks
+                        ? 'Use section locks to hide and block full modules for this role.'
+                        : 'Run the latest migration to enable saving section locks. Until then, the old default behavior stays active.'}
+                    </p>
+                  </div>
+
                   {/* Info Alert */}
                   <Alert className="bg-amber-50 border-amber-200">
                     <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -305,6 +306,7 @@ export default function RoleCreate({ permissions, permission_categories, errors 
 
             {/* Permissions Card */}
             <div className="lg:col-span-2">
+              <div className="space-y-8">
               <Card className="shadow-sm border-gray-200">
                 <CardHeader className="border-b bg-gray-50/50">
                   <div className="flex items-center justify-between">
@@ -458,6 +460,82 @@ export default function RoleCreate({ permissions, permission_categories, errors 
                   )}
                 </CardContent>
               </Card>
+
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="border-b bg-gray-50/50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-lg">Section Access</CardTitle>
+                      <CardDescription>Block entire ERP sections for this role without changing its action permissions</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-white">
+                      {data.blocked_sections.length} / {Object.keys(sections).length} blocked
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  {!supports_section_locks && (
+                    <Alert className="bg-amber-50 border-amber-200">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-800">
+                        Section locks will become active after running `php artisan migrate`.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {Object.entries(sections).map(([sectionId, section]) => {
+                      const isBlocked = data.blocked_sections.includes(sectionId);
+
+                      return (
+                        <label
+                          key={sectionId}
+                          htmlFor={`section-${sectionId}`}
+                          className={`flex min-h-[136px] cursor-pointer flex-col rounded-xl border p-3 transition-colors hover:bg-gray-50 ${
+                            isBlocked ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'
+                          } ${!supports_section_locks ? 'cursor-not-allowed opacity-70' : ''}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900">{section.label}</p>
+                              <p className="mt-1 text-[11px] text-gray-400">{sectionId}</p>
+                            </div>
+                            <Checkbox
+                              id={`section-${sectionId}`}
+                              checked={isBlocked}
+                              disabled={!supports_section_locks}
+                              onCheckedChange={(checked) => handleSectionChange(sectionId, checked === true)}
+                            />
+                          </div>
+
+                          <p className="mt-3 flex-1 text-xs leading-5 text-gray-500">{section.description}</p>
+
+                          <div className="mt-3 flex items-center justify-between">
+                            <Badge
+                              variant="outline"
+                              className={isBlocked
+                                ? 'bg-amber-100 text-amber-700 border-amber-300 text-xs'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200 text-xs'}
+                            >
+                              {isBlocked ? 'Blocked' : 'Allowed'}
+                            </Badge>
+                            <span className="text-[11px] text-gray-400">Module access</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {errors.blocked_sections && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                      <p className="text-sm text-red-600 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        {errors.blocked_sections}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              </div>
             </div>
           </div>
 

@@ -104,6 +104,7 @@ interface UserPermissions {
     canDelete: boolean;
     canSyncDevices: boolean;
     isEmployee: boolean;
+    isSelfOnly?: boolean;
     isBranchManager: boolean;
     isDepartmentHead: boolean;
 }
@@ -119,8 +120,10 @@ interface AttendanceReportProps extends PageProps {
 }
 
 export default function AttendanceReport({ auth, employees, reports, employee_name, employee_id, from_date, to_date, userPermissions }: AttendanceReportProps) {
+    const selfOnlyEmployeeId = userPermissions.isSelfOnly && employees.length === 1 ? String(employees[0].id) : '';
+
     const { data, setData, post, processing, errors } = useForm({
-        employee_id: employee_id || '',
+        employee_id: employee_id || selfOnlyEmployeeId || '',
         from_date: from_date || '',
         to_date: to_date || '',
     });
@@ -137,8 +140,8 @@ export default function AttendanceReport({ auth, employees, reports, employee_na
     }, [employees]);
 
     useEffect(() => {
-        if (employee_id) {
-            setData('employee_id', employee_id);
+        if (employee_id || selfOnlyEmployeeId) {
+            setData('employee_id', employee_id || selfOnlyEmployeeId);
         }
         if (from_date) {
             setData('from_date', from_date);
@@ -146,7 +149,7 @@ export default function AttendanceReport({ auth, employees, reports, employee_na
         if (to_date) {
             setData('to_date', to_date);
         }
-    }, [employee_id, from_date, to_date, setData]);
+    }, [employee_id, selfOnlyEmployeeId, from_date, to_date, setData]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -295,24 +298,35 @@ export default function AttendanceReport({ auth, employees, reports, employee_na
                         <CardHeader>
                             <CardTitle>Employee Attendance Report</CardTitle>
                             <CardDescription>
-                                Select an employee and date range to view attendance records
+                                {userPermissions.isSelfOnly
+                                    ? 'Select a date range to view your attendance records'
+                                    : 'Select an employee and date range to view attendance records'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="employee_id">Select Employee</Label>
-                                        <ComboSelect
-                                            value={data.employee_id || null}
-                                            onChange={(value) => setData('employee_id', value ?? '')}
-                                            items={employeeItems}
-                                            placeholder="Select an employee"
-                                        />
-                                        {errors.employee_id && (
-                                            <p className="text-sm text-red-500">{errors.employee_id}</p>
-                                        )}
-                                    </div>
+                                    {!userPermissions.isSelfOnly ? (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="employee_id">Select Employee</Label>
+                                            <ComboSelect
+                                                value={data.employee_id || null}
+                                                onChange={(value) => setData('employee_id', value ?? '')}
+                                                items={employeeItems}
+                                                placeholder="Select an employee"
+                                            />
+                                            {errors.employee_id && (
+                                                <p className="text-sm text-red-500">{errors.employee_id}</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <Label>Employee</Label>
+                                            <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                                                {employees[0]?.name ?? employee_name}
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <div className="space-y-2">
                                         <Label htmlFor="from_date">From Date</Label>

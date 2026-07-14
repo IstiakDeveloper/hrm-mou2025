@@ -49,7 +49,12 @@ class EmployeeLoanReportController extends Controller
 
             if ($needsAsOf && ! $filters['as_of']) {
                 $error = 'Please select an as-of date.';
-            } elseif ($needsRange && ! $filters['date_from'] && ! $filters['date_to']) {
+            } elseif (
+                $needsRange
+                && ($config['report'] ?? '') !== 'loan_ledger'
+                && ! $filters['date_from']
+                && ! $filters['date_to']
+            ) {
                 $error = 'Please select a date range (from and/or to).';
             } else {
                 $payload = $this->reports->build($report, $config, $filters);
@@ -136,6 +141,14 @@ class EmployeeLoanReportController extends Controller
 
         $template = $payload['template'] ?? 'loan-table';
         $colCount = count($payload['columns'] ?? $payload['group_columns'] ?? []);
+
+        if ($template === 'loan-installment-ledger') {
+            $colCount = 14;
+        }
+
+        if ($template === 'loan-statement-employee') {
+            $colCount = 19;
+        }
 
         return [
             'companyName' => config('employee_loan_reports.company_name'),

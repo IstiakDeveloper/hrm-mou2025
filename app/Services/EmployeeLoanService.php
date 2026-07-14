@@ -20,15 +20,146 @@ use InvalidArgumentException;
 
 class EmployeeLoanService
 {
+    public const LEGACY_FLAT_PF_CUTOFF = '2025-01-01';
+
     /** @var array<int, list<array{installment: EmployeeLoanInstallment, loan: EmployeeLoan, amount: float, salary_head_id: int, head_name: string}>>|null */
     protected ?array $batchDeductionsByEmployee = null;
 
     public function __construct(
         protected LoanDeductionHeadsService $loanHeadsService,
+        protected LoanCalculationService $loanCalculator,
         protected LoanPolicyService $policyService,
         protected PayslipTotalsService $payslipTotals,
         protected ProbationSalaryService $probationSalaryService,
     ) {}
+
+    public function legacyFlatPfCutoff(): Carbon
+    {
+        return Carbon::parse(self::LEGACY_FLAT_PF_CUTOFF)->startOfDay();
+    }
+
+    public function shouldUseLegacyFlatPfCalculation(EmployeeLoan $loan): bool
+    {
+        $loan->loadMissing(['policy', 'migrationItem']);
+
+        $loanType = $loan->loan_type ?? $loan->policy?->loan_type;
+        if ($loanType !== 'pf_loan' || ! $loan->disbursement_date) {
+            return false;
+        }
+
+        return $loan->disbursement_date->lt($this->legacyFlatPfCutoff());
+    }
+
+    public function isModernLoanDisbursement(Carbon|string|null $disbursementDate): bool
+    {
+        if ($disbursementDate === null || $disbursementDate === '') {
+            return false;
+        }
+
+        return Carbon::parse($disbursementDate)->gte($this->legacyFlatPfCutoff());
+    }
+
+    public function resolveCalculationMethodForMigrationRow(
+        LoanPolicy $policy,
+        string $disbursementDate,
+        ?string $override = null,
+    ): string {
+        if (
+            $policy->loan_type === 'pf_loan'
+            && Carbon::parse($disbursementDate)->lt($this->legacyFlatPfCutoff())
+        ) {
+            return 'flat';
+        }
+
+        $method = in_array($override, ['flat', 'reducing'], true)
+            ? $override
+            : ($policy->calculation_method ?? 'reducing');
+
+        if ($this->isModernLoanDisbursement($disbursementDate) && $method === 'flat') {
+            return 'reducing';
+        }
+
+        return $method;
+    }
+
+    public function resolveCalculationMethodForLoan(EmployeeLoan $loan): string
+    {
+        if ($this->shouldUseLegacyFlatPfCalculation($loan)) {
+            return 'flat';
+        }
+
+        $loan->loadMissing(['policy', 'migrationItem']);
+
+        $override = $loan->migrationItem?->calculation_method;
+        if (in_array($override, ['flat', 'reducing'], true)) {
+            $method = $override;
+        } else {
+            $method = $loan->policy?->calculation_method ?? 'reducing';
+        }
+
+        if ($loan->disbursement_date && $loan->disbursement_date->gte($this->legacyFlatPfCutoff()) && $method === 'flat') {
+            return 'reducing';
+        }
+
+        return $method;
+    }
+
+    /**
+     * @return list<int> Updated migration item IDs.
+     */
+    public function ensureLegacyFlatPfMigrationItems(?iterable $loanIds = null): array
+    {
+        $query = EmployeeLoan::query()
+            ->with('migrationItem')
+            ->where('loan_type', 'pf_loan')
+            ->whereDate('disbursement_date', '<', self::LEGACY_FLAT_PF_CUTOFF);
+
+        if ($loanIds !== null) {
+            $query->whereIn('id', collect($loanIds)->filter()->values());
+        }
+
+        $updated = [];
+
+        foreach ($query->get() as $loan) {
+            $item = $loan->migrationItem;
+            if (! $item || $item->calculation_method === 'flat') {
+                continue;
+            }
+
+            $item->update(['calculation_method' => 'flat']);
+            $updated[] = (int) $item->id;
+        }
+
+        return $updated;
+    }
+
+    /**
+     * @return list<int> Updated migration item IDs cleared from flat.
+     */
+    public function ensureNoFlatForModernLoans(?iterable $loanIds = null): array
+    {
+        $query = EmployeeLoan::query()
+            ->with('migrationItem')
+            ->whereDate('disbursement_date', '>=', self::LEGACY_FLAT_PF_CUTOFF);
+
+        if ($loanIds !== null) {
+            $query->whereIn('id', collect($loanIds)->filter()->values());
+        }
+
+        $updated = [];
+
+        foreach ($query->get() as $loan) {
+            $item = $loan->migrationItem;
+            if (! $item || $item->calculation_method !== 'flat') {
+                continue;
+            }
+
+            $item->update(['calculation_method' => 'reducing']);
+            $updated[] = (int) $item->id;
+        }
+
+        return $updated;
+    }
 
     public function resolveFirstInstallmentDate(Carbon|string $disbursementDate, int $graceMonths = 0): Carbon
     {
@@ -63,10 +194,22 @@ class EmployeeLoanService
 
         $principal = SalaryStructureCalculator::roundTaka((float) $data['principal_amount']);
         $count = (int) $data['installment_count'];
-        $installmentAmount = $policyValues['installment_amount'];
         $interestRate = $policyValues['interest_rate'];
         $loanType = $policyValues['loan_type'];
-        $totalPayable = SalaryStructureCalculator::roundTaka($installmentAmount * $count);
+
+        $calc = $this->loanCalculator->calculate($policy, $principal, (int) ($data['loan_cycle'] ?? 1));
+        $installmentAmount = isset($data['installment_amount']) && $data['installment_amount'] !== null
+            ? SalaryStructureCalculator::roundTaka((float) $data['installment_amount'])
+            : (float) $calc['installment_amount_monthly'];
+        $totalPayable = (float) $calc['total_payable'];
+
+        if ($installmentAmount !== (float) $calc['installment_amount_monthly']) {
+            throw new InvalidArgumentException(sprintf(
+                'Installment amount must be %s for this policy and principal.',
+                taka_fmt($calc['installment_amount_monthly'], 0),
+            ));
+        }
+
         $head = $this->loanHeadsService->headForLoanType($loanType);
         $isLegacy = (bool) ($data['is_legacy_import'] ?? false);
 
@@ -358,27 +501,40 @@ class EmployeeLoanService
             throw new InvalidArgumentException('Installment schedule already exists for this loan.');
         }
 
-        $loan->loadMissing('policy');
+        $loan->loadMissing(['policy', 'migrationItem']);
         $intervalMonths = max(1, (int) ($loan->policy?->interval_months ?? 1));
-
         $firstDue = Carbon::parse($loan->first_installment_date)->startOfMonth();
-        $remaining = (float) $loan->total_payable;
-        $baseAmount = (float) $loan->installment_amount;
 
-        for ($i = 1; $i <= $loan->installment_count; $i++) {
-            $amount = $i === $loan->installment_count
-                ? SalaryStructureCalculator::roundTaka($remaining)
-                : SalaryStructureCalculator::roundTaka($baseAmount);
+        $principal = SalaryStructureCalculator::roundTaka((float) $loan->principal_amount);
+        $rate = (float) $loan->interest_rate;
+        $count = (int) $loan->installment_count;
+        $monthly = SalaryStructureCalculator::roundTaka((float) $loan->installment_amount);
+        $totalPayable = SalaryStructureCalculator::roundTaka((float) $loan->total_payable);
+        $method = $this->resolveCalculationMethodForLoan($loan);
 
-            $remaining = SalaryStructureCalculator::roundTaka($remaining - $amount);
+        $planRows = ($method === 'flat' || $rate <= 0)
+            ? $this->loanCalculatorBreakdownFlat(
+                $principal,
+                SalaryStructureCalculator::roundTaka(max(0, $totalPayable - $principal)),
+                $totalPayable,
+                $monthly,
+                $count,
+            )
+            : $this->loanCalculatorBreakdownReducing($principal, $rate, $monthly, $count, $totalPayable);
+
+        $paymentAmounts = $this->loanCalculator->buildRoundedPaymentAmounts($totalPayable, $monthly, $count);
+
+        for ($i = 1; $i <= $count; $i++) {
+            $plan = $planRows[$i - 1] ?? ['principal' => 0.0, 'service_charge' => 0.0, 'total' => 0.0];
+            $payment = $paymentAmounts[$i - 1] ?? $monthly;
 
             EmployeeLoanInstallment::query()->create([
                 'employee_loan_id' => $loan->id,
                 'installment_no' => $i,
                 'due_date' => $firstDue->copy()->addMonths(($i - 1) * $intervalMonths)->endOfMonth()->toDateString(),
-                'principal_amount' => $amount,
-                'interest_amount' => 0,
-                'total_amount' => $amount,
+                'principal_amount' => SalaryStructureCalculator::roundTaka((float) $plan['principal']),
+                'interest_amount' => SalaryStructureCalculator::roundTaka((float) $plan['service_charge']),
+                'total_amount' => $payment,
                 'status' => 'pending',
             ]);
         }
@@ -912,18 +1068,6 @@ class EmployeeLoanService
                 continue;
             }
 
-            $scheduledAmount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
-            $expectedAmount = $this->resolvePayrollLoanDeductionAmount(
-                $payslip,
-                $loan,
-                $installment,
-                $scheduledAmount
-            );
-            $expectedAmount = $this->capPayrollCollectionAmount(
-                $this->freshLoanOutstanding($loan),
-                $expectedAmount
-            );
-
             $transaction = EmployeeLoanTransaction::query()
                 ->where('employee_loan_installment_id', $installment->id)
                 ->where('transaction_type', EmployeeLoanTransaction::TYPE_INSTALLMENT)
@@ -934,7 +1078,22 @@ class EmployeeLoanService
                 continue;
             }
 
+            $scheduledAmount = SalaryStructureCalculator::roundTaka((float) $installment->total_amount);
             $currentAmount = SalaryStructureCalculator::roundTaka((float) $transaction->credit_amount);
+            $expectedAmount = $this->resolvePayrollLoanDeductionAmount(
+                $payslip,
+                $loan,
+                $installment,
+                $scheduledAmount
+            );
+            $freshLoan = $this->freshLoanOutstanding($loan);
+            $availableBeforeThisTransaction = SalaryStructureCalculator::roundTaka(
+                (float) $freshLoan->outstanding_balance + $currentAmount
+            );
+            $expectedAmount = $this->capPayrollCollectionAmount(
+                $freshLoan->forceFill(['outstanding_balance' => $availableBeforeThisTransaction]),
+                $expectedAmount
+            );
             $currentPaid = SalaryStructureCalculator::roundTaka((float) ($installment->paid_amount ?? 0));
 
             if ($currentAmount === $expectedAmount && $currentPaid === $expectedAmount) {
@@ -1466,6 +1625,1010 @@ class EmployeeLoanService
             ->get();
     }
 
+    /**
+     * @return array{
+     *   principal_amount: float,
+     *   service_charge_amount: float,
+     *   total_payable: float,
+     *   recovered_principal: float,
+     *   recovered_service_charge: float,
+     *   outstanding_principal: float,
+     *   outstanding_service_charge: float,
+     *   schedule: list<array{
+     *     id: int,
+     *     installment_no: int,
+     *     due_date: ?string,
+     *     principal_amount: float,
+     *     service_charge_amount: float,
+     *     total_amount: float,
+     *     paid_principal_amount: ?float,
+     *     paid_service_charge_amount: ?float,
+     *     paid_amount: ?float,
+     *     status: string,
+     *     paid_at: ?string,
+     *     scheduled_month: ?string,
+     *     payment_month: ?string,
+     *     payment_branch: ?string,
+     *     balance_principal: float,
+     *     balance_service_charge: float,
+     *     balance_total: float,
+     *     status_label: string,
+     *   }>
+     * }
+     */
+    public function breakdownForLoan(EmployeeLoan $loan, bool $withSchedule = true): array
+    {
+        $loan->loadMissing(['policy', 'installments', 'transactions', 'employee.branch', 'migrationItem']);
+
+        $principal = SalaryStructureCalculator::roundTaka((float) $loan->principal_amount);
+        $totalPayable = SalaryStructureCalculator::roundTaka((float) $loan->total_payable);
+        $serviceCharge = SalaryStructureCalculator::roundTaka(max(0, $totalPayable - $principal));
+
+        $policy = $loan->policy;
+        $method = $this->resolveCalculationMethodForLoan($loan);
+        $rate = (float) ($loan->interest_rate ?? 0);
+        $installmentCount = max(1, (int) $loan->installment_count);
+        $monthly = SalaryStructureCalculator::roundTaka((float) $loan->installment_amount);
+
+        $plannedRows = ($method === 'flat' || $rate <= 0)
+            ? $this->loanCalculatorBreakdownFlat($principal, $serviceCharge, $totalPayable, $monthly, $installmentCount)
+            : $this->loanCalculatorBreakdownReducing($principal, $rate, $monthly, $installmentCount, $totalPayable);
+
+        $ledger = $this->walkPrincipalServiceLedger($loan, $principal, $serviceCharge, $totalPayable, $plannedRows);
+
+        $recoveredPrincipal = (float) $ledger['recovered_principal'];
+        $recoveredService = (float) $ledger['recovered_service_charge'];
+        $outstandingPrincipal = (float) $ledger['outstanding_principal'];
+        $outstandingService = (float) $ledger['outstanding_service_charge'];
+
+        /** @var array<int, array{principal: float, service_charge: float, amount: float}> $installmentAllocations */
+        $installmentAllocations = $ledger['installment_allocations'];
+        /** @var array<int, array{principal: float, service_charge: float}> $balancesAfterInstallment */
+        $balancesAfterInstallment = $ledger['balances_after_installment'];
+        /** @var array<int, array{close_pr: float, close_sc: float, close_total: float}> $transactionSnapshots */
+        $transactionSnapshots = $ledger['transaction_snapshots'];
+
+        $txByInstallment = $loan->transactions
+            ->filter(fn (EmployeeLoanTransaction $tx) => $tx->employee_loan_installment_id && (float) $tx->credit_amount > 0)
+            ->sortBy('id')
+            ->groupBy('employee_loan_installment_id')
+            ->map(fn ($group) => $group->last());
+
+        $defaultBranch = $loan->employee?->branch?->name ?? 'Head Office';
+        $schedule = [];
+
+        if ($withSchedule) {
+            $runningPrincipal = $principal;
+            $runningService = $serviceCharge;
+
+            foreach ($loan->installments->sortBy('installment_no')->values() as $index => $installment) {
+                $plan = $plannedRows[$index] ?? ['principal' => 0.0, 'service_charge' => 0.0, 'total' => 0.0];
+                $paidAmount = $installment->paid_amount !== null
+                    ? SalaryStructureCalculator::roundTaka((float) $installment->paid_amount)
+                    : null;
+                $isPaid = $installment->status === 'paid' || ($paidAmount !== null && $paidAmount > 0);
+
+                $allocation = $installmentAllocations[$installment->id] ?? null;
+                $paidPrincipal = 0.0;
+                $paidService = 0.0;
+
+                if ($isPaid) {
+                    if ($allocation !== null) {
+                        $paidPrincipal = (float) $allocation['principal'];
+                        $paidService = (float) $allocation['service_charge'];
+                        $paidAmount = SalaryStructureCalculator::roundTaka((float) $allocation['amount']);
+                    } elseif ($paidAmount !== null && $paidAmount > 0) {
+                        [$paidPrincipal, $paidService] = $this->splitLedgerCredit(
+                            $paidAmount,
+                            $runningPrincipal,
+                            $runningService,
+                            null,
+                            $plan,
+                        );
+                    }
+
+                    $runningPrincipal = SalaryStructureCalculator::roundTaka(max(0.0, $runningPrincipal - $paidPrincipal));
+                    $runningService = SalaryStructureCalculator::roundTaka(max(0.0, $runningService - $paidService));
+                }
+
+                $rowBalancePrincipal = $isPaid
+                    ? ($balancesAfterInstallment[$installment->id]['principal'] ?? $runningPrincipal)
+                    : 0.0;
+                $rowBalanceService = $isPaid
+                    ? ($balancesAfterInstallment[$installment->id]['service_charge'] ?? $runningService)
+                    : 0.0;
+                $rowBalanceTotal = SalaryStructureCalculator::roundTaka($rowBalancePrincipal + $rowBalanceService);
+
+                /** @var EmployeeLoanTransaction|null $paymentTx */
+                $paymentTx = $txByInstallment->get($installment->id);
+                if ($isPaid && $paymentTx && isset($transactionSnapshots[$paymentTx->id])) {
+                    $snap = $transactionSnapshots[$paymentTx->id];
+                    $rowBalancePrincipal = (float) $snap['close_pr'];
+                    $rowBalanceService = (float) $snap['close_sc'];
+                    $rowBalanceTotal = (float) $snap['close_total'];
+                }
+
+                $scheduledMonth = $this->formatLedgerMonthLabel($installment->due_date);
+                $paymentMonth = null;
+                $paymentBranch = null;
+
+                if ($isPaid) {
+                    /** @var EmployeeLoanTransaction|null $paymentTx */
+                    $paymentTx = $txByInstallment->get($installment->id);
+                    if ($paymentTx?->payroll_year && $paymentTx->payroll_month) {
+                        $paymentMonth = $this->formatLedgerMonthLabel(
+                            Carbon::create((int) $paymentTx->payroll_year, (int) $paymentTx->payroll_month, 1)
+                        );
+                    } elseif ($installment->paid_at) {
+                        $paymentMonth = $this->formatLedgerMonthLabel($installment->paid_at);
+                    } else {
+                        $paymentMonth = $scheduledMonth;
+                    }
+
+                    $paymentBranch = $defaultBranch;
+                }
+
+                $schedule[] = [
+                    'id' => $installment->id,
+                    'installment_no' => $installment->installment_no,
+                    'due_date' => $installment->due_date?->format('d-m-Y'),
+                    'scheduled_month' => $scheduledMonth,
+                    'principal_amount' => SalaryStructureCalculator::roundTaka((float) $plan['principal']),
+                    'service_charge_amount' => SalaryStructureCalculator::roundTaka((float) $plan['service_charge']),
+                    'total_amount' => SalaryStructureCalculator::roundTaka((float) $installment->total_amount),
+                    'paid_principal_amount' => $isPaid ? $paidPrincipal : null,
+                    'paid_service_charge_amount' => $isPaid ? $paidService : null,
+                    'paid_amount' => $isPaid ? $paidAmount : null,
+                    'payment_month' => $paymentMonth,
+                    'payment_branch' => $paymentBranch,
+                    'balance_principal' => $rowBalancePrincipal,
+                    'balance_service_charge' => $rowBalanceService,
+                    'balance_total' => $rowBalanceTotal,
+                    'status' => $installment->status,
+                    'status_label' => $isPaid ? 'PAID' : 'NON-PAID',
+                    'paid_at' => $installment->paid_at?->format('d-m-Y H:i'),
+                ];
+            }
+        }
+
+        return [
+            'principal_amount' => $principal,
+            'service_charge_amount' => $serviceCharge,
+            'total_payable' => $totalPayable,
+            'recovered_principal' => $recoveredPrincipal,
+            'recovered_service_charge' => $recoveredService,
+            'outstanding_principal' => $outstandingPrincipal,
+            'outstanding_service_charge' => $outstandingService,
+            'schedule' => $schedule,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   migration_item_id: ?int,
+     *   loan_policy_id: int,
+     *   policy_name: ?string,
+     *   use_manual_terms: bool,
+     *   calculation_method: ?string,
+     *   disbursement_date_iso: ?string,
+     *   disburse_amount: float,
+     *   installment_amount: float,
+     *   passed_months: int,
+     *   service_charge_amount: ?float,
+     *   outstanding_principal: float,
+     *   outstanding_service_charge: float,
+     *   outstanding_total: float,
+     * }
+     */
+    public function ledgerEditSnapshot(EmployeeLoan $loan): array
+    {
+        $loan->loadMissing(['policy', 'migrationItem', 'installments']);
+        $breakdown = $this->breakdownForLoan($loan, false);
+        $item = $loan->migrationItem;
+
+        if ($item) {
+            return [
+                'migration_item_id' => $item->id,
+                'loan_policy_id' => (int) $item->loan_policy_id,
+                'policy_name' => $loan->policy?->name,
+                'use_manual_terms' => (bool) $item->use_manual_terms,
+                'calculation_method' => $this->resolveCalculationMethodForLoan($loan),
+                'disbursement_date_iso' => $item->disbursement_date?->format('Y-m-d'),
+                'disburse_amount' => (float) $item->disburse_amount,
+                'installment_amount' => (float) $item->installment_amount,
+                'passed_months' => (int) $item->passed_months,
+                'service_charge_amount' => $item->service_charge_amount !== null
+                    ? (float) $item->service_charge_amount
+                    : null,
+                'outstanding_principal' => (float) $item->outstanding_principal,
+                'outstanding_service_charge' => (float) $item->outstanding_service_charge,
+                'outstanding_total' => (float) $item->outstanding_total,
+            ];
+        }
+
+        $principal = SalaryStructureCalculator::roundTaka((float) $loan->principal_amount);
+        $totalPayable = SalaryStructureCalculator::roundTaka((float) $loan->total_payable);
+        $paidCount = $loan->installments
+            ->filter(fn (EmployeeLoanInstallment $row) => $row->status === 'paid' || (float) ($row->paid_amount ?? 0) > 0)
+            ->count();
+
+        return [
+            'migration_item_id' => null,
+            'loan_policy_id' => (int) $loan->loan_policy_id,
+            'policy_name' => $loan->policy?->name,
+            'use_manual_terms' => (bool) $loan->is_legacy_import,
+            'calculation_method' => $this->resolveCalculationMethodForLoan($loan),
+            'disbursement_date_iso' => $loan->disbursement_date?->format('Y-m-d'),
+            'disburse_amount' => $principal,
+            'installment_amount' => SalaryStructureCalculator::roundTaka((float) $loan->installment_amount),
+            'passed_months' => max((int) ($loan->legacy_paid_installments ?? 0), $paidCount),
+            'service_charge_amount' => SalaryStructureCalculator::roundTaka(max(0, $totalPayable - $principal)),
+            'outstanding_principal' => (float) $breakdown['outstanding_principal'],
+            'outstanding_service_charge' => (float) $breakdown['outstanding_service_charge'],
+            'outstanding_total' => SalaryStructureCalculator::roundTaka(
+                (float) $breakdown['outstanding_principal'] + (float) $breakdown['outstanding_service_charge']
+            ),
+        ];
+    }
+
+    /**
+     * @param  list<array{principal: float, service_charge: float, total: float}>  $plannedRows
+     * @return array{
+     *   outstanding_principal: float,
+     *   outstanding_service_charge: float,
+     *   recovered_principal: float,
+     *   recovered_service_charge: float,
+     *   installment_allocations: array<int, array{principal: float, service_charge: float, amount: float}>,
+     *   balances_after_installment: array<int, array{principal: float, service_charge: float}>,
+     *   transaction_snapshots: array<int, array{
+     *     open_pr: float,
+     *     open_sc: float,
+     *     open_total: float,
+     *     tx_pr: float,
+     *     tx_sc: float,
+     *     close_pr: float,
+     *     close_sc: float,
+     *     close_total: float,
+     *   }>,
+     * }
+     */
+    protected function walkPrincipalServiceLedger(
+        EmployeeLoan $loan,
+        float $principal,
+        float $serviceCharge,
+        float $totalPayable,
+        array $plannedRows,
+    ): array {
+        $installmentsById = $loan->installments->keyBy('id');
+        $plannedByInstallmentNo = collect($plannedRows)->values();
+
+        $curPrincipal = 0.0;
+        $curService = 0.0;
+
+        $installmentAllocations = [];
+        $balancesAfterInstallment = [];
+        $transactionSnapshots = [];
+
+        $transactions = $loan->transactions
+            ->sortBy(fn (EmployeeLoanTransaction $tx) => [
+                $tx->transaction_date?->format('Y-m-d') ?? '',
+                $tx->id,
+            ])
+            ->values();
+
+        foreach ($transactions as $tx) {
+            if ($tx->transaction_type === EmployeeLoanTransaction::TYPE_REVERSAL) {
+                continue;
+            }
+
+            $openPrincipal = $curPrincipal;
+            $openService = $curService;
+            $txPrincipal = 0.0;
+            $txService = 0.0;
+
+            if ((float) $tx->debit_amount > 0) {
+                $debit = (float) $tx->debit_amount;
+                if ($tx->transaction_type === EmployeeLoanTransaction::TYPE_DISBURSEMENT) {
+                    [$txPrincipal, $txService] = $this->splitDisbursementDebit(
+                        $debit,
+                        $principal,
+                        $serviceCharge,
+                        $totalPayable,
+                    );
+                } else {
+                    $txPrincipal = SalaryStructureCalculator::roundTaka($debit);
+                    $txService = 0.0;
+                }
+
+                $curPrincipal = SalaryStructureCalculator::roundTaka($curPrincipal + $txPrincipal);
+                $curService = SalaryStructureCalculator::roundTaka($curService + $txService);
+            } elseif ((float) $tx->credit_amount > 0) {
+                $credit = (float) $tx->credit_amount;
+                $plan = null;
+                if ($tx->employee_loan_installment_id) {
+                    $installment = $installmentsById->get($tx->employee_loan_installment_id);
+                    if ($installment) {
+                        $plan = $plannedByInstallmentNo->get($installment->installment_no - 1);
+                    }
+                }
+
+                [$txPrincipal, $txService] = $this->splitLedgerCredit(
+                    $credit,
+                    $curPrincipal,
+                    $curService,
+                    $tx->transaction_type,
+                    is_array($plan) ? $plan : null,
+                );
+
+                $curPrincipal = SalaryStructureCalculator::roundTaka(max(0.0, $curPrincipal - $txPrincipal));
+                $curService = SalaryStructureCalculator::roundTaka(max(0.0, $curService - $txService));
+
+                if ($tx->employee_loan_installment_id) {
+                    $installmentId = (int) $tx->employee_loan_installment_id;
+                    $installmentAllocations[$installmentId] ??= [
+                        'principal' => 0.0,
+                        'service_charge' => 0.0,
+                        'amount' => 0.0,
+                    ];
+                    $installmentAllocations[$installmentId]['principal'] = SalaryStructureCalculator::roundTaka(
+                        $installmentAllocations[$installmentId]['principal'] + $txPrincipal
+                    );
+                    $installmentAllocations[$installmentId]['service_charge'] = SalaryStructureCalculator::roundTaka(
+                        $installmentAllocations[$installmentId]['service_charge'] + $txService
+                    );
+                    $installmentAllocations[$installmentId]['amount'] = SalaryStructureCalculator::roundTaka(
+                        $installmentAllocations[$installmentId]['amount'] + $credit
+                    );
+                    $balancesAfterInstallment[$installmentId] = [
+                        'principal' => $curPrincipal,
+                        'service_charge' => $curService,
+                    ];
+                }
+            }
+
+            $transactionSnapshots[$tx->id] = [
+                'open_pr' => $openPrincipal,
+                'open_sc' => $openService,
+                'open_total' => SalaryStructureCalculator::roundTaka($openPrincipal + $openService),
+                'tx_pr' => $txPrincipal,
+                'tx_sc' => $txService,
+                'close_pr' => $curPrincipal,
+                'close_sc' => $curService,
+                'close_total' => SalaryStructureCalculator::roundTaka($curPrincipal + $curService),
+            ];
+        }
+
+        $ledgerOutstanding = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
+        $breakdownOutstanding = SalaryStructureCalculator::roundTaka($curPrincipal + $curService);
+        $isPrincipalOnlyDisbursement = $this->loanHasPrincipalOnlyDisbursement($loan, $principal, $serviceCharge, $totalPayable);
+        $totalCredits = SalaryStructureCalculator::roundTaka((float) $loan->transactions
+            ->filter(fn (EmployeeLoanTransaction $tx) => $tx->transaction_type !== EmployeeLoanTransaction::TYPE_REVERSAL)
+            ->sum('credit_amount'));
+
+        if ($isPrincipalOnlyDisbursement && $totalCredits <= 0) {
+            $curPrincipal = $principal;
+            $curService = $serviceCharge;
+        } elseif ($ledgerOutstanding <= 0 && $breakdownOutstanding > 0) {
+            $curPrincipal = 0.0;
+            $curService = 0.0;
+        } elseif (
+            ! $isPrincipalOnlyDisbursement
+            && $ledgerOutstanding > 0
+            && abs($breakdownOutstanding - $ledgerOutstanding) > 0.02
+        ) {
+            [$curPrincipal, $curService] = $this->scaleOutstandingComponentsToLedgerTotal(
+                $curPrincipal,
+                $curService,
+                $ledgerOutstanding,
+            );
+        }
+
+        $recoveredPrincipal = SalaryStructureCalculator::roundTaka(max(0.0, $principal - $curPrincipal));
+        $recoveredService = SalaryStructureCalculator::roundTaka(max(0.0, $serviceCharge - $curService));
+
+        if ($ledgerOutstanding <= 0) {
+            $recoveredPrincipal = $principal;
+            $recoveredService = $serviceCharge;
+            $curPrincipal = 0.0;
+            $curService = 0.0;
+
+            if ($balancesAfterInstallment !== []) {
+                $lastInstallmentId = array_key_last($balancesAfterInstallment);
+                $balancesAfterInstallment[$lastInstallmentId] = [
+                    'principal' => 0.0,
+                    'service_charge' => 0.0,
+                ];
+            }
+        }
+
+        return [
+            'outstanding_principal' => $curPrincipal,
+            'outstanding_service_charge' => $curService,
+            'recovered_principal' => $recoveredPrincipal,
+            'recovered_service_charge' => $recoveredService,
+            'installment_allocations' => $installmentAllocations,
+            'balances_after_installment' => $balancesAfterInstallment,
+            'transaction_snapshots' => $transactionSnapshots,
+        ];
+    }
+
+    /**
+     * @return array<int, array{
+     *   open_pr: float,
+     *   open_sc: float,
+     *   open_total: float,
+     *   tx_pr: float,
+     *   tx_sc: float,
+     *   close_pr: float,
+     *   close_sc: float,
+     *   close_total: float,
+     * }>
+     */
+    public function transactionPrincipalServiceSnapshotsForLoan(EmployeeLoan $loan): array
+    {
+        $loan->loadMissing(['policy', 'installments', 'transactions', 'migrationItem']);
+
+        $principal = SalaryStructureCalculator::roundTaka((float) $loan->principal_amount);
+        $totalPayable = SalaryStructureCalculator::roundTaka((float) $loan->total_payable);
+        $serviceCharge = SalaryStructureCalculator::roundTaka(max(0, $totalPayable - $principal));
+
+        $policy = $loan->policy;
+        $method = $this->resolveCalculationMethodForLoan($loan);
+        $rate = (float) ($loan->interest_rate ?? 0);
+        $installmentCount = max(1, (int) $loan->installment_count);
+        $monthly = SalaryStructureCalculator::roundTaka((float) $loan->installment_amount);
+
+        $plannedRows = ($method === 'flat' || $rate <= 0)
+            ? $this->loanCalculatorBreakdownFlat($principal, $serviceCharge, $totalPayable, $monthly, $installmentCount)
+            : $this->loanCalculatorBreakdownReducing($principal, $rate, $monthly, $installmentCount, $totalPayable);
+
+        return $this->walkPrincipalServiceLedger($loan, $principal, $serviceCharge, $totalPayable, $plannedRows)['transaction_snapshots'];
+    }
+
+    /**
+     * @param  array{principal: float, service_charge: float, total?: float}|null  $plan
+     * @return array{0: float, 1: float}
+     */
+    protected function splitLedgerCredit(
+        float $credit,
+        float $outstandingPrincipal,
+        float $outstandingService,
+        ?string $transactionType = null,
+        ?array $plan = null,
+    ): array {
+        $outstandingTotal = SalaryStructureCalculator::roundTaka($outstandingPrincipal + $outstandingService);
+        if ($credit <= 0 || $outstandingTotal <= 0) {
+            return [0.0, 0.0];
+        }
+
+        $credit = SalaryStructureCalculator::roundTaka(min($credit, $outstandingTotal));
+
+        if ($transactionType === EmployeeLoanTransaction::TYPE_REBATE) {
+            $txService = SalaryStructureCalculator::roundTaka(min($credit, $outstandingService));
+            $txPrincipal = SalaryStructureCalculator::roundTaka($credit - $txService);
+
+            return $this->capAndRebalanceLedgerSplit(
+                $txPrincipal,
+                $txService,
+                $credit,
+                $outstandingPrincipal,
+                $outstandingService,
+            );
+        }
+
+        $planPrincipal = $plan !== null ? (float) ($plan['principal'] ?? 0) : null;
+        $planService = $plan !== null ? (float) ($plan['service_charge'] ?? 0) : null;
+        $plannedTotal = $planPrincipal !== null && $planService !== null
+            ? SalaryStructureCalculator::roundTaka($planPrincipal + $planService)
+            : 0.0;
+
+        if ($plannedTotal > 0) {
+            if ($credit + 0.01 >= $plannedTotal || SalaryStructureCalculator::roundTaka(abs($plannedTotal - $credit)) <= 2.0) {
+                $txPrincipal = SalaryStructureCalculator::roundTaka(
+                    min($outstandingPrincipal, (float) $planPrincipal)
+                );
+                $txService = SalaryStructureCalculator::roundTaka($credit - $txPrincipal);
+            } else {
+                $ratio = max(0.0, $credit / $plannedTotal);
+                $txPrincipal = SalaryStructureCalculator::roundTaka((float) $planPrincipal * $ratio);
+                $txService = SalaryStructureCalculator::roundTaka($credit - $txPrincipal);
+            }
+        } else {
+            $txPrincipal = SalaryStructureCalculator::roundTaka(
+                min($outstandingPrincipal, $outstandingPrincipal * ($credit / $outstandingTotal))
+            );
+            $txService = SalaryStructureCalculator::roundTaka($credit - $txPrincipal);
+        }
+
+        return $this->capAndRebalanceLedgerSplit(
+            $txPrincipal,
+            $txService,
+            $credit,
+            $outstandingPrincipal,
+            $outstandingService,
+        );
+    }
+
+    /**
+     * @return array{0: float, 1: float}
+     */
+    protected function capAndRebalanceLedgerSplit(
+        float $txPrincipal,
+        float $txService,
+        float $credit,
+        float $outstandingPrincipal,
+        float $outstandingService,
+    ): array {
+        $txPrincipal = SalaryStructureCalculator::roundTaka(min(max(0.0, $txPrincipal), $outstandingPrincipal));
+        $txService = SalaryStructureCalculator::roundTaka(min(max(0.0, $txService), $outstandingService));
+
+        $allocated = SalaryStructureCalculator::roundTaka($txPrincipal + $txService);
+        if ($allocated < $credit) {
+            $remainder = SalaryStructureCalculator::roundTaka($credit - $allocated);
+            $extraPrincipal = SalaryStructureCalculator::roundTaka(
+                min($remainder, max(0.0, $outstandingPrincipal - $txPrincipal))
+            );
+            $txPrincipal = SalaryStructureCalculator::roundTaka($txPrincipal + $extraPrincipal);
+            $remainder = SalaryStructureCalculator::roundTaka($credit - $txPrincipal - $txService);
+            $extraService = SalaryStructureCalculator::roundTaka(
+                min($remainder, max(0.0, $outstandingService - $txService))
+            );
+            $txService = SalaryStructureCalculator::roundTaka($txService + $extraService);
+        }
+
+        if ($txPrincipal > $outstandingPrincipal) {
+            $extra = $txPrincipal - $outstandingPrincipal;
+            $txPrincipal = $outstandingPrincipal;
+            $txService = SalaryStructureCalculator::roundTaka(min($outstandingService, $txService + $extra));
+        }
+
+        if ($txService > $outstandingService) {
+            $extra = $txService - $outstandingService;
+            $txService = $outstandingService;
+            $txPrincipal = SalaryStructureCalculator::roundTaka(min($outstandingPrincipal, $txPrincipal + $extra));
+        }
+
+        return [
+            SalaryStructureCalculator::roundTaka($txPrincipal),
+            SalaryStructureCalculator::roundTaka($txService),
+        ];
+    }
+
+    /**
+     * @return array{0: float, 1: float}
+     */
+    protected function splitDisbursementDebit(
+        float $debit,
+        float $principal,
+        float $serviceCharge,
+        float $totalPayable,
+    ): array {
+        if ($totalPayable <= 0) {
+            return [SalaryStructureCalculator::roundTaka($debit), 0.0];
+        }
+
+        if ($serviceCharge > 0
+            && abs($debit - $principal) <= 0.02
+            && $debit + 0.02 < $totalPayable) {
+            return [$principal, $serviceCharge];
+        }
+
+        if (abs($debit - $totalPayable) <= 0.02) {
+            return [$principal, $serviceCharge];
+        }
+
+        $ratio = $debit / $totalPayable;
+        $txPrincipal = SalaryStructureCalculator::roundTaka($principal * $ratio);
+        $txService = SalaryStructureCalculator::roundTaka($debit - $txPrincipal);
+
+        return [$txPrincipal, $txService];
+    }
+
+    protected function loanHasPrincipalOnlyDisbursement(
+        EmployeeLoan $loan,
+        float $principal,
+        float $serviceCharge,
+        float $totalPayable,
+    ): bool {
+        if ($serviceCharge <= 0 || $totalPayable <= $principal + 0.02) {
+            return false;
+        }
+
+        $disbursement = $loan->transactions
+            ->firstWhere('transaction_type', EmployeeLoanTransaction::TYPE_DISBURSEMENT);
+
+        if (! $disbursement) {
+            return false;
+        }
+
+        $debit = SalaryStructureCalculator::roundTaka((float) $disbursement->debit_amount);
+
+        return abs($debit - $principal) <= 0.02 && $debit + 0.02 < $totalPayable;
+    }
+
+    public function repairPrincipalOnlyDisbursementLedger(EmployeeLoan $loan): bool
+    {
+        $loan->loadMissing('transactions');
+
+        $principal = SalaryStructureCalculator::roundTaka((float) $loan->principal_amount);
+        $totalPayable = SalaryStructureCalculator::roundTaka((float) $loan->total_payable);
+        $serviceCharge = SalaryStructureCalculator::roundTaka(max(0, $totalPayable - $principal));
+
+        if (! $this->loanHasPrincipalOnlyDisbursement($loan, $principal, $serviceCharge, $totalPayable)) {
+            return false;
+        }
+
+        $hasCollections = $loan->transactions->contains(
+            fn (EmployeeLoanTransaction $tx) => in_array($tx->transaction_type, [
+                EmployeeLoanTransaction::TYPE_INSTALLMENT,
+                EmployeeLoanTransaction::TYPE_MANUAL_PAYMENT,
+                EmployeeLoanTransaction::TYPE_COLLECTION,
+                EmployeeLoanTransaction::TYPE_ADVANCE_COLLECTION,
+                EmployeeLoanTransaction::TYPE_LEGACY_PAYMENT,
+                EmployeeLoanTransaction::TYPE_REBATE,
+                EmployeeLoanTransaction::TYPE_WAIVE,
+            ], true) && (float) $tx->credit_amount > 0
+        );
+
+        if ($hasCollections) {
+            return false;
+        }
+
+        $disbursement = $loan->transactions
+            ->firstWhere('transaction_type', EmployeeLoanTransaction::TYPE_DISBURSEMENT);
+
+        if (! $disbursement) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($loan, $disbursement, $totalPayable) {
+            $disbursement->update(['debit_amount' => $totalPayable]);
+            $this->recalculateLoanLedgerBalances($loan->fresh());
+
+            return true;
+        });
+    }
+
+    /**
+     * Recompute loan totals from decimal amortization while keeping posted payments unchanged.
+     *
+     * @return array{
+     *   status: 'repaired'|'skipped'|'unchanged',
+     *   reason: ?string,
+     *   loan_number: string,
+     *   old_total_payable: float,
+     *   new_total_payable: float,
+     *   pending_installments_updated: int,
+     * }
+     */
+    public function repairLoanAmortizationCalculation(EmployeeLoan $loan): array
+    {
+        $loan->loadMissing(['policy', 'application', 'installments', 'transactions']);
+
+        $result = [
+            'status' => 'skipped',
+            'reason' => null,
+            'loan_number' => (string) $loan->loan_number,
+            'old_total_payable' => SalaryStructureCalculator::roundTaka((float) $loan->total_payable),
+            'new_total_payable' => SalaryStructureCalculator::roundTaka((float) $loan->total_payable),
+            'pending_installments_updated' => 0,
+        ];
+
+        if (! $loan->policy || ! $loan->loan_policy_id) {
+            $result['reason'] = 'no_policy';
+
+            return $result;
+        }
+
+        if ($this->shouldUseLegacyFlatPfCalculation($loan)) {
+            $result['reason'] = 'legacy_flat_pf';
+
+            return $result;
+        }
+
+        $method = $this->resolveCalculationMethodForLoan($loan);
+        $rate = (float) ($loan->interest_rate ?? $loan->policy->default_interest_rate ?? 0);
+        $principal = SalaryStructureCalculator::roundTaka((float) $loan->principal_amount);
+        $oldTotal = SalaryStructureCalculator::roundTaka((float) $loan->total_payable);
+        $oldEmi = SalaryStructureCalculator::roundTaka((float) $loan->installment_amount);
+        $installmentCount = max(1, (int) $loan->installment_count);
+
+        if ($principal <= 0 || $installmentCount < 1) {
+            $result['reason'] = 'invalid_loan_terms';
+
+            return $result;
+        }
+
+        if ($method === 'flat' && $rate <= 0 && abs($oldTotal - $principal) <= 0.01) {
+            $result['reason'] = 'zero_interest_unchanged';
+            $result['status'] = 'unchanged';
+
+            return $result;
+        }
+
+        $cycle = (int) ($loan->application?->loan_cycle ?? 1);
+        $calc = $this->loanCalculator->calculate($loan->policy, $principal, $cycle);
+        $newTotal = SalaryStructureCalculator::roundTaka((float) $calc['total_payable']);
+        $newEmi = SalaryStructureCalculator::roundTaka((float) $calc['installment_amount_monthly']);
+        $result['new_total_payable'] = $newTotal;
+
+        if ($loan->is_legacy_import) {
+            $formulaTotal = SalaryStructureCalculator::roundTaka($newEmi * $installmentCount);
+            if (abs($oldTotal - $formulaTotal) > 1) {
+                $result['reason'] = 'legacy_manual_terms';
+
+                return $result;
+            }
+        }
+
+        $serviceCharge = SalaryStructureCalculator::roundTaka((float) $calc['service_charge_amount']);
+        $planRows = ($method === 'flat' || $rate <= 0)
+            ? $this->loanCalculatorBreakdownFlat($principal, $serviceCharge, $newTotal, $newEmi, $installmentCount)
+            : $this->loanCalculatorBreakdownReducing($principal, $rate, $newEmi, $installmentCount, $newTotal);
+
+        $paidCredits = $this->totalLoanPaymentCredits($loan);
+
+        if ($paidCredits > $newTotal) {
+            $result['reason'] = 'paid_exceeds_new_total';
+
+            return $result;
+        }
+
+        $pendingInstallments = $loan->installments
+            ->where('status', 'pending')
+            ->sortBy('installment_no')
+            ->values();
+
+        $hasChanges = abs($oldTotal - $newTotal) > 0.01
+            || abs($oldEmi - $newEmi) > 0.01
+            || $pendingInstallments->contains(function (EmployeeLoanInstallment $row) use ($planRows) {
+                $plan = $planRows[(int) $row->installment_no - 1] ?? null;
+                if (! $plan) {
+                    return false;
+                }
+
+                return SalaryStructureCalculator::roundTaka((float) $row->interest_amount)
+                    !== SalaryStructureCalculator::roundTaka((float) $plan['service_charge'])
+                    || SalaryStructureCalculator::roundTaka((float) $row->principal_amount)
+                    !== SalaryStructureCalculator::roundTaka((float) $plan['principal']);
+            });
+
+        if (! $hasChanges) {
+            $result['status'] = 'unchanged';
+            $result['reason'] = 'already_correct';
+
+            return $result;
+        }
+
+        $remainingToCollect = SalaryStructureCalculator::roundTaka(max(0, $newTotal - $paidCredits));
+        $pendingPayments = $pendingInstallments->isEmpty()
+            ? []
+            : $this->loanCalculator->buildRoundedPaymentAmounts(
+                $remainingToCollect,
+                $newEmi,
+                $pendingInstallments->count(),
+            );
+
+        DB::transaction(function () use (
+            $loan,
+            $newTotal,
+            $newEmi,
+            $planRows,
+            $pendingInstallments,
+            $pendingPayments,
+            &$result,
+            $calc,
+        ) {
+            $loan->update([
+                'total_payable' => $newTotal,
+                'installment_amount' => $newEmi,
+            ]);
+
+            $disbursement = $loan->transactions
+                ->firstWhere('transaction_type', EmployeeLoanTransaction::TYPE_DISBURSEMENT);
+            if ($disbursement) {
+                $disbursement->update(['debit_amount' => $newTotal]);
+            }
+
+            if ($loan->application) {
+                $loan->application->update([
+                    'installment_amount_monthly' => $newEmi,
+                    'service_charge_amount' => (float) $calc['service_charge_amount'],
+                    'total_payable' => $newTotal,
+                ]);
+            }
+
+            foreach ($pendingInstallments as $index => $installment) {
+                $plan = $planRows[(int) $installment->installment_no - 1] ?? [
+                    'principal' => 0.0,
+                    'service_charge' => 0.0,
+                    'total' => 0.0,
+                ];
+
+                $installment->update([
+                    'principal_amount' => SalaryStructureCalculator::roundTaka((float) $plan['principal']),
+                    'interest_amount' => SalaryStructureCalculator::roundTaka((float) $plan['service_charge']),
+                    'total_amount' => $pendingPayments[$index] ?? SalaryStructureCalculator::roundTaka((float) $plan['total']),
+                ]);
+                $result['pending_installments_updated']++;
+            }
+
+            $this->recalculateLoanLedgerBalances($loan->fresh());
+
+            $fresh = $loan->fresh();
+            if ((float) $fresh->outstanding_balance <= 0 && $fresh->status === 'active') {
+                $fresh->update(['status' => 'completed']);
+            }
+        });
+
+        $result['status'] = 'repaired';
+
+        return $result;
+    }
+
+    protected function totalLoanPaymentCredits(EmployeeLoan $loan): float
+    {
+        return SalaryStructureCalculator::roundTaka((float) $loan->transactions
+            ->whereIn('transaction_type', [
+                EmployeeLoanTransaction::TYPE_INSTALLMENT,
+                EmployeeLoanTransaction::TYPE_MANUAL_PAYMENT,
+                EmployeeLoanTransaction::TYPE_LEGACY_PAYMENT,
+                EmployeeLoanTransaction::TYPE_COLLECTION,
+                EmployeeLoanTransaction::TYPE_ADVANCE_COLLECTION,
+                EmployeeLoanTransaction::TYPE_REBATE,
+                EmployeeLoanTransaction::TYPE_WAIVE,
+            ])
+            ->sum('credit_amount'));
+    }
+
+    /**
+     * @return array{0: float, 1: float}
+     */
+    protected function scaleOutstandingComponentsToLedgerTotal(
+        float $outstandingPrincipal,
+        float $outstandingService,
+        float $ledgerOutstanding,
+    ): array {
+        $componentTotal = SalaryStructureCalculator::roundTaka($outstandingPrincipal + $outstandingService);
+        if ($componentTotal <= 0) {
+            return [0.0, 0.0];
+        }
+
+        $scaledPrincipal = SalaryStructureCalculator::roundTaka(
+            $outstandingPrincipal * ($ledgerOutstanding / $componentTotal)
+        );
+        $scaledService = SalaryStructureCalculator::roundTaka($ledgerOutstanding - $scaledPrincipal);
+
+        return [
+            max(0.0, $scaledPrincipal),
+            max(0.0, $scaledService),
+        ];
+    }
+
+    protected function formatLedgerMonthLabel(Carbon|string|null $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        return strtoupper(Carbon::parse($value)->format('M-Y'));
+    }
+
+    /**
+     * @return array{
+     *   principal_amount: float,
+     *   service_charge_amount: float,
+     *   total_payable: float,
+     *   recovered_principal: float,
+     *   recovered_service_charge: float,
+     *   outstanding_principal: float,
+     *   outstanding_service_charge: float,
+     * }
+     */
+    public function breakdownSummaryForLoan(EmployeeLoan $loan): array
+    {
+        $breakdown = $this->breakdownForLoan($loan, false);
+
+        return [
+            'principal_amount' => $breakdown['principal_amount'],
+            'service_charge_amount' => $breakdown['service_charge_amount'],
+            'total_payable' => $breakdown['total_payable'],
+            'recovered_principal' => $breakdown['recovered_principal'],
+            'recovered_service_charge' => $breakdown['recovered_service_charge'],
+            'outstanding_principal' => $breakdown['outstanding_principal'],
+            'outstanding_service_charge' => $breakdown['outstanding_service_charge'],
+        ];
+    }
+
+    /**
+     * @param  iterable<int, EmployeeLoan>  $loans
+     * @return array<int, array{
+     *   principal_amount: float,
+     *   service_charge_amount: float,
+     *   total_payable: float,
+     *   recovered_principal: float,
+     *   recovered_service_charge: float,
+     *   outstanding_principal: float,
+     *   outstanding_service_charge: float,
+     * }>
+     */
+    public function breakdownSummariesForLoans(iterable $loans): array
+    {
+        $summaries = [];
+
+        foreach ($loans as $loan) {
+            if ($loan instanceof EmployeeLoan) {
+                $summaries[$loan->id] = $this->breakdownSummaryForLoan($loan);
+            }
+        }
+
+        return $summaries;
+    }
+
+    /**
+     * @return list<array{principal: float, service_charge: float, total: float}>
+     */
+    protected function loanCalculatorBreakdownFlat(
+        float $principal,
+        float $serviceCharge,
+        float $totalPayable,
+        float $monthly,
+        int $installments
+    ): array {
+        $rows = [];
+        $remainingPrincipal = $principal;
+        $remainingService = $serviceCharge;
+        $remainingTotal = $totalPayable;
+
+        for ($i = 1; $i <= $installments; $i++) {
+            $total = $i === $installments
+                ? SalaryStructureCalculator::roundTaka($remainingTotal)
+                : SalaryStructureCalculator::roundTaka($monthly);
+
+            $principalPart = $totalPayable > 0
+                ? SalaryStructureCalculator::roundTaka($principal * ($total / $totalPayable))
+                : $total;
+            $servicePart = SalaryStructureCalculator::roundTaka($total - $principalPart);
+
+            if ($i === $installments) {
+                $principalPart = SalaryStructureCalculator::roundTaka($remainingPrincipal);
+                $servicePart = SalaryStructureCalculator::roundTaka($remainingService);
+                $total = SalaryStructureCalculator::roundTaka($principalPart + $servicePart);
+            }
+
+            $rows[] = [
+                'principal' => $principalPart,
+                'service_charge' => $servicePart,
+                'total' => $total,
+            ];
+
+            $remainingPrincipal = SalaryStructureCalculator::roundTaka($remainingPrincipal - $principalPart);
+            $remainingService = SalaryStructureCalculator::roundTaka($remainingService - $servicePart);
+            $remainingTotal = SalaryStructureCalculator::roundTaka($remainingTotal - $total);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array{principal: float, service_charge: float, total: float}>
+     */
+    protected function loanCalculatorBreakdownReducing(
+        float $principal,
+        float $rateYearly,
+        float $monthly,
+        int $installments,
+        ?float $totalPayable = null,
+    ): array {
+        return $this->loanCalculator->formatReducingScheduleForLedger(
+            $principal,
+            $rateYearly,
+            $monthly,
+            $installments,
+            $totalPayable,
+        );
+    }
+
     public function isCorrectableTransaction(EmployeeLoanTransaction $transaction): bool
     {
         if ($transaction->payroll_run_id || $transaction->payslip_id) {
@@ -1556,7 +2719,13 @@ class EmployeeLoanService
             ];
 
             if ($transaction->transaction_type === EmployeeLoanTransaction::TYPE_DISBURSEMENT) {
-                $updates['debit_amount'] = $amount;
+                $totalPayable = SalaryStructureCalculator::roundTaka((float) $loan->total_payable);
+                if ($amount + 0.02 < $totalPayable) {
+                    throw new InvalidArgumentException(
+                        'Disbursement ledger amount must equal total payable (principal + service charge), not principal only.'
+                    );
+                }
+                $updates['debit_amount'] = $totalPayable;
                 $updates['credit_amount'] = 0;
             } else {
                 $updates['credit_amount'] = $amount;
@@ -1643,12 +2812,38 @@ class EmployeeLoanService
 
     protected function refreshLoanStatus(EmployeeLoan $loan): void
     {
+        $loan->refresh();
         $pending = $loan->installments()->whereIn('status', ['pending', 'scheduled'])->count();
-        if ($pending === 0 && (float) $loan->outstanding_balance <= 0) {
+        $balance = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
+
+        if ($pending === 0 && $balance > 0 && $loan->status === 'active') {
+            $this->settleOutstandingTailAsRebate($loan, $balance);
+            $loan->refresh();
+            $balance = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
+        }
+
+        if ($pending === 0 && $balance <= 0) {
             $loan->update(['status' => 'completed']);
         } elseif ($loan->status === 'completed' && $pending > 0) {
             $loan->update(['status' => 'active']);
         }
+    }
+
+    protected function settleOutstandingTailAsRebate(EmployeeLoan $loan, float $amount): void
+    {
+        $amount = SalaryStructureCalculator::roundTaka($amount);
+        if ($amount <= 0 || $loan->status !== 'active') {
+            return;
+        }
+
+        $this->postCollectionTransaction($loan, [
+            'transaction_type' => EmployeeLoanTransaction::TYPE_REBATE,
+            'credit_amount' => $amount,
+            'debit_amount' => 0,
+            'transaction_date' => now(),
+            'notes' => 'Auto-rebate — remaining balance after all installments were collected',
+            'created_by' => auth()->id(),
+        ]);
     }
 
     /**

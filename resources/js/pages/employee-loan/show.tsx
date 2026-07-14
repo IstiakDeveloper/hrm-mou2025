@@ -17,7 +17,11 @@ type Installment = {
     id: number;
     installment_no: number;
     due_date: string | null;
+    principal_amount: number;
+    service_charge_amount: number;
     total_amount: number;
+    paid_principal_amount: number | null;
+    paid_service_charge_amount: number | null;
     status: string;
     paid_at: string | null;
     paid_amount: number | null;
@@ -30,10 +34,16 @@ type Props = {
         loan_type_label: string;
         status: string;
         principal_amount: number;
+        service_charge_amount: number;
         total_payable: number;
         installment_count: number;
         installment_amount: number;
+        installment_amount_exact: number;
         outstanding_balance: number;
+        outstanding_principal: number;
+        outstanding_service_charge: number;
+        recovered_principal: number;
+        recovered_service_charge: number;
         paid_installments: number;
         disbursement_date: string | null;
         first_installment_date: string | null;
@@ -131,13 +141,19 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                         <p className="text-lg font-bold tabular-nums">{fmt(loan.principal_amount)}</p>
                     </CardContent>
                 </Card>
+                <Card className="shadow-2xs">
+                    <CardContent className="p-3">
+                        <p className="text-[10px] uppercase font-bold text-violet-700">Service charge</p>
+                        <p className="text-lg font-bold tabular-nums text-violet-900">{fmt(loan.service_charge_amount)}</p>
+                    </CardContent>
+                </Card>
                 <Card className="shadow-2xs border-amber-200 bg-amber-50/20">
                     <CardContent className="p-3">
                         <p className="text-[10px] uppercase font-bold text-amber-800">Outstanding</p>
                         <p className="text-lg font-bold tabular-nums text-amber-900">{fmt(loan.outstanding_balance)}</p>
                     </CardContent>
                 </Card>
-                <Card className="shadow-2xs">
+                <Card className="shadow-2xs lg:col-span-2">
                     <CardContent className="p-3">
                         <p className="text-[10px] uppercase font-bold text-zinc-500">Progress</p>
                         <p className="text-lg font-bold tabular-nums">
@@ -146,6 +162,33 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                         <Badge variant="outline" className="mt-1 text-[10px] capitalize">
                             {loan.status}
                         </Badge>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="mb-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Card className="shadow-2xs">
+                    <CardContent className="p-3">
+                        <p className="text-[10px] uppercase font-bold text-zinc-500">Outstanding principal</p>
+                        <p className="text-base font-bold tabular-nums text-zinc-900">{fmt(loan.outstanding_principal)}</p>
+                    </CardContent>
+                </Card>
+                <Card className="shadow-2xs">
+                    <CardContent className="p-3">
+                        <p className="text-[10px] uppercase font-bold text-violet-700">Outstanding service charge</p>
+                        <p className="text-base font-bold tabular-nums text-violet-900">{fmt(loan.outstanding_service_charge)}</p>
+                    </CardContent>
+                </Card>
+                <Card className="shadow-2xs">
+                    <CardContent className="p-3">
+                        <p className="text-[10px] uppercase font-bold text-zinc-500">Recovered principal</p>
+                        <p className="text-base font-bold tabular-nums text-emerald-800">{fmt(loan.recovered_principal)}</p>
+                    </CardContent>
+                </Card>
+                <Card className="shadow-2xs">
+                    <CardContent className="p-3">
+                        <p className="text-[10px] uppercase font-bold text-violet-700">Recovered service charge</p>
+                        <p className="text-base font-bold tabular-nums text-emerald-800">{fmt(loan.recovered_service_charge)}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -160,7 +203,11 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                             <TableRow className="bg-zinc-50/80">
                                 <TableHead className="text-xs">#</TableHead>
                                 <TableHead className="text-xs">Due date</TableHead>
+                                <TableHead className="text-xs text-right">Principal</TableHead>
+                                <TableHead className="text-xs text-right">Service charge</TableHead>
                                 <TableHead className="text-xs text-right">Installment amount</TableHead>
+                                <TableHead className="text-xs text-right">Paid PR</TableHead>
+                                <TableHead className="text-xs text-right">Paid SC</TableHead>
                                 <TableHead className="text-xs text-right">Paid amount</TableHead>
                                 <TableHead className="text-xs">Status</TableHead>
                                 <TableHead className="text-xs">Paid date</TableHead>
@@ -178,7 +225,19 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                                     <TableCell className="text-xs font-mono">{row.installment_no}</TableCell>
                                     <TableCell className="text-xs">{row.due_date}</TableCell>
                                     <TableCell className="text-xs text-right tabular-nums text-zinc-700">
+                                        {fmt(row.principal_amount)}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums text-violet-700">
+                                        {fmt(row.service_charge_amount)}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums text-zinc-700">
                                         {fmt(row.total_amount)}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums text-emerald-800">
+                                        {row.paid_principal_amount !== null ? fmt(row.paid_principal_amount) : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums text-emerald-800">
+                                        {row.paid_service_charge_amount !== null ? fmt(row.paid_service_charge_amount) : '—'}
                                     </TableCell>
                                     <TableCell
                                         className={cn(

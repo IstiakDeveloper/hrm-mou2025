@@ -12,7 +12,8 @@ import {
     ChevronRight,
     BookOpen,
     Percent,
-    ShieldAlert
+    ShieldAlert,
+    User,
 } from 'lucide-react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
@@ -27,6 +28,12 @@ import { formatPfAmount } from '@/lib/pf-format';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    StaffFundEmployeeDashboardView,
+    type StaffFundEmployeeDashboardProps,
+} from '@/pages/sections/staff-fund/employee-dashboard';
+import { useState } from 'react';
 
 type Props = {
     stats: {
@@ -38,6 +45,8 @@ type Props = {
         gratuityPendingApproval: number;
     };
     userRole: string;
+    showEmployeeTab?: boolean;
+    employeeDashboard?: StaffFundEmployeeDashboardProps | null;
 };
 
 const fmt = formatPfAmount;
@@ -120,35 +129,14 @@ function ShortcutTile({ href, title, icon: Icon, description }: { href: string; 
     );
 }
 
-export default function StaffFundDashboard({ stats, userRole }: Props) {
+export default function StaffFundDashboard({ stats, userRole, showEmployeeTab: showEmployeeTabProp, employeeDashboard }: Props) {
     const { auth } = usePage<SharedData>().props;
     const can = (p: string) => hasAppPermission(auth, p);
+    const showEmployeeTab = Boolean(showEmployeeTabProp && employeeDashboard);
+    const [dashboardMode, setDashboardMode] = useState<'admin' | 'employee'>('admin');
 
-    return (
-        <Layout>
-            <Head title="Staff Fund Dashboard" />
-
-            <PageSurface className="max-w-full bg-[#f9fafb] px-3 py-3 md:px-4 md:py-4">
-                {/* Dashboard Subheader */}
-                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-emerald-100 pb-3">
-                    <div className="flex items-center gap-2">
-                        <span className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-lg bg-emerald-600 text-white shadow-sm">
-                            <Coins className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-                        </span>
-                        <div>
-                            <h1 className="text-sm sm:text-base font-bold text-zinc-800 tracking-tight leading-tight">Staff Fund Module</h1>
-                            <p className="text-[10px] sm:text-[11px] text-zinc-400 mt-0.5">
-                                {userRole} · Central hub for Employee Provident Fund (PF) & Gratuity ledger management.
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white text-zinc-600 hover:text-emerald-700 hover:bg-emerald-50">
-                            <Link href="/sections">Sections</Link>
-                        </Button>
-                    </div>
-                </div>
-
+    const adminDashboardBody = (
+        <>
                 {/* Stat Summaries Grid - Highly compact, organized */}
                 <section className="mb-5">
                     <div className="flex items-center gap-1 mb-2">
@@ -297,6 +285,64 @@ export default function StaffFundDashboard({ stats, userRole }: Props) {
                         })}
                     </CardContent>
                 </Card>
+        </>
+    );
+
+    return (
+        <Layout>
+            <Head title="Staff Fund Dashboard" />
+
+            <PageSurface className="max-w-full bg-[#f9fafb] px-3 py-3 md:px-4 md:py-4">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-emerald-100 pb-3">
+                    <div className="flex items-center gap-2">
+                        <span className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-lg bg-emerald-600 text-white shadow-sm">
+                            <Coins className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                        </span>
+                        <div>
+                            <h1 className="text-sm sm:text-base font-bold text-zinc-800 tracking-tight leading-tight">Staff Fund Module</h1>
+                            <p className="text-[10px] sm:text-[11px] text-zinc-400 mt-0.5">
+                                {userRole} · Central hub for Employee Provident Fund (PF) & Gratuity ledger management.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white text-zinc-600 hover:text-emerald-700 hover:bg-emerald-50">
+                            <Link href="/sections">Sections</Link>
+                        </Button>
+                    </div>
+                </div>
+
+                {showEmployeeTab ? (
+                    <Tabs
+                        value={dashboardMode}
+                        onValueChange={(v) => setDashboardMode(v as 'admin' | 'employee')}
+                        className="w-full"
+                    >
+                        <TabsList className="mb-4 h-9 w-fit min-w-0 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
+                            <TabsTrigger
+                                value="admin"
+                                className="h-8 min-w-[5.5rem] flex-none rounded-md px-3 text-xs data-[state=active]:bg-zinc-900 data-[state=active]:text-white"
+                            >
+                                Admin
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="employee"
+                                className="h-8 min-w-[5.5rem] flex-none gap-1.5 rounded-md px-3 text-xs data-[state=active]:bg-cyan-600 data-[state=active]:text-white"
+                            >
+                                <User className="h-3.5 w-3.5" />
+                                My fund
+                            </TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="admin">{adminDashboardBody}</TabsContent>
+                        <TabsContent value="employee">
+                            {employeeDashboard ? (
+                                <StaffFundEmployeeDashboardView embedded {...employeeDashboard} />
+                            ) : null}
+                        </TabsContent>
+                    </Tabs>
+                ) : (
+                    adminDashboardBody
+                )}
             </PageSurface>
         </Layout>
     );

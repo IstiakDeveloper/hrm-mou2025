@@ -13,6 +13,10 @@ import {
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
 import { WordTableReport } from '@/components/reports/WordTableReport';
+import {
+    LoanInstallmentLedgerTable,
+    type LoanInstallmentLedgerRow,
+} from '@/components/employee-loan/LoanInstallmentLedgerTable';
 import { employeeLoanReportPath } from '@/lib/employee-loan-reports';
 import { Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 import type { SharedData } from '@/types';
@@ -22,6 +26,14 @@ type ReportMeta = {
     title: string;
     description: string;
     filters: string[];
+};
+
+type LoanLedgerSection = {
+    title: string;
+    loan_number: string;
+    loan_type?: string;
+    status?: string;
+    rows: LoanInstallmentLedgerRow[];
 };
 
 type Props = {
@@ -228,7 +240,32 @@ export default function EmployeeLoanReportShow({
                             periodLabel={periodLabel}
                             rowCount={(payload.meta as { row_count?: number } | undefined)?.row_count}
                         />
-                        <WordTableReport payload={payload as Parameters<typeof WordTableReport>[0]['payload']} />
+                        {payload.template === 'loan-installment-ledger' ? (
+                            <div className="space-y-6">
+                                {((payload.sections as LoanLedgerSection[] | undefined) ?? []).length > 0 ? (
+                                    (payload.sections as LoanLedgerSection[]).map((section) => (
+                                        <div key={section.loan_number} className="space-y-2">
+                                            <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2">
+                                                <p className="text-sm font-semibold text-zinc-900">{section.title}</p>
+                                                <p className="text-xs text-zinc-500">
+                                                    {section.loan_type}
+                                                    {section.status ? ` · ${section.status}` : ''}
+                                                </p>
+                                            </div>
+                                            <LoanInstallmentLedgerTable
+                                                embedded
+                                                rows={section.rows}
+                                                emptyMessage="No installments for this loan."
+                                            />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">No loans found for the selected filters.</p>
+                                )}
+                            </div>
+                        ) : (
+                            <WordTableReport payload={payload as Parameters<typeof WordTableReport>[0]['payload']} />
+                        )}
                     </PayrollSectionCard>
                 )}
             </PayrollPage>

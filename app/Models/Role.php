@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\PermissionRegistry;
+use App\Support\SectionRegistry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -14,10 +15,12 @@ class Role extends Model
         'name',
         'description',
         'permissions',
+        'blocked_sections',
     ];
 
     protected $casts = [
         'permissions' => 'array',
+        'blocked_sections' => 'array',
     ];
 
     public function users()
@@ -55,5 +58,19 @@ class Role extends Model
         }
 
         return array_values(array_unique($permissions));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function blockedSectionList(): array
+    {
+        if (! SectionRegistry::supportsRoleSectionLocks()) {
+            return [];
+        }
+
+        return SectionRegistry::filterValid(
+            is_array($this->blocked_sections) ? $this->blocked_sections : []
+        );
     }
 }

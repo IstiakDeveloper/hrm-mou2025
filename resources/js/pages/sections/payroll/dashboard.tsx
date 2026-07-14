@@ -23,6 +23,13 @@ import { type SharedData } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    PayrollEmployeeDashboardView,
+    type PayrollEmployeeDashboardProps,
+} from '@/pages/sections/payroll/employee-dashboard';
+import { User } from 'lucide-react';
+import { useState } from 'react';
 
 type Props = {
     stats: {
@@ -37,6 +44,8 @@ type Props = {
         postedRuns: number;
     };
     userRole: string;
+    showEmployeeTab?: boolean;
+    employeeDashboard?: PayrollEmployeeDashboardProps | null;
 };
 
 const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4';
@@ -91,28 +100,15 @@ function ShortcutTile({ href, title, icon: Icon }: { href: string; title: string
     );
 }
 
-export default function PayrollDashboard({ stats, userRole }: Props) {
+export default function PayrollDashboard({ stats, userRole, showEmployeeTab: showEmployeeTabProp, employeeDashboard }: Props) {
     const { auth } = usePage<SharedData>().props;
     const can = (p: string) => hasAppPermission(auth, p);
     const section = '?section=payroll';
+    const showEmployeeTab = Boolean(showEmployeeTabProp && employeeDashboard);
+    const [dashboardMode, setDashboardMode] = useState<'admin' | 'employee'>('admin');
 
-    return (
-        <Layout>
-            <Head title="Payroll" />
-
-            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 px-3 sm:px-4">
-                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-sm sm:text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Payroll setup</h1>
-                        <p className="text-xs text-zinc-500">
-                            {userRole} · Master data before monthly payroll
-                        </p>
-                    </div>
-                    <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white">
-                        <Link href="/sections">Sections</Link>
-                    </Button>
-                </div>
-
+    const adminDashboardBody = (
+        <>
                 <section className="mb-6">
                     <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Overview</h2>
                     <div className={kpiGrid}>
@@ -192,6 +188,57 @@ export default function PayrollDashboard({ stats, userRole }: Props) {
                         )}
                     </div>
                 </section>
+        </>
+    );
+
+    return (
+        <Layout>
+            <Head title="Payroll" />
+
+            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 px-3 sm:px-4">
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h1 className="text-sm sm:text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Payroll setup</h1>
+                        <p className="text-xs text-zinc-500">
+                            {userRole} · Master data before monthly payroll
+                        </p>
+                    </div>
+                    <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white">
+                        <Link href="/sections">Sections</Link>
+                    </Button>
+                </div>
+
+                {showEmployeeTab ? (
+                    <Tabs
+                        value={dashboardMode}
+                        onValueChange={(v) => setDashboardMode(v as 'admin' | 'employee')}
+                        className="w-full"
+                    >
+                        <TabsList className="mb-4 h-9 w-fit min-w-0 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
+                            <TabsTrigger
+                                value="admin"
+                                className="h-8 min-w-[5.5rem] flex-none rounded-md px-3 text-xs data-[state=active]:bg-zinc-900 data-[state=active]:text-white"
+                            >
+                                Admin
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="employee"
+                                className="h-8 min-w-[5.5rem] flex-none gap-1.5 rounded-md px-3 text-xs data-[state=active]:bg-violet-600 data-[state=active]:text-white"
+                            >
+                                <User className="h-3.5 w-3.5" />
+                                My payroll
+                            </TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="admin">{adminDashboardBody}</TabsContent>
+                        <TabsContent value="employee">
+                            {employeeDashboard ? (
+                                <PayrollEmployeeDashboardView embedded {...employeeDashboard} />
+                            ) : null}
+                        </TabsContent>
+                    </Tabs>
+                ) : (
+                    adminDashboardBody
+                )}
             </PageSurface>
         </Layout>
     );

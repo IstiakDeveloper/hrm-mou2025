@@ -6,9 +6,9 @@ return [
     'reports' => [
         'loan-ledger' => [
             'title' => 'Loan Ledger',
-            'description' => 'All loan ledger transactions in the selected period.',
-            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'employee_id', 'loan_type'],
-            'template' => 'loan-table',
+            'description' => 'Full installment ledger per loan (PAID and NON-PAID) with PR/SC breakdown — same layout as single loan ledger.',
+            'filters' => ['branch_id', 'department_id', 'employee_id', 'loan_type'],
+            'template' => 'loan-installment-ledger',
             'report' => 'loan_ledger',
         ],
         'loan-disburse-register' => [
@@ -27,9 +27,9 @@ return [
         ],
         'loan-collection-register' => [
             'title' => 'Loan Collection Register',
-            'description' => 'Off-payroll collections, advance, waive and related batches.',
+            'description' => 'All collections including payroll installment deductions, manual collections, advance payments, rebates, and waivers.',
             'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'employee_id'],
-            'template' => 'loan-table',
+            'template' => 'loan-collection-register',
             'report' => 'loan_collection_register',
         ],
         'loan-pf-balance' => [
@@ -57,7 +57,7 @@ return [
             'title' => 'Loan Statement (Employee Wise)',
             'description' => 'Summary of all loans for selected employee(s).',
             'filters' => ['as_of', 'branch_id', 'department_id', 'employee_id', 'loan_type'],
-            'template' => 'loan-table',
+            'template' => 'loan-statement-employee',
             'report' => 'loan_statement_employee',
             'require_employee' => false,
         ],

@@ -16,6 +16,7 @@ import axios from 'axios';
 type Calc = {
     rate_yearly: number;
     installment_amount_monthly: number;
+    installment_amount_monthly_exact: number;
     total_installments: number;
     grace_months: number;
     interval_months: number;
@@ -294,9 +295,17 @@ export default function LoanApplicationForm({ employees, policies, committees, n
                                 <CardTitle className="text-sm font-semibold text-zinc-900">Loan calculation</CardTitle>
                             </CardHeader>
                             <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 md:grid-cols-4">
+                                <div className="rounded-lg border border-zinc-100 bg-zinc-50/50 px-3 py-2">
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Rate (yearly %)</p>
+                                    <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">{calc.rate_yearly}</p>
+                                </div>
+                                <div className="rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2">
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-amber-800">Monthly installment</p>
+                                    <p className="mt-0.5 text-sm font-semibold tabular-nums text-amber-900">
+                                        {fmt(calc.installment_amount_monthly)}
+                                    </p>
+                                </div>
                                 {[
-                                    ['Rate (yearly %)', calc.rate_yearly],
-                                    ['Monthly installment', fmt(calc.installment_amount_monthly)],
                                     ['Total installments', calc.total_installments],
                                     ['Grace months', calc.grace_months],
                                     ['Interval months', calc.interval_months],

@@ -30,16 +30,21 @@ class AttendanceReportController extends Controller
         $user = Auth::user();
 
         $employees = $this->employeesForReportDropdown($user);
+        $selfOnlyEmployeeId = $this->selfOnlyEmployeeId($user, $employees);
 
         // Initialize empty reports array
         $reports = [];
         $employeeName = '';
-        $employeeId = '';
+        $employeeId = $selfOnlyEmployeeId !== null ? (string) $selfOnlyEmployeeId : '';
         $fromDate = '';
         $toDate = '';
 
         // Process the report if form is submitted
-        if ($request->filled(['employee_id', 'from_date', 'to_date'])) {
+        if ($request->filled(['employee_id', 'from_date', 'to_date']) || ($selfOnlyEmployeeId !== null && $request->filled(['from_date', 'to_date']))) {
+            if ($selfOnlyEmployeeId !== null && ! $request->filled('employee_id')) {
+                $request->merge(['employee_id' => $selfOnlyEmployeeId]);
+            }
+
             // Validate the request
             $validated = $request->validate([
                 'employee_id' => 'required|exists:employees,id',
@@ -47,7 +52,7 @@ class AttendanceReportController extends Controller
                 'to_date' => 'required|date|after_or_equal:from_date',
             ]);
 
-            $selectedEmployeeId = (int) $request->employee_id;
+            $selectedEmployeeId = (int) ($request->employee_id ?: $selfOnlyEmployeeId);
             $fromDate = $request->from_date;
             $toDate = $request->to_date;
 
@@ -80,10 +85,31 @@ class AttendanceReportController extends Controller
                 'canDelete' => $user->hasPermission('attendance.delete'),
                 'canSyncDevices' => $user->hasPermission('attendance.sync'),
                 'isEmployee' => $user->employee_id ? true : false,
+                'isSelfOnly' => $selfOnlyEmployeeId !== null,
                 'isBranchManager' => $user->hasPermission('branch_manager'),
                 'isDepartmentHead' => $user->hasPermission('department_head'),
             ],
         ]);
+    }
+
+    /**
+     * When the user may only view their own attendance, return that employee id.
+     *
+     * @param  \Illuminate\Support\Collection<int, array{id: int, name: string}>  $employees
+     */
+    private function selfOnlyEmployeeId(User $user, $employees): ?int
+    {
+        if (! $user->employee_id || OrganogramAccessService::hasUnrestrictedAttendanceScope($user)) {
+            return null;
+        }
+
+        if ($employees->count() !== 1) {
+            return null;
+        }
+
+        $onlyId = (int) $employees->first()['id'];
+
+        return $onlyId === (int) $user->employee_id ? $onlyId : null;
     }
 
     /**

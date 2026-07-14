@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
+use App\Support\SectionRegistry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -295,12 +296,54 @@ class User extends Authenticatable
         'payroll',
     ];
 
+    /**
+     * @return list<string>
+     */
+    public function effectiveBlockedSections(): array
+    {
+        if (! SectionRegistry::supportsRoleSectionLocks()) {
+            return [];
+        }
+
+        $this->loadMissing(['role', 'roles']);
+
+        $blocked = [];
+
+        $merge = static function (?Role $role) use (&$blocked): void {
+            if (! $role) {
+                return;
+            }
+
+            foreach ($role->blockedSectionList() as $sectionId) {
+                $blocked[$sectionId] = true;
+            }
+        };
+
+        $merge($this->role);
+
+        foreach ($this->roles as $role) {
+            $merge($role);
+        }
+
+        return array_values(array_intersect(SectionRegistry::ids(), array_keys($blocked)));
+    }
+
     public function canAccessSection(string $sectionId): bool
     {
+        if (! in_array($sectionId, SectionRegistry::ids(), true)) {
+            return false;
+        }
+
         if ($this->isSuperAdmin()) {
             return true;
         }
 
+        // Role Section Access (blocked_sections) is the source of truth when the column exists.
+        if (SectionRegistry::supportsRoleSectionLocks()) {
+            return ! in_array($sectionId, $this->effectiveBlockedSections(), true);
+        }
+
+        // Legacy fallbacks before the blocked_sections migration.
         if ($this->isAccountant()) {
             return in_array($sectionId, self::ACCOUNTANT_SECTION_IDS, true);
         }

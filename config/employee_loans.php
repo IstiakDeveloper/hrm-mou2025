@@ -1,6 +1,23 @@
 <?php
 
 return [
+    /*
+    |--------------------------------------------------------------------------
+    | Rebate — current month (manual)
+    |--------------------------------------------------------------------------
+    |
+    | When closing a loan, staff choose whether the pending installment due in
+    | the same calendar month as the collection date is included in the rebate.
+    | This default applies when the UI does not send an explicit choice.
+    |
+    */
+    'rebate' => [
+        'default_include_current_month' => filter_var(
+            env('LOAN_REBATE_DEFAULT_INCLUDE_CURRENT_MONTH', false),
+            FILTER_VALIDATE_BOOL
+        ),
+    ],
+
     'loan_types' => [
         'pf_loan' => [
             'label' => 'PF Loan',

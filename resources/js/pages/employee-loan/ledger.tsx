@@ -1,45 +1,51 @@
-import React, { useState } from 'react';
-import { Link, router, useForm } from '@inertiajs/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import { Link, useForm } from '@inertiajs/react';
 import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { PayrollField, PayrollMonthSelect, PayrollYearSelect } from '@/components/payroll/PayrollFilterGrid';
-import { ArrowDownRight, ArrowLeft, ArrowUpRight, Pencil, Plus, Save, Trash2 } from 'lucide-react';
+import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
+import { ArrowLeft, Banknote, Pencil, Save } from 'lucide-react';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
-import { hasAppPermission } from '@/lib/permissions';
-import { usePage } from '@inertiajs/react';
-import type { SharedData } from '@/types';
+import { LoanInstallmentLedgerTable, type LoanInstallmentLedgerRow } from '@/components/employee-loan/LoanInstallmentLedgerTable';
+import {
+    LoanTermsEditDialog,
+    type LoanTermsEditValues,
+    type LoanTermsPolicy,
+} from '@/components/employee-loan/LoanTermsEditDialog';
+import {
+    LedgerEmployeeLoanSwitcher,
+    type LedgerNavLoan,
+} from '@/components/employee-loan/LedgerEmployeeLoanSwitcher';
 
-type Tx = {
-    id: number;
-    transaction_type: string;
-    transaction_type_label: string;
-    can_correct: boolean;
-    debit_amount: number;
-    credit_amount: number;
-    balance_after: number;
-    amount: number;
-    transaction_date: string | null;
-    transaction_date_iso: string | null;
-    payroll_year: number | null;
-    payroll_month: number | null;
-    payroll_period: string | null;
-    notes: string | null;
-    reference_no: string | null;
-};
+type Installment = LoanInstallmentLedgerRow;
 
 type HeaderRow = { label: string; value: string | number | null | undefined };
+
+type FullPaidPreview = {
+    suggested_amount: number;
+    outstanding_service_charge: number;
+    outstanding_principal: number;
+    outstanding_total: number;
+    collection_after_rebate: number;
+    pending_installments: number;
+    includes_current_month: boolean;
+    current_month_excluded: boolean;
+    excluded_service_charge: number;
+    explanation: string;
+};
 
 type Props = {
     loan: {
@@ -50,6 +56,10 @@ type Props = {
         outstanding_balance: number;
         principal_amount: number;
         service_charge_amount: number;
+        outstanding_principal: number;
+        outstanding_service_charge: number;
+        recovered_principal: number;
+        recovered_service_charge: number;
         total_payable: number;
         interest_rate: number;
         installment_count: number;
@@ -74,9 +84,12 @@ type Props = {
             branch: string | null;
         };
     };
-    transactions: Tx[];
-    months: { value: number; label: string }[];
-    years: number[];
+    schedule: Installment[];
+    editTerms: LoanTermsEditValues;
+    policies: LoanTermsPolicy[];
+    employeeLoans: LedgerNavLoan[];
+    canEdit: boolean;
+    defaultIncludeCurrentMonth: boolean;
 };
 
 const fmt = fmtLoanAmount;
@@ -105,27 +118,72 @@ function LedgerHeaderTable({ rows }: { rows: HeaderRow[] }) {
     );
 }
 
-export default function EmployeeLoanLedger({ loan, transactions, months, years }: Props) {
-    const { auth } = usePage<SharedData>().props;
-    const canEdit = hasAppPermission(auth, 'payroll.edit');
-    const [paymentOpen, setPaymentOpen] = useState(false);
-    const [editTx, setEditTx] = useState<Tx | null>(null);
+export default function EmployeeLoanLedger({ loan, schedule, editTerms, policies, employeeLoans, canEdit, defaultIncludeCurrentMonth }: Props) {
+    const [fullPaidOpen, setFullPaidOpen] = useState(false);
+    const [termsEditOpen, setTermsEditOpen] = useState(false);
+    const [includeCurrentMonth, setIncludeCurrentMonth] = useState(defaultIncludeCurrentMonth);
+    const [preview, setPreview] = useState<FullPaidPreview | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState<string | null>(null);
 
-    const paymentForm = useForm({
-        amount: '',
-        transaction_date: new Date().toISOString().slice(0, 10),
+    const pendingInstallments = useMemo(
+        () => schedule.filter((row) => row.status === 'pending' || row.status === 'scheduled').length,
+        [schedule],
+    );
+
+    const termsForEdit = useMemo<LoanTermsEditValues>(
+        () => ({
+            ...editTerms,
+            loan_id: loan.id,
+        }),
+        [editTerms, loan.id],
+    );
+
+    const fullPaidForm = useForm({
+        collection_date: new Date().toISOString().slice(0, 10),
         reference_no: '',
-        notes: '',
+        notes: 'Loan full paid with rebate',
+        include_current_month: null as boolean | null,
+        rebate_amount: null as number | null,
     });
 
-    const editForm = useForm({
-        amount: '',
-        transaction_date: '',
-        year: '',
-        month: '',
-        reference_no: '',
-        notes: '',
-    });
+    useEffect(() => {
+        if (!fullPaidOpen || loan.status !== 'active' || pendingInstallments === 0) {
+            setPreview(null);
+            setPreviewError(null);
+            return;
+        }
+
+        let cancelled = false;
+        setPreviewLoading(true);
+        setPreviewError(null);
+
+        axios
+            .post(route('employee-loans.full-paid.preview', loan.id), {
+                collection_date: fullPaidForm.data.collection_date,
+                include_current_month: includeCurrentMonth,
+            })
+            .then(({ data }) => {
+                if (!cancelled) {
+                    setPreview(data);
+                }
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    setPreview(null);
+                    setPreviewError(error.response?.data?.message ?? 'Could not calculate full paid preview.');
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setPreviewLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [fullPaidOpen, loan.id, loan.status, pendingInstallments, fullPaidForm.data.collection_date, includeCurrentMonth]);
 
     const employeeRows: HeaderRow[] = [
         { label: 'Employee Id', value: loan.employee.pin },
@@ -152,52 +210,29 @@ export default function EmployeeLoanLedger({ loan, transactions, months, years }
         { label: 'Disburse Branch', value: loan.employee.branch },
         { label: 'Loan Amount (PR)', value: fmt(loan.principal_amount) },
         { label: 'Loan Amount (SC)', value: fmt(loan.service_charge_amount) },
+        { label: 'Outstanding PR', value: fmt(loan.outstanding_principal) },
+        { label: 'Outstanding SC', value: fmt(loan.outstanding_service_charge) },
         { label: 'Loan Amount (Total)', value: fmt(loan.total_payable) },
-        { label: 'Rebate Amt', value: fmt(loan.rebate_amount) },
+        { label: 'Recovered PR', value: fmt(loan.recovered_principal) },
+        { label: 'Recovered SC', value: fmt(loan.recovered_service_charge) },
         { label: 'Loan Close Date', value: loan.loan_close_date },
     ];
 
-    const submitPayment = (e: React.FormEvent) => {
+    const submitFullPaid = (e: React.FormEvent) => {
         e.preventDefault();
-        paymentForm.post(route('employee-loans.manual-payment.store', loan.id), {
+        fullPaidForm.transform((data) => ({
+            ...data,
+            include_current_month: includeCurrentMonth,
+            rebate_amount: preview?.suggested_amount ?? null,
+        }));
+        fullPaidForm.post(route('employee-loans.full-paid.store', loan.id), {
             onSuccess: () => {
-                setPaymentOpen(false);
-                paymentForm.reset();
+                setFullPaidOpen(false);
+                fullPaidForm.reset();
+                setIncludeCurrentMonth(defaultIncludeCurrentMonth);
+                setPreview(null);
             },
         });
-    };
-
-    const openEdit = (tx: Tx) => {
-        setEditTx(tx);
-        editForm.setData({
-            amount: String(tx.amount),
-            transaction_date: tx.transaction_date_iso || '',
-            year: tx.payroll_year ? String(tx.payroll_year) : String(new Date().getFullYear()),
-            month: tx.payroll_month ? String(tx.payroll_month) : String(new Date().getMonth() + 1),
-            reference_no: tx.reference_no || '',
-            notes: tx.notes || '',
-        });
-        editForm.clearErrors();
-    };
-
-    const closeEdit = () => {
-        setEditTx(null);
-        editForm.reset();
-        editForm.clearErrors();
-    };
-
-    const submitEdit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editTx) return;
-
-        editForm.put(route('employee-loans.transactions.update', editTx.id), {
-            onSuccess: () => closeEdit(),
-        });
-    };
-
-    const deleteTx = (tx: Tx) => {
-        if (!confirm('Remove this ledger entry? Balances will be recalculated.')) return;
-        router.delete(route('employee-loans.transactions.destroy', tx.id));
     };
 
     return (
@@ -209,12 +244,37 @@ export default function EmployeeLoanLedger({ loan, transactions, months, years }
                 >
                     <ArrowLeft className="h-3 w-3" /> Loan details
                 </Link>
-                {canEdit && loan.status === 'active' && (
-                    <Button size="sm" className="h-7 bg-amber-600 hover:bg-amber-700 text-xs" onClick={() => setPaymentOpen(true)}>
-                        <Plus className="mr-1 h-3 w-3" /> Manual payment
-                    </Button>
+                {canEdit && (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setTermsEditOpen(true)}
+                        >
+                            <Pencil className="mr-1 h-3 w-3" /> Edit loan terms
+                        </Button>
+                        {loan.status === 'active' && pendingInstallments > 0 && (
+                            <Button
+                                size="sm"
+                                className="h-7 bg-emerald-600 text-xs hover:bg-emerald-700"
+                                onClick={() => {
+                                    setIncludeCurrentMonth(defaultIncludeCurrentMonth);
+                                    setFullPaidOpen(true);
+                                }}
+                            >
+                                <Banknote className="mr-1 h-3 w-3" /> Rebate & full payment
+                            </Button>
+                        )}
+                    </div>
                 )}
             </div>
+
+            <LedgerEmployeeLoanSwitcher
+                currentLoanId={loan.id}
+                currentEmployeeId={loan.employee.id}
+                employeeLoans={employeeLoans}
+            />
 
             <div className="mb-3 grid gap-3 lg:grid-cols-3">
                 <LedgerHeaderTable rows={employeeRows} />
@@ -224,205 +284,121 @@ export default function EmployeeLoanLedger({ loan, transactions, months, years }
 
             <Card className="mb-3 border-amber-200 bg-amber-50/20 shadow-2xs">
                 <CardContent className="flex flex-wrap items-center justify-between gap-3 p-3">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase text-amber-800">Outstanding balance</p>
-                        <p className="text-xl font-bold tabular-nums text-amber-900">{fmt(loan.outstanding_balance)}</p>
-                        <p className="text-xs text-zinc-500">{loan.employee.label} · {loan.loan_type_label}</p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-amber-800">Outstanding balance</p>
+                            <p className="text-xl font-bold tabular-nums text-amber-900">{fmt(loan.outstanding_balance)}</p>
+                            <p className="text-xs text-zinc-500">{loan.employee.label} · {loan.loan_type_label}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-zinc-500">Outstanding principal</p>
+                            <p className="text-lg font-bold tabular-nums text-zinc-900">{fmt(loan.outstanding_principal)}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-violet-700">Outstanding service charge</p>
+                            <p className="text-lg font-bold tabular-nums text-violet-900">{fmt(loan.outstanding_service_charge)}</p>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
 
-            <div className="rounded-lg border border-zinc-200 bg-white shadow-2xs overflow-hidden">
-                <Table>
-                    <TableHeader>
-                        <TableRow className="bg-zinc-50/80">
-                            <TableHead className="text-xs">Date</TableHead>
-                            <TableHead className="text-xs">Type</TableHead>
-                            <TableHead className="text-xs">Period</TableHead>
-                            <TableHead className="text-xs text-right">Debit</TableHead>
-                            <TableHead className="text-xs text-right">Credit</TableHead>
-                            <TableHead className="text-xs text-right">Balance</TableHead>
-                            <TableHead className="text-xs">Notes</TableHead>
-                            {canEdit && <TableHead className="text-xs w-20" />}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {transactions.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={canEdit ? 8 : 7} className="py-8 text-center text-sm text-zinc-500">
-                                    No ledger entries yet.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            transactions.map((tx) => (
-                                <TableRow key={tx.id}>
-                                    <TableCell className="text-xs">{tx.transaction_date}</TableCell>
-                                    <TableCell className="text-xs font-medium">{tx.transaction_type_label}</TableCell>
-                                    <TableCell className="text-xs text-zinc-500">{tx.payroll_period || '—'}</TableCell>
-                                    <TableCell className="text-xs text-right tabular-nums">
-                                        {tx.debit_amount > 0 ? (
-                                            <span className="inline-flex items-center gap-0.5 text-red-700">
-                                                <ArrowUpRight className="h-3 w-3" /> {fmt(tx.debit_amount)}
-                                            </span>
-                                        ) : (
-                                            '—'
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-right tabular-nums">
-                                        {tx.credit_amount > 0 ? (
-                                            <span className="inline-flex items-center gap-0.5 text-emerald-700">
-                                                <ArrowDownRight className="h-3 w-3" /> {fmt(tx.credit_amount)}
-                                            </span>
-                                        ) : (
-                                            '—'
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-right font-semibold tabular-nums">
-                                        {fmt(tx.balance_after)}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-zinc-500 max-w-[200px] truncate">
-                                        {tx.notes || tx.reference_no || '—'}
-                                    </TableCell>
-                                    {canEdit && (
-                                        <TableCell className="text-right">
-                                            {tx.can_correct && (
-                                                <div className="flex justify-end gap-1">
-                                                    <Button
-                                                        type="button"
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="h-7 w-7"
-                                                        onClick={() => openEdit(tx)}
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="h-7 w-7 text-red-600 hover:text-red-700"
-                                                        onClick={() => deleteTx(tx)}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                    )}
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+            <LoanInstallmentLedgerTable rows={schedule} />
 
-            <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
-                <DialogContent>
+            <LoanTermsEditDialog
+                open={termsEditOpen}
+                onOpenChange={setTermsEditOpen}
+                title="Edit loan terms"
+                subtitle={loan.employee.label}
+                terms={termsForEdit}
+                policies={policies}
+            />
+
+            <Dialog open={fullPaidOpen} onOpenChange={setFullPaidOpen}>
+                <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>Record manual payment</DialogTitle>
+                        <DialogTitle>Rebate & full payment</DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Rebate + সব বাকি installment একসাথে collect হবে। নিচের checkbox দিয়ে এই মাসের SC rebate দেবেন কি না সেটা নির্ধারণ করুন।
+                        </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={submitPayment} className="space-y-3">
-                        <PayrollField label="Amount (৳)" error={paymentForm.errors.amount}>
-                            <Input
-                                type="number"
-                                min="1"
-                                step="0.01"
-                                value={paymentForm.data.amount}
-                                onChange={(e) => paymentForm.setData('amount', e.target.value)}
-                            />
-                        </PayrollField>
-                        <PayrollField label="Payment date" error={paymentForm.errors.transaction_date}>
+                    <form onSubmit={submitFullPaid} className="space-y-3">
+                        <PayrollField label="Collection date" error={fullPaidForm.errors.collection_date}>
                             <Input
                                 type="date"
-                                value={paymentForm.data.transaction_date}
-                                onChange={(e) => paymentForm.setData('transaction_date', e.target.value)}
+                                value={fullPaidForm.data.collection_date}
+                                onChange={(e) => fullPaidForm.setData('collection_date', e.target.value)}
                             />
                         </PayrollField>
                         <PayrollField label="Reference">
                             <Input
-                                value={paymentForm.data.reference_no}
-                                onChange={(e) => paymentForm.setData('reference_no', e.target.value)}
+                                value={fullPaidForm.data.reference_no}
+                                onChange={(e) => fullPaidForm.setData('reference_no', e.target.value)}
                             />
                         </PayrollField>
-                        <PayrollField label="Notes" error={paymentForm.errors.notes}>
+                        <PayrollField label="Notes" error={fullPaidForm.errors.notes}>
                             <Textarea
-                                value={paymentForm.data.notes}
-                                onChange={(e) => paymentForm.setData('notes', e.target.value)}
+                                value={fullPaidForm.data.notes}
+                                onChange={(e) => fullPaidForm.setData('notes', e.target.value)}
                             />
                         </PayrollField>
+
+                        <label className="flex items-start gap-2 text-xs text-zinc-700">
+                            <Checkbox
+                                checked={includeCurrentMonth}
+                                onCheckedChange={(checked) => setIncludeCurrentMonth(checked === true)}
+                            />
+                            <span>
+                                এই মাসের installment-এর SC rebate-এ দিন
+                                <span className="mt-0.5 block text-[11px] text-zinc-500">
+                                    Uncheck = এই মাসের SC rebate হবে না (month cutoff)। Check = এই মাসসহ সব বাকি SC rebate।
+                                </span>
+                            </span>
+                        </label>
+
+                        {previewLoading && <p className="text-xs text-zinc-500">Calculating…</p>}
+                        {previewError && <p className="text-xs text-rose-600">{previewError}</p>}
+                        {fullPaidForm.errors.full_paid && (
+                            <p className="text-xs text-rose-600">{fullPaidForm.errors.full_paid}</p>
+                        )}
+
+                        {preview && !previewLoading && (
+                            <div className="rounded-md border border-emerald-100 bg-emerald-50/50 p-3 text-xs">
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    <PreviewMetric label="Rebate" value={fmt(preview.suggested_amount)} />
+                                    <PreviewMetric label="Collection" value={fmt(preview.collection_after_rebate)} />
+                                    <PreviewMetric label="Pending installments" value={String(preview.pending_installments)} />
+                                    <PreviewMetric label="Employee pays" value={fmt(preview.collection_after_rebate)} accent />
+                                </div>
+                                <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">{preview.explanation}</p>
+                            </div>
+                        )}
+
                         <DialogFooter>
-                            <Button type="submit" disabled={paymentForm.processing}>
+                            <Button type="submit" disabled={fullPaidForm.processing || previewLoading || !preview}>
                                 <Save className="mr-2 h-4 w-4" />
-                                Save payment
+                                Close loan
                             </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
-
-            <Dialog open={!!editTx} onOpenChange={(open) => !open && closeEdit()}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Edit ledger entry</DialogTitle>
-                    </DialogHeader>
-                    {editTx && (
-                        <form onSubmit={submitEdit} className="space-y-3">
-                            <PayrollField label="Amount (৳)" error={editForm.errors.amount}>
-                                <Input
-                                    type="number"
-                                    min="0.01"
-                                    step="0.01"
-                                    value={editForm.data.amount}
-                                    onChange={(e) => editForm.setData('amount', e.target.value)}
-                                />
-                            </PayrollField>
-                            <PayrollField label="Transaction date" error={editForm.errors.transaction_date}>
-                                <Input
-                                    type="date"
-                                    value={editForm.data.transaction_date}
-                                    onChange={(e) => editForm.setData('transaction_date', e.target.value)}
-                                />
-                            </PayrollField>
-                            {editTx.transaction_type === 'legacy_payment' && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <PayrollField label="Payroll year">
-                                        <PayrollYearSelect
-                                            years={years}
-                                            value={editForm.data.year}
-                                            onChange={(v) => editForm.setData('year', v)}
-                                        />
-                                    </PayrollField>
-                                    <PayrollField label="Payroll month">
-                                        <PayrollMonthSelect
-                                            months={months}
-                                            value={editForm.data.month}
-                                            onChange={(v) => editForm.setData('month', v)}
-                                        />
-                                    </PayrollField>
-                                </div>
-                            )}
-                            <PayrollField label="Reference">
-                                <Input
-                                    value={editForm.data.reference_no}
-                                    onChange={(e) => editForm.setData('reference_no', e.target.value)}
-                                />
-                            </PayrollField>
-                            <PayrollField label="Notes" error={editForm.errors.notes}>
-                                <Textarea
-                                    value={editForm.data.notes}
-                                    onChange={(e) => editForm.setData('notes', e.target.value)}
-                                />
-                            </PayrollField>
-                            <DialogFooter>
-                                <Button type="submit" disabled={editForm.processing}>
-                                    <Save className="mr-2 h-4 w-4" />
-                                    Save changes
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    )}
-                </DialogContent>
-            </Dialog>
         </EmployeeLoanLayout>
+    );
+}
+
+function PreviewMetric({
+    label,
+    value,
+    accent = false,
+}: {
+    label: string;
+    value: string;
+    accent?: boolean;
+}) {
+    return (
+        <div>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{label}</p>
+            <p className={`text-sm font-semibold tabular-nums ${accent ? 'text-emerald-800' : 'text-zinc-900'}`}>{value}</p>
+        </div>
     );
 }

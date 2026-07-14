@@ -327,6 +327,22 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/my-assets', [EmployeeAssetController::class, 'index'])->name('my-assets.index');
 
+    Route::prefix('employee/staff-fund')->name('employee.staff-fund.')->group(function () {
+        Route::get('/pf-ledger', [\App\Http\Controllers\Employee\EmployeeStaffFundController::class, 'pfLedger'])->name('pf-ledger');
+        Route::get('/gratuity', [\App\Http\Controllers\Employee\EmployeeStaffFundController::class, 'gratuityLedger'])->name('gratuity');
+    });
+
+    Route::prefix('employee/payroll')->name('employee.payroll.')->group(function () {
+        Route::get('/payslips', [\App\Http\Controllers\Employee\EmployeePayrollController::class, 'payslips'])->name('payslips.index');
+        Route::get('/payslips/{payslip}', [\App\Http\Controllers\Employee\EmployeePayrollController::class, 'show'])->name('payslips.show');
+    });
+
+    Route::prefix('employee/loan')->name('employee.loan.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Employee\EmployeeLoanController::class, 'index'])->name('index');
+        Route::get('/{employee_loan}', [\App\Http\Controllers\Employee\EmployeeLoanController::class, 'show'])->name('show');
+        Route::get('/{employee_loan}/ledger', [\App\Http\Controllers\Employee\EmployeeLoanController::class, 'ledger'])->name('ledger');
+    });
+
     // Profile (self-service; requires profile permissions on role)
     Route::prefix('profile')->name('profile.')->middleware(['permission:profile.view'])->group(function () {
         Route::get('/', [ProfileController::class, 'edit'])->name('edit');
@@ -443,6 +459,9 @@ Route::middleware(['auth'])->group(function () {
         // Role & Permission Management
         Route::middleware(['permission:roles.view'])->prefix('roles')->name('roles.')->group(function () {
             Route::get('/', [RoleController::class, 'index'])->name('index');
+            Route::post('/sync-defaults', [RoleController::class, 'syncDefaultRoles'])
+                ->name('sync-defaults')
+                ->middleware('permission:roles.edit');
             Route::get('/create', [RoleController::class, 'create'])->name('create')->middleware('permission:roles.create');
             Route::post('/', [RoleController::class, 'store'])->name('store')->middleware('permission:roles.create');
             Route::get('/{role}', [RoleController::class, 'show'])->name('show');
@@ -925,6 +944,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/waive', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createWaive'])->name('waive.create')->middleware('permission:employee-loan.edit');
             Route::post('/waive', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeWaive'])->name('waive.store')->middleware('permission:employee-loan.edit');
             Route::get('/rebate', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'createRebate'])->name('rebate.create')->middleware('permission:employee-loan.edit');
+            Route::post('/rebate/preview', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'rebatePreview'])->name('rebate.preview')->middleware('permission:employee-loan.edit');
             Route::post('/rebate', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'storeRebate'])->name('rebate.store')->middleware('permission:employee-loan.edit');
             Route::get('/rollback', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'rollbackIndex'])->name('rollback.index')->middleware('permission:employee-loan.edit');
             Route::post('/{loan_collection}/rollback', [\App\Http\Controllers\EmployeeLoan\LoanCollectionController::class, 'rollback'])->name('rollback')->middleware('permission:employee-loan.edit');
@@ -953,11 +973,15 @@ Route::middleware(['auth'])->group(function () {
 
         Route::prefix('employee-loans')->name('employee-loans.')->group(function () {
             Route::get('/', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'index'])->name('index');
+            Route::get('/ledger-lookup', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'ledgerLookup'])->name('ledger-lookup');
             Route::get('/create', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'create'])->name('create')->middleware('permission:employee-loan.create');
             Route::post('/', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'store'])->name('store')->middleware('permission:employee-loan.create');
             Route::get('/{employee_loan}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'show'])->name('show');
             Route::get('/{employee_loan}/ledger', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'ledger'])->name('ledger');
-            Route::post('/{employee_loan}/manual-payment', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'storeManualPayment'])->name('manual-payment.store')->middleware('permission:employee-loan.edit');
+            Route::put('/{employee_loan}/ledger-terms', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'updateLedgerTerms'])->name('ledger-terms.update')->middleware('permission:employee-loan.edit');
+            Route::post('/{employee_loan}/ledger-terms/recalculate', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'recalculateLedgerTerms'])->name('ledger-terms.recalculate')->middleware('permission:employee-loan.edit');
+            Route::post('/{employee_loan}/full-paid/preview', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'fullPaidPreview'])->name('full-paid.preview')->middleware('permission:employee-loan.edit');
+            Route::post('/{employee_loan}/full-paid', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'storeFullPaidWithRebate'])->name('full-paid.store')->middleware('permission:employee-loan.edit');
             Route::put('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'updateTransaction'])->name('transactions.update')->middleware('permission:employee-loan.edit');
             Route::delete('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'destroyTransaction'])->name('transactions.destroy')->middleware('permission:employee-loan.edit');
             Route::post('/{employee_loan}/cancel', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'cancel'])->name('cancel')->middleware('permission:employee-loan.edit');

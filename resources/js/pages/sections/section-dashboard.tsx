@@ -75,29 +75,39 @@ export default function SectionDashboard({ sectionId, mode }: Props) {
                     { label: 'Reports overview', href: '/reports' },
                 ];
             case 'staff-fund':
-                return [
-                    { label: 'Staff Fund dashboard', href: '/sections/staff-fund' },
-                    { label: 'PF Register', href: '/provident-fund' },
-                    { label: 'Gratuity entitlements', href: '/gratuity' },
-                    { label: 'Gratuity payments', href: '/gratuity/payments' },
-                    { label: 'Final Payment', href: '/final-payments' },
-                ];
+                return mode === 'admin'
+                    ? [
+                        { label: 'Staff Fund dashboard', href: '/sections/staff-fund' },
+                        { label: 'PF Register', href: '/provident-fund' },
+                        { label: 'Gratuity entitlements', href: '/gratuity' },
+                        { label: 'Gratuity payments', href: '/gratuity/payments' },
+                        { label: 'Final Payment', href: '/final-payments' },
+                    ]
+                    : [
+                        { label: 'My Staff Fund', href: '/sections/staff-fund' },
+                        { label: 'My PF Ledger', href: '/employee/staff-fund/pf-ledger' },
+                        { label: 'My Gratuity', href: '/employee/staff-fund/gratuity' },
+                    ];
             case 'employee-loan':
                 return [];
             case 'payroll':
-                return [
-                    { label: 'Payroll dashboard', href: '/sections/payroll' },
-                    { label: 'Payscales', href: '/payscales' },
-                    { label: 'Grades', href: '/salary-grades' },
-                    { label: 'Steps', href: '/salary-steps' },
-                    { label: 'Salary Heads', href: '/salary-heads' },
-                    { label: 'Salary Structure (manual)', href: '/salary-structures/manual' },
-                    { label: 'Branch Wise Bank', href: '/branch-payroll-banks' },
-                    { label: 'Probation Salary', href: '/probation-salary' },
-                    { label: 'Fixed Salary', href: '/fixed-salary' },
-                    { label: 'Head Modification', href: '/salary-head-modifications' },
-                    { label: 'Salary Process', href: '/salary-process' },
-                ];
+                return mode === 'admin'
+                    ? [
+                        { label: 'Payroll dashboard', href: '/sections/payroll' },
+                        { label: 'Payscales', href: '/payscales' },
+                        { label: 'Grades', href: '/salary-grades' },
+                        { label: 'Steps', href: '/salary-steps' },
+                        { label: 'Salary Heads', href: '/salary-heads' },
+                        { label: 'Salary Structure (manual)', href: '/salary-structures/manual' },
+                        { label: 'Branch Wise Bank', href: '/branch-payroll-banks' },
+                        { label: 'Probation Salary', href: '/probation-salary' },
+                        { label: 'Fixed Salary', href: '/fixed-salary' },
+                        { label: 'Head Modification', href: '/salary-head-modifications' },
+                        { label: 'Salary Process', href: '/salary-process' },
+                    ]
+                    : [
+                        { label: 'My Payslips', href: '/employee/payroll/payslips' },
+                    ];
             case 'fixed-asset':
                 return [
                     { label: 'Fixed Asset dashboard', href: '/sections/fixed-asset' },

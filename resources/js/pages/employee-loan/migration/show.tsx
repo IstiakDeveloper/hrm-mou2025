@@ -17,13 +17,18 @@ import {
 } from '@/components/ui/dialog';
 import { PayrollComboField, PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
+import {
+    calculationMethodItemsForLoan,
+    isLegacyFlatPfLoan,
+    normalizeCalculationMethodForLoan,
+} from '@/lib/employee-loan-calculation-method';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { ArrowLeft, Pencil, RefreshCw, Save } from 'lucide-react';
 import axios from 'axios';
 import { jsonCsrfHeaders } from '@/lib/csrf';
 import { cn } from '@/lib/utils';
 
-type Policy = { id: number; code: string; name: string; label: string };
+type Policy = { id: number; code: string; name: string; label: string; loan_type: string; calculation_method: string };
 
 type Item = {
     id: number;
@@ -37,6 +42,7 @@ type Item = {
     passed_months: number;
     use_manual_terms: boolean;
     service_charge_amount: number | null;
+    calculation_method: string | null;
     outstanding_principal: number;
     outstanding_service_charge: number;
     outstanding_total: number;
@@ -78,6 +84,7 @@ const fmt = fmtLoanAmount;
 type SavePayload = {
     loan_policy_id: number | null;
     use_manual_terms: boolean;
+    calculation_method: string | null;
     disbursement_date: string;
     disburse_amount: number;
     service_charge_amount: number | null;
@@ -88,9 +95,14 @@ type SavePayload = {
     outstanding_total: number;
 };
 
+function policyLoanType(policyId: string, policies: Policy[]): string | null {
+    return policies.find((p) => String(p.id) === policyId)?.loan_type ?? null;
+}
+
 function buildSavePayload(data: {
     loan_policy_id: string;
     use_manual_terms: boolean;
+    calculation_method: string;
     disbursement_date: string;
     disburse_amount: string;
     service_charge_amount: string;
@@ -99,21 +111,39 @@ function buildSavePayload(data: {
     outstanding_principal: string;
     outstanding_service_charge: string;
     outstanding_total: string;
-}, policyId: string): SavePayload {
+}, policyId: string, policies: Policy[]): SavePayload {
     return {
         loan_policy_id: policyId ? Number(policyId) : null,
         use_manual_terms: Boolean(data.use_manual_terms),
+        calculation_method: normalizeCalculationMethodForLoan(
+            data.calculation_method,
+            data.disbursement_date,
+            policyLoanType(policyId, policies),
+        ),
         disbursement_date: data.disbursement_date,
         disburse_amount: Number(data.disburse_amount),
-        service_charge_amount:
-            data.use_manual_terms && data.service_charge_amount !== ''
-                ? Number(data.service_charge_amount)
-                : null,
+        service_charge_amount: data.use_manual_terms
+            ? Number(data.service_charge_amount || 0)
+            : null,
         installment_amount: Number(data.installment_amount),
         passed_months: Number(data.passed_months) || 0,
         outstanding_principal: Number(data.outstanding_principal),
-        outstanding_service_charge: Number(data.outstanding_service_charge),
+        outstanding_service_charge: Number(data.outstanding_service_charge || 0),
         outstanding_total: Number(data.outstanding_total),
+    };
+}
+
+function snapshotPreviewMeta(
+    passedMonths: number,
+    installmentAmount: number,
+    outstandingTotal: number,
+): Pick<RowPreview, 'remaining_installments' | 'total_installments' | 'total_payable'> {
+    const remaining = Math.max(1, Math.ceil(outstandingTotal / Math.max(installmentAmount, 1)));
+
+    return {
+        remaining_installments: remaining,
+        total_installments: passedMonths + remaining,
+        total_payable: passedMonths * installmentAmount + outstandingTotal,
     };
 }
 
@@ -152,6 +182,17 @@ const statusBadge = (status: string) => {
     return map[status] ?? 'bg-zinc-100 text-zinc-600';
 };
 
+function policyDefaultMethodLabel(policyId: string, policies: Policy[]): string {
+    const policy = policies.find((p) => String(p.id) === policyId);
+    if (!policy) {
+        return 'Policy default';
+    }
+
+    const label = policy.calculation_method === 'flat' ? 'Flat' : 'Reducing';
+
+    return `Policy default (${label})`;
+}
+
 export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
     const [batchEditOpen, setBatchEditOpen] = useState(false);
     const [editItem, setEditItem] = useState<Item | null>(null);
@@ -189,6 +230,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
     const itemForm = useForm({
         loan_policy_id: '',
         use_manual_terms: false,
+        calculation_method: '',
         disbursement_date: '',
         disburse_amount: '',
         service_charge_amount: '',
@@ -251,13 +293,34 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
         [patchItemForm],
     );
 
+    const calculationMethodComboItems = useMemo(() => {
+        const data = itemFormDataRef.current;
+        const policyId = resolvePolicyId(data);
+        const loanType = policyLoanType(policyId, policies);
+        const methodItems = calculationMethodItemsForLoan(data.disbursement_date, loanType);
+
+        if (isLegacyFlatPfLoan(data.disbursement_date, loanType)) {
+            return methodItems;
+        }
+
+        return [
+            { value: '', label: policyDefaultMethodLabel(policyId, policies), keywords: 'default policy' },
+            ...methodItems,
+        ];
+    }, [policies, itemForm.data.loan_policy_id, itemForm.data.calculation_method, itemForm.data.disbursement_date, resolvePolicyId]);
+
     const recalculateFromPolicy = useCallback(
-        async (options?: { useManual?: boolean; data?: Partial<typeof itemForm.data> }): Promise<boolean> => {
+        async (options?: {
+            useManual?: boolean;
+            forcePolicy?: boolean;
+            data?: Partial<typeof itemForm.data>;
+        }): Promise<boolean> => {
             const data = { ...itemFormDataRef.current, ...options?.data };
             const policyId = resolvePolicyId(data);
             const amount = parseFloat(data.disburse_amount);
             const passed = parseInt(data.passed_months, 10) || 0;
             const useManual = options?.useManual ?? Boolean(data.use_manual_terms);
+            const forcePolicy = options?.forcePolicy ?? false;
 
             if (!policyId || !Number.isFinite(amount) || amount <= 0) {
                 setCalcError(null);
@@ -265,12 +328,18 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                 return false;
             }
 
-            if (useManual) {
-                const sc = parseFloat(data.service_charge_amount);
-                const install = parseFloat(data.installment_amount);
-                if (!Number.isFinite(sc) || sc <= 0 || !Number.isFinite(install) || install <= 0) {
-                    setCalcError('Manual mode: enter total service charge and installment amount.');
-                    return false;
+            const install = parseFloat(data.installment_amount);
+            if (useManual && (!Number.isFinite(install) || install <= 0)) {
+                setCalcError('Manual mode: installment amount দিন।');
+                return false;
+            }
+
+            if (!forcePolicy && Number.isFinite(install) && install > 0) {
+                const outTotal = parseFloat(data.outstanding_total);
+                if (Number.isFinite(outTotal) && outTotal > 0) {
+                    setPreviewMeta(
+                        snapshotPreviewMeta(passed, install, outTotal),
+                    );
                 }
             }
 
@@ -284,11 +353,24 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                 disburse_amount: amount,
                 passed_months: passed,
                 use_manual_terms: useManual,
+                force_policy: forcePolicy,
+                installment_amount: install,
+                outstanding_principal: parseFloat(data.outstanding_principal) || 0,
+                outstanding_service_charge: parseFloat(data.outstanding_service_charge) || 0,
+                outstanding_total: parseFloat(data.outstanding_total) || 0,
             };
 
+            const method = normalizeCalculationMethodForLoan(
+                data.calculation_method,
+                data.disbursement_date,
+                policyLoanType(policyId, policies),
+            );
+            if (method === 'reducing' || method === 'flat') {
+                payload.calculation_method = method;
+            }
+
             if (useManual) {
-                payload.service_charge_amount = parseFloat(data.service_charge_amount);
-                payload.installment_amount = parseFloat(data.installment_amount);
+                payload.service_charge_amount = parseFloat(data.service_charge_amount) || 0;
             }
 
             try {
@@ -298,7 +380,15 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                     return false;
                 }
 
-                applyPreview(preview as RowPreview);
+                if (forcePolicy) {
+                    applyPreview(preview as RowPreview);
+                } else {
+                    setPreviewMeta({
+                        remaining_installments: (preview as RowPreview).remaining_installments,
+                        total_installments: (preview as RowPreview).total_installments,
+                        total_payable: (preview as RowPreview).total_payable,
+                    });
+                }
 
                 return true;
             } catch (err: unknown) {
@@ -323,9 +413,9 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
         [applyPreview, resolvePolicyId],
     );
 
-    const triggerRecalc = useCallback(() => {
+    const triggerPolicyRecalc = useCallback(() => {
         const useManual = Boolean(itemFormDataRef.current.use_manual_terms);
-        void recalculateFromPolicy({ useManual });
+        void recalculateFromPolicy({ useManual, forcePolicy: true });
     }, [recalculateFromPolicy]);
 
     const openBatchEdit = () => {
@@ -344,6 +434,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
         const formData = {
             loan_policy_id: row.loan_policy_id != null ? String(row.loan_policy_id) : '',
             use_manual_terms: row.use_manual_terms,
+            calculation_method: row.calculation_method ?? '',
             disbursement_date: row.disbursement_date_iso || '',
             disburse_amount: String(row.disburse_amount),
             service_charge_amount: row.service_charge_amount != null ? String(row.service_charge_amount) : '',
@@ -358,7 +449,9 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
         itemForm.setData(formData);
         itemForm.clearErrors();
 
-        void recalculateFromPolicy({ useManual: row.use_manual_terms, data: formData });
+        setPreviewMeta(
+            snapshotPreviewMeta(row.passed_months, row.installment_amount, row.outstanding_total),
+        );
     };
 
     const closeItemEdit = () => {
@@ -439,18 +532,27 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
         }
 
         if (merged.use_manual_terms) {
-            const sc = parseFloat(merged.service_charge_amount);
             const install = parseFloat(merged.installment_amount);
-            if (!Number.isFinite(sc) || sc <= 0 || !Number.isFinite(install) || install <= 0) {
-                setSaveError('Manual mode: service charge ও installment দিন।');
+            if (!Number.isFinite(install) || install <= 0) {
+                setSaveError('Manual mode: installment amount দিন।');
                 return;
             }
+        }
 
-            await recalculateFromPolicy({ useManual: true, data: merged });
+        const outPr = parseFloat(merged.outstanding_principal);
+        const outSc = parseFloat(merged.outstanding_service_charge || '0');
+        const outTotal = parseFloat(merged.outstanding_total);
+        if (
+            !Number.isFinite(outTotal) ||
+            outTotal <= 0 ||
+            Math.abs(outPr + outSc - outTotal) > 0.02
+        ) {
+            setSaveError('Outstanding: Out total = Out PR + Out SC হতে হবে।');
+            return;
         }
 
         const current = itemFormDataRef.current;
-        const payload = buildSavePayload(current, resolvePolicyId(current));
+        const payload = buildSavePayload(current, resolvePolicyId(current), policies);
 
         setSaveLoading(true);
 
@@ -653,22 +755,14 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                             <p className="text-xs text-zinc-500">{editItem.employee_label}</p>
 
                             {itemForm.data.use_manual_terms ? (
-                                <PayrollField label="Loan policy">
-                                    <Input
-                                        readOnly
-                                        tabIndex={-1}
-                                        className="bg-zinc-50 text-xs"
-                                        value={
-                                            policyItems.find((p) => p.value === resolvePolicyId(itemForm.data))
-                                                ?.label ??
-                                            editItem.policy_name ??
-                                            (editItem.loan_policy_id ? `Policy #${editItem.loan_policy_id}` : '—')
-                                        }
-                                    />
-                                    <p className="mt-1 text-[10px] text-zinc-500">
-                                        Manual terms — policy একই থাকবে; শুধু service charge ও installment custom।
-                                    </p>
-                                </PayrollField>
+                                <PayrollComboField
+                                    label="Loan policy"
+                                    value={resolvePolicyId(itemForm.data)}
+                                    onChange={(v) => patchItemForm({ loan_policy_id: v })}
+                                    items={policyItems}
+                                    placeholder="Select policy"
+                                    required
+                                />
                             ) : (
                                 <PayrollComboField
                                     label="Loan policy"
@@ -685,6 +779,25 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                 />
                             )}
 
+                            <PayrollComboField
+                                label="Calculation method"
+                                value={itemForm.data.calculation_method}
+                                onChange={(v) => {
+                                    patchItemForm({ calculation_method: v });
+                                    if (!itemFormDataRef.current.use_manual_terms) {
+                                        void recalculateFromPolicy({
+                                            useManual: false,
+                                            data: { calculation_method: v },
+                                        });
+                                    }
+                                }}
+                                items={calculationMethodComboItems}
+                                placeholder="Policy default"
+                            />
+                            <p className="-mt-1 text-[10px] text-zinc-500">
+                                ২০২৫-এর আগের PF loan শুধু flat। ২০২৫ ও পরে কোনো loan flat হবে না — reducing/policy default।
+                            </p>
+
                             <div className="flex items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50/80 p-3">
                                 <Checkbox
                                     id="use_manual_terms"
@@ -695,10 +808,10 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                         patchItemForm({
                                             use_manual_terms: enabled,
                                             loan_policy_id: policyId,
-                                        });
-                                        void recalculateFromPolicy({
-                                            useManual: enabled,
-                                            data: { use_manual_terms: enabled, loan_policy_id: policyId },
+                                            service_charge_amount:
+                                                enabled && itemFormDataRef.current.service_charge_amount === ''
+                                                    ? '0'
+                                                    : itemFormDataRef.current.service_charge_amount,
                                         });
                                     }}
                                 />
@@ -707,8 +820,8 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                         Manual legacy terms
                                     </Label>
                                     <p className="text-[10px] leading-relaxed text-zinc-600">
-                                        পুরনো loan-এর মোট service charge (যেমন ৳32,208) ও installment (যেমন ৳10,925)
-                                        নিজে দিন। Check করলে policy ৭% override হবে না — save-এ এই values যাবে।
+                                        পুরনো loan-এর মোট service charge (PF loan-এ যেমন ৳32,208; motorcycle-এ ০) ও
+                                        installment (যেমন ৳3,000) নিজে দিন। Check করলে policy rate override হবে না।
                                     </p>
                                 </div>
                             </div>
@@ -717,7 +830,20 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                 <Input
                                     type="date"
                                     value={itemForm.data.disbursement_date}
-                                    onChange={(e) => patchItemForm({ disbursement_date: e.target.value })}
+                                    onChange={(e) => {
+                                        const disbursementDate = e.target.value;
+                                        const policyId = resolvePolicyId(itemFormDataRef.current);
+                                        const loanType = policyLoanType(policyId, policies);
+                                        const method = normalizeCalculationMethodForLoan(
+                                            itemFormDataRef.current.calculation_method,
+                                            disbursementDate,
+                                            loanType,
+                                        );
+                                        patchItemForm({
+                                            disbursement_date: disbursementDate,
+                                            calculation_method: method ?? '',
+                                        });
+                                    }}
                                 />
                             </PayrollField>
 
@@ -732,7 +858,6 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                             disburse_amount: e.target.value.replace(/[^\d.]/g, ''),
                                         })
                                     }
-                                    onBlur={triggerRecalc}
                                     placeholder="e.g. 230000"
                                 />
                             </PayrollField>
@@ -753,8 +878,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                                     service_charge_amount: e.target.value.replace(/[^\d.]/g, ''),
                                                 })
                                             }
-                                            onBlur={triggerRecalc}
-                                            placeholder="e.g. 32208"
+                                            placeholder="0 for motorcycle"
                                         />
                                     </PayrollField>
                                     <PayrollField label="Installment / month" error={itemForm.errors.installment_amount}>
@@ -768,8 +892,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                                     installment_amount: e.target.value.replace(/[^\d.]/g, ''),
                                                 })
                                             }
-                                            onBlur={triggerRecalc}
-                                            placeholder="e.g. 10925"
+                                            placeholder="e.g. 3000"
                                         />
                                     </PayrollField>
                                     <div className="sm:col-span-2">
@@ -796,11 +919,14 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                         <Input
                                             type="text"
                                             inputMode="decimal"
-                                            readOnly
-                                            tabIndex={-1}
-                                            className={cn('bg-zinc-50 tabular-nums', calcLoading && 'animate-pulse')}
+                                            className="tabular-nums"
                                             value={itemForm.data.installment_amount}
-                                            placeholder="Auto from policy"
+                                            onChange={(e) =>
+                                                patchItemForm({
+                                                    installment_amount: e.target.value.replace(/[^\d.]/g, ''),
+                                                })
+                                            }
+                                            placeholder="e.g. 3000"
                                         />
                                     </PayrollField>
                                 </div>
@@ -815,7 +941,6 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                     onChange={(e) =>
                                         patchItemForm({ passed_months: e.target.value.replace(/\D/g, '') })
                                     }
-                                    onBlur={triggerRecalc}
                                 />
                                 <p className="mt-1 text-[10px] text-zinc-500">
                                     Disburse-এর পর কত মাস installment paid — প্রথম N টা installment paid mark হবে।
@@ -841,7 +966,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                         size="sm"
                                         variant="outline"
                                         className="h-7 text-[10px]"
-                                        onClick={triggerRecalc}
+                                        onClick={triggerPolicyRecalc}
                                         disabled={calcLoading}
                                     >
                                         {calcLoading ? 'Calculating…' : 'Recalculate from policy'}
@@ -852,13 +977,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                         <Input
                                             type="text"
                                             inputMode="decimal"
-                                            readOnly={!itemForm.data.use_manual_terms}
-                                            tabIndex={itemForm.data.use_manual_terms ? 0 : -1}
-                                            className={cn(
-                                                'tabular-nums',
-                                                calcLoading && 'animate-pulse',
-                                                !itemForm.data.use_manual_terms && 'bg-white',
-                                            )}
+                                            className="tabular-nums"
                                             value={itemForm.data.outstanding_principal}
                                             onChange={(e) => {
                                                 const pr = e.target.value.replace(/[^\d.]/g, '');
@@ -876,13 +995,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                         <Input
                                             type="text"
                                             inputMode="decimal"
-                                            readOnly={!itemForm.data.use_manual_terms}
-                                            tabIndex={itemForm.data.use_manual_terms ? 0 : -1}
-                                            className={cn(
-                                                'tabular-nums',
-                                                calcLoading && 'animate-pulse',
-                                                !itemForm.data.use_manual_terms && 'bg-white',
-                                            )}
+                                            className="tabular-nums"
                                             value={itemForm.data.outstanding_service_charge}
                                             onChange={(e) => {
                                                 const sc = e.target.value.replace(/[^\d.]/g, '');
@@ -900,13 +1013,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                         <Input
                                             type="text"
                                             inputMode="decimal"
-                                            readOnly={!itemForm.data.use_manual_terms}
-                                            tabIndex={itemForm.data.use_manual_terms ? 0 : -1}
-                                            className={cn(
-                                                'font-semibold tabular-nums',
-                                                calcLoading && 'animate-pulse',
-                                                !itemForm.data.use_manual_terms && 'bg-white',
-                                            )}
+                                            className="font-semibold tabular-nums"
                                             value={itemForm.data.outstanding_total}
                                             onChange={(e) =>
                                                 patchItemForm({
@@ -919,8 +1026,8 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
                                 {calcError && <p className="mt-2 text-xs text-rose-600">{calcError}</p>}
                                 <p className="mt-2 text-[10px] text-amber-800/80">
                                     {itemForm.data.use_manual_terms
-                                        ? 'Manual: total payable − (passed × installment) থেকে Out PR/SC auto হবে। প্রয়োজনে Out SC/PR হাতে ঠিক করুন।'
-                                        : 'Policy থেকে auto calculate — Recalculate from policy চাপুন বা disburse/passed months বদলান। Save করলেও policy অনুযায়ী আবার calculate হবে।'}
+                                        ? 'Manual: সব field edit করা যাবে। Motorcycle loan-এ service charge ০ দিন। Save করলে linked loan schedule এই snapshot থেকে rebuild হবে।'
+                                        : 'সব field edit করা যাবে। Policy থেকে auto-fill চাইলে Recalculate from policy চাপুন। Save করলে form-এর values অনুযায়ী loan schedule rebuild হবে।'}
                                 </p>
                             </div>
 

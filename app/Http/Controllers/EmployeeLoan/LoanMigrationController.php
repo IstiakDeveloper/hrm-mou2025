@@ -31,37 +31,33 @@ class LoanMigrationController extends Controller
             'disburse_amount' => 'required|numeric|min:1',
             'passed_months' => 'nullable|integer|min:0|max:360',
             'use_manual_terms' => 'nullable|boolean',
+            'force_policy' => 'nullable|boolean',
             'service_charge_amount' => 'nullable|numeric|min:0',
             'installment_amount' => 'nullable|numeric|min:1',
+            'outstanding_principal' => 'nullable|numeric|min:0',
             'outstanding_service_charge' => 'nullable|numeric|min:0',
+            'outstanding_total' => 'nullable|numeric|min:0',
+            'calculation_method' => 'nullable|in:reducing,flat',
         ]);
 
         $policy = LoanPolicy::query()->findOrFail($validated['loan_policy_id']);
 
         try {
             if (! empty($validated['use_manual_terms'])) {
-                if (empty($validated['service_charge_amount']) || empty($validated['installment_amount'])) {
-                    return response()->json(['message' => 'Service charge and installment are required for manual legacy terms.'], 422);
+                if (! isset($validated['installment_amount']) || (float) $validated['installment_amount'] <= 0) {
+                    return response()->json(['message' => 'Installment amount is required for manual legacy terms.'], 422);
                 }
 
-                return response()->json(
-                    $this->calculator->calculateManualMigrationSnapshot(
-                        $policy,
-                        (float) $validated['disburse_amount'],
-                        (float) $validated['service_charge_amount'],
-                        (float) $validated['installment_amount'],
-                        (int) ($validated['passed_months'] ?? 0),
-                    )
-                );
+                if (! array_key_exists('service_charge_amount', $validated)) {
+                    return response()->json(['message' => 'Service charge is required for manual legacy terms (use 0 for motorcycle loans).'], 422);
+                }
             }
 
             return response()->json(
-                $this->calculator->calculateMigrationSnapshot(
+                $this->migrationService->previewFromRow(
                     $policy,
-                    (float) $validated['disburse_amount'],
-                    (int) ($validated['passed_months'] ?? 0),
-                    isset($validated['installment_amount']) ? (float) $validated['installment_amount'] : null,
-                    isset($validated['outstanding_service_charge']) ? (float) $validated['outstanding_service_charge'] : null,
+                    $validated,
+                    $request->boolean('force_policy'),
                 )
             );
         } catch (\InvalidArgumentException $e) {
@@ -126,12 +122,14 @@ class LoanMigrationController extends Controller
             })
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get(['id', 'code', 'name'])
+            ->get(['id', 'code', 'name', 'loan_type', 'calculation_method'])
             ->map(fn (LoanPolicy $p) => [
                 'id' => $p->id,
                 'code' => $p->code,
                 'name' => $p->name,
                 'label' => "{$p->name} ({$p->code})",
+                'loan_type' => $p->loan_type,
+                'calculation_method' => $p->calculation_method,
             ]);
 
         return Inertia::render('employee-loan/migration/show', [
@@ -160,6 +158,7 @@ class LoanMigrationController extends Controller
                     'service_charge_amount' => $item->service_charge_amount !== null
                         ? (float) $item->service_charge_amount
                         : null,
+                    'calculation_method' => $item->calculation_method,
                     'outstanding_principal' => (float) $item->outstanding_principal,
                     'outstanding_service_charge' => (float) $item->outstanding_service_charge,
                     'outstanding_total' => (float) $item->outstanding_total,
@@ -188,6 +187,7 @@ class LoanMigrationController extends Controller
             'rows.*.outstanding_principal' => 'nullable|numeric|min:0',
             'rows.*.outstanding_service_charge' => 'nullable|numeric|min:0',
             'rows.*.outstanding_total' => 'nullable|numeric|min:0',
+            'rows.*.calculation_method' => 'nullable|in:reducing,flat',
         ]);
 
         try {
@@ -231,15 +231,15 @@ class LoanMigrationController extends Controller
         $request->merge([
             'use_manual_terms' => $useManual,
             'loan_policy_id' => $request->filled('loan_policy_id') ? (int) $request->input('loan_policy_id') : null,
-            'service_charge_amount' => $request->filled('service_charge_amount')
-                ? $request->input('service_charge_amount')
+            'service_charge_amount' => $useManual
+                ? ($request->input('service_charge_amount') ?? 0)
                 : null,
         ]);
 
         $validated = $request->validate([
             'loan_policy_id' => 'nullable|integer|exists:loan_policies,id',
             'use_manual_terms' => 'boolean',
-            'service_charge_amount' => $useManual ? 'required|numeric|min:0.01' : 'nullable|numeric|min:0',
+            'service_charge_amount' => $useManual ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'disbursement_date' => 'required|date',
             'disburse_amount' => 'required|numeric|min:1',
             'installment_amount' => 'required|numeric|min:1',
@@ -247,9 +247,13 @@ class LoanMigrationController extends Controller
             'outstanding_principal' => 'required|numeric|min:0',
             'outstanding_service_charge' => 'required|numeric|min:0',
             'outstanding_total' => 'required|numeric|min:0.01',
+            'calculation_method' => 'nullable|in:reducing,flat',
         ]);
 
         $validated['use_manual_terms'] = $useManual;
+        if (array_key_exists('calculation_method', $validated) && $validated['calculation_method'] === null) {
+            unset($validated['calculation_method']);
+        }
 
         try {
             $this->migrationService->updateItem($loan_migration_item, $validated);

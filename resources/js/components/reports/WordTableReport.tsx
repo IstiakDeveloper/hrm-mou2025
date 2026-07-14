@@ -219,6 +219,182 @@ export function WordTableReport({ payload }: { payload: TablePayload }) {
         );
     }
 
+    if (template === 'loan-statement-employee') {
+        const rows = payload.rows ?? [];
+        const totals = payload.totals;
+
+        if (rows.length === 0) {
+            return <p className="text-sm text-muted-foreground">No rows for the selected filters.</p>;
+        }
+
+        const headerClass = 'border-b border-black bg-zinc-700 font-semibold text-center text-amber-400';
+
+        return (
+            <div className="overflow-x-auto border border-black bg-white">
+                <table className="w-full border-collapse text-[10px] text-black">
+                    <thead>
+                        <tr className={headerClass}>
+                            <th colSpan={2} className="border-r border-black p-1">Employee</th>
+                            <th rowSpan={2} className="border-r border-black p-1 align-middle text-left">Policy</th>
+                            <th colSpan={3} className="border-r border-black p-1">Opening Loan Outstanding</th>
+                            <th colSpan={3} className="border-r border-black p-1">Disburse</th>
+                            <th colSpan={3} className="border-r border-black p-1">Collection</th>
+                            <th rowSpan={2} className="border-r border-black p-1 align-middle text-center">Full Paid Loanee</th>
+                            <th rowSpan={2} className="border-r border-black p-1 align-middle text-right">Rebate Amt</th>
+                            <th colSpan={2} className="border-r border-black p-1">Transfer</th>
+                            <th colSpan={3} className="p-1">Closing Outstanding</th>
+                        </tr>
+                        <tr className={headerClass}>
+                            <th className="border-r border-black p-1">ID</th>
+                            <th className="border-r border-black p-1 text-left">Name</th>
+                            <th className="border-r border-black p-1 text-right">PR</th>
+                            <th className="border-r border-black p-1 text-right">SC</th>
+                            <th className="border-r border-black p-1 text-right">Total</th>
+                            <th className="border-r border-black p-1 text-right">PR</th>
+                            <th className="border-r border-black p-1 text-right">SC</th>
+                            <th className="border-r border-black p-1 text-right">Total</th>
+                            <th className="border-r border-black p-1 text-right">PR</th>
+                            <th className="border-r border-black p-1 text-right">SC</th>
+                            <th className="border-r border-black p-1 text-right">Total</th>
+                            <th className="border-r border-black p-1 text-right">In</th>
+                            <th className="border-r border-black p-1 text-right">Out</th>
+                            <th className="border-r border-black p-1 text-right">PR</th>
+                            <th className="border-r border-black p-1 text-right">SC</th>
+                            <th className="p-1 text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((row, i) => (
+                            <tr key={i} className="border-b border-black">
+                                <td className="border-r border-black p-1 text-center font-mono text-[9px]">{row.pin}</td>
+                                <td className="border-r border-black p-1 text-left">{row.name}</td>
+                                <td className="border-r border-black p-1 text-left">{row.policy}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.open_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.open_sc)}</td>
+                                <td className="border-r border-black p-1 text-right font-medium">{fmt(row.open_total)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.disburse_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.disburse_sc)}</td>
+                                <td className="border-r border-black p-1 text-right font-medium">{fmt(row.disburse_total)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.coll_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.coll_sc)}</td>
+                                <td className="border-r border-black p-1 text-right font-medium">{fmt(row.coll_total)}</td>
+                                <td className="border-r border-black p-1 text-center">{row.full_paid_loanee ? '1' : ''}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.rebate_amount)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.transfer_in)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.transfer_out)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.close_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.close_sc)}</td>
+                                <td className="p-1 text-right font-medium">{fmt(row.close_total)}</td>
+                            </tr>
+                        ))}
+                        {totals && (
+                            <tr className="border-t-2 border-black bg-zinc-100 font-bold">
+                                <td colSpan={3} className="border-r border-black p-1 text-center">Total</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.open_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.open_sc)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.open_total)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.disburse_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.disburse_sc)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.disburse_total)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.coll_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.coll_sc)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.coll_total)}</td>
+                                <td className="border-r border-black p-1 text-center">{totals.full_paid_loanee ?? ''}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.rebate_amount)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.transfer_in)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.transfer_out)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.close_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.close_sc)}</td>
+                                <td className="p-1 text-right">{fmt(totals.close_total)}</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+
+    if (template === 'loan-collection-register') {
+        const rows = payload.rows ?? [];
+        const totals = payload.totals;
+
+        if (rows.length === 0) {
+            return <p className="text-sm text-muted-foreground">No rows for the selected filters.</p>;
+        }
+
+        return (
+            <div className="overflow-x-auto border border-black bg-white">
+                <table className="w-full border-collapse text-[10px] text-black">
+                    <thead>
+                        <tr className="border-b border-black bg-emerald-50/80 font-semibold text-center">
+                            <th colSpan={2} className="border-r border-black p-1">Employee</th>
+                            <th rowSpan={2} className="border-r border-black p-1 align-middle text-left">Policy</th>
+                            <th rowSpan={2} className="border-r border-black p-1 align-middle text-center">Disburse Date</th>
+                            <th rowSpan={2} className="border-r border-black p-1 align-middle text-right">Disburse Amt</th>
+                            <th rowSpan={2} className="border-r border-black p-1 align-middle text-right">Install Amt</th>
+                            <th colSpan={3} className="border-r border-black p-1">Opening Outstanding</th>
+                            <th colSpan={3} className="border-r border-black p-1">Collection</th>
+                            <th rowSpan={2} className="border-r border-black p-1 align-middle text-right">Rebate Amount</th>
+                            <th colSpan={3} className="p-1">Loan Balance</th>
+                        </tr>
+                        <tr className="border-b border-black bg-emerald-50/80 font-semibold text-center">
+                            <th className="border-r border-black p-1">ID</th>
+                            <th className="border-r border-black p-1 text-left">Name</th>
+                            <th className="border-r border-black p-1 text-right">PR</th>
+                            <th className="border-r border-black p-1 text-right">SC</th>
+                            <th className="border-r border-black p-1 text-right">Total</th>
+                            <th className="border-r border-black p-1 text-right">PR</th>
+                            <th className="border-r border-black p-1 text-right">SC</th>
+                            <th className="border-r border-black p-1 text-right">Total</th>
+                            <th className="border-r border-black p-1 text-right">PR</th>
+                            <th className="border-r border-black p-1 text-right">SC</th>
+                            <th className="p-1 text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((row, i) => (
+                            <tr key={i} className="border-b border-black">
+                                <td className="border-r border-black p-1 text-center font-mono text-[9px]">{row.pin}</td>
+                                <td className="border-r border-black p-1 text-left">{row.name}</td>
+                                <td className="border-r border-black p-1 text-left">{row.policy}</td>
+                                <td className="border-r border-black p-1 text-center whitespace-nowrap">{row.disburse_date}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.disburse_amount)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.install_amount)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.open_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.open_sc)}</td>
+                                <td className="border-r border-black p-1 text-right font-medium">{fmt(row.open_total)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.coll_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.coll_sc)}</td>
+                                <td className="border-r border-black p-1 text-right font-medium">{fmt(row.coll_total)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.rebate_amount)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.close_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(row.close_sc)}</td>
+                                <td className="p-1 text-right font-medium">{fmt(row.close_total)}</td>
+                            </tr>
+                        ))}
+                        {totals && (
+                            <tr className="border-t-2 border-black font-bold bg-emerald-50/50">
+                                <td colSpan={4} className="border-r border-black p-1 text-center font-bold">Total</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.disburse_amount)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.install_amount)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.open_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.open_sc)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.open_total)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.coll_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.coll_sc)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.coll_total)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.rebate_amount)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.close_pr)}</td>
+                                <td className="border-r border-black p-1 text-right">{fmt(totals.close_sc)}</td>
+                                <td className="p-1 text-right">{fmt(totals.close_total)}</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+
     const columns = payload.columns ?? [];
     const rows = payload.rows ?? [];
     const totals = payload.totals;

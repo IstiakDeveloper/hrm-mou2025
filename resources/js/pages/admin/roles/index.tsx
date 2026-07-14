@@ -49,7 +49,10 @@ interface Role {
   name: string;
   description: string;
   permissions: string[] | null;
+  permissions_array?: string[];
+  permission_count?: number;
   users_count?: number;
+  is_default?: boolean;
 }
 
 interface PaginationData {
@@ -72,19 +75,27 @@ interface RolesIndexProps {
     search?: string;
   };
   success?: string;
+  can_sync_defaults?: boolean;
 }
 
-export default function RolesIndex({ roles, filters, success }: RolesIndexProps) {
+export default function RolesIndex({ roles, filters, success, can_sync_defaults = true }: RolesIndexProps) {
   const { data, setData, get, processing } = useForm({
     search: filters.search || '',
   });
 
+  const syncForm = useForm({});
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     get(route('admin.roles.index'), {
       preserveState: true,
+    });
+  };
+
+  const handleSyncDefaults = () => {
+    syncForm.post(route('admin.roles.sync-defaults'), {
+      preserveScroll: true,
     });
   };
 
@@ -98,8 +109,10 @@ export default function RolesIndex({ roles, filters, success }: RolesIndexProps)
     });
   };
 
-  const countPermissions = (permissions: string[] | null): number => {
-    return permissions ? permissions.length : 0;
+  const countPermissions = (role: Role): number => {
+    if (typeof role.permission_count === 'number') return role.permission_count;
+    if (role.permissions_array) return role.permissions_array.length;
+    return role.permissions ? role.permissions.length : 0;
   };
 
   return (
@@ -111,15 +124,29 @@ export default function RolesIndex({ roles, filters, success }: RolesIndexProps)
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Role Management</h1>
             <p className="mt-1 text-gray-500">
-              Manage system roles and their permissions
+              Sync refreshes default permissions only — Section Access is customized per role
             </p>
           </div>
-          <Link href={route('admin.roles.create')}>
-            <Button className="flex items-center gap-1">
-              <PlusCircle className="h-4 w-4" />
-              <span>Add Role</span>
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {can_sync_defaults && (
+              <Button
+                type="button"
+                variant="outline"
+                className="flex items-center gap-1"
+                disabled={syncForm.processing}
+                onClick={handleSyncDefaults}
+              >
+                <Shield className="h-4 w-4" />
+                <span>{syncForm.processing ? 'Syncing…' : 'Sync Default Roles'}</span>
+              </Button>
+            )}
+            <Link href={route('admin.roles.create')}>
+              <Button className="flex items-center gap-1">
+                <PlusCircle className="h-4 w-4" />
+                <span>Add Role</span>
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {success && (
@@ -197,6 +224,11 @@ export default function RolesIndex({ roles, filters, success }: RolesIndexProps)
                             >
                               {role.name}
                             </Badge>
+                            {role.is_default && (
+                              <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 text-xs">
+                                Default
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="max-w-md truncate">
@@ -204,7 +236,7 @@ export default function RolesIndex({ roles, filters, success }: RolesIndexProps)
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge variant="outline" className="bg-blue-50 text-blue-800">
-                            {countPermissions(role.permissions)}
+                            {countPermissions(role)}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
@@ -233,7 +265,7 @@ export default function RolesIndex({ roles, filters, success }: RolesIndexProps)
                               <DropdownMenuItem
                                 className="cursor-pointer text-destructive focus:text-destructive"
                                 onClick={() => setRoleToDelete(role)}
-                                disabled={role.name === 'Super Admin' || (role.users_count && role.users_count > 0)}
+                                disabled={Boolean(role.is_default) || role.name === 'Super Admin' || Boolean(role.users_count && role.users_count > 0)}
                               >
                                 <Trash className="mr-2 h-4 w-4" />
                                 <span>Delete</span>

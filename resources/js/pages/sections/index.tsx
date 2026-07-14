@@ -5,7 +5,7 @@ import { CheckCircle2, Lock, XCircle, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
-import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead, isSuperAdmin } from '@/lib/permissions';
+import { hasAppPermission, isBranchAccount, isSuperAdmin } from '@/lib/permissions';
 
 // Curated themes for each module to create a vibrant, professional layout
 const SECTION_THEMES: Record<string, {
@@ -175,6 +175,7 @@ export default function SectionsIndex() {
     };
 
     const employee = auth?.employee;
+    const blockedSections = new Set<string>(auth?.user?.blocked_sections ?? []);
     const photoUrl = employee?.photo ? `/storage/${employee.photo}` : null;
     const name = auth?.user?.name || 'User';
     const email = auth?.user?.email || '';
@@ -261,6 +262,10 @@ export default function SectionsIndex() {
                         const Icon = section.icon;
                         const moduleActive = Boolean(section.href);
                         const hasAccess = (() => {
+                            if (blockedSections.has(section.id)) {
+                                return false;
+                            }
+
                             if (isBranchAccount(auth)) {
                                 if (section.id === 'attendance-movement') {
                                     return true;
@@ -278,24 +283,8 @@ export default function SectionsIndex() {
                                 return true;
                             }
 
-                            if (isAccountant(auth)) {
-                                return (
-                                    section.id === 'employee-loan' ||
-                                    section.id === 'staff-fund' ||
-                                    section.id === 'fixed-asset' ||
-                                    section.id === 'inventory'
-                                );
-                            }
-
-                            if (isDepartmentHead(auth)) {
-                                if (
-                                    section.id === 'employee-loan' ||
-                                    section.id === 'staff-fund' ||
-                                    section.id === 'payroll'
-                                ) {
-                                    return false;
-                                }
-                            }
+                            // Section Access (role blocked_sections) already applied above.
+                            // No hardcoded Department Head / Accountant denylist — customize per role in Admin → Roles.
 
                             switch (section.id) {
                                 case 'human-resources':
@@ -324,7 +313,8 @@ export default function SectionsIndex() {
                                 case 'payroll':
                                     return (
                                         hasAppPermission(auth, 'payroll.view') ||
-                                        hasAppPermission(auth, 'admin.access')
+                                        hasAppPermission(auth, 'admin.access') ||
+                                        Boolean(employee?.id)
                                     );
                                 case 'fixed-asset':
                                     return (
@@ -344,13 +334,15 @@ export default function SectionsIndex() {
                                     return (
                                         hasAppPermission(auth, 'staff-fund.view') ||
                                         hasAppPermission(auth, 'payroll.view') ||
-                                        hasAppPermission(auth, 'admin.access')
+                                        hasAppPermission(auth, 'admin.access') ||
+                                        Boolean(employee?.id)
                                     );
                                 case 'employee-loan':
                                     return (
                                         hasAppPermission(auth, 'employee-loan.view') ||
                                         hasAppPermission(auth, 'payroll.view') ||
-                                        hasAppPermission(auth, 'admin.access')
+                                        hasAppPermission(auth, 'admin.access') ||
+                                        Boolean(employee?.id)
                                     );
                                 default:
                                     return false;

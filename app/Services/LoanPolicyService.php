@@ -7,6 +7,10 @@ use InvalidArgumentException;
 
 class LoanPolicyService
 {
+    public function __construct(
+        protected LoanCalculationService $calculator,
+    ) {}
+
     /**
      * @param  array{
      *   principal_amount: float,
@@ -66,7 +70,8 @@ class LoanPolicyService
         } elseif (isset($data['installment_amount']) && $data['installment_amount'] !== null) {
             $installmentAmount = SalaryStructureCalculator::roundTaka((float) $data['installment_amount']);
         } else {
-            $installmentAmount = SalaryStructureCalculator::roundTaka($principal / $count);
+            $calc = $this->calculator->calculate($policy, $principal, (int) ($data['loan_cycle'] ?? 1));
+            $installmentAmount = (float) $calc['installment_amount_monthly'];
         }
 
         if ($installmentAmount <= 0) {

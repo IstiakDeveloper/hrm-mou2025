@@ -2,7 +2,11 @@
 
 /**
  * Default system roles and their permission assignments.
- * Use permissions:sync-default-roles or db:seed to apply. Custom roles are managed in Admin → Roles.
+ * Use permissions:sync-default-roles (or Admin → Roles → Sync Default Roles) to apply.
+ * Default role permissions cannot be edited in the UI — change this file and re-sync.
+ * Section Access (roles.blocked_sections) is managed in Admin → Roles and is NOT reset by sync.
+ * Optional blocked_sections keys below are documentation / seeder hints only.
+ * Custom roles are managed in Admin → Roles.
  *
  * Super Admin: use '*' to receive every key from config/permissions.php (including new modules after deploy).
  */
@@ -11,6 +15,7 @@ return [
         'Super Admin' => [
             'description' => 'Full system access including all destructive actions (only this role should hold *.delete and admin/roles/users management).',
             'permissions' => '*',
+            'blocked_sections' => [],
         ],
         'HR Admin' => [
             'description' => 'Full operational access across all ERP modules (all sections). Cannot delete records or manage system users/roles.',
@@ -19,6 +24,16 @@ return [
         'Accountant' => [
             'description' => 'Accounts modules: Employee Loan, Staff Fund, Fixed Asset, and Inventory. Cannot delete records.',
             'permissions' => 'sections:employee-loan,staff-fund,fixed-asset,inventory',
+            'blocked_sections' => [
+                'human-resources',
+                'attendance-movement',
+                'leave',
+                'payroll',
+                'store',
+                'recruitment',
+                'training',
+                'administration',
+            ],
         ],
         'Administrator' => [
             'description' => 'Read-only oversight (no user/role admin, no deletes, no master-data edits).',
@@ -170,6 +185,7 @@ return [
                 'profile.view', 'profile.edit',
                 'reports.view',
             ],
+            'blocked_sections' => ['employee-loan', 'staff-fund', 'payroll'],
         ],
         'Team Leader' => [
             'description' => 'First-level approvals within a team (subset of department/branch).',

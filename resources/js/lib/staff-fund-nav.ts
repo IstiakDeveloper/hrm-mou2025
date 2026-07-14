@@ -27,6 +27,11 @@ export function staffFundPath(path: string): string {
     return qs ? `${base}?${qs}` : base;
 }
 
+/** Employee self-service paths within Staff Fund section context. */
+export function staffFundEmployeePath(path: string): string {
+    return staffFundPath(path);
+}
+
 export const STAFF_FUND_NAV_GROUPS: StaffFundNavGroup[] = [
     {
         id: 'pf',

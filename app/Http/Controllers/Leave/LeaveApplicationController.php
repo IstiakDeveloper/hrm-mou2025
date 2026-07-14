@@ -322,8 +322,7 @@ class LeaveApplicationController extends Controller
                     return true;
                 }
             } elseif ($type === 'executive_director') {
-                if (in_array('Executive Director', OrganogramAccessService::mergedRoleNames($user), true)
-                    || $user->hasPermission('organogram.executive_director')) {
+                if (OrganogramAccessService::isExecutiveDirector($user)) {
                     return true;
                 }
             } elseif ($type === 'designation' && $tier->designation_id && $user->employee_id) {
@@ -347,8 +346,7 @@ class LeaveApplicationController extends Controller
             ->exists();
 
         if ($hasAnyTierForContext && $tiers->isEmpty()) {
-            return in_array('Executive Director', OrganogramAccessService::mergedRoleNames($user), true)
-                || $user->hasPermission('organogram.executive_director');
+            return OrganogramAccessService::isExecutiveDirector($user);
         }
 
         return false;
@@ -619,10 +617,23 @@ class LeaveApplicationController extends Controller
                 ->exists();
 
             if ($hasTiersForContext) {
+                // Apex: Executive Director may approve any pending leave in their visibility,
+                // including applications currently routed to a lower tier (dept head / designation).
+                if (OrganogramAccessService::isExecutiveDirector($user)
+                    && $user->hasPermission('leave-applications.approve')) {
+                    return OrganogramAccessService::userCanSeeEmployee($user, (int) $application->employee_id);
+                }
+
                 $resolved = $this->resolveTierApprovers($applicant, (int) $application->days);
                 $recipientIds = $resolved['recipients']->pluck('id')->map(fn ($id) => (int) $id)->all();
+                $isListedApprover = in_array((int) $user->id, $recipientIds, true);
 
-                if ($recipientIds === [] || ! in_array((int) $user->id, $recipientIds, true)) {
+                // When the application routes to Executive Director, allow ED role / organogram
+                // permission even if designation-based recipient lookup missed the user.
+                $routesToEd = ($resolved['addressee']['type'] ?? null) === 'executive_director';
+                $isEdApprover = $routesToEd && OrganogramAccessService::isExecutiveDirector($user);
+
+                if (! $isListedApprover && ! $isEdApprover) {
                     return false;
                 }
 
@@ -1101,19 +1112,38 @@ class LeaveApplicationController extends Controller
     }
 
     /**
-     * Get users who are Executive Directors (by designation).
+     * Users who can act as Executive Director for leave tiers:
+     * Executive Director role, organogram.executive_director permission, or matching designation.
      */
     private function getExecutiveDirectors()
     {
-        $executiveDirectorEmployeeIds = Employee::whereHas('designation', function ($q) {
-            $q->where('name', 'Executive Director');
+        $designationEmployeeIds = Employee::whereHas('designation', function ($q) {
+            $q->where(function ($inner) {
+                $inner->where('name', 'Executive Director')
+                    ->orWhereRaw('LOWER(name) LIKE ?', ['%executive director%']);
+            });
         })->pluck('id');
 
-        if ($executiveDirectorEmployeeIds->isEmpty()) {
-            return collect([]);
-        }
+        $users = User::query()
+            ->with(['role', 'roles', 'employee.designation'])
+            ->where(function ($q) use ($designationEmployeeIds) {
+                $q->whereHas('role', fn ($r) => $r->where('name', 'Executive Director'))
+                    ->orWhereHas('roles', fn ($r) => $r->where('name', 'Executive Director'));
 
-        return User::whereIn('employee_id', $executiveDirectorEmployeeIds)->get();
+                if ($designationEmployeeIds->isNotEmpty()) {
+                    $q->orWhereIn('employee_id', $designationEmployeeIds->all());
+                }
+            })
+            ->get();
+
+        // Also include users whose roles grant organogram.executive_director but use another role name.
+        $permissionHolders = User::query()
+            ->with(['role', 'roles'])
+            ->whereNotIn('id', $users->pluck('id')->all())
+            ->get()
+            ->filter(fn (User $u) => $u->hasDirectPermission('organogram.executive_director'));
+
+        return $users->merge($permissionHolders)->unique('id')->values();
     }
 
     /**

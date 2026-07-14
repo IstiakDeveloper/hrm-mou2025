@@ -44,7 +44,10 @@ class HandleInertiaRequests extends Middleware
     {
         /** @var User|null $user */
         $user = Auth::user();
-        $user?->loadMissing(['role:id,name,permissions', 'roles:id,name,permissions']);
+        $roleColumns = Schema::hasTable('roles') && Schema::hasColumn('roles', 'blocked_sections')
+            ? 'id,name,permissions,blocked_sections'
+            : 'id,name,permissions';
+        $user?->loadMissing(["role:{$roleColumns}", "roles:{$roleColumns}"]);
 
         $employee = null;
         $activeMovement = null;
@@ -111,6 +114,7 @@ class HandleInertiaRequests extends Middleware
                     'account_type' => $user->account_type,
                     'branch_id' => $user->branch_id,
                     'is_department_head' => $user->isDepartmentHead(),
+                    'blocked_sections' => $user->effectiveBlockedSections(),
                     'role' => $user->role,
                     'roles' => $user->roles,
                 ] : null,

@@ -7,6 +7,8 @@ use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\EmployeeLoan;
 use App\Models\LoanCollectionBatch;
 use App\Services\LoanCollectionService;
+use App\Services\LoanRebateService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -17,6 +19,7 @@ class LoanCollectionController extends Controller
 
     public function __construct(
         protected LoanCollectionService $collectionService,
+        protected LoanRebateService $rebateService,
     ) {}
 
     public function index(Request $request)
@@ -68,7 +71,35 @@ class LoanCollectionController extends Controller
 
     public function createRebate(Request $request)
     {
-        return Inertia::render('employee-loan/collection/rebate', $this->formPayload($request));
+        return Inertia::render('employee-loan/collection/rebate', [
+            ...$this->formPayload($request),
+            'defaultIncludeCurrentMonth' => (bool) config('employee_loans.rebate.default_include_current_month', false),
+        ]);
+    }
+
+    public function rebatePreview(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_loan_id' => 'required|integer|exists:employee_loans,id',
+            'collection_date' => 'required|date',
+            'include_current_month' => 'nullable|boolean',
+        ]);
+
+        $loan = EmployeeLoan::query()->findOrFail($validated['employee_loan_id']);
+
+        try {
+            $preview = $this->rebateService->suggest(
+                $loan,
+                Carbon::parse($validated['collection_date']),
+                array_key_exists('include_current_month', $validated)
+                    ? (bool) $validated['include_current_month']
+                    : null,
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($preview);
     }
 
     public function rollbackIndex(Request $request)

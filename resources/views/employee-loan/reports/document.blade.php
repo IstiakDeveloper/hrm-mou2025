@@ -35,6 +35,12 @@
             <p>{{ $payload['meta']['message'] }}</p>
         @elseif ($template === 'loan-grouped')
             @include('employee-loan.reports.templates.grouped', ['payload' => $payload])
+        @elseif ($template === 'loan-installment-ledger')
+            @include('employee-loan.reports.templates.installment-ledger', ['payload' => $payload])
+        @elseif ($template === 'loan-collection-register')
+            @include('employee-loan.reports.templates.collection-register', ['payload' => $payload])
+        @elseif ($template === 'loan-statement-employee')
+            @include('employee-loan.reports.templates.statement-employee', ['payload' => $payload])
         @elseif ($template === 'loan-table')
             @include('employee-loan.reports.templates.table', ['payload' => $payload])
         @else

@@ -258,6 +258,41 @@ class PermissionRegistry
     }
 
     /**
+     * Role names defined in config/default_roles.php (synced via permissions:sync-default-roles).
+     *
+     * @return list<string>
+     */
+    public static function defaultRoleNames(): array
+    {
+        return array_keys(config('default_roles.roles', []));
+    }
+
+    public static function isDefaultRoleName(?string $name): bool
+    {
+        if ($name === null || $name === '') {
+            return false;
+        }
+
+        return in_array($name, self::defaultRoleNames(), true);
+    }
+
+    /**
+     * Catalog keys grouped by category for Admin → Roles permission UI.
+     *
+     * @return array<string, array<string, string>> category => [permission => label]
+     */
+    public static function labelsGroupedByCategory(): array
+    {
+        $grouped = [];
+        foreach (self::keys() as $key) {
+            $category = self::categoryFor($key);
+            $grouped[$category][$key] = self::labelFor($key);
+        }
+
+        return $grouped;
+    }
+
+    /**
      * @return array<string, \App\Models\Role>
      */
     public static function syncDefaultRoles(): array
@@ -271,13 +306,12 @@ class PermissionRegistry
                 ? $permissionInput
                 : (is_array($permissionInput) ? $permissionInput : []);
 
+            // Permissions only — blocked_sections are UI-managed and must not reset on sync.
             $roles[$name] = \App\Models\Role::updateOrCreate(
                 ['name' => $name],
                 [
                     'description' => $definition['description'] ?? null,
-                    'permissions' => self::encodePermissions(
-                        self::resolvePermissionList($permissions)
-                    ),
+                    'permissions' => self::resolvePermissionList($permissions),
                 ]
             );
         }

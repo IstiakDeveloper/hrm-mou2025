@@ -10,6 +10,8 @@ use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\EmployeeGratuityPayment;
+use App\Models\EmployeeLoan;
+use App\Models\EmployeeLoanTransaction;
 use App\Models\EmployeePfTransaction;
 use App\Models\EmployeeType;
 use App\Models\Holiday;
@@ -17,6 +19,7 @@ use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
 use App\Models\Movement;
 use App\Models\PayrollRun;
+use App\Models\Payslip;
 use App\Models\Payscale;
 use App\Models\Program;
 use App\Models\Project;
@@ -30,7 +33,10 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\ActiveSessionService;
+use App\Services\EmployeeGratuityService;
 use App\Services\EmployeeLoanDashboardService;
+use App\Services\EmployeeLoanService;
+use App\Services\EmployeeProvidentFundService;
 use App\Services\OrganogramAccessService;
 use App\Services\SalaryStructureCalculator;
 use App\Support\SafeSchema;
@@ -244,16 +250,24 @@ class DashboardController extends Controller
         }
 
         /** @var User $user */
-        $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
-
-        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
-
-        if (! $hasPermission($user, 'payroll.view') && ! $hasPermission($user, 'admin.access')) {
-            abort(403);
-        }
+        $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
 
         if (! $user->canAccessSection('payroll')) {
             abort(403);
+        }
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        $seesOperationalPayrollDashboard = $hasPermission($user, 'admin.access')
+            || $hasPermission($user, 'payroll.view');
+
+        if (! $seesOperationalPayrollDashboard) {
+            $employeeDashboard = $this->buildPayrollEmployeeDashboardProps($user);
+            if ($employeeDashboard === null) {
+                return redirect()->route('sections.index');
+            }
+
+            return Inertia::render('sections/payroll/employee-dashboard', $employeeDashboard);
         }
 
         $roles = $user->roles;
@@ -261,6 +275,9 @@ class DashboardController extends Controller
 
         $branchCount = Branch::query()->count();
         $mappedBranches = SafeSchema::modelCount(BranchPayrollBank::class);
+
+        $employeeDashboard = $this->buildPayrollEmployeeDashboardProps($user);
+        $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
 
         return Inertia::render('sections/payroll/dashboard', [
             'stats' => [
@@ -275,13 +292,15 @@ class DashboardController extends Controller
                 'postedRuns' => SafeSchema::modelCount(PayrollRun::class, fn ($q) => $q->where('status', 'posted')),
             ],
             'userRole' => $role?->name ?? 'User',
+            'showEmployeeTab' => $showEmployeeTab,
+            'employeeDashboard' => $employeeDashboard,
         ]);
     }
 
     /**
      * Staff Fund section dashboard — PF & gratuity overview.
      */
-    public function staffFundSection(Request $request)
+    public function staffFundSection(Request $request, EmployeeGratuityService $gratuityService)
     {
         $authUser = $request->user();
         if (! $authUser instanceof User) {
@@ -289,18 +308,25 @@ class DashboardController extends Controller
         }
 
         /** @var User $user */
-        $user = User::query()->with(['role', 'roles'])->findOrFail($authUser->id);
-
-        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
-
-        if (! $hasPermission($user, 'payroll.view')
-            && ! $hasPermission($user, 'staff-fund.view')
-            && ! $hasPermission($user, 'admin.access')) {
-            abort(403);
-        }
+        $user = User::query()->with(['role', 'roles', 'employee'])->findOrFail($authUser->id);
 
         if (! $user->canAccessSection('staff-fund')) {
             abort(403);
+        }
+
+        $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
+
+        $seesOperationalStaffFundDashboard = $hasPermission($user, 'admin.access')
+            || $hasPermission($user, 'staff-fund.view')
+            || $hasPermission($user, 'payroll.view');
+
+        if (! $seesOperationalStaffFundDashboard) {
+            $employeeDashboard = $this->buildStaffFundEmployeeDashboardProps($user, $gratuityService);
+            if ($employeeDashboard === null) {
+                return redirect()->route('sections.index');
+            }
+
+            return Inertia::render('sections/staff-fund/employee-dashboard', $employeeDashboard);
         }
 
         $roles = $user->roles;
@@ -335,6 +361,9 @@ class DashboardController extends Controller
             ->whereHas('employee', fn ($e) => $e->forGratuity())
             ->whereIn('status', ['calculated', 'approved']));
 
+        $employeeDashboard = $this->buildStaffFundEmployeeDashboardProps($user, $gratuityService);
+        $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
+
         return Inertia::render('sections/staff-fund/dashboard', [
             'stats' => [
                 'pfEnrolledEmployees' => $pfEnrolled,
@@ -345,6 +374,8 @@ class DashboardController extends Controller
                 'gratuityPendingApproval' => $gratuityPending,
             ],
             'userRole' => $role?->name ?? 'User',
+            'showEmployeeTab' => $showEmployeeTab,
+            'employeeDashboard' => $employeeDashboard,
         ]);
     }
 
@@ -363,22 +394,33 @@ class DashboardController extends Controller
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
-        if (! $hasPermission($user, 'payroll.view')
-            && ! $hasPermission($user, 'employee-loan.view')
-            && ! $hasPermission($user, 'admin.access')) {
-            abort(403);
-        }
-
         if (! $user->canAccessSection('employee-loan')) {
             abort(403);
         }
 
+        $seesOperationalEmployeeLoanDashboard = $hasPermission($user, 'payroll.view')
+            || $hasPermission($user, 'employee-loan.view')
+            || $hasPermission($user, 'admin.access');
+
+        if (! $seesOperationalEmployeeLoanDashboard) {
+            $employeeDashboard = $this->buildEmployeeLoanEmployeeDashboardProps($user);
+            if ($employeeDashboard === null) {
+                return redirect()->route('sections.index');
+            }
+
+            return Inertia::render('sections/employee-loan/employee-dashboard', $employeeDashboard);
+        }
+
         $roles = $user->roles;
         $role = $roles->isNotEmpty() ? $roles->first() : $user->role;
+        $employeeDashboard = $this->buildEmployeeLoanEmployeeDashboardProps($user);
+        $showEmployeeTab = $employeeDashboard !== null && $this->userHasDualAdminAndEmployeeContext($user);
 
         return Inertia::render('sections/employee-loan/dashboard', [
             'stats' => $dashboard->stats(),
             'userRole' => $role?->name ?? 'User',
+            'showEmployeeTab' => $showEmployeeTab,
+            'employeeDashboard' => $employeeDashboard,
         ]);
     }
 
@@ -758,6 +800,360 @@ class DashboardController extends Controller
             'recentAttendance' => $recentAttendance,
             'recentMovements' => $recentMovements,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildPayrollEmployeeDashboardProps(User $user): ?array
+    {
+        $employee = $user->employee()->with(['department:id,name', 'branch:id,name', 'designation:id,name'])->first();
+        if (! $employee) {
+            return null;
+        }
+
+        $currentYear = (int) Carbon::now()->year;
+
+        $postedPayslips = Payslip::query()
+            ->where('payslips.employee_id', $employee->id)
+            ->whereHas('payrollRun', fn ($q) => $q->where('status', 'posted'))
+            ->with([
+                'employee.designation:id,name',
+                'lines.head:id,name,is_loan_head',
+                'payrollRun:id,year,month,salary_type,status,branch_id,bonus_configuration_id,posted_at',
+                'payrollRun.branch:id,name',
+                'payrollRun.bonusConfiguration:id,name',
+            ])
+            ->join('payroll_runs', 'payslips.payroll_run_id', '=', 'payroll_runs.id')
+            ->orderByDesc('payroll_runs.year')
+            ->orderByDesc('payroll_runs.month')
+            ->orderByDesc('payslips.id')
+            ->select('payslips.*')
+            ->get();
+
+        $ytdPayslips = $postedPayslips->filter(
+            fn (Payslip $p) => (int) ($p->payrollRun?->year ?? 0) === $currentYear
+        );
+
+        $recent = $postedPayslips->take(6)->map(function (Payslip $p) {
+            $run = $p->payrollRun;
+            $monthName = $run ? date('F', mktime(0, 0, 0, (int) $run->month, 1)) : '';
+            $periodLabel = $run
+                ? ($run->salary_type === 'bonus'
+                    ? (($run->bonusConfiguration?->name ?? 'Bonus')." · {$monthName} {$run->year}")
+                    : "{$monthName} {$run->year}")
+                : '—';
+
+            return [
+                'id' => $p->id,
+                'period_label' => $periodLabel,
+                'salary_type' => $run?->salary_type ?? 'salary',
+                'branch' => $run?->branch?->name,
+                'gross' => SalaryStructureCalculator::roundTaka((float) $p->gross_salary),
+                'net' => SalaryStructureCalculator::roundTaka((float) $p->net_payable),
+                'is_withheld' => (bool) $p->is_withheld,
+                'posted_at' => $run?->posted_at?->format('d-m-Y'),
+            ];
+        })->values();
+
+        $latestPayslip = $postedPayslips->first();
+
+        return [
+            'employee' => [
+                'id' => $employee->id,
+                'pin' => $employee->pin,
+                'name_en' => $employee->name_en,
+                'designation' => $employee->designation ? ['name' => $employee->designation->name] : null,
+                'department' => $employee->department ? ['name' => $employee->department->name] : null,
+                'branch' => $employee->branch ? ['name' => $employee->branch->name] : null,
+            ],
+            'summary' => [
+                'year' => $currentYear,
+                'payslip_count' => $ytdPayslips->count(),
+                'salary_count' => $ytdPayslips->filter(fn (Payslip $p) => $p->payrollRun?->salary_type === 'salary')->count(),
+                'bonus_count' => $ytdPayslips->filter(fn (Payslip $p) => $p->payrollRun?->salary_type === 'bonus')->count(),
+                'ytd_gross' => SalaryStructureCalculator::roundTaka((float) $ytdPayslips->sum('gross_salary')),
+                'ytd_deduction' => SalaryStructureCalculator::roundTaka((float) $ytdPayslips->sum('total_deduction')),
+                'ytd_net' => SalaryStructureCalculator::roundTaka((float) $ytdPayslips->sum('net_payable')),
+            ],
+            'latestPayslip' => $latestPayslip ? [
+                'id' => $latestPayslip->id,
+                'period_label' => $recent->first()['period_label'] ?? 'Latest payslip',
+                'salary_type' => $latestPayslip->payrollRun?->salary_type ?? 'salary',
+                'branch' => $latestPayslip->payrollRun?->branch?->name,
+                'designation' => $latestPayslip->employee?->designation?->name,
+                'grade' => $latestPayslip->grade_label,
+                'step' => $latestPayslip->step_number,
+                'basic' => SalaryStructureCalculator::roundTaka((float) $latestPayslip->basic_salary),
+                'gross' => SalaryStructureCalculator::roundTaka((float) $latestPayslip->gross_salary),
+                'deduction' => SalaryStructureCalculator::roundTaka((float) $latestPayslip->total_deduction),
+                'net' => SalaryStructureCalculator::roundTaka((float) $latestPayslip->net_payable),
+                'is_withheld' => (bool) $latestPayslip->is_withheld,
+                'posted_at' => $latestPayslip->payrollRun?->posted_at?->format('d-m-Y'),
+                'earnings' => $latestPayslip->lines
+                    ->where('type', 'earning')
+                    ->filter(fn (\App\Models\PayslipLine $line) => (float) $line->computed_amount > 0)
+                    ->map(fn (\App\Models\PayslipLine $line) => [
+                        'id' => $line->id,
+                        'head_label' => $line->head?->name ?? $line->head_name,
+                        'amount' => SalaryStructureCalculator::roundTaka((float) $line->computed_amount),
+                    ])
+                    ->values(),
+                'deductions' => $latestPayslip->lines
+                    ->where('type', 'deduction')
+                    ->filter(fn (\App\Models\PayslipLine $line) => (float) $line->computed_amount > 0)
+                    ->map(fn (\App\Models\PayslipLine $line) => [
+                        'id' => $line->id,
+                        'head_label' => $line->head?->name ?? $line->head_name,
+                        'amount' => SalaryStructureCalculator::roundTaka((float) $line->computed_amount),
+                        'is_loan' => (bool) ($line->head?->is_loan_head ?? preg_match('/\s—\sLN-/', (string) $line->head_name)),
+                    ])
+                    ->values(),
+            ] : null,
+            'recentPayslips' => $recent,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildStaffFundEmployeeDashboardProps(User $user, EmployeeGratuityService $gratuityService): ?array
+    {
+        $employee = $user->employee()->with(['department:id,name', 'branch:id,name'])->first();
+        if (! $employee) {
+            return null;
+        }
+
+        $employee->loadSum(
+            ['pfTransactions as own_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)],
+            'employee_contribution'
+        )->loadSum(
+            ['pfTransactions as org_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)],
+            'employer_contribution'
+        );
+
+        $recentPfTransactions = EmployeePfTransaction::query()
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get()
+            ->map(fn (EmployeePfTransaction $tx) => [
+                'id' => $tx->id,
+                'transaction_type' => $tx->transaction_type,
+                'transaction_date' => $tx->transaction_date?->format('d-m-Y'),
+                'credit_amount' => SalaryStructureCalculator::roundTaka((float) $tx->credit_amount),
+                'debit_amount' => SalaryStructureCalculator::roundTaka((float) $tx->debit_amount),
+                'balance_after' => SalaryStructureCalculator::roundTaka((float) $tx->balance_after),
+            ]);
+
+        $inGratuityScope = Employee::query()->whereKey($employee->id)->forGratuity()->exists();
+        $gratuityCalc = $inGratuityScope
+            ? $gratuityService->calculate($employee, Carbon::today())
+            : [
+                'completed_years' => 0,
+                'basic_salary' => 0.0,
+                'basic_multiplier' => 0,
+                'gratuity_amount' => 0.0,
+                'service_start' => null,
+                'service_end' => Carbon::today()->toDateString(),
+                'eligible' => false,
+                'label' => 'Gratuity applies to permanent employees with assigned salary structure.',
+            ];
+
+        $gratuityPayments = EmployeeGratuityPayment::query()
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get()
+            ->map(fn (EmployeeGratuityPayment $p) => [
+                'id' => $p->id,
+                'service_end_date' => $p->service_end_date?->format('d-m-Y'),
+                'gratuity_amount' => (float) $p->gratuity_amount,
+                'status' => $p->status,
+                'payment_date' => $p->payment_date?->format('d-m-Y'),
+            ]);
+
+        return [
+            'employee' => [
+                'id' => $employee->id,
+                'pin' => $employee->pin,
+                'name_en' => $employee->name_en,
+                'department' => $employee->department ? ['name' => $employee->department->name] : null,
+                'branch' => $employee->branch ? ['name' => $employee->branch->name] : null,
+            ],
+            'pf' => [
+                'enrolled' => (bool) ($employee->pf_enrolled ?? true),
+                'balance' => SalaryStructureCalculator::roundTaka((float) $employee->pf_balance),
+                'own_contribution' => SalaryStructureCalculator::roundTaka((float) ($employee->own_contribution ?? 0)),
+                'org_contribution' => SalaryStructureCalculator::roundTaka((float) ($employee->org_contribution ?? 0)),
+                'employee_percent' => (float) config('payroll.pf_employee_percent', 10),
+                'employer_percent' => (float) config('payroll.pf_employer_percent', 10),
+                'recent_transactions' => $recentPfTransactions,
+            ],
+            'gratuity' => [
+                'in_scope' => $inGratuityScope,
+                'calculation' => $gratuityCalc,
+                'recent_payments' => $gratuityPayments,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildEmployeeLoanEmployeeDashboardProps(User $user): ?array
+    {
+        $employee = $user->employee()->with(['department:id,name', 'branch:id,name', 'designation:id,name'])->first();
+        if (! $employee) {
+            return null;
+        }
+
+        $loans = EmployeeLoan::query()
+            ->where('employee_id', $employee->id)
+            ->with([
+                'policy:id,name,code',
+                'installments' => fn ($q) => $q->orderBy('installment_no'),
+                'transactions' => fn ($q) => $q->orderByDesc('transaction_date')->orderByDesc('id'),
+            ])
+            ->orderByRaw("case when status = 'active' then 0 when status = 'completed' then 1 else 2 end")
+            ->orderByDesc('disbursement_date')
+            ->orderByDesc('id')
+            ->get();
+
+        $activeLoans = $loans->where('status', 'active')->values();
+        $completedLoans = $loans->where('status', 'completed')->count();
+
+        $loanService = app(EmployeeLoanService::class);
+        $breakdowns = $loanService->breakdownSummariesForLoans($loans);
+        $activeBreakdowns = $loanService->breakdownSummariesForLoans($activeLoans);
+
+        $nextInstallment = $activeLoans
+            ->flatMap(fn (EmployeeLoan $loan) => $loan->installments->map(fn ($installment) => (object) ['loan' => $loan, 'installment' => $installment]))
+            ->filter(fn ($row) => in_array($row->installment->status, ['pending', 'scheduled'], true))
+            ->sortBy([
+                fn ($row) => $row->installment->due_date?->timestamp ?? PHP_INT_MAX,
+                fn ($row) => $row->installment->installment_no,
+            ])
+            ->first();
+
+        $recentTransactions = EmployeeLoanTransaction::query()
+            ->where('employee_id', $employee->id)
+            ->with('loan:id,loan_number,loan_type')
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('id')
+            ->limit(6)
+            ->get();
+
+        $recentRecovery = $recentTransactions
+            ->first(fn (EmployeeLoanTransaction $tx) => (float) $tx->credit_amount > 0);
+
+        return [
+            'employee' => [
+                'id' => $employee->id,
+                'pin' => $employee->pin,
+                'name_en' => $employee->name_en,
+                'designation' => $employee->designation ? ['name' => $employee->designation->name] : null,
+                'department' => $employee->department ? ['name' => $employee->department->name] : null,
+                'branch' => $employee->branch ? ['name' => $employee->branch->name] : null,
+            ],
+            'summary' => [
+                'total_loans' => $loans->count(),
+                'active_loans' => $activeLoans->count(),
+                'completed_loans' => $completedLoans,
+                'total_outstanding' => SalaryStructureCalculator::roundTaka((float) $activeLoans->sum('outstanding_balance')),
+                'total_principal' => SalaryStructureCalculator::roundTaka((float) $loans->sum('principal_amount')),
+                'total_service_charge' => SalaryStructureCalculator::roundTaka((float) $loans->sum(fn (EmployeeLoan $loan) => ($breakdowns[$loan->id]['service_charge_amount'] ?? 0))),
+                'total_recovered' => SalaryStructureCalculator::roundTaka((float) ($loans->sum('total_payable') - $loans->sum('outstanding_balance'))),
+                'outstanding_principal' => SalaryStructureCalculator::roundTaka((float) $activeLoans->sum(fn (EmployeeLoan $loan) => ($activeBreakdowns[$loan->id]['outstanding_principal'] ?? 0))),
+                'outstanding_service_charge' => SalaryStructureCalculator::roundTaka((float) $activeLoans->sum(fn (EmployeeLoan $loan) => ($activeBreakdowns[$loan->id]['outstanding_service_charge'] ?? 0))),
+                'recovered_principal' => SalaryStructureCalculator::roundTaka((float) $loans->sum(fn (EmployeeLoan $loan) => ($breakdowns[$loan->id]['recovered_principal'] ?? 0))),
+                'recovered_service_charge' => SalaryStructureCalculator::roundTaka((float) $loans->sum(fn (EmployeeLoan $loan) => ($breakdowns[$loan->id]['recovered_service_charge'] ?? 0))),
+            ],
+            'nextInstallment' => $nextInstallment ? [
+                'loan_id' => $nextInstallment->loan->id,
+                'loan_number' => $nextInstallment->loan->loan_number,
+                'loan_type_label' => $nextInstallment->loan->typeLabel(),
+                'installment_no' => $nextInstallment->installment->installment_no,
+                'installment_count' => $nextInstallment->loan->installment_count,
+                'due_date' => $this->formatDateValue($nextInstallment->installment->due_date),
+                'amount' => SalaryStructureCalculator::roundTaka((float) $nextInstallment->installment->total_amount),
+                'status' => $nextInstallment->installment->status,
+            ] : null,
+            'recentRecovery' => $recentRecovery ? [
+                'loan_id' => $recentRecovery->employee_loan_id,
+                'loan_number' => $recentRecovery->loan?->loan_number,
+                'transaction_type' => $recentRecovery->transaction_type,
+                'transaction_type_label' => $this->employeeLoanTransactionTypeLabel($recentRecovery->transaction_type),
+                'amount' => SalaryStructureCalculator::roundTaka((float) $recentRecovery->credit_amount),
+                'transaction_date' => $recentRecovery->transaction_date?->format('d-m-Y'),
+            ] : null,
+            'activeLoanCards' => $activeLoans->map(function (EmployeeLoan $loan) use ($activeBreakdowns) {
+                $paidInstallments = $loan->installments->where('status', 'paid')->count();
+                $nextPending = $loan->installments->first(fn ($installment) => in_array($installment->status, ['pending', 'scheduled'], true));
+                $summary = $activeBreakdowns[$loan->id] ?? [];
+
+                return [
+                    'id' => $loan->id,
+                    'loan_number' => $loan->loan_number,
+                    'loan_type_label' => $loan->typeLabel(),
+                    'policy_name' => $loan->policy?->name,
+                    'principal_amount' => SalaryStructureCalculator::roundTaka((float) $loan->principal_amount),
+                    'service_charge_amount' => SalaryStructureCalculator::roundTaka((float) ($summary['service_charge_amount'] ?? 0)),
+                    'total_payable' => SalaryStructureCalculator::roundTaka((float) $loan->total_payable),
+                    'installment_amount' => SalaryStructureCalculator::roundTaka((float) $loan->installment_amount),
+                    'outstanding_balance' => SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance),
+                    'outstanding_principal' => SalaryStructureCalculator::roundTaka((float) ($summary['outstanding_principal'] ?? 0)),
+                    'outstanding_service_charge' => SalaryStructureCalculator::roundTaka((float) ($summary['outstanding_service_charge'] ?? 0)),
+                    'installment_count' => $loan->installment_count,
+                    'paid_installments' => $paidInstallments,
+                    'next_due_date' => $this->formatDateValue($nextPending?->due_date),
+                    'status' => $loan->status,
+                    'disbursement_date' => $this->formatDateValue($loan->disbursement_date),
+                ];
+            })->values(),
+            'recentTransactions' => $recentTransactions->map(fn (EmployeeLoanTransaction $tx) => [
+                'id' => $tx->id,
+                'loan_id' => $tx->employee_loan_id,
+                'loan_number' => $tx->loan?->loan_number,
+                'loan_type_label' => $tx->loan?->typeLabel(),
+                'transaction_type' => $tx->transaction_type,
+                'transaction_type_label' => $this->employeeLoanTransactionTypeLabel($tx->transaction_type),
+                'debit_amount' => SalaryStructureCalculator::roundTaka((float) $tx->debit_amount),
+                'credit_amount' => SalaryStructureCalculator::roundTaka((float) $tx->credit_amount),
+                'balance_after' => SalaryStructureCalculator::roundTaka((float) $tx->balance_after),
+                'transaction_date' => $this->formatDateValue($tx->transaction_date),
+                'notes' => $tx->notes,
+                'reference_no' => $tx->reference_no,
+            ])->values(),
+        ];
+    }
+
+    private function employeeLoanTransactionTypeLabel(string $type): string
+    {
+        return match ($type) {
+            EmployeeLoanTransaction::TYPE_DISBURSEMENT => 'Disbursement',
+            EmployeeLoanTransaction::TYPE_INSTALLMENT => 'Payroll Installment',
+            EmployeeLoanTransaction::TYPE_MANUAL_PAYMENT => 'Manual Payment',
+            EmployeeLoanTransaction::TYPE_LEGACY_PAYMENT => 'Pre-system Payment',
+            EmployeeLoanTransaction::TYPE_COLLECTION => 'Collection',
+            EmployeeLoanTransaction::TYPE_ADVANCE_COLLECTION => 'Advance Collection',
+            EmployeeLoanTransaction::TYPE_REBATE => 'Rebate',
+            EmployeeLoanTransaction::TYPE_WAIVE => 'Waive',
+            EmployeeLoanTransaction::TYPE_TRANSFER => 'Transfer',
+            EmployeeLoanTransaction::TYPE_ADJUSTMENT => 'Adjustment',
+            EmployeeLoanTransaction::TYPE_REVERSAL => 'Reversal',
+            default => ucfirst(str_replace('_', ' ', $type)),
+        };
+    }
+
+    private function formatDateValue($value, string $format = 'd-m-Y'): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        return Carbon::parse((string) $value)->format($format);
     }
 
     /**

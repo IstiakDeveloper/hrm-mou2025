@@ -142,6 +142,19 @@ class OrganogramAccessService
     }
 
     /**
+     * Executive Director via role name and/or organogram permission marker.
+     * Employee + Executive Director must see own data and the full employee directory.
+     */
+    public static function isExecutiveDirector(User $user): bool
+    {
+        if (in_array('Executive Director', self::mergedRoleNames($user), true)) {
+            return true;
+        }
+
+        return $user->hasDirectPermission('organogram.executive_director');
+    }
+
+    /**
      * HR / leave-desk users who may see all leave applications (not organogram-limited).
      */
     public static function hasUnrestrictedLeaveApplicationAccess(User $user): bool
@@ -228,7 +241,7 @@ class OrganogramAccessService
             return true;
         }
 
-        if (in_array('Executive Director', self::mergedRoleNames($user), true)) {
+        if (self::isExecutiveDirector($user)) {
             return true;
         }
 
@@ -307,6 +320,9 @@ class OrganogramAccessService
      */
     public static function constrainVisibleEmployees(Builder $query, User $user): void
     {
+        $table = $query->getModel()->getTable();
+        $col = static fn (string $column): string => "{$table}.{$column}";
+
         if (self::userBypassesOrganogramEmployeeScope($user)) {
             return;
         }
@@ -314,7 +330,7 @@ class OrganogramAccessService
         if ($user->isBranchAccount()) {
             $bid = (int) ($user->branch_id ?: 0);
             if ($bid > 0) {
-                $query->where('current_branch_id', $bid);
+                $query->where($col('current_branch_id'), $bid);
 
                 return;
             }
@@ -326,7 +342,8 @@ class OrganogramAccessService
         $roleNames = self::mergedRoleNames($user);
         $eid = $user->employee_id;
 
-        if (in_array('Executive Director', $roleNames, true)) {
+        // Employee + Executive Director (role or organogram marker): full directory + own record.
+        if (self::isExecutiveDirector($user)) {
             return;
         }
 
@@ -335,7 +352,7 @@ class OrganogramAccessService
             if ($ids->isEmpty()) {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->whereIn('department_id', $ids->all());
+                $query->whereIn($col('department_id'), $ids->all());
             }
 
             return;
@@ -345,7 +362,7 @@ class OrganogramAccessService
         if (self::shouldApplyBranchOnlyEmployeeScope($user)) {
             $bid = self::branchOnlyScopeBranchId($user);
             if ($bid !== null) {
-                $query->where('current_branch_id', $bid);
+                $query->where($col('current_branch_id'), $bid);
 
                 return;
             }
@@ -361,7 +378,7 @@ class OrganogramAccessService
             if ($branchIds->isEmpty()) {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->whereIn('current_branch_id', $branchIds->all());
+                $query->whereIn($col('current_branch_id'), $branchIds->all());
             }
 
             return;
@@ -373,7 +390,7 @@ class OrganogramAccessService
             if ($branchIds->isEmpty()) {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->whereIn('current_branch_id', $branchIds->all());
+                $query->whereIn($col('current_branch_id'), $branchIds->all());
             }
 
             return;
@@ -382,21 +399,21 @@ class OrganogramAccessService
         if (self::isHeadOfficeUser($user) && $eid) {
             $headDeptIds = self::headedDepartmentIdsForUser($user);
             if ($headDeptIds !== []) {
-                $query->whereIn('department_id', $headDeptIds);
+                $query->whereIn($col('department_id'), $headDeptIds);
 
                 return;
             }
         }
 
         if (in_array('Team Leader', $roleNames, true) && $user->employee?->department_id) {
-            $query->where('department_id', $user->employee->department_id);
+            $query->where($col('department_id'), $user->employee->department_id);
 
             return;
         }
 
         $deptHeadScope = self::departmentIdsForDepartmentHeadScope($user);
         if ($deptHeadScope !== []) {
-            $query->whereIn('department_id', $deptHeadScope);
+            $query->whereIn($col('department_id'), $deptHeadScope);
 
             return;
         }
@@ -405,7 +422,7 @@ class OrganogramAccessService
             $branch = Branch::query()->find($user->branch_id);
             $emp = Employee::query()->find($eid);
             if ($branch && $emp && $branch->isEmployeeBranchHead($emp)) {
-                $query->where('current_branch_id', $user->branch_id);
+                $query->where($col('current_branch_id'), $user->branch_id);
 
                 return;
             }
@@ -416,7 +433,7 @@ class OrganogramAccessService
         }
 
         if ($eid) {
-            $query->where('id', $eid);
+            $query->where($col('id'), $eid);
 
             return;
         }
@@ -667,7 +684,7 @@ class OrganogramAccessService
         if (self::userBypassesOrganogramEmployeeScope($user)) {
             return true;
         }
-        if (in_array('Executive Director', self::mergedRoleNames($user), true)) {
+        if (self::isExecutiveDirector($user)) {
             return true;
         }
         if ($user->hasPermission('employees.view') && ! self::hasOrganogramLineRole($user)) {

@@ -439,7 +439,7 @@ class AttendanceController extends Controller
 
         // Base query for employees (exclude terminated/inactive)
         $employeesQuery = Employee::with(['department', 'designation', 'branch'])
-            ->where('status', 'active');
+            ->where('employees.status', 'active');
 
         // Apply filters based on user permissions and role
         $this->applyEmployeeFilters($employeesQuery, $user, $request);
@@ -1780,7 +1780,7 @@ class AttendanceController extends Controller
      */
     private function getAccessibleEmployees($user)
     {
-        $q = Employee::query()->where('status', 'active');
+        $q = Employee::query()->where('employees.status', 'active');
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
         $this->applyOrganogramEmployeeOrder($q);
 

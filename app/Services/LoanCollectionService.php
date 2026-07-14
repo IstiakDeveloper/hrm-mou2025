@@ -15,6 +15,7 @@ class LoanCollectionService
 {
     public function __construct(
         protected EmployeeLoanService $loanService,
+        protected LoanRebateService $rebateService,
     ) {}
 
     public function nextBatchNumber(): string
@@ -503,6 +504,100 @@ class LoanCollectionService
         $this->loanService->refreshLoanStatusPublic($loan->fresh());
 
         return $amount;
+    }
+
+    /**
+     * Close an active loan in one step: rebate pending SC, then collect remaining installments.
+     *
+     * @param  array{
+     *   employee_loan_id: int,
+     *   collection_date: string,
+     *   reference_no?: string|null,
+     *   notes?: string|null,
+     *   include_current_month?: bool|null,
+     *   rebate_amount?: float|null,
+     * }  $data
+     * @return array{
+     *   rebate_batch: ?LoanCollectionBatch,
+     *   collection_batch: ?LoanCollectionBatch,
+     *   tail_rebate_batch: ?LoanCollectionBatch,
+     *   rebate_amount: float,
+     *   collection_amount: float,
+     *   tail_rebate_amount: float,
+     * }
+     */
+    public function processFullPaidWithRebate(array $data, ?int $createdBy = null): array
+    {
+        return DB::transaction(function () use ($data, $createdBy) {
+            $loan = EmployeeLoan::query()->findOrFail($data['employee_loan_id']);
+            $this->assertLoanCollectible($loan);
+
+            $this->loanService->repairPrincipalOnlyDisbursementLedger($loan);
+            $loan->refresh();
+
+            $collectionDate = Carbon::parse($data['collection_date']);
+            $includeCurrentMonth = array_key_exists('include_current_month', $data)
+                ? (bool) $data['include_current_month']
+                : (bool) config('employee_loans.rebate.default_include_current_month', false);
+
+            $suggestion = $this->rebateService->suggest($loan, $collectionDate, $includeCurrentMonth);
+            $rebateAmount = array_key_exists('rebate_amount', $data) && $data['rebate_amount'] !== null
+                ? SalaryStructureCalculator::roundTaka((float) $data['rebate_amount'])
+                : (float) $suggestion['suggested_amount'];
+
+            $rebateBatch = null;
+            $collectionBatch = null;
+            $tailRebateBatch = null;
+            $collectionAmount = 0.0;
+            $tailRebateAmount = 0.0;
+
+            if ($rebateAmount > 0) {
+                $rebateBatch = $this->processRebate([
+                    'collection_date' => $collectionDate->toDateString(),
+                    'reference_no' => $data['reference_no'] ?? null,
+                    'notes' => ($data['notes'] ?? 'Loan full paid').' — service charge rebate',
+                    'employee_loan_id' => $loan->id,
+                    'amount' => $rebateAmount,
+                ], $createdBy);
+            }
+
+            $loan->refresh();
+            $pendingCount = $loan->installments()->where('status', 'pending')->count();
+            if ($pendingCount > 0) {
+                $collectionBatch = $this->processAdvance([
+                    'collection_date' => $collectionDate->toDateString(),
+                    'reference_no' => $data['reference_no'] ?? null,
+                    'notes' => ($data['notes'] ?? 'Loan full paid').' — advance collection',
+                    'employee_loan_id' => $loan->id,
+                    'installment_count' => $pendingCount,
+                ], $createdBy);
+                $collectionAmount = (float) $collectionBatch->total_amount;
+            }
+
+            $loan->refresh();
+            $remaining = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
+            if ($remaining > 0) {
+                $tailRebateAmount = $remaining;
+                $tailRebateBatch = $this->processRebate([
+                    'collection_date' => $collectionDate->toDateString(),
+                    'reference_no' => $data['reference_no'] ?? null,
+                    'notes' => ($data['notes'] ?? 'Loan full paid').' — remaining balance',
+                    'employee_loan_id' => $loan->id,
+                    'amount' => $remaining,
+                ], $createdBy);
+            }
+
+            $this->loanService->refreshLoanStatusPublic($loan->fresh());
+
+            return [
+                'rebate_batch' => $rebateBatch,
+                'collection_batch' => $collectionBatch,
+                'tail_rebate_batch' => $tailRebateBatch,
+                'rebate_amount' => $rebateAmount,
+                'collection_amount' => $collectionAmount,
+                'tail_rebate_amount' => $tailRebateAmount,
+            ];
+        });
     }
 
     /**

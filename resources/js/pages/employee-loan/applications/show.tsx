@@ -21,6 +21,8 @@ type Application = {
     applied_amount: number;
     rate_yearly: number;
     installment_amount_monthly: number;
+    installment_amount_monthly_exact: number;
+    service_charge_amount_exact: number;
     total_installments: number;
     grace_months: number;
     interval_months: number;

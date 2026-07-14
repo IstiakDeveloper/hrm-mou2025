@@ -12,6 +12,7 @@ import {
     ChevronDown,
     ChevronRight,
     ClipboardList,
+    Coins,
     Home,
     LayoutDashboard,
     LogOut,
@@ -47,6 +48,7 @@ import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { getActiveSectionId, getMenuKeysForSection, getSectionById, withSectionParam, type AdminSectionId } from '@/lib/admin-sections';
 import { EMPLOYEE_LOAN_NAV_GROUPS, employeeLoanPath } from '@/lib/employee-loan-nav';
+import { employeeLoanEmployeePath } from '@/lib/employee-loan-employee-nav';
 import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee-loan-reports';
 import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
@@ -346,6 +348,40 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 path: '/my-assets',
                 hasSubmenu: false,
                 employeeOnly: true,
+            },
+            {
+                title: 'My Staff Fund',
+                menuKey: 'sf-my-dashboard',
+                icon: <Coins className="h-5 w-5" />,
+                path: '/sections/staff-fund',
+                hasSubmenu: true,
+                employeeOnly: true,
+                submenu: [
+                    { title: 'PF Ledger', path: '/employee/staff-fund/pf-ledger' },
+                    { title: 'Gratuity', path: '/employee/staff-fund/gratuity' },
+                ],
+            },
+            {
+                title: 'My Payroll',
+                menuKey: 'payroll-my-dashboard',
+                icon: <BriefcaseBusiness className="h-5 w-5" />,
+                path: '/sections/payroll',
+                hasSubmenu: true,
+                employeeOnly: true,
+                submenu: [
+                    { title: 'Payslips', path: '/employee/payroll/payslips' },
+                ],
+            },
+            {
+                title: 'My Loan',
+                menuKey: 'loan-my-dashboard',
+                icon: <Wallet className="h-5 w-5" />,
+                path: '/sections/employee-loan',
+                hasSubmenu: true,
+                employeeOnly: true,
+                submenu: [
+                    { title: 'My Loans', path: '/employee/loan' },
+                ],
             },
             {
                 title: 'Employee Management',
@@ -670,6 +706,45 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         if (!keys) {
             return menuItemsForLayout;
         }
+
+        if (
+            activeSectionId === 'staff-fund' &&
+            employee?.id &&
+            !hasPermission('staff-fund.view') &&
+            !hasPermission('payroll.view') &&
+            !hasPermission('admin.access')
+        ) {
+            const employeeStaffFundKeys = ['sf-my-dashboard'];
+            return employeeStaffFundKeys
+                .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
+                .filter((x): x is MenuItemType => Boolean(x));
+        }
+
+        if (
+            activeSectionId === 'payroll' &&
+            employee?.id &&
+            !hasPermission('payroll.view') &&
+            !hasPermission('admin.access')
+        ) {
+            const employeePayrollKeys = ['payroll-my-dashboard'];
+            return employeePayrollKeys
+                .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
+                .filter((x): x is MenuItemType => Boolean(x));
+        }
+
+        if (
+            activeSectionId === 'employee-loan' &&
+            employee?.id &&
+            !hasPermission('employee-loan.view') &&
+            !hasPermission('payroll.view') &&
+            !hasPermission('admin.access')
+        ) {
+            const employeeLoanKeys = ['loan-my-dashboard'];
+            return employeeLoanKeys
+                .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
+                .filter((x): x is MenuItemType => Boolean(x));
+        }
+
         const globalKeys = [...(employee?.id ? (['my-assets'] as const) : [])];
         const mergedKeys = [...globalKeys, ...keys.filter((k) => !globalKeys.includes(k))];
         return mergedKeys.map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key)).filter((x): x is MenuItemType => Boolean(x));
@@ -757,6 +832,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const showsAdminHrDashboard = hasAnyDashboardPerm(hrSectionDashboardAny);
     const canSeePersonalHrDashboard = Boolean(employee?.id) && !showsAdminHrDashboard;
 
+    const showsAdminPayrollDashboard = hasAnyDashboardPerm(payrollSectionDashboardAny);
+    const canSeePersonalPayrollDashboard = Boolean(employee?.id) && !showsAdminPayrollDashboard;
+    const showsAdminStaffFundDashboard = hasAnyDashboardPerm(staffFundSectionDashboardAny);
+    const canSeePersonalStaffFundDashboard = Boolean(employee?.id) && !showsAdminStaffFundDashboard;
+    const showsAdminEmployeeLoanDashboard = hasAnyDashboardPerm(['employee-loan.view', 'payroll.view', 'admin.access']);
+    const canSeePersonalEmployeeLoanDashboard = Boolean(employee?.id) && !showsAdminEmployeeLoanDashboard;
+
     const sectionDashboardEntries: { title: string; path: string }[] = (() => {
         if (!activeSectionId) {
             return [];
@@ -779,17 +861,29 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             case 'administration':
                 return hasAnyDashboardPerm(administrationSectionDashboardAny) ? [{ title: 'Administration', path: '/sections/administration' }] : [];
             case 'payroll':
-                return !departmentHead && hasAnyDashboardPerm(payrollSectionDashboardAny)
-                    ? [{ title: 'Payroll', path: '/sections/payroll' }]
-                    : [];
+                if (!departmentHead && showsAdminPayrollDashboard) {
+                    return [{ title: 'Payroll', path: '/sections/payroll' }];
+                }
+                if (canSeePersonalPayrollDashboard) {
+                    return [{ title: 'My Payroll', path: '/sections/payroll' }];
+                }
+                return [];
             case 'staff-fund':
-                return !departmentHead && hasAnyDashboardPerm(staffFundSectionDashboardAny)
-                    ? [{ title: 'Staff Fund', path: '/sections/staff-fund' }]
-                    : [];
+                if (!departmentHead && showsAdminStaffFundDashboard) {
+                    return [{ title: 'Staff Fund', path: '/sections/staff-fund' }];
+                }
+                if (canSeePersonalStaffFundDashboard) {
+                    return [{ title: 'My Staff Fund', path: '/sections/staff-fund' }];
+                }
+                return [];
             case 'employee-loan':
-                return !departmentHead && hasAnyDashboardPerm(['employee-loan.view', 'payroll.view', 'admin.access'])
-                    ? [{ title: 'Employee Loan', path: '/sections/employee-loan' }]
-                    : [];
+                if (!departmentHead && showsAdminEmployeeLoanDashboard) {
+                    return [{ title: 'Employee Loan', path: '/sections/employee-loan' }];
+                }
+                if (canSeePersonalEmployeeLoanDashboard) {
+                    return [{ title: 'My Loan', path: employeeLoanEmployeePath('/sections/employee-loan') }];
+                }
+                return [];
             case 'fixed-asset':
                 return hasAnyDashboardPerm(fixedAssetSectionDashboardAny) ? [{ title: 'Fixed Asset', path: '/sections/fixed-asset' }] : [];
             case 'inventory':
@@ -1396,8 +1490,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </p>
 
                         <div className={`flex items-start space-x-3 rounded-md border p-4 transition-all duration-200 ${
-                            forgotReturnTime 
-                                ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-500' 
+                            forgotReturnTime
+                                ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-500'
                                 : 'border-amber-200 bg-amber-50/20 hover:bg-amber-50/40'
                         }`}>
                             <Checkbox

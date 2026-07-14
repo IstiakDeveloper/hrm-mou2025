@@ -29,11 +29,20 @@ interface AvailablePermissions {
   [key: string]: string;
 }
 
+interface AvailableSections {
+  [key: string]: {
+    label: string;
+    description: string;
+  };
+}
+
 interface Role {
   id: number;
   name: string;
   description: string;
   permissions: unknown;
+  blocked_sections?: unknown;
+  is_default?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -41,13 +50,16 @@ interface Role {
 interface RoleEditProps {
   role: Role;
   permissions: AvailablePermissions;
+  permissions_by_category: Record<string, AvailablePermissions>;
   permission_categories: PermissionCategories;
+  sections: AvailableSections;
+  supports_section_locks: boolean;
   errors: {
     [key: string]: string;
   };
 }
 
-export default function RoleEdit({ role, permissions, permission_categories, errors }: RoleEditProps) {
+export default function RoleEdit({ role, permissions, permissions_by_category, permission_categories, sections, supports_section_locks, errors }: RoleEditProps) {
   const normalizePermissions = (raw: unknown): string[] => {
     if (Array.isArray(raw)) {
       return raw.filter((p): p is string => typeof p === 'string' && p.trim() !== '');
@@ -73,20 +85,42 @@ export default function RoleEdit({ role, permissions, permission_categories, err
     return [];
   };
 
+  const normalizeBlockedSections = (raw: unknown): string[] => {
+    if (Array.isArray(raw)) {
+      return raw.filter((id): id is string => typeof id === 'string' && id.trim() !== '');
+    }
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed === '') return [];
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        return normalizeBlockedSections(parsed);
+      } catch {
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter((id) => id !== '');
+      }
+    }
+
+    return [];
+  };
+
   const originalPermissions = React.useMemo(() => normalizePermissions(role.permissions), [role.permissions]);
+  const originalBlockedSections = React.useMemo(() => normalizeBlockedSections(role.blocked_sections), [role.blocked_sections]);
 
   const { data, setData, put, processing } = useForm({
     name: role.name,
     description: role.description || '',
     permissions: normalizePermissions(role.permissions),
+    blocked_sections: normalizeBlockedSections(role.blocked_sections),
   });
 
   const [activeTab, setActiveTab] = useState<string>(Object.keys(permission_categories)[0] || 'admin');
   const [hasChanges, setHasChanges] = useState(false);
 
-  // System roles that should show warnings
-  const systemRoles = [1, 2, 3]; // Super Admin, Administrator, HR Manager
-  const isSystemRole = systemRoles.includes(role.id);
+  const isDefaultRole = Boolean(role.is_default);
+  const isSystemRole = isDefaultRole;
 
   // Track changes
   React.useEffect(() => {
@@ -94,58 +128,25 @@ export default function RoleEdit({ role, permissions, permission_categories, err
       name: role.name,
       description: role.description || '',
       permissions: normalizePermissions(role.permissions),
+      blocked_sections: normalizeBlockedSections(role.blocked_sections),
     };
 
     const hasDataChanged =
       data.name !== originalData.name ||
       data.description !== originalData.description ||
-      JSON.stringify([...data.permissions].sort()) !== JSON.stringify([...originalData.permissions].sort());
+      (!isDefaultRole && JSON.stringify([...data.permissions].sort()) !== JSON.stringify([...originalData.permissions].sort())) ||
+      JSON.stringify([...data.blocked_sections].sort()) !== JSON.stringify([...originalData.blocked_sections].sort());
 
     setHasChanges(hasDataChanged);
-  }, [data, role]);
+  }, [data, role, isDefaultRole]);
 
-  // Group permissions by category based on the controller logic
+  // Full catalog from config/permissions.php (via PermissionRegistry), not a hardcoded subset
   const getPermissionsByCategory = (category: string): AvailablePermissions => {
-    const categoryMap: { [key: string]: string[] } = {
-      admin: ['admin.access'],
-      users: ['users.view', 'users.create', 'users.edit', 'users.delete'],
-      roles: ['roles.view', 'roles.create', 'roles.edit', 'roles.delete'],
-      employees: ['employees.view', 'employees.create', 'employees.edit', 'employees.delete'],
-      organization: [
-        'branches.view', 'branches.create', 'branches.edit', 'branches.delete',
-        'departments.view', 'departments.create', 'departments.edit', 'departments.delete',
-        'designations.view', 'designations.create', 'designations.edit', 'designations.delete'
-      ],
-      attendance: [
-        'attendance.view', 'attendance.create', 'attendance.edit', 'attendance.delete',
-        'attendance.sync', 'attendance.admin'
-      ],
-      leave: [
-        'leave-types.view', 'leave-types.create', 'leave-types.edit', 'leave-types.delete',
-        'leave-balances.view', 'leave-balances.create', 'leave-balances.edit', 'leave-balances.delete', 'leave-balances.admin',
-        'leave-applications.view', 'leave-applications.create', 'leave-applications.edit', 'leave-applications.cancel', 'leave-applications.approve'
-      ],
-      movement: [
-        'movements.view', 'movements.create', 'movements.edit', 'movements.cancel', 'movements.complete', 'movements.approve',
-        'transfers.view', 'transfers.create', 'transfers.edit', 'transfers.approve'
-      ],
-      holidays: ['holidays.view', 'holidays.create', 'holidays.edit', 'holidays.delete'],
-      reports: ['reports.view', 'reports.export']
-    };
-
-    const categoryPermissions: AvailablePermissions = {};
-    const permissionKeys = categoryMap[category] || [];
-
-    permissionKeys.forEach(key => {
-      if (permissions[key]) {
-        categoryPermissions[key] = permissions[key];
-      }
-    });
-
-    return categoryPermissions;
+    return permissions_by_category[category] || {};
   };
 
   const handlePermissionChange = (permission: string, checked: boolean) => {
+    if (isDefaultRole) return;
     const newPermissions = checked
       ? [...data.permissions, permission]
       : data.permissions.filter(p => p !== permission);
@@ -153,7 +154,16 @@ export default function RoleEdit({ role, permissions, permission_categories, err
     setData('permissions', newPermissions);
   };
 
+  const handleSectionChange = (sectionId: string, checked: boolean) => {
+    const newSections = checked
+      ? [...data.blocked_sections, sectionId]
+      : data.blocked_sections.filter(id => id !== sectionId);
+
+    setData('blocked_sections', newSections);
+  };
+
   const handleSelectAllInCategory = (category: string, checked: boolean) => {
+    if (isDefaultRole) return;
     const categoryPermissions = Object.keys(getPermissionsByCategory(category));
 
     if (checked) {
@@ -226,11 +236,15 @@ export default function RoleEdit({ role, permissions, permission_categories, err
     const cleanPermissions = data.permissions.filter(p =>
       typeof p === 'string' && p.trim() !== '' && Object.keys(permissions).includes(p)
     );
+    const cleanBlockedSections = data.blocked_sections.filter(id =>
+      typeof id === 'string' && id.trim() !== '' && Object.keys(sections).includes(id)
+    );
 
     const submitData = {
       name: data.name.trim(),
       description: data.description.trim(),
-      permissions: cleanPermissions
+      permissions: cleanPermissions,
+      blocked_sections: cleanBlockedSections,
     };
 
     // Debug log to check data
@@ -284,17 +298,19 @@ export default function RoleEdit({ role, permissions, permission_categories, err
             )}
           </div>
           <p className="text-gray-600">
-            Modify role permissions and details for <span className="font-medium">{role.name}</span>
+            {isDefaultRole
+              ? <>Default role permissions for <span className="font-medium">{role.name}</span> come from <code className="text-sm">config/default_roles.php</code> (Sync Default Roles). Section Access can still be customized here.</>
+              : <>Modify role permissions and details for <span className="font-medium">{role.name}</span></>}
           </p>
         </div>
 
         {/* System Role Warning */}
-        {isSystemRole && (
+        {isDefaultRole && (
           <Alert className="mb-6 bg-amber-50 border-amber-200">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-800">
-              <strong>Warning:</strong> You are editing a system role. Changes may affect core system functionality.
-              Please ensure you understand the implications before modifying permissions.
+              <strong>Default system role:</strong> Granular permissions are read-only (refresh via Sync Default Roles).
+              <strong> Section Access is editable</strong> and is not reset by sync.
             </AlertDescription>
           </Alert>
         )}
@@ -342,6 +358,7 @@ export default function RoleEdit({ role, permissions, permission_categories, err
                       value={data.name}
                       onChange={e => setData('name', e.target.value)}
                       placeholder="e.g., HR Manager, Department Head"
+                      disabled={isDefaultRole}
                       className={errors.name ? 'border-red-300 focus:border-red-500' : ''}
                     />
                     {errors.name && (
@@ -392,6 +409,12 @@ export default function RoleEdit({ role, permissions, permission_categories, err
                         <span className="text-blue-700">Original:</span>
                         <span className="font-medium text-blue-900">{role.permissions?.length || 0} permissions</span>
                       </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-blue-700">Blocked sections:</span>
+                        <span className="font-medium text-blue-900">
+                          {supports_section_locks ? data.blocked_sections.length : 'Migration required'}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -410,6 +433,7 @@ export default function RoleEdit({ role, permissions, permission_categories, err
 
             {/* Permissions Card */}
             <div className="lg:col-span-2">
+              <div className="space-y-8">
               <Card className="shadow-sm border-gray-200">
                 <CardHeader className="border-b bg-gray-50/50">
                   <div className="flex items-center justify-between">
@@ -419,7 +443,11 @@ export default function RoleEdit({ role, permissions, permission_categories, err
                       </div>
                       <div>
                         <CardTitle className="text-lg">Role Permissions</CardTitle>
-                        <CardDescription>Modify system access permissions by category</CardDescription>
+                        <CardDescription>
+                          {isDefaultRole
+                            ? 'Synced from config/default_roles.php — editing disabled'
+                            : 'Modify system access permissions by category'}
+                        </CardDescription>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -494,6 +522,7 @@ export default function RoleEdit({ role, permissions, permission_categories, err
                                 <Checkbox
                                   id={`select-all-${categoryKey}`}
                                   checked={isCategoryFullySelected(categoryKey)}
+                                  disabled={isDefaultRole}
                                   onCheckedChange={(checked) =>
                                     handleSelectAllInCategory(categoryKey, checked === true)
                                   }
@@ -537,6 +566,7 @@ export default function RoleEdit({ role, permissions, permission_categories, err
                                       <Checkbox
                                         id={key}
                                         checked={isSelected}
+                                        disabled={isDefaultRole}
                                         onCheckedChange={(checked) =>
                                           handlePermissionChange(key, checked === true)
                                         }
@@ -586,6 +616,90 @@ export default function RoleEdit({ role, permissions, permission_categories, err
                   )}
                 </CardContent>
               </Card>
+
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="border-b bg-gray-50/50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-lg">Section Access</CardTitle>
+                      <CardDescription>
+                        Block entire ERP sections for this role. Independently editable — not reset by Sync Default Roles.
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-white">
+                      {data.blocked_sections.length} / {Object.keys(sections).length} blocked
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  {!supports_section_locks && (
+                    <Alert className="bg-amber-50 border-amber-200">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-800">
+                        Section locks will save only after running `php artisan migrate`. Until then, the previous default access rules remain active.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {Object.entries(sections).map(([sectionId, section]) => {
+                      const isBlocked = data.blocked_sections.includes(sectionId);
+                      const wasOriginallyBlocked = originalBlockedSections.includes(sectionId);
+                      const hasChanged = isBlocked !== wasOriginallyBlocked;
+
+                      return (
+                        <label
+                          key={sectionId}
+                          htmlFor={`section-${sectionId}`}
+                          className={`flex min-h-[136px] cursor-pointer flex-col rounded-xl border p-3 transition-colors hover:bg-gray-50 ${
+                            isBlocked ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'
+                          } ${hasChanged ? 'ring-2 ring-amber-200' : ''} ${!supports_section_locks ? 'cursor-not-allowed opacity-70' : ''}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900">{section.label}</p>
+                              <p className="mt-1 text-[11px] text-gray-400">{sectionId}</p>
+                            </div>
+                            <Checkbox
+                              id={`section-${sectionId}`}
+                              checked={isBlocked}
+                              disabled={!supports_section_locks}
+                              onCheckedChange={(checked) => handleSectionChange(sectionId, checked === true)}
+                            />
+                          </div>
+
+                          <p className="mt-3 flex-1 text-xs leading-5 text-gray-500">{section.description}</p>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={isBlocked
+                                ? 'bg-amber-100 text-amber-700 border-amber-300 text-xs'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200 text-xs'}
+                            >
+                              {isBlocked ? 'Blocked' : 'Allowed'}
+                            </Badge>
+                            {hasChanged && (
+                              <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 text-xs">
+                                {isBlocked ? 'Added' : 'Removed'}
+                              </Badge>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {errors.blocked_sections && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                      <p className="text-sm text-red-600 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        {errors.blocked_sections}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              </div>
             </div>
           </div>
 
@@ -619,7 +733,7 @@ export default function RoleEdit({ role, permissions, permission_categories, err
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
-                  Update Role
+                  {isDefaultRole ? 'Save Description & Section Access' : 'Update Role'}
                 </>
               )}
             </Button>

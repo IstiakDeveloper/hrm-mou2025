@@ -17,6 +17,7 @@ class LoanMigrationItem extends Model
         'passed_months',
         'use_manual_terms',
         'service_charge_amount',
+        'calculation_method',
         'outstanding_principal',
         'outstanding_service_charge',
         'outstanding_total',
