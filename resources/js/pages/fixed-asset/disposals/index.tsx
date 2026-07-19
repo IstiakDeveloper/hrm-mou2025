@@ -38,6 +38,11 @@ export default function AssetDisposalIndex({
     branches,
     statusOptions,
     branchScoped,
+    listRoute = 'fixed-asset.disposals.register',
+    pageTitle = 'Disposal register',
+    pageDescription = 'Approved and completed asset disposals.',
+    showCreateButton = false,
+    showReviewActions = false,
 }: {
     disposals: { data: Row[] };
     pendingCount: number;
@@ -45,6 +50,11 @@ export default function AssetDisposalIndex({
     branches: { id: number; name: string; is_head_office: boolean }[];
     statusOptions: { value: string; label: string }[];
     branchScoped?: boolean;
+    listRoute?: string;
+    pageTitle?: string;
+    pageDescription?: string;
+    showCreateButton?: boolean;
+    showReviewActions?: boolean;
 }) {
     const { flash, auth } = usePage<{ flash?: { success?: string; error?: string }; auth?: object }>().props;
     const canReview = hasAppPermission(auth, 'fixed-assets.delete') || hasAppPermission(auth, 'admin.access');
@@ -54,7 +64,7 @@ export default function AssetDisposalIndex({
     const [status, setStatus] = useState(filters.status || '');
 
     const applyFilters = () => {
-        router.get(route('asset-disposals.index'), {
+        router.get(route(listRoute), {
             search: search || undefined,
             branch_id: branchId ?? undefined,
             status: status || undefined,
@@ -63,26 +73,28 @@ export default function AssetDisposalIndex({
 
     const approve = (id: number) => {
         if (!confirm('Approve disposal? The asset will be marked disposed.')) return;
-        router.post(route('asset-disposals.approve', id));
+        router.post(route('fixed-asset.disposal.approve', id));
     };
 
     const reject = (id: number) => {
         const notes = window.prompt('Rejection reason (optional):');
-        router.post(route('asset-disposals.reject', id), { review_notes: notes ?? '' });
+        router.post(route('fixed-asset.disposal.reject', id), { review_notes: notes ?? '' });
     };
 
     return (
         <Layout>
-            <Head title="Asset disposals" />
+            <Head title={pageTitle} />
             <PayrollPage>
                 <PayrollPageHeader
                     icon={Trash2}
-                    title="Disposal requests"
-                    description={pendingCount > 0 ? `${pendingCount} pending approval` : 'Request and approve asset write-offs, sales, or scrap.'}
+                    title={pageTitle}
+                    description={pageDescription}
                 >
-                    <Link href={route('asset-disposals.create')}>
-                        <Button size="sm"><Plus className="mr-2 h-4 w-4" />Request disposal</Button>
-                    </Link>
+                    {showCreateButton && (
+                        <Link href={route('fixed-asset.disposal.requests.create')}>
+                            <Button size="sm"><Plus className="mr-2 h-4 w-4" />Request disposal</Button>
+                        </Link>
+                    )}
                 </PayrollPageHeader>
 
                 <BranchScopeAlert branchScoped={branchScoped} />
@@ -109,7 +121,7 @@ export default function AssetDisposalIndex({
                     </div>
                 </PayrollSectionCard>
 
-                <PayrollSectionCard title="Requests">
+                <PayrollSectionCard title={showReviewActions ? 'Requests' : 'Register'}>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -138,7 +150,7 @@ export default function AssetDisposalIndex({
                                         <TableCell><Badge variant={statusVariant[row.status] ?? 'secondary'}>{row.status}</Badge></TableCell>
                                         <TableCell>{row.requested_by_user?.name ?? '—'}</TableCell>
                                         <TableCell className="space-x-1 text-right">
-                                            {row.status === 'pending' && canReview && (
+                                            {showReviewActions && row.status === 'pending' && canReview && (
                                                 <>
                                                     <Button size="sm" variant="default" onClick={() => approve(row.id)}><Check className="h-4 w-4" /></Button>
                                                     <Button size="sm" variant="outline" onClick={() => reject(row.id)}><X className="h-4 w-4" /></Button>

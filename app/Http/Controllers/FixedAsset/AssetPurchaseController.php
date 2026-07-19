@@ -155,7 +155,7 @@ class AssetPurchaseController extends Controller
             'purchase' => [
                 'id' => $purchase->id,
                 'purchase_no' => $purchase->purchase_no,
-                'purchase_date' => $purchase->purchase_date->format('Y-m-d'),
+                'purchase_date' => optional($purchase->purchase_date)->format('Y-m-d'),
                 'purchase_type' => $purchase->purchase_type,
                 'purchase_type_label' => AssetPurchase::PURCHASE_TYPES[$purchase->purchase_type] ?? $purchase->purchase_type,
                 'voucher_no' => $purchase->voucher_no,
@@ -242,6 +242,12 @@ class AssetPurchaseController extends Controller
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'depreciation_rate', 'depreciation_method', 'default_useful_life_years']),
+            'subCategories' => AssetSubCategory::query()
+                ->where('is_active', true)
+                ->orderBy('asset_category_id')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'asset_category_id', 'name', 'code', 'depreciation_rate']),
             'custodians' => AssetCustodian::query()
                 ->where('is_active', true)
                 ->with('employee:id,employee_id,name_en')

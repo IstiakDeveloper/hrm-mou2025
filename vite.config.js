@@ -44,11 +44,14 @@ export default defineConfig({
                     if (!id.includes('node_modules')) {
                         return;
                     }
-                    if (id.includes('react-dom') || id.includes('/react/')) {
+                    // Keep react + inertia together to avoid circular vendor chunks / OOM pressure
+                    if (
+                        id.includes('react-dom') ||
+                        id.includes('/react/') ||
+                        id.includes('\\react\\') ||
+                        id.includes('@inertiajs')
+                    ) {
                         return 'vendor-react';
-                    }
-                    if (id.includes('@inertiajs')) {
-                        return 'vendor-inertia';
                     }
                     if (id.includes('date-fns')) {
                         return 'vendor-date-fns';

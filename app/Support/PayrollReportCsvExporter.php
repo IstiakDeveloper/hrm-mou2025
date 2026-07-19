@@ -39,6 +39,7 @@ class PayrollReportCsvExporter
             'head-register' => self::headRegisterRows($payload),
             'advance-salary' => self::advanceSalaryRows($payload),
             'bonus-register' => self::bonusRegisterRows($payload),
+            'final-payment' => self::finalPaymentRows($payload),
             'salary-certificate' => self::salaryCertificateRows($payload),
             default => [[], []],
         };
@@ -99,17 +100,17 @@ class PayrollReportCsvExporter
         return [$headers, $rows];
     }
 
+    protected static function salarySheetRound(mixed $value): int
+    {
+        return (int) round((float) $value);
+    }
+
     /**
      * @param  array<string, mixed>  $row
      * @param  list<string>  $earningHeads
      * @param  list<string>  $deductionHeads
      * @return list<string|int|float|null>
      */
-    protected static function salarySheetRound(mixed $value): int
-    {
-        return (int) round((float) $value);
-    }
-
     protected static function salarySheetDataLine(array $row, array $earningHeads, array $deductionHeads, int $serial = 1): array
     {
         $line = [
@@ -262,6 +263,76 @@ class PayrollReportCsvExporter
                 $row['amount'] ?? 0,
             ];
         }
+
+        return [$headers, $rows];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{0: list<string>, 1: list<list<string|int|float|null>>}
+     */
+    protected static function finalPaymentRows(array $payload): array
+    {
+        $headers = [
+            '#',
+            'PIN',
+            'Name',
+            'Designation',
+            'Department',
+            'Branch',
+            'Separation Date',
+            'Payment Date',
+            'PF Refund',
+            'Gratuity',
+            'Gross Payable',
+            'Loan Recovery',
+            'Net Payable',
+            'Status',
+        ];
+        $rows = [];
+
+        foreach ($payload['rows'] ?? [] as $index => $row) {
+            $branch = trim((string) ($row['branch'] ?? ''));
+            $branchCode = trim((string) ($row['branch_code'] ?? ''));
+            if ($branchCode !== '') {
+                $branch .= ($branch !== '' ? ' ' : '')."({$branchCode})";
+            }
+
+            $rows[] = [
+                $index + 1,
+                $row['pin'] ?? '',
+                $row['name'] ?? '',
+                $row['designation'] ?? '',
+                $row['department'] ?? '',
+                $branch,
+                $row['separation_date'] ?? '',
+                $row['payment_date'] ?? '',
+                $row['pf_balance'] ?? 0,
+                $row['gratuity_amount'] ?? 0,
+                $row['gross'] ?? 0,
+                $row['loan_outstanding'] ?? 0,
+                $row['net_payable'] ?? 0,
+                $row['status'] ?? '',
+            ];
+        }
+
+        $totals = $payload['totals'] ?? [];
+        $rows[] = [
+            '',
+            '',
+            'Total',
+            '',
+            '',
+            '',
+            '',
+            '',
+            $totals['pf_balance'] ?? 0,
+            $totals['gratuity_amount'] ?? 0,
+            $totals['gross'] ?? 0,
+            $totals['loan_outstanding'] ?? 0,
+            $totals['net_payable'] ?? 0,
+            '',
+        ];
 
         return [$headers, $rows];
     }

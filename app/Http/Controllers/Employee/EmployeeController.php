@@ -75,6 +75,152 @@ class EmployeeController extends Controller
         return $d !== '' ? $d : 'auto.local';
     }
 
+    /**
+     * FormData often sends empty photo/signature fields as "" which breaks nullable|file validation.
+     */
+    private function scrubEmptyMediaUploads(Request $request): void
+    {
+        foreach (['photo', 'signature'] as $field) {
+            if ($request->hasFile($field)) {
+                $file = $request->file($field);
+                if ($file && $file->isValid()) {
+                    continue;
+                }
+            }
+
+            $request->files->remove($field);
+            $request->request->remove($field);
+        }
+    }
+
+    /**
+     * Store employee photo/signature on the public disk (storage/app/public/...).
+     * Also mirrors into public/storage when the symlink is missing (common on Hostinger).
+     */
+    private function storeEmployeeMediaFile(
+        \Illuminate\Http\UploadedFile $file,
+        string $directory,
+        string $pinHint = 'emp',
+        ?string $oldRelativePath = null
+    ): string {
+        if ($oldRelativePath) {
+            $this->deleteEmployeeMediaFile($oldRelativePath);
+        }
+
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext === '' || ! preg_match('/^[a-z0-9]{1,8}$/', $ext)) {
+            $guessed = $file->guessExtension();
+            $ext = strtolower(is_string($guessed) && $guessed !== '' ? $guessed : 'jpg');
+        }
+
+        $safePin = preg_replace('/[^a-zA-Z0-9_\-]/', '', $pinHint) ?: 'emp';
+        $filename = $safePin.'_'.time().'_'.Str::lower((string) Str::random(6)).'.'.$ext;
+        $relative = trim($directory, '/').'/'.$filename;
+
+        try {
+            $stored = Storage::disk('public')->putFileAs($directory, $file, $filename);
+            if (! is_string($stored) || $stored === '') {
+                throw new \RuntimeException('putFileAs returned empty path.');
+            }
+        } catch (\Throwable $e) {
+            // Fallback: write directly under public/storage (Hostinger copy-mode setups)
+            Log::warning('Employee media public-disk store failed; using public/storage fallback', [
+                'error' => $e->getMessage(),
+                'directory' => $directory,
+            ]);
+
+            $targetDir = public_path('storage/'.$directory);
+            if (! is_dir($targetDir) && ! @mkdir($targetDir, 0775, true) && ! is_dir($targetDir)) {
+                throw new \RuntimeException('Unable to create media directory: '.$targetDir);
+            }
+
+            if (! $file->move($targetDir, $filename)) {
+                throw new \RuntimeException('Unable to move uploaded media file.');
+            }
+
+            // Best-effort also keep a copy on the public disk root for consistency
+            try {
+                $fallbackSource = $targetDir.DIRECTORY_SEPARATOR.$filename;
+                if (is_file($fallbackSource)) {
+                    Storage::disk('public')->put($relative, file_get_contents($fallbackSource) ?: '');
+                }
+            } catch (\Throwable $ignored) {
+                // ignore
+            }
+
+            return $relative;
+        }
+
+        $this->mirrorPublicDiskFileToPublicStorage($relative);
+
+        Log::info('Employee media stored', [
+            'relative' => $relative,
+            'disk_exists' => Storage::disk('public')->exists($relative),
+            'public_path_exists' => is_file(public_path('storage/'.$relative)),
+        ]);
+
+        return $relative;
+    }
+
+    private function deleteEmployeeMediaFile(?string $relativePath): void
+    {
+        $relativePath = ltrim((string) $relativePath, '/');
+        if ($relativePath === '') {
+            return;
+        }
+
+        try {
+            if (Storage::disk('public')->exists($relativePath)) {
+                Storage::disk('public')->delete($relativePath);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Employee media disk delete failed', [
+                'path' => $relativePath,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $publicCopy = public_path('storage/'.$relativePath);
+        if (is_file($publicCopy)) {
+            @unlink($publicCopy);
+        }
+    }
+
+    private function mirrorPublicDiskFileToPublicStorage(string $relativePath): void
+    {
+        $relativePath = ltrim($relativePath, '/');
+        try {
+            $source = Storage::disk('public')->path($relativePath);
+            $dest = public_path('storage/'.$relativePath);
+            if (! is_file($source)) {
+                return;
+            }
+
+            // If public/storage is already a working symlink into the same file, skip copy.
+            if (is_link(public_path('storage'))) {
+                return;
+            }
+
+            $destDir = dirname($dest);
+            if (! is_dir($destDir)) {
+                @mkdir($destDir, 0775, true);
+            }
+
+            if (! @copy($source, $dest)) {
+                Log::warning('Employee media mirror to public/storage failed', [
+                    'relative' => $relativePath,
+                    'source' => $source,
+                    'dest' => $dest,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Employee media mirror exception', [
+                'relative' => $relativePath,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function readJsonArrayFile(string $absPath): array
     {
         try {
@@ -1586,49 +1732,14 @@ class EmployeeController extends Controller
             'employeeType',
         ]);
         OrganogramAccessService::constrainVisibleEmployees($query, $user);
-
-        $query
-            ->when($request->search, function ($query, $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('employees.name_en', 'like', "%{$search}%")
-                        ->orWhere('employees.name_bn', 'like', "%{$search}%")
-                        ->orWhere('employees.pin', 'like', "%{$search}%")
-                        ->orWhere('employees.employee_id', 'like', "%{$search}%")
-                        ->orWhere('employees.email', 'like', "%{$search}%");
-                });
-            })
-            ->when($request->department_id, function ($query, $departmentId) {
-                $query->where('employees.department_id', $departmentId);
-            })
-            ->when($request->branch_id, function ($query, $branchId) {
-                $query->where('employees.current_branch_id', $branchId);
-            })
-            ->when($request->status, function ($query, $status) {
-                $query->where('employees.status', $status);
-            })
-            ->when($request->employee_type_id, function ($query, $employeeTypeId) {
-                $query->where('employees.employee_type_id', $employeeTypeId);
-            })
-            ->when($request->designation_id, function ($query, $designationId) {
-                $query->where('employees.designation_id', $designationId);
-            });
+        $this->applyEmployeeDirectoryFilters($query, $request);
 
         $perPage = (int) $request->get('per_page', 25);
         if (! in_array($perPage, [10, 25, 50, 100, 200, 500], true)) {
             $perPage = 25;
         }
 
-        $allowedSortBy = ['organogram', 'id', 'pin', 'name', 'status'];
-        $sortBy = (string) $request->get('sort_by', 'organogram');
-        if (! in_array($sortBy, $allowedSortBy, true)) {
-            $sortBy = 'organogram';
-        }
-
-        $sortDir = strtolower((string) $request->get('sort_dir', 'asc'));
-        if (! in_array($sortDir, ['asc', 'desc'], true)) {
-            $sortDir = 'asc';
-        }
-
+        [$sortBy, $sortDir] = $this->resolveEmployeeDirectorySort($request);
         HeadOfficeOrganogram::applyToEmployeeQuery($query, $sortBy, $sortDir);
 
         $employees = $query
@@ -1661,8 +1772,308 @@ class EmployeeController extends Controller
             'branches' => $branches,
             'employee_types' => $employeeTypes,
             'designations' => $designations,
-            'filters' => $request->only(['search', 'department_id', 'branch_id', 'status', 'employee_type_id', 'designation_id', 'per_page', 'sort_by', 'sort_dir']),
+            'filters' => array_merge(
+                $request->only(['search', 'per_page', 'sort_by', 'sort_dir']),
+                [
+                    'department_ids' => $this->resolveIntFilterIds($request, 'department_ids', 'department_id'),
+                    'branch_ids' => $this->resolveIntFilterIds($request, 'branch_ids', 'branch_id'),
+                    'statuses' => $this->resolveStringFilterValues($request, 'statuses', 'status'),
+                    'employee_type_ids' => $this->resolveIntFilterIds($request, 'employee_type_ids', 'employee_type_id'),
+                    'designation_ids' => $this->resolveIntFilterIds($request, 'designation_ids', 'designation_id'),
+                ]
+            ),
         ]);
+    }
+
+    /**
+     * Download filtered employees as XLSX with the same detailed columns as the import template.
+     */
+    public function exportXlsx(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user instanceof User && $user->isAccountsDeskOnly()) {
+            abort(403);
+        }
+
+        $query = Employee::query()->with([
+            'department:id,name',
+            'joiningDesignation:id,name',
+            'lastDesignation:id,name',
+            'designation:id,name',
+            'branch:id,name',
+            'lastBranch:id,name',
+            'employeeType:id,name',
+        ]);
+        OrganogramAccessService::constrainVisibleEmployees($query, $user);
+        $this->applyEmployeeDirectoryFilters($query, $request);
+
+        [$sortBy, $sortDir] = $this->resolveEmployeeDirectorySort($request);
+        HeadOfficeOrganogram::applyToEmployeeQuery($query, $sortBy, $sortDir);
+
+        $employees = $query->get();
+        $employeeIds = $employees->pluck('id')->all();
+
+        $banksByEmployee = collect();
+        $addressesByEmployee = collect();
+        if ($employeeIds !== []) {
+            $banksByEmployee = DB::table('employee_bank_accounts')
+                ->whereIn('employee_id', $employeeIds)
+                ->orderByDesc('is_primary')
+                ->orderBy('id')
+                ->get()
+                ->groupBy('employee_id')
+                ->map(fn ($rows) => $rows->first());
+
+            $addressesByEmployee = DB::table('employee_addresses')
+                ->whereIn('employee_id', $employeeIds)
+                ->get()
+                ->groupBy('employee_id');
+        }
+
+        $rows = [];
+        foreach ($employees as $index => $employee) {
+            $rows[] = $this->mapEmployeeToImportExportRow(
+                $employee,
+                $index + 1,
+                $banksByEmployee->get($employee->id),
+                $addressesByEmployee->get($employee->id, collect())
+            );
+        }
+
+        $mapRef = fn ($query) => $query->get(['id', 'name'])
+            ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name])
+            ->all();
+
+        $references = [
+            'departments' => $mapRef(Department::query()->orderBy('name')),
+            'designations' => $mapRef(Designation::query()->orderBy('name')),
+            'branches' => $mapRef(Branch::query()->orderBy('name')),
+            'employee_types' => $mapRef(EmployeeType::query()->where('is_active', true)->orderBy('name')),
+        ];
+
+        $xlsx = EmployeeImportTemplateExporter::generate($rows, $references);
+        $filename = 'employees-export-'.now()->format('Y-m-d-His').'.xlsx';
+
+        return response((string) $xlsx, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Employee>  $query
+     */
+    private function applyEmployeeDirectoryFilters($query, Request $request): void
+    {
+        $query->when($request->search, function ($query, $search) {
+            $query->where(function ($query) use ($search) {
+                $query->where('employees.name_en', 'like', "%{$search}%")
+                    ->orWhere('employees.name_bn', 'like', "%{$search}%")
+                    ->orWhere('employees.pin', 'like', "%{$search}%")
+                    ->orWhere('employees.employee_id', 'like', "%{$search}%")
+                    ->orWhere('employees.email', 'like', "%{$search}%");
+            });
+        });
+
+        $departmentIds = $this->resolveIntFilterIds($request, 'department_ids', 'department_id');
+        if ($departmentIds !== []) {
+            $query->whereIn('employees.department_id', $departmentIds);
+        }
+
+        $branchIds = $this->resolveIntFilterIds($request, 'branch_ids', 'branch_id');
+        if ($branchIds !== []) {
+            $query->whereIn('employees.current_branch_id', $branchIds);
+        }
+
+        $statuses = $this->resolveStringFilterValues($request, 'statuses', 'status');
+        if ($statuses !== []) {
+            $allowed = ['active', 'inactive', 'on_leave', 'terminated'];
+            $statuses = array_values(array_intersect($statuses, $allowed));
+            if ($statuses !== []) {
+                $query->whereIn('employees.status', $statuses);
+            }
+        }
+
+        $employeeTypeIds = $this->resolveIntFilterIds($request, 'employee_type_ids', 'employee_type_id');
+        if ($employeeTypeIds !== []) {
+            $query->whereIn('employees.employee_type_id', $employeeTypeIds);
+        }
+
+        $designationIds = $this->resolveIntFilterIds($request, 'designation_ids', 'designation_id');
+        if ($designationIds !== []) {
+            $query->whereIn('employees.designation_id', $designationIds);
+        }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function resolveIntFilterIds(Request $request, string $pluralKey, string $singularKey): array
+    {
+        $raw = $request->input($pluralKey, $request->input($singularKey));
+
+        if ($raw === null || $raw === '' || $raw === []) {
+            return [];
+        }
+
+        if (is_string($raw)) {
+            $parts = preg_split('/[,\s]+/', $raw) ?: [];
+
+            return array_values(array_unique(array_filter(array_map('intval', $parts), fn (int $id) => $id > 0)));
+        }
+
+        if (! is_array($raw)) {
+            $id = (int) $raw;
+
+            return $id > 0 ? [$id] : [];
+        }
+
+        return array_values(array_unique(array_filter(array_map('intval', $raw), fn (int $id) => $id > 0)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveStringFilterValues(Request $request, string $pluralKey, string $singularKey): array
+    {
+        $raw = $request->input($pluralKey, $request->input($singularKey));
+
+        if ($raw === null || $raw === '' || $raw === []) {
+            return [];
+        }
+
+        if (is_string($raw)) {
+            $parts = preg_split('/[,\s]+/', $raw) ?: [];
+
+            return array_values(array_unique(array_filter(array_map(
+                static fn ($v) => trim((string) $v),
+                $parts
+            ), static fn (string $v) => $v !== '')));
+        }
+
+        if (! is_array($raw)) {
+            $value = trim((string) $raw);
+
+            return $value !== '' ? [$value] : [];
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($v) => trim((string) $v),
+            $raw
+        ), static fn (string $v) => $v !== '')));
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function resolveEmployeeDirectorySort(Request $request): array
+    {
+        $allowedSortBy = ['organogram', 'id', 'pin', 'name', 'status'];
+        $sortBy = (string) $request->get('sort_by', 'organogram');
+        if (! in_array($sortBy, $allowedSortBy, true)) {
+            $sortBy = 'organogram';
+        }
+
+        $sortDir = strtolower((string) $request->get('sort_dir', 'asc'));
+        if (! in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'asc';
+        }
+
+        return [$sortBy, $sortDir];
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>|iterable<int, object>  $addresses
+     * @return array<string, string>
+     */
+    private function mapEmployeeToImportExportRow(
+        Employee $employee,
+        int $sl,
+        ?object $bank,
+        $addresses
+    ): array {
+        $addressMap = [
+            'present' => null,
+            'permanent' => null,
+        ];
+        foreach ($addresses as $address) {
+            $type = (string) ($address->type ?? '');
+            if (isset($addressMap[$type]) && $addressMap[$type] === null) {
+                $addressMap[$type] = $address;
+            }
+        }
+
+        $fmtDate = static function ($value): string {
+            if ($value instanceof \DateTimeInterface) {
+                return $value->format('Y-m-d');
+            }
+            if (is_string($value) && trim($value) !== '') {
+                return substr(trim($value), 0, 10);
+            }
+
+            return '';
+        };
+
+        $joiningDesig = $employee->joiningDesignation?->name
+            ?? $employee->designation?->name
+            ?? '';
+        $lastDesig = $employee->lastDesignation?->name
+            ?? $employee->designation?->name
+            ?? $joiningDesig;
+
+        $present = $addressMap['present'];
+        $permanent = $addressMap['permanent'];
+
+        return [
+            'sl' => (string) $sl,
+            'pin' => (string) ($employee->pin ?? $employee->employee_id ?? ''),
+            'name_en' => (string) ($employee->name_en ?? ''),
+            'employee_type' => (string) ($employee->employeeType?->name ?? ''),
+            'mobile_personal' => (string) ($employee->mobile_personal ?? ''),
+            'joining_date' => $fmtDate($employee->joining_date),
+            'department' => (string) ($employee->department?->name ?? ''),
+            'joining_designation' => (string) $joiningDesig,
+            'branch' => (string) ($employee->branch?->name ?? ''),
+            'status' => (string) ($employee->status ?? ''),
+            'name_bn' => (string) ($employee->name_bn ?? ''),
+            'email' => (string) ($employee->email ?? ''),
+            'mobile_official' => (string) ($employee->mobile_official ?? ''),
+            'gender' => (string) ($employee->gender ?? ''),
+            'religion' => (string) ($employee->religion ?? ''),
+            'blood_group' => (string) ($employee->blood_group ?? ''),
+            'date_of_birth' => $fmtDate($employee->date_of_birth),
+            'marital_status' => (string) ($employee->marital_status ?? ''),
+            'spouse_name' => (string) ($employee->spouse_name ?? ''),
+            'spouse_mobile' => (string) ($employee->spouse_mobile ?? ''),
+            'fathers_name' => (string) ($employee->fathers_name ?? ''),
+            'fathers_mobile' => (string) ($employee->fathers_mobile ?? ''),
+            'mothers_name' => (string) ($employee->mothers_name ?? ''),
+            'mothers_mobile' => (string) ($employee->mothers_mobile ?? ''),
+            'nid_number' => (string) ($employee->nid_number ?? ''),
+            'smart_card_number' => (string) ($employee->smart_card_number ?? ''),
+            'tin_certificate_no' => (string) ($employee->tin_certificate_no ?? ''),
+            'driving_license_no' => (string) ($employee->driving_license_no ?? ''),
+            'passport_no' => (string) ($employee->passport_no ?? ''),
+            'identification_mark' => (string) ($employee->identification_mark ?? ''),
+            'confirmation_date' => $fmtDate($employee->confirmation_date),
+            'last_designation' => (string) $lastDesig,
+            'last_branch' => (string) ($employee->lastBranch?->name ?? $employee->branch?->name ?? ''),
+            'bank_name' => (string) ($bank->bank_name ?? ''),
+            'bank_branch_name' => (string) ($bank->branch_name ?? ''),
+            'bank_account_no' => (string) ($bank->account_no ?? ''),
+            'bank_account_type' => (string) ($bank->account_type ?? ''),
+            'present_division' => (string) ($present->division ?? ''),
+            'present_district' => (string) ($present->district ?? ''),
+            'present_upazila' => (string) ($present->upazila ?? ''),
+            'present_union' => (string) ($present->union ?? ''),
+            'present_village' => (string) ($present->village ?? ''),
+            'permanent_division' => (string) ($permanent->division ?? ''),
+            'permanent_district' => (string) ($permanent->district ?? ''),
+            'permanent_upazila' => (string) ($permanent->upazila ?? ''),
+            'permanent_union' => (string) ($permanent->union ?? ''),
+            'permanent_village' => (string) ($permanent->village ?? ''),
+        ];
     }
 
     /**
@@ -1762,6 +2173,7 @@ class EmployeeController extends Controller
         $createdEmployee = null;
 
         try {
+            $this->scrubEmptyMediaUploads($request);
             $this->normalizeEmployeeRequestPayload($request);
             $this->mergeSalaryLinesFromRequest($request);
             $this->resolveNidAndSmartCardFromRequest($request);
@@ -1931,8 +2343,8 @@ class EmployeeController extends Controller
                 'documents.*.description' => 'nullable|string',
                 'documents.*.expiry_date' => 'nullable|date',
 
-                'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
-                'signature' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
+                'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:4096',
+                'signature' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:4096',
             ]);
 
             $marital = trim((string) ($validated['marital_status'] ?? ''));
@@ -1996,27 +2408,19 @@ class EmployeeController extends Controller
 
             DB::transaction(function () use ($request, $employeeData, $validated, &$createdEmployee) {
                 if ($request->hasFile('photo')) {
-                    $photo = $request->file('photo');
-                    $ext = strtolower((string) $photo->getClientOriginalExtension());
-                    $filename = time().'_'.uniqid().'.'.$ext;
-                    $targetDir = public_path('storage/employee_photos');
-                    if (! is_dir($targetDir)) {
-                        @mkdir($targetDir, 0775, true);
-                    }
-                    $photo->move($targetDir, $filename);
-                    $employeeData['photo'] = 'employee_photos/'.$filename;
+                    $employeeData['photo'] = $this->storeEmployeeMediaFile(
+                        $request->file('photo'),
+                        'employee_photos',
+                        (string) ($employeeData['pin'] ?? 'emp')
+                    );
                 }
 
                 if ($request->hasFile('signature')) {
-                    $sig = $request->file('signature');
-                    $ext = strtolower((string) $sig->getClientOriginalExtension());
-                    $filename = time().'_'.uniqid().'.'.$ext;
-                    $targetDir = public_path('storage/employee_signatures');
-                    if (! is_dir($targetDir)) {
-                        @mkdir($targetDir, 0775, true);
-                    }
-                    $sig->move($targetDir, $filename);
-                    $employeeData['signature'] = 'employee_signatures/'.$filename;
+                    $employeeData['signature'] = $this->storeEmployeeMediaFile(
+                        $request->file('signature'),
+                        'employee_signatures',
+                        (string) ($employeeData['pin'] ?? 'emp')
+                    );
                 }
 
                 $createdEmployee = Employee::create($employeeData);
@@ -2210,7 +2614,15 @@ class EmployeeController extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
-        $locations = $this->buildLocationsBasePayload();
+        try {
+            $locations = $this->buildLocationsBasePayload();
+        } catch (\Throwable $e) {
+            Log::error('Employee edit: locations payload failed', [
+                'employee_id' => $employee->id,
+                'error' => $e->getMessage(),
+            ]);
+            $locations = ['divisions' => [], 'districts' => []];
+        }
 
         // Load new tabbed relational data (so edit does not wipe on update)
         $employeePayload = $employee->toInertiaArray();
@@ -2295,6 +2707,7 @@ class EmployeeController extends Controller
     public function update(Request $request, Employee $employee)
     {
         try {
+            $this->scrubEmptyMediaUploads($request);
             $this->normalizeEmployeeRequestPayload($request);
             $this->mergeSalaryLinesFromRequest($request);
             $this->resolveNidAndSmartCardFromRequest($request);
@@ -2458,8 +2871,8 @@ class EmployeeController extends Controller
                 'documents.*.description' => 'nullable|string',
                 'documents.*.expiry_date' => 'nullable|date',
 
-                'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
-                'signature' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:2048',
+                'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:4096',
+                'signature' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:4096',
             ]);
 
             $this->assertEmployeePayrollAssignment($validated);
@@ -2496,41 +2909,30 @@ class EmployeeController extends Controller
                 $employeeData['email'] = strtolower((string) $employeeData['pin']).'@'.$this->getAutoEmailDomain();
             }
 
+            if ($request->filled('photo') && ! $request->hasFile('photo')) {
+                Log::warning('Employee update: photo field present but not an uploaded file', [
+                    'employee_id' => $employee->id,
+                    'photo_type' => gettype($request->input('photo')),
+                ]);
+            }
+
             DB::transaction(function () use ($request, $employee, $employeeData, $validated) {
                 if ($request->hasFile('photo')) {
-                    if ($employee->photo) {
-                        $old = public_path('storage/'.$employee->photo);
-                        if (file_exists($old)) {
-                            @unlink($old);
-                        }
-                    }
-                    $photo = $request->file('photo');
-                    $ext = strtolower((string) $photo->getClientOriginalExtension());
-                    $filename = time().'_'.uniqid().'.'.$ext;
-                    $targetDir = public_path('storage/employee_photos');
-                    if (! is_dir($targetDir)) {
-                        @mkdir($targetDir, 0775, true);
-                    }
-                    $photo->move($targetDir, $filename);
-                    $employeeData['photo'] = 'employee_photos/'.$filename;
+                    $employeeData['photo'] = $this->storeEmployeeMediaFile(
+                        $request->file('photo'),
+                        'employee_photos',
+                        (string) ($employeeData['pin'] ?? $employee->pin ?? 'emp'),
+                        $employee->photo
+                    );
                 }
 
                 if ($request->hasFile('signature')) {
-                    if ($employee->signature) {
-                        $old = public_path('storage/'.$employee->signature);
-                        if (file_exists($old)) {
-                            @unlink($old);
-                        }
-                    }
-                    $sig = $request->file('signature');
-                    $ext = strtolower((string) $sig->getClientOriginalExtension());
-                    $filename = time().'_'.uniqid().'.'.$ext;
-                    $targetDir = public_path('storage/employee_signatures');
-                    if (! is_dir($targetDir)) {
-                        @mkdir($targetDir, 0775, true);
-                    }
-                    $sig->move($targetDir, $filename);
-                    $employeeData['signature'] = 'employee_signatures/'.$filename;
+                    $employeeData['signature'] = $this->storeEmployeeMediaFile(
+                        $request->file('signature'),
+                        'employee_signatures',
+                        (string) ($employeeData['pin'] ?? $employee->pin ?? 'emp'),
+                        $employee->signature
+                    );
                 }
 
                 $employee->update($employeeData);
@@ -2846,10 +3248,10 @@ class EmployeeController extends Controller
 
             // Delete photo if exists
             if ($employee->photo) {
-                $photoPath = public_path('storage/'.$employee->photo);
-                if (file_exists($photoPath)) {
-                    unlink($photoPath);
-                }
+                $this->deleteEmployeeMediaFile($employee->photo);
+            }
+            if ($employee->signature) {
+                $this->deleteEmployeeMediaFile($employee->signature);
             }
 
             // Delete employee
@@ -2956,7 +3358,8 @@ class EmployeeController extends Controller
     public function importPreview(Request $request)
     {
         $validated = $request->validate([
-            'file' => 'required|file|max:10240|mimes:csv,txt,xlsx',
+            // extensions (not only mimes) — Hostinger often mis-detects xlsx as octet-stream
+            'file' => 'required|file|max:10240|extensions:csv,txt,xlsx',
         ]);
 
         $file = $request->file('file');
@@ -3005,25 +3408,34 @@ class EmployeeController extends Controller
                 $previewRows[] = EmployeeImportCsv::mapAssocToPreviewRow($rowNumber, $rowAssoc);
             }
 
+            if (count($previewRows) === 0) {
+                Log::warning('Employee import preview failed: no data rows', $debug + [
+                    'header_idx' => $headerIdx,
+                    'raw_row_count' => count($rows),
+                ]);
+
+                return back()->withErrors([
+                    'file' => 'No employee rows found. Keep row 3 (field keys) and enter data from row 4.',
+                ]);
+            }
+
             $importId = (string) Str::uuid();
             $debug['step'] = 'importPreview:cached';
             $debug['importId'] = $importId;
             $debug['row_count'] = count($previewRows);
 
-            Cache::put(
-                "employee_import_preview:{$importId}",
-                [
-                    'header' => $headerMap,
-                    'rows' => $previewRows,
-                    'debug' => $debug,
-                ],
-                self::EMPLOYEE_IMPORT_CACHE_TTL_SECONDS
-            );
+            $this->putImportPreview($importId, [
+                'header' => $headerMap,
+                'rows' => $previewRows,
+                'debug' => $debug,
+            ]);
 
-            Log::info('Employee import preview cached; redirecting to review', $debug);
+            Log::info('Employee import preview stored; redirecting to review', $debug);
 
-            // Force navigation to the review page (works reliably even for file uploads)
-            return Inertia::location(route('employees.import.review', ['importId' => $importId]));
+            // Normal redirect (not Inertia::location) — Hostinger / LiteSpeed often break 409 + X-Inertia-Location
+            return redirect()
+                ->route('employees.import.review', ['importId' => $importId])
+                ->with('success', 'File parsed successfully. Review and confirm the rows below.');
         } catch (\Throwable $e) {
             Log::error('Employee import failed', [
                 'error' => $e->getMessage(),
@@ -3044,7 +3456,7 @@ class EmployeeController extends Controller
 
     public function importReview(string $importId)
     {
-        $cached = Cache::get("employee_import_preview:{$importId}");
+        $cached = $this->getImportPreview($importId);
         if (! is_array($cached) || ! isset($cached['rows'])) {
             return redirect()->route('employees.index')
                 ->with('error', 'Import preview expired. Please upload the file again.');
@@ -3226,7 +3638,7 @@ class EmployeeController extends Controller
     public function importCommit(Request $request)
     {
         $importId = trim((string) $request->input('importId', ''));
-        $cached = $importId !== '' ? Cache::get("employee_import_preview:{$importId}") : null;
+        $cached = $importId !== '' ? $this->getImportPreview($importId) : null;
 
         if (! is_array($cached)) {
             return redirect()->route('employees.index')
@@ -3385,7 +3797,7 @@ class EmployeeController extends Controller
         }
 
         if ($created > 0) {
-            Cache::forget("employee_import_preview:{$importId}");
+            $this->forgetImportPreview($importId);
         }
 
         $branchBreakdown = [];
@@ -3875,11 +4287,105 @@ class EmployeeController extends Controller
     private function writeImportPreviewCache(string $importId, array $cached, array $rows): void
     {
         $cached['rows'] = $rows;
-        Cache::put(
-            "employee_import_preview:{$importId}",
-            $cached,
-            self::EMPLOYEE_IMPORT_CACHE_TTL_SECONDS
-        );
+        $this->putImportPreview($importId, $cached);
+    }
+
+    private function importPreviewRelativePath(string $importId): string
+    {
+        $safeId = preg_replace('/[^a-zA-Z0-9\-]/', '', $importId) ?: 'invalid';
+
+        return "imports/employees/previews/{$safeId}.json";
+    }
+
+    /**
+     * Persist import preview on disk (reliable on shared hosting where Redis/cache often fails).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function putImportPreview(string $importId, array $payload): void
+    {
+        $payload['expires_at'] = now()->addSeconds(self::EMPLOYEE_IMPORT_CACHE_TTL_SECONDS)->getTimestamp();
+        $relative = $this->importPreviewRelativePath($importId);
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            throw new \RuntimeException('Unable to encode import preview payload.');
+        }
+
+        Storage::disk('local')->put($relative, $json);
+
+        try {
+            Cache::put(
+                "employee_import_preview:{$importId}",
+                $payload,
+                self::EMPLOYEE_IMPORT_CACHE_TTL_SECONDS
+            );
+        } catch (\Throwable $e) {
+            // Disk is source of truth on Hostinger; cache is optional.
+            Log::warning('Employee import: cache mirror failed', [
+                'importId' => $importId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function getImportPreview(string $importId): ?array
+    {
+        try {
+            $cached = Cache::get("employee_import_preview:{$importId}");
+            if (is_array($cached) && isset($cached['rows'])) {
+                return $cached;
+            }
+        } catch (\Throwable $e) {
+            // Fall through to disk.
+        }
+
+        $relative = $this->importPreviewRelativePath($importId);
+        if (! Storage::disk('local')->exists($relative)) {
+            return null;
+        }
+
+        try {
+            $raw = Storage::disk('local')->get($relative);
+            $data = is_string($raw) ? json_decode($raw, true) : null;
+        } catch (\Throwable $e) {
+            Log::warning('Employee import: preview disk read failed', [
+                'importId' => $importId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if (! is_array($data) || ! isset($data['rows'])) {
+            return null;
+        }
+
+        $expiresAt = (int) ($data['expires_at'] ?? 0);
+        if ($expiresAt > 0 && $expiresAt < time()) {
+            $this->forgetImportPreview($importId);
+
+            return null;
+        }
+
+        return $data;
+    }
+
+    private function forgetImportPreview(string $importId): void
+    {
+        try {
+            Storage::disk('local')->delete($this->importPreviewRelativePath($importId));
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        try {
+            Cache::forget("employee_import_preview:{$importId}");
+        } catch (\Throwable $e) {
+            // ignore
+        }
     }
 
     /**

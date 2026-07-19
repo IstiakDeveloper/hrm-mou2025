@@ -207,8 +207,9 @@ export default function ImportReview({
         form.setData({ importId, rows: initial });
     }, [importId, initial]);
 
-    const inertiaPage = usePage() as { props?: { flash?: { error?: string } } };
+    const inertiaPage = usePage() as { props?: { flash?: { error?: string; success?: string } } };
     const flashError = inertiaPage?.props?.flash?.error;
+    const flashSuccess = inertiaPage?.props?.flash?.success;
 
     const liveIssuesByRow = useMemo(
         () => computeIssuesByRow(form.data.rows, existing),
@@ -330,8 +331,15 @@ export default function ImportReview({
                     </Link>
                 </div>
 
-                {(flashError || validationMessages.length > 0) && (
-                    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                {(flashError || flashSuccess || validationMessages.length > 0) && (
+                    <div
+                        className={`rounded-md border px-3 py-2 text-xs ${
+                            flashError || validationMessages.length > 0
+                                ? 'border-red-200 bg-red-50 text-red-800'
+                                : 'border-green-200 bg-green-50 text-green-800'
+                        }`}
+                    >
+                        {flashSuccess && <p>{flashSuccess}</p>}
                         {flashError && <p>{flashError}</p>}
                         {validationMessages.map((msg) => (
                             <p key={msg}>{msg}</p>

@@ -155,6 +155,23 @@ return [
             'salary_type' => 'bonus',
             'template' => 'bonus-register',
         ],
+        'final-payment' => [
+            'title' => 'Final Payment Report',
+            'description' => 'Date-wise PF refund, gratuity, loan recovery and net final payment statement.',
+            'filters' => [
+                'date_from',
+                'date_to',
+                'payment_status',
+                'branch_id',
+                'department_id',
+                'designation_id',
+                'program_id',
+                'project_id',
+            ],
+            'template' => 'final-payment',
+            'date_range' => true,
+            'section' => 'staff-fund',
+        ],
         'salary-certificate' => [
             'title' => 'Salary Certificate',
             'description' => 'Salary certificate for an employee.',

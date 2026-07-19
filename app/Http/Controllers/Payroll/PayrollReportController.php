@@ -25,11 +25,13 @@ class PayrollReportController extends Controller
     public function index()
     {
         $definitions = config('payroll_reports.reports', []);
-        $list = collect($definitions)->map(fn ($def, $slug) => [
-            'slug' => $slug,
-            'title' => $def['title'],
-            'description' => $def['description'] ?? '',
-        ])->values();
+        $list = collect($definitions)
+            ->filter(fn ($def) => ($def['section'] ?? 'payroll') === 'payroll')
+            ->map(fn ($def, $slug) => [
+                'slug' => $slug,
+                'title' => $def['title'],
+                'description' => $def['description'] ?? '',
+            ])->values();
 
         return Inertia::render('payroll/reports/index', [
             'reports' => $list,
@@ -74,6 +76,7 @@ class PayrollReportController extends Controller
                 'payscale_id' => $request->input('payscale_id', ''),
                 'date_from' => $request->input('date_from', ''),
                 'date_to' => $request->input('date_to', ''),
+                'payment_status' => $request->input('payment_status', 'all'),
             ]),
             'generated' => $generated,
             'payload' => $payload,

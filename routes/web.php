@@ -383,28 +383,65 @@ Route::middleware(['auth'])->group(function () {
 
     Route::prefix('admin')->name('admin.')->middleware(['permission:admin.access'])->group(function () {
 
-        // One-time (token-protected) storage linker for shared hosting.
-        // Usage (set STORAGE_LINK_TOKEN in .env first):
-        //   /admin/utils/storage-link?token=YOUR_TOKEN
-        Route::get('utils/storage-link', function (Request $request) {
-            $token = env('STORAGE_LINK_TOKEN');
-            if (! is_string($token) || $token === '' || ! hash_equals($token, (string) $request->query('token', ''))) {
-                abort(404);
-            }
-
+        // Storage helpers for Hostinger / shared hosting (admin auth required).
+        //   /admin/utils/storage-link       → Artisan::call('storage:link')
+        //   /admin/utils/storage-link-copy  → symlink, then copy fallback
+        Route::get('utils/storage-link', function () {
             $link = public_path('storage');
             $target = storage_path('app/public');
 
-            // Already linked / exists
             if (is_link($link) || File::exists($link)) {
                 return response()->json([
                     'ok' => true,
+                    'mode' => 'already',
                     'message' => 'public/storage already exists.',
                     'path' => $link,
+                    'is_link' => is_link($link),
                 ]);
             }
 
-            // Try symlink first (may be blocked on shared hosting)
+            try {
+                $exitCode = Artisan::call('storage:link');
+                $output = trim(Artisan::output());
+                $ok = is_link($link) || File::exists($link);
+
+                return response()->json([
+                    'ok' => $ok,
+                    'mode' => 'artisan',
+                    'message' => $ok
+                        ? 'Storage link created via Artisan::call(storage:link).'
+                        : 'Artisan storage:link ran but public/storage was not created.',
+                    'exit_code' => $exitCode,
+                    'output' => $output,
+                    'link' => $link,
+                    'target' => $target,
+                    'hint' => $ok ? null : 'Try /admin/utils/storage-link-copy',
+                ], $ok ? 200 : 500);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'ok' => false,
+                    'mode' => 'artisan',
+                    'message' => 'Artisan::call(storage:link) failed.',
+                    'error' => $e->getMessage(),
+                    'hint' => 'Try /admin/utils/storage-link-copy',
+                ], 500);
+            }
+        })->middleware(['auth'])->name('utils.storage-link');
+
+        Route::get('utils/storage-link-copy', function () {
+            $link = public_path('storage');
+            $target = storage_path('app/public');
+
+            if (is_link($link) || File::exists($link)) {
+                return response()->json([
+                    'ok' => true,
+                    'mode' => 'already',
+                    'message' => 'public/storage already exists.',
+                    'path' => $link,
+                    'is_link' => is_link($link),
+                ]);
+            }
+
             try {
                 if (@symlink($target, $link)) {
                     return response()->json([
@@ -419,7 +456,6 @@ Route::middleware(['auth'])->group(function () {
                 // fall through to copy mode
             }
 
-            // Fallback: copy files instead of symlink
             try {
                 File::ensureDirectoryExists($link);
                 File::copyDirectory($target, $link);
@@ -434,11 +470,12 @@ Route::middleware(['auth'])->group(function () {
             } catch (\Throwable $e) {
                 return response()->json([
                     'ok' => false,
+                    'mode' => 'copy',
                     'message' => 'Failed to create storage link/copy.',
                     'error' => $e->getMessage(),
                 ], 500);
             }
-        })->middleware(['auth'])->name('utils.storage-link');
+        })->middleware(['auth'])->name('utils.storage-link-copy');
 
         Route::get('users/bulk-email/form', [UserController::class, 'bulkEmailForm'])->name('users.bulk-email.form');
         Route::post('users/bulk-email/send', [UserController::class, 'sendBulkEmails'])->name('users.bulk-email.send');
@@ -498,6 +535,9 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('permission:employees.view');
 
     Route::middleware(['permission:employees.view'])->group(function () {
+        Route::get('employees/export.xlsx', [EmployeeController::class, 'exportXlsx'])
+            ->name('employees.export');
+
         Route::resource('employees', EmployeeController::class)->parameters(['employees' => 'employee']);
 
         Route::patch('employees/{employee}/status', [EmployeeController::class, 'updateStatus'])
@@ -1035,6 +1075,8 @@ Route::middleware(['auth'])->group(function () {
         });
 
         Route::get('/final-payments', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'index'])->name('final-payments.index');
+        Route::get('/final-payments/employees/lookup', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'inactiveEmployeeLookup'])->name('final-payments.employees.lookup');
+        Route::post('/final-payments/generate', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'generate'])->name('final-payments.generate')->middleware('permission:staff-fund.edit');
         Route::get('/final-payments/{final_payment}', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'show'])->name('final-payments.show');
         Route::post('/final-payments/{final_payment}/refresh', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'refresh'])->name('final-payments.refresh')->middleware('permission:staff-fund.edit');
         Route::post('/final-payments/{final_payment}/mark-paid', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'markPaid'])->name('final-payments.mark-paid')->middleware('permission:staff-fund.edit');
@@ -1187,6 +1229,7 @@ Route::middleware(['auth'])->group(function () {
         });
 
         Route::prefix('fixed-asset/depreciation')->name('fixed-asset.depreciation.')->group(function () {
+            Route::get('/', [AssetDepreciationController::class, 'overview'])->name('index');
             Route::get('/calculation', [AssetDepreciationController::class, 'calculation'])->name('calculation');
             Route::get('/posting', [AssetDepreciationController::class, 'posting'])->name('posting');
             Route::post('/posting', [AssetDepreciationController::class, 'post'])->name('post')->middleware('permission:fixed-assets.edit');
@@ -1271,7 +1314,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/requests/{asset_disposal}/reject', [AssetDisposalController::class, 'reject'])->name('reject')->middleware('permission:fixed-assets.delete');
         });
 
-        Route::redirect('/asset-disposals', '/fixed-asset/disposal/requests');
+        Route::get('/fixed-asset/disposals', [AssetDisposalController::class, 'registerIndex'])->name('fixed-asset.disposals.register');
+
+        Route::redirect('/asset-disposals', '/fixed-asset/disposals');
         Route::redirect('/asset-disposals/create', '/fixed-asset/disposal/requests/create');
 
         Route::prefix('asset-disposals')->name('asset-disposals.')->group(function () {
@@ -1282,7 +1327,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{asset_disposal}/reject', [AssetDisposalController::class, 'reject'])->name('reject')->middleware('permission:fixed-assets.delete');
         });
 
-        Route::redirect('/asset-depreciation', '/fixed-asset/depreciation/posting');
+        Route::redirect('/asset-depreciation', '/fixed-asset/depreciation');
 
         Route::prefix('asset-depreciation')->name('asset-depreciation.')->group(function () {
             Route::get('/', [AssetDepreciationController::class, 'index'])->name('index');

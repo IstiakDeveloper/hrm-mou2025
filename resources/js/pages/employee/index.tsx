@@ -28,6 +28,7 @@ import {
     Search,
     UserPlus,
     Upload,
+    Download,
     MoreHorizontal,
     Edit,
     Trash,
@@ -37,6 +38,7 @@ import {
     Eye,
     Filter
 } from 'lucide-react';
+import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
@@ -69,12 +71,14 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
+import { format, parseISO, isValid } from 'date-fns';
 
 interface Employee extends EmployeeNameFields {
     id: number;
     pin?: string;
     employee_id: string;
     status: 'active' | 'inactive' | 'on_leave' | 'terminated';
+    confirmation_date?: string | null;
     employee_type?: { id: number; name: string } | null;
     employeeType?: { id: number; name: string } | null;
     photo: string | null;
@@ -149,16 +153,65 @@ interface EmployeeIndexProps {
     filters: {
         search?: string;
         department_id?: string;
+        department_ids?: number[] | string[];
         branch_id?: string;
+        branch_ids?: number[] | string[];
         status?: string;
+        statuses?: string[];
         employee_type_id?: string;
+        employee_type_ids?: number[] | string[];
         designation_id?: string;
+        designation_ids?: number[] | string[];
         per_page?: string;
         sort_by?: string;
         sort_dir?: string;
     };
     success?: string;
 }
+
+function normalizeIdFilter(
+    plural: number[] | string[] | undefined,
+    singular?: string | number | null
+): string[] {
+    if (Array.isArray(plural) && plural.length > 0) {
+        return plural.map(String).filter(Boolean);
+    }
+    if (singular !== undefined && singular !== null && String(singular) !== '') {
+        return [String(singular)];
+    }
+    return [];
+}
+
+function normalizeStringFilter(plural: string[] | undefined, singular?: string | null): string[] {
+    if (Array.isArray(plural) && plural.length > 0) {
+        return plural.map(String).filter(Boolean);
+    }
+    if (singular) {
+        return [String(singular)];
+    }
+    return [];
+}
+
+function formatDisplayDate(value?: string | null): string {
+    if (!value) return '—';
+    const raw = String(value).trim();
+    if (!raw) return '—';
+    const ymd = raw.length >= 10 ? raw.slice(0, 10) : raw;
+    try {
+        const date = parseISO(ymd);
+        if (!isValid(date)) return '—';
+        return format(date, 'dd MMM yyyy');
+    } catch {
+        return '—';
+    }
+}
+
+const STATUS_FILTER_OPTIONS = [
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' },
+    { value: 'on_leave', label: 'On Leave' },
+    { value: 'terminated', label: 'Terminated' },
+];
 
 export default function EmployeeIndex({
     employees,
@@ -171,11 +224,11 @@ export default function EmployeeIndex({
 }: EmployeeIndexProps) {
     const { data, setData, get, processing } = useForm({
         search: filters.search || '',
-        department_id: filters.department_id || '',
-        branch_id: filters.branch_id || '',
-        status: filters.status || '',
-        employee_type_id: filters.employee_type_id || '',
-        designation_id: filters.designation_id || '',
+        department_ids: normalizeIdFilter(filters.department_ids, filters.department_id),
+        branch_ids: normalizeIdFilter(filters.branch_ids, filters.branch_id),
+        statuses: normalizeStringFilter(filters.statuses, filters.status),
+        employee_type_ids: normalizeIdFilter(filters.employee_type_ids, filters.employee_type_id),
+        designation_ids: normalizeIdFilter(filters.designation_ids, filters.designation_id),
         per_page: filters.per_page || '100',
         sort_by: filters.sort_by || 'organogram',
         sort_dir: filters.sort_dir || 'asc',
@@ -183,6 +236,7 @@ export default function EmployeeIndex({
 
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [importOpen, setImportOpen] = useState(false);
+    const [importStatus, setImportStatus] = useState('');
 
     const importForm = useForm<{
         file: File | null;
@@ -191,14 +245,44 @@ export default function EmployeeIndex({
     });
 
     const page = usePage() as any;
+    const flashError = page?.props?.flash?.error as string | undefined;
+    const flashSuccess = (page?.props?.flash?.success as string | undefined) || success;
     const importSummary = page?.props?.flash?.import_summary as
         | { created: number; skipped: number; branches?: { branch_id: number; branch_name: string; created: number }[] }
         | undefined;
     const importRowErrors = (page?.props?.flash?.import_row_errors as { row: number; errors: string[] }[] | undefined) ?? [];
 
-    const [showFilters, setShowFilters] = useState(
-        !!(filters.department_id || filters.branch_id || filters.status || filters.employee_type_id || filters.designation_id)
+    const hasActiveFilters = !!(
+        data.department_ids.length > 0 ||
+        data.branch_ids.length > 0 ||
+        data.statuses.length > 0 ||
+        data.employee_type_ids.length > 0 ||
+        data.designation_ids.length > 0
     );
+
+    const [showFilters, setShowFilters] = useState(
+        !!(
+            normalizeIdFilter(filters.department_ids, filters.department_id).length > 0 ||
+            normalizeIdFilter(filters.branch_ids, filters.branch_id).length > 0 ||
+            normalizeStringFilter(filters.statuses, filters.status).length > 0 ||
+            normalizeIdFilter(filters.employee_type_ids, filters.employee_type_id).length > 0 ||
+            normalizeIdFilter(filters.designation_ids, filters.designation_id).length > 0
+        )
+    );
+
+    const buildFilterParams = (merged: typeof data): Record<string, string | string[]> => {
+        const params: Record<string, string | string[]> = {};
+        if (merged.search) params.search = merged.search;
+        if (merged.department_ids.length > 0) params.department_ids = merged.department_ids;
+        if (merged.branch_ids.length > 0) params.branch_ids = merged.branch_ids;
+        if (merged.statuses.length > 0) params.statuses = merged.statuses;
+        if (merged.employee_type_ids.length > 0) params.employee_type_ids = merged.employee_type_ids;
+        if (merged.designation_ids.length > 0) params.designation_ids = merged.designation_ids;
+        if (merged.per_page && merged.per_page !== '100') params.per_page = merged.per_page;
+        if (merged.sort_by && merged.sort_by !== 'organogram') params.sort_by = merged.sort_by;
+        if (merged.sort_dir && merged.sort_dir !== 'asc') params.sort_dir = merged.sort_dir;
+        return params;
+    };
 
     const applyFilters = (next: Partial<typeof data>) => {
         const merged = {
@@ -208,18 +292,21 @@ export default function EmployeeIndex({
 
         setData(merged);
 
-        const params: Record<string, string> = {};
-        if (merged.search) params.search = merged.search;
-        if (merged.department_id) params.department_id = merged.department_id;
-        if (merged.branch_id) params.branch_id = merged.branch_id;
-        if (merged.status) params.status = merged.status;
-        if (merged.employee_type_id) params.employee_type_id = merged.employee_type_id;
-        if (merged.designation_id) params.designation_id = merged.designation_id;
-        if (merged.per_page && merged.per_page !== '100') params.per_page = merged.per_page;
-        if (merged.sort_by && merged.sort_by !== 'organogram') params.sort_by = merged.sort_by;
-        if (merged.sort_dir && merged.sort_dir !== 'asc') params.sort_dir = merged.sort_dir;
+        router.get(route('employees.index'), buildFilterParams(merged), { preserveState: true, replace: true });
+    };
 
-        router.get(route('employees.index'), params, { preserveState: true, replace: true });
+    const handleExportXlsx = () => {
+        const params = new URLSearchParams();
+        const filterParams = buildFilterParams(data);
+        Object.entries(filterParams).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+                value.forEach((v) => params.append(`${key}[]`, v));
+            } else if (value) {
+                params.set(key, value);
+            }
+        });
+        const qs = params.toString();
+        window.location.href = route('employees.export') + (qs ? `?${qs}` : '');
     };
 
     const toggleSort = (sortBy: 'id' | 'pin' | 'name' | 'status') => {
@@ -262,11 +349,11 @@ export default function EmployeeIndex({
     const handleClearFilters = () => {
         applyFilters({
             search: '',
-            department_id: '',
-            branch_id: '',
-            status: '',
-            employee_type_id: '',
-            designation_id: '',
+            department_ids: [],
+            branch_ids: [],
+            statuses: [],
+            employee_type_ids: [],
+            designation_ids: [],
         });
     };
 
@@ -300,7 +387,7 @@ export default function EmployeeIndex({
         <Layout>
             <Head title="Employee Management" />
 
-            <PageSurface>
+            <PageSurface className="max-w-[96rem]">
                 <div className="mb-8 flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Employee Management</h1>
@@ -309,7 +396,27 @@ export default function EmployeeIndex({
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Dialog open={importOpen} onOpenChange={setImportOpen}>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="flex items-center gap-2"
+                            onClick={handleExportXlsx}
+                        >
+                            <Download className="h-4 w-4" />
+                            <span>Download XLSX</span>
+                        </Button>
+                        <Dialog
+                            open={importOpen}
+                            onOpenChange={(open) => {
+                                if (importForm.processing) return;
+                                setImportOpen(open);
+                                if (!open) {
+                                    setImportStatus('');
+                                    importForm.clearErrors();
+                                    importForm.setData('file', null);
+                                }
+                            }}
+                        >
                             <DialogTrigger asChild>
                                 <Button variant="outline" className="flex items-center gap-2">
                                     <Upload className="h-4 w-4" />
@@ -328,11 +435,31 @@ export default function EmployeeIndex({
                                     className="space-y-4"
                                     onSubmit={(e) => {
                                         e.preventDefault();
+                                        if (!importForm.data.file) {
+                                            importForm.setError('file', 'Please choose an Excel or CSV file.');
+                                            return;
+                                        }
+
+                                        setImportStatus('Uploading file…');
                                         importForm.post(route('employees.import.preview'), {
                                             forceFormData: true,
-                                            preserveScroll: true,
+                                            onStart: () => setImportStatus('Uploading file…'),
+                                            onProgress: (event) => {
+                                                if (!event?.percentage) return;
+                                                if (event.percentage < 100) {
+                                                    setImportStatus(`Uploading… ${Math.round(event.percentage)}%`);
+                                                } else {
+                                                    setImportStatus('Parsing Excel on server… please wait');
+                                                }
+                                            },
                                             onSuccess: () => {
-                                                // On success, the server redirects to the review page via Inertia render
+                                                setImportStatus('Opening review page…');
+                                            },
+                                            onError: () => {
+                                                setImportStatus('');
+                                            },
+                                            onFinish: () => {
+                                                // If redirect did not navigate away, keep dialog open with status cleared by onError/success
                                             },
                                         });
                                     }}
@@ -355,13 +482,28 @@ export default function EmployeeIndex({
                                             id="importFile"
                                             type="file"
                                             accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                            disabled={importForm.processing}
                                             onChange={(e) => {
                                                 const f = e.target.files?.[0] ?? null;
                                                 importForm.setData('file', f);
+                                                setImportStatus('');
+                                                importForm.clearErrors('file');
                                             }}
                                         />
                                         <InputError message={importForm.errors.file as any} />
                                     </div>
+
+                                    {importStatus && (
+                                        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                                            {importStatus}
+                                        </div>
+                                    )}
+
+                                    {importForm.processing && (
+                                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-100">
+                                            <div className="h-full w-1/2 animate-pulse rounded-full bg-blue-500" />
+                                        </div>
+                                    )}
 
                                     <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
                                         Required: PIN, name, employment type, mobile, joining date, department, designation, branch.
@@ -377,8 +519,8 @@ export default function EmployeeIndex({
                                         >
                                             Cancel
                                         </Button>
-                                        <Button type="submit" disabled={importForm.processing}>
-                                            {importForm.processing ? 'Uploading...' : 'Upload & Review'}
+                                        <Button type="submit" disabled={importForm.processing || !importForm.data.file}>
+                                            {importForm.processing ? 'Working…' : 'Upload & Review'}
                                         </Button>
                                     </DialogFooter>
                                 </form>
@@ -394,10 +536,17 @@ export default function EmployeeIndex({
                     </div>
                 </div>
 
-                {success && (
+                {flashSuccess && (
                     <Alert className="mb-6 bg-green-50 border-green-200">
                         <Check className="h-4 w-4 text-green-600" />
-                        <AlertDescription className="text-green-700">{success}</AlertDescription>
+                        <AlertDescription className="text-green-700">{flashSuccess}</AlertDescription>
+                    </Alert>
+                )}
+
+                {flashError && (
+                    <Alert className="mb-6 border-red-200 bg-red-50">
+                        <X className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-700">{flashError}</AlertDescription>
                     </Alert>
                 )}
 
@@ -498,107 +647,70 @@ export default function EmployeeIndex({
                         {showFilters && (
                             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                                 <div>
-                                    <Select
-                                        value={data.department_id || 'all'}
-                                        onValueChange={value => {
-                                            applyFilters({ department_id: value === 'all' ? '' : value });
-                                        }}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Filter by Department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Departments</SelectItem>
-                                            {departments.map(department => (
-                                                <SelectItem key={department.id} value={department.id.toString()}>
-                                                    {department.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <MultiSelectFilter
+                                        values={data.department_ids}
+                                        onChange={(values) => applyFilters({ department_ids: values })}
+                                        items={departments.map((d) => ({
+                                            value: String(d.id),
+                                            label: d.name,
+                                        }))}
+                                        placeholder="Filter by Department"
+                                        allLabel="All Departments"
+                                        disabled={processing}
+                                    />
                                 </div>
 
                                 <div>
-                                    <Select
-                                        value={data.branch_id || 'all'}
-                                        onValueChange={value => {
-                                            applyFilters({ branch_id: value === 'all' ? '' : value });
-                                        }}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Filter by Branch" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Branches</SelectItem>
-                                            {sortPayrollBranches(branches).map((branch) => (
-                                                <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                    {formatBranchSelectLabel(branch)}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <MultiSelectFilter
+                                        values={data.branch_ids}
+                                        onChange={(values) => applyFilters({ branch_ids: values })}
+                                        items={sortPayrollBranches(branches).map((branch) => ({
+                                            value: String(branch.id),
+                                            label: formatBranchSelectLabel(branch),
+                                        }))}
+                                        placeholder="Filter by Branch"
+                                        allLabel="All Branches"
+                                        disabled={processing}
+                                    />
                                 </div>
 
                                 <div>
-                                    <Select
-                                        value={data.status || 'all'}
-                                        onValueChange={value => {
-                                            applyFilters({ status: value === 'all' ? '' : value });
-                                        }}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Filter by Status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Statuses</SelectItem>
-                                            <SelectItem value="active">Active</SelectItem>
-                                            <SelectItem value="inactive">Inactive</SelectItem>
-                                            <SelectItem value="on_leave">On Leave</SelectItem>
-                                            <SelectItem value="terminated">Terminated</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <MultiSelectFilter
+                                        values={data.statuses}
+                                        onChange={(values) => applyFilters({ statuses: values })}
+                                        items={STATUS_FILTER_OPTIONS}
+                                        placeholder="Filter by Status"
+                                        allLabel="All Statuses"
+                                        disabled={processing}
+                                    />
                                 </div>
 
                                 <div>
-                                    <Select
-                                        value={data.designation_id || 'all'}
-                                        onValueChange={value => {
-                                            applyFilters({ designation_id: value === 'all' ? '' : value });
-                                        }}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Filter by Designation" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Designations</SelectItem>
-                                            {designations.map((designation) => (
-                                                <SelectItem key={designation.id} value={designation.id.toString()}>
-                                                    {designation.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <MultiSelectFilter
+                                        values={data.designation_ids}
+                                        onChange={(values) => applyFilters({ designation_ids: values })}
+                                        items={designations.map((d) => ({
+                                            value: String(d.id),
+                                            label: d.name,
+                                        }))}
+                                        placeholder="Filter by Designation"
+                                        allLabel="All Designations"
+                                        disabled={processing}
+                                    />
                                 </div>
 
                                 <div>
-                                    <Select
-                                        value={data.employee_type_id || 'all'}
-                                        onValueChange={value => {
-                                            applyFilters({ employee_type_id: value === 'all' ? '' : value });
-                                        }}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Filter by Employee Type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Employee Types</SelectItem>
-                                            {employee_types.map((type) => (
-                                                <SelectItem key={type.id} value={type.id.toString()}>
-                                                    {type.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <MultiSelectFilter
+                                        values={data.employee_type_ids}
+                                        onChange={(values) => applyFilters({ employee_type_ids: values })}
+                                        items={employee_types.map((type) => ({
+                                            value: String(type.id),
+                                            label: type.name,
+                                        }))}
+                                        placeholder="Filter by Employee Type"
+                                        allLabel="All Employee Types"
+                                        disabled={processing}
+                                    />
                                 </div>
 
                                 <div className="flex items-center">
@@ -641,6 +753,7 @@ export default function EmployeeIndex({
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Department</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Employee Type</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider whitespace-nowrap">Confirmation</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">
                                             <button
                                                 type="button"
@@ -656,12 +769,12 @@ export default function EmployeeIndex({
                                 <TableBody>
                                     {employees.data.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-32 text-center">
+                                            <TableCell colSpan={8} className="h-32 text-center">
                                                 <div className="flex flex-col items-center justify-center">
                                                     <Users className="h-8 w-8 text-gray-400" />
                                                     <h3 className="mt-2 text-lg font-medium text-gray-900">No Employees Found</h3>
                                                     <p className="mt-1 text-gray-500">
-                                                        {data.search || data.department_id || data.branch_id || data.status || data.employee_type_id || data.designation_id
+                                                        {data.search || hasActiveFilters
                                                             ? 'Try different search filters'
                                                             : 'Get started by adding a new employee'}
                                                     </p>
@@ -700,6 +813,9 @@ export default function EmployeeIndex({
                                                 <TableCell className="text-[13px] text-slate-600">{employee.branch.name}</TableCell>
                                                 <TableCell className="text-[13px] text-slate-600">
                                                     {employee.employee_type?.name || employee.employeeType?.name || '—'}
+                                                </TableCell>
+                                                <TableCell className="text-[13px] text-slate-600 whitespace-nowrap">
+                                                    {formatDisplayDate(employee.confirmation_date)}
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">

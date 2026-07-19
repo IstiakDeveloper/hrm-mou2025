@@ -1,9 +1,3 @@
-import React, { useMemo, useState } from 'react';
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import Layout from '@/layouts/AdminLayout';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
     PayrollComboField,
     PayrollEmployeeSelect,
@@ -15,9 +9,16 @@ import {
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { PayrollReportDocumentHeader } from '@/components/payroll/PayrollReportDocumentHeader';
 import { PayrollReportSignatureSection } from '@/components/payroll/PayrollReportSignatureSection';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import Layout from '@/layouts/AdminLayout';
+import { staffFundPath } from '@/lib/staff-fund-nav';
 import { formatTakaAmount, formatTakaSheetCell } from '@/lib/taka-format';
 import { takaInWords } from '@/lib/taka-in-words';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 
 type ReportMeta = {
     slug: string;
@@ -56,6 +57,12 @@ type Props = {
     error: string | null;
     exportUrls: { print: string; pdf: string; excel: string };
 };
+
+const FINAL_PAYMENT_STATUS_OPTIONS = [
+    { value: 'all', label: 'All statuses' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'paid', label: 'Paid' },
+];
 
 function fmt(n: unknown) {
     const v = Number(n);
@@ -108,7 +115,10 @@ function headerMinWidth(label: string): number {
     const text = label.trim();
     if (!text) return 2;
     if (text.length <= 5) return Math.max(2, text.length);
-    const words = text.split(/\s+/).map((word) => word.replace(/[()]/g, '')).filter(Boolean);
+    const words = text
+        .split(/\s+/)
+        .map((word) => word.replace(/[()]/g, ''))
+        .filter(Boolean);
     return Math.max(2, ...words.map((word) => word.length));
 }
 
@@ -127,7 +137,7 @@ function SalarySheetTable({
     totals?: Record<string, unknown>;
     totalsLabel?: string;
 }) {
-    const labelFor = (key: string) => headLabels[key] ?? key;
+    const labelFor = useCallback((key: string) => headLabels[key] ?? key, [headLabels]);
     const employeeCols = 4;
     const earningCols = earningHeads.length + 1;
     const deductionCols = deductionHeads.length + 1;
@@ -144,51 +154,50 @@ function SalarySheetTable({
         if (totals) nameTexts.push(totalsLabel);
 
         return {
-            serial: maxTextLen(rows.map((_, i) => String(i + 1)), 2),
+            serial: maxTextLen(
+                rows.map((_, i) => String(i + 1)),
+                2,
+            ),
             name: maxTextLen(nameTexts, 4),
-            designation: maxTextLen(rows.map((row) => String(row.designation ?? '')), 4),
-            grade: maxTextLen(rows.map((row) => String(row.grade_step ?? '')), 4),
+            designation: maxTextLen(
+                rows.map((row) => String(row.designation ?? '')),
+                4,
+            ),
+            grade: maxTextLen(
+                rows.map((row) => String(row.grade_step ?? '')),
+                4,
+            ),
             earning: Object.fromEntries(
-                earningHeads.map((head) => [
-                    head,
-                    amountColWidth(rows, totals, (row) => (row.components as Record<string, number>)?.[head]),
-                ]),
+                earningHeads.map((head) => [head, amountColWidth(rows, totals, (row) => (row.components as Record<string, number>)?.[head])]),
             ),
             gross: amountColWidth(rows, totals, (row) => row.gross),
             deduction: Object.fromEntries(
-                deductionHeads.map((head) => [
-                    head,
-                    amountColWidth(rows, totals, (row) => (row.components as Record<string, number>)?.[head]),
-                ]),
+                deductionHeads.map((head) => [head, amountColWidth(rows, totals, (row) => (row.components as Record<string, number>)?.[head])]),
             ),
             ded: amountColWidth(rows, totals, (row) => row.deduction),
             net: amountColWidth(rows, totals, (row) => row.net),
-            bank: maxTextLen(rows.map((row) => String(row.account_no ?? '')), 4),
+            bank: maxTextLen(
+                rows.map((row) => String(row.account_no ?? '')),
+                4,
+            ),
         };
-    }, [rows, totals, earningHeads, deductionHeads]);
+    }, [rows, totals, totalsLabel, earningHeads, deductionHeads]);
 
-    const colWidths = useMemo(() => ({
-        serial: serialColumnWidth(Math.max(dataWidths.serial, headerMinWidth('#'))),
-        name: textColumnWidth(dataWidths.name, 'Name (Pin)'),
-        designation: textColumnWidth(dataWidths.designation, 'Designation'),
-        grade: textColumnWidth(dataWidths.grade, 'Grade (Step)'),
-        earning: Object.fromEntries(
-            earningHeads.map((head) => [
-                head,
-                amountColumnWidth(dataWidths.earning[head], labelFor(head)),
-            ]),
-        ),
-        gross: amountColumnWidth(dataWidths.gross, 'Gross'),
-        deduction: Object.fromEntries(
-            deductionHeads.map((head) => [
-                head,
-                amountColumnWidth(dataWidths.deduction[head], labelFor(head)),
-            ]),
-        ),
-        ded: amountColumnWidth(dataWidths.ded, 'Ded.'),
-        net: amountColumnWidth(dataWidths.net, 'Net'),
-        bank: textColumnWidth(dataWidths.bank, 'Bank Account No.'),
-    }), [dataWidths, earningHeads, deductionHeads, headLabels]);
+    const colWidths = useMemo(
+        () => ({
+            serial: serialColumnWidth(Math.max(dataWidths.serial, headerMinWidth('#'))),
+            name: textColumnWidth(dataWidths.name, 'Name (Pin)'),
+            designation: textColumnWidth(dataWidths.designation, 'Designation'),
+            grade: textColumnWidth(dataWidths.grade, 'Grade (Step)'),
+            earning: Object.fromEntries(earningHeads.map((head) => [head, amountColumnWidth(dataWidths.earning[head], labelFor(head))])),
+            gross: amountColumnWidth(dataWidths.gross, 'Gross'),
+            deduction: Object.fromEntries(deductionHeads.map((head) => [head, amountColumnWidth(dataWidths.deduction[head], labelFor(head))])),
+            ded: amountColumnWidth(dataWidths.ded, 'Ded.'),
+            net: amountColumnWidth(dataWidths.net, 'Net'),
+            bank: textColumnWidth(dataWidths.bank, 'Bank Account No.'),
+        }),
+        [dataWidths, earningHeads, deductionHeads, labelFor],
+    );
 
     const dataTotalChars = useMemo(() => {
         const all = [
@@ -204,7 +213,10 @@ function SalarySheetTable({
             dataWidths.bank,
         ];
 
-        return Math.max(1, all.reduce((sum, value) => sum + value, 0));
+        return Math.max(
+            1,
+            all.reduce((sum, value) => sum + value, 0),
+        );
     }, [dataWidths, earningHeads, deductionHeads]);
 
     const layoutTotalChars = useMemo(() => {
@@ -221,18 +233,18 @@ function SalarySheetTable({
             colWidths.bank,
         ];
 
-        return Math.max(1, all.reduce((sum, value) => sum + value, 0));
+        return Math.max(
+            1,
+            all.reduce((sum, value) => sum + value, 0),
+        );
     }, [colWidths, earningHeads, deductionHeads]);
 
     const fillPage = dataTotalChars < 195;
-    const colCss = (chars: number) =>
-        fillPage ? `${((chars / layoutTotalChars) * 100).toFixed(4)}%` : `${chars}ch`;
+    const colCss = (chars: number) => (fillPage ? `${((chars / layoutTotalChars) * 100).toFixed(4)}%` : `${chars}ch`);
 
     return (
         <div className="overflow-x-auto border border-black print:overflow-visible">
-            <table
-                className={`${fillPage ? 'w-full' : 'w-auto max-w-full'} table-fixed border-collapse text-[10px] text-black print:text-[9px]`}
-            >
+            <table className={`${fillPage ? 'w-full' : 'w-auto max-w-full'} table-fixed border-collapse text-[10px] text-black print:text-[9px]`}>
                 <colgroup>
                     <col style={{ width: colCss(colWidths.serial) }} />
                     <col style={{ width: colCss(colWidths.name) }} />
@@ -250,7 +262,7 @@ function SalarySheetTable({
                     <col style={{ width: colCss(colWidths.bank) }} />
                 </colgroup>
                 <thead>
-                    <tr className="border-b border-black bg-muted/30">
+                    <tr className="bg-muted/30 border-b border-black">
                         <th colSpan={employeeCols} className={`${thClass} text-center font-bold`}>
                             Employee Info
                         </th>
@@ -333,38 +345,123 @@ function SalarySheetTable({
     );
 }
 
-function SalarySheetFooter({
-    net,
-    showInWords,
-    signatureBlocks,
-}: {
-    net?: unknown;
-    showInWords?: boolean;
-    signatureBlocks: SignatureBlock[];
-}) {
+function SalarySheetFooter({ net, showInWords, signatureBlocks }: { net?: unknown; showInWords?: boolean; signatureBlocks: SignatureBlock[] }) {
     return (
         <div className="mt-1 print:break-inside-avoid">
             {showInWords && net !== undefined && (
-                <p className="px-1 py-0.5 text-left text-[9px] font-bold leading-snug text-black print:text-[8px]">
-                    In Words: {takaInWords(net)}
-                </p>
+                <p className="px-1 py-0.5 text-left text-[9px] leading-snug font-bold text-black print:text-[8px]">In Words: {takaInWords(net)}</p>
             )}
             <PayrollReportSignatureSection blocks={signatureBlocks} className="mt-4 print:mb-11" />
         </div>
     );
 }
 
-function ReportPreview({
-    payload,
-    signatureBlocks = [],
-}: {
-    payload: Record<string, unknown>;
-    signatureBlocks?: SignatureBlock[];
-}) {
+function ReportPreview({ payload, signatureBlocks = [] }: { payload: Record<string, unknown>; signatureBlocks?: SignatureBlock[] }) {
     const template = String(payload.template ?? '');
 
     if (payload.meta && typeof payload.meta === 'object' && (payload.meta as { message?: string }).message) {
-        return <p className="text-sm text-muted-foreground">{(payload.meta as { message: string }).message}</p>;
+        return <p className="text-muted-foreground text-sm">{(payload.meta as { message: string }).message}</p>;
+    }
+
+    if (template === 'final-payment') {
+        const rows = (payload.rows as Record<string, unknown>[]) ?? [];
+        const totals = (payload.totals as Record<string, unknown>) ?? {};
+        const meta = (payload.meta as Record<string, unknown>) ?? {};
+        const thClass = 'border-r border-black px-1 py-1 text-center align-middle text-[8px] leading-tight';
+        const tdClass = 'border-r border-black px-1 py-1 align-middle';
+        const amountClass = `${tdClass} text-center font-mono tabular-nums whitespace-nowrap`;
+
+        if (rows.length === 0) {
+            return <p className="text-muted-foreground text-sm">No final payment records found for the selected filters.</p>;
+        }
+
+        return (
+            <div>
+                <div className="mb-1 flex justify-between text-[9px] font-semibold text-black">
+                    <span>
+                        Records: {String(meta.row_count ?? rows.length)} · Pending: {String(meta.pending_count ?? 0)} · Paid:{' '}
+                        {String(meta.paid_count ?? 0)}
+                    </span>
+                    <span>Date filter: Payment date</span>
+                </div>
+                <div className="overflow-x-auto border border-black print:overflow-visible">
+                    <table className="w-full min-w-max table-fixed border-collapse text-[9px] text-black print:text-[8px]">
+                        <thead>
+                            <tr className="border-b border-black">
+                                <th colSpan={5} className={`${thClass} font-bold`}>
+                                    Employee Information
+                                </th>
+                                <th colSpan={2} className={`${thClass} font-bold`}>
+                                    Dates
+                                </th>
+                                <th colSpan={3} className={`${thClass} font-bold`}>
+                                    Payable Components
+                                </th>
+                                <th className={`${thClass} font-bold`}>Deduction</th>
+                                <th colSpan={2} className={`${thClass} font-bold`}>
+                                    Settlement
+                                </th>
+                            </tr>
+                            <tr className="border-b border-black">
+                                {[
+                                    '#',
+                                    'Name (PIN)',
+                                    'Designation',
+                                    'Department',
+                                    'Branch',
+                                    'Separation',
+                                    'Payment',
+                                    'PF Refund',
+                                    'Gratuity',
+                                    'Gross',
+                                    'Loan',
+                                    'Net Payable',
+                                    'Status',
+                                ].map((header) => (
+                                    <th key={header} className={thClass}>
+                                        {header}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((row, index) => (
+                                <tr key={index} className="border-b border-black">
+                                    <td className={`${tdClass} text-center`}>{index + 1}</td>
+                                    <td className={`${tdClass} whitespace-nowrap`}>{nameWithPin(row)}</td>
+                                    <td className={`${tdClass} whitespace-nowrap`}>{String(row.designation ?? '—')}</td>
+                                    <td className={`${tdClass} whitespace-nowrap`}>{String(row.department ?? '—')}</td>
+                                    <td className={`${tdClass} whitespace-nowrap`}>
+                                        {String(row.branch ?? '—')}
+                                        {row.branch_code ? ` (${String(row.branch_code)})` : ''}
+                                    </td>
+                                    <td className={`${tdClass} text-center whitespace-nowrap`}>{String(row.separation_date ?? '—')}</td>
+                                    <td className={`${tdClass} text-center whitespace-nowrap`}>{String(row.payment_date ?? '—')}</td>
+                                    <td className={amountClass}>{fmtSheet(row.pf_balance)}</td>
+                                    <td className={amountClass}>{fmtSheet(row.gratuity_amount)}</td>
+                                    <td className={amountClass}>{fmtSheet(row.gross)}</td>
+                                    <td className={amountClass}>{fmtSheet(row.loan_outstanding)}</td>
+                                    <td className={`${amountClass} font-bold`}>{fmtSheet(row.net_payable)}</td>
+                                    <td className={`${tdClass} text-center font-semibold`}>{String(row.status ?? '')}</td>
+                                </tr>
+                            ))}
+                            <tr className="font-bold">
+                                <td colSpan={7} className={`${tdClass} text-right`}>
+                                    Total
+                                </td>
+                                <td className={amountClass}>{fmtSheet(totals.pf_balance)}</td>
+                                <td className={amountClass}>{fmtSheet(totals.gratuity_amount)}</td>
+                                <td className={amountClass}>{fmtSheet(totals.gross)}</td>
+                                <td className={amountClass}>{fmtSheet(totals.loan_outstanding)}</td>
+                                <td className={amountClass}>{fmtSheet(totals.net_payable)}</td>
+                                <td className={tdClass} />
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <SalarySheetFooter net={totals.net_payable} showInWords signatureBlocks={signatureBlocks} />
+            </div>
+        );
     }
 
     if (template === 'salary-certificate') {
@@ -396,7 +493,10 @@ function ReportPreview({
                             <th className="border-r border-black p-1 text-left">Grade</th>
                             <th className="border-r border-black p-1 text-right">Step</th>
                             {heads.map((h) => (
-                                <th key={h} className="border-r border-black p-1 text-right align-bottom whitespace-normal leading-tight min-w-[3.5rem] max-w-[5.5rem]">
+                                <th
+                                    key={h}
+                                    className="max-w-[5.5rem] min-w-[3.5rem] border-r border-black p-1 text-right align-bottom leading-tight whitespace-normal"
+                                >
                                     {labelFor(h)}
                                 </th>
                             ))}
@@ -423,7 +523,9 @@ function ReportPreview({
                         ))}
                         {totals && (
                             <tr className="font-bold">
-                                <td colSpan={3} className="border-r border-black p-1">Total</td>
+                                <td colSpan={3} className="border-r border-black p-1">
+                                    Total
+                                </td>
                                 {heads.map((h) => (
                                     <td key={h} className="border-r border-black p-1 text-right">
                                         {fmt((totals.components as Record<string, number>)?.[h])}
@@ -449,7 +551,7 @@ function ReportPreview({
             const sections = (payload.sections as { label: string; rows: Record<string, unknown>[]; totals?: Record<string, unknown> }[]) ?? [];
             const salaryMonth = String(payload.salary_month ?? '');
             if (sections.length === 0) {
-                return <p className="text-sm text-muted-foreground">No payslips found for the selected filters.</p>;
+                return <p className="text-muted-foreground text-sm">No payslips found for the selected filters.</p>;
             }
             return (
                 <div className="space-y-4">
@@ -467,11 +569,7 @@ function ReportPreview({
                                     rows={section.rows ?? []}
                                     totals={section.totals}
                                 />
-                                <SalarySheetFooter
-                                    net={section.totals?.net}
-                                    showInWords
-                                    signatureBlocks={signatureBlocks}
-                                />
+                                <SalarySheetFooter net={section.totals?.net} showInWords signatureBlocks={signatureBlocks} />
                             </div>
                         </div>
                     ))}
@@ -483,23 +581,15 @@ function ReportPreview({
         const totals = payload.totals as Record<string, unknown> | undefined;
         return (
             <div>
-                <SalarySheetTable
-                    earningHeads={earningHeads}
-                    deductionHeads={deductionHeads}
-                    headLabels={headLabels}
-                    rows={rows}
-                    totals={totals}
-                />
-                {totals && (
-                    <SalarySheetFooter net={totals.net} showInWords signatureBlocks={signatureBlocks} />
-                )}
+                <SalarySheetTable earningHeads={earningHeads} deductionHeads={deductionHeads} headLabels={headLabels} rows={rows} totals={totals} />
+                {totals && <SalarySheetFooter net={totals.net} showInWords signatureBlocks={signatureBlocks} />}
             </div>
         );
     }
 
     const simpleRows = (payload.rows as Record<string, unknown>[]) ?? [];
     if (simpleRows.length === 0) {
-        return <p className="text-sm text-muted-foreground">No rows in this report.</p>;
+        return <p className="text-muted-foreground text-sm">No rows in this report.</p>;
     }
 
     const keys = Object.keys(simpleRows[0]).filter((k) => k !== 'components' && k !== 'withheld');
@@ -542,7 +632,6 @@ export default function PayrollReportShow({
     payload,
     periodLabel,
     error,
-    exportUrls,
 }: Props) {
     const { auth } = usePage().props as { auth?: { permissions?: string[] } };
     const canExport = auth?.permissions?.includes('reports.export') ?? true;
@@ -559,12 +648,16 @@ export default function PayrollReportShow({
             employee: f.includes('employee_id'),
             salaryHead: f.includes('salary_head_id'),
             payscale: f.includes('payscale_id'),
+            paymentStatus: f.includes('payment_status'),
             grid: f.some((x) => ['branch_id', 'department_id', 'designation_id', 'program_id', 'project_id'].includes(x)),
         };
     }, [report.filters]);
 
+    const isFinalPaymentReport = report.slug === 'final-payment';
+    const reportBasePath = isFinalPaymentReport ? staffFundPath(`/payroll/reports/${report.slug}`) : `/payroll/reports/${report.slug}`;
+
     const generate = () => {
-        router.get(`/payroll/reports/${report.slug}`, { ...filters, generate: '1' }, { preserveState: true });
+        router.get(reportBasePath, { ...filters, generate: '1' }, { preserveState: true });
     };
 
     const query = useMemo(() => {
@@ -572,8 +665,11 @@ export default function PayrollReportShow({
         Object.entries(filters).forEach(([k, v]) => {
             if (v) p.set(k, v);
         });
+        if (isFinalPaymentReport) {
+            p.set('section', 'staff-fund');
+        }
         return p.toString();
-    }, [filters]);
+    }, [filters, isFinalPaymentReport]);
 
     const printUrl = `/payroll/reports/${report.slug}/print?${query}`;
     const pdfUrl = `/payroll/reports/${report.slug}/pdf?${query}`;
@@ -585,8 +681,8 @@ export default function PayrollReportShow({
             <PayrollPage>
                 <PayrollPageHeader title={report.title} description={report.description}>
                     <Button asChild variant="outline" size="sm">
-                        <Link href="/payroll/reports">
-                            <ArrowLeft className="mr-2 h-4 w-4" /> All reports
+                        <Link href={isFinalPaymentReport ? staffFundPath('/sections/staff-fund') : '/payroll/reports'}>
+                            <ArrowLeft className="mr-2 h-4 w-4" /> {isFinalPaymentReport ? 'Staff Fund' : 'All reports'}
                         </Link>
                     </Button>
                 </PayrollPageHeader>
@@ -638,6 +734,15 @@ export default function PayrollReportShow({
                         )}
 
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            {show.paymentStatus && (
+                                <PayrollComboField
+                                    label="Payment status"
+                                    value={filters.payment_status}
+                                    onChange={(v) => setFilter('payment_status', v)}
+                                    items={FINAL_PAYMENT_STATUS_OPTIONS}
+                                    placeholder="All statuses"
+                                />
+                            )}
                             {show.year && (
                                 <PayrollYearSelect
                                     value={filters.year}
@@ -659,10 +764,20 @@ export default function PayrollReportShow({
                             {show.dateRange && (
                                 <>
                                     <PayrollField label="Date from">
-                                        <Input type="date" className="h-10 bg-white" value={filters.date_from} onChange={(e) => setFilter('date_from', e.target.value)} />
+                                        <Input
+                                            type="date"
+                                            className="h-10 bg-white"
+                                            value={filters.date_from}
+                                            onChange={(e) => setFilter('date_from', e.target.value)}
+                                        />
                                     </PayrollField>
                                     <PayrollField label="Date to">
-                                        <Input type="date" className="h-10 bg-white" value={filters.date_to} onChange={(e) => setFilter('date_to', e.target.value)} />
+                                        <Input
+                                            type="date"
+                                            className="h-10 bg-white"
+                                            value={filters.date_to}
+                                            onChange={(e) => setFilter('date_to', e.target.value)}
+                                        />
                                     </PayrollField>
                                 </>
                             )}
@@ -723,11 +838,7 @@ export default function PayrollReportShow({
                                 </>
                             )}
                         </div>
-                        <PayrollReportDocumentHeader
-                            companyName={companyName}
-                            companyAddress={companyAddress}
-                            title={report.title}
-                        />
+                        <PayrollReportDocumentHeader companyName={companyName} companyAddress={companyAddress} title={report.title} />
                         <ReportPreview payload={payload} signatureBlocks={signatureBlocks} />
                     </PayrollSectionCard>
                 )}

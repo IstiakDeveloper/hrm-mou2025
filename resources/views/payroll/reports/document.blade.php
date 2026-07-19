@@ -54,6 +54,11 @@
             @include('payroll.reports.templates.advance-salary', ['payload' => $payload])
         @elseif ($template === 'bonus-register')
             @include('payroll.reports.templates.bonus-register', ['payload' => $payload])
+        @elseif ($template === 'final-payment')
+            @include('payroll.reports.templates.final-payment', [
+                'payload' => $payload,
+                'periodLabel' => $periodLabel,
+            ])
         @elseif ($template === 'salary-certificate')
             @include('payroll.reports.templates.salary-certificate', ['payload' => $payload, 'companyName' => $companyName, 'periodLabel' => $periodLabel])
         @else

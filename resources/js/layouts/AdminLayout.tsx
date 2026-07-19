@@ -144,6 +144,11 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                     path: gratuityReportPath(r.slug),
                     permission: 'staff-fund.view',
                 })),
+                {
+                    title: 'Final Payment Report',
+                    path: staffFundPath('/payroll/reports/final-payment'),
+                    permission: 'staff-fund.view',
+                },
             ];
         case 'payroll':
             return [

@@ -9,6 +9,7 @@ import { ComboSelect } from '@/components/ComboSelect';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { FormDateField } from '@/components/fixed-asset/FormDateField';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { displayDateToServer, todayDisplayDate } from '@/lib/display-date';
 
 type AssetOpt = { id: number; asset_tag: string; manual_asset_code: string | null; name: string; book_value: string | null };

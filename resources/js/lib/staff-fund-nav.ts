@@ -103,5 +103,8 @@ export const STAFF_FUND_DASHBOARD_SHORTCUTS = {
         { title: 'Payment records', href: '/gratuity/payments', icon: Wallet },
         { title: 'Gratuity rules', href: '/gratuity/rules', icon: FileBarChart2 },
     ],
-    settlement: [{ title: 'Final Payment', href: '/final-payments', icon: HandCoins }],
+    settlement: [
+        { title: 'Final Payment', href: '/final-payments', icon: HandCoins },
+        { title: 'Final Payment Report', href: '/payroll/reports/final-payment', icon: FileBarChart2 },
+    ],
 } as const;

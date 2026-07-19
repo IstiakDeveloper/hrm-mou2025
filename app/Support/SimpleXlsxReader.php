@@ -3,10 +3,14 @@
 namespace App\Support;
 
 use RuntimeException;
+use SimpleXMLElement;
 use ZipArchive;
 
 /**
  * Minimal first-sheet XLSX reader (shared strings + numeric cells).
+ *
+ * Hostinger-safe: does not use namespaced XPath (avoids
+ * "SimpleXMLElement::xpath(): Undefined namespace prefix").
  */
 class SimpleXlsxReader
 {
@@ -32,16 +36,19 @@ class SimpleXlsxReader
             throw new RuntimeException('Unable to open XLSX: '.$absolutePath);
         }
 
-        $sharedStrings = self::loadSharedStrings($zip);
-        $sheetPath = 'xl/worksheets/sheet'.$sheetIndex.'.xml';
-        $sheetXml = $zip->getFromName($sheetPath);
-        $zip->close();
+        try {
+            $sharedStrings = self::loadSharedStrings($zip);
+            $sheetPath = 'xl/worksheets/sheet'.$sheetIndex.'.xml';
+            $sheetXml = $zip->getFromName($sheetPath);
 
-        if ($sheetXml === false) {
-            throw new RuntimeException('Worksheet not found: '.$sheetPath);
+            if ($sheetXml === false) {
+                throw new RuntimeException('Worksheet not found: '.$sheetPath);
+            }
+
+            return self::parseSheetXml($sheetXml, $sharedStrings);
+        } finally {
+            $zip->close();
         }
-
-        return self::parseSheetXml($sheetXml, $sharedStrings);
     }
 
     /**
@@ -54,17 +61,15 @@ class SimpleXlsxReader
             return [];
         }
 
-        $root = simplexml_load_string($xml);
-        if ($root === false) {
+        $root = self::loadXml($xml);
+        if ($root === null) {
             return [];
         }
 
-        $root->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
         $strings = [];
-        foreach ($root->xpath('//m:si') ?: [] as $si) {
-            $parts = $si->xpath('.//m:t') ?: [];
+        foreach (self::childNodes($root, 'si') as $si) {
             $text = '';
-            foreach ($parts as $part) {
+            foreach (self::descendantNodes($si, 't') as $part) {
                 $text .= (string) $part;
             }
             $strings[] = $text;
@@ -79,38 +84,90 @@ class SimpleXlsxReader
      */
     private static function parseSheetXml(string $xml, array $sharedStrings): array
     {
-        $root = simplexml_load_string($xml);
-        if ($root === false) {
+        $root = self::loadXml($xml);
+        if ($root === null) {
             return [];
         }
 
-        $root->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
         $rows = [];
+        foreach (self::childNodes($root, 'sheetData') as $sheetData) {
+            foreach (self::childNodes($sheetData, 'row') as $row) {
+                $cells = [];
+                foreach (self::childNodes($row, 'c') as $cell) {
+                    $ref = (string) ($cell['r'] ?? '');
+                    $col = self::columnLettersFromRef($ref);
+                    $cells[$col] = self::cellValue($cell, $sharedStrings);
+                }
 
-        foreach ($root->xpath('//m:sheetData/m:row') ?: [] as $row) {
-            $cells = [];
-            foreach ($row->xpath('m:c') ?: [] as $cell) {
-                $ref = (string) ($cell['r'] ?? '');
-                $col = self::columnLettersFromRef($ref);
-                $cells[$col] = self::cellValue($cell, $sharedStrings);
+                if ($cells === []) {
+                    $rows[] = [];
+
+                    continue;
+                }
+
+                $maxCol = max(array_keys($cells));
+                $maxIndex = self::columnIndex($maxCol);
+                $line = array_fill(0, $maxIndex + 1, '');
+                foreach ($cells as $col => $value) {
+                    $line[self::columnIndex($col)] = $value;
+                }
+                $rows[] = $line;
             }
-
-            if ($cells === []) {
-                $rows[] = [];
-
-                continue;
-            }
-
-            $maxCol = max(array_keys($cells));
-            $maxIndex = self::columnIndex($maxCol);
-            $line = array_fill(0, $maxIndex + 1, '');
-            foreach ($cells as $col => $value) {
-                $line[self::columnIndex($col)] = $value;
-            }
-            $rows[] = $line;
         }
 
         return $rows;
+    }
+
+    private static function loadXml(string $xml): ?SimpleXMLElement
+    {
+        $previous = libxml_use_internal_errors(true);
+        try {
+            // Always strip namespaces — most portable across PHP builds.
+            $root = simplexml_load_string(self::stripNamespaces($xml));
+
+            return $root instanceof SimpleXMLElement ? $root : null;
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+    }
+
+    private static function stripNamespaces(string $xml): string
+    {
+        $xml = preg_replace('/\sxmlns(:\w+)?="[^"]*"/i', '', $xml) ?? $xml;
+        $xml = preg_replace('/([<\/])\w+:(\w+)/', '$1$2', $xml) ?? $xml;
+
+        return $xml;
+    }
+
+    /**
+     * @return list<SimpleXMLElement>
+     */
+    private static function childNodes(SimpleXMLElement $parent, string $localName): array
+    {
+        $found = [];
+        foreach ($parent->children() as $name => $child) {
+            if ((string) $name === $localName) {
+                $found[] = $child;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * @return list<SimpleXMLElement>
+     */
+    private static function descendantNodes(SimpleXMLElement $parent, string $localName): array
+    {
+        $found = self::childNodes($parent, $localName);
+        foreach ($parent->children() as $child) {
+            foreach (self::descendantNodes($child, $localName) as $nested) {
+                $found[] = $nested;
+            }
+        }
+
+        return $found;
     }
 
     private static function columnLettersFromRef(string $ref): string
@@ -136,23 +193,22 @@ class SimpleXlsxReader
     /**
      * @param  list<string>  $sharedStrings
      */
-    private static function cellValue(\SimpleXMLElement $cell, array $sharedStrings): string
+    private static function cellValue(SimpleXMLElement $cell, array $sharedStrings): string
     {
         $type = (string) ($cell['t'] ?? '');
-        $valueNode = $cell->children('http://schemas.openxmlformats.org/spreadsheetml/2006/main')->v;
-        $inline = $cell->children('http://schemas.openxmlformats.org/spreadsheetml/2006/main')->is;
 
-        if ($type === 'inlineStr' && $inline !== null) {
-            $text = $inline->children('http://schemas.openxmlformats.org/spreadsheetml/2006/main')->t;
+        if ($type === 'inlineStr') {
+            $parts = self::descendantNodes($cell, 't');
 
-            return (string) ($text ?? '');
+            return $parts !== [] ? (string) $parts[0] : '';
         }
 
-        if ($valueNode === null) {
+        $values = self::childNodes($cell, 'v');
+        if ($values === []) {
             return '';
         }
 
-        $raw = (string) $valueNode;
+        $raw = (string) $values[0];
 
         if ($type === 's') {
             return $sharedStrings[(int) $raw] ?? '';

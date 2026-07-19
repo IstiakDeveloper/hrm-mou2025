@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Payroll;
 use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
+use App\Models\Employee;
 use App\Models\SeparationFinalPayment;
+use App\Models\User;
 use App\Services\FinalPaymentSettlementService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use InvalidArgumentException;
+use Throwable;
 
 class FinalPaymentController extends Controller
 {
@@ -27,21 +31,30 @@ class FinalPaymentController extends Controller
         if (! in_array($status, ['all', 'pending', 'paid'], true)) {
             $status = 'all';
         }
+        $search = trim((string) $request->input('search', ''));
 
         $query = SeparationFinalPayment::query()
             ->with([
-                'employee:id,employee_id,pin,name_en,name_bn,department_id,designation_id,current_branch_id',
+                'employee:id,employee_id,pin,name_en,name_bn,department_id,designation_id,current_branch_id,last_branch_id',
                 'employee.department:id,name',
                 'employee.designation:id,name',
                 'employee.branch:id,name',
+                'employee.lastBranch:id,name',
                 'separation:id,separation_date,reason',
             ])
             ->when($status !== 'all', fn ($q) => $q->where('status', $status))
             ->when($request->filled('branch_id'), function ($q) use ($request) {
-                $q->whereHas('employee', fn ($eq) => $eq->where('current_branch_id', $request->integer('branch_id')));
+                $branchId = $request->integer('branch_id');
+                $q->whereHas('employee', function ($eq) use ($branchId) {
+                    $eq->where('current_branch_id', $branchId)
+                        ->orWhere(function ($branchQuery) use ($branchId) {
+                            $branchQuery->whereNull('current_branch_id')
+                                ->where('last_branch_id', $branchId);
+                        });
+                });
             })
             ->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->integer('employee_id')))
-            ->when($request->filled('search'), function ($q, $search) {
+            ->when($search !== '', function ($q) use ($search) {
                 $q->whereHas('employee', function ($eq) use ($search) {
                     $eq->where('name_en', 'like', "%{$search}%")
                         ->orWhere('name_bn', 'like', "%{$search}%")
@@ -50,13 +63,15 @@ class FinalPaymentController extends Controller
                 });
             });
 
-        $perPage = $this->resolvePerPage($request->get('per_page'), 15);
+        $perPage = $this->resolvePerPage($request->get('per_page'), 10);
 
         $records = $this->inertiaPagination(
             $query->orderByDesc('id')->paginate($perPage)->withQueryString()
         );
 
         $pendingCount = SeparationFinalPayment::query()->where('status', 'pending')->count();
+        /** @var User|null $user */
+        $user = Auth::user();
 
         return Inertia::render('payroll/final-payment/index', [
             'records' => $records,
@@ -65,11 +80,106 @@ class FinalPaymentController extends Controller
                 'status' => $status,
                 'branch_id' => (string) $request->input('branch_id', ''),
                 'employee_id' => (string) $request->input('employee_id', ''),
-                'search' => (string) $request->input('search', ''),
-                'per_page' => (string) $request->input('per_page', ''),
+                'search' => $search,
+                'per_page' => (string) $perPage,
             ],
+            'canGenerate' => $user?->hasPermission('staff-fund.edit') ?? false,
             ...$this->payrollFilterOptions(),
         ]);
+    }
+
+    public function generate(Request $request)
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+        if (! $user?->hasPermission('staff-fund.edit')) {
+            return back()->with('error', 'You do not have permission to generate final payments.');
+        }
+
+        $validated = $request->validate([
+            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+        ]);
+
+        $employee = Employee::query()->findOrFail((int) $validated['employee_id']);
+        if ($employee->status !== 'inactive') {
+            return back()->withErrors([
+                'employee_id' => 'Only inactive employees can receive a final payment.',
+            ]);
+        }
+
+        try {
+            $finalPayment = $this->settlementService->generateForEmployee(
+                $employee,
+                (int) Auth::id(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return back()->withErrors(['employee_id' => $exception->getMessage()]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'employee_id' => 'Final payment could not be generated. Please try again or contact the administrator.',
+            ]);
+        }
+
+        return redirect()
+            ->route('final-payments.show', $finalPayment)
+            ->with('success', 'Final payment generated successfully.');
+    }
+
+    public function inactiveEmployeeLookup(Request $request)
+    {
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $search = trim((string) ($validated['q'] ?? ''));
+        $limit = (int) ($validated['limit'] ?? 25);
+
+        $employees = Employee::query()
+            ->select([
+                'id',
+                'pin',
+                'employee_id',
+                'name_en',
+                'name_bn',
+                'status',
+                'dropout_date',
+                'resignation_date',
+            ])
+            ->where('status', 'inactive')
+            ->whereNotExists(function ($sub) {
+                $sub->selectRaw('1')
+                    ->from('separation_final_payments')
+                    ->whereColumn('separation_final_payments.employee_id', 'employees.id');
+            })
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
+                        ->orWhere('pin', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('pin')
+            ->limit($limit)
+            ->get();
+
+        return response()->json($employees->map(function (Employee $employee) {
+            $separationDate = $employee->getRawOriginal('dropout_date')
+                ?: $employee->getRawOriginal('resignation_date');
+
+            return [
+                'id' => $employee->id,
+                'pin' => $employee->pin,
+                'employee_id' => $employee->employee_id,
+                'name_en' => $employee->name_en,
+                'name_bn' => $employee->name_bn,
+                'status' => $employee->status,
+                'separation_date' => $separationDate ? (string) $separationDate : null,
+            ];
+        })->values());
     }
 
     public function show(SeparationFinalPayment $final_payment)
@@ -89,11 +199,13 @@ class FinalPaymentController extends Controller
         }
 
         $settlementDetails = $this->buildSettlementDetails($final_payment);
+        /** @var User|null $user */
+        $user = Auth::user();
 
         return Inertia::render('payroll/final-payment/show', [
             'finalPayment' => $final_payment,
             'settlementDetails' => $settlementDetails,
-            'canProcess' => Auth::user()?->hasPermission('staff-fund.edit') ?? false,
+            'canProcess' => $user?->hasPermission('staff-fund.edit') ?? false,
         ]);
     }
 
@@ -143,7 +255,9 @@ class FinalPaymentController extends Controller
 
     public function refresh(SeparationFinalPayment $final_payment)
     {
-        if (! Auth::user()?->hasPermission('staff-fund.edit')) {
+        /** @var User|null $user */
+        $user = Auth::user();
+        if (! $user?->hasPermission('staff-fund.edit')) {
             return back()->with('error', 'You do not have permission to refresh final payment calculations.');
         }
 
@@ -158,7 +272,9 @@ class FinalPaymentController extends Controller
 
     public function markPaid(Request $request, SeparationFinalPayment $final_payment)
     {
-        if (! Auth::user()?->hasPermission('staff-fund.edit')) {
+        /** @var User|null $user */
+        $user = Auth::user();
+        if (! $user?->hasPermission('staff-fund.edit')) {
             return back()->with('error', 'You do not have permission to process final payments.');
         }
 

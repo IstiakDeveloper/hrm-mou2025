@@ -53,7 +53,7 @@ export default function AssetDepreciationIndex({
     const [search, setSearch] = useState(filters.search || '');
 
     const applyFilters = () => {
-        router.get(route('asset-depreciation.index'), {
+        router.get(route('fixed-asset.depreciation.index'), {
             year,
             month,
             branch_id: branchId ?? undefined,
@@ -63,7 +63,7 @@ export default function AssetDepreciationIndex({
 
     const runDepreciation = () => {
         if (!confirm(`Post straight-line depreciation for ${MONTHS.find((m) => m.value === month)?.label} ${year}?`)) return;
-        router.post(route('asset-depreciation.run'), {
+        router.post(route('fixed-asset.depreciation.post'), {
             year,
             month,
             branch_id: branchId ?? undefined,
@@ -150,7 +150,7 @@ export default function AssetDepreciationIndex({
                                 entries.data.map((row) => (
                                     <TableRow key={row.id}>
                                         <TableCell>
-                                            <Link href={route('asset-depreciation.schedule', row.fixed_asset!.id)} className="font-mono text-xs text-emerald-700 hover:underline">
+                                            <Link href={route('fixed-asset.depreciation.schedule', row.fixed_asset!.id)} className="font-mono text-xs text-emerald-700 hover:underline">
                                                 {row.fixed_asset?.asset_tag}
                                             </Link>
                                             <div className="text-xs text-muted-foreground">{row.fixed_asset?.name}</div>

@@ -8,6 +8,7 @@ use App\Models\PayslipLine;
 use App\Models\SalaryHead;
 use App\Models\SalaryStep;
 use App\Models\SalaryStructure;
+use App\Models\SeparationFinalPayment;
 use App\Support\BranchOrganogram;
 use App\Support\HeadOfficeOrganogram;
 use Carbon\Carbon;
@@ -36,6 +37,9 @@ class PayrollReportService
             'month' => $request->filled('month') ? (int) $request->input('month') : null,
             'date_from' => $request->input('date_from'),
             'date_to' => $request->input('date_to'),
+            'payment_status' => in_array($request->input('payment_status'), ['pending', 'paid'], true)
+                ? $request->input('payment_status')
+                : 'all',
         ];
     }
 
@@ -56,6 +60,7 @@ class PayrollReportService
             'head-register' => $this->headRegister($config, $filters),
             'advance-salary' => $this->advanceSalary($config, $filters),
             'bonus-register' => $this->bonusRegister($config, $filters),
+            'final-payment' => $this->finalPayment($filters),
             'salary-certificate' => $this->salaryCertificate($config, $filters),
             default => ['rows' => [], 'meta' => ['message' => 'Unknown report type.'], 'template' => 'generic'],
         };
@@ -1032,6 +1037,88 @@ class PayrollReportService
             'meta' => [
                 'row_count' => count($rows),
                 'total' => round($total, 2),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    protected function finalPayment(array $filters): array
+    {
+        $query = SeparationFinalPayment::query()
+            ->with([
+                'employee:id,pin,employee_id,name_en,department_id,designation_id,current_branch_id,last_branch_id,program_id,project_id',
+                'employee.department:id,name',
+                'employee.designation:id,name',
+                'employee.branch:id,name,branch_code',
+                'employee.lastBranch:id,name,branch_code',
+                'separation:id,separation_date,reason',
+            ])
+            ->when(($filters['payment_status'] ?? 'all') !== 'all', fn ($q) => $q->where('status', $filters['payment_status']))
+            ->when($filters['branch_id'], function ($q, $branchId) {
+                $q->whereHas('employee', function ($employeeQuery) use ($branchId) {
+                    $employeeQuery->where('current_branch_id', $branchId)
+                        ->orWhere(function ($lastBranchQuery) use ($branchId) {
+                            $lastBranchQuery->whereNull('current_branch_id')
+                                ->where('last_branch_id', $branchId);
+                        });
+                });
+            })
+            ->when($filters['department_id'], fn ($q, $id) => $q->whereHas('employee', fn ($eq) => $eq->where('department_id', $id)))
+            ->when($filters['designation_id'], fn ($q, $id) => $q->whereHas('employee', fn ($eq) => $eq->where('designation_id', $id)))
+            ->when($filters['program_id'], fn ($q, $id) => $q->whereHas('employee', fn ($eq) => $eq->where('program_id', $id)))
+            ->when($filters['project_id'], fn ($q, $id) => $q->whereHas('employee', fn ($eq) => $eq->where('project_id', $id)));
+
+        $query
+            ->when($filters['date_from'], fn ($q, $date) => $q->whereDate('payment_date', '>=', $date))
+            ->when($filters['date_to'], fn ($q, $date) => $q->whereDate('payment_date', '<=', $date));
+
+        $records = $query->orderByDesc('id')->get();
+        $rows = $records->map(function (SeparationFinalPayment $record) {
+            $employee = $record->employee;
+            $branch = $employee?->branch ?? $employee?->lastBranch;
+            $gross = (float) $record->pf_balance + (float) $record->gratuity_amount;
+            $paymentDate = $record->getRawOriginal('payment_date');
+
+            return [
+                'pin' => $employee?->pin ?? $employee?->employee_id,
+                'name' => $employee?->name_en,
+                'designation' => $employee?->designation?->name,
+                'department' => $employee?->department?->name,
+                'branch' => $branch?->name,
+                'branch_code' => $branch?->branch_code,
+                'separation_date' => $record->separation?->separation_date?->format('d M Y'),
+                'payment_date' => $paymentDate ? Carbon::parse((string) $paymentDate)->format('d M Y') : null,
+                'pf_balance' => (float) $record->pf_balance,
+                'gratuity_amount' => (float) $record->gratuity_amount,
+                'gross' => round($gross, 2),
+                'loan_outstanding' => (float) $record->loan_outstanding,
+                'net_payable' => (float) $record->net_payable,
+                'status' => ucfirst($record->status),
+            ];
+        })->values()->all();
+
+        $totals = [
+            'pf_balance' => round((float) $records->sum('pf_balance'), 2),
+            'gratuity_amount' => round((float) $records->sum('gratuity_amount'), 2),
+            'gross' => round((float) $records->sum(
+                fn (SeparationFinalPayment $record) => (float) $record->pf_balance + (float) $record->gratuity_amount
+            ), 2),
+            'loan_outstanding' => round((float) $records->sum('loan_outstanding'), 2),
+            'net_payable' => round((float) $records->sum('net_payable'), 2),
+        ];
+
+        return [
+            'template' => 'final-payment',
+            'date_basis' => 'payment',
+            'rows' => $rows,
+            'totals' => $totals,
+            'meta' => [
+                'row_count' => count($rows),
+                'pending_count' => $records->where('status', SeparationFinalPayment::STATUS_PENDING)->count(),
+                'paid_count' => $records->where('status', SeparationFinalPayment::STATUS_PAID)->count(),
             ],
         ];
     }

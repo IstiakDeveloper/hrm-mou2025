@@ -304,10 +304,66 @@ class AssetDepreciationController extends Controller
         ]);
     }
 
-    /** @deprecated Legacy route — redirects via routes file */
+    public function overview(Request $request)
+    {
+        $context = $this->periodContext($request);
+        $branchId = $this->resolveBranchId($request, $context['scopedBranchId']);
+        $perPage = $this->resolvePerPage($request->get('per_page'));
+
+        $query = AssetDepreciationEntry::query()
+            ->with([
+                'fixedAsset:id,asset_tag,name,branch_id,manual_asset_code',
+                'fixedAsset.branch:id,name',
+                'postedByUser:id,name',
+            ])
+            ->where('period_year', $context['year'])
+            ->where('period_month', $context['month']);
+
+        if ($context['financialYear']) {
+            $query->where('asset_financial_year_id', $context['financialYear']->id);
+        }
+
+        $this->applyFixedAssetRelationBranchScope($query, $request);
+
+        if (! $context['scopedBranchId'] && $request->filled('branch_id')) {
+            $query->whereHas('fixedAsset', fn ($q) => $q->where('branch_id', $request->integer('branch_id')));
+        }
+
+        $paginator = $query
+            ->when($request->search, function ($q, $search) {
+                $q->whereHas('fixedAsset', fn ($q) => $q->where('asset_tag', 'like', "%{$search}%")
+                    ->orWhere('manual_asset_code', 'like', "%{$search}%")
+                    ->orWhere('name', 'like', "%{$search}%"));
+            })
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $preview = $this->depreciation->calculateForPeriod(
+            $context['year'],
+            $context['month'],
+            $branchId,
+            $context['financialYear']?->id,
+        );
+
+        $summary = $preview['summary'];
+        $summary['posted'] = $paginator->total();
+        $summary['pending'] = max(0, $summary['will_post']);
+
+        return Inertia::render('fixed-asset/depreciation/index', [
+            'entries' => $this->inertiaPagination($paginator),
+            'period' => ['year' => $context['year'], 'month' => $context['month']],
+            'summary' => $summary,
+            'filters' => $request->only(['search', 'per_page', 'branch_id', 'year', 'month']),
+            'branches' => $context['branches'],
+            'branchScoped' => $context['branchScoped'],
+        ]);
+    }
+
+    /** @deprecated Legacy route — redirects to overview */
     public function index(Request $request)
     {
-        return redirect()->route('fixed-asset.depreciation.posting', $request->query());
+        return redirect()->route('fixed-asset.depreciation.index', $request->query());
     }
 
     /** @deprecated Legacy route */

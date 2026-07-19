@@ -2,8 +2,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
-        "build:ssr": "vite build && vite build --ssr",
+        "build": "node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build",
+        "build:ssr": "npm run build && node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build --ssr",
         "icons:pwa": "node scripts/generate-pwa-icons.mjs",
         "dev": "vite",
         "format": "prettier --write resources/",

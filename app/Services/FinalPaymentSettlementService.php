@@ -9,6 +9,7 @@ use App\Models\EmployeePfTransaction;
 use App\Models\LoanCollectionBatch;
 use App\Models\Separation;
 use App\Models\SeparationFinalPayment;
+use App\Models\SeparationHistory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -173,6 +174,83 @@ class FinalPaymentSettlementService
         return $finalPayment->fresh();
     }
 
+    /**
+     * Generate a final-payment record for a legacy inactive employee who was
+     * separated before separation records were maintained in the system.
+     */
+    public function generateForEmployee(Employee $employee, ?int $actorUserId = null): SeparationFinalPayment
+    {
+        return DB::transaction(function () use ($employee, $actorUserId) {
+            $employee = Employee::query()
+                ->whereKey($employee->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $existing = SeparationFinalPayment::query()
+                ->where('employee_id', $employee->id)
+                ->latest('id')
+                ->first();
+
+            if ($existing) {
+                if ($existing->isPending()) {
+                    $this->refreshSnapshot($existing, $employee);
+                } elseif ($existing->isPaid() && ! $existing->settlementsApplied()) {
+                    $this->applySettlements($existing, $actorUserId);
+                }
+
+                return $existing->fresh();
+            }
+
+            $separation = Separation::query()
+                ->where('employee_id', $employee->id)
+                ->where('status', 'completed')
+                ->latest('separation_date')
+                ->latest('id')
+                ->first();
+
+            if (! $separation) {
+                if ($employee->status === 'active') {
+                    throw new InvalidArgumentException(
+                        'This employee is active. Complete the regular separation process before generating a final payment.'
+                    );
+                }
+
+                $separationDate = trim((string) (
+                    $employee->getRawOriginal('dropout_date')
+                    ?: $employee->getRawOriginal('resignation_date')
+                    ?: $employee->getRawOriginal('final_payment_date')
+                ));
+                if ($separationDate === '') {
+                    $separationDate = Carbon::today()->toDateString();
+                }
+
+                $reason = trim((string) ($employee->dropout_reason ?? ''));
+                if ($reason === '') {
+                    $reason = 'Legacy separation record generated for final payment.';
+                }
+
+                $separation = Separation::query()->create([
+                    'employee_id' => $employee->id,
+                    'separation_date' => $separationDate,
+                    'reason' => $reason,
+                    'status' => 'completed',
+                    'approved_by' => $actorUserId,
+                ]);
+
+                SeparationHistory::query()->create([
+                    'separation_id' => $separation->id,
+                    'employee_id' => $employee->id,
+                    'separation_date' => $separationDate,
+                    'reason' => $reason,
+                    'final_payment_date' => null,
+                    'created_by' => $actorUserId,
+                ]);
+            }
+
+            return $this->ensureForSeparation($separation, $actorUserId);
+        });
+    }
+
     public function refreshSnapshot(SeparationFinalPayment $finalPayment, ?Employee $employee = null): SeparationFinalPayment
     {
         if ($finalPayment->isPaid()) {
@@ -216,7 +294,7 @@ class FinalPaymentSettlementService
             $this->refreshSnapshot($finalPayment, $employee);
 
             $finalPayment->status = SeparationFinalPayment::STATUS_PAID;
-            $finalPayment->payment_date = $paymentDate;
+            $finalPayment->setAttribute('payment_date', $paymentDate);
             $finalPayment->paid_by = $actorUserId;
             if ($notes !== null && trim($notes) !== '') {
                 $finalPayment->notes = trim($notes);

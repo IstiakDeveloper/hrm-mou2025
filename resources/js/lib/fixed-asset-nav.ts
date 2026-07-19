@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
-import { Boxes, Calculator, CalendarRange, FileBarChart2, Layers, Package, PenLine, RotateCcw, ShoppingCart, Trash2, TrendingDown, Truck, UserCheck } from 'lucide-react';
+import { Boxes, ClipboardList, FileBarChart2, Layers, Package, ShieldCheck, ShoppingCart, Trash2, TrendingDown, Truck, UserCheck, Wrench } from 'lucide-react';
+import { withSectionParam } from '@/lib/admin-sections';
 import { FIXED_ASSET_REPORT_NAV, fixedAssetReportPath } from '@/lib/fixed-asset-reports';
 
 export const FIXED_ASSET_SECTION_ID = 'fixed-asset' as const;
@@ -46,7 +47,7 @@ export const FIXED_ASSET_NAV_GROUPS: FixedAssetNavGroup[] = [
     },
     {
         id: 'purchase',
-        title: 'Purchase Asset',
+        title: 'Purchases',
         icon: ShoppingCart,
         defaultPath: '/fixed-asset/purchases',
         items: [
@@ -56,15 +57,20 @@ export const FIXED_ASSET_NAV_GROUPS: FixedAssetNavGroup[] = [
     },
     {
         id: 'asset',
-        title: 'Asset',
+        title: 'Asset Register',
         icon: Package,
-        defaultPath: '/fixed-asset/assets/tracking',
+        defaultPath: '/fixed-assets',
         items: [
+            { title: 'Asset Register', path: '/fixed-assets', description: 'Browse, search, view, and edit fixed assets' },
+            { title: 'Register New Asset', path: '/fixed-assets/create', permission: 'fixed-assets.create', description: 'Create a fixed asset manually' },
+            { title: 'Import Assets', path: '/fixed-assets/import', permission: 'fixed-assets.create', description: 'Bulk import assets from CSV' },
             { title: 'Asset Tracking', path: '/fixed-asset/assets/tracking', description: 'Track assets by branch, project, category' },
-            { title: 'Asset Insurance', path: '/fixed-asset/assets/insurance', description: 'Insurance policies for assets' },
-            { title: 'Asset Warranty', path: '/fixed-asset/assets/warranties', description: 'Warranty records' },
-            { title: 'Asset Guaranty', path: '/fixed-asset/assets/guarantees', description: 'Guarantee records' },
-            { title: 'Asset Not in Use', path: '/fixed-asset/assets/not-in-use', description: 'Idle / not-in-use assets' },
+            { title: 'Assignments', path: '/asset-assignments', description: 'Assign assets to employees and manage releases' },
+            { title: 'Maintenance', path: '/asset-maintenances', description: 'Maintenance register and work history' },
+            { title: 'Insurance', path: '/fixed-asset/assets/insurance', description: 'Insurance policies for assets' },
+            { title: 'Warranties', path: '/fixed-asset/assets/warranties', description: 'Warranty records' },
+            { title: 'Guarantees', path: '/fixed-asset/assets/guarantees', description: 'Guarantee records' },
+            { title: 'Not In Use', path: '/fixed-asset/assets/not-in-use', description: 'Idle or temporarily inactive assets' },
         ],
     },
     {
@@ -81,8 +87,9 @@ export const FIXED_ASSET_NAV_GROUPS: FixedAssetNavGroup[] = [
         id: 'depreciation',
         title: 'Depreciation',
         icon: TrendingDown,
-        defaultPath: '/fixed-asset/depreciation/calculation',
+        defaultPath: '/fixed-asset/depreciation',
         items: [
+            { title: 'Overview', path: '/fixed-asset/depreciation', description: 'Monthly depreciation runs and summaries' },
             { title: 'Calculation', path: '/fixed-asset/depreciation/calculation', description: 'Preview depreciation before posting' },
             { title: 'Posting', path: '/fixed-asset/depreciation/posting', description: 'Post monthly depreciation for a FY period' },
             { title: 'Rollback', path: '/fixed-asset/depreciation/rollback', permission: 'fixed-assets.edit', description: 'Reverse auto-posted depreciation' },
@@ -91,24 +98,25 @@ export const FIXED_ASSET_NAV_GROUPS: FixedAssetNavGroup[] = [
     },
     {
         id: 'transfer',
-        title: 'Transfer',
+        title: 'Transfers',
         icon: Truck,
         defaultPath: '/fixed-asset/transfer/branch',
         items: [
-            { title: 'Branch', path: '/fixed-asset/transfer/branch', description: 'Transfer assets between branches' },
-            { title: 'Project', path: '/fixed-asset/transfer/project/create', permission: 'fixed-assets.edit', description: 'Move assets between projects' },
-            { title: 'Custodian', path: '/fixed-asset/transfer/custodian/create', permission: 'fixed-assets.edit', description: 'Transfer custodian responsibility' },
-            { title: 'History', path: '/fixed-asset/transfer/history', description: 'All transfer history' },
+            { title: 'Branch Transfers', path: '/fixed-asset/transfer/branch', description: 'Transfer assets between branches' },
+            { title: 'Project Transfer', path: '/fixed-asset/transfer/project/create', permission: 'fixed-assets.edit', description: 'Move assets between projects' },
+            { title: 'Custodian Transfer', path: '/fixed-asset/transfer/custodian/create', permission: 'fixed-assets.edit', description: 'Transfer custodian responsibility' },
+            { title: 'Transfer History', path: '/fixed-asset/transfer/history', description: 'All transfer history' },
         ],
     },
     {
         id: 'disposal',
-        title: 'Disposal',
+        title: 'Disposals',
         icon: Trash2,
         defaultPath: '/fixed-asset/disposal/requests',
         items: [
-            { title: 'Disposal Reason', path: '/fixed-asset/disposal/reasons', description: 'Master disposal reasons' },
-            { title: 'Disposal Request', path: '/fixed-asset/disposal/requests', description: 'Submit disposal for approval' },
+            { title: 'Disposal Register', path: '/fixed-asset/disposals', description: 'Approved and completed disposal history' },
+            { title: 'Disposal Requests', path: '/fixed-asset/disposal/requests', description: 'Submit disposal for approval' },
+            { title: 'Disposal Reasons', path: '/fixed-asset/disposal/reasons', description: 'Master disposal reasons' },
             { title: 'Dispose Asset', path: '/fixed-asset/disposal/dispose/create', permission: 'fixed-assets.delete', description: 'Directly dispose a single asset' },
             { title: 'Batch Dispose', path: '/fixed-asset/disposal/batch/create', permission: 'fixed-assets.delete', description: 'Dispose multiple assets at once' },
         ],
@@ -127,7 +135,7 @@ export const FIXED_ASSET_NAV_GROUPS: FixedAssetNavGroup[] = [
 ];
 
 export function fixedAssetPath(path: string): string {
-    return path;
+    return withSectionParam(path, FIXED_ASSET_SECTION_ID);
 }
 
 /** Flat shortcuts for section dashboards */

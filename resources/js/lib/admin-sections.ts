@@ -180,7 +180,15 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     if (p.startsWith('/attendance') || p.startsWith('/movements') || p.startsWith('/zkteco')) {
         return 'attendance-movement';
     }
-    if (p.startsWith('/sections/staff-fund') || p.startsWith('/provident-fund') || p.startsWith('/gratuity') || p.startsWith('/final-payments') || p.startsWith('/employee/staff-fund')) {
+    if (
+        p.startsWith('/sections/staff-fund')
+        || p.startsWith('/provident-fund')
+        || p.startsWith('/gratuity')
+        || p.startsWith('/final-payments')
+        || p.startsWith('/employee/staff-fund')
+        || p === '/payroll/reports/final-payment'
+        || p.startsWith('/payroll/reports/final-payment/')
+    ) {
         return 'staff-fund';
     }
     if (p.startsWith('/sections/payroll') || p.startsWith('/employee/payroll')) {
@@ -225,7 +233,11 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         p.startsWith('/fixed-asset/depreciation') ||
         p.startsWith('/fixed-asset/transfer') ||
         p.startsWith('/fixed-asset/disposal') ||
+        p.startsWith('/fixed-asset/disposals') ||
         p.startsWith('/fixed-assets') ||
+        p.startsWith('/asset-assignments') ||
+        p.startsWith('/asset-maintenances') ||
+        p.startsWith('/asset-transfers') ||
         p.startsWith('/fixed-asset/reports')
     ) {
         return 'fixed-asset';

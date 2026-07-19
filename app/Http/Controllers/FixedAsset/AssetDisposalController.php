@@ -142,10 +142,29 @@ class AssetDisposalController extends Controller
         return back()->with('success', 'Disposal request rejected.');
     }
 
+    public function registerIndex(Request $request)
+    {
+        if (! $request->filled('status')) {
+            $request->merge(['status' => AssetDisposal::STATUS_APPROVED]);
+        }
+
+        return $this->renderDisposalList(
+            $request,
+            'fixed-asset/disposals/index',
+            'fixed-asset.disposals.register',
+            [
+                'pageTitle' => 'Disposal register',
+                'pageDescription' => 'Approved and completed asset disposals.',
+                'showCreateButton' => false,
+                'showReviewActions' => false,
+            ],
+        );
+    }
+
     /** @deprecated */
     public function index(Request $request)
     {
-        return redirect()->route('fixed-asset.disposal.requests.index', $request->query());
+        return redirect()->route('fixed-asset.disposals.register', $request->query());
     }
 
     /** @deprecated */
@@ -163,7 +182,10 @@ class AssetDisposalController extends Controller
     /**
      * @return \Inertia\Response
      */
-    private function renderDisposalList(Request $request, string $view, string $routeName)
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    private function renderDisposalList(Request $request, string $view, string $routeName, array $extra = [])
     {
         $perPage = $this->resolvePerPage($request->get('per_page'));
         $branchProps = $this->fixedAssetBranchFilterProps($request);
@@ -207,6 +229,7 @@ class AssetDisposalController extends Controller
             'listRoute' => $routeName,
             ...$branchProps,
             'statusOptions' => collect(AssetDisposal::STATUSES)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            ...$extra,
         ]);
     }
 

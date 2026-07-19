@@ -665,6 +665,16 @@ export default function EmployeeEdit({
     const photoFileInputRef = useRef<HTMLInputElement>(null);
     const signatureFileInputRef = useRef<HTMLInputElement>(null);
 
+    useEffect(() => {
+        if (data.photo instanceof File) return;
+        setPhotoPreview(employee.photo ? `/storage/${employee.photo}?v=${encodeURIComponent(employee.photo)}` : null);
+    }, [employee.photo, data.photo]);
+
+    useEffect(() => {
+        if (data.signature instanceof File) return;
+        setSignaturePreview(employee.signature ? `/storage/${employee.signature}?v=${encodeURIComponent(employee.signature)}` : null);
+    }, [employee.signature, data.signature]);
+
     const applyPhotoFile = useCallback((file: File | null) => {
         if (!file || !file.type.startsWith('image/')) return;
         setData('photo', file);
@@ -1016,6 +1026,7 @@ export default function EmployeeEdit({
             forceFormData: true,
             transform: (formData) => ({
                 ...formData,
+                _method: 'PUT',
                 salary_lines_json: buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows),
             }),
             onSuccess: () => {
