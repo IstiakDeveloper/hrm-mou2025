@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\AdminNotice;
+use App\Models\Employee;
 use App\Models\Transfer;
 use App\Models\TransferHistory;
+use App\Models\User;
 use App\Notifications\AdminNoticeNotification;
 use App\Support\BangladeshDate;
 use Illuminate\Support\Carbon;
@@ -41,6 +43,8 @@ class TransferCompletionService
         }
 
         $employee->save();
+
+        $this->syncUserBranchFromEmployee($employee);
 
         TransferHistory::create([
             'transfer_id' => $transfer->id,
@@ -101,5 +105,58 @@ class TransferCompletionService
             });
 
         return $activated;
+    }
+
+    public function syncUserBranchFromEmployee(Employee $employee): bool
+    {
+        $employee->loadMissing('user');
+        $user = $employee->user;
+
+        if (! $user || $user->isBranchAccount()) {
+            return false;
+        }
+
+        $branchId = (int) ($employee->current_branch_id ?: 0);
+        if ($branchId <= 0) {
+            return false;
+        }
+
+        if ((int) ($user->branch_id ?: 0) === $branchId) {
+            return false;
+        }
+
+        $user->branch_id = $branchId;
+        $user->save();
+
+        return true;
+    }
+
+    /**
+     * Align users.branch_id with employees.current_branch_id for linked staff accounts.
+     */
+    public function syncAllUserBranchesFromPosting(?callable $onSynced = null): int
+    {
+        $synced = 0;
+
+        User::query()
+            ->whereNotNull('employee_id')
+            ->where('account_type', '!=', 'branch')
+            ->with('employee')
+            ->orderBy('id')
+            ->each(function (User $user) use (&$synced, $onSynced) {
+                $employee = $user->employee;
+                if (! $employee) {
+                    return;
+                }
+
+                if ($this->syncUserBranchFromEmployee($employee)) {
+                    $synced++;
+                    if ($onSynced) {
+                        $onSynced($user, $employee);
+                    }
+                }
+            });
+
+        return $synced;
     }
 }

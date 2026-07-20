@@ -13,7 +13,11 @@ import {
     scoreRingClass,
     scoreTextClass,
     scoreBgClass,
-    clamp
+    clamp,
+    portalPresentCount,
+    portalMovementCount,
+    portalMovementEmployees,
+    portalPresentEmployees,
 } from './components/helpers';
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
@@ -214,11 +218,12 @@ export default function DailyBranchSummary({
             const total = statuses.reduce((a, s) => a + (c[s] ?? 0), 0);
             const workingTotal = clamp(total - other, 0, total);
             const present = clamp(workingTotal - absent - leave, 0, workingTotal);
-            const presentOnly = clamp(present - movementCount, 0, present);
+            const presentOnly = portalPresentCount(b);
+            const movementDisplayCount = portalMovementCount(b);
             const presentRate = workingTotal > 0 ? present / workingTotal : 1;
             const attention = (1 - presentRate) * 1000 + absent * 2 + leave * 0.5;
 
-            return { branch: b, present, presentOnly, movementCount, absent, leave, total, workingTotal, presentRate, attention };
+            return { branch: b, present, presentOnly, movementCount, movementDisplayCount, absent, leave, total, workingTotal, presentRate, attention };
         });
     }, [branchesSummary, statuses]);
 
@@ -268,7 +273,7 @@ export default function DailyBranchSummary({
     useEffect(() => {
         if (activeBranch) {
             const counts = activeBranch.branch.counts || ({} as Record<Status, number>);
-            const movementCount = activeBranch.movementCount ?? 0;
+            const movementCount = activeBranch.movementDisplayCount ?? 0;
             if ((counts.absent ?? 0) > 0) {
                 setSelectedStatus('absent');
             } else if (movementCount > 0) {
@@ -369,16 +374,16 @@ export default function DailyBranchSummary({
             return null;
         }
         const c = portalBranchSummary.counts ?? ({} as Record<Status, number>);
-        const movementCount = portalBranchSummary.movementCount ?? 0;
         const absent = c.absent ?? 0;
         const leave = c.leave ?? 0;
         const other = (c.holiday ?? 0) + (c.weekend ?? 0);
         const total = statuses.reduce((a, s) => a + (c[s] ?? 0), 0);
         const workingTotal = clamp(total - other, 0, total);
         const present = clamp(workingTotal - absent - leave, 0, workingTotal);
-        const presentOnly = clamp(present - movementCount, 0, present);
+        const presentOnly = portalPresentCount(portalBranchSummary);
+        const movementDisplayCount = portalMovementCount(portalBranchSummary);
 
-        return { presentOnly, movementCount, absent, leave, workingTotal, present };
+        return { presentOnly, movementCount: movementDisplayCount, absent, leave, workingTotal, present };
     }, [portalBranchSummary, statuses]);
 
     const singleBranchData = useMemo(() => {
@@ -394,7 +399,7 @@ export default function DailyBranchSummary({
                 branch: item.branch,
                 stats: {
                     presentOnly: item.presentOnly,
-                    movementCount: item.movementCount,
+                    movementCount: item.movementDisplayCount,
                     absent: item.absent,
                     leave: item.leave,
                     workingTotal: item.workingTotal,
@@ -408,7 +413,7 @@ export default function DailyBranchSummary({
     const branchStackSegments = (row: (typeof derived)[number]) => {
         return [
             { key: 'present', label: 'Present', value: row.presentOnly, className: 'bg-emerald-500' },
-            { key: 'movement', label: 'On Duty (Movement)', value: row.movementCount, className: 'bg-amber-500' },
+            { key: 'movement', label: 'On Duty (Movement)', value: row.movementDisplayCount, className: 'bg-amber-500' },
             { key: 'absent', label: 'Absent', value: row.absent, className: 'bg-rose-500' },
             { key: 'leave', label: 'Leave', value: row.leave, className: 'bg-blue-500' },
         ];
@@ -423,7 +428,9 @@ export default function DailyBranchSummary({
     const filteredEmployees = useMemo(() => {
         if (!activeBranch) return [];
         const list = selectedStatus === 'movement'
-            ? (activeBranch.branch.employeesWithMovement ?? [])
+            ? portalMovementEmployees(activeBranch.branch)
+            : selectedStatus === 'present'
+              ? portalPresentEmployees(activeBranch.branch)
             : (activeBranch.branch.employeesByStatus?.[selectedStatus] ?? []);
         if (!localSearch.trim()) return list;
         const query = localSearch.toLowerCase().trim();
@@ -888,7 +895,7 @@ export default function DailyBranchSummary({
                                                 {/* Mini Stats row */}
                                                 <div className="mt-2 flex items-center justify-between text-[9px] font-bold text-slate-500 tabular-nums">
                                                     <span>P: <strong className="text-emerald-600">{row.presentOnly}</strong></span>
-                                                    <span>M: <strong className={row.movementCount > 0 ? "text-amber-600" : "text-slate-400"}>{row.movementCount}</strong></span>
+                                                    <span>M: <strong className={row.movementDisplayCount > 0 ? "text-amber-600" : "text-slate-400"}>{row.movementDisplayCount}</strong></span>
                                                     <span>A: <strong className="text-rose-600">{row.absent}</strong></span>
                                                     <span>L: <strong className="text-blue-550">{row.leave}</strong></span>
                                                     <span className="text-slate-400 font-normal">Tot: {row.workingTotal}</span>
@@ -972,8 +979,8 @@ export default function DailyBranchSummary({
                                                     </TableCell>
 
                                                     <TableCell className="px-3.5 py-2 align-middle text-right text-xs font-semibold tabular-nums">
-                                                        <span className={row.movementCount > 0 ? "text-amber-600 font-bold" : "text-slate-500"}>
-                                                            {row.movementCount}
+                                                        <span className={row.movementDisplayCount > 0 ? "text-amber-600 font-bold" : "text-slate-500"}>
+                                                            {row.movementDisplayCount}
                                                         </span>
                                                     </TableCell>
 
@@ -1001,7 +1008,7 @@ export default function DailyBranchSummary({
                                     <div>
                                         <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Today&apos;s breakdown</p>
                                         <p className="text-sm font-bold text-slate-800 mt-0.5">
-                                            P:{activeBranch.presentOnly} · M:{activeBranch.movementCount} · A:{activeBranch.absent} · L:{activeBranch.leave} · Tot:{activeBranch.workingTotal}
+                                            P:{activeBranch.presentOnly} · M:{activeBranch.movementDisplayCount} · A:{activeBranch.absent} · L:{activeBranch.leave} · Tot:{activeBranch.workingTotal}
                                         </p>
                                     </div>
                                     <div className="w-full sm:max-w-xs">
@@ -1050,8 +1057,8 @@ export default function DailyBranchSummary({
                                         </div>
                                         <div>
                                             <div className="text-slate-400 text-[9px] uppercase font-bold tracking-wider">Movement</div>
-                                            <div className={cn("text-base font-black mt-0.5", activeBranch.movementCount > 0 ? "text-amber-400" : "text-white")}>
-                                                {activeBranch.movementCount}
+                                            <div className={cn("text-base font-black mt-0.5", activeBranch.movementDisplayCount > 0 ? "text-amber-400" : "text-white")}>
+                                                {activeBranch.movementDisplayCount}
                                             </div>
                                         </div>
                                         <div>
@@ -1081,7 +1088,9 @@ export default function DailyBranchSummary({
                                             { key: 'weekend' as InspectorTab, label: 'Weekend', tone: 'neutral' },
                                         ] as Array<{ key: InspectorTab; label: string; tone: 'good' | 'warn' | 'bad' | 'info' | 'neutral' }>).map((s) => {
                                             const count = s.key === 'movement'
-                                                ? (activeBranch.movementCount ?? 0)
+                                                ? (activeBranch.movementDisplayCount ?? 0)
+                                                : s.key === 'present'
+                                                  ? (activeBranch.presentOnly ?? 0)
                                                 : (activeBranch.branch.counts?.[s.key as Status] ?? 0);
                                             const isSelected = selectedStatus === s.key;
 
@@ -1431,10 +1440,10 @@ export default function DailyBranchSummary({
                         const presentPct = pct(row.present, row.workingTotal);
                         const dotColor = row.presentRate < 0.75 ? "#ef4444" : row.presentRate < 0.9 ? "#f59e0b" : "#10b981";
                         const presentOnly = row.presentOnly;
-                        const movementCount = row.movementCount;
+                        const movementDisplayCount = row.movementDisplayCount;
                         const barSegments = [
                             { value: presentOnly, color: '#00c58d' },
-                            { value: movementCount, color: '#f59e0b' },
+                            { value: movementDisplayCount, color: '#f59e0b' },
                             { value: row.absent, color: '#f43f5e' },
                             { value: row.leave, color: '#3b82f6' },
                         ];
@@ -1484,7 +1493,7 @@ export default function DailyBranchSummary({
                                         </g>
                                     </svg>
                                     <span className="text-[8px] text-slate-500 font-mono tracking-tighter w-[48px] text-left shrink-0">
-                                        P:{presentOnly} M:{movementCount} A:{row.absent}
+                                        P:{presentOnly} M:{movementDisplayCount} A:{row.absent}
                                     </span>
                                     <span className={cn("font-black font-mono w-[30px] text-right shrink-0", scoreTextClass(row.presentRate))}>
                                         {formatPct(presentPct)}

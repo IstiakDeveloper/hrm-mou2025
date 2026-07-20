@@ -48,13 +48,13 @@ export function PortalStatsBar({ stats, compact = false }: { stats: PortalStats;
         },
         {
             key: 'present',
-            label: 'Present at Branch',
+            label: 'Present (Checked In)',
             value: stats.presentOnly,
             icon: <UserCheck className="h-4.5 w-4.5" />,
             bg: 'from-emerald-50/40 to-white border-emerald-100',
             iconBg: 'bg-emerald-100/60 text-emerald-600',
             valueColor: 'text-emerald-700',
-            desc: 'checked-in on-site'
+            desc: 'checked in today'
         },
         {
             key: 'movement',
@@ -64,7 +64,7 @@ export function PortalStatsBar({ stats, compact = false }: { stats: PortalStats;
             bg: 'from-indigo-50/40 to-white border-indigo-100',
             iconBg: 'bg-indigo-100/60 text-indigo-650',
             valueColor: 'text-indigo-700',
-            desc: 'official duty details'
+            desc: 'where staff went on duty'
         },
         {
             key: 'absent',

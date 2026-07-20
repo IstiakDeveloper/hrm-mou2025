@@ -25,14 +25,14 @@ export function PortalGridBoard({
                 accent: 'bg-emerald-500',
                 text: 'text-emerald-800',
                 badge: 'bg-emerald-650 text-white',
-                subtext: 'present at branch'
+                subtext: 'checked in today'
             },
             movement: {
                 bg: 'bg-indigo-50/20 border-indigo-100',
                 accent: 'bg-indigo-500',
                 text: 'text-indigo-850',
                 badge: 'bg-indigo-650 text-white',
-                subtext: 'out on official duty'
+                subtext: 'official duty / destination'
             },
             absent: {
                 bg: 'bg-rose-50/20 border-rose-100',

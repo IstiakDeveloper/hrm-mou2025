@@ -482,6 +482,9 @@ Route::middleware(['auth'])->group(function () {
         // User Management
         Route::middleware(['permission:users.view'])->prefix('users')->name('users.')->group(function () {
             Route::get('/', [UserController::class, 'index'])->name('index');
+            Route::post('/sync-branches', [UserController::class, 'syncBranchesFromPosting'])
+                ->name('sync-branches')
+                ->middleware('permission:users.edit');
             Route::get('/create', [UserController::class, 'create'])->name('create')->middleware('permission:users.create');
             Route::post('/', [UserController::class, 'store'])->name('store')->middleware('permission:users.create');
             Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit')->middleware('permission:users.edit');

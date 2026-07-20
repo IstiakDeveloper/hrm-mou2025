@@ -1775,11 +1775,12 @@ class EmployeeController extends Controller
             'filters' => array_merge(
                 $request->only(['search', 'per_page', 'sort_by', 'sort_dir']),
                 [
-                    'department_ids' => $this->resolveIntFilterIds($request, 'department_ids', 'department_id'),
-                    'branch_ids' => $this->resolveIntFilterIds($request, 'branch_ids', 'branch_id'),
+                    'department_ids' => $this->resolveFilterValues($request, 'department_ids', 'department_id'),
+                    'branch_ids' => $this->resolveFilterValues($request, 'branch_ids', 'branch_id'),
                     'statuses' => $this->resolveStringFilterValues($request, 'statuses', 'status'),
-                    'employee_type_ids' => $this->resolveIntFilterIds($request, 'employee_type_ids', 'employee_type_id'),
-                    'designation_ids' => $this->resolveIntFilterIds($request, 'designation_ids', 'designation_id'),
+                    'employee_type_ids' => $this->resolveFilterValues($request, 'employee_type_ids', 'employee_type_id'),
+                    'designation_ids' => $this->resolveFilterValues($request, 'designation_ids', 'designation_id'),
+                    'genders' => $this->resolveStringFilterValues($request, 'genders', 'gender'),
                 ]
             ),
         ]);
@@ -1876,15 +1877,10 @@ class EmployeeController extends Controller
             });
         });
 
-        $departmentIds = $this->resolveIntFilterIds($request, 'department_ids', 'department_id');
-        if ($departmentIds !== []) {
-            $query->whereIn('employees.department_id', $departmentIds);
-        }
-
-        $branchIds = $this->resolveIntFilterIds($request, 'branch_ids', 'branch_id');
-        if ($branchIds !== []) {
-            $query->whereIn('employees.current_branch_id', $branchIds);
-        }
+        $this->applyNullableIdFilter($query, $request, 'employees.department_id', 'department_ids', 'department_id');
+        $this->applyNullableIdFilter($query, $request, 'employees.current_branch_id', 'branch_ids', 'branch_id');
+        $this->applyNullableIdFilter($query, $request, 'employees.employee_type_id', 'employee_type_ids', 'employee_type_id');
+        $this->applyNullableIdFilter($query, $request, 'employees.designation_id', 'designation_ids', 'designation_id');
 
         $statuses = $this->resolveStringFilterValues($request, 'statuses', 'status');
         if ($statuses !== []) {
@@ -1895,21 +1891,34 @@ class EmployeeController extends Controller
             }
         }
 
-        $employeeTypeIds = $this->resolveIntFilterIds($request, 'employee_type_ids', 'employee_type_id');
-        if ($employeeTypeIds !== []) {
-            $query->whereIn('employees.employee_type_id', $employeeTypeIds);
-        }
-
-        $designationIds = $this->resolveIntFilterIds($request, 'designation_ids', 'designation_id');
-        if ($designationIds !== []) {
-            $query->whereIn('employees.designation_id', $designationIds);
+        $genders = $this->resolveStringFilterValues($request, 'genders', 'gender');
+        if ($genders !== []) {
+            $allowed = ['male', 'female', 'other', '__null'];
+            $genders = array_values(array_intersect($genders, $allowed));
+            $hasNull = in_array('__null', $genders, true);
+            $realGenders = array_values(array_filter($genders, fn ($v) => $v !== '__null'));
+            if ($hasNull && $realGenders !== []) {
+                $query->where(function ($q) use ($realGenders) {
+                    $q->whereIn('employees.gender', $realGenders)
+                      ->orWhereNull('employees.gender')
+                      ->orWhere('employees.gender', '');
+                });
+            } elseif ($hasNull) {
+                $query->where(function ($q) {
+                    $q->whereNull('employees.gender')->orWhere('employees.gender', '');
+                });
+            } elseif ($realGenders !== []) {
+                $query->whereIn('employees.gender', $realGenders);
+            }
         }
     }
 
     /**
-     * @return list<int>
+     * Resolve filter values that may include '__null' sentinel alongside numeric IDs.
+     *
+     * @return list<string>
      */
-    private function resolveIntFilterIds(Request $request, string $pluralKey, string $singularKey): array
+    private function resolveFilterValues(Request $request, string $pluralKey, string $singularKey): array
     {
         $raw = $request->input($pluralKey, $request->input($singularKey));
 
@@ -1917,19 +1926,38 @@ class EmployeeController extends Controller
             return [];
         }
 
-        if (is_string($raw)) {
-            $parts = preg_split('/[,\s]+/', $raw) ?: [];
-
-            return array_values(array_unique(array_filter(array_map('intval', $parts), fn (int $id) => $id > 0)));
-        }
-
         if (! is_array($raw)) {
-            $id = (int) $raw;
-
-            return $id > 0 ? [$id] : [];
+            $raw = preg_split('/[,\s]+/', (string) $raw) ?: [];
         }
 
-        return array_values(array_unique(array_filter(array_map('intval', $raw), fn (int $id) => $id > 0)));
+        return array_values(array_unique(array_filter(
+            array_map(static fn ($v) => trim((string) $v), $raw),
+            static fn (string $v) => $v !== '' && ($v === '__null' || (int) $v > 0)
+        )));
+    }
+
+    /**
+     * Apply whereIn + orWhereNull filter for a column that supports '__null'.
+     */
+    private function applyNullableIdFilter($query, Request $request, string $column, string $pluralKey, string $singularKey): void
+    {
+        $values = $this->resolveFilterValues($request, $pluralKey, $singularKey);
+        if ($values === []) {
+            return;
+        }
+
+        $hasNull = in_array('__null', $values, true);
+        $ids = array_values(array_filter(array_map('intval', $values), fn (int $id) => $id > 0));
+
+        if ($hasNull && $ids !== []) {
+            $query->where(function ($q) use ($column, $ids) {
+                $q->whereIn($column, $ids)->orWhereNull($column);
+            });
+        } elseif ($hasNull) {
+            $query->whereNull($column);
+        } elseif ($ids !== []) {
+            $query->whereIn($column, $ids);
+        }
     }
 
     /**

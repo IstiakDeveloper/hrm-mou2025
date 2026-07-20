@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\TransferCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -96,6 +97,18 @@ class UserController extends Controller
             ],
             'filters' => $request->only(['search', 'per_page']),
         ]);
+    }
+
+    public function syncBranchesFromPosting(TransferCompletionService $transferCompletionService)
+    {
+        $synced = $transferCompletionService->syncAllUserBranchesFromPosting();
+
+        return redirect()->route('admin.users.index')->with(
+            'success',
+            $synced > 0
+                ? "Synced {$synced} user branch(es) from employee posting."
+                : 'All user branches are already in sync.'
+        );
     }
 
     /**

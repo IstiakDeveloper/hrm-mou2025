@@ -24,6 +24,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Search,
+    RefreshCw,
     UserPlus,
     Edit,
     Trash,
@@ -111,6 +112,7 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
     const [search, setSearch] = useState(filters.search || '');
     const [perPage, setPerPage] = useState(filters.per_page || '10');
     const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
+    const [isSyncingBranches, setIsSyncingBranches] = useState(false);
 
     const handleSearch = () => {
         router.get(route('admin.users.index'), { search, per_page: perPage }, { preserveState: true });
@@ -151,6 +153,20 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
             preserveScroll: true,
             onSuccess: () => setUserToDelete(null),
         });
+    };
+
+    const handleSyncBranches = () => {
+        if (isSyncingBranches) return;
+
+        router.post(
+            route('admin.users.sync-branches'),
+            {},
+            {
+                preserveScroll: true,
+                onStart: () => setIsSyncingBranches(true),
+                onFinish: () => setIsSyncingBranches(false),
+            }
+        );
     };
 
     const getUserFullName = (user: UserData) => {
@@ -254,6 +270,19 @@ export default function UsersIndex({ users, filters, success }: UsersIndexProps)
                                 Search
                             </Button>
                             <div className="flex w-full flex-col gap-2 sm:flex-row sm:w-auto">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleSyncBranches}
+                                    disabled={isSyncingBranches}
+                                    className="h-9 w-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto"
+                                >
+                                    <RefreshCw
+                                        className={`mr-1 h-4 w-4 ${isSyncingBranches ? 'animate-spin' : ''}`}
+                                    />
+                                    {isSyncingBranches ? 'Syncing...' : 'Sync Branch'}
+                                </Button>
                                 <BulkEmailButton />
                                 <Link href={route('admin.users.create')} className="w-full sm:w-auto">
                                     <Button

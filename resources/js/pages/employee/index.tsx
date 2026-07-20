@@ -162,6 +162,8 @@ interface EmployeeIndexProps {
         employee_type_ids?: number[] | string[];
         designation_id?: string;
         designation_ids?: number[] | string[];
+        gender?: string;
+        genders?: string[];
         per_page?: string;
         sort_by?: string;
         sort_dir?: string;
@@ -213,6 +215,15 @@ const STATUS_FILTER_OPTIONS = [
     { value: 'terminated', label: 'Terminated' },
 ];
 
+const GENDER_FILTER_OPTIONS = [
+    { value: 'male', label: 'Male' },
+    { value: 'female', label: 'Female' },
+    { value: 'other', label: 'Other' },
+    { value: '__null', label: 'Not Assigned' },
+];
+
+const NOT_ASSIGNED_ITEM = { value: '__null', label: '— Not Assigned —' };
+
 export default function EmployeeIndex({
     employees,
     departments,
@@ -229,6 +240,7 @@ export default function EmployeeIndex({
         statuses: normalizeStringFilter(filters.statuses, filters.status),
         employee_type_ids: normalizeIdFilter(filters.employee_type_ids, filters.employee_type_id),
         designation_ids: normalizeIdFilter(filters.designation_ids, filters.designation_id),
+        genders: normalizeStringFilter(filters.genders, filters.gender),
         per_page: filters.per_page || '100',
         sort_by: filters.sort_by || 'organogram',
         sort_dir: filters.sort_dir || 'asc',
@@ -257,7 +269,8 @@ export default function EmployeeIndex({
         data.branch_ids.length > 0 ||
         data.statuses.length > 0 ||
         data.employee_type_ids.length > 0 ||
-        data.designation_ids.length > 0
+        data.designation_ids.length > 0 ||
+        data.genders.length > 0
     );
 
     const [showFilters, setShowFilters] = useState(
@@ -266,7 +279,8 @@ export default function EmployeeIndex({
             normalizeIdFilter(filters.branch_ids, filters.branch_id).length > 0 ||
             normalizeStringFilter(filters.statuses, filters.status).length > 0 ||
             normalizeIdFilter(filters.employee_type_ids, filters.employee_type_id).length > 0 ||
-            normalizeIdFilter(filters.designation_ids, filters.designation_id).length > 0
+            normalizeIdFilter(filters.designation_ids, filters.designation_id).length > 0 ||
+            normalizeStringFilter(filters.genders, filters.gender).length > 0
         )
     );
 
@@ -278,6 +292,7 @@ export default function EmployeeIndex({
         if (merged.statuses.length > 0) params.statuses = merged.statuses;
         if (merged.employee_type_ids.length > 0) params.employee_type_ids = merged.employee_type_ids;
         if (merged.designation_ids.length > 0) params.designation_ids = merged.designation_ids;
+        if (merged.genders.length > 0) params.genders = merged.genders;
         if (merged.per_page && merged.per_page !== '100') params.per_page = merged.per_page;
         if (merged.sort_by && merged.sort_by !== 'organogram') params.sort_by = merged.sort_by;
         if (merged.sort_dir && merged.sort_dir !== 'asc') params.sort_dir = merged.sort_dir;
@@ -354,6 +369,7 @@ export default function EmployeeIndex({
             statuses: [],
             employee_type_ids: [],
             designation_ids: [],
+            genders: [],
         });
     };
 
@@ -645,16 +661,19 @@ export default function EmployeeIndex({
                         </div>
 
                         {showFilters && (
-                            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
                                 <div>
                                     <MultiSelectFilter
                                         values={data.department_ids}
                                         onChange={(values) => applyFilters({ department_ids: values })}
-                                        items={departments.map((d) => ({
-                                            value: String(d.id),
-                                            label: d.name,
-                                        }))}
-                                        placeholder="Filter by Department"
+                                        items={[
+                                            NOT_ASSIGNED_ITEM,
+                                            ...departments.map((d) => ({
+                                                value: String(d.id),
+                                                label: d.name,
+                                            })),
+                                        ]}
+                                        placeholder="Department"
                                         allLabel="All Departments"
                                         disabled={processing}
                                     />
@@ -664,23 +683,15 @@ export default function EmployeeIndex({
                                     <MultiSelectFilter
                                         values={data.branch_ids}
                                         onChange={(values) => applyFilters({ branch_ids: values })}
-                                        items={sortPayrollBranches(branches).map((branch) => ({
-                                            value: String(branch.id),
-                                            label: formatBranchSelectLabel(branch),
-                                        }))}
-                                        placeholder="Filter by Branch"
+                                        items={[
+                                            NOT_ASSIGNED_ITEM,
+                                            ...sortPayrollBranches(branches).map((branch) => ({
+                                                value: String(branch.id),
+                                                label: formatBranchSelectLabel(branch),
+                                            })),
+                                        ]}
+                                        placeholder="Branch"
                                         allLabel="All Branches"
-                                        disabled={processing}
-                                    />
-                                </div>
-
-                                <div>
-                                    <MultiSelectFilter
-                                        values={data.statuses}
-                                        onChange={(values) => applyFilters({ statuses: values })}
-                                        items={STATUS_FILTER_OPTIONS}
-                                        placeholder="Filter by Status"
-                                        allLabel="All Statuses"
                                         disabled={processing}
                                     />
                                 </div>
@@ -689,11 +700,14 @@ export default function EmployeeIndex({
                                     <MultiSelectFilter
                                         values={data.designation_ids}
                                         onChange={(values) => applyFilters({ designation_ids: values })}
-                                        items={designations.map((d) => ({
-                                            value: String(d.id),
-                                            label: d.name,
-                                        }))}
-                                        placeholder="Filter by Designation"
+                                        items={[
+                                            NOT_ASSIGNED_ITEM,
+                                            ...designations.map((d) => ({
+                                                value: String(d.id),
+                                                label: d.name,
+                                            })),
+                                        ]}
+                                        placeholder="Designation"
                                         allLabel="All Designations"
                                         disabled={processing}
                                     />
@@ -703,12 +717,37 @@ export default function EmployeeIndex({
                                     <MultiSelectFilter
                                         values={data.employee_type_ids}
                                         onChange={(values) => applyFilters({ employee_type_ids: values })}
-                                        items={employee_types.map((type) => ({
-                                            value: String(type.id),
-                                            label: type.name,
-                                        }))}
-                                        placeholder="Filter by Employee Type"
+                                        items={[
+                                            NOT_ASSIGNED_ITEM,
+                                            ...employee_types.map((type) => ({
+                                                value: String(type.id),
+                                                label: type.name,
+                                            })),
+                                        ]}
+                                        placeholder="Employee Type"
                                         allLabel="All Employee Types"
+                                        disabled={processing}
+                                    />
+                                </div>
+
+                                <div>
+                                    <MultiSelectFilter
+                                        values={data.statuses}
+                                        onChange={(values) => applyFilters({ statuses: values })}
+                                        items={STATUS_FILTER_OPTIONS}
+                                        placeholder="Status"
+                                        allLabel="All Statuses"
+                                        disabled={processing}
+                                    />
+                                </div>
+
+                                <div>
+                                    <MultiSelectFilter
+                                        values={data.genders}
+                                        onChange={(values) => applyFilters({ genders: values })}
+                                        items={GENDER_FILTER_OPTIONS}
+                                        placeholder="Gender"
+                                        allLabel="All Genders"
                                         disabled={processing}
                                     />
                                 </div>

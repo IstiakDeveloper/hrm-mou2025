@@ -66,13 +66,14 @@ export function filterStaffList(list: EmployeeRow[], query: string) {
 
 export function portalPresentEmployees(branch: BranchSummary): EmployeeRow[] {
     const movementIds = new Set((branch.employeesWithMovement ?? []).map((e) => e.id));
-    const keys: Status[] = ['present', 'late', 'half_day', 'on_duty'];
+    const keys: Status[] = ['present', 'late', 'half_day'];
     const rows: EmployeeRow[] = [];
     const seen = new Set<number>();
 
+    // Checked-in staff stay in Present even when they also have official movement.
     for (const key of keys) {
         for (const row of branch.employeesByStatus?.[key] ?? []) {
-            if (movementIds.has(row.id) || seen.has(row.id)) {
+            if (seen.has(row.id)) {
                 continue;
             }
             seen.add(row.id);
@@ -80,7 +81,33 @@ export function portalPresentEmployees(branch: BranchSummary): EmployeeRow[] {
         }
     }
 
+    // On-duty without movement and without a check-in punch.
+    for (const row of branch.employeesByStatus?.on_duty ?? []) {
+        if (movementIds.has(row.id) || seen.has(row.id)) {
+            continue;
+        }
+        seen.add(row.id);
+        rows.push(row);
+    }
+
     return rows;
+}
+
+/** All staff with official movement today (may also appear in Present). */
+export function portalMovementEmployees(branch: BranchSummary): EmployeeRow[] {
+    return branch.employeesWithMovement ?? [];
+}
+
+export function portalPresentCount(branch: BranchSummary): number {
+    return portalPresentEmployees(branch).length;
+}
+
+export function portalMovementCount(branch: BranchSummary): number {
+    return branch.movementCount ?? portalMovementEmployees(branch).length;
+}
+
+export function checkedInStatusCount(counts: Record<Status, number>): number {
+    return (counts.present ?? 0) + (counts.late ?? 0) + (counts.half_day ?? 0);
 }
 
 export function portalColumnEmployees(branch: BranchSummary, key: 'present' | 'movement' | 'absent' | 'leave'): EmployeeRow[] {
@@ -88,7 +115,7 @@ export function portalColumnEmployees(branch: BranchSummary, key: 'present' | 'm
         case 'present':
             return portalPresentEmployees(branch);
         case 'movement':
-            return branch.employeesWithMovement ?? [];
+            return portalMovementEmployees(branch);
         case 'absent':
             return branch.employeesByStatus?.absent ?? [];
         case 'leave':
