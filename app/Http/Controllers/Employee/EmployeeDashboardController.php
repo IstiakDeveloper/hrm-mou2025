@@ -379,6 +379,14 @@ class EmployeeDashboardController extends Controller
             ? $this->decodeWeekendDays($attendanceSettings->weekend_days)
             : [];
 
+        // Fall back to the company-wide weekend when the branch has no setting.
+        if (empty($weekendDays)) {
+            $weekendDays = $this->decodeWeekendDays(AttendanceSetting::global()->weekend_days);
+            if (empty($weekendDays)) {
+                $weekendDays = [5, 6];
+            }
+        }
+
         // Instantiate Attendance model for method access
         $attendanceModel = new Attendance;
 

@@ -27,10 +27,15 @@ class MonthlyAttendanceCalculator
         array $movementsByEmployeeId,
         array $leaveDaysByEmployee,
         array $holidayApplicable,
-        array $attendanceByEmployeeDate
+        array $attendanceByEmployeeDate,
+        array $defaultWeekendDays = [5, 6]
     ): array {
         $dailyStatusByEmployee = [];
         $summaryByEmployee = [];
+
+        // Normalize the global/default weekend so branches without their own
+        // attendance setting still fall back to the company-wide weekend.
+        $defaultWeekendDays = array_values(array_map('intval', $defaultWeekendDays));
 
         foreach ($employees as $employee) {
             $empId = (int) $employee->id;
@@ -42,6 +47,13 @@ class MonthlyAttendanceCalculator
                 : [];
             if (!is_array($weekendDays)) {
                 $weekendDays = [];
+            }
+            $weekendDays = array_values(array_map('intval', $weekendDays));
+
+            // Branch has no configured weekend -> use company-wide default so
+            // weekend days are not mistakenly reported as absent.
+            if (empty($weekendDays)) {
+                $weekendDays = $defaultWeekendDays;
             }
 
             $summary = [

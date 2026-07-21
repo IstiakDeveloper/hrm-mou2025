@@ -727,6 +727,17 @@ class DashboardController extends Controller
             }
         }
 
+        // Fall back to the company-wide weekend when the branch has no setting.
+        if (empty($weekendDays)) {
+            $globalWeekend = AttendanceSetting::global()->weekend_days;
+            $weekendDays = is_array($globalWeekend)
+                ? $globalWeekend
+                : (json_decode($globalWeekend ?? '[]', true) ?: []);
+            if (empty($weekendDays)) {
+                $weekendDays = [5, 6];
+            }
+        }
+
         $manager = $employee->manager;
         $reportingName = null;
         if ($manager) {

@@ -582,6 +582,12 @@ class AttendanceController extends Controller
             }
         }
 
+        // Company-wide weekend fallback for branches without their own setting.
+        $defaultWeekendDays = $this->normalizeJsonArray(AttendanceSetting::global()->weekend_days);
+        if (empty($defaultWeekendDays)) {
+            $defaultWeekendDays = [5, 6];
+        }
+
         $calc = MonthlyAttendanceCalculator::compute(
             $employees,
             $month,
@@ -591,7 +597,8 @@ class AttendanceController extends Controller
             $movements->toArray(),
             $leaveDays,
             $holidayApplicable,
-            array_map(fn ($rows) => $rows, $attendanceByEmployeeDate)
+            array_map(fn ($rows) => $rows, $attendanceByEmployeeDate),
+            $defaultWeekendDays
         );
         $dailyStatusByEmployee = $calc['dailyStatusByEmployee'];
         $summaryByEmployee = $calc['summaryByEmployee'];
@@ -961,6 +968,12 @@ class AttendanceController extends Controller
 
         $statuses = ['present', 'late', 'half_day', 'absent', 'leave', 'on_duty', 'holiday', 'weekend'];
 
+        // Company-wide weekend fallback for branches without their own setting.
+        $defaultWeekendDays = $this->normalizeJsonArray(AttendanceSetting::global()->weekend_days);
+        if (empty($defaultWeekendDays)) {
+            $defaultWeekendDays = [5, 6];
+        }
+
         $branchesOut = [];
         foreach ($employees as $e) {
             $empId = (int) $e->id;
@@ -980,6 +993,9 @@ class AttendanceController extends Controller
             }
 
             $weekendDays = $attendanceSettings[$branchIdInt]['weekend_days'] ?? [];
+            if (! is_array($weekendDays) || empty($weekendDays)) {
+                $weekendDays = $defaultWeekendDays;
+            }
             $isHoliday = ! empty($holidayApplicable['*'][$ymd]) || ($branchIdStr !== '' && ! empty($holidayApplicable[$branchIdStr][$ymd]));
             $isOnLeave = isset($leaveTypeByEmployee[$empId]);
             $hasMovement = ! empty($movementsByEmployee[$empId]) && $movementsByEmployee[$empId]->count() > 0;

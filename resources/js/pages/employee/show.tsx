@@ -587,9 +587,7 @@ export default function EmployeeShow({
 
                             <Section title="Identity Documents" icon={<Shield className="w-4 h-4" />}>
                                 <div className="space-y-1">
-                                    <DataItem label="NID" value={employee.nid} />
-                                    <DataItem label="NID Number" value={employee.nid_number} />
-                                    <DataItem label="Smart Card Number" value={employee.smart_card_number} />
+                                    <DataItem label="NID / Smart Card Number" value={employee.nid_number || employee.smart_card_number || employee.nid} />
                                     <DataItem label="Birth Registration No" value={employee.birth_registration_number} />
                                     <DataItem label="TIN Certificate No" value={employee.tin_certificate_no} />
                                     <DataItem label="Driving License No" value={employee.driving_license_no} />

@@ -156,6 +156,15 @@ class AttendanceExportController extends Controller
                 ->map(fn ($ms) => $ms->values()->all())
                 ->toArray();
 
+            // Company-wide weekend fallback for branches without their own setting.
+            $globalWeekendRaw = AttendanceSetting::global()->weekend_days;
+            $defaultWeekendDays = is_array($globalWeekendRaw)
+                ? array_values(array_map('intval', $globalWeekendRaw))
+                : (json_decode($globalWeekendRaw ?? '[]', true) ?: []);
+            if (empty($defaultWeekendDays)) {
+                $defaultWeekendDays = [5, 6];
+            }
+
             // Calculate status codes and summary for each employee
             $employeesWithSummary = collect();
 
@@ -169,7 +178,8 @@ class AttendanceExportController extends Controller
                     $movementsByEmployee,
                     $leaveDays,
                     $holidayApplicable,
-                    $attendanceByEmployeeDate
+                    $attendanceByEmployeeDate,
+                    $defaultWeekendDays
                 );
 
                 $summary = $calc['summaryByEmployee'][(int) $employee->id] ?? [

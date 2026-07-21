@@ -1,44 +1,6 @@
-import React, { useState } from 'react';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import Layout from '@/layouts/AdminLayout';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow
-} from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
-import { Input } from '@/components/ui/input';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import {
-    ChevronLeft,
-    ChevronRight,
-    ArrowUpDown,
-    Search,
-    UserPlus,
-    Upload,
-    Download,
-    MoreHorizontal,
-    Edit,
-    Trash,
-    Check,
-    X,
-    Users,
-    Eye,
-    Filter
-} from 'lucide-react';
+import InputError from '@/components/input-error';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
+import { PageSurface } from '@/components/page-surface';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
@@ -50,28 +12,24 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import InputError from '@/components/input-error';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PageSurface } from '@/components/page-surface';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import Layout from '@/layouts/AdminLayout';
 import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '@/lib/employee-name';
-import { format, parseISO, isValid } from 'date-fns';
+import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { format, isValid, parseISO } from 'date-fns';
+import { ArrowUpDown, Check, ChevronLeft, ChevronRight, Download, Edit, Eye, Filter, Search, Trash, Upload, UserPlus, Users, X } from 'lucide-react';
+import React, { useState } from 'react';
 
 interface Employee extends EmployeeNameFields {
     id: number;
@@ -130,6 +88,13 @@ interface EmployeeTypeOption {
     name: string;
 }
 
+interface EmployeeExportColumn {
+    key: string;
+    label: string;
+    group: string;
+    group_label: string;
+}
+
 interface PaginationData {
     current_page: number;
     last_page: number;
@@ -150,6 +115,7 @@ interface EmployeeIndexProps {
     branches: Branch[];
     employee_types: EmployeeTypeOption[];
     designations: Designation[];
+    export_columns: EmployeeExportColumn[];
     filters: {
         search?: string;
         department_id?: string;
@@ -171,10 +137,7 @@ interface EmployeeIndexProps {
     success?: string;
 }
 
-function normalizeIdFilter(
-    plural: number[] | string[] | undefined,
-    singular?: string | number | null
-): string[] {
+function normalizeIdFilter(plural: number[] | string[] | undefined, singular?: string | number | null): string[] {
     if (Array.isArray(plural) && plural.length > 0) {
         return plural.map(String).filter(Boolean);
     }
@@ -230,8 +193,9 @@ export default function EmployeeIndex({
     branches,
     employee_types,
     designations,
+    export_columns,
     filters,
-    success
+    success,
 }: EmployeeIndexProps) {
     const { data, setData, get, processing } = useForm({
         search: filters.search || '',
@@ -247,6 +211,8 @@ export default function EmployeeIndex({
     });
 
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+    const [exportOpen, setExportOpen] = useState(false);
+    const [selectedExportColumns, setSelectedExportColumns] = useState<string[]>(() => export_columns.map((column) => column.key));
     const [importOpen, setImportOpen] = useState(false);
     const [importStatus, setImportStatus] = useState('');
 
@@ -281,7 +247,7 @@ export default function EmployeeIndex({
             normalizeIdFilter(filters.employee_type_ids, filters.employee_type_id).length > 0 ||
             normalizeIdFilter(filters.designation_ids, filters.designation_id).length > 0 ||
             normalizeStringFilter(filters.genders, filters.gender).length > 0
-        )
+        ),
     );
 
     const buildFilterParams = (merged: typeof data): Record<string, string | string[]> => {
@@ -320,16 +286,34 @@ export default function EmployeeIndex({
                 params.set(key, value);
             }
         });
+        selectedExportColumns.forEach((column) => params.append('columns[]', column));
         const qs = params.toString();
         window.location.href = route('employees.export') + (qs ? `?${qs}` : '');
+        setExportOpen(false);
+    };
+
+    const allExportColumnsSelected = export_columns.length > 0 && selectedExportColumns.length === export_columns.length;
+    const exportColumnGroups = export_columns.reduce<Record<string, EmployeeExportColumn[]>>((groups, column) => {
+        (groups[column.group] ??= []).push(column);
+        return groups;
+    }, {});
+
+    const toggleExportColumn = (key: string, checked: boolean) => {
+        setSelectedExportColumns((current) => (checked ? Array.from(new Set([...current, key])) : current.filter((column) => column !== key)));
+    };
+
+    const toggleExportGroup = (columns: EmployeeExportColumn[], checked: boolean) => {
+        const groupKeys = new Set(columns.map((column) => column.key));
+        setSelectedExportColumns((current) =>
+            checked ? Array.from(new Set([...current, ...groupKeys])) : current.filter((column) => !groupKeys.has(column)),
+        );
     };
 
     const toggleSort = (sortBy: 'id' | 'pin' | 'name' | 'status') => {
         const currentBy = (data as any).sort_by as string;
         const currentDir = (data as any).sort_dir as string;
 
-        const nextDir =
-            currentBy === sortBy ? (currentDir === 'asc' ? 'desc' : 'asc') : 'asc';
+        const nextDir = currentBy === sortBy ? (currentDir === 'asc' ? 'desc' : 'asc') : 'asc';
 
         applyFilters({ sort_by: sortBy, sort_dir: nextDir } as any);
     };
@@ -357,7 +341,7 @@ export default function EmployeeIndex({
                 console.error('Delete error:', errors);
                 setEmployeeToDelete(null);
                 // error টোস্ট বা মেসেজ দেখাতে চাইলে এখানে যোগ করুন
-            }
+            },
         });
     };
 
@@ -380,7 +364,7 @@ export default function EmployeeIndex({
             {
                 preserveScroll: true,
                 preserveState: true,
-            }
+            },
         );
     };
 
@@ -407,20 +391,85 @@ export default function EmployeeIndex({
                 <div className="mb-8 flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Employee Management</h1>
-                        <p className="mt-1 text-gray-500">
-                            Manage all employees across branches and departments
-                        </p>
+                        <p className="mt-1 text-gray-500">Manage all employees across branches and departments</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="flex items-center gap-2"
-                            onClick={handleExportXlsx}
-                        >
+                        <Button type="button" variant="outline" className="flex items-center gap-2" onClick={() => setExportOpen(true)}>
                             <Download className="h-4 w-4" />
                             <span>Download XLSX</span>
                         </Button>
+                        <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+                            <DialogContent className="max-w-3xl">
+                                <DialogHeader>
+                                    <DialogTitle>Select XLSX Columns</DialogTitle>
+                                    <DialogDescription>
+                                        Select the employee fields you want in the downloaded XLSX. Current directory filters will also be applied.
+                                    </DialogDescription>
+                                </DialogHeader>
+
+                                <div className="bg-muted/20 flex items-center justify-between rounded-md border px-3 py-2">
+                                    <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                                        <Checkbox
+                                            checked={allExportColumnsSelected}
+                                            onCheckedChange={(checked) =>
+                                                setSelectedExportColumns(checked ? export_columns.map((column) => column.key) : [])
+                                            }
+                                        />
+                                        Select All
+                                    </label>
+                                    <span className="text-muted-foreground text-sm">
+                                        {selectedExportColumns.length} of {export_columns.length} selected
+                                    </span>
+                                </div>
+
+                                <div className="max-h-[55vh] space-y-5 overflow-y-auto pr-2">
+                                    {Object.entries(exportColumnGroups).map(([group, columns]) => (
+                                        <section key={group}>
+                                            <label className="mb-2 flex cursor-pointer items-center gap-2">
+                                                <Checkbox
+                                                    checked={
+                                                        columns.every((column) => selectedExportColumns.includes(column.key))
+                                                            ? true
+                                                            : columns.some((column) => selectedExportColumns.includes(column.key))
+                                                              ? 'indeterminate'
+                                                              : false
+                                                    }
+                                                    onCheckedChange={(checked) => toggleExportGroup(columns, checked === true)}
+                                                />
+                                                <h3 className="text-foreground text-sm font-semibold">{columns[0]?.group_label}</h3>
+                                                <span className="text-muted-foreground text-xs">
+                                                    ({columns.filter((column) => selectedExportColumns.includes(column.key)).length}/{columns.length})
+                                                </span>
+                                            </label>
+                                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                                {columns.map((column) => (
+                                                    <label
+                                                        key={column.key}
+                                                        className="hover:bg-muted/40 flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                                                    >
+                                                        <Checkbox
+                                                            checked={selectedExportColumns.includes(column.key)}
+                                                            onCheckedChange={(checked) => toggleExportColumn(column.key, checked === true)}
+                                                        />
+                                                        <span>{column.label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </section>
+                                    ))}
+                                </div>
+
+                                <DialogFooter>
+                                    <Button type="button" variant="outline" onClick={() => setExportOpen(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button type="button" disabled={selectedExportColumns.length === 0} onClick={handleExportXlsx}>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Download Selected
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                         <Dialog
                             open={importOpen}
                             onOpenChange={(open) => {
@@ -443,7 +492,8 @@ export default function EmployeeIndex({
                                 <DialogHeader>
                                     <DialogTitle>Import Employees</DialogTitle>
                                     <DialogDescription>
-                                        Download the Excel template, fill employee data, then upload. You will review each row and fix branch, department, and designation before saving.
+                                        Download the Excel template, fill employee data, then upload. You will review each row and fix branch,
+                                        department, and designation before saving.
                                     </DialogDescription>
                                 </DialogHeader>
 
@@ -480,14 +530,11 @@ export default function EmployeeIndex({
                                         });
                                     }}
                                 >
-                                    <div className="flex items-center justify-between rounded-md border bg-muted/20 p-3">
-                                        <div className="text-sm text-muted-foreground">
+                                    <div className="bg-muted/20 flex items-center justify-between rounded-md border p-3">
+                                        <div className="text-muted-foreground text-sm">
                                             Professional Excel template with grouped headers, Bengali labels, and reference data.
                                         </div>
-                                        <a
-                                            href={route('employees.import.example')}
-                                            className="text-sm font-medium text-primary hover:underline"
-                                        >
+                                        <a href={route('employees.import.example')} className="text-primary text-sm font-medium hover:underline">
                                             Download Excel template
                                         </a>
                                     </div>
@@ -521,18 +568,13 @@ export default function EmployeeIndex({
                                         </div>
                                     )}
 
-                                    <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                                        Required: PIN, name, employment type, mobile, joining date, department, designation, branch.
-                                        Use the Excel template (row 3 = field keys). Email is optional. Next step: review and confirm.
+                                    <div className="bg-muted/30 text-muted-foreground rounded-md border p-3 text-sm">
+                                        Required: PIN, name, employment type, mobile, joining date, department, designation, branch. Use the Excel
+                                        template (row 3 = field keys). Email is optional. Next step: review and confirm.
                                     </div>
 
                                     <DialogFooter>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={() => setImportOpen(false)}
-                                            disabled={importForm.processing}
-                                        >
+                                        <Button type="button" variant="outline" onClick={() => setImportOpen(false)} disabled={importForm.processing}>
                                             Cancel
                                         </Button>
                                         <Button type="submit" disabled={importForm.processing || !importForm.data.file}>
@@ -553,7 +595,7 @@ export default function EmployeeIndex({
                 </div>
 
                 {flashSuccess && (
-                    <Alert className="mb-6 bg-green-50 border-green-200">
+                    <Alert className="mb-6 border-green-200 bg-green-50">
                         <Check className="h-4 w-4 text-green-600" />
                         <AlertDescription className="text-green-700">{flashSuccess}</AlertDescription>
                     </Alert>
@@ -567,7 +609,7 @@ export default function EmployeeIndex({
                 )}
 
                 {importSummary && (
-                    <Alert className="mb-6 bg-blue-50 border-blue-200">
+                    <Alert className="mb-6 border-blue-200 bg-blue-50">
                         <AlertDescription className="text-blue-800">
                             <div className="font-medium">
                                 Import summary: Created {importSummary.created}, skipped {importSummary.skipped}.
@@ -595,9 +637,7 @@ export default function EmployeeIndex({
                                         ))}
                                     </ul>
                                     {importRowErrors.length > 10 && (
-                                        <div className="mt-1 text-xs text-blue-700">
-                                            Showing 10 of {importRowErrors.length} errors.
-                                        </div>
+                                        <div className="mt-1 text-xs text-blue-700">Showing 10 of {importRowErrors.length} errors.</div>
                                     )}
                                 </div>
                             )}
@@ -605,13 +645,13 @@ export default function EmployeeIndex({
                     </Alert>
                 )}
 
-                <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
-                    <CardHeader className="bg-white border-b border-slate-100 pb-5 pt-6 px-6">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <CardTitle className="text-lg font-bold text-slate-800 tracking-wide">
+                <Card className="overflow-hidden rounded-xl border-slate-200 bg-white shadow-sm">
+                    <CardHeader className="border-b border-slate-100 bg-white px-6 pt-6 pb-5">
+                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                            <CardTitle className="text-lg font-bold tracking-wide text-slate-800">
                                 Employees Directory
                                 {isOrganogramSort && (
-                                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                                    <span className="ml-2 text-[10px] font-semibold tracking-wide text-emerald-700 uppercase">
                                         · Organogram order
                                     </span>
                                 )}
@@ -629,20 +669,20 @@ export default function EmployeeIndex({
                                 </Button>
                                 <form onSubmit={handleSearch} className="flex items-center">
                                     <div className="relative flex-1">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                        <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                         <Input
                                             type="search"
                                             name="search"
                                             placeholder="Search employees..."
                                             value={data.search}
-                                            onChange={e => setData('search', e.target.value)}
-                                            className="pl-9 h-9 w-[220px] md:w-[300px] text-sm bg-slate-50 border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+                                            onChange={(e) => setData('search', e.target.value)}
+                                            className="h-9 w-[220px] rounded-lg border-slate-200 bg-slate-50 pl-9 text-sm transition-all focus-visible:ring-emerald-500 md:w-[300px]"
                                         />
                                     </div>
                                     <Button
                                         type="submit"
                                         variant="secondary"
-                                        className="ml-2 h-9 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium"
+                                        className="ml-2 h-9 rounded-lg bg-slate-100 font-medium text-slate-700 hover:bg-slate-200"
                                         disabled={processing}
                                     >
                                         Search
@@ -653,7 +693,7 @@ export default function EmployeeIndex({
                                     variant="outline"
                                     size="icon"
                                     onClick={() => setShowFilters(!showFilters)}
-                                    className={`h-9 w-9 rounded-lg border-slate-200 transition-colors ${showFilters ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    className={`h-9 w-9 rounded-lg border-slate-200 transition-colors ${showFilters ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:bg-slate-50'}`}
                                 >
                                     <Filter className="h-4 w-4" />
                                 </Button>
@@ -753,12 +793,7 @@ export default function EmployeeIndex({
                                 </div>
 
                                 <div className="flex items-center">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleClearFilters}
-                                        disabled={processing}
-                                    >
+                                    <Button variant="outline" size="sm" onClick={handleClearFilters} disabled={processing}>
                                         Clear Filters
                                     </Button>
                                 </div>
@@ -770,8 +805,8 @@ export default function EmployeeIndex({
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="bg-slate-50/80 border-b border-slate-200">
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">
+                                    <TableRow className="border-b border-slate-200 bg-slate-50/80">
+                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleSort('name')}
@@ -780,7 +815,7 @@ export default function EmployeeIndex({
                                                 Employee <ArrowUpDown className="h-3.5 w-3.5" />
                                             </button>
                                         </TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">
+                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleSort('pin')}
@@ -789,11 +824,19 @@ export default function EmployeeIndex({
                                                 PIN <ArrowUpDown className="h-3.5 w-3.5" />
                                             </button>
                                         </TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Department</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Employee Type</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider whitespace-nowrap">Confirmation</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">
+                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                            Department
+                                        </TableHead>
+                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                            Branch
+                                        </TableHead>
+                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                            Employee Type
+                                        </TableHead>
+                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider whitespace-nowrap text-slate-700 uppercase">
+                                            Confirmation
+                                        </TableHead>
+                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleSort('status')}
@@ -802,7 +845,9 @@ export default function EmployeeIndex({
                                                 Status <ArrowUpDown className="h-3.5 w-3.5" />
                                             </button>
                                         </TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
+                                        <TableHead className="h-11 pr-6 text-right text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                            Actions
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -824,7 +869,7 @@ export default function EmployeeIndex({
                                         employees.data.map((employee) => (
                                             <TableRow
                                                 key={employee.id}
-                                                className="hover:bg-slate-50 transition-colors border-b border-slate-100 group"
+                                                className="group border-b border-slate-100 transition-colors hover:bg-slate-50"
                                             >
                                                 <TableCell className="pl-6">
                                                     <div className="flex items-center space-x-3">
@@ -838,31 +883,31 @@ export default function EmployeeIndex({
                                                             )}
                                                         </Avatar>
                                                         <div>
-                                                            <div className="font-semibold text-[13px] text-slate-800">
+                                                            <div className="text-[13px] font-semibold text-slate-800">
                                                                 {employeeDisplayName(employee)}
                                                             </div>
-                                                            <div className="text-[12px] font-medium text-emerald-600/90 mt-0.5">
+                                                            <div className="mt-0.5 text-[12px] font-medium text-emerald-600/90">
                                                                 {employee.designation.name}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-[13px] text-slate-600 font-medium">{employee.pin || employee.employee_id}</TableCell>
+                                                <TableCell className="text-[13px] font-medium text-slate-600">
+                                                    {employee.pin || employee.employee_id}
+                                                </TableCell>
                                                 <TableCell className="text-[13px] text-slate-600">{employee.department.name}</TableCell>
                                                 <TableCell className="text-[13px] text-slate-600">{employee.branch.name}</TableCell>
                                                 <TableCell className="text-[13px] text-slate-600">
                                                     {employee.employee_type?.name || employee.employeeType?.name || '—'}
                                                 </TableCell>
-                                                <TableCell className="text-[13px] text-slate-600 whitespace-nowrap">
+                                                <TableCell className="text-[13px] whitespace-nowrap text-slate-600">
                                                     {formatDisplayDate(employee.confirmation_date)}
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <Switch
                                                             checked={employee.status === 'active'}
-                                                            onCheckedChange={(checked) =>
-                                                                handleStatusChange(employee, checked)
-                                                            }
+                                                            onCheckedChange={(checked) => handleStatusChange(employee, checked)}
                                                             aria-label="Toggle employee active status"
                                                         />
                                                         <span
@@ -874,30 +919,37 @@ export default function EmployeeIndex({
                                                         >
                                                             {employee.status === 'active' ? 'Active' : 'Inactive'}
                                                         </span>
-                                                        {employee.status !== 'active' &&
-                                                            employee.status !== 'inactive' && (
-                                                                <span className="ml-1">
-                                                                    {getStatusBadge(employee.status)}
-                                                                </span>
-                                                            )}
+                                                        {employee.status !== 'active' && employee.status !== 'inactive' && (
+                                                            <span className="ml-1">{getStatusBadge(employee.status)}</span>
+                                                        )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-right pr-6">
+                                                <TableCell className="pr-6 text-right">
                                                     <div className="flex items-center justify-end gap-2 transition-opacity duration-200">
                                                         <Link href={route('employees.show', employee.id)}>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors" title="View Details">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                                                                title="View Details"
+                                                            >
                                                                 <Eye className="h-4 w-4" />
                                                             </Button>
                                                         </Link>
                                                         <Link href={route('employees.edit', employee.id)}>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-colors" title="Edit Employee">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                                                                title="Edit Employee"
+                                                            >
                                                                 <Edit className="h-4 w-4" />
                                                             </Button>
                                                         </Link>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 rounded-lg bg-red-50 text-red-600 transition-colors hover:bg-red-100 hover:text-red-700"
                                                             title="Delete Employee"
                                                             onClick={() => setEmployeeToDelete(employee)}
                                                         >
@@ -913,15 +965,12 @@ export default function EmployeeIndex({
                         </div>
 
                         {/* Pagination — use Laravel `link.url` (correct page + query string); never `i + 1` (wrong for ellipses). */}
-                        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-6 py-4 rounded-b-xl">
+                        <div className="flex items-center justify-between rounded-b-xl border-t border-slate-200 bg-slate-50/50 px-6 py-4">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2 text-[13px] text-slate-500">
                                     <span className="hidden sm:inline">Rows per page:</span>
-                                    <Select
-                                        value={data.per_page}
-                                        onValueChange={(value) => applyFilters({ per_page: value })}
-                                    >
-                                        <SelectTrigger className="h-8 w-[70px] text-[13px] bg-white border-slate-200">
+                                    <Select value={data.per_page} onValueChange={(value) => applyFilters({ per_page: value })}>
+                                        <SelectTrigger className="h-8 w-[70px] border-slate-200 bg-white text-[13px]">
                                             <SelectValue placeholder="10" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -936,7 +985,11 @@ export default function EmployeeIndex({
                                 </div>
                                 <div className="hidden sm:block">
                                     <p className="text-[13px] text-slate-500">
-                                        Showing <span className="font-semibold text-slate-700">{employees.total > 0 ? (employees.current_page - 1) * employees.per_page + 1 : 0}</span> to{' '}
+                                        Showing{' '}
+                                        <span className="font-semibold text-slate-700">
+                                            {employees.total > 0 ? (employees.current_page - 1) * employees.per_page + 1 : 0}
+                                        </span>{' '}
+                                        to{' '}
                                         <span className="font-semibold text-slate-700">
                                             {Math.min(employees.current_page * employees.per_page, employees.total)}
                                         </span>{' '}
@@ -947,7 +1000,7 @@ export default function EmployeeIndex({
 
                             {employees.last_page > 1 && (
                                 <div className="flex items-center justify-end">
-                                    <nav className="isolate inline-flex -space-x-px gap-1.5" aria-label="Pagination">
+                                    <nav className="isolate inline-flex gap-1.5 -space-x-px" aria-label="Pagination">
                                         {employees.current_page > 1 && employees.links[0]?.url ? (
                                             <Link
                                                 href={employees.links[0].url}
@@ -999,8 +1052,7 @@ export default function EmployeeIndex({
                                             );
                                         })}
 
-                                        {employees.current_page < employees.last_page &&
-                                        employees.links[employees.links.length - 1]?.url ? (
+                                        {employees.current_page < employees.last_page && employees.links[employees.links.length - 1]?.url ? (
                                             <Link
                                                 href={employees.links[employees.links.length - 1].url!}
                                                 preserveState
@@ -1025,18 +1077,13 @@ export default function EmployeeIndex({
                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                         <AlertDialogDescription>
                             This action will permanently delete the employee record for{' '}
-                            <span className="font-medium text-gray-900">
-                                {employeeDisplayName(employeeToDelete ?? undefined)}
-                            </span>
-                            . This action cannot be undone.
+                            <span className="font-medium text-gray-900">{employeeDisplayName(employeeToDelete ?? undefined)}</span>. This action
+                            cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDeleteEmployee}
-                            className="bg-destructive text-gray-50 hover:bg-destructive/50"
-                        >
+                        <AlertDialogAction onClick={handleDeleteEmployee} className="bg-destructive hover:bg-destructive/50 text-gray-50">
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>

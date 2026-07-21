@@ -28,6 +28,7 @@ use App\Models\Zone;
 use App\Services\EmployeeSalaryAssignmentService;
 use App\Services\OrganogramAccessService;
 use App\Support\BranchOrganogram;
+use App\Support\EmployeeExport;
 use App\Support\EmployeeImportCsv;
 use App\Support\EmployeeImportTemplateExporter;
 use App\Support\HeadOfficeOrganogram;
@@ -902,6 +903,67 @@ class EmployeeController extends Controller
 
         $this->normalizeEmployeeBankPayload($request);
         $this->normalizeEmployeeNomineeGuarantorPayload($request);
+        $this->normalizeEmployeeRepeatedTabPayload($request);
+    }
+
+    private function normalizeEmployeeRepeatedTabPayload(Request $request): void
+    {
+        $assets = $request->input('assets');
+        if (is_array($assets)) {
+            $request->merge([
+                'assets' => array_map(static fn ($asset) => is_array($asset) ? [
+                    ...$asset,
+                    'serial' => $asset['serial'] ?? $asset['serial_no'] ?? null,
+                    'name' => $asset['name'] ?? $asset['asset_name'] ?? '',
+                    'provided_quality' => $asset['provided_quality'] ?? $asset['provided_qty'] ?? null,
+                    'details' => $asset['details'] ?? $asset['asset_details'] ?? null,
+                ] : $asset, $assets),
+            ]);
+        }
+
+        $experiences = $request->input('experiences');
+        if (is_array($experiences)) {
+            $request->merge([
+                'experiences' => array_map(static fn ($experience) => is_array($experience) ? [
+                    ...$experience,
+                    'address' => $experience['address'] ?? $experience['responsibility'] ?? null,
+                ] : $experience, $experiences),
+            ]);
+        }
+
+        $documents = $request->input('documents');
+        if (is_array($documents)) {
+            $request->merge([
+                'documents' => array_map(static fn ($document) => is_array($document) ? [
+                    ...$document,
+                    'title' => trim((string) ($document['title'] ?? $document['document_title'] ?? '')),
+                ] : $document, $documents),
+            ]);
+        }
+
+        $collateral = $request->input('collateral');
+        if (is_array($collateral) && is_array($collateral['certificate_levels'] ?? null)) {
+            $levelMap = [
+                'ssc' => 'ssc',
+                'SSC' => 'ssc',
+                'hsc' => 'hsc',
+                'HSC' => 'hsc',
+                'honors' => 'honors',
+                'Honors' => 'honors',
+                'masters' => 'masters',
+                'Masters' => 'masters',
+            ];
+            $normalizedLevels = [];
+            foreach ($collateral['certificate_levels'] as $level) {
+                $key = trim((string) $level);
+                if ($key === '') {
+                    continue;
+                }
+                $normalizedLevels[] = $levelMap[$key] ?? strtolower($key);
+            }
+            $collateral['certificate_levels'] = array_values(array_unique($normalizedLevels));
+            $request->merge(['collateral' => $collateral]);
+        }
     }
 
     private function normalizeEmployeeNomineeGuarantorPayload(Request $request): void
@@ -1772,6 +1834,15 @@ class EmployeeController extends Controller
             'branches' => $branches,
             'employee_types' => $employeeTypes,
             'designations' => $designations,
+            'export_columns' => array_map(
+                fn (array $column) => [
+                    'key' => $column['key'],
+                    'label' => $column['label'],
+                    'group' => $column['group'],
+                    'group_label' => EmployeeExport::groupTitles()[$column['group']] ?? ucfirst($column['group']),
+                ],
+                EmployeeExport::columns()
+            ),
             'filters' => array_merge(
                 $request->only(['search', 'per_page', 'sort_by', 'sort_dir']),
                 [
@@ -1797,6 +1868,19 @@ class EmployeeController extends Controller
             abort(403);
         }
 
+        $availableColumnKeys = EmployeeExport::headers();
+        $requestedColumnKeys = $request->input('columns', $availableColumnKeys);
+        if (! is_array($requestedColumnKeys)) {
+            $requestedColumnKeys = preg_split('/[,\s]+/', (string) $requestedColumnKeys) ?: [];
+        }
+        $selectedColumnKeys = array_values(array_unique(array_filter(
+            array_map(static fn ($key) => trim((string) $key), $requestedColumnKeys),
+            static fn (string $key) => in_array($key, $availableColumnKeys, true)
+        )));
+        if ($selectedColumnKeys === []) {
+            abort(422, 'Select at least one column to export.');
+        }
+
         $query = Employee::query()->with([
             'department:id,name',
             'joiningDesignation:id,name',
@@ -1805,6 +1889,11 @@ class EmployeeController extends Controller
             'branch:id,name',
             'lastBranch:id,name',
             'employeeType:id,name',
+            'program:id,name',
+            'project:id,name',
+            'payscale:id,name',
+            'salaryGrade:id,name',
+            'salaryStep:id,step_number,basic_salary',
         ]);
         OrganogramAccessService::constrainVisibleEmployees($query, $user);
         $this->applyEmployeeDirectoryFilters($query, $request);
@@ -1817,6 +1906,8 @@ class EmployeeController extends Controller
 
         $banksByEmployee = collect();
         $addressesByEmployee = collect();
+        $relatedByTable = [];
+        $salaryDetailsByEmployee = collect();
         if ($employeeIds !== []) {
             $banksByEmployee = DB::table('employee_bank_accounts')
                 ->whereIn('employee_id', $employeeIds)
@@ -1830,6 +1921,41 @@ class EmployeeController extends Controller
                 ->whereIn('employee_id', $employeeIds)
                 ->get()
                 ->groupBy('employee_id');
+
+            foreach ([
+                'educations' => 'employee_educations',
+                'nominees' => 'employee_nominees',
+                'guarantors' => 'employee_guarantors',
+                'guarantor_cheques' => 'employee_guarantor_cheques',
+                'collaterals' => 'employee_collaterals',
+                'collateral_cheques' => 'employee_collateral_receive_cheques',
+                'assets' => 'employee_assets',
+                'experiences' => 'employee_experiences',
+                'trainings' => 'employee_trainings',
+                'documents' => 'employee_documents',
+            ] as $key => $table) {
+                $relatedByTable[$key] = DB::table($table)
+                    ->whereIn('employee_id', $employeeIds)
+                    ->orderBy('id')
+                    ->get()
+                    ->groupBy('employee_id');
+            }
+
+            $salaryDetailsByEmployee = DB::table('salary_head_modifications as modifications')
+                ->join('salary_heads as heads', 'heads.id', '=', 'modifications.salary_head_id')
+                ->whereIn('modifications.employee_id', $employeeIds)
+                ->where('modifications.is_active', true)
+                ->select([
+                    'modifications.employee_id',
+                    'heads.name as head_name',
+                    'heads.type as head_type',
+                    'modifications.amount_type',
+                    'modifications.amount',
+                    'modifications.effective_from',
+                ])
+                ->orderBy('heads.sort_order')
+                ->get()
+                ->groupBy('employee_id');
         }
 
         $rows = [];
@@ -1838,7 +1964,12 @@ class EmployeeController extends Controller
                 $employee,
                 $index + 1,
                 $banksByEmployee->get($employee->id),
-                $addressesByEmployee->get($employee->id, collect())
+                $addressesByEmployee->get($employee->id, collect()),
+                array_map(
+                    fn ($rows) => $rows->get($employee->id, collect()),
+                    $relatedByTable
+                ),
+                $salaryDetailsByEmployee->get($employee->id, collect())
             );
         }
 
@@ -1853,7 +1984,14 @@ class EmployeeController extends Controller
             'employee_types' => $mapRef(EmployeeType::query()->where('is_active', true)->orderBy('name')),
         ];
 
-        $xlsx = EmployeeImportTemplateExporter::generate($rows, $references);
+        $xlsx = EmployeeImportTemplateExporter::generate(
+            $rows,
+            $references,
+            $selectedColumnKeys,
+            EmployeeExport::columns(),
+            EmployeeExport::groupTitles(),
+            EmployeeExport::groupColors()
+        );
         $filename = 'employees-export-'.now()->format('Y-m-d-His').'.xlsx';
 
         return response((string) $xlsx, 200, [
@@ -1900,8 +2038,8 @@ class EmployeeController extends Controller
             if ($hasNull && $realGenders !== []) {
                 $query->where(function ($q) use ($realGenders) {
                     $q->whereIn('employees.gender', $realGenders)
-                      ->orWhereNull('employees.gender')
-                      ->orWhere('employees.gender', '');
+                        ->orWhereNull('employees.gender')
+                        ->orWhere('employees.gender', '');
                 });
             } elseif ($hasNull) {
                 $query->where(function ($q) {
@@ -2013,13 +2151,17 @@ class EmployeeController extends Controller
 
     /**
      * @param  \Illuminate\Support\Collection<int, object>|iterable<int, object>  $addresses
+     * @param  array<string, \Illuminate\Support\Collection<int, object>|iterable<int, object>>  $related
+     * @param  \Illuminate\Support\Collection<int, object>|iterable<int, object>  $salaryDetails
      * @return array<string, string>
      */
     private function mapEmployeeToImportExportRow(
         Employee $employee,
         int $sl,
         ?object $bank,
-        $addresses
+        $addresses,
+        array $related = [],
+        $salaryDetails = []
     ): array {
         $addressMap = [
             'present' => null,
@@ -2043,6 +2185,23 @@ class EmployeeController extends Controller
             return '';
         };
 
+        $relatedValues = static function (iterable $rows, string $field) use ($fmtDate): string {
+            $values = [];
+            foreach ($rows as $index => $row) {
+                $value = $row->{$field} ?? '';
+                if ($value instanceof \DateTimeInterface || str_contains($field, 'date')) {
+                    $value = $fmtDate($value);
+                } elseif (is_bool($value)) {
+                    $value = $value ? 'Yes' : 'No';
+                } elseif (is_array($value) || is_object($value)) {
+                    $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                }
+                $values[] = ($index + 1).'. '.trim((string) $value);
+            }
+
+            return implode("\n", $values);
+        };
+
         $joiningDesig = $employee->joiningDesignation?->name
             ?? $employee->designation?->name
             ?? '';
@@ -2052,6 +2211,35 @@ class EmployeeController extends Controller
 
         $present = $addressMap['present'];
         $permanent = $addressMap['permanent'];
+        $educations = $related['educations'] ?? [];
+        $nominees = $related['nominees'] ?? [];
+        $guarantors = $related['guarantors'] ?? [];
+        $guarantorCheques = $related['guarantor_cheques'] ?? [];
+        $collateralRows = $related['collaterals'] ?? [];
+        $collateral = collect($collateralRows)->first();
+        $collateralCheques = $related['collateral_cheques'] ?? [];
+        $assets = $related['assets'] ?? [];
+        $experiences = $related['experiences'] ?? [];
+        $trainings = $related['trainings'] ?? [];
+        $documents = $related['documents'] ?? [];
+
+        $salaryLines = [];
+        foreach ($salaryDetails as $index => $detail) {
+            $amount = (string) ($detail->amount ?? '');
+            if (($detail->amount_type ?? '') === 'percentage') {
+                $amount .= '%';
+            }
+            $salaryLines[] = ($index + 1).'. '.(string) ($detail->head_name ?? '')
+                .' ['.(string) ($detail->head_type ?? '').']: '.$amount;
+        }
+
+        $certificateLevels = '';
+        if ($collateral !== null) {
+            $decodedLevels = json_decode((string) ($collateral->certificate_levels ?? ''), true);
+            $certificateLevels = is_array($decodedLevels)
+                ? implode(', ', array_map('strval', $decodedLevels))
+                : (string) ($collateral->certificate_levels ?? '');
+        }
 
         return [
             'sl' => (string) $sl,
@@ -2091,16 +2279,93 @@ class EmployeeController extends Controller
             'bank_branch_name' => (string) ($bank->branch_name ?? ''),
             'bank_account_no' => (string) ($bank->account_no ?? ''),
             'bank_account_type' => (string) ($bank->account_type ?? ''),
+            'bank_address' => (string) ($bank->bank_address ?? ''),
+            'bank_remark' => (string) ($bank->remark ?? ''),
             'present_division' => (string) ($present->division ?? ''),
             'present_district' => (string) ($present->district ?? ''),
             'present_upazila' => (string) ($present->upazila ?? ''),
             'present_union' => (string) ($present->union ?? ''),
             'present_village' => (string) ($present->village ?? ''),
+            'present_address_details' => (string) ($present->address_details ?? ''),
             'permanent_division' => (string) ($permanent->division ?? ''),
             'permanent_district' => (string) ($permanent->district ?? ''),
             'permanent_upazila' => (string) ($permanent->upazila ?? ''),
             'permanent_union' => (string) ($permanent->union ?? ''),
             'permanent_village' => (string) ($permanent->village ?? ''),
+            'permanent_address_details' => (string) ($permanent->address_details ?? ''),
+            'program' => (string) ($employee->program?->name ?? ''),
+            'project' => (string) ($employee->project?->name ?? ''),
+            'is_project_employee' => $employee->is_project_employee ? 'Yes' : 'No',
+            'is_custodian' => $employee->is_custodian ? 'Yes' : 'No',
+            'probation_period' => $employee->probation_period_days !== null
+                ? (string) $employee->probation_period_days.' days'
+                : '',
+            'age' => $employee->staff_age_years !== null
+                ? (string) $employee->staff_age_years.' years'
+                : '',
+            'payscale' => (string) ($employee->payscale?->name ?? ''),
+            'salary_grade' => (string) ($employee->salaryGrade?->name ?? ''),
+            'salary_step' => $employee->salaryStep
+                ? 'Step '.(string) $employee->salaryStep->step_number
+                : '',
+            'basic_salary' => (string) ($employee->basic_salary ?? ''),
+            'salary_details' => implode("\n", $salaryLines),
+            'photo' => (string) ($employee->photo ?? ''),
+            'signature' => (string) ($employee->signature ?? ''),
+            'education_degree' => $relatedValues($educations, 'degree'),
+            'education_institute' => $relatedValues($educations, 'institute'),
+            'education_board' => $relatedValues($educations, 'board'),
+            'education_group' => $relatedValues($educations, 'group_name'),
+            'education_subject' => $relatedValues($educations, 'subject'),
+            'education_result_type' => $relatedValues($educations, 'result_type'),
+            'education_result_value' => $relatedValues($educations, 'result_value'),
+            'nominee_name' => $relatedValues($nominees, 'name'),
+            'nominee_relation' => $relatedValues($nominees, 'relation'),
+            'nominee_mobile' => $relatedValues($nominees, 'contact'),
+            'nominee_date_of_birth' => $relatedValues($nominees, 'date_of_birth'),
+            'nominee_share' => $relatedValues($nominees, 'share'),
+            'guarantor_name' => $relatedValues($guarantors, 'name'),
+            'guarantor_father_name' => $relatedValues($guarantors, 'father_name'),
+            'guarantor_mobile' => $relatedValues($guarantors, 'phone'),
+            'guarantor_address' => $relatedValues($guarantors, 'address'),
+            'guarantor_profession' => $relatedValues($guarantors, 'occupation'),
+            'guarantor_organization' => $relatedValues($guarantors, 'organization'),
+            'guarantor_designation' => $relatedValues($guarantors, 'designation'),
+            'guarantor_nid' => $relatedValues($guarantors, 'nid'),
+            'guarantor_cheque_bank' => $relatedValues($guarantorCheques, 'bank_name'),
+            'guarantor_cheque_number' => $relatedValues($guarantorCheques, 'cheque_no'),
+            'guarantor_cheque_amount' => $relatedValues($guarantorCheques, 'amount'),
+            'collateral_has_certificate' => $collateral?->has_certificate ? 'Yes' : 'No',
+            'collateral_certificate_levels' => $certificateLevels,
+            'collateral_security_amount' => (string) ($collateral->security_amount ?? ''),
+            'collateral_interest' => (string) ($collateral->collateral_interest ?? ''),
+            'collateral_date' => $fmtDate($collateral->collateral_date ?? null),
+            'collateral_notes' => (string) ($collateral->notes ?? ''),
+            'collateral_cheque_bank' => $relatedValues($collateralCheques, 'bank_name'),
+            'collateral_cheque_number' => $relatedValues($collateralCheques, 'cheque_no'),
+            'collateral_cheque_amount' => $relatedValues($collateralCheques, 'amount'),
+            'asset_serial' => $relatedValues($assets, 'serial'),
+            'asset_number' => $relatedValues($assets, 'asset_no'),
+            'asset_name' => $relatedValues($assets, 'name'),
+            'asset_quantity' => $relatedValues($assets, 'provided_quality'),
+            'asset_price' => $relatedValues($assets, 'asset_price'),
+            'asset_details' => $relatedValues($assets, 'details'),
+            'experience_organization' => $relatedValues($experiences, 'organization'),
+            'experience_from_date' => $relatedValues($experiences, 'from_date'),
+            'experience_to_date' => $relatedValues($experiences, 'to_date'),
+            'experience_designation' => $relatedValues($experiences, 'designation'),
+            'experience_department' => $relatedValues($experiences, 'department'),
+            'experience_responsibility' => $relatedValues($experiences, 'address'),
+            'training_title' => $relatedValues($trainings, 'training_title'),
+            'training_institute' => $relatedValues($trainings, 'institute'),
+            'training_duration' => $relatedValues($trainings, 'duration'),
+            'training_address' => $relatedValues($trainings, 'address'),
+            'training_remarks' => $relatedValues($trainings, 'remarks'),
+            'document_type' => $relatedValues($documents, 'document_type'),
+            'document_title' => $relatedValues($documents, 'title'),
+            'document_description' => $relatedValues($documents, 'description'),
+            'document_expiry_date' => $relatedValues($documents, 'expiry_date'),
+            'document_file' => $relatedValues($documents, 'file_path'),
         ];
     }
 
@@ -2325,6 +2590,7 @@ class EmployeeController extends Controller
                 'guarantor_cheques.*.bank_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.branch_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.cheque_no' => 'nullable|string|max:80',
+                'guarantor_cheques.*.amount' => 'nullable|numeric|min:0',
 
                 'collateral' => 'nullable|array',
                 'collateral.has_certificate' => 'nullable|boolean',
@@ -2339,6 +2605,7 @@ class EmployeeController extends Controller
                 'collateral_receive_cheques.*.bank_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.branch_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.cheque_no' => 'nullable|string|max:80',
+                'collateral_receive_cheques.*.amount' => 'nullable|numeric|min:0',
                 'collateral_receive_cheques.*.notes' => 'nullable|string',
 
                 'assets' => 'nullable|array',
@@ -2522,6 +2789,7 @@ class EmployeeController extends Controller
                         'bank_name' => $c['bank_name'] ?? null,
                         'branch_name' => $c['branch_name'] ?? null,
                         'cheque_no' => $c['cheque_no'] ?? null,
+                        'amount' => $c['amount'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -2551,6 +2819,7 @@ class EmployeeController extends Controller
                         'bank_name' => $rc['bank_name'] ?? null,
                         'branch_name' => $rc['branch_name'] ?? null,
                         'cheque_no' => $rc['cheque_no'] ?? null,
+                        'amount' => $rc['amount'] ?? null,
                         'notes' => $rc['notes'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -2849,6 +3118,7 @@ class EmployeeController extends Controller
                 'guarantor_cheques.*.bank_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.branch_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.cheque_no' => 'nullable|string|max:80',
+                'guarantor_cheques.*.amount' => 'nullable|numeric|min:0',
 
                 'collateral' => 'nullable|array',
                 'collateral.has_certificate' => 'nullable|boolean',
@@ -2863,6 +3133,7 @@ class EmployeeController extends Controller
                 'collateral_receive_cheques.*.bank_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.branch_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.cheque_no' => 'nullable|string|max:80',
+                'collateral_receive_cheques.*.amount' => 'nullable|numeric|min:0',
                 'collateral_receive_cheques.*.notes' => 'nullable|string',
 
                 'assets' => 'nullable|array',
@@ -3045,6 +3316,7 @@ class EmployeeController extends Controller
                         'bank_name' => $c['bank_name'] ?? null,
                         'branch_name' => $c['branch_name'] ?? null,
                         'cheque_no' => $c['cheque_no'] ?? null,
+                        'amount' => $c['amount'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -3074,6 +3346,7 @@ class EmployeeController extends Controller
                         'bank_name' => $rc['bank_name'] ?? null,
                         'branch_name' => $rc['branch_name'] ?? null,
                         'cheque_no' => $rc['cheque_no'] ?? null,
+                        'amount' => $rc['amount'] ?? null,
                         'notes' => $rc['notes'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),

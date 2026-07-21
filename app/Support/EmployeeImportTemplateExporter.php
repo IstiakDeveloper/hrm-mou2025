@@ -13,15 +13,28 @@ final class EmployeeImportTemplateExporter
      * @param  list<array<string, string>>  $sampleRows  keyed by column key
      * @param  array<string, list<array{id: int|string, name: string}>>  $references
      */
-    public static function generate(array $sampleRows, array $references = []): SimpleXLSXGen
-    {
+    public static function generate(
+        array $sampleRows,
+        array $references = [],
+        ?array $selectedColumnKeys = null,
+        ?array $columnDefinitions = null,
+        ?array $groupTitles = null,
+        ?array $groupColors = null
+    ): SimpleXLSXGen {
         $xlsx = SimpleXLSXGen::create('Employee Import');
         $xlsx->setAuthor('HRM System')
             ->setTitle('Employee Import Template')
             ->setSubject('Bulk employee import')
             ->setDescription('Fill employee data starting row 4. Do not change row 3 (field keys).');
 
-        self::addDataSheet($xlsx, $sampleRows);
+        self::addDataSheet(
+            $xlsx,
+            $sampleRows,
+            $selectedColumnKeys,
+            $columnDefinitions,
+            $groupTitles,
+            $groupColors
+        );
         self::addGuideSheet($xlsx);
         self::addReferenceSheet($xlsx, $references);
 
@@ -31,11 +44,24 @@ final class EmployeeImportTemplateExporter
     /**
      * @param  list<array<string, string>>  $sampleRows
      */
-    private static function addDataSheet(SimpleXLSXGen $xlsx, array $sampleRows): void
-    {
-        $columns = EmployeeImportCsv::columns();
-        $groupTitles = EmployeeImportCsv::groupTitles();
-        $groupColors = EmployeeImportCsv::groupColors();
+    private static function addDataSheet(
+        SimpleXLSXGen $xlsx,
+        array $sampleRows,
+        ?array $selectedColumnKeys = null,
+        ?array $columnDefinitions = null,
+        ?array $customGroupTitles = null,
+        ?array $customGroupColors = null
+    ): void {
+        $columns = $columnDefinitions ?? EmployeeImportCsv::columns();
+        if ($selectedColumnKeys !== null) {
+            $selected = array_fill_keys($selectedColumnKeys, true);
+            $columns = array_values(array_filter(
+                $columns,
+                fn (array $column) => isset($selected[$column['key']])
+            ));
+        }
+        $groupTitles = $customGroupTitles ?? EmployeeImportCsv::groupTitles();
+        $groupColors = $customGroupColors ?? EmployeeImportCsv::groupColors();
 
         $groupRow = [];
         $labelRow = [];
