@@ -6,9 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, ArrowRight, Calendar, Check, UserCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calendar, Check, Pencil, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { parseFormDateValue } from '@/lib/display-date';
+
+function formatConfirmationDate(value: unknown): string {
+    const d = parseFormDateValue(value);
+    return d ? format(d, 'dd MMM yyyy') : '—';
+}
 
 type Designation = { id: number; name: string };
 type SalaryGrade = { id: number; name: string };
@@ -40,7 +46,7 @@ type Confirmation = {
     promotion?: { id: number } | null;
 };
 
-type Props = { confirmation: Confirmation };
+type Props = { confirmation: Confirmation; canEdit?: boolean };
 
 function pickName(x: Designation | EmployeeType | null | undefined): string {
     return x?.name?.trim() ? x.name : '—';
@@ -57,7 +63,7 @@ function statusBadge(status: Confirmation['status']) {
     }
 }
 
-export default function ConfirmationShow({ confirmation }: Props) {
+export default function ConfirmationShow({ confirmation, canEdit = false }: Props) {
     const anyC: any = confirmation;
     const fromDesignation = anyC.fromDesignation ?? anyC.from_designation;
     const toDesignation = anyC.toDesignation ?? anyC.to_designation;
@@ -68,7 +74,7 @@ export default function ConfirmationShow({ confirmation }: Props) {
     const fromStep = anyC.fromSalaryStep ?? anyC.from_salary_step;
     const toStep = anyC.toSalaryStep ?? anyC.to_salary_step;
     const promotion = anyC.promotion ?? null;
-    const date = new Date(confirmation.confirmation_date);
+    const dateLabel = formatConfirmationDate(confirmation.confirmation_date);
 
     return (
         <Layout>
@@ -86,11 +92,21 @@ export default function ConfirmationShow({ confirmation }: Props) {
                         <h1 className="text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Confirmation record</h1>
                         <p className="mt-1 text-xs text-zinc-600">Request #{confirmation.id}</p>
                     </div>
-                    {confirmation.status === 'approved' && (
-                        <Button size="sm" className="h-8 bg-emerald-600 text-xs hover:bg-emerald-700" onClick={() => confirm('Apply confirmation now?') && router.post(route('confirmations.complete', confirmation.id))}>
-                            <Check className="mr-1.5 h-3.5 w-3.5" />Apply now
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {canEdit && (
+                            <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+                                <Link href={route('confirmations.edit', confirmation.id)}>
+                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                    Edit
+                                </Link>
+                            </Button>
+                        )}
+                        {confirmation.status === 'approved' && (
+                            <Button size="sm" className="h-8 bg-emerald-600 text-xs hover:bg-emerald-700" onClick={() => confirm('Apply confirmation now?') && router.post(route('confirmations.complete', confirmation.id))}>
+                                <Check className="mr-1.5 h-3.5 w-3.5" />Apply now
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -101,7 +117,7 @@ export default function ConfirmationShow({ confirmation }: Props) {
                                     <span>Details</span>
                                     {statusBadge(confirmation.status)}
                                 </CardTitle>
-                                <CardDescription className="text-xs text-zinc-500">Confirmation on {format(date, 'dd MMM yyyy')}</CardDescription>
+                                <CardDescription className="text-xs text-zinc-500">Confirmation on {dateLabel}</CardDescription>
                             </CardHeader>
                             <CardContent className="pt-4">
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -153,7 +169,7 @@ export default function ConfirmationShow({ confirmation }: Props) {
                                     <p className="text-[10px] text-zinc-500">{confirmation.employee.employee_id}</p>
                                 </div>
                                 <div className="rounded-lg border border-zinc-200 bg-white p-3">
-                                    <div className="flex items-center gap-2 text-zinc-700"><Calendar className="h-4 w-4 text-zinc-400" />Confirmation: {format(date, 'dd MMM yyyy')}</div>
+                                    <div className="flex items-center gap-2 text-zinc-700"><Calendar className="h-4 w-4 text-zinc-400" />Confirmation: {dateLabel}</div>
                                     <div className="mt-2 flex items-center gap-2 text-zinc-700"><UserCheck className="h-4 w-4 text-zinc-400" />Order: {confirmation.confirmation_order_no ?? '—'}</div>
                                     <div className="mt-2 flex items-center gap-1 text-zinc-700">
                                         <span>{pickName(fromDesignation)}</span>

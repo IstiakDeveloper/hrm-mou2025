@@ -59,7 +59,8 @@ export function previewTotals(payslip: PayslipRow, amounts: Record<number, strin
         if (!Number.isFinite(amt)) continue;
         if (line.type === 'earning') {
             gross += amt;
-            if (line.head_name === 'Basic' || line.salary_head_id === null) {
+            // Fixed Salary / Probation Salary are "Others" earnings — never Basic.
+            if (line.head_name === 'Basic') {
                 basic = amt;
             }
         } else {
@@ -109,7 +110,9 @@ function ComponentRow({
             )}
         >
             <div className="min-w-0">
-                <p className={cn('text-xs font-semibold tracking-tight', line.is_loan ? 'text-amber-900' : 'text-slate-800')}>{line.head_name}</p>
+                <p className={cn('text-xs font-semibold tracking-tight', line.is_loan ? 'text-amber-900' : 'text-slate-800')}>
+                    {lineHeadDisplayLabel(line)}
+                </p>
                 <p className="text-[10px] text-slate-400 font-medium mt-0.5">{line.is_loan ? 'Loan installment' : typeHint}</p>
             </div>
             {canEdit ? (
@@ -150,6 +153,10 @@ function isOthersEarningHead(headName: string): boolean {
 }
 
 function lineHeadDisplayLabel(line: PayslipLineRow): string {
+    if (isOthersEarningHead(line.head_name)) {
+        return 'Others';
+    }
+
     return line.head_label?.trim() || line.head_name;
 }
 

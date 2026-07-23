@@ -8,9 +8,11 @@ return [
     'tiers' => [
         ['level' => 1, 'label' => 'Branch Manager'],
         ['level' => 2, 'label' => 'Assistant Branch Manager'],
-        ['level' => 3, 'label' => 'Officer'],
-        ['level' => 4, 'label' => 'Accountant'],
-        ['level' => 5, 'label' => 'Probationary Staff'],
+        ['level' => 3, 'label' => 'Accountant'],
+        ['level' => 4, 'label' => 'Probationary Accountant'],
+        ['level' => 5, 'label' => 'Officer'],
+        ['level' => 6, 'label' => 'Probationary Staff'],
+        ['level' => 7, 'label' => 'Cashier'],
     ],
 
     'fallback_tier' => [

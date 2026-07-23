@@ -8,10 +8,10 @@ use App\Models\InventoryProduct;
 use App\Services\InventoryLedgerService;
 use App\Support\InventoryBranchScope;
 use App\Support\InventoryReportCsvExporter;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InventoryReportController extends Controller

@@ -8,7 +8,7 @@ use App\Models\LeaveApplication;
 use App\Models\LeaveType;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\ProjectPdf;
 use Carbon\Carbon;
 
 class EmployeeLeaveController extends Controller

@@ -351,11 +351,29 @@ class AttendanceDataUpdateController extends Controller
      */
     protected function isEmployeeOnMovement($employeeId, $date)
     {
+        $dayStart = $date->copy()->startOfDay();
+        $dayEnd = $date->copy()->endOfDay();
+
         return Movement::where('employee_id', $employeeId)
-            ->whereIn('status', ['approved', 'completed'])
+            ->whereIn('status', ['approved', 'completed', 'active'])
             ->where('movement_type', 'official')
-            ->where('from_datetime', '<=', $date->endOfDay())
-            ->where('to_datetime', '>=', $date->startOfDay())
+            ->where('from_datetime', '<=', $dayEnd)
+            ->where(function ($query) use ($dayStart) {
+                $query->where(function ($q) use ($dayStart) {
+                    // Closed: only days up to actual return
+                    $q->where('status', 'completed')
+                        ->whereNotNull('actual_return_datetime')
+                        ->where('actual_return_datetime', '>=', $dayStart);
+                })->orWhere(function ($q) use ($dayStart) {
+                    // Still open: covers this day if started on/before it
+                    $q->whereIn('status', ['active', 'approved']);
+                })->orWhere(function ($q) use ($dayStart) {
+                    // Completed but missing return time — fall back to planned end
+                    $q->where('status', 'completed')
+                        ->whereNull('actual_return_datetime')
+                        ->where('to_datetime', '>=', $dayStart);
+                });
+            })
             ->exists();
     }
 

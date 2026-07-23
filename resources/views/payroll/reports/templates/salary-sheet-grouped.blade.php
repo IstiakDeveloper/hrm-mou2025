@@ -12,6 +12,10 @@
 @endphp
 @forelse ($payload['sections'] ?? [] as $sectionIndex => $section)
     @php
+        $heads = $section['heads'] ?? $payload['heads'] ?? [];
+        $earningHeads = $section['earning_heads'] ?? $payload['earning_heads'] ?? [];
+        $deductionHeads = $section['deduction_heads'] ?? $payload['deduction_heads'] ?? [];
+        $headLabels = $section['head_labels'] ?? $payload['head_labels'] ?? [];
         $pages = $reportService->paginateSalarySheetSectionPages(
             $section['rows'] ?? [],
             $heads,
@@ -20,11 +24,25 @@
         $sectionLayoutPayload = array_merge($payload, [
             'rows' => $section['rows'] ?? [],
             'totals' => $section['totals'] ?? null,
+            'heads' => $heads,
+            'earning_heads' => $earningHeads,
+            'deduction_heads' => $deductionHeads,
+            'head_labels' => $headLabels,
         ]);
         $sectionDataWidths = PayrollReportTableWidths::salarySheetData($sectionLayoutPayload, $fmtAmt);
         $sectionColWidths = PayrollReportTableWidths::salarySheet($sectionLayoutPayload, $fmtAmt);
-        $sectionDataTotalChars = PayrollReportTableWidths::salarySheetTotalChars($sectionDataWidths, $earningHeads, $deductionHeads);
-        $sectionLayoutTotalChars = PayrollReportTableWidths::salarySheetTotalChars($sectionColWidths, $earningHeads, $deductionHeads);
+        $sectionDataTotalChars = PayrollReportTableWidths::salarySheetTotalChars(
+            $sectionDataWidths,
+            $earningHeads,
+            $deductionHeads,
+            ! empty($payload['topsheet']),
+        );
+        $sectionLayoutTotalChars = PayrollReportTableWidths::salarySheetTotalChars(
+            $sectionColWidths,
+            $earningHeads,
+            $deductionHeads,
+            ! empty($payload['topsheet']),
+        );
         $sectionTableLayout = [
             'colWidths' => $sectionColWidths,
             'fillPage' => PayrollReportTableWidths::shouldFillPageWidth($sectionDataTotalChars),
@@ -44,7 +62,7 @@
                     ])
                 @endif
                 @include('payroll.reports.templates.salary-sheet-table', [
-                    'payload' => array_merge($payload, [
+                    'payload' => array_merge($sectionLayoutPayload, [
                         'rows' => $page['rows'],
                         'totals' => $page['totals'],
                         'totals_label' => $page['totals_label'],

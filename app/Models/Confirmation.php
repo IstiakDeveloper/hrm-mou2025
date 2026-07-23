@@ -85,6 +85,11 @@ class Confirmation extends Model
         return $this->belongsTo(Promotion::class);
     }
 
+    public function histories()
+    {
+        return $this->hasMany(ConfirmationHistory::class);
+    }
+
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');

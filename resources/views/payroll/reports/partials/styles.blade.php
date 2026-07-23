@@ -216,6 +216,7 @@
         width: auto;
         max-width: 100%;
         page-break-inside: avoid;
+        font-size: 8pt;
     }
 
     table.salary-sheet-table.salary-sheet-table-fill {
@@ -251,7 +252,7 @@
     table.salary-sheet-table th,
     table.salary-sheet-table td {
         vertical-align: middle;
-        padding: 4px 4px;
+        padding: 3px 3px;
     }
 
     table.salary-sheet-table td {
@@ -266,6 +267,7 @@
         hyphens: none;
         overflow: visible;
         line-height: 1.1;
+        font-size: 7.5pt;
     }
 
     table.salary-sheet-table td.col-amount,
@@ -277,11 +279,12 @@
 
     table.salary-sheet-table th.col-serial,
     table.salary-sheet-table td.col-serial {
-        min-width: 5ch;
+        min-width: 4ch;
     }
 
     table.salary-sheet-table td.col-amount {
         font-variant-numeric: tabular-nums;
+        font-size: 7.5pt;
     }
 
     table.salary-sheet-table tr.totals-row td.col-amount {
@@ -294,6 +297,7 @@
         white-space: nowrap;
         text-align: left;
         overflow: visible;
+        font-size: 7.5pt;
     }
 
     table.salary-sheet-table th.cell-name {
@@ -307,10 +311,19 @@
 
     table.salary-sheet-table th.component-head {
         font-size: 6.5pt;
-        line-height: 1.05;
+        line-height: 1.1;
         word-break: normal;
         overflow-wrap: normal;
         hyphens: none;
+        padding: 2px 2px;
+    }
+
+    table.salary-sheet-table tr.category-head-row th {
+        text-align: center;
+        font-size: 8pt;
+        border-bottom: 1px solid #000;
+        vertical-align: middle;
+        padding: 4px 3px;
     }
 
     table.data tr.category-head-row th {
@@ -469,9 +482,44 @@
         vertical-align: middle;
     }
 
+    body.report-landscape table.salary-sheet-table {
+        font-size: 7pt;
+    }
+
+    body.report-landscape table.salary-sheet-table th,
+    body.report-landscape table.salary-sheet-table td {
+        padding: 2px 2px;
+        font-size: 7pt;
+    }
+
+    body.report-landscape table.salary-sheet-table th.component-head {
+        font-size: 6pt;
+        line-height: 1.1;
+        padding: 2px 1.5px;
+    }
+
+    body.report-landscape table.salary-sheet-table tr.category-head-row th {
+        font-size: 7.5pt;
+        padding: 3px 2px;
+    }
+
     body.report-landscape table.salary-sheet-table th.num,
     body.report-landscape table.salary-sheet-table td.num {
         text-align: center;
+    }
+
+    body.pdf-export table.salary-sheet-table {
+        font-size: 7pt;
+    }
+
+    body.pdf-export table.salary-sheet-table th,
+    body.pdf-export table.salary-sheet-table td {
+        padding: 2px 2px;
+        font-size: 7pt;
+    }
+
+    body.pdf-export table.salary-sheet-table th.component-head {
+        font-size: 6pt;
     }
 
     body.pdf-export table.salary-sheet-table.salary-sheet-table-fill {

@@ -11,9 +11,9 @@ use App\Models\FixedAsset;
 use App\Services\AssetFinancialYearService;
 use App\Services\FixedAssetReportService;
 use App\Support\FixedAssetReportCsvExporter;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FixedAssetReportController extends Controller
@@ -58,6 +58,7 @@ class FixedAssetReportController extends Controller
 
         return Inertia::render('fixed-asset/reports/show', [
             'companyName' => config('fixed_asset_reports.company_name'),
+            'companyAddress' => config('fixed_asset_reports.company_address', config('payroll_reports.company_address', '')),
             'report' => [
                 'slug' => $report,
                 'title' => $config['title'],
@@ -73,6 +74,8 @@ class FixedAssetReportController extends Controller
             'generated' => $generated,
             'payload' => $payload,
             'periodLabel' => $this->reports->periodLabel($filters, $config),
+            'branchLabel' => $this->reports->branchHeaderLabel($filters),
+            'printMetaLabel' => $this->reports->printMetaLabel($filters, $config),
             'error' => $error,
             'exportUrls' => $generated && $payload ? [
                 'print' => route('fixed-asset.reports.print', $report).($query ? '?'.$query : ''),
@@ -93,7 +96,8 @@ class FixedAssetReportController extends Controller
     public function pdf(Request $request, string $report)
     {
         $data = $this->documentData($request, $report);
-        $pdf = Pdf::loadView('fixed-asset.reports.document', $data)->setPaper('a4', 'portrait');
+        $orientation = ! empty($data['landscape']) ? 'landscape' : 'portrait';
+        $pdf = Pdf::loadView('fixed-asset.reports.document', $data)->setPaper('a4', $orientation);
         $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.pdf';
 
         return $pdf->download($filename);
@@ -120,14 +124,20 @@ class FixedAssetReportController extends Controller
             $config,
         );
         $payload = $this->reports->build($report, $config, $filters);
+        $wideSchedule = ($config['template'] ?? '') === 'depreciation-schedule'
+            && in_array($config['schedule_variant'] ?? '', ['audit', 'summary'], true);
 
         return [
             'companyName' => config('fixed_asset_reports.company_name'),
+            'companyAddress' => config('fixed_asset_reports.company_address', config('payroll_reports.company_address', '')),
             'title' => $config['title'],
             'periodLabel' => $this->reports->periodLabel($filters, $config),
+            'branchLabel' => $this->reports->branchHeaderLabel($filters),
+            'printMetaLabel' => $this->reports->printMetaLabel($filters, $config),
             'generatedAt' => now()->format('d M Y H:i'),
             'payload' => $payload,
             'printMode' => false,
+            'landscape' => $wideSchedule,
         ];
     }
 

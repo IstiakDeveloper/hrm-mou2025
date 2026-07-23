@@ -12,8 +12,8 @@ class PayrollReportTableWidths
      * @return array{
      *     serial: int,
      *     name: int,
+     *     pin: int,
      *     designation: int,
-     *     grade_step: int,
      *     earning: array<string, int>,
      *     gross: int,
      *     deduction: array<string, int>,
@@ -36,24 +36,20 @@ class PayrollReportTableWidths
             $serialTexts[] = (string) ($serialStart + $index + 1);
         }
 
-        $nameTexts = [];
-        foreach ($rows as $row) {
-            if (! empty($row['name']) && ! empty($row['pin'])) {
-                $nameTexts[] = $row['name'].' ('.$row['pin'].')';
-            } else {
-                $nameTexts[] = (string) ($row['name'] ?? $row['pin'] ?? '');
-            }
-        }
+        $nameTexts = array_map(
+            fn (array $row): string => (string) ($row['name'] ?? ''),
+            $rows,
+        );
         if ($totals) {
             $nameTexts[] = $totalsLabel;
         }
 
-        $designationTexts = array_map(
-            fn (array $row): string => (string) ($row['designation'] ?? ''),
+        $pinTexts = array_map(
+            fn (array $row): string => (string) ($row['pin'] ?? ''),
             $rows,
         );
-        $gradeTexts = array_map(
-            fn (array $row): string => (string) ($row['grade_step'] ?? ''),
+        $designationTexts = array_map(
+            fn (array $row): string => (string) ($row['designation'] ?? ''),
             $rows,
         );
         $bankTexts = array_map(
@@ -74,14 +70,14 @@ class PayrollReportTableWidths
         return [
             'serial' => self::maxLength($serialTexts, 2),
             'name' => self::maxLength($nameTexts, 4),
+            'pin' => self::maxLength($pinTexts, 3),
             'designation' => self::maxLength($designationTexts, 4),
-            'grade_step' => self::maxLength($gradeTexts, 4),
             'earning' => $earning,
             'gross' => self::amountWidth($rows, $totals, $fmtAmt, fn (array $row) => $row['gross'] ?? 0),
             'deduction' => $deduction,
             'ded' => self::amountWidth($rows, $totals, $fmtAmt, fn (array $row) => $row['deduction'] ?? 0),
             'net' => self::amountWidth($rows, $totals, $fmtAmt, fn (array $row) => $row['net'] ?? 0),
-            'bank' => self::maxLength($bankTexts, 4),
+            'bank' => self::maxLength($bankTexts, 14),
         ];
     }
 
@@ -93,8 +89,8 @@ class PayrollReportTableWidths
      * @return array{
      *     serial: int,
      *     name: int,
+     *     pin: int,
      *     designation: int,
-     *     grade_step: int,
      *     earning: array<string, int>,
      *     gross: int,
      *     deduction: array<string, int>,
@@ -109,6 +105,9 @@ class PayrollReportTableWidths
         $headLabels = $payload['head_labels'] ?? [];
         $earningHeads = $payload['earning_heads'] ?? [];
         $deductionHeads = $payload['deduction_heads'] ?? [];
+        $topsheet = ! empty($payload['topsheet']);
+        $nameHeader = $topsheet ? 'Branch' : 'Name';
+        $designationHeader = $topsheet ? 'Employees' : 'Designation';
 
         $earning = [];
         foreach ($earningHeads as $head) {
@@ -123,16 +122,16 @@ class PayrollReportTableWidths
         }
 
         return [
-            'serial' => self::serialColumnWidth(max($data['serial'], self::headerMinWidth('#'))),
-            'name' => self::textColumnWidth($data['name'], 'Name (Pin)'),
-            'designation' => self::textColumnWidth($data['designation'], 'Designation'),
-            'grade_step' => self::textColumnWidth($data['grade_step'], 'Grade (Step)'),
+            'serial' => self::serialColumnWidth(max($data['serial'], self::headerMinWidth('SL'))),
+            'name' => self::textColumnWidth($data['name'], $nameHeader),
+            'pin' => $topsheet ? 0 : self::textColumnWidth($data['pin'], 'PIN'),
+            'designation' => self::textColumnWidth($data['designation'], $designationHeader),
             'earning' => $earning,
             'gross' => self::amountColumnWidth($data['gross'], 'Gross'),
             'deduction' => $deduction,
-            'ded' => self::amountColumnWidth($data['ded'], 'Ded.'),
-            'net' => self::amountColumnWidth($data['net'], 'Net'),
-            'bank' => self::textColumnWidth($data['bank'], 'Bank Account No.'),
+            'ded' => self::amountColumnWidth($data['ded'], 'Total Deduction'),
+            'net' => self::amountColumnWidth($data['net'], 'Net Payable'),
+            'bank' => $topsheet ? 0 : self::textColumnWidth($data['bank'], 'Account No.') + 4,
         ];
     }
 
@@ -248,8 +247,8 @@ class PayrollReportTableWidths
      * @param  array{
      *     serial: int,
      *     name: int,
+     *     pin: int,
      *     designation: int,
-     *     grade_step: int,
      *     earning: array<string, int>,
      *     gross: int,
      *     deduction: array<string, int>,
@@ -258,19 +257,19 @@ class PayrollReportTableWidths
      *     bank: int,
      * }  $widths
      */
-    public static function salarySheetTotalChars(array $widths, array $earningHeads, array $deductionHeads): int
+    public static function salarySheetTotalChars(array $widths, array $earningHeads, array $deductionHeads, bool $topsheet = false): int
     {
         $all = [
             $widths['serial'],
             $widths['name'],
+            ...($topsheet ? [] : [$widths['pin']]),
             $widths['designation'],
-            $widths['grade_step'],
             ...array_values($widths['earning']),
             $widths['gross'],
             ...array_values($widths['deduction']),
             $widths['ded'],
             $widths['net'],
-            $widths['bank'],
+            ...($topsheet ? [] : [$widths['bank']]),
         ];
 
         return max(1, array_sum($all));

@@ -20,6 +20,12 @@ import {
     type PayrollStepOption,
 } from '@/components/employee/EmployeeSalaryAssignment';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { parseFormDateValue } from '@/lib/display-date';
+
+function formatConfirmationDate(value: unknown): string {
+    const d = parseFormDateValue(value);
+    return d ? format(d, 'dd MMM yyyy') : '—';
+}
 
 type EmployeeType = { id: number; name: string; probation_months: number };
 type Designation = { id: number; name: string };
@@ -219,7 +225,6 @@ export default function CreateConfirmation({
                                                         mode="single"
                                                         selected={confirmationDate}
                                                         onSelect={(d) => { setConfirmationDate(d ?? undefined); setConfirmationDateOpen(false); }}
-                                                        disabled={(date) => { const today = new Date(); today.setHours(0, 0, 0, 0); return date < today; }}
                                                     />
                                                 </PopoverContent>
                                             </Popover>
@@ -269,7 +274,7 @@ export default function CreateConfirmation({
                                             <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Probation → Permanent</p>
                                             <p className="mt-2 text-zinc-700">Type: {employeeType?.name ?? '—'} → {permanentEmployeeType?.name ?? 'Permanent'}</p>
                                             <p className="mt-1 text-zinc-700">Period: {employeeType?.probation_months ? `${employeeType.probation_months} months` : '—'}</p>
-                                            <p className="mt-1 text-zinc-700">Joining: {selectedEmployee.joining_date ?? '—'}</p>
+                                            <p className="mt-1 text-zinc-700">Joining: {formatConfirmationDate(selectedEmployee.joining_date)}</p>
                                         </div>
                                         <div className="rounded-lg border border-zinc-200 bg-white p-3">
                                             <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Current → Confirmed</p>

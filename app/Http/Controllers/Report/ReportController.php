@@ -16,10 +16,10 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Services\ActiveSessionService;
 use App\Services\OrganogramAccessService;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
 
 class ReportController extends Controller
 {

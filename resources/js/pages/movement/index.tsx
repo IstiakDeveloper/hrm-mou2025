@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
@@ -36,10 +36,12 @@ import {
     Check,
     ChevronLeft,
     ChevronRight,
+    Download,
     Edit,
     Eye,
     Filter,
     Plus,
+    Printer,
     RefreshCcw,
     Search,
     Trash,
@@ -51,11 +53,11 @@ import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
     id: number;
+    pin?: string | null;
     employee_id: string;
     department: {
         id: number;
@@ -65,11 +67,36 @@ interface Employee extends EmployeeNameFields {
         id: number;
         name: string;
     };
+    branch?: {
+        id: number;
+        name: string;
+        branch_code?: string | null;
+    } | null;
 }
 
 interface Department {
     id: number;
     name: string;
+}
+
+interface ZoneOption {
+    id: number;
+    name: string;
+    code?: string | null;
+}
+
+interface RegionalOfficeOption {
+    id: number;
+    name: string;
+    code?: string | null;
+    zone_id: number;
+}
+
+interface BranchOption {
+    id: number;
+    name: string;
+    branch_code?: string | null;
+    regional_office_id: number | null;
 }
 
 interface Movement {
@@ -119,13 +146,20 @@ interface MovementIndexProps {
     movements: MovementsResponse;
     departments: Department[];
     employees: Employee[];
+    zones: ZoneOption[];
+    regionalOffices: RegionalOfficeOption[];
+    branches: BranchOption[];
     filters: {
         status?: string;
         department_id?: string;
         employee_id?: string;
         movement_type?: string;
+        zone_id?: string;
+        regional_office_id?: string;
+        branch_id?: string;
         from_date?: string;
         to_date?: string;
+        cross_day_only?: string | boolean;
         search?: string;
         per_page?: string;
     };
@@ -146,10 +180,19 @@ interface MovementIndexProps {
     };
 }
 
+function parseFilterDate(value?: string): Date | undefined {
+    if (!value) return undefined;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 export default function MovementIndex({
     movements,
     departments,
     employees,
+    zones = [],
+    regionalOffices = [],
+    branches = [],
     filters,
     userPermissions,
 }: MovementIndexProps) {
@@ -159,11 +202,13 @@ export default function MovementIndex({
     const [departmentId, setDepartmentId] = useState(filters.department_id || '');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || '');
     const [movementType, setMovementType] = useState(filters.movement_type || '');
-    const [fromDate, setFromDate] = useState<Date | undefined>(
-        filters.from_date ? new Date(filters.from_date) : undefined,
-    );
-    const [toDate, setToDate] = useState<Date | undefined>(
-        filters.to_date ? new Date(filters.to_date) : undefined,
+    const [zoneId, setZoneId] = useState(filters.zone_id || '');
+    const [regionalOfficeId, setRegionalOfficeId] = useState(filters.regional_office_id || '');
+    const [branchId, setBranchId] = useState(filters.branch_id || '');
+    const [fromDate, setFromDate] = useState<Date | undefined>(parseFilterDate(filters.from_date));
+    const [toDate, setToDate] = useState<Date | undefined>(parseFilterDate(filters.to_date));
+    const [crossDayOnly, setCrossDayOnly] = useState(
+        filters.cross_day_only === true || filters.cross_day_only === '1' || filters.cross_day_only === 'true',
     );
     const [search, setSearch] = useState(filters.search || '');
     const [perPage, setPerPage] = useState(filters.per_page || '10');
@@ -173,13 +218,72 @@ export default function MovementIndex({
     const [filterSheetOpen, setFilterSheetOpen] = useState(false);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
+    const filteredRegionalOffices = useMemo(() => {
+        if (!zoneId || zoneId === 'all') return regionalOffices;
+        return regionalOffices.filter((ro) => String(ro.zone_id) === String(zoneId));
+    }, [regionalOffices, zoneId]);
+
+    const filteredBranches = useMemo(() => {
+        let list = branches;
+        if (regionalOfficeId && regionalOfficeId !== 'all') {
+            list = list.filter((branch) => String(branch.regional_office_id) === String(regionalOfficeId));
+        } else if (zoneId && zoneId !== 'all') {
+            const regionalIds = new Set(filteredRegionalOffices.map((ro) => String(ro.id)));
+            list = list.filter(
+                (branch) =>
+                    branch.regional_office_id != null && regionalIds.has(String(branch.regional_office_id)),
+            );
+        }
+        return list;
+    }, [branches, regionalOfficeId, zoneId, filteredRegionalOffices]);
+
+    const handleZoneChange = (value: string) => {
+        const next = value === 'all' ? '' : value;
+        setZoneId(next);
+        setRegionalOfficeId('');
+        setBranchId('');
+    };
+
+    const handleRegionalOfficeChange = (value: string) => {
+        const next = value === 'all' ? '' : value;
+        setRegionalOfficeId(next);
+        setBranchId('');
+        if (next) {
+            const selected = regionalOffices.find((ro) => String(ro.id) === String(next));
+            if (selected) {
+                setZoneId(String(selected.zone_id));
+            }
+        }
+    };
+
+    const handleBranchChange = (value: string) => {
+        const next = value === 'all' ? '' : value;
+        setBranchId(next);
+        if (next) {
+            const selected = branches.find((branch) => String(branch.id) === String(next));
+            if (selected?.regional_office_id) {
+                setRegionalOfficeId(String(selected.regional_office_id));
+                const regional = regionalOffices.find(
+                    (ro) => String(ro.id) === String(selected.regional_office_id),
+                );
+                if (regional) {
+                    setZoneId(String(regional.zone_id));
+                }
+            }
+        }
+    };
+
     const buildFilterParams = () => ({
         status: status && status !== 'all' ? status : '',
         department_id: departmentId && departmentId !== 'all' ? departmentId : '',
         employee_id: employeeId && employeeId !== 'all' ? employeeId : '',
         movement_type: movementType && movementType !== 'all' ? movementType : '',
+        zone_id: zoneId && zoneId !== 'all' ? zoneId : '',
+        regional_office_id: regionalOfficeId && regionalOfficeId !== 'all' ? regionalOfficeId : '',
+        branch_id: branchId && branchId !== 'all' ? branchId : '',
         from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '',
         to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '',
+        cross_day_only: crossDayOnly ? '1' : '',
         search,
         per_page: perPage,
         page:
@@ -208,8 +312,12 @@ export default function MovementIndex({
         setDepartmentId('');
         setEmployeeId('');
         setMovementType('');
+        setZoneId('');
+        setRegionalOfficeId('');
+        setBranchId('');
         setFromDate(undefined);
         setToDate(undefined);
+        setCrossDayOnly(false);
         setSearch('');
         setPerPage('10');
         setShowFilters(false);
@@ -218,7 +326,17 @@ export default function MovementIndex({
     };
 
     const hasActiveFilters = Boolean(
-        search || status || departmentId || employeeId || movementType || fromDate || toDate,
+        search ||
+            status ||
+            departmentId ||
+            employeeId ||
+            movementType ||
+            zoneId ||
+            regionalOfficeId ||
+            branchId ||
+            fromDate ||
+            toDate ||
+            crossDayOnly,
     );
 
     const activeFilterCount = [
@@ -227,13 +345,34 @@ export default function MovementIndex({
         departmentId && departmentId !== 'all',
         employeeId && employeeId !== 'all',
         movementType && movementType !== 'all',
+        zoneId && zoneId !== 'all',
+        regionalOfficeId && regionalOfficeId !== 'all',
+        branchId && branchId !== 'all',
         fromDate,
         toDate,
+        crossDayOnly,
     ].filter(Boolean).length;
 
     const applyFiltersAndClose = () => {
         handleSearch();
         setFilterSheetOpen(false);
+    };
+
+    const buildQueryString = () =>
+        new URLSearchParams(
+            Object.entries(buildFilterParams()).filter(([, value]) => value !== ''),
+        ).toString();
+
+    const handlePrint = () => {
+        const query = buildQueryString();
+        const url = `${route('movements.print')}${query ? `?${query}` : ''}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+    };
+
+    const handleDownloadXlsx = () => {
+        const query = buildQueryString();
+        const url = `${route('movements.export.xlsx')}${query ? `?${query}` : ''}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
     };
 
     const deletableIdsOnPage = movements.data.map((movement) => movement.id);
@@ -290,109 +429,169 @@ export default function MovementIndex({
     };
 
     const filterFields = (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Select value={status || 'all'} onValueChange={setStatus}>
-                <SelectTrigger className="h-9 border-slate-200">
-                    <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-            </Select>
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Select value={zoneId || 'all'} onValueChange={handleZoneChange}>
+                    <SelectTrigger className="h-9 border-slate-200">
+                        <SelectValue placeholder="Zone Office" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Zone Offices</SelectItem>
+                        {zones.map((zone) => (
+                            <SelectItem key={zone.id} value={zone.id.toString()}>
+                                {zone.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
 
-            <Select value={departmentId || 'all'} onValueChange={setDepartmentId}>
-                <SelectTrigger className="h-9 border-slate-200">
-                    <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((department) => (
-                        <SelectItem key={department.id} value={department.id.toString()}>
-                            {department.name}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+                <Select value={regionalOfficeId || 'all'} onValueChange={handleRegionalOfficeChange}>
+                    <SelectTrigger className="h-9 border-slate-200">
+                        <SelectValue placeholder="Regional Office" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Regional Offices</SelectItem>
+                        {filteredRegionalOffices.map((office) => (
+                            <SelectItem key={office.id} value={office.id.toString()}>
+                                {office.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
 
-            <Select value={employeeId || 'all'} onValueChange={setEmployeeId}>
-                <SelectTrigger className="h-9 border-slate-200">
-                    <SelectValue placeholder="Employee" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Employees</SelectItem>
-                    {employees.map((employee) => (
-                        <SelectItem key={employee.id} value={employee.id.toString()}>
-                            {employeeDisplayName(employee)} ({employee.employee_id})
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+                <Select value={branchId || 'all'} onValueChange={handleBranchChange}>
+                    <SelectTrigger className="h-9 border-slate-200">
+                        <SelectValue placeholder="Branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Branches</SelectItem>
+                        {filteredBranches.map((branch) => (
+                            <SelectItem key={branch.id} value={branch.id.toString()}>
+                                {branch.branch_code ? `${branch.name} (${branch.branch_code})` : branch.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
 
-            <Select value={movementType || 'all'} onValueChange={setMovementType}>
-                <SelectTrigger className="h-9 border-slate-200">
-                    <SelectValue placeholder="Movement Type" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="official">Official</SelectItem>
-                    <SelectItem value="personal">Personal</SelectItem>
-                </SelectContent>
-            </Select>
+                <Select value={status || 'all'} onValueChange={setStatus}>
+                    <SelectTrigger className="h-9 border-slate-200">
+                        <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                </Select>
 
-            <Popover open={fromDateOpen} onOpenChange={setFromDateOpen}>
-                <PopoverTrigger asChild>
-                    <Button
-                        variant="outline"
-                        className={cn(
-                            'h-9 w-full justify-start border-slate-200 text-left text-sm font-normal',
-                            !fromDate && 'text-muted-foreground',
-                        )}
-                    >
-                        <CalendarRange className="mr-2 h-4 w-4 shrink-0" />
-                        {fromDate ? format(fromDate, 'MMM dd, yyyy') : 'From Date'}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                        mode="single"
-                        selected={fromDate}
-                        onSelect={(date) => {
-                            setFromDate(date);
-                            setFromDateOpen(false);
-                        }}
-                        initialFocus
-                    />
-                </PopoverContent>
-            </Popover>
+                <Select value={departmentId || 'all'} onValueChange={setDepartmentId}>
+                    <SelectTrigger className="h-9 border-slate-200">
+                        <SelectValue placeholder="Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Departments</SelectItem>
+                        {departments.map((department) => (
+                            <SelectItem key={department.id} value={department.id.toString()}>
+                                {department.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
 
-            <Popover open={toDateOpen} onOpenChange={setToDateOpen}>
-                <PopoverTrigger asChild>
-                    <Button
-                        variant="outline"
-                        className={cn(
-                            'h-9 w-full justify-start border-slate-200 text-left text-sm font-normal',
-                            !toDate && 'text-muted-foreground',
-                        )}
-                    >
-                        <CalendarRange className="mr-2 h-4 w-4 shrink-0" />
-                        {toDate ? format(toDate, 'MMM dd, yyyy') : 'To Date'}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                        mode="single"
-                        selected={toDate}
-                        onSelect={(date) => {
-                            setToDate(date);
-                            setToDateOpen(false);
-                        }}
-                        initialFocus
-                        disabled={(date) => (fromDate ? date < fromDate : false)}
-                    />
-                </PopoverContent>
-            </Popover>
+                <Select value={employeeId || 'all'} onValueChange={setEmployeeId}>
+                    <SelectTrigger className="h-9 border-slate-200">
+                        <SelectValue placeholder="Employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Employees</SelectItem>
+                        {employees.map((employee) => (
+                            <SelectItem key={employee.id} value={employee.id.toString()}>
+                                {employeeDisplayName(employee)} ({employee.employee_id})
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
+                <Select value={movementType || 'all'} onValueChange={setMovementType}>
+                    <SelectTrigger className="h-9 border-slate-200">
+                        <SelectValue placeholder="Movement Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="official">Official</SelectItem>
+                        <SelectItem value="personal">Personal</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Popover open={fromDateOpen} onOpenChange={setFromDateOpen}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="outline"
+                            className={cn(
+                                'h-9 w-full justify-start border-slate-200 text-left text-sm font-normal',
+                                !fromDate && 'text-muted-foreground',
+                            )}
+                        >
+                            <CalendarRange className="mr-2 h-4 w-4 shrink-0" />
+                            {fromDate ? format(fromDate, 'MMM dd, yyyy') : 'From Date'}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            mode="single"
+                            selected={fromDate}
+                            onSelect={(date) => {
+                                setFromDate(date);
+                                setFromDateOpen(false);
+                            }}
+                            initialFocus
+                        />
+                    </PopoverContent>
+                </Popover>
+
+                <Popover open={toDateOpen} onOpenChange={setToDateOpen}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="outline"
+                            className={cn(
+                                'h-9 w-full justify-start border-slate-200 text-left text-sm font-normal',
+                                !toDate && 'text-muted-foreground',
+                            )}
+                        >
+                            <CalendarRange className="mr-2 h-4 w-4 shrink-0" />
+                            {toDate ? format(toDate, 'MMM dd, yyyy') : 'To Date'}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            mode="single"
+                            selected={toDate}
+                            onSelect={(date) => {
+                                setToDate(date);
+                                setToDateOpen(false);
+                            }}
+                            initialFocus
+                            disabled={(date) => (fromDate ? date < fromDate : false)}
+                        />
+                    </PopoverContent>
+                </Popover>
+            </div>
+
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+                <Checkbox
+                    checked={crossDayOnly}
+                    onCheckedChange={(checked) => setCrossDayOnly(checked === true)}
+                    className="mt-0.5"
+                />
+                <span className="min-w-0">
+                    <span className="block text-sm font-medium text-slate-800">Not closed same day</span>
+                    <span className="block text-xs text-slate-500">
+                        Show movements started on one day but closed on another, or still open from a previous day.
+                    </span>
+                </span>
+            </label>
         </div>
     );
 
@@ -462,7 +661,7 @@ export default function MovementIndex({
         <Layout>
             <Head title="Movement Requests" />
 
-            <PageSurface>
+            <PageSurface className="max-w-none px-3 sm:px-4 md:px-6">
                 {flash?.success && (
                     <Alert className="mb-4 border-emerald-200 bg-emerald-50">
                         <AlertTitle>Success</AlertTitle>
@@ -493,6 +692,30 @@ export default function MovementIndex({
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1.5">
+                        {userPermissions.canView && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 border-slate-200 sm:h-9 sm:w-9"
+                                title="Print Movement Register"
+                                onClick={handlePrint}
+                            >
+                                <Printer className="h-4 w-4" />
+                            </Button>
+                        )}
+                        {userPermissions.canView && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 border-slate-200 sm:h-9 sm:w-9"
+                                title="Download XLSX"
+                                onClick={handleDownloadXlsx}
+                            >
+                                <Download className="h-4 w-4" />
+                            </Button>
+                        )}
                         {userPermissions.canView && (
                             <Link href={route('movements.report')}>
                                 <Button
@@ -630,7 +853,9 @@ export default function MovementIndex({
                         <SheetContent side="bottom" className="max-h-[88vh] rounded-t-2xl px-4 pb-6">
                             <SheetHeader className="text-left">
                                 <SheetTitle>Filter movements</SheetTitle>
-                                <SheetDescription>Narrow the list by status, department, dates, and more.</SheetDescription>
+                                <SheetDescription>
+                                    Filter by zone, regional office, branch, date range, and cross-day movements.
+                                </SheetDescription>
                             </SheetHeader>
                             <div className="mt-4 max-h-[58vh] overflow-y-auto py-1">{filterFields}</div>
                             <SheetFooter className="mt-4 flex flex-row gap-2 sm:justify-stretch">
@@ -664,7 +889,15 @@ export default function MovementIndex({
                                                 !userPermissions.canDelete && 'pl-6',
                                             )}
                                         >
+                                            PIN
+                                        </TableHead>
+                                        <TableHead
+                                            className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase"
+                                        >
                                             Employee
+                                        </TableHead>
+                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                            Branch
                                         </TableHead>
                                         <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
                                             Type
@@ -707,7 +940,15 @@ export default function MovementIndex({
                                                         />
                                                     </TableCell>
                                                 )}
-                                                <TableCell className={cn(!userPermissions.canDelete && 'pl-6')}>
+                                                <TableCell
+                                                    className={cn(
+                                                        'whitespace-nowrap font-mono text-[13px] text-slate-700',
+                                                        !userPermissions.canDelete && 'pl-6',
+                                                    )}
+                                                >
+                                                    {movement.employee.pin || movement.employee.employee_id}
+                                                </TableCell>
+                                                <TableCell>
                                                     <div className="flex min-w-[180px] items-center">
                                                         <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                                                             <Activity className="h-4 w-4" />
@@ -726,40 +967,23 @@ export default function MovementIndex({
                                                         </div>
                                                     </div>
                                                 </TableCell>
+                                                <TableCell className="whitespace-nowrap text-[13px] text-slate-600">
+                                                    {movement.employee.branch?.name || '—'}
+                                                </TableCell>
                                                 <TableCell>{getMovementTypeBadge(movement.movement_type)}</TableCell>
                                                 <TableCell className="whitespace-nowrap text-[13px] text-slate-600">
                                                     {format(new Date(movement.from_datetime), 'MMM dd, yyyy HH:mm')}
                                                 </TableCell>
                                                 <TableCell className="whitespace-nowrap text-[13px] text-slate-600">
                                                     {movement.status === 'completed' && movement.actual_return_datetime ? (
-                                                        <TooltipProvider>
-                                                            <Tooltip>
-                                                                <TooltipTrigger>
-                                                                    <span className="font-medium text-emerald-600">
-                                                                        {format(
-                                                                            new Date(movement.actual_return_datetime),
-                                                                            'MMM dd, yyyy HH:mm',
-                                                                        )}
-                                                                    </span>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>
-                                                                    <div className="text-xs">
-                                                                        <div>
-                                                                            Expected:{' '}
-                                                                            {format(new Date(movement.to_datetime), 'MMM dd, yyyy HH:mm')}
-                                                                        </div>
-                                                                        <div className="font-semibold">Actual return time</div>
-                                                                    </div>
-                                                                </TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
-                                                    ) : (
-                                                        <span>
-                                                            {format(new Date(movement.to_datetime), 'MMM dd, yyyy HH:mm')}
-                                                            {movement.status === 'active' && (
-                                                                <span className="ml-1 text-xs text-blue-600">(Expected)</span>
+                                                        <span className="font-medium text-emerald-600">
+                                                            {format(
+                                                                new Date(movement.actual_return_datetime),
+                                                                'MMM dd, yyyy HH:mm',
                                                             )}
                                                         </span>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400 italic">Not returned</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
@@ -832,7 +1056,7 @@ export default function MovementIndex({
                                         ))
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={userPermissions.canDelete ? 9 : 8} className="h-24 text-center">
+                                            <TableCell colSpan={userPermissions.canDelete ? 11 : 10} className="h-24 text-center">
                                                 No movement requests found.
                                                 {hasActiveFilters && (
                                                     <Button variant="link" onClick={resetFilters} className="px-2 font-normal">

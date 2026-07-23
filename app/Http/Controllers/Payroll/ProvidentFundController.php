@@ -164,6 +164,7 @@ class ProvidentFundController extends Controller
 
         if ($transaction->transaction_type === EmployeeProvidentFundService::TYPE_OPENING) {
             $validated = $request->validate([
+                'employee_id' => 'required|exists:employees,id',
                 'employee_amount' => 'required|numeric|min:0',
                 'employer_amount' => 'required|numeric|min:0',
                 'transaction_date' => 'required|date',
@@ -173,6 +174,7 @@ class ProvidentFundController extends Controller
 
             try {
                 $this->pfService->updateCorrectableTransaction($transaction, [
+                    'employee_id' => (int) $validated['employee_id'],
                     'employee_amount' => (float) $validated['employee_amount'],
                     'employer_amount' => (float) $validated['employer_amount'],
                     'transaction_date' => Carbon::parse($validated['transaction_date']),
@@ -180,10 +182,15 @@ class ProvidentFundController extends Controller
                     'reference_no' => $validated['reference_no'] ?? null,
                 ]);
             } catch (\InvalidArgumentException $e) {
-                throw ValidationException::withMessages(['employee_amount' => $e->getMessage()]);
+                $field = str_contains(strtolower($e->getMessage()), 'employee')
+                    || str_contains(strtolower($e->getMessage()), 'opening balance already')
+                    ? 'employee_id'
+                    : 'employee_amount';
+                throw ValidationException::withMessages([$field => $e->getMessage()]);
             }
         } else {
             $validated = $request->validate([
+                'employee_id' => 'sometimes|exists:employees,id',
                 'employee_amount' => 'required|numeric|min:0',
                 'employer_amount' => 'required|numeric|min:0',
                 'year' => 'required|integer|min:2000|max:2100',
@@ -193,16 +200,24 @@ class ProvidentFundController extends Controller
             ]);
 
             try {
-                $this->pfService->updateCorrectableTransaction($transaction, [
+                $payload = [
                     'employee_amount' => (float) $validated['employee_amount'],
                     'employer_amount' => (float) $validated['employer_amount'],
                     'payroll_year' => (int) $validated['year'],
                     'payroll_month' => (int) $validated['month'],
                     'notes' => $validated['notes'],
                     'reference_no' => $validated['reference_no'] ?? null,
-                ]);
+                ];
+                if (isset($validated['employee_id'])) {
+                    $payload['employee_id'] = (int) $validated['employee_id'];
+                }
+
+                $this->pfService->updateCorrectableTransaction($transaction, $payload);
             } catch (\InvalidArgumentException $e) {
-                throw ValidationException::withMessages(['employee_amount' => $e->getMessage()]);
+                $field = str_contains(strtolower($e->getMessage()), 'employee')
+                    ? 'employee_id'
+                    : 'employee_amount';
+                throw ValidationException::withMessages([$field => $e->getMessage()]);
             }
         }
 

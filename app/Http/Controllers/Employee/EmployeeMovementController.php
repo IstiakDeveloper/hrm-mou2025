@@ -7,7 +7,7 @@ use App\Models\Employee;
 use App\Models\Movement;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\ProjectPdf;
 use Carbon\Carbon;
 
 class EmployeeMovementController extends Controller

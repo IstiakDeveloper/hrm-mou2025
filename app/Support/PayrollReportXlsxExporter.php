@@ -53,10 +53,11 @@ class PayrollReportXlsxExporter
         $headLabels = $payload['head_labels'] ?? [];
         $heads = $payload['heads'] ?? [];
         $salaryMonth = (string) ($payload['salary_month'] ?? '');
-        $employeeCols = 4;
+        $topsheet = ! empty($payload['topsheet']);
+        $employeeCols = $topsheet ? 3 : 4;
         $earningCols = count($earningHeads) + 1;
         $deductionCols = count($deductionHeads) + 1;
-        $summaryCols = 2;
+        $summaryCols = $topsheet ? 1 : 2;
         $totalCols = $employeeCols + $earningCols + $deductionCols + $summaryCols;
         $lastCol = $totalCols - 1;
 
@@ -109,10 +110,19 @@ class PayrollReportXlsxExporter
         $reportService = app(PayrollReportService::class);
 
         foreach ($payload['sections'] ?? [] as $section) {
+            $sectionHeads = $section['heads'] ?? $payload['heads'] ?? [];
+            $sectionEarningHeads = $section['earning_heads'] ?? $payload['earning_heads'] ?? [];
+            $sectionDeductionHeads = $section['deduction_heads'] ?? $payload['deduction_heads'] ?? [];
+            $sectionHeadLabels = $section['head_labels'] ?? $payload['head_labels'] ?? [];
+            $sectionEarningCols = count($sectionEarningHeads) + 1;
+            $sectionDeductionCols = count($sectionDeductionHeads) + 1;
+            $sectionTotalCols = $employeeCols + $sectionEarningCols + $sectionDeductionCols + $summaryCols;
+            $sectionLastCol = $sectionTotalCols - 1;
+
             $sectionLabel = (string) ($section['label'] ?? '');
             if ($sectionLabel !== '' || $salaryMonth !== '') {
-                $mid = (int) floor($totalCols / 2);
-                $line = array_fill(0, $totalCols, '');
+                $mid = (int) floor($sectionTotalCols / 2);
+                $line = array_fill(0, $sectionTotalCols, '');
                 if ($sectionLabel !== '') {
                     $line[0] = self::styled($sectionLabel, bold: true, align: 'left', fontSize: 9);
                 }
@@ -124,91 +134,111 @@ class PayrollReportXlsxExporter
                     $merges[] = [0, max(0, $mid - 1), $r];
                 }
                 if ($salaryMonth !== '') {
-                    $merges[] = [$mid, $lastCol, $r];
+                    $merges[] = [$mid, $sectionLastCol, $r];
                 }
             }
 
             $pages = $reportService->paginateSalarySheetSectionPages(
                 $section['rows'] ?? [],
-                $heads,
+                $sectionHeads,
                 $section['totals'] ?? null,
             );
 
             foreach ($pages as $page) {
                 $earningStart = $employeeCols;
-                $earningEnd = $employeeCols + $earningCols - 1;
+                $earningEnd = $employeeCols + $sectionEarningCols - 1;
                 $deductionStart = $earningEnd + 1;
-                $deductionEnd = $deductionStart + $deductionCols - 1;
+                $deductionEnd = $deductionStart + $sectionDeductionCols - 1;
+                $netCol = $deductionEnd + 1;
+                $bankCol = $topsheet ? null : $netCol + 1;
 
-                $category = array_fill(0, $totalCols, self::styled('', border: false));
-                $category[0] = self::styled('Employee Info', bold: true, fontSize: 8);
+                $category = array_fill(0, $sectionTotalCols, self::styled('', border: false));
+                $category[0] = self::styled($topsheet ? 'Branch Info' : 'Employee Info', bold: true, fontSize: 8);
                 $category[$earningStart] = self::styled('Salary & Allowance', bold: true, fontSize: 8);
                 $category[$deductionStart] = self::styled('Deduction', bold: true, fontSize: 8);
-                $r = $addRow($category);
-                $merges[] = [0, $employeeCols - 1, $r];
-                $merges[] = [$earningStart, $earningEnd, $r];
-                $merges[] = [$deductionStart, $deductionEnd, $r];
+                $category[$netCol] = self::styled('Net Payable', bold: true, fontSize: 8);
+                if ($bankCol !== null) {
+                    $category[$bankCol] = self::styled('Account No.', bold: true, fontSize: 8);
+                }
+                $categoryRow = $addRow($category);
+                $merges[] = [0, $employeeCols - 1, $categoryRow];
+                $merges[] = [$earningStart, $earningEnd, $categoryRow];
+                $merges[] = [$deductionStart, $deductionEnd, $categoryRow];
 
                 $headers = [
-                    self::styled('#', bold: true, fontSize: 8),
-                    self::styled('Name (Pin)', bold: true, align: 'left', fontSize: 8),
-                    self::styled('Designation', bold: true, fontSize: 8),
-                    self::styled('Grade (Step)', bold: true, fontSize: 8),
+                    self::styled('SL', bold: true, fontSize: 8),
+                    self::styled($topsheet ? 'Branch' : 'Name', bold: true, align: 'left', fontSize: 8),
                 ];
-                foreach ($earningHeads as $head) {
-                    $headers[] = self::styled($headLabels[$head] ?? $head, bold: true, fontSize: 7);
+                if (! $topsheet) {
+                    $headers[] = self::styled('PIN', bold: true, fontSize: 8);
+                }
+                $headers[] = self::styled($topsheet ? 'Employees' : 'Designation', bold: true, fontSize: 8);
+                foreach ($sectionEarningHeads as $head) {
+                    $headers[] = self::styled($sectionHeadLabels[$head] ?? $head, bold: true, fontSize: 7);
                 }
                 $headers[] = self::styled('Gross', bold: true, fontSize: 8);
-                foreach ($deductionHeads as $head) {
-                    $headers[] = self::styled($headLabels[$head] ?? $head, bold: true, fontSize: 7);
+                foreach ($sectionDeductionHeads as $head) {
+                    $headers[] = self::styled($sectionHeadLabels[$head] ?? $head, bold: true, fontSize: 7);
                 }
-                $headers[] = self::styled('Ded.', bold: true, fontSize: 8);
-                $headers[] = self::styled('Net', bold: true, fontSize: 8);
-                $headers[] = self::styled('Bank Account No.', bold: true, fontSize: 8);
-                $addRow($headers);
+                $headers[] = self::styled('Total Deduction', bold: true, fontSize: 8);
+                $headers[] = self::styled('', border: false);
+                if (! $topsheet) {
+                    $headers[] = self::styled('', border: false);
+                }
+                $headerRow = $addRow($headers);
+                $merges[] = [$netCol, $netCol, $categoryRow, $headerRow];
+                if ($bankCol !== null) {
+                    $merges[] = [$bankCol, $bankCol, $categoryRow, $headerRow];
+                }
 
                 $serialStart = (int) ($page['serial_start'] ?? 0);
                 foreach ($page['rows'] ?? [] as $index => $row) {
                     $line = [
                         self::styled((string) ($serialStart + $index + 1), fontSize: 8),
-                        self::styled(self::nameWithPin($row), align: 'left', fontSize: 8),
-                        self::styled((string) ($row['designation'] ?? ''), align: 'left', fontSize: 8),
-                        self::styled((string) ($row['grade_step'] ?? ''), align: 'left', fontSize: 8),
+                        self::styled((string) ($row['name'] ?? ''), align: 'left', fontSize: 8),
                     ];
-                    foreach ($earningHeads as $head) {
+                    if (! $topsheet) {
+                        $line[] = self::styled((string) ($row['pin'] ?? ''), fontSize: 8);
+                    }
+                    $line[] = self::styled((string) ($row['designation'] ?? ''), align: 'left', fontSize: 8);
+                    foreach ($sectionEarningHeads as $head) {
                         $line[] = self::styled(self::amt($row['components'][$head] ?? 0), fontSize: 8);
                     }
                     $line[] = self::styled(self::amt($row['gross'] ?? 0), fontSize: 8);
-                    foreach ($deductionHeads as $head) {
+                    foreach ($sectionDeductionHeads as $head) {
                         $line[] = self::styled(self::amt($row['components'][$head] ?? 0), fontSize: 8);
                     }
                     $line[] = self::styled(self::amt($row['deduction'] ?? 0), fontSize: 8);
                     $line[] = self::styled(self::amt($row['net'] ?? 0), fontSize: 8);
-                    $line[] = self::styled((string) ($row['account_no'] ?? ''), align: 'left', fontSize: 8);
+                    if (! $topsheet) {
+                        $line[] = self::styled((string) ($row['account_no'] ?? ''), align: 'left', fontSize: 8);
+                    }
                     $addRow($line);
                 }
 
                 $totals = $page['totals'] ?? null;
                 $totalsLabel = (string) ($page['totals_label'] ?? 'Total');
                 if ($totals && ($page['rows'] ?? []) !== []) {
-                    $line = array_fill(0, $totalCols, self::styled('', border: true));
+                    $line = array_fill(0, $sectionTotalCols, self::styled('', border: true));
                     $line[0] = self::styled($totalsLabel, bold: true, align: 'right', fontSize: 8);
                     $col = $employeeCols;
-                    foreach ($earningHeads as $head) {
+                    foreach ($sectionEarningHeads as $head) {
                         $line[$col++] = self::styled(self::amt($totals['components'][$head] ?? 0), bold: true, fontSize: 8);
                     }
                     $line[$col++] = self::styled(self::amt($totals['gross'] ?? 0), bold: true, fontSize: 8);
-                    foreach ($deductionHeads as $head) {
+                    foreach ($sectionDeductionHeads as $head) {
                         $line[$col++] = self::styled(self::amt($totals['components'][$head] ?? 0), bold: true, fontSize: 8);
                     }
                     $line[$col++] = self::styled(self::amt($totals['deduction'] ?? 0), bold: true, fontSize: 8);
                     $line[$col++] = self::styled(self::amt($totals['net'] ?? 0), bold: true, fontSize: 8);
-                    $line[$col] = self::styled('', border: true);
+                    if (! $topsheet) {
+                        $line[$col] = self::styled('', border: true);
+                    }
                     $r = $addRow($line);
                     $merges[] = [0, $employeeCols - 1, $r];
 
                     if ($totalsLabel === 'Total') {
-                        $line = array_fill(0, $totalCols, self::styled('', border: true));
+                        $line = array_fill(0, $sectionTotalCols, self::styled('', border: true));
                         $line[0] = self::styled(
                             'In Words: '.AmountInWords::taka($totals['net'] ?? 0),
                             bold: true,
@@ -216,7 +246,7 @@ class PayrollReportXlsxExporter
                             fontSize: 8,
                         );
                         $r = $addRow($line);
-                        $merges[] = [0, $lastCol, $r];
+                        $merges[] = [0, $sectionLastCol, $r];
                     }
                 }
 
@@ -229,8 +259,10 @@ class PayrollReportXlsxExporter
         $xlsx = SimpleXLSXGen::create($title ?: 'Payroll Report');
         $xlsx->setAuthor('HRM System')->addSheet($rows, 'Salary Sheet');
 
-        foreach ($merges as [$fromCol, $toCol, $row]) {
-            $xlsx->mergeCells(self::cellRef($fromCol, $row).':'.self::cellRef($toCol, $row));
+        foreach ($merges as $merge) {
+            [$fromCol, $toCol, $fromRow] = $merge;
+            $toRow = $merge[3] ?? $fromRow;
+            $xlsx->mergeCells(self::cellRef($fromCol, $fromRow).':'.self::cellRef($toCol, $toRow));
         }
 
         self::setSalarySheetColumnWidths($xlsx, $totalCols);
@@ -316,12 +348,15 @@ class PayrollReportXlsxExporter
 
     protected static function setSalarySheetColumnWidths(SimpleXLSXGen $xlsx, int $totalCols): void
     {
+        $lastCol = max(0, $totalCols - 1);
+
         for ($i = 0; $i < $totalCols; $i++) {
-            $width = match ($i) {
-                0 => 5,
-                1 => 24,
-                2 => 16,
-                3 => 12,
+            $width = match (true) {
+                $i === 0 => 5,
+                $i === 1 => 22,
+                $i === 2 => 10,
+                $i === 3 => 16,
+                $i === $lastCol => 18,
                 default => 10,
             };
             $xlsx->setColWidth(self::colLetter($i), $width);

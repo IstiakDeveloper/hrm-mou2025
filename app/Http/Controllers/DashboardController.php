@@ -892,10 +892,10 @@ class DashboardController extends Controller
                 'period_label' => $recent->first()['period_label'] ?? 'Latest payslip',
                 'salary_type' => $latestPayslip->payrollRun?->salary_type ?? 'salary',
                 'branch' => $latestPayslip->payrollRun?->branch?->name,
-                'designation' => $latestPayslip->employee?->designation?->name,
+                'designation' => $latestPayslip->displayDesignation(),
                 'grade' => $latestPayslip->grade_label,
                 'step' => $latestPayslip->step_number,
-                'basic' => SalaryStructureCalculator::roundTaka((float) $latestPayslip->basic_salary),
+                'basic' => SalaryStructureCalculator::roundTaka($latestPayslip->displayBasicSalary()),
                 'gross' => SalaryStructureCalculator::roundTaka((float) $latestPayslip->gross_salary),
                 'deduction' => SalaryStructureCalculator::roundTaka((float) $latestPayslip->total_deduction),
                 'net' => SalaryStructureCalculator::roundTaka((float) $latestPayslip->net_payable),
@@ -906,7 +906,9 @@ class DashboardController extends Controller
                     ->filter(fn (\App\Models\PayslipLine $line) => (float) $line->computed_amount > 0)
                     ->map(fn (\App\Models\PayslipLine $line) => [
                         'id' => $line->id,
-                        'head_label' => $line->head?->name ?? $line->head_name,
+                        'head_label' => \App\Models\Payslip::isOthersFlatEarningHead($line->head_name)
+                            ? 'Others'
+                            : ($line->head?->name ?? $line->head_name),
                         'amount' => SalaryStructureCalculator::roundTaka((float) $line->computed_amount),
                     ])
                     ->values(),

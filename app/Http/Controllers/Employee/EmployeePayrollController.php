@@ -167,7 +167,7 @@ class EmployeePayrollController extends Controller
             'month' => $run ? (int) $run->month : null,
             'salary_type' => $run?->salary_type ?? 'salary',
             'branch' => $run?->branch?->name,
-            'basic' => SalaryStructureCalculator::roundTaka((float) $payslip->basic_salary),
+            'basic' => SalaryStructureCalculator::roundTaka($payslip->displayBasicSalary()),
             'gross' => SalaryStructureCalculator::roundTaka((float) $payslip->gross_salary),
             'deduction' => SalaryStructureCalculator::roundTaka((float) $payslip->total_deduction),
             'net' => SalaryStructureCalculator::roundTaka((float) $payslip->net_payable),
@@ -187,8 +187,8 @@ class EmployeePayrollController extends Controller
             'id' => $payslip->id,
             'grade' => $payslip->grade_label,
             'step' => $payslip->step_number,
-            'designation' => $payslip->employee?->designation?->name,
-            'basic' => SalaryStructureCalculator::roundTaka((float) $payslip->basic_salary),
+            'designation' => $payslip->displayDesignation(),
+            'basic' => SalaryStructureCalculator::roundTaka($payslip->displayBasicSalary()),
             'gross' => SalaryStructureCalculator::roundTaka((float) $payslip->gross_salary),
             'deduction' => SalaryStructureCalculator::roundTaka((float) $payslip->total_deduction),
             'net' => SalaryStructureCalculator::roundTaka((float) $payslip->net_payable),
@@ -201,7 +201,9 @@ class EmployeePayrollController extends Controller
                 ->filter(fn (PayslipLine $line) => (float) $line->computed_amount > 0)
                 ->map(fn (PayslipLine $line) => [
                     'id' => $line->id,
-                    'head_label' => $line->head?->name ?? $line->head_name,
+                    'head_label' => Payslip::isOthersFlatEarningHead($line->head_name)
+                        ? 'Others'
+                        : ($line->head?->name ?? $line->head_name),
                     'amount' => SalaryStructureCalculator::roundTaka((float) $line->computed_amount),
                 ])
                 ->values(),

@@ -30,7 +30,7 @@ type SeparationsResponse = { data: Separation[]; links?: { prev: string | null; 
 type Props = {
     separations: SeparationsResponse;
     employees: Employee[];
-    filters: { status?: string; employee_id?: string; search?: string; per_page?: string };
+    filters: { status?: string; employee_id?: string; from_date?: string; to_date?: string; search?: string; per_page?: string };
     canEditSeparations?: boolean;
     canDeleteSeparations?: boolean;
 };
@@ -49,19 +49,28 @@ function statusBadge(status: Separation['status']) {
 export default function SeparationIndex({ separations, employees, filters, canEditSeparations = false, canDeleteSeparations = false }: Props) {
     const [status, setStatus] = useState(filters.status || 'all');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
+    const [fromDate, setFromDate] = useState(filters.from_date || '');
+    const [toDate, setToDate] = useState(filters.to_date || '');
     const [search, setSearch] = useState(filters.search || '');
     const [perPage, setPerPage] = useState(filters.per_page || '10');
 
     const filterParams = () => ({
         status: status !== 'all' ? status : '',
         employee_id: employeeId !== 'all' ? employeeId : '',
+        from_date: fromDate,
+        to_date: toDate,
         search: search.trim(),
         per_page: perPage,
     });
 
     const applyFilters = () => router.get(route('separations.index'), filterParams(), { preserveState: true });
     const reset = () => {
-        setStatus('all'); setEmployeeId('all'); setSearch(''); setPerPage('10');
+        setStatus('all');
+        setEmployeeId('all');
+        setFromDate('');
+        setToDate('');
+        setSearch('');
+        setPerPage('10');
         router.get(route('separations.index'), { per_page: '10' }, { preserveState: true });
     };
 
@@ -101,7 +110,7 @@ export default function SeparationIndex({ separations, employees, filters, canEd
                 </div>
 
                 <Card className="mb-6 rounded-xl border-slate-200 bg-white shadow-sm">
-                    <CardContent className="flex flex-col gap-4 p-4 md:flex-row">
+                    <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:flex-wrap md:items-end">
                         <Select value={status} onValueChange={setStatus}>
                             <SelectTrigger className="md:w-48"><SelectValue placeholder="Status" /></SelectTrigger>
                             <SelectContent>
@@ -116,6 +125,12 @@ export default function SeparationIndex({ separations, employees, filters, canEd
                                 {employees.map((e) => <SelectItem key={e.id} value={String(e.id)}>{e.employee_id} — {employeeDisplayName(e)}</SelectItem>)}
                             </SelectContent>
                         </Select>
+                        <div className="space-y-1">
+                            <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-9 md:w-40" title="From date" />
+                        </div>
+                        <div className="space-y-1">
+                            <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-9 md:w-40" title="To date" />
+                        </div>
                         <Button onClick={applyFilters} className="bg-emerald-600 hover:bg-emerald-700">Apply</Button>
                         <Button variant="outline" onClick={reset}>Reset</Button>
                     </CardContent>

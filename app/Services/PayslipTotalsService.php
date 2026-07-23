@@ -19,7 +19,8 @@ class PayslipTotalsService
             $amount = (float) $line->computed_amount;
             if ($line->type === 'earning') {
                 $gross += $amount;
-                if ($line->head_name === 'Basic' || $line->salary_head_id === null) {
+                // Fixed Salary / Probation Salary are null-head "Others" lines — not Basic.
+                if ($line->head_name === 'Basic') {
                     $basic = $amount;
                 }
             } else {

@@ -16,11 +16,11 @@ use App\Services\OrganogramAccessService;
 use App\Support\BranchOrganogram;
 use App\Support\HeadOfficeOrganogram;
 use App\Support\MonthlyAttendanceCalculator;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
 
 class AttendanceController extends Controller
 {

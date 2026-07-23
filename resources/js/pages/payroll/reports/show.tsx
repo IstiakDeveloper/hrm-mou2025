@@ -129,6 +129,7 @@ function SalarySheetTable({
     rows,
     totals,
     totalsLabel = 'Total',
+    topsheet = false,
 }: {
     earningHeads: string[];
     deductionHeads: string[];
@@ -136,21 +137,24 @@ function SalarySheetTable({
     rows: Record<string, unknown>[];
     totals?: Record<string, unknown>;
     totalsLabel?: string;
+    topsheet?: boolean;
 }) {
     const labelFor = useCallback((key: string) => headLabels[key] ?? key, [headLabels]);
-    const employeeCols = 4;
+    const employeeCols = topsheet ? 3 : 4;
     const earningCols = earningHeads.length + 1;
     const deductionCols = deductionHeads.length + 1;
-    const summaryCols = 2;
-    const thClass = 'border-r border-black px-1 py-1 text-center align-middle whitespace-normal break-normal leading-[1.05]';
-    const tdClass = 'border-r border-black px-1 py-1 align-middle overflow-visible';
+    const infoLabel = topsheet ? 'Branch Info' : 'Employee Info';
+    const nameLabel = topsheet ? 'Branch' : 'Name';
+    const designationLabel = topsheet ? 'Employees' : 'Designation';
+    const thClass = 'border-r border-black px-0.5 py-0.5 text-center align-middle whitespace-normal break-normal leading-[1.05]';
+    const tdClass = 'border-r border-black px-0.5 py-0.5 align-middle overflow-visible';
     const textClass = `${tdClass} whitespace-nowrap text-left`;
     const nowrapClass = textClass;
-    const amountClass = `${tdClass} whitespace-nowrap text-center tabular-nums`;
+    const amountClass = `${tdClass} whitespace-nowrap text-center tabular-nums text-[9px] print:text-[8px]`;
     const amountHeadClass = `${thClass} text-[8px] print:text-[7px]`;
 
     const dataWidths = useMemo(() => {
-        const nameTexts = rows.map(nameWithPin);
+        const nameTexts = rows.map((row) => String(row.name ?? ''));
         if (totals) nameTexts.push(totalsLabel);
 
         return {
@@ -159,12 +163,14 @@ function SalarySheetTable({
                 2,
             ),
             name: maxTextLen(nameTexts, 4),
+            pin: topsheet
+                ? 0
+                : maxTextLen(
+                      rows.map((row) => String(row.pin ?? '')),
+                      3,
+                  ),
             designation: maxTextLen(
                 rows.map((row) => String(row.designation ?? '')),
-                4,
-            ),
-            grade: maxTextLen(
-                rows.map((row) => String(row.grade_step ?? '')),
                 4,
             ),
             earning: Object.fromEntries(
@@ -176,80 +182,82 @@ function SalarySheetTable({
             ),
             ded: amountColWidth(rows, totals, (row) => row.deduction),
             net: amountColWidth(rows, totals, (row) => row.net),
-            bank: maxTextLen(
-                rows.map((row) => String(row.account_no ?? '')),
-                4,
-            ),
+            bank: topsheet
+                ? 0
+                : maxTextLen(
+                      rows.map((row) => String(row.account_no ?? '')),
+                      14,
+                  ),
         };
-    }, [rows, totals, totalsLabel, earningHeads, deductionHeads]);
+    }, [rows, totals, totalsLabel, earningHeads, deductionHeads, topsheet]);
 
     const colWidths = useMemo(
         () => ({
-            serial: serialColumnWidth(Math.max(dataWidths.serial, headerMinWidth('#'))),
-            name: textColumnWidth(dataWidths.name, 'Name (Pin)'),
-            designation: textColumnWidth(dataWidths.designation, 'Designation'),
-            grade: textColumnWidth(dataWidths.grade, 'Grade (Step)'),
+            serial: serialColumnWidth(Math.max(dataWidths.serial, headerMinWidth('SL'))),
+            name: textColumnWidth(dataWidths.name, nameLabel),
+            pin: topsheet ? 0 : textColumnWidth(dataWidths.pin, 'PIN'),
+            designation: textColumnWidth(dataWidths.designation, designationLabel),
             earning: Object.fromEntries(earningHeads.map((head) => [head, amountColumnWidth(dataWidths.earning[head], labelFor(head))])),
             gross: amountColumnWidth(dataWidths.gross, 'Gross'),
             deduction: Object.fromEntries(deductionHeads.map((head) => [head, amountColumnWidth(dataWidths.deduction[head], labelFor(head))])),
-            ded: amountColumnWidth(dataWidths.ded, 'Ded.'),
-            net: amountColumnWidth(dataWidths.net, 'Net'),
-            bank: textColumnWidth(dataWidths.bank, 'Bank Account No.'),
+            ded: amountColumnWidth(dataWidths.ded, 'Total Deduction'),
+            net: amountColumnWidth(dataWidths.net, 'Net Payable'),
+            bank: topsheet ? 0 : textColumnWidth(dataWidths.bank, 'Account No.') + 4,
         }),
-        [dataWidths, earningHeads, deductionHeads, labelFor],
+        [dataWidths, earningHeads, deductionHeads, labelFor, topsheet, nameLabel, designationLabel],
     );
 
     const dataTotalChars = useMemo(() => {
         const all = [
             dataWidths.serial,
             dataWidths.name,
+            ...(topsheet ? [] : [dataWidths.pin]),
             dataWidths.designation,
-            dataWidths.grade,
             ...earningHeads.map((h) => dataWidths.earning[h]),
             dataWidths.gross,
             ...deductionHeads.map((h) => dataWidths.deduction[h]),
             dataWidths.ded,
             dataWidths.net,
-            dataWidths.bank,
+            ...(topsheet ? [] : [dataWidths.bank]),
         ];
 
         return Math.max(
             1,
             all.reduce((sum, value) => sum + value, 0),
         );
-    }, [dataWidths, earningHeads, deductionHeads]);
+    }, [dataWidths, earningHeads, deductionHeads, topsheet]);
 
     const layoutTotalChars = useMemo(() => {
         const all = [
             colWidths.serial,
             colWidths.name,
+            ...(topsheet ? [] : [colWidths.pin]),
             colWidths.designation,
-            colWidths.grade,
             ...earningHeads.map((h) => colWidths.earning[h]),
             colWidths.gross,
             ...deductionHeads.map((h) => colWidths.deduction[h]),
             colWidths.ded,
             colWidths.net,
-            colWidths.bank,
+            ...(topsheet ? [] : [colWidths.bank]),
         ];
 
         return Math.max(
             1,
             all.reduce((sum, value) => sum + value, 0),
         );
-    }, [colWidths, earningHeads, deductionHeads]);
+    }, [colWidths, earningHeads, deductionHeads, topsheet]);
 
     const fillPage = dataTotalChars < 195;
     const colCss = (chars: number) => (fillPage ? `${((chars / layoutTotalChars) * 100).toFixed(4)}%` : `${chars}ch`);
 
     return (
         <div className="overflow-x-auto border border-black print:overflow-visible">
-            <table className={`${fillPage ? 'w-full' : 'w-auto max-w-full'} table-fixed border-collapse text-[10px] text-black print:text-[9px]`}>
+            <table className={`${fillPage ? 'w-full' : 'w-auto max-w-full'} table-fixed border-collapse text-[9px] text-black print:text-[8px]`}>
                 <colgroup>
                     <col style={{ width: colCss(colWidths.serial) }} />
                     <col style={{ width: colCss(colWidths.name) }} />
+                    {!topsheet && <col style={{ width: colCss(colWidths.pin) }} />}
                     <col style={{ width: colCss(colWidths.designation) }} />
-                    <col style={{ width: colCss(colWidths.grade) }} />
                     {earningHeads.map((h) => (
                         <col key={h} style={{ width: colCss(colWidths.earning[h]) }} />
                     ))}
@@ -259,12 +267,12 @@ function SalarySheetTable({
                     ))}
                     <col style={{ width: colCss(colWidths.ded) }} />
                     <col style={{ width: colCss(colWidths.net) }} />
-                    <col style={{ width: colCss(colWidths.bank) }} />
+                    {!topsheet && <col style={{ width: colCss(colWidths.bank) }} />}
                 </colgroup>
                 <thead>
                     <tr className="bg-muted/30 border-b border-black">
                         <th colSpan={employeeCols} className={`${thClass} text-center font-bold`}>
-                            Employee Info
+                            {infoLabel}
                         </th>
                         <th colSpan={earningCols} className={`${thClass} text-center font-bold`}>
                             Salary &amp; Allowance
@@ -272,13 +280,20 @@ function SalarySheetTable({
                         <th colSpan={deductionCols} className={`${thClass} text-center font-bold`}>
                             Deduction
                         </th>
-                        <th colSpan={summaryCols} className="p-1.5 align-middle" />
+                        <th rowSpan={2} className={`${amountHeadClass} font-bold`}>
+                            Net Payable
+                        </th>
+                        {!topsheet && (
+                            <th rowSpan={2} className={`${thClass} font-bold`}>
+                                Account No.
+                            </th>
+                        )}
                     </tr>
                     <tr className="border-b border-black">
-                        <th className={`${thClass}`}>#</th>
-                        <th className={`${thClass} whitespace-normal`}>Name (Pin)</th>
-                        <th className={thClass}>Designation</th>
-                        <th className={thClass}>Grade (Step)</th>
+                        <th className={`${thClass}`}>SL</th>
+                        <th className={`${thClass} whitespace-normal`}>{nameLabel}</th>
+                        {!topsheet && <th className={thClass}>PIN</th>}
+                        <th className={thClass}>{designationLabel}</th>
                         {earningHeads.map((h) => (
                             <th key={h} className={amountHeadClass}>
                                 {labelFor(h)}
@@ -290,18 +305,16 @@ function SalarySheetTable({
                                 {labelFor(h)}
                             </th>
                         ))}
-                        <th className={amountHeadClass}>Ded.</th>
-                        <th className={amountHeadClass}>Net</th>
-                        <th className="border-r border-black p-1.5 text-center align-middle">Bank Account No.</th>
+                        <th className={amountHeadClass}>Total Deduction</th>
                     </tr>
                 </thead>
                 <tbody>
                     {rows.map((row, i) => (
                         <tr key={i} className="border-b border-black">
                             <td className={`${tdClass} text-center`}>{i + 1}</td>
-                            <td className={nowrapClass}>{nameWithPin(row)}</td>
+                            <td className={nowrapClass}>{String(row.name ?? '')}</td>
+                            {!topsheet && <td className={`${tdClass} whitespace-nowrap text-center`}>{String(row.pin ?? '')}</td>}
                             <td className={nowrapClass}>{String(row.designation ?? '')}</td>
-                            <td className={nowrapClass}>{String(row.grade_step ?? '')}</td>
                             {earningHeads.map((h) => (
                                 <td key={h} className={amountClass}>
                                     {fmtSheet((row.components as Record<string, number>)?.[h])}
@@ -315,7 +328,7 @@ function SalarySheetTable({
                             ))}
                             <td className={amountClass}>{fmtSheet(row.deduction)}</td>
                             <td className={amountClass}>{fmtSheet(row.net)}</td>
-                            <td className={nowrapClass}>{String(row.account_no ?? '')}</td>
+                            {!topsheet && <td className={nowrapClass}>{String(row.account_no ?? '')}</td>}
                         </tr>
                     ))}
                     {totals && (
@@ -336,7 +349,7 @@ function SalarySheetTable({
                             ))}
                             <td className={amountClass}>{fmtSheet(totals.deduction)}</td>
                             <td className={amountClass}>{fmtSheet(totals.net)}</td>
-                            <td className="p-1" />
+                            {!topsheet && <td className="p-1" />}
                         </tr>
                     )}
                 </tbody>
@@ -548,11 +561,21 @@ function ReportPreview({ payload, signatureBlocks = [] }: { payload: Record<stri
         const headLabels = (payload.head_labels as Record<string, string>) ?? {};
 
         if (template === 'salary-sheet-grouped') {
-            const sections = (payload.sections as { label: string; rows: Record<string, unknown>[]; totals?: Record<string, unknown> }[]) ?? [];
+            const sections = (payload.sections as {
+                label: string;
+                rows: Record<string, unknown>[];
+                totals?: Record<string, unknown>;
+                earning_heads?: string[];
+                deduction_heads?: string[];
+                head_labels?: Record<string, string>;
+            }[]) ?? [];
             const salaryMonth = String(payload.salary_month ?? '');
             if (sections.length === 0) {
                 return <p className="text-muted-foreground text-sm">No payslips found for the selected filters.</p>;
             }
+            const defaultEarningHeads = (payload.earning_heads as string[]) ?? [];
+            const defaultDeductionHeads = (payload.deduction_heads as string[]) ?? [];
+            const defaultHeadLabels = (payload.head_labels as Record<string, string>) ?? {};
             return (
                 <div className="space-y-4">
                     {sections.map((section, si) => (
@@ -563,9 +586,9 @@ function ReportPreview({ payload, signatureBlocks = [] }: { payload: Record<stri
                             </div>
                             <div className="flex flex-col">
                                 <SalarySheetTable
-                                    earningHeads={earningHeads}
-                                    deductionHeads={deductionHeads}
-                                    headLabels={headLabels}
+                                    earningHeads={section.earning_heads ?? defaultEarningHeads}
+                                    deductionHeads={section.deduction_heads ?? defaultDeductionHeads}
+                                    headLabels={section.head_labels ?? defaultHeadLabels}
                                     rows={section.rows ?? []}
                                     totals={section.totals}
                                 />
@@ -579,9 +602,17 @@ function ReportPreview({ payload, signatureBlocks = [] }: { payload: Record<stri
 
         const rows = (payload.rows as Record<string, unknown>[]) ?? [];
         const totals = payload.totals as Record<string, unknown> | undefined;
+        const topsheet = Boolean(payload.topsheet);
         return (
             <div>
-                <SalarySheetTable earningHeads={earningHeads} deductionHeads={deductionHeads} headLabels={headLabels} rows={rows} totals={totals} />
+                <SalarySheetTable
+                    earningHeads={earningHeads}
+                    deductionHeads={deductionHeads}
+                    headLabels={headLabels}
+                    rows={rows}
+                    totals={totals}
+                    topsheet={topsheet}
+                />
                 {totals && <SalarySheetFooter net={totals.net} showInWords signatureBlocks={signatureBlocks} />}
             </div>
         );

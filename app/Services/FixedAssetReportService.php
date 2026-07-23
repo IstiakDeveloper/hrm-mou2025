@@ -107,12 +107,115 @@ class FixedAssetReportService
     }
 
     /**
+     * Period plus applied filters (branch, category, status) for screen/print headers.
+     *
      * @param  array<string, mixed>  $config
      * @param  array<string, mixed>  $filters
      */
     public function periodLabel(array $filters, array $config): string
     {
+        $parts = [$this->periodCoreLabel($filters, $config)];
+
+        if ($branch = $this->branchLabel($filters)) {
+            $parts[] = 'Branch: '.$branch;
+        }
+
+        if ($category = $this->categoryLabel($filters)) {
+            $parts[] = 'Category: '.$category;
+        }
+
+        if (! empty($filters['status'])) {
+            $status = (string) $filters['status'];
+            $parts[] = 'Status: '.(FixedAsset::STATUSES[$status] ?? $status);
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    /**
+     * Financial-year / date range only (no branch/category).
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $filters
+     */
+    public function periodCoreLabel(array $filters, array $config): string
+    {
         return $this->period->resolve($filters, $config)['label'];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    public function branchLabel(array $filters): ?string
+    {
+        if (empty($filters['branch_id'])) {
+            return null;
+        }
+
+        $branch = Branch::query()
+            ->whereKey((int) $filters['branch_id'])
+            ->first(['id', 'name', 'branch_code']);
+
+        if (! $branch) {
+            return null;
+        }
+
+        $name = trim((string) $branch->name);
+        $code = trim((string) ($branch->branch_code ?? ''));
+
+        if ($name === '') {
+            return null;
+        }
+
+        return $code !== '' ? "{$name} ({$code})" : $name;
+    }
+
+    /**
+     * Left-side header label: "Branch: Name (Code)" or "Branch: All Branches".
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function branchHeaderLabel(array $filters): string
+    {
+        $label = $this->branchLabel($filters);
+
+        return 'Branch: '.($label ?: 'All Branches');
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    public function categoryLabel(array $filters): ?string
+    {
+        if (empty($filters['asset_category_id'])) {
+            return null;
+        }
+
+        $name = AssetCategory::query()->whereKey((int) $filters['asset_category_id'])->value('name');
+
+        return $name ? (string) $name : null;
+    }
+
+    /**
+     * Right-side meta for salary-sheet-style print headers (period + non-branch filters).
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $filters
+     */
+    public function printMetaLabel(array $filters, array $config): string
+    {
+        $parts = [$this->periodCoreLabel($filters, $config)];
+
+        if ($category = $this->categoryLabel($filters)) {
+            $parts[] = 'Category: '.$category;
+        }
+
+        if (! empty($filters['status'])) {
+            $status = (string) $filters['status'];
+            $parts[] = 'Status: '.(FixedAsset::STATUSES[$status] ?? $status);
+        }
+
+        return implode(' · ', $parts);
     }
 
     /**
@@ -604,7 +707,7 @@ class FixedAssetReportService
                 'cost_addition' => $addition,
                 'cost_sales_adj' => $salesAdj,
                 'cost_closing' => $closingCost,
-                'depreciation_rate' => $rate ? round((float) $rate, 2) : null,
+                'depreciation_rate' => $rate !== null ? (int) round((float) $rate) : null,
                 'dep_opening' => $openingDep,
                 'dep_charged' => $charged,
                 'dep_sales_adj' => $depSalesAdj,

@@ -6,9 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Services\GratuityReportService;
 use App\Support\GratuityReportCsvExporter;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class GratuityReportController extends Controller

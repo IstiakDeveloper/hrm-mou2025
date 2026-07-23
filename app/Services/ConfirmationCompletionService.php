@@ -40,27 +40,11 @@ class ConfirmationCompletionService
             ? Carbon::parse($confirmation->confirmation_date)
             : now();
 
-        $employee->confirmation_date = $confirmationDate;
-
         if ($confirmation->to_designation_id) {
             $employee->last_designation_id = $employee->designation_id;
-            $employee->designation_id = $confirmation->to_designation_id;
         }
 
-        if ($confirmation->to_employee_type_id) {
-            $employee->employee_type_id = $confirmation->to_employee_type_id;
-            $employee->probation_period_days = 0;
-        }
-
-        if ($confirmation->to_salary_grade_id && $confirmation->to_salary_step_id) {
-            $employee->payscale_id = $toPayscaleId
-                ?: $confirmation->toSalaryGrade?->payscale_id
-                ?: Payscale::activeId();
-            $employee->salary_grade_id = $confirmation->to_salary_grade_id;
-            $employee->salary_step_id = $confirmation->to_salary_step_id;
-            $employee->last_promotion_date = $confirmationDate;
-        }
-
+        $this->syncEmployeeFromConfirmation($confirmation, $toPayscaleId);
         $employee->save();
 
         ConfirmationHistory::create([
@@ -121,6 +105,35 @@ class ConfirmationCompletionService
 
         $confirmation->status = 'completed';
         $confirmation->save();
+    }
+
+    public function syncEmployeeFromConfirmation(Confirmation $confirmation, ?int $toPayscaleId = null): void
+    {
+        $confirmation->loadMissing(['employee', 'toSalaryGrade']);
+        $employee = $confirmation->employee;
+        $confirmationDate = $confirmation->confirmation_date
+            ? Carbon::parse($confirmation->confirmation_date)
+            : now();
+
+        $employee->confirmation_date = $confirmationDate;
+
+        if ($confirmation->to_designation_id) {
+            $employee->designation_id = $confirmation->to_designation_id;
+        }
+
+        if ($confirmation->to_employee_type_id) {
+            $employee->employee_type_id = $confirmation->to_employee_type_id;
+            $employee->probation_period_days = 0;
+        }
+
+        if ($confirmation->to_salary_grade_id && $confirmation->to_salary_step_id) {
+            $employee->payscale_id = $toPayscaleId
+                ?: $confirmation->toSalaryGrade?->payscale_id
+                ?: Payscale::activeId();
+            $employee->salary_grade_id = $confirmation->to_salary_grade_id;
+            $employee->salary_step_id = $confirmation->to_salary_step_id;
+            $employee->last_promotion_date = $confirmationDate;
+        }
     }
 
     public function activateDueConfirmations(?int $actorUserId = null): int

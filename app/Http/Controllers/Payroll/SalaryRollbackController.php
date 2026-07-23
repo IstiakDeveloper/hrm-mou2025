@@ -36,19 +36,41 @@ class SalaryRollbackController extends Controller
 
             $payslips = Payslip::query()
                 ->whereIn('payroll_run_id', $runIds)
-                ->with(['employee.branch', 'employee.department', 'employee.designation', 'employee.project', 'payrollRun.branch'])
-                ->when($request->filled('branch_id'), fn ($q) => $q->whereHas(
-                    'employee',
-                    fn ($eq) => $eq->where('current_branch_id', $request->integer('branch_id'))
-                ))
+                ->with([
+                    'branch:id,name,branch_code',
+                    'employee.branch',
+                    'employee.department',
+                    'employee.designation',
+                    'employee.project',
+                    'payrollRun.branch',
+                ])
+                ->when($request->filled('branch_id'), function ($q) use ($request) {
+                    $branchId = $request->integer('branch_id');
+                    $q->where(function ($inner) use ($branchId) {
+                        $inner->where('branch_id', $branchId)
+                            ->orWhere(function ($legacy) use ($branchId) {
+                                $legacy->whereNull('branch_id')
+                                    ->where(function ($fallback) use ($branchId) {
+                                        $fallback->whereHas('payrollRun', fn ($rq) => $rq->where('branch_id', $branchId))
+                                            ->orWhereHas('employee', fn ($eq) => $eq->where('current_branch_id', $branchId));
+                                    });
+                            });
+                    });
+                })
                 ->when($request->filled('department_id'), fn ($q) => $q->whereHas(
                     'employee',
                     fn ($eq) => $eq->where('department_id', $request->integer('department_id'))
                 ))
-                ->when($request->filled('designation_id'), fn ($q) => $q->whereHas(
-                    'employee',
-                    fn ($eq) => $eq->where('designation_id', $request->integer('designation_id'))
-                ))
+                ->when($request->filled('designation_id'), function ($q) use ($request) {
+                    $designationId = $request->integer('designation_id');
+                    $q->where(function ($inner) use ($designationId) {
+                        $inner->where('designation_id', $designationId)
+                            ->orWhere(function ($legacy) use ($designationId) {
+                                $legacy->whereNull('designation_id')
+                                    ->whereHas('employee', fn ($eq) => $eq->where('designation_id', $designationId));
+                            });
+                    });
+                })
                 ->when($request->filled('project_id'), fn ($q) => $q->whereHas(
                     'employee',
                     fn ($eq) => $eq->where('project_id', $request->integer('project_id'))
@@ -59,23 +81,22 @@ class SalaryRollbackController extends Controller
             foreach ($payslips as $p) {
                 $emp = $p->employee;
                 $run = $p->payrollRun;
-                $branch = $emp?->branch ?? $run?->branch;
 
                 $rows[] = [
                     'payslip_id' => $p->id,
                     'payroll_run_id' => $p->payroll_run_id,
-                    'branch_id' => $branch?->id,
-                    'branch' => $branch?->name,
-                    'branch_label' => $this->branchLabel($branch?->name, $branch?->branch_code),
+                    'branch_id' => $p->displayBranchId(),
+                    'branch' => $p->displayBranchName(),
+                    'branch_label' => $this->branchLabel($p->displayBranchName(), $p->displayBranchCode()),
                     'pin' => $emp?->pin,
-                    'name' => $emp?->name_en,
+                    'name' => $p->displayName(),
                     'project' => $emp?->project?->name,
                     'department' => $emp?->department?->name,
-                    'designation' => $emp?->designation?->name,
+                    'designation' => $p->displayDesignation(),
                     'joining_date' => $emp?->joining_date?->format('d-m-Y'),
                     'grade' => $p->grade_label,
                     'step' => $p->step_number,
-                    'basic' => (float) $p->basic_salary,
+                    'basic' => $p->displayBasicSalary(),
                     'gross' => (float) $p->gross_salary,
                     'deduction' => (float) $p->total_deduction,
                     'net' => (float) $p->net_payable,

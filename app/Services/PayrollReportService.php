@@ -54,7 +54,9 @@ class PayrollReportService
 
         return match ($template) {
             'grade-step' => $this->gradeStepCalculation($filters),
-            'salary-sheet' => $this->salarySheet($config, $filters),
+            'salary-sheet' => ! empty($config['topsheet_by'])
+                ? $this->salarySheetTopsheet($config, $filters)
+                : $this->salarySheet($config, $filters),
             'salary-sheet-grouped' => $this->salarySheetGrouped($config, $filters),
             'bank-advice' => $this->bankAdvice($config, $filters),
             'head-register' => $this->headRegister($config, $filters),
@@ -197,6 +199,107 @@ class PayrollReportService
     }
 
     /**
+     * One summary row per branch (topsheet) — same salary heads as the salary sheet.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    protected function salarySheetTopsheet(array $config, array $filters): array
+    {
+        $payslips = $this->fetchPayslips($config, $filters);
+        $sheet = $this->mapSalarySheet($payslips, $config);
+        $groupBy = (string) ($config['topsheet_by'] ?? 'branch');
+
+        /** @var array<string, array{label: string, sort_tuple: list<int|string>, rows: list<array<string, mixed>>}> $groups */
+        $groups = [];
+
+        foreach ($sheet['rows'] as $row) {
+            $key = match ($groupBy) {
+                'month' => $row['period'] ?? 'Unknown',
+                'designation' => $row['designation'] ?? 'Unassigned',
+                default => $row['branch_code'] ?? '__unassigned__',
+            };
+
+            if (! isset($groups[$key])) {
+                $branch = $this->resolveSalarySheetBranch($row);
+                $groups[$key] = [
+                    'label' => match ($groupBy) {
+                        'month' => (string) ($row['period'] ?? 'Unknown'),
+                        'designation' => (string) ($row['designation'] ?? 'Unassigned'),
+                        default => $this->formatBranchLabel(
+                            (string) ($row['branch'] ?? ''),
+                            (string) ($row['branch_code'] ?? ''),
+                        ),
+                    },
+                    'sort_tuple' => BranchOrganogram::branchHierarchySortTuple($branch),
+                    'rows' => [],
+                ];
+            }
+
+            $groups[$key]['rows'][] = $row;
+        }
+
+        uasort($groups, function (array $a, array $b) use ($groupBy) {
+            if ($groupBy === 'branch') {
+                return ($a['sort_tuple'] ?? []) <=> ($b['sort_tuple'] ?? []);
+            }
+
+            return strcmp($a['label'], $b['label']);
+        });
+
+        $heads = $sheet['heads'] ?? [];
+        $topsheetRows = [];
+
+        foreach ($groups as $group) {
+            $totals = $this->sumSheetRows($group['rows'], $heads);
+            $employeeCount = count($group['rows']);
+
+            $topsheetRows[] = [
+                'pin' => '',
+                'name' => $group['label'],
+                'designation' => $employeeCount === 1 ? '1 employee' : $employeeCount.' employees',
+                'department' => null,
+                'branch' => $group['label'],
+                'branch_code' => null,
+                'branch_id' => null,
+                'branch_model' => null,
+                'branch_label' => $group['label'],
+                'grade' => null,
+                'step' => null,
+                'grade_step' => '',
+                'account_no' => '',
+                'period' => $sheet['salary_month'] ?? '',
+                'components' => $totals['components'],
+                'gross' => $totals['gross'],
+                'deduction' => $totals['deduction'],
+                'net' => $totals['net'],
+                'withheld' => false,
+                'employee_count' => $employeeCount,
+            ];
+        }
+
+        return [
+            'template' => 'salary-sheet',
+            'topsheet' => true,
+            'topsheet_by' => $groupBy,
+            'salary_month' => $this->periodLabel($filters, $config),
+            'heads' => $heads,
+            'earning_heads' => $sheet['earning_heads'] ?? [],
+            'deduction_heads' => $sheet['deduction_heads'] ?? [],
+            'head_labels' => $sheet['head_labels'] ?? [],
+            'rows' => $topsheetRows,
+            'totals' => $this->sumSheetRows($topsheetRows, $heads),
+            'meta' => [
+                'row_count' => count($topsheetRows),
+                'employee_count' => count($sheet['rows'] ?? []),
+                'status' => $config['status'] ?? null,
+                'salary_type' => $config['salary_type'] ?? 'salary',
+            ],
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $config
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
@@ -204,10 +307,116 @@ class PayrollReportService
     protected function salarySheetGrouped(array $config, array $filters): array
     {
         $payslips = $this->fetchPayslips($config, $filters);
-        $sheet = $this->mapSalarySheet($payslips, $config);
-        $sheet['salary_month'] = $this->periodLabel($filters, $config);
+        $groupBy = $config['group_by'] ?? 'branch';
 
-        return $this->groupSalarySheetRows($sheet, $config['group_by'] ?? 'branch');
+        /** @var array<string, array{label: string, sort_tuple: list<int|string>, payslips: Collection<int, Payslip>}> $groups */
+        $groups = [];
+
+        foreach ($payslips as $payslip) {
+            if ($payslip->is_withheld) {
+                continue;
+            }
+
+            $key = match ($groupBy) {
+                'month' => $this->salarySheetMonthGroupKey($payslip),
+                'designation' => $payslip->displayDesignation() ?: '__unassigned__',
+                default => $payslip->displayBranchCode() ?? '__unassigned__',
+            };
+
+            if (! isset($groups[$key])) {
+                $groups[$key] = [
+                    'label' => $this->salarySheetGroupLabel($payslip, $groupBy),
+                    'sort_tuple' => $this->salarySheetGroupSortTuple($payslip, $groupBy),
+                    'payslips' => collect(),
+                ];
+            }
+
+            $groups[$key]['payslips']->push($payslip);
+        }
+
+        uasort($groups, function (array $a, array $b) use ($groupBy) {
+            if ($groupBy === 'branch') {
+                return ($a['sort_tuple'] ?? []) <=> ($b['sort_tuple'] ?? []);
+            }
+
+            return strcmp($a['label'], $b['label']);
+        });
+
+        $sections = [];
+        foreach ($groups as $group) {
+            $sheet = $this->mapSalarySheet($group['payslips'], $config);
+            $sections[] = array_merge([
+                'label' => $group['label'],
+            ], $sheet);
+        }
+
+        $firstSection = $sections[0] ?? null;
+
+        return [
+            'template' => 'salary-sheet-grouped',
+            'salary_month' => $this->periodLabel($filters, $config),
+            'sections' => $sections,
+            'heads' => $firstSection['heads'] ?? [],
+            'earning_heads' => $firstSection['earning_heads'] ?? [],
+            'deduction_heads' => $firstSection['deduction_heads'] ?? [],
+            'head_labels' => $firstSection['head_labels'] ?? [],
+            'rows' => [],
+            'totals' => null,
+            'meta' => [
+                'row_count' => array_sum(array_map(
+                    static fn (array $section) => count($section['rows'] ?? []),
+                    $sections
+                )),
+                'status' => $config['status'] ?? null,
+                'salary_type' => $config['salary_type'] ?? 'salary',
+                'section_count' => count($sections),
+            ],
+        ];
+    }
+
+    protected function salarySheetMonthGroupKey(Payslip $payslip): string
+    {
+        $run = $payslip->payrollRun;
+        if (! $run) {
+            return 'unknown';
+        }
+
+        return sprintf('%04d-%02d', (int) $run->year, (int) $run->month);
+    }
+
+    protected function salarySheetGroupLabel(Payslip $payslip, string $groupBy): string
+    {
+        return match ($groupBy) {
+            'month' => $payslip->payrollRun
+                ? sprintf('%s %d', date('F', mktime(0, 0, 0, (int) $payslip->payrollRun->month, 1)), $payslip->payrollRun->year)
+                : 'Unknown',
+            'designation' => $payslip->displayDesignation() ?: 'Unassigned',
+            default => $this->formatSalarySheetBranchSectionLabel(
+                $payslip->displayBranchName(),
+                $payslip->displayBranchCode(),
+            ),
+        };
+    }
+
+    /**
+     * @return list<int|string>
+     */
+    protected function salarySheetGroupSortTuple(Payslip $payslip, string $groupBy): array
+    {
+        return match ($groupBy) {
+            'month' => [$this->salarySheetMonthGroupKey($payslip)],
+            'designation' => [mb_strtolower($payslip->displayDesignation() ?: 'zzz')],
+            default => BranchOrganogram::branchHierarchySortTuple($payslip->displayBranch()),
+        };
+    }
+
+    protected function formatSalarySheetBranchSectionLabel(?string $name, ?string $code): string
+    {
+        $branchLabel = $this->formatBranchLabel($name, $code);
+
+        return str_starts_with($branchLabel, 'Branch:')
+            ? $branchLabel
+            : 'Branch: '.$branchLabel;
     }
 
     /**
@@ -227,7 +436,14 @@ class PayrollReportService
             if (! isset($groups[$key])) {
                 $branch = $this->resolveSalarySheetBranch($row);
                 $groups[$key] = [
-                    'label' => $row['branch_label'] ?? $row['branch'] ?? 'Unassigned',
+                    'label' => match ($groupBy) {
+                        'month' => (string) ($row['period'] ?? 'Unknown'),
+                        'designation' => (string) ($row['designation'] ?? 'Unassigned'),
+                        default => $this->formatSalarySheetBranchSectionLabel(
+                            (string) ($row['branch'] ?? ''),
+                            (string) ($row['branch_code'] ?? ''),
+                        ),
+                    },
                     'sort_tuple' => BranchOrganogram::branchHierarchySortTuple($branch),
                     'rows' => [],
                 ];
@@ -297,12 +513,24 @@ class PayrollReportService
                     ? $this->salarySheetDeductionSortOrder($key, $label)
                     : $this->salarySheetEarningSortOrder($key, $label);
 
-                if (! isset($columnMeta[$key]) || $sortOrder < $columnMeta[$key]['sort_order']) {
+                if (! isset($columnMeta[$key])) {
                     $columnMeta[$key] = [
                         'label' => $label,
                         'sort_order' => $sortOrder,
                         'category' => $category,
                     ];
+
+                    continue;
+                }
+
+                if ($sortOrder < $columnMeta[$key]['sort_order']) {
+                    $columnMeta[$key]['sort_order'] = $sortOrder;
+                }
+
+                // Prefer a percentage-aware label when available (e.g. House Rent (70%)).
+                if ($this->salarySheetLabelShowsPercentage($label)
+                    && ! $this->salarySheetLabelShowsPercentage((string) $columnMeta[$key]['label'])) {
+                    $columnMeta[$key]['label'] = $label;
                 }
             }
         }
@@ -340,20 +568,21 @@ class PayrollReportService
                 $components[$key] += (float) $line->computed_amount;
             }
 
-            $components['Basic'] = (float) $payslip->basic_salary;
+            // Fixed / Probation salary payslips put the amount only under Others.
+            $components['Basic'] = $payslip->displayBasicSalary();
             $bank = $banks[$payslip->employee_id] ?? null;
-            $branch = $employee?->branch ?? $run?->branch;
-            $branchName = $branch?->name;
-            $branchCode = $branch?->branch_code;
+            $branch = $payslip->displayBranch();
+            $branchName = $payslip->displayBranchName();
+            $branchCode = $payslip->displayBranchCode();
 
             $rows[] = [
                 'pin' => $employee?->pin,
-                'name' => $employee?->name_en,
-                'designation' => $employee?->designation?->name,
+                'name' => $payslip->displayName(),
+                'designation' => $payslip->displayDesignation(),
                 'department' => $employee?->department?->name,
                 'branch' => $branchName,
                 'branch_code' => $branchCode,
-                'branch_id' => $branch?->id,
+                'branch_id' => $payslip->displayBranchId(),
                 'branch_model' => $branch,
                 'branch_label' => $this->formatBranchLabel($branchName, $branchCode),
                 'grade' => $payslip->grade_label,
@@ -486,7 +715,7 @@ class PayrollReportService
             return 'loan:'.($this->resolveLoanHeadType($line) ?? 'other');
         }
 
-        if ($line->type === 'earning' && in_array($line->head_name, ['Fixed Salary', 'Probation Salary'], true)) {
+        if ($line->type === 'earning' && Payslip::isOthersFlatEarningHead($line->head_name)) {
             return 'earn:others';
         }
 
@@ -506,11 +735,40 @@ class PayrollReportService
                 ?? $this->loanTypeLabel($type);
         }
 
-        if ($line->type === 'earning' && in_array($line->head_name, ['Fixed Salary', 'Probation Salary'], true)) {
+        if ($line->type === 'earning' && Payslip::isOthersFlatEarningHead($line->head_name)) {
             return 'Others';
         }
 
-        return $line->head?->name ?? $line->head_name;
+        $label = (string) ($line->head?->name ?? $line->head_name);
+
+        return $this->appendSalarySheetPercentageLabel($label, $line);
+    }
+
+    protected function appendSalarySheetPercentageLabel(string $label, PayslipLine $line): string
+    {
+        if (strtolower(trim((string) $line->amount_type)) !== 'percentage') {
+            return $label;
+        }
+
+        $pct = (float) $line->input_value;
+        if ($pct <= 0) {
+            return $label;
+        }
+
+        if ($this->salarySheetLabelShowsPercentage($label)) {
+            return $label;
+        }
+
+        $formatted = fmod($pct, 1.0) === 0.0
+            ? (string) (int) round($pct)
+            : rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.');
+
+        return $label.' ('.$formatted.'%)';
+    }
+
+    protected function salarySheetLabelShowsPercentage(string $label): bool
+    {
+        return (bool) preg_match('/\(\s*\d+(?:\.\d+)?\s*%\s*\)/', $label);
     }
 
     /**
@@ -734,6 +992,8 @@ class PayrollReportService
         $query = Payslip::query()
             ->with([
                 'lines.head:id,name,short_name,type,is_loan_head,loan_head_type',
+                'branch:id,name,branch_code,is_head_office,regional_office_id',
+                'branch.regionalOffice.zone:id,code,name',
                 'payrollRun.branch:id,name,branch_code,is_head_office,regional_office_id',
                 'payrollRun.branch.regionalOffice.zone:id,code,name',
                 'payrollRun.bonusConfiguration:id,name',
@@ -749,10 +1009,15 @@ class PayrollReportService
                 'employee',
                 fn (Builder $eq) => $eq->where('department_id', $id)
             ))
-            ->when($filters['designation_id'], fn ($q, $id) => $q->whereHas(
-                'employee',
-                fn (Builder $eq) => $eq->where('designation_id', $id)
-            ))
+            ->when($filters['designation_id'], function ($q, $id) {
+                $q->where(function (Builder $inner) use ($id) {
+                    $inner->where('designation_id', $id)
+                        ->orWhere(function (Builder $legacy) use ($id) {
+                            $legacy->whereNull('designation_id')
+                                ->whereHas('employee', fn (Builder $eq) => $eq->where('designation_id', $id));
+                        });
+                });
+            })
             ->when($filters['program_id'], fn ($q, $id) => $q->whereHas(
                 'employee',
                 fn (Builder $eq) => $eq->where('program_id', $id)
@@ -775,8 +1040,15 @@ class PayrollReportService
         if ($filters['branch_id']) {
             $branchId = $filters['branch_id'];
             $query->where(function (Builder $q) use ($branchId) {
-                $q->whereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId))
-                    ->orWhereHas('employee', fn (Builder $eq) => $eq->where('current_branch_id', $branchId));
+                $q->where('branch_id', $branchId)
+                    ->orWhere(function (Builder $legacy) use ($branchId) {
+                        $legacy->whereNull('branch_id')
+                            ->where(function (Builder $fallback) use ($branchId) {
+                                $fallback->whereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId))
+                                    ->orWhereHas('employee', fn (Builder $eq) => $eq->where('current_branch_id', $branchId));
+                            });
+                    })
+                    ->orWhereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId));
             });
         }
 
@@ -839,8 +1111,8 @@ class PayrollReportService
             $bank = $banks[$payslip->employee_id] ?? null;
             $rows[] = [
                 'pin' => $employee?->pin,
-                'name' => $employee?->name_en,
-                'branch' => $employee?->branch?->name ?? $payslip->payrollRun?->branch?->name,
+                'name' => $payslip->displayName(),
+                'branch' => $payslip->displayBranchName(),
                 'bank_name' => $bank?->bank_name,
                 'bank_branch' => $bank?->branch_name,
                 'account_no' => $bank?->account_no,
@@ -876,6 +1148,7 @@ class PayrollReportService
                 'payslip.employee:id,pin,name_en,designation_id,current_branch_id',
                 'payslip.employee.designation:id,name',
                 'payslip.employee.branch:id,name',
+                'payslip.branch:id,name',
                 'payslip.payrollRun:id,year,month,branch_id',
                 'payslip.payrollRun.branch:id,name',
             ])
@@ -888,8 +1161,15 @@ class PayrollReportService
                 if ($filters['branch_id']) {
                     $branchId = $filters['branch_id'];
                     $q->where(function (Builder $inner) use ($branchId) {
-                        $inner->whereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId))
-                            ->orWhereHas('employee', fn (Builder $eq) => $eq->where('current_branch_id', $branchId));
+                        $inner->where('branch_id', $branchId)
+                            ->orWhere(function (Builder $legacy) use ($branchId) {
+                                $legacy->whereNull('branch_id')
+                                    ->where(function (Builder $fallback) use ($branchId) {
+                                        $fallback->whereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId))
+                                            ->orWhereHas('employee', fn (Builder $eq) => $eq->where('current_branch_id', $branchId));
+                                    });
+                            })
+                            ->orWhereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId));
                     });
                 }
             })
@@ -904,9 +1184,9 @@ class PayrollReportService
             $amount = (float) $line->computed_amount;
             $rows[] = [
                 'pin' => $employee?->pin,
-                'name' => $employee?->name_en,
-                'designation' => $employee?->designation?->name,
-                'branch' => $employee?->branch?->name ?? $payslip?->payrollRun?->branch?->name,
+                'name' => $payslip?->displayName(),
+                'designation' => $payslip?->displayDesignation(),
+                'branch' => $payslip?->displayBranchName(),
                 'head_name' => $line->head_name,
                 'amount' => $amount,
                 'period' => $payslip?->payrollRun
@@ -942,7 +1222,9 @@ class PayrollReportService
                 'payslip.employee:id,pin,name_en,designation_id,current_branch_id',
                 'payslip.employee.designation:id,name',
                 'payslip.employee.branch:id,name',
-                'payslip.payrollRun:id,year,month',
+                'payslip.branch:id,name',
+                'payslip.payrollRun:id,year,month,branch_id',
+                'payslip.payrollRun.branch:id,name',
                 'head:id,name,is_loan_head,loan_head_type',
             ])
             ->where('type', 'deduction')
@@ -960,7 +1242,17 @@ class PayrollReportService
                 }
                 if ($filters['branch_id']) {
                     $branchId = $filters['branch_id'];
-                    $q->whereHas('employee', fn (Builder $eq) => $eq->where('current_branch_id', $branchId));
+                    $q->where(function (Builder $inner) use ($branchId) {
+                        $inner->where('branch_id', $branchId)
+                            ->orWhere(function (Builder $legacy) use ($branchId) {
+                                $legacy->whereNull('branch_id')
+                                    ->where(function (Builder $fallback) use ($branchId) {
+                                        $fallback->whereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId))
+                                            ->orWhereHas('employee', fn (Builder $eq) => $eq->where('current_branch_id', $branchId));
+                                    });
+                            })
+                            ->orWhereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId));
+                    });
                 }
             })
             ->orderBy('head_name')
@@ -974,9 +1266,9 @@ class PayrollReportService
             $amount = (float) $line->computed_amount;
             $rows[] = [
                 'pin' => $employee?->pin,
-                'name' => $employee?->name_en,
-                'designation' => $employee?->designation?->name,
-                'branch' => $employee?->branch?->name,
+                'name' => $payslip?->displayName(),
+                'designation' => $payslip?->displayDesignation(),
+                'branch' => $payslip?->displayBranchName(),
                 'head_name' => $line->head_name,
                 'loan_type' => $line->head?->loan_head_type ?? 'n_a',
                 'amount' => $amount,
@@ -1020,9 +1312,9 @@ class PayrollReportService
 
             $rows[] = [
                 'pin' => $employee?->pin,
-                'name' => $employee?->name_en,
-                'branch' => $employee?->branch?->name ?? $run?->branch?->name,
-                'basic' => (float) $payslip->basic_salary,
+                'name' => $payslip->displayName(),
+                'branch' => $payslip->displayBranchName(),
+                'basic' => $payslip->displayBasicSalary(),
                 'bonus_name' => $bonusLine?->head_name ?? $run?->bonusConfiguration?->name ?? 'Bonus',
                 'percentage' => $bonusLine?->input_value,
                 'amount' => $amount,
@@ -1150,10 +1442,10 @@ class PayrollReportService
                 'template' => 'salary-certificate',
                 'employee' => $employee ? [
                     'pin' => $employee->pin,
-                    'name' => $employee->name_en,
-                    'designation' => $employee->designation?->name,
+                    'name' => $payslip?->displayName() ?? $employee->name_en,
+                    'designation' => $payslip?->displayDesignation() ?? $employee->designation?->name,
                     'department' => $employee->department?->name,
-                    'branch' => $employee->branch?->name,
+                    'branch' => $payslip?->displayBranchName() ?? $employee->branch?->name,
                 ] : null,
                 'lines' => [],
                 'meta' => ['message' => 'No posted payslip found for the selected period.'],
@@ -1168,24 +1460,24 @@ class PayrollReportService
             'template' => 'salary-certificate',
             'employee' => [
                 'pin' => $employee->pin,
-                'name' => $employee->name_en,
-                'designation' => $employee->designation?->name,
+                'name' => $payslip->displayName(),
+                'designation' => $payslip->displayDesignation(),
                 'department' => $employee->department?->name,
-                'branch' => $employee->branch?->name,
+                'branch' => $payslip->displayBranchName(),
                 'grade' => $payslip->grade_label,
                 'step' => $payslip->step_number,
                 'payscale' => $employee->payscale?->name,
             ],
             'period' => sprintf('%s %d', date('F', mktime(0, 0, 0, (int) $run->month, 1)), $run->year),
             'earnings' => $earnings->map(fn ($l) => [
-                'name' => $l->head_name,
+                'name' => Payslip::isOthersFlatEarningHead($l->head_name) ? 'Others' : $l->head_name,
                 'amount' => (float) $l->computed_amount,
             ])->all(),
             'deductions' => $deductions->map(fn ($l) => [
                 'name' => $l->head_name,
                 'amount' => (float) $l->computed_amount,
             ])->all(),
-            'basic' => (float) $payslip->basic_salary,
+            'basic' => $payslip->displayBasicSalary(),
             'gross' => (float) $payslip->gross_salary,
             'deduction' => (float) $payslip->total_deduction,
             'net' => (float) $payslip->net_payable,

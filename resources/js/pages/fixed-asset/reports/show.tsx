@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { ComboSelect } from '@/components/ComboSelect';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
-import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader';
+import { PayrollReportDocumentHeader } from '@/components/payroll/PayrollReportDocumentHeader';
 import { PayrollField, PayrollMonthSelect, PayrollYearSelect } from '@/components/payroll/PayrollFilterGrid';
 import { FormDateField } from '@/components/fixed-asset/FormDateField';
 import { displayDateToServer, toFormDisplayDate } from '@/lib/display-date';
-import { formatTakaAmount, formatTakaWhole } from '@/lib/taka-format';
+import { formatTakaWhole } from '@/lib/taka-format';
 import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
 type ReportMeta = {
@@ -31,6 +31,7 @@ type Section = {
 
 type Props = {
     companyName: string;
+    companyAddress?: string;
     report: ReportMeta;
     filterOptions: {
         branches: { id: number; name: string; branch_code?: string | null; is_head_office?: boolean }[];
@@ -45,13 +46,33 @@ type Props = {
     generated: boolean;
     payload: Record<string, unknown> | null;
     periodLabel: string;
+    branchLabel: string;
+    printMetaLabel: string;
     error: string | null;
     exportUrls: { print: string; pdf: string; excel: string } | null;
 };
 
 function fmt(n: unknown) {
     const v = Number(n);
-    return Number.isFinite(v) ? formatTakaAmount(v, 2) : '—';
+    return Number.isFinite(v) ? formatTakaWhole(v) : '—';
+}
+
+function isNumericCell(value: unknown): boolean {
+    if (typeof value === 'number') {
+        return Number.isFinite(value);
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed !== '' && /^-?\d+(\.\d+)?$/.test(trimmed);
+    }
+    return false;
+}
+
+function cellDisplay(value: unknown): string {
+    if (value == null || value === '') {
+        return '';
+    }
+    return isNumericCell(value) ? fmt(value) : String(value);
 }
 
 function columnKeys(template: string, firstRow: Record<string, unknown>, payload?: Record<string, unknown>): string[] {
@@ -126,7 +147,7 @@ function DataTable({
                         <tr key={i} className="border-b border-slate-200">
                             {colKeys.map((k) => (
                                 <td key={k} className="border-r border-slate-100 px-2 py-1 last:border-r-0">
-                                    {typeof row[k] === 'number' ? fmt(row[k]) : String(row[k] ?? '')}
+                                    {cellDisplay(row[k])}
                                 </td>
                             ))}
                         </tr>
@@ -136,7 +157,7 @@ function DataTable({
                             <td className="px-2 py-1">Total</td>
                             {colKeys.slice(1).map((k) => (
                                 <td key={k} className="px-2 py-1">
-                                    {totals[k] != null ? fmt(totals[k]) : ''}
+                                    {totals[k] != null ? cellDisplay(totals[k]) : ''}
                                 </td>
                             ))}
                         </tr>
@@ -206,6 +227,7 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
 
 export default function FixedAssetReportShow({
     companyName,
+    companyAddress = '',
     report,
     filterOptions,
     filters: initFilters,
@@ -213,6 +235,8 @@ export default function FixedAssetReportShow({
     generated,
     payload,
     periodLabel,
+    branchLabel,
+    printMetaLabel,
     error,
     exportUrls,
 }: Props) {
@@ -415,12 +439,20 @@ export default function FixedAssetReportShow({
                                 </Button>
                             </div>
                         )}
-                        <ReportDocumentHeader
+                        <PayrollReportDocumentHeader
                             companyName={companyName}
+                            companyAddress={companyAddress}
                             title={report.title}
-                            periodLabel={periodLabel}
-                            rowCount={(payload.meta as { row_count?: number } | undefined)?.row_count}
                         />
+                        <div className="mb-3 flex items-baseline justify-between gap-4 text-[11px] font-bold text-slate-900">
+                            <span className="text-left">{branchLabel}</span>
+                            <span className="shrink-0 text-right whitespace-nowrap">
+                                {printMetaLabel}
+                                {(payload.meta as { row_count?: number } | undefined)?.row_count != null && (
+                                    <> &nbsp;|&nbsp; Records: {(payload.meta as { row_count?: number }).row_count}</>
+                                )}
+                            </span>
+                        </div>
                         <ReportPreview payload={payload} />
                     </PayrollSectionCard>
                 )}

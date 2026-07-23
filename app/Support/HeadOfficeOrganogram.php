@@ -99,14 +99,14 @@ final class HeadOfficeOrganogram
         self::ensureBranchJoin($query);
         self::ensureEmployeeTypeJoin($query);
 
-        $query->orderByRaw(self::projectEmployeeBucketSql().' ASC');
-
         $headOfficeWhen = self::headOfficeWhenSql();
         $branchWhen = self::branchOfficeWhenSql();
         $tierSql = self::designationTierOrderSql();
+        $projectBucketSql = self::projectEmployeeBucketSql();
 
         $query->orderByRaw("CASE WHEN {$headOfficeWhen} THEN 0 ELSE 1 END ASC");
         $query->orderByRaw("CASE WHEN {$headOfficeWhen} THEN {$tierSql} END ASC");
+        $query->orderByRaw("CASE WHEN {$headOfficeWhen} THEN {$projectBucketSql} END ASC");
         self::applyPinSortToQuery($query, 'asc', $headOfficeWhen);
 
         BranchOrganogram::ensureHierarchyJoins($query);
@@ -121,6 +121,7 @@ final class HeadOfficeOrganogram
         $query->orderByRaw("CASE WHEN {$branchWhen} THEN COALESCE(branches.branch_code, branches.name, '') END ASC");
         $query->orderByRaw("CASE WHEN {$branchWhen} THEN branches.name END ASC");
         $query->orderByRaw("CASE WHEN {$branchWhen} THEN {$branchTierSql} END ASC");
+        $query->orderByRaw("CASE WHEN {$branchWhen} THEN {$projectBucketSql} END ASC");
         $query->orderByRaw("CASE WHEN {$branchWhen} THEN ".BranchOrganogram::designationSequenceOrderSql().' END ASC');
         self::applyPinSortToQuery($query, 'asc', $branchWhen);
     }

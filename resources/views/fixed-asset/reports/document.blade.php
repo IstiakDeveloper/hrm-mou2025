@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ $title }}</title>
-    @include('fixed-asset.reports.partials.styles')
+    @include('fixed-asset.reports.partials.styles', ['landscape' => !empty($landscape)])
     @if (!empty($printMode))
         <script>window.addEventListener('load', () => window.print());</script>
     @endif
@@ -16,10 +16,12 @@
             </p>
         @endif
 
-        @include('reports.partials.header', [
+        @include('fixed-asset.reports.partials.header', [
             'companyName' => $companyName,
+            'companyAddress' => $companyAddress ?? '',
             'title' => $title,
-            'periodLabel' => $periodLabel,
+            'branchLabel' => $branchLabel ?? '',
+            'printMetaLabel' => $printMetaLabel ?? $periodLabel,
             'generatedAt' => $generatedAt,
             'payload' => $payload,
         ])

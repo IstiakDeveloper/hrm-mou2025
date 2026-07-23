@@ -202,6 +202,7 @@ export default function ProvidentFundIndex({
         e.preventDefault();
         if (openingEditId) {
             openingForm.transform((data) => ({
+                employee_id: data.employee_id,
                 employee_amount: data.employee_amount,
                 employer_amount: data.employer_amount,
                 transaction_date: data.transaction_date,
@@ -478,7 +479,9 @@ export default function ProvidentFundIndex({
                             {openingEditId ? 'Edit Initial PF' : 'Record Initial PF Balance'}
                         </DialogTitle>
                         <DialogDescription className="text-xs text-zinc-400">
-                            Set employee's initial balance before system startup.
+                            {openingEditId
+                                ? 'You can correct the employee, amounts, or date. Balances update automatically.'
+                                : "Set employee's initial balance before system startup."}
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={submitOpening} className="space-y-3">
@@ -489,7 +492,6 @@ export default function ProvidentFundIndex({
                             employees={employees}
                             required
                             allowAll={false}
-                            disabled={openingEditId !== null}
                             comboPortal={false}
                             forPf
                         />

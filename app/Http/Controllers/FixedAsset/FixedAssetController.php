@@ -146,6 +146,32 @@ class FixedAssetController extends Controller
     {
         $validated = $this->validateAsset($request, $fixed_asset);
 
+        $purchaseCost = array_key_exists('purchase_cost', $validated)
+            ? ($validated['purchase_cost'] !== null ? (float) $validated['purchase_cost'] : null)
+            : null;
+        $bookValue = array_key_exists('book_value', $validated) && $validated['book_value'] !== null
+            ? (float) $validated['book_value']
+            : ($purchaseCost ?? null);
+
+        $oldCost = (float) ($fixed_asset->purchase_cost ?? 0);
+        $oldBook = (float) ($fixed_asset->book_value ?? $fixed_asset->purchase_cost ?? 0);
+        $oldAccum = (float) ($fixed_asset->accumulated_depreciation ?? 0);
+
+        $newCost = $purchaseCost ?? $oldCost;
+        $newBook = $bookValue ?? $oldBook;
+
+        // Keep accumulated depreciation in sync when cost / book value are corrected on edit
+        // e.g. cost 2800, book 2780→2770 ⇒ depreciation 20→30.
+        $costChanged = round($newCost, 2) !== round($oldCost, 2);
+        $bookChanged = round($newBook, 2) !== round($oldBook, 2);
+        $accumulated = $oldAccum;
+        if ($costChanged || $bookChanged) {
+            $accumulated = max(0, round($oldAccum + ($newCost - $oldCost) - ($newBook - $oldBook), 2));
+            if ($newCost > 0) {
+                $accumulated = min($accumulated, round($newCost, 2));
+            }
+        }
+
         $fixed_asset->update([
             'name' => $validated['name'],
             'asset_category_id' => $validated['asset_category_id'],
@@ -156,8 +182,8 @@ class FixedAssetController extends Controller
             'model' => $validated['model'] ?? null,
             'manufacturer' => $validated['manufacturer'] ?? null,
             'purchase_date' => $validated['purchase_date'] ?? null,
-            'purchase_cost' => $validated['purchase_cost'] ?? null,
-            'book_value' => $validated['book_value'] ?? $validated['purchase_cost'] ?? null,
+            'purchase_cost' => $purchaseCost,
+            'book_value' => $bookValue,
             'warranty_expiry' => $validated['warranty_expiry'] ?? null,
             'custodian_employee_id' => $validated['custodian_employee_id'] ?? null,
             'vendor' => $validated['vendor'] ?? null,
@@ -165,6 +191,7 @@ class FixedAssetController extends Controller
             'useful_life_years' => $validated['useful_life_years'] ?? null,
             'depreciation_method' => $validated['depreciation_method'] ?? null,
             'salvage_value' => $validated['salvage_value'] ?? null,
+            'accumulated_depreciation' => $accumulated,
             'depreciation_start_date' => $validated['depreciation_start_date'] ?? null,
             'disposal_date' => $validated['disposal_date'] ?? null,
             'disposal_amount' => $validated['disposal_amount'] ?? null,

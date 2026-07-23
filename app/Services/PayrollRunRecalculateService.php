@@ -34,10 +34,13 @@ class PayrollRunRecalculateService
         }
 
         $run->load([
+            'branch:id,name,branch_code',
             'payslips.employee.salaryGrade',
             'payslips.employee.salaryStep',
             'payslips.employee.payscale',
             'payslips.employee.employeeType',
+            'payslips.employee.designation:id,name',
+            'payslips.employee.branch:id,name,branch_code',
         ]);
 
         if ($run->payslips->isEmpty()) {
@@ -85,6 +88,7 @@ class PayrollRunRecalculateService
                     );
 
                     $payslip->update([
+                        ...Payslip::snapshotFromEmployee($employee, $run->branch),
                         'payscale_id' => $employee->payscale_id,
                         'salary_grade_id' => $employee->salary_grade_id,
                         'salary_step_id' => $employee->salary_step_id,

@@ -526,16 +526,17 @@ class PayrollCalculationService
     ): array {
         $warnings = $warningNote ? [$warningNote] : [];
         $sort = 0;
-        $basic = SalaryStructureCalculator::roundTaka($amount);
-        $gross = $basic;
+        $amount = SalaryStructureCalculator::roundTaka($amount);
+        // Flat Fixed/Probation pay is an "Others" earning only — never populate Basic.
+        $gross = $amount;
 
         $lines = [[
             'salary_head_id' => null,
             'head_name' => $headLabel,
             'type' => 'earning',
             'amount_type' => 'fixed',
-            'input_value' => $basic,
-            'computed_amount' => $basic,
+            'input_value' => $amount,
+            'computed_amount' => $amount,
             'sort_order' => $sort++,
         ]];
 
@@ -547,7 +548,7 @@ class PayrollCalculationService
         $isWithheld = $this->isSalaryWithheld($employee->id, $processDate, $salaryType, $payrollYear, $payrollMonth);
 
         $result = [
-            'basic_salary' => $basic,
+            'basic_salary' => 0.0,
             'gross_salary' => $gross,
             'total_deduction' => SalaryStructureCalculator::roundTaka($deduction),
             'net_payable' => SalaryStructureCalculator::roundTaka($gross - $deduction),

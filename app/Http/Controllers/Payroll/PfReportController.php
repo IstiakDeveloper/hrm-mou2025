@@ -10,6 +10,7 @@ use App\Support\PayrollReportPrintPdf;
 use App\Support\PfReportXlsxExporter;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
 use Mpdf\HTMLParserMode;
 use Mpdf\Mpdf;
 use Symfony\Component\HttpFoundation\Response;

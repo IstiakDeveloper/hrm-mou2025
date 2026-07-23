@@ -316,7 +316,7 @@ class BonusCalculationController extends Controller
         $activeCount = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest)->count();
 
         $employeesQuery = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest, payrollReadyOnly: true)
-            ->with(['salaryGrade', 'salaryStep', 'payscale']);
+            ->with(['salaryGrade', 'salaryStep', 'payscale', 'designation:id,name', 'branch:id,name,branch_code']);
 
         HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
 
@@ -368,6 +368,7 @@ class BonusCalculationController extends Controller
             $payslip = Payslip::query()->create([
                 'payroll_run_id' => $run->id,
                 'employee_id' => $employee->id,
+                ...Payslip::snapshotFromEmployee($employee, $branch),
                 'payscale_id' => $employee->payscale_id,
                 'salary_grade_id' => $employee->salary_grade_id,
                 'salary_step_id' => $employee->salary_step_id,

@@ -10,7 +10,9 @@ use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Movement;
+use App\Models\RegionalOffice;
 use App\Models\User;
+use App\Models\Zone;
 use App\Notifications\HrmNotification;
 use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
@@ -19,6 +21,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
+use Shuchkin\SimpleXLSXGen;
 
 class MovementController extends Controller
 {
@@ -114,8 +118,6 @@ class MovementController extends Controller
     {
         $user = Auth::user();
 
-        $query = Movement::with(['employee.department', 'employee.designation']);
-
         $userEmployeeId = $user->employee_id;
         $hasViewPermission = $user->hasPermission('movements.view');
         $isBranchManager = $user->hasPermission('branch_manager') && $user->branch_id;
@@ -139,44 +141,7 @@ class MovementController extends Controller
             }
         }
 
-        if (! $hasViewPermission) {
-            if ($userEmployeeId) {
-                $query->where('employee_id', $userEmployeeId);
-            } else {
-                $query->whereRaw('1 = 0');
-            }
-        } else {
-            OrganogramAccessService::constrainViaEmployeeRelation($query, $user, 'employee');
-        }
-
-        // Apply user-selected filters
-        $query->when($request->filled('status') && $request->status !== 'all', function ($query) use ($request) {
-            $query->where('status', $request->status);
-        })
-            ->when($request->filled('department_id') && $request->department_id !== 'all', function ($query) use ($request) {
-                $query->whereHas('employee', function ($q) use ($request) {
-                    $q->where('department_id', $request->department_id);
-                });
-            })
-            ->when($request->filled('employee_id') && $request->employee_id !== 'all', function ($query) use ($request) {
-                $query->where('employee_id', $request->employee_id);
-            })
-            ->when($request->filled('movement_type') && $request->movement_type !== 'all', function ($query) use ($request) {
-                $query->where('movement_type', $request->movement_type);
-            })
-            ->when($request->from_date, function ($query, $fromDate) {
-                $query->where('from_datetime', '>=', $fromDate);
-            })
-            ->when($request->to_date, function ($query, $toDate) {
-                $query->where('to_datetime', '<=', $toDate);
-            })
-            ->when($request->search, function ($query, $search) {
-                $query->whereHas('employee', function ($q) use ($search) {
-                    $q->where('name_en', 'like', "%{$search}%")
-                        ->orWhere('name_bn', 'like', "%{$search}%")
-                        ->orWhere('employee_id', 'like', "%{$search}%");
-                });
-            });
+        $query = $this->buildMovementIndexQuery($request, $user);
 
         $perPage = $this->resolvePerPage($request->get('per_page'), 10);
 
@@ -187,12 +152,16 @@ class MovementController extends Controller
         // Get accessible departments and employees
         $departments = $this->getAccessibleDepartments($user);
         $employees = $this->getAccessibleEmployees($user);
+        $organizationFilters = $this->getAccessibleOrganizationFilters($user);
 
         return Inertia::render('movement/index', [
             'movements' => $this->inertiaPagination($movements),
             'departments' => $departments,
             'employees' => $employees,
-            'filters' => $request->only(['status', 'department_id', 'employee_id', 'movement_type', 'from_date', 'to_date', 'search', 'per_page']),
+            'zones' => $organizationFilters['zones'],
+            'regionalOffices' => $organizationFilters['regionalOffices'],
+            'branches' => $organizationFilters['branches'],
+            'filters' => $request->only($this->movementIndexFilterKeys()),
             'userPermissions' => [
                 'canView' => $hasViewPermission,
                 'canCreate' => $user->hasPermission('movements.create'),
@@ -207,6 +176,302 @@ class MovementController extends Controller
                 'employeeId' => $userEmployeeId,
             ],
         ]);
+    }
+
+    /**
+     * Download the current index listing as PDF (respects active filters).
+     */
+    public function exportIndexPdf(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('movements.view'), 403);
+
+        $movements = $this->buildMovementIndexQuery($request, $user)
+            ->orderByDesc('id')
+            ->get();
+
+        $pdf = app('dompdf.wrapper');
+        $pdf->loadView('pdf.movement-index', [
+            'movements' => $movements,
+            'filterSummary' => $this->movementIndexFilterSummary($request),
+        ]);
+
+        return $pdf->download('movements-'.now()->format('Y-m-d-His').'.pdf');
+    }
+
+    /**
+     * Print-friendly TSX document for the current filtered index listing.
+     */
+    public function printIndex(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('movements.view'), 403);
+
+        $movements = $this->buildMovementIndexQuery($request, $user)
+            ->orderByDesc('id')
+            ->get();
+
+        return Inertia::render('movement/print', [
+            'movements' => $movements,
+            'filterSummary' => $this->movementIndexFilterSummary($request),
+            'generatedAt' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Download the current index listing as XLSX (respects active filters).
+     */
+    public function exportIndexXlsx(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('movements.view'), 403);
+
+        $movements = $this->buildMovementIndexQuery($request, $user)
+            ->orderByDesc('id')
+            ->get();
+
+        $rows = [[
+            'PIN',
+            'Employee',
+            'Branch',
+            'Department',
+            'Designation',
+            'Type',
+            'From',
+            'Return',
+            'Destination',
+            'Status',
+            'Duration',
+            'Purpose',
+        ]];
+
+        foreach ($movements as $movement) {
+            $employee = $movement->employee;
+            $rows[] = [
+                (string) ($employee->pin ?? $employee->employee_id ?? ''),
+                (string) ($employee->name_en ?? $employee->full_name_en ?? ''),
+                (string) ($employee->branch->name ?? ''),
+                (string) ($employee->department->name ?? ''),
+                (string) ($employee->designation->name ?? ''),
+                ucfirst((string) $movement->movement_type),
+                Carbon::parse($movement->from_datetime)->format('Y-m-d H:i'),
+                $movement->status === 'completed' && $movement->actual_return_datetime
+                    ? Carbon::parse($movement->actual_return_datetime)->format('Y-m-d H:i')
+                    : 'Not returned',
+                (string) $movement->destination,
+                ucfirst((string) $movement->status),
+                $this->movementDurationLabel($movement),
+                (string) $movement->purpose,
+            ];
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'movement-xlsx-');
+        if ($path === false) {
+            abort(500, 'Could not create export file.');
+        }
+
+        SimpleXLSXGen::fromArray($rows)->saveAs($path);
+        $content = file_get_contents($path);
+        @unlink($path);
+
+        return response($content, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="movements-'.now()->format('Y-m-d-His').'.xlsx"',
+        ]);
+    }
+
+    private function buildMovementIndexQuery(Request $request, User $user)
+    {
+        $query = Movement::with(['employee.department', 'employee.designation', 'employee.branch']);
+
+        $hasViewPermission = $user->hasPermission('movements.view');
+        $userEmployeeId = $user->employee_id;
+
+        if (! $hasViewPermission) {
+            if ($userEmployeeId) {
+                $query->where('employee_id', $userEmployeeId);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        } else {
+            OrganogramAccessService::constrainViaEmployeeRelation($query, $user, 'employee');
+        }
+
+        $this->applyMovementIndexFilters($query, $request);
+
+        return $query;
+    }
+
+    private function applyMovementIndexFilters($query, Request $request): void
+    {
+        $query->when($request->filled('status') && $request->status !== 'all', function ($query) use ($request) {
+            $query->where('status', $request->status);
+        })
+            ->when($request->filled('department_id') && $request->department_id !== 'all', function ($query) use ($request) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('department_id', $request->department_id);
+                });
+            })
+            ->when($request->filled('employee_id') && $request->employee_id !== 'all', function ($query) use ($request) {
+                $query->where('employee_id', $request->employee_id);
+            })
+            ->when($request->filled('movement_type') && $request->movement_type !== 'all', function ($query) use ($request) {
+                $query->where('movement_type', $request->movement_type);
+            })
+            ->when($request->filled('branch_id') && $request->branch_id !== 'all', function ($query) use ($request) {
+                $query->whereHas('employee', function ($q) use ($request) {
+                    $q->where('current_branch_id', $request->branch_id);
+                });
+            })
+            ->when(
+                $request->filled('regional_office_id') && $request->regional_office_id !== 'all' && ! ($request->filled('branch_id') && $request->branch_id !== 'all'),
+                function ($query) use ($request) {
+                    $query->whereHas('employee.branch', function ($q) use ($request) {
+                        $q->where('regional_office_id', $request->regional_office_id);
+                    });
+                }
+            )
+            ->when(
+                $request->filled('zone_id') && $request->zone_id !== 'all'
+                    && ! ($request->filled('branch_id') && $request->branch_id !== 'all')
+                    && ! ($request->filled('regional_office_id') && $request->regional_office_id !== 'all'),
+                function ($query) use ($request) {
+                    $query->whereHas('employee.branch.regionalOffice', function ($q) use ($request) {
+                        $q->where('zone_id', $request->zone_id);
+                    });
+                }
+            )
+            ->when($this->filledFilter($request, 'from_date'), function ($query) use ($request) {
+                $query->whereDate('from_datetime', '>=', $request->input('from_date'));
+            })
+            ->when($this->filledFilter($request, 'to_date'), function ($query) use ($request) {
+                $query->whereDate('from_datetime', '<=', $request->input('to_date'));
+            })
+            ->when($request->boolean('cross_day_only'), function ($query) {
+                $query->where(function ($q) {
+                    $q->where(function ($q2) {
+                        $q2->where('status', 'completed')
+                            ->whereNotNull('actual_return_datetime')
+                            ->whereRaw('DATE(from_datetime) != DATE(actual_return_datetime)');
+                    })->orWhere(function ($q2) {
+                        $q2->where('status', 'active')
+                            ->whereRaw('DATE(from_datetime) < CURDATE()');
+                    });
+                });
+            })
+            ->when($request->search, function ($query, $search) {
+                $query->whereHas('employee', function ($q) use ($search) {
+                    $q->where('name_en', 'like', "%{$search}%")
+                        ->orWhere('name_bn', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhere('pin', 'like', "%{$search}%");
+                });
+            });
+    }
+
+    private function movementDurationLabel(Movement $movement): string
+    {
+        if ($movement->status !== 'completed' || ! $movement->actual_return_datetime) {
+            return '—';
+        }
+
+        $from = Carbon::parse($movement->from_datetime);
+        $to = Carbon::parse($movement->actual_return_datetime);
+        $hours = $from->diffInHours($to);
+        $minutes = $from->diffInMinutes($to) % 60;
+
+        return "{$hours}h {$minutes}m";
+    }
+
+    private function movementIndexFilterSummary(Request $request): string
+    {
+        $parts = [];
+
+        if ($this->filledFilter($request, 'from_date')) {
+            $parts[] = 'From '.$request->input('from_date');
+        }
+        if ($this->filledFilter($request, 'to_date')) {
+            $parts[] = 'To '.$request->input('to_date');
+        }
+        if ($request->filled('status') && $request->status !== 'all') {
+            $parts[] = 'Status: '.ucfirst((string) $request->status);
+        }
+        if ($request->filled('movement_type') && $request->movement_type !== 'all') {
+            $parts[] = 'Type: '.ucfirst((string) $request->movement_type);
+        }
+        if ($request->filled('branch_id') && $request->branch_id !== 'all') {
+            $branch = Branch::find($request->branch_id);
+            $parts[] = 'Branch: '.($branch->name ?? $request->branch_id);
+        }
+        if ($request->boolean('cross_day_only')) {
+            $parts[] = 'Not closed same day';
+        }
+        if ($request->search) {
+            $parts[] = 'Search: '.$request->search;
+        }
+
+        return $parts === [] ? 'All movements' : implode(', ', $parts);
+    }
+
+    private function filledFilter(Request $request, string $key): bool
+    {
+        $value = $request->input($key);
+
+        return $value !== null && $value !== '' && $value !== 'all';
+    }
+
+    /**
+     * Zone / regional office / branch options scoped to the user's organogram access.
+     *
+     * @return array{zones: \Illuminate\Support\Collection, regionalOffices: \Illuminate\Support\Collection, branches: \Illuminate\Support\Collection}
+     */
+    private function getAccessibleOrganizationFilters($user): array
+    {
+        $branchIds = OrganogramAccessService::accessibleBranchIdList($user);
+
+        if ($branchIds === []) {
+            return [
+                'zones' => collect(),
+                'regionalOffices' => collect(),
+                'branches' => collect(),
+            ];
+        }
+
+        $branchesQuery = Branch::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->select(['id', 'name', 'branch_code', 'regional_office_id']);
+
+        if ($branchIds !== null) {
+            $branchesQuery->whereIn('id', $branchIds);
+        }
+
+        $branches = $branchesQuery->get();
+        $regionalOfficeIds = $branches->pluck('regional_office_id')->filter()->unique()->values();
+
+        $regionalOffices = $regionalOfficeIds->isEmpty()
+            ? collect()
+            : RegionalOffice::query()
+                ->whereIn('id', $regionalOfficeIds)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'code', 'zone_id']);
+
+        $zoneIds = $regionalOffices->pluck('zone_id')->filter()->unique()->values();
+
+        $zones = $zoneIds->isEmpty()
+            ? collect()
+            : Zone::query()
+                ->whereIn('id', $zoneIds)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']);
+
+        return [
+            'zones' => $zones,
+            'regionalOffices' => $regionalOffices,
+            'branches' => $branches,
+        ];
     }
 
     /**
@@ -413,76 +678,50 @@ class MovementController extends Controller
      * Update attendance records for a movement
      */
     /**
-     * Update attendance records for a movement
+     * Update attendance records for a movement.
+     *
+     * Only touch the movement start day while active.
+     * Planned to_datetime often spans past midnight (e.g. default +8h), and filling
+     * those next days with branch work_start (09:00) was inventing false attendance.
+     * Extra days are applied only when the movement is closed (actual return).
      */
     private function updateAttendanceForMovement(Movement $movement)
     {
-        // Get all dates between from_datetime and to_datetime (inclusive)
-        $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
-        $endDate = Carbon::parse($movement->to_datetime)->startOfDay();
-        $currentDate = $startDate->copy();
-        $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
         $movementStart = Carbon::parse($movement->from_datetime);
+        $dateStr = $movementStart->format('Y-m-d');
 
-        // Loop through each day
-        while ($currentDate->lte($endDate)) {
-            $dateStr = $currentDate->format('Y-m-d');
+        $attendance = Attendance::where('employee_id', $movement->employee_id)
+            ->where('date', $dateStr)
+            ->first();
 
-            // Check if an attendance record already exists for this date
-            $attendance = Attendance::where('employee_id', $movement->employee_id)
-                ->where('date', $dateStr)
-                ->first();
-
-            if (! $attendance) {
-                // If no attendance record exists, create a new one
-                $attendance = new Attendance;
-                $attendance->employee_id = $movement->employee_id;
-                $attendance->date = $dateStr;
-                // Prefer on_duty for official movement days
-                $attendance->status = 'on_duty';
-            } else {
-                // Update status to on_duty if it was absent (do not downgrade other statuses like leave/late)
-                if ($attendance->status == 'absent') {
-                    $attendance->status = 'on_duty';
-                }
-            }
-
-            $isStartDay = $movementStart->format('Y-m-d') === $dateStr;
-
-            $inCandidate = null;
-            $outCandidate = null; // No check out time on creation
-
-            // Only set check-in if there is no existing check-in
-            if (! $attendance->check_in) {
-                if ($isStartDay) {
-                    $inCandidate = $movementStart->format('H:i:s');
-                } else {
-                    $inCandidate = $workTimes['work_start_time'];
-                }
-            }
-
-            // Merge (min/max) against any existing punch times
-            $this->mergeAttendanceTimes($attendance, $inCandidate, $outCandidate);
-
-            // Link to movement
-            $attendance->movement_id = $movement->id;
-
-            // Add remarks about movement
-            $remarks = 'On official movement: '.$movement->purpose;
-            if ($attendance->remarks) {
-                // Don't duplicate remarks if they already exist
-                if (strpos($attendance->remarks, $remarks) === false) {
-                    $attendance->remarks = $attendance->remarks.' | '.$remarks;
-                }
-            } else {
-                $attendance->remarks = $remarks;
-            }
-
-            $attendance->save();
-
-            // Move to next day
-            $currentDate->addDay();
+        if (! $attendance) {
+            $attendance = new Attendance;
+            $attendance->employee_id = $movement->employee_id;
+            $attendance->date = $dateStr;
+            $attendance->status = 'on_duty';
+        } elseif ($attendance->status == 'absent') {
+            $attendance->status = 'on_duty';
         }
+
+        $inCandidate = null;
+        if (! $attendance->check_in) {
+            $inCandidate = $movementStart->format('H:i:s');
+        }
+
+        $this->mergeAttendanceTimes($attendance, $inCandidate, null);
+
+        $attendance->movement_id = $movement->id;
+
+        $remarks = 'On official movement: '.$movement->purpose;
+        if ($attendance->remarks) {
+            if (strpos($attendance->remarks, $remarks) === false) {
+                $attendance->remarks = $attendance->remarks.' | '.$remarks;
+            }
+        } else {
+            $attendance->remarks = $remarks;
+        }
+
+        $attendance->save();
     }
 
     /**
@@ -1045,60 +1284,10 @@ class MovementController extends Controller
                 'approved_by' => $movement->approved_by,
             ]);
 
-            // For official movements, create/update attendance records
+            // For official movements, create/update attendance for the start day only.
+            // Multi-day / return-day attendance is applied when the movement is closed.
             if ($movement->movement_type === 'official') {
-                // Get all dates between from_datetime and to_datetime (inclusive)
-                $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
-                $endDate = Carbon::parse($movement->to_datetime)->startOfDay();
-                $currentDate = $startDate->copy();
-
-                while ($currentDate->lte($endDate)) {
-                    $dateStr = $currentDate->format('Y-m-d');
-
-                    // Check if an attendance record already exists for this date
-                    $attendance = Attendance::firstOrNew([
-                        'employee_id' => $movement->employee_id,
-                        'date' => $dateStr,
-                    ]);
-
-                    // Set to on_duty status and link to movement
-                    if (! $attendance->exists) {
-                        $attendance->status = 'on_duty';
-                    } else {
-                        if ($attendance->status == 'absent') {
-                            $attendance->status = 'on_duty';
-                        }
-                    }
-                    $attendance->movement_id = $movement->id;
-
-                    // Only set check-in if there is no existing check-in
-                    if (! $attendance->check_in) {
-                        if ($currentDate->isSameDay(Carbon::parse($movement->from_datetime))) {
-                            $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
-                        } else {
-                            $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
-                            $attendance->check_in = $workTimes['work_start_time'];
-                        }
-                    }
-                    // Do not auto-set check-out from movement; check-out must reflect final punch/action.
-
-                    // Create a simple prefix for the remarks to avoid encoding issues
-                    $remarks = 'On official movement';
-
-                    if ($attendance->remarks) {
-                        // Only add the prefix if it's not already there
-                        if (strpos($attendance->remarks, $remarks) === false) {
-                            $attendance->remarks = $attendance->remarks.' | '.$remarks;
-                        }
-                    } else {
-                        $attendance->remarks = $remarks;
-                    }
-
-                    $attendance->save();
-
-                    // Move to next day
-                    $currentDate->addDay();
-                }
+                $this->updateAttendanceForMovement($movement);
             }
 
             DB::commit();
@@ -1329,11 +1518,12 @@ class MovementController extends Controller
      */
     private function updateAttendanceForCompletion(Movement $movement, $returnDateTime)
     {
-        // Get all dates covered by this movement
+        // Dates from start through actual return only (not planned to_datetime spillover)
         $movementDates = $movement->getDatesAttribute();
         $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
         $movementStart = Carbon::parse($movement->from_datetime);
         $return = $returnDateTime instanceof Carbon ? $returnDateTime : Carbon::parse($returnDateTime);
+        $workStartNormalized = Carbon::parse($workTimes['work_start_time'])->format('H:i:s');
 
         foreach ($movementDates as $date) {
             // Find attendance record for this date
@@ -1379,6 +1569,55 @@ class MovementController extends Controller
                 }
             } else {
                 $attendance->remarks = 'On official movement: '.$movement->purpose.' | '.$returnInfo;
+            }
+
+            $attendance->save();
+        }
+
+        // Clear invented next-day rows created earlier from planned to_datetime (e.g. 09:00 auto check-in)
+        $this->clearMovementAttendanceSpillover($movement, $return, $workStartNormalized);
+    }
+
+    /**
+     * Remove false attendance days created when planned to_datetime crossed midnight
+     * but the employee actually returned earlier (same calendar day as start, or earlier than planned end).
+     */
+    private function clearMovementAttendanceSpillover(Movement $movement, Carbon $return, string $workStartNormalized): void
+    {
+        $spillover = Attendance::where('employee_id', $movement->employee_id)
+            ->where('movement_id', $movement->id)
+            ->whereDate('date', '>', $return->toDateString())
+            ->get();
+
+        foreach ($spillover as $attendance) {
+            $checkIn = $attendance->check_in
+                ? Carbon::parse($attendance->check_in)->format('H:i:s')
+                : null;
+
+            // Invented from movement create: office start with no checkout
+            if ($checkIn === $workStartNormalized && ! $attendance->check_out) {
+                $attendance->check_in = null;
+            }
+
+            $attendance->movement_id = null;
+
+            if ($attendance->remarks) {
+                $attendance->remarks = trim(preg_replace(
+                    '/\s*\|\s*/',
+                    ' | ',
+                    preg_replace(
+                        '/(?:^|\s*\|\s*)On official movement:[^|]*/i',
+                        '',
+                        preg_replace('/(?:^|\s*\|\s*)Movement completed:[^|]*/i', '', $attendance->remarks)
+                    )
+                ), " |\t\n\r\0\x0B");
+                if ($attendance->remarks === '') {
+                    $attendance->remarks = null;
+                }
+            }
+
+            if (! $attendance->check_in && ! $attendance->check_out && $attendance->status === 'on_duty') {
+                $attendance->status = 'absent';
             }
 
             $attendance->save();
@@ -1585,8 +1824,12 @@ class MovementController extends Controller
             'department_id',
             'employee_id',
             'movement_type',
+            'zone_id',
+            'regional_office_id',
+            'branch_id',
             'from_date',
             'to_date',
+            'cross_day_only',
             'search',
             'per_page',
             'page',

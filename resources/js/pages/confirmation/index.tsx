@@ -8,9 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRight, Briefcase, Check, ChevronLeft, ChevronRight, Eye, Plus, Search, User, X } from 'lucide-react';
+import { ArrowRight, Briefcase, Check, ChevronLeft, ChevronRight, Eye, Pencil, Plus, Search, User, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { parseFormDateValue } from '@/lib/display-date';
+
+function formatConfirmationDate(value: unknown): string {
+    const d = parseFormDateValue(value);
+    return d ? format(d, 'dd MMM yyyy') : '—';
+}
 
 type Employee = EmployeeNameFields & { id: number; employee_id: string };
 type Designation = { id: number; name: string };
@@ -40,7 +46,9 @@ type ConfirmationsResponse = { data: Confirmation[]; links?: { prev: string | nu
 type Props = {
     confirmations: ConfirmationsResponse;
     employees: Employee[];
-    filters: { status?: string; employee_id?: string; search?: string; per_page?: string };
+    filters: { status?: string; employee_id?: string; from_date?: string; to_date?: string; search?: string; per_page?: string };
+    canEditConfirmations?: boolean;
+    canEditCompleted?: boolean;
 };
 
 function statusBadge(status: Confirmation['status']) {
@@ -60,15 +68,25 @@ function statusBadge(status: Confirmation['status']) {
     }
 }
 
-export default function ConfirmationIndex({ confirmations, employees, filters }: Props) {
+export default function ConfirmationIndex({
+    confirmations,
+    employees,
+    filters,
+    canEditConfirmations = false,
+    canEditCompleted = false,
+}: Props) {
     const [status, setStatus] = useState(filters.status || 'all');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
+    const [fromDate, setFromDate] = useState(filters.from_date || '');
+    const [toDate, setToDate] = useState(filters.to_date || '');
     const [search, setSearch] = useState(filters.search || '');
     const [perPage, setPerPage] = useState(filters.per_page || '10');
 
     const filterParams = () => ({
         status: status !== 'all' ? status : '',
         employee_id: employeeId !== 'all' ? employeeId : '',
+        from_date: fromDate,
+        to_date: toDate,
         search: search.trim(),
         per_page: perPage,
     });
@@ -81,6 +99,8 @@ export default function ConfirmationIndex({ confirmations, employees, filters }:
     const reset = () => {
         setStatus('all');
         setEmployeeId('all');
+        setFromDate('');
+        setToDate('');
         setSearch('');
         setPerPage('10');
         router.get(route('confirmations.index'), { per_page: '10' }, { preserveState: true });
@@ -123,7 +143,7 @@ export default function ConfirmationIndex({ confirmations, employees, filters }:
 
                 <Card className="mb-6 rounded-xl border-slate-200 bg-white shadow-sm">
                     <CardContent className="p-4">
-                        <div className="flex flex-col gap-4 md:flex-row md:gap-4">
+                        <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end md:gap-4">
                             <Select value={status} onValueChange={setStatus}>
                                 <SelectTrigger className="md:w-48"><SelectValue placeholder="Status" /></SelectTrigger>
                                 <SelectContent>
@@ -146,7 +166,16 @@ export default function ConfirmationIndex({ confirmations, employees, filters }:
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <Button onClick={applyFilters} className="bg-emerald-600 hover:bg-emerald-700">Apply</Button>
+                            <div className="space-y-1">
+                                <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-9 md:w-40" title="From date" />
+                            </div>
+                            <div className="space-y-1">
+                                <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-9 md:w-40" title="To date" />
+                            </div>
+                            <div className="flex gap-2">
+                                <Button onClick={applyFilters} className="bg-emerald-600 hover:bg-emerald-700">Apply</Button>
+                                <Button variant="outline" onClick={reset}>Reset</Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -203,11 +232,23 @@ export default function ConfirmationIndex({ confirmations, employees, filters }:
                                                     );
                                                 })()}
                                             </TableCell>
-                                            <TableCell className="text-[13px] font-medium text-slate-600">{format(new Date(c.confirmation_date), 'dd MMM yyyy')}</TableCell>
+                                            <TableCell className="text-[13px] font-medium text-slate-600">{formatConfirmationDate(c.confirmation_date)}</TableCell>
                                             <TableCell className="text-[13px] text-slate-600">{c.confirmation_order_no ?? '—'}</TableCell>
                                             <TableCell>{statusBadge(c.status)}</TableCell>
                                             <TableCell className="pr-6 text-right">
                                                 <div className="flex items-center justify-end gap-2">
+                                                    {((canEditConfirmations && (c.status === 'pending' || c.status === 'approved')) ||
+                                                        (canEditCompleted && c.status === 'completed')) && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 rounded-lg bg-violet-50 text-violet-600 hover:bg-violet-100"
+                                                            title="Edit"
+                                                            onClick={() => router.visit(route('confirmations.edit', c.id))}
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" onClick={() => router.visit(route('confirmations.show', c.id))}>
                                                         <Eye className="h-4 w-4" />
                                                     </Button>

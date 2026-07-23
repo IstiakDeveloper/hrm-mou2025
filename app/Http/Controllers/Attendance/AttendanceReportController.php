@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
 use Mpdf\Mpdf;
 
 class AttendanceReportController extends Controller

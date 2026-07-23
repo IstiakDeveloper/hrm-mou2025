@@ -117,12 +117,16 @@ function statusBadge(status: Promotion['status']) {
 export default function PromotionIndex({ promotions, employees, filters, canApprove, canEditPromotions = false, canEditCompleted = false }: Props) {
     const [status, setStatus] = useState(filters.status || 'all');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
+    const [fromDate, setFromDate] = useState(filters.from_date || '');
+    const [toDate, setToDate] = useState(filters.to_date || '');
     const [search, setSearch] = useState(filters.search || '');
     const [perPage, setPerPage] = useState(filters.per_page || '10');
 
     const filterParams = () => ({
         status: status !== 'all' ? status : '',
         employee_id: employeeId !== 'all' ? employeeId : '',
+        from_date: fromDate,
+        to_date: toDate,
         search: search.trim(),
         per_page: perPage,
     });
@@ -145,6 +149,8 @@ export default function PromotionIndex({ promotions, employees, filters, canAppr
     const reset = () => {
         setStatus('all');
         setEmployeeId('all');
+        setFromDate('');
+        setToDate('');
         setSearch('');
         setPerPage('10');
         router.get(route('promotions.index'), { per_page: '10' }, { preserveState: true });
@@ -231,6 +237,14 @@ export default function PromotionIndex({ promotions, employees, filters, canAppr
                                         ))}
                                     </SelectContent>
                                 </Select>
+                            </div>
+
+                            <div className="w-full md:w-40">
+                                <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-10" title="From date" />
+                            </div>
+
+                            <div className="w-full md:w-40">
+                                <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-10" title="To date" />
                             </div>
 
                             <div className="flex space-x-2">

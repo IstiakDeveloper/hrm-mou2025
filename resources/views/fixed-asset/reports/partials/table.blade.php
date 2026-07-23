@@ -29,7 +29,7 @@
         };
     };
 
-    $fmt = fn ($v) => is_numeric($v) ? taka_fmt($v, 2) : ($v ?? '');
+    $fmt = fn ($v) => is_numeric($v) ? taka_fmt($v, 0) : ($v ?? '');
 @endphp
 
 @if (count($sections) > 0)

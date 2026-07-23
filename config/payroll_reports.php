@@ -80,12 +80,12 @@ return [
         ],
         'salary-sheet-branch-wise' => [
             'title' => 'Salary Sheet Report (Branch Wise)',
-            'description' => 'Salary sheet grouped by branch.',
+            'description' => 'Branch topsheet: Head Office and each branch as one summary row with salary head totals.',
             'filters' => ['year', 'month', 'branch_id'],
             'status' => 'posted',
             'salary_type' => 'salary',
-            'template' => 'salary-sheet-grouped',
-            'group_by' => 'branch',
+            'template' => 'salary-sheet',
+            'topsheet_by' => 'branch',
         ],
         'salary-sheet-month-wise' => [
             'title' => 'Salary Sheet Report (Month Wise)',

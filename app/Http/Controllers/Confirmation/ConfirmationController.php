@@ -149,6 +149,19 @@ class ConfirmationController extends Controller
             ->whereHas('employeeType', fn ($q) => $q->where('probation_months', '>', 0));
     }
 
+    private function canEditConfirmation(User $user, Confirmation $confirmation): bool
+    {
+        if (in_array($confirmation->status, ['rejected', 'cancelled'], true)) {
+            return false;
+        }
+
+        if ($confirmation->status === 'completed') {
+            return $user->isSuperAdmin();
+        }
+
+        return $user->hasPermission('confirmations.edit');
+    }
+
     public function index(Request $request)
     {
         /** @var User $user */
@@ -192,6 +205,8 @@ class ConfirmationController extends Controller
             'confirmations' => $confirmations,
             'employees' => $this->probationEmployeeQuery()->get(),
             'filters' => $request->only(['status', 'employee_id', 'from_date', 'to_date', 'search', 'per_page']),
+            'canEditConfirmations' => $user->hasPermission('confirmations.edit'),
+            'canEditCompleted' => $user->isSuperAdmin(),
         ]);
     }
 
@@ -243,7 +258,7 @@ class ConfirmationController extends Controller
             'to_salary_grade_id' => 'nullable|exists:salary_grades,id',
             'to_salary_step_id' => 'nullable|exists:salary_steps,id',
             'to_basic_salary' => 'nullable|numeric|min:0',
-            'confirmation_date' => 'required|date|after_or_equal:today',
+            'confirmation_date' => 'required|date',
             'confirmation_order_no' => 'nullable|string|max:50',
             'reason' => 'nullable|string',
         ]);
@@ -332,9 +347,106 @@ class ConfirmationController extends Controller
             'approver',
         ]);
 
+        /** @var User $user */
+        $user = Auth::user();
+
         return Inertia::render('confirmation/show', [
             'confirmation' => $confirmation,
+            'canEdit' => $this->canEditConfirmation($user, $confirmation),
         ]);
+    }
+
+    public function edit(Confirmation $confirmation)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        if (! $this->canEditConfirmation($user, $confirmation)) {
+            return redirect()->route('confirmations.show', $confirmation)
+                ->with('error', 'You do not have permission to edit this confirmation.');
+        }
+
+        $confirmation->load([
+            'employee',
+            'fromDesignation',
+            'toDesignation',
+            'fromEmployeeType',
+            'toEmployeeType',
+            'fromSalaryGrade',
+            'toSalaryGrade',
+            'fromSalaryStep',
+            'toSalaryStep',
+        ]);
+
+        $toPayscaleId = null;
+        if ($confirmation->toSalaryGrade?->payscale_id) {
+            $toPayscaleId = (int) $confirmation->toSalaryGrade->payscale_id;
+        } elseif ($confirmation->to_salary_step_id) {
+            $step = SalaryStep::query()->with('grade')->find($confirmation->to_salary_step_id);
+            $toPayscaleId = $step?->grade?->payscale_id ? (int) $step->grade->payscale_id : null;
+        }
+
+        $permanentTypeId = EmployeeType::resolvePermanentTypeId($confirmation->from_employee_type_id);
+        $permanentType = $permanentTypeId ? EmployeeType::query()->find($permanentTypeId) : null;
+
+        return Inertia::render('confirmation/edit', array_merge($this->payrollFormOptions(), [
+            'confirmation' => $confirmation,
+            'toPayscaleId' => $toPayscaleId,
+            'designations' => Designation::query()->orderBy('name')->get(['id', 'name']),
+            'permanentEmployeeType' => $permanentType ? [
+                'id' => $permanentType->id,
+                'name' => $permanentType->name,
+            ] : null,
+            'canEditCompleted' => $user->isSuperAdmin() && $confirmation->status === 'completed',
+        ]));
+    }
+
+    public function update(Request $request, Confirmation $confirmation)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        if (! $this->canEditConfirmation($user, $confirmation)) {
+            return redirect()->route('confirmations.show', $confirmation)
+                ->with('error', 'You do not have permission to edit this confirmation.');
+        }
+
+        $request->validate([
+            'to_designation_id' => 'required|exists:designations,id',
+            'to_payscale_id' => 'nullable|exists:payscales,id',
+            'to_salary_grade_id' => 'nullable|exists:salary_grades,id',
+            'to_salary_step_id' => 'nullable|exists:salary_steps,id',
+            'to_basic_salary' => 'nullable|numeric|min:0',
+            'confirmation_date' => 'required|date',
+            'confirmation_order_no' => 'nullable|string|max:50',
+            'reason' => 'nullable|string',
+        ]);
+
+        $payroll = $this->normalizeConfirmationPayrollInput($request);
+        $wasCompleted = $confirmation->status === 'completed';
+
+        DB::transaction(function () use ($request, $confirmation, $payroll, $wasCompleted, $user) {
+            $confirmation->to_designation_id = $request->to_designation_id;
+            $confirmation->to_salary_grade_id = $payroll['to_salary_grade_id'];
+            $confirmation->to_salary_step_id = $payroll['to_salary_step_id'];
+            $confirmation->to_basic_salary = $payroll['to_basic_salary'];
+            $confirmation->confirmation_date = $request->confirmation_date;
+            $confirmation->confirmation_order_no = trim((string) $request->input('confirmation_order_no', ''))
+                ?: $confirmation->confirmation_order_no;
+            $confirmation->reason = $request->reason;
+            $confirmation->save();
+
+            if ($wasCompleted) {
+                $confirmation->loadMissing(['employee', 'toSalaryGrade', 'promotion']);
+                $this->confirmationCompletionService->syncEmployeeFromConfirmation(
+                    $confirmation,
+                    $payroll['to_payscale_id']
+                );
+                $confirmation->employee->save();
+                $this->syncConfirmationHistory($confirmation, $user->id);
+                $this->syncLinkedPromotion($confirmation, $user->id);
+            }
+        });
+
+        return redirect()->route('confirmations.show', $confirmation)->with('success', 'Confirmation updated successfully.');
     }
 
     public function approve(Confirmation $confirmation)
@@ -425,5 +537,61 @@ class ConfirmationController extends Controller
         });
 
         return redirect()->route('confirmations.index')->with('success', 'Confirmation and promotion completed successfully.');
+    }
+
+    private function syncConfirmationHistory(Confirmation $confirmation, ?int $actorUserId): void
+    {
+        $history = $confirmation->histories()->latest('id')->first();
+        if (! $history) {
+            return;
+        }
+
+        $history->update([
+            'to_designation_id' => $confirmation->to_designation_id,
+            'to_employee_type_id' => $confirmation->to_employee_type_id,
+            'to_salary_grade_id' => $confirmation->to_salary_grade_id,
+            'to_salary_step_id' => $confirmation->to_salary_step_id,
+            'to_basic_salary' => $confirmation->to_basic_salary,
+            'confirmation_date' => $confirmation->confirmation_date
+                ? Carbon::parse($confirmation->confirmation_date)
+                : now(),
+            'created_by' => $actorUserId,
+        ]);
+    }
+
+    private function syncLinkedPromotion(Confirmation $confirmation, ?int $actorUserId): void
+    {
+        if (! $confirmation->promotion_id) {
+            return;
+        }
+
+        $promotion = $confirmation->promotion;
+        if (! $promotion) {
+            return;
+        }
+
+        $promotion->to_designation_id = $confirmation->to_designation_id;
+        $promotion->to_salary_grade_id = $confirmation->to_salary_grade_id;
+        $promotion->to_salary_step_id = $confirmation->to_salary_step_id;
+        $promotion->to_basic_salary = $confirmation->to_basic_salary;
+        $promotion->effective_date = $confirmation->confirmation_date;
+        $promotion->reason = $confirmation->reason
+            ? 'Confirmation promotion: '.$confirmation->reason
+            : 'Auto-created from confirmation #'.$confirmation->id;
+        $promotion->save();
+
+        $history = $promotion->histories()->latest('id')->first();
+        if ($history) {
+            $history->update([
+                'to_designation_id' => $promotion->to_designation_id,
+                'to_salary_grade_id' => $promotion->to_salary_grade_id,
+                'to_salary_step_id' => $promotion->to_salary_step_id,
+                'to_basic_salary' => $promotion->to_basic_salary,
+                'promotion_date' => $promotion->effective_date
+                    ? Carbon::parse($promotion->effective_date)
+                    : now(),
+                'created_by' => $actorUserId,
+            ]);
+        }
     }
 }

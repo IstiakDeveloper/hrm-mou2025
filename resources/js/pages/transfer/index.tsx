@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { formatBranchSelectLabel, formatPayrollBranchLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Select,
@@ -25,7 +24,6 @@ import { PageSurface } from '@/components/page-surface';
 import {
   ArrowRight,
   Building2,
-  CalendarIcon,
   Check,
   CheckCircle,
   ChevronLeft,
@@ -41,13 +39,6 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
 interface Employee extends EmployeeNameFields {
@@ -149,16 +140,10 @@ export default function TransferIndex({
   const [employeeId, setEmployeeId] = useState(filters.employee_id || 'all');
   const [fromBranchId, setFromBranchId] = useState(filters.from_branch_id || 'all');
   const [toBranchId, setToBranchId] = useState(filters.to_branch_id || 'all');
-  const [fromDate, setFromDate] = useState<Date | undefined>(
-    filters.from_date ? new Date(filters.from_date) : undefined
-  );
-  const [toDate, setToDate] = useState<Date | undefined>(
-    filters.to_date ? new Date(filters.to_date) : undefined
-  );
+  const [fromDate, setFromDate] = useState(filters.from_date || '');
+  const [toDate, setToDate] = useState(filters.to_date || '');
   const [search, setSearch] = useState(filters.search || '');
   const [perPage, setPerPage] = useState(filters.per_page || '10');
-  const [fromDateOpen, setFromDateOpen] = useState(false);
-  const [toDateOpen, setToDateOpen] = useState(false);
 
   const filterParams = () => ({
     status: status === 'all' ? '' : status,
@@ -166,8 +151,8 @@ export default function TransferIndex({
     employee_id: employeeId === 'all' ? '' : employeeId,
     from_branch_id: fromBranchId === 'all' ? '' : fromBranchId,
     to_branch_id: toBranchId === 'all' ? '' : toBranchId,
-    from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '',
-    to_date: toDate ? format(toDate, 'yyyy-MM-dd') : '',
+    from_date: fromDate,
+    to_date: toDate,
     search,
     per_page: perPage,
   });
@@ -193,8 +178,8 @@ export default function TransferIndex({
     setEmployeeId('all');
     setFromBranchId('all');
     setToBranchId('all');
-    setFromDate(undefined);
-    setToDate(undefined);
+    setFromDate('');
+    setToDate('');
     setSearch('');
     setPerPage('10');
     router.get(route('transfers.index'), { per_page: '10' }, { preserveState: true });
@@ -265,67 +250,6 @@ export default function TransferIndex({
 
         <Card className="mb-6 shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
           <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div className="space-y-2">
-                <Label>From Date</Label>
-                <Popover open={fromDateOpen} onOpenChange={setFromDateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !fromDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {fromDate ? format(fromDate, 'PPP') : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={fromDate}
-                      onSelect={(date) => {
-                        setFromDate(date);
-                        setFromDateOpen(false);
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="space-y-2">
-                <Label>To Date</Label>
-                <Popover open={toDateOpen} onOpenChange={setToDateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !toDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {toDate ? format(toDate, 'PPP') : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={toDate}
-                      onSelect={(date) => {
-                        setToDate(date);
-                        setToDateOpen(false);
-                      }}
-                      disabled={(date) => (fromDate ? date < fromDate : false)}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-4">
               <div className="relative xl:col-span-2">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
@@ -407,6 +331,9 @@ export default function TransferIndex({
                   ))}
                 </SelectContent>
               </Select>
+
+              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} title="From date" />
+              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} title="To date" />
             </div>
 
             <div className="flex justify-end gap-2">

@@ -655,11 +655,11 @@ class SalaryPostController extends Controller
         $mapped = [
             'id' => $p->id,
             'pin' => $p->employee?->pin,
-            'name' => $p->employee?->name_en,
-            'designation' => $p->employee?->designation?->name,
+            'name' => $p->displayName(),
+            'designation' => $p->displayDesignation(),
             'grade' => $p->grade_label,
             'step' => $p->step_number,
-            'basic' => (float) $p->basic_salary,
+            'basic' => $p->displayBasicSalary(),
             'gross' => (float) $p->gross_salary,
             'deduction' => (float) $p->total_deduction,
             'net' => (float) $p->net_payable,
@@ -671,7 +671,9 @@ class SalaryPostController extends Controller
                 'id' => $line->id,
                 'salary_head_id' => $line->salary_head_id,
                 'head_name' => $line->head_name,
-                'head_label' => $line->head?->name ?? $line->head_name,
+                'head_label' => Payslip::isOthersFlatEarningHead($line->head_name)
+                    ? 'Others'
+                    : ($line->head?->name ?? $line->head_name),
                 'type' => $line->type,
                 'amount_type' => $line->amount_type,
                 'input_value' => (float) $line->input_value,

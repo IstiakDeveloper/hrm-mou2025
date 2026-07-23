@@ -2,6 +2,7 @@
 
 return [
     'company_name' => env('FIXED_ASSET_REPORT_COMPANY', env('APP_NAME', 'Organization')),
+    'company_address' => env('FIXED_ASSET_REPORT_ADDRESS', env('PAYROLL_REPORT_ADDRESS', 'Ukilpara, Naogaon')),
 
     'reports' => [
         'asset-tracking' => [

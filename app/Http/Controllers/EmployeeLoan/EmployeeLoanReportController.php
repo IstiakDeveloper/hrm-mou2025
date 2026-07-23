@@ -6,9 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Services\EmployeeLoanReportService;
 use App\Support\EmployeeLoanReportCsvExporter;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Support\ProjectPdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeLoanReportController extends Controller

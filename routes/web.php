@@ -1603,6 +1603,14 @@ Route::middleware(['auth'])->group(function () {
             ->name('index')
             ->middleware('permission:movements.view');
 
+        Route::get('/print', [MovementController::class, 'printIndex'])
+            ->name('print')
+            ->middleware('permission:movements.view');
+
+        Route::get('/export/xlsx', [MovementController::class, 'exportIndexXlsx'])
+            ->name('export.xlsx')
+            ->middleware('permission:movements.view');
+
         // Create movement
         Route::middleware(['permission:movements.create'])->group(function () {
             Route::get('/create', [MovementController::class, 'create'])->name('create');
@@ -1690,6 +1698,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{confirmation}', [ConfirmationController::class, 'show'])->name('show');
 
         Route::middleware(['permission:confirmations.edit'])->group(function () {
+            Route::get('/{confirmation}/edit', [ConfirmationController::class, 'edit'])->name('edit');
+            Route::put('/{confirmation}', [ConfirmationController::class, 'update'])->name('update');
             Route::post('/{confirmation}/cancel', [ConfirmationController::class, 'cancel'])->name('cancel');
             Route::post('/{confirmation}/complete', [ConfirmationController::class, 'complete'])->name('complete');
         });

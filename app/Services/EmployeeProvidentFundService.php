@@ -314,7 +314,30 @@ class EmployeeProvidentFundService
         }
 
         return DB::transaction(function () use ($transaction, $data) {
-            $employee = Employee::query()->whereKey($transaction->employee_id)->lockForUpdate()->firstOrFail();
+            $fromEmployeeId = (int) $transaction->employee_id;
+            $toEmployeeId = isset($data['employee_id']) ? (int) $data['employee_id'] : $fromEmployeeId;
+            $employeeChanged = $toEmployeeId !== $fromEmployeeId;
+
+            $lockIds = $employeeChanged
+                ? collect([$fromEmployeeId, $toEmployeeId])->sort()->values()->all()
+                : [$fromEmployeeId];
+
+            $lockedEmployees = [];
+            foreach ($lockIds as $lockId) {
+                $lockedEmployees[$lockId] = Employee::query()->whereKey($lockId)->lockForUpdate()->firstOrFail();
+            }
+
+            if ($employeeChanged && $transaction->transaction_type === self::TYPE_OPENING) {
+                $exists = EmployeePfTransaction::query()
+                    ->where('employee_id', $toEmployeeId)
+                    ->where('transaction_type', self::TYPE_OPENING)
+                    ->where('id', '!=', $transaction->id)
+                    ->exists();
+
+                if ($exists) {
+                    throw new InvalidArgumentException('Opening balance already recorded for this employee.');
+                }
+            }
 
             if ($transaction->transaction_type === self::TYPE_OPENING) {
                 $employeeAmount = SalaryStructureCalculator::roundTaka(max(0, (float) ($data['employee_amount'] ?? 0)));
@@ -330,6 +353,7 @@ class EmployeeProvidentFundService
                     : Carbon::parse($data['transaction_date']);
 
                 $transaction->update([
+                    'employee_id' => $toEmployeeId,
                     'employee_contribution' => $employeeAmount,
                     'employer_contribution' => $employerAmount,
                     'credit_amount' => $total,
@@ -355,6 +379,7 @@ class EmployeeProvidentFundService
                 }
 
                 $transaction->update([
+                    'employee_id' => $toEmployeeId,
                     'employee_contribution' => $employeeAmount,
                     'employer_contribution' => $employerAmount,
                     'credit_amount' => $total,
@@ -367,7 +392,10 @@ class EmployeeProvidentFundService
                 ]);
             }
 
-            $this->recalculateEmployeeBalances($employee);
+            $this->recalculateEmployeeBalances($lockedEmployees[$fromEmployeeId]);
+            if ($employeeChanged) {
+                $this->recalculateEmployeeBalances($lockedEmployees[$toEmployeeId]);
+            }
 
             return $transaction->fresh();
         });
