@@ -15,6 +15,7 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\MisLoanFieldOfficerSyncService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -321,6 +322,8 @@ class EmployeeV2Controller extends Controller
         }
 
         $user->roles()->sync([$employeeRole->id]);
+
+        app(MisLoanFieldOfficerSyncService::class)->pushEmployee($employee->fresh(['designation', 'branch', 'user']) ?? $employee);
     }
 
     private function buildEmployeeSaveErrorMessage(\Throwable $e): string

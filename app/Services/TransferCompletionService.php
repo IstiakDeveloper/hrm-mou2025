@@ -8,6 +8,7 @@ use App\Models\Transfer;
 use App\Models\TransferHistory;
 use App\Models\User;
 use App\Notifications\AdminNoticeNotification;
+use App\Services\MisLoanFieldOfficerSyncService;
 use App\Support\BangladeshDate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +46,15 @@ class TransferCompletionService
         $employee->save();
 
         $this->syncUserBranchFromEmployee($employee);
+
+        $freshEmployee = $employee->fresh(['designation', 'branch', 'user']);
+        if ($freshEmployee) {
+            $misLoanSync = app(MisLoanFieldOfficerSyncService::class);
+            $misLoanSync->pushTransfer($freshEmployee);
+            if ($misLoanSync->isSyncableDesignation($freshEmployee->designation?->name)) {
+                $misLoanSync->pushEmployee($freshEmployee);
+            }
+        }
 
         TransferHistory::create([
             'transfer_id' => $transfer->id,

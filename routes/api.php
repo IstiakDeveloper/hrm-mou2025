@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\ZKTecoAPIController;
 use App\Http\Controllers\API\BranchEmployeeAPIController;
 use App\Http\Controllers\API\EmployeeAPIController;
+use App\Http\Controllers\API\OrganizationSyncAPIController;
 
 /*
 |--------------------------------------------------------------------------
@@ -27,6 +28,10 @@ Route::post('/zkteco/device-pin-mappings', [ZKTecoAPIController::class, 'syncDev
 
 // Employee Sync API
 Route::post('/employees/sync', [EmployeeAPIController::class, 'syncEmployees']);
+
+// Organization / field-officer sync (MisLoan and other consumers)
+Route::get('/sync/organization-structure', [OrganizationSyncAPIController::class, 'organizationStructure']);
+Route::get('/sync/field-officers', [OrganizationSyncAPIController::class, 'fieldOfficers']);
 
 // Branch Employee APIs
 Route::get('/branch/{branchId}/employees', [BranchEmployeeAPIController::class, 'getEmployeesByBranch']);

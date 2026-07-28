@@ -40,6 +40,16 @@ return [
     'zkteco_api_key' => env('ZKTECO_API_KEY', 'AWSKJSKJ934895395834985834958345'),
     'zkteco_auto_register_devices' => env('ZKTECO_AUTO_REGISTER_DEVICES', true),
 
+    /*
+    |--------------------------------------------------------------------------
+    | HRM Sync API Key
+    |--------------------------------------------------------------------------
+    |
+    | Bearer token for organization/user sync endpoints consumed by MisLoan.
+    |
+    */
+    'sync_api_key' => env('HRM_SYNC_API_KEY'),
+
 
 
     /*

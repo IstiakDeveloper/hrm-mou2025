@@ -232,7 +232,10 @@ class PayrollReportService
                             (string) ($row['branch_code'] ?? ''),
                         ),
                     },
-                    'sort_tuple' => BranchOrganogram::branchHierarchySortTuple($branch),
+                    'sort_tuple' => BranchOrganogram::branchCodeSortTuple(
+                        $branch,
+                        (string) ($row['branch_code'] ?? ''),
+                    ),
                     'rows' => [],
                 ];
             }
@@ -406,7 +409,10 @@ class PayrollReportService
         return match ($groupBy) {
             'month' => [$this->salarySheetMonthGroupKey($payslip)],
             'designation' => [mb_strtolower($payslip->displayDesignation() ?: 'zzz')],
-            default => BranchOrganogram::branchHierarchySortTuple($payslip->displayBranch()),
+            default => BranchOrganogram::branchCodeSortTuple(
+                $payslip->displayBranch(),
+                $payslip->displayBranchCode(),
+            ),
         };
     }
 
@@ -444,7 +450,10 @@ class PayrollReportService
                             (string) ($row['branch_code'] ?? ''),
                         ),
                     },
-                    'sort_tuple' => BranchOrganogram::branchHierarchySortTuple($branch),
+                    'sort_tuple' => BranchOrganogram::branchCodeSortTuple(
+                        $branch,
+                        (string) ($row['branch_code'] ?? ''),
+                    ),
                     'rows' => [],
                 ];
             }

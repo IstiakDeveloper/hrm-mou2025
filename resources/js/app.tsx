@@ -40,6 +40,13 @@ router.on('navigate', (event) => {
     }
 });
 
+router.on('invalid', (event) => {
+    if (event.detail.response?.status === 419) {
+        event.preventDefault();
+        window.location.reload();
+    }
+});
+
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
     resolve: async (name) => {

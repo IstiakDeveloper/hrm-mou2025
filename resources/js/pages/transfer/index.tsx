@@ -34,6 +34,7 @@ import {
   Plus,
   Search,
   User,
+  Users,
   UserX,
   XCircle
 } from 'lucide-react';
@@ -239,6 +240,12 @@ export default function TransferIndex({
                 Register
               </Button>
             )}
+            <Link href={route('transfers.bulk.create')}>
+              <Button variant="outline" size="sm" className="h-9 flex items-center bg-white">
+                <Users className="mr-1 h-4 w-4" />
+                Bulk Transfer
+              </Button>
+            </Link>
             <Link href={route('transfers.create')}>
               <Button size="sm" className="h-9 flex items-center bg-emerald-600 hover:bg-emerald-700">
                 <Plus className="mr-1 h-4 w-4" />

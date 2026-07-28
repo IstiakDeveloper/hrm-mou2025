@@ -1666,6 +1666,8 @@ Route::middleware(['auth'])->group(function () {
 
         Route::middleware(['permission:transfers.create'])->group(function () {
             Route::get('/create', [TransferController::class, 'create'])->name('create');
+            Route::get('/bulk', [TransferController::class, 'bulkCreate'])->name('bulk.create');
+            Route::post('/bulk', [TransferController::class, 'storeBulk'])->name('bulk.store');
             Route::post('/', [TransferController::class, 'store'])->name('store');
         });
 

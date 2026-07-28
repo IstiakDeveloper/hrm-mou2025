@@ -299,6 +299,33 @@ final class BranchOrganogram
     }
 
     /**
+     * Head office first, then numeric branch_code ascending (for salary sheets / topsheets).
+     *
+     * @return list<int|string>
+     */
+    public static function branchCodeSortTuple(?Branch $branch, ?string $fallbackCode = null): array
+    {
+        $code = trim((string) ($branch?->branch_code ?? $fallbackCode ?? ''));
+        $name = trim((string) ($branch?->name ?? ''));
+
+        if (! $branch && $code === '') {
+            return [1, 999999, 'zzz', 'zzz'];
+        }
+
+        return [
+            ($branch?->is_head_office) ? 0 : 1,
+            self::numericCodeRank($code !== '' ? $code : null),
+            mb_strtolower($code !== '' ? $code : ($name !== '' ? $name : 'zzz')),
+            mb_strtolower($name),
+        ];
+    }
+
+    public static function compareBranchesByCode(?Branch $a, ?Branch $b): int
+    {
+        return self::branchCodeSortTuple($a) <=> self::branchCodeSortTuple($b);
+    }
+
+    /**
      * @param  Builder<Branch>  $query
      */
     private static function ensureBranchModelHierarchyJoins(Builder $query): void

@@ -26,6 +26,7 @@ use App\Models\TransferHistory;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\EmployeeSalaryAssignmentService;
+use App\Services\MisLoanFieldOfficerSyncService;
 use App\Services\OrganogramAccessService;
 use App\Support\BranchOrganogram;
 use App\Support\EmployeeExport;
@@ -1689,6 +1690,7 @@ class EmployeeController extends Controller
     private function syncLinkedUserActiveStatusFromEmployee(Employee $employee): void
     {
         $employee->syncLinkedUserActiveStatus();
+        app(MisLoanFieldOfficerSyncService::class)->pushEmployee($employee->fresh(['designation', 'branch', 'user']) ?? $employee);
     }
 
     /**
@@ -1774,6 +1776,8 @@ class EmployeeController extends Controller
         }
 
         $user->roles()->sync($roleIds);
+
+        app(MisLoanFieldOfficerSyncService::class)->pushEmployee($employee->fresh(['designation', 'branch', 'user']) ?? $employee);
     }
 
     /**

@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'misloan' => [
+        'url' => env('MISLOAN_API_URL'),
+        'app_url' => env('MISLOAN_APP_URL'),
+        'token' => env('MISLOAN_API_TOKEN'),
+    ],
+
 ];

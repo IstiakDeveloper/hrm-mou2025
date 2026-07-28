@@ -37,6 +37,40 @@ class TransferController extends Controller
 
         return $prefix.now()->format('His');
     }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function createApprovedTransfer(array $data, $user): Transfer
+    {
+        $employee = Employee::findOrFail($data['employee_id']);
+
+        $orderNo = trim((string) ($data['transfer_order_no'] ?? ''));
+        if ($orderNo === '') {
+            $orderNo = $this->generateTransferOrderNo();
+        }
+
+        $transfer = Transfer::create([
+            'employee_id' => $data['employee_id'],
+            'from_branch_id' => $data['from_branch_id'] ?? $employee->current_branch_id,
+            'to_branch_id' => $data['to_branch_id'],
+            'from_department_id' => $data['from_department_id'] ?? $employee->department_id,
+            'to_department_id' => $data['to_department_id'] ?? null,
+            'from_designation_id' => $data['from_designation_id'] ?? $employee->designation_id,
+            'to_designation_id' => $data['to_designation_id'] ?? null,
+            'effective_date' => $data['effective_date'],
+            'transfer_order_no' => $orderNo,
+            'reason' => $data['reason'],
+            'status' => 'approved',
+            'approved_by' => $user->id,
+        ]);
+
+        if ($this->transferCompletionService->shouldApplyImmediately($transfer->effective_date)) {
+            $this->transferCompletionService->apply($transfer, $user->id);
+        }
+
+        return $transfer;
+    }
     /**
      * Display a listing of transfers.
      */
@@ -130,18 +164,40 @@ class TransferController extends Controller
                 ->with('error', 'You do not have permission to create transfer requests.');
         }
 
-        $employees = Employee::where('status', 'active')->get();
-        $branches = Branch::query()->active()->orderBy('name')->get();
-        $departments = Department::all();
-        $designations = Designation::all();
+        return Inertia::render('transfer/create', $this->transferFormPayload());
+    }
 
-        return Inertia::render('transfer/create', [
-            'employees' => $employees,
-            'branches' => $branches,
-            'departments' => $departments,
-            'designations' => $designations,
+    /**
+     * Show form to create multiple transfers at once.
+     */
+    public function bulkCreate()
+    {
+        $user = Auth::user();
+
+        if (! $user->hasPermission('transfers.create')) {
+            return redirect()->route('transfers.index')
+                ->with('error', 'You do not have permission to create transfer requests.');
+        }
+
+        return Inertia::render('transfer/bulk', $this->transferFormPayload());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function transferFormPayload(): array
+    {
+        return [
+            'employees' => Employee::query()
+                ->where('status', 'active')
+                ->with(['department', 'designation'])
+                ->orderBy('employee_id')
+                ->get(),
+            'branches' => Branch::query()->active()->orderBy('name')->get(),
+            'departments' => Department::all(),
+            'designations' => Designation::all(),
             'suggestedOrderNo' => $this->generateTransferOrderNo(),
-        ]);
+        ];
     }
 
     /**
@@ -170,38 +226,88 @@ class TransferController extends Controller
             'reason' => 'required|string',
         ]);
 
-        // Get current employee details
-        $employee = Employee::findOrFail($request->employee_id);
-
-        $orderNo = trim((string) $request->input('transfer_order_no', ''));
-        if ($orderNo === '') {
-            $orderNo = $this->generateTransferOrderNo();
-        }
-
-        // Create transfer as approved; apply immediately when effective date is today or earlier.
-        DB::transaction(function () use ($request, $employee, $orderNo, $user) {
-            $transfer = Transfer::create([
-                'employee_id' => $request->employee_id,
-                'from_branch_id' => $request->from_branch_id ?? $employee->current_branch_id,
-                'to_branch_id' => $request->to_branch_id,
-                'from_department_id' => $request->from_department_id ?? $employee->department_id,
-                'to_department_id' => $request->to_department_id,
-                'from_designation_id' => $request->from_designation_id ?? $employee->designation_id,
-                'to_designation_id' => $request->to_designation_id,
-                'effective_date' => $request->effective_date,
-                'transfer_order_no' => $orderNo,
-                'reason' => $request->reason,
-                'status' => 'approved',
-                'approved_by' => $user->id,
-            ]);
-
-            if ($this->transferCompletionService->shouldApplyImmediately($transfer->effective_date)) {
-                $this->transferCompletionService->apply($transfer, $user->id);
-            }
+        DB::transaction(function () use ($request, $user) {
+            $this->createApprovedTransfer($request->all(), $user);
         });
 
         return redirect()->route('transfers.index')
             ->with('success', 'Transfer created successfully.');
+    }
+
+    /**
+     * Store multiple transfer requests in one submission.
+     */
+    public function storeBulk(Request $request)
+    {
+        $user = Auth::user();
+
+        if (! $user->hasPermission('transfers.create')) {
+            return redirect()->route('transfers.index')
+                ->with('error', 'You do not have permission to create transfer requests.');
+        }
+
+        $validated = $request->validate([
+            'to_branch_id' => ['required', Rule::exists('branches', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'reason' => 'required|string',
+            'rows' => 'required|array|min:1',
+            'rows.*.employee_id' => 'required|exists:employees,id|distinct',
+            'rows.*.effective_date' => 'required|date',
+            'rows.*.transfer_order_no' => 'nullable|string|max:50',
+            'rows.*.to_department_id' => 'nullable|exists:departments,id',
+            'rows.*.to_designation_id' => 'nullable|exists:designations,id',
+        ]);
+
+        $employeeIds = collect($validated['rows'])->pluck('employee_id')->all();
+        $employees = Employee::query()->whereIn('id', $employeeIds)->get()->keyBy('id');
+
+        foreach ($validated['rows'] as $index => $row) {
+            $employee = $employees->get($row['employee_id']);
+            if (! $employee) {
+                continue;
+            }
+
+            $fromBranchId = $employee->current_branch_id;
+            if (! $fromBranchId) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "rows.{$index}.employee_id" => 'Employee does not have a current branch.',
+                ]);
+            }
+
+            if ((int) $fromBranchId === (int) $validated['to_branch_id']) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "rows.{$index}.employee_id" => 'Destination branch must be different from current branch.',
+                ]);
+            }
+        }
+
+        $createdCount = 0;
+
+        DB::transaction(function () use ($validated, $employees, $user, &$createdCount) {
+            foreach ($validated['rows'] as $row) {
+                $employee = $employees->get($row['employee_id']);
+                if (! $employee) {
+                    continue;
+                }
+
+                $this->createApprovedTransfer([
+                    'employee_id' => $employee->id,
+                    'from_branch_id' => $employee->current_branch_id,
+                    'to_branch_id' => $validated['to_branch_id'],
+                    'from_department_id' => $employee->department_id,
+                    'to_department_id' => $row['to_department_id'] ?? null,
+                    'from_designation_id' => $employee->designation_id,
+                    'to_designation_id' => $row['to_designation_id'] ?? null,
+                    'effective_date' => $row['effective_date'],
+                    'transfer_order_no' => $row['transfer_order_no'] ?? null,
+                    'reason' => $validated['reason'],
+                ], $user);
+
+                $createdCount++;
+            }
+        });
+
+        return redirect()->route('transfers.index')
+            ->with('success', "{$createdCount} transfer(s) created successfully.");
     }
 
     /**

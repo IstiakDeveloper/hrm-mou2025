@@ -166,6 +166,9 @@ export default function CreateTransfer({ employees, branches, departments, desig
 
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-3xl font-bold text-gray-900">Create Transfer Request</h1>
+                    <Link href={route('transfers.bulk.create')}>
+                        <Button variant="outline" size="sm">Bulk transfer</Button>
+                    </Link>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
