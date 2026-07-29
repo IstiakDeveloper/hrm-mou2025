@@ -215,67 +215,66 @@ interface EmployeeLeavesProps {
       <Layout>
         <Head title={`Leaves - ${employeeDisplayName(employee)}`} />
 
-        <PageSurface>
-          <div className="mb-6">
+        <PageSurface className="max-w-7xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+          <div className="mb-2">
             <Link
               href={route('employees.show', employee.id)}
-              className="flex w-fit items-center text-gray-500 hover:text-gray-700"
+              className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700"
             >
-              <ArrowLeft className="mr-1 h-4 w-4" />
+              <ArrowLeft className="mr-1 h-3.5 w-3.5" />
               <span>Back to Employee Profile</span>
             </Link>
           </div>
 
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">
+          <div className="mb-3">
+            <h1 className="text-base sm:text-lg font-bold text-gray-900">
               Leave Management: {employeeDisplayName(employee)}
             </h1>
-            <div className="mt-1 text-gray-500">
+            <div className="mt-0.5 text-xs text-gray-500">
               {employee.designation.name} • {employee.department.name} • {employee.employee_id}
             </div>
           </div>
 
           {/* Leave Balances */}
-          <Card className="mb-8 shadow-sm">
-            <CardHeader className="bg-gray-50 border-b">
+          <Card className="shadow-xs">
+            <CardHeader className="bg-gray-50/80 px-3 py-2 sm:px-4 border-b">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Leave Balances</CardTitle>
-                  <CardDescription>Leave allocation and usage for {currentYear}</CardDescription>
+                  <CardTitle className="text-xs font-bold tracking-wider text-gray-900 uppercase">Leave Balances</CardTitle>
+                  <CardDescription className="text-[10px] text-gray-500">Allocation and usage for {currentYear}</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <CardContent className="p-2.5 sm:p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
                 {leaveBalances.length > 0 ? (
                   leaveBalances.map((balance) => (
-                    <div key={balance.id} className="bg-white rounded-lg border p-4">
-                      <div className="flex justify-between items-center mb-3">
-                        <div>
-                          <h3 className="font-medium text-gray-900">{balance.leave_type.name}</h3>
-                          <p className="text-xs text-gray-500">
-                            {balance.leave_type.is_paid ? 'Paid Leave' : 'Unpaid Leave'}
+                    <div key={balance.id} className="bg-white rounded-lg border p-2.5 sm:p-3.5 shadow-xs">
+                      <div className="flex justify-between items-start mb-2 gap-1">
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-xs text-gray-900 truncate">{balance.leave_type.name}</h3>
+                          <p className="text-[9px] text-gray-500">
+                            {balance.leave_type.is_paid ? 'Paid' : 'Unpaid'}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <span className="text-sm font-medium">
-                            {balance.remaining_days} / {balance.allocated_days}
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-bold text-emerald-700 tabular-nums">
+                            {balance.remaining_days} <span className="text-[10px] font-normal text-gray-500">/ {balance.allocated_days}</span>
                           </span>
-                          <p className="text-xs text-gray-500">Days Available</p>
                         </div>
                       </div>
                       <Progress
                         value={(balance.used_days / balance.allocated_days) * 100}
-                        className="h-2"
+                        className="h-1.5"
                       />
-                      <div className="flex justify-between mt-2 text-xs text-gray-500">
-                        <span>Used: {balance.used_days} day{balance.used_days !== 1 ? 's' : ''}</span>
-                        <span>Remaining: {balance.remaining_days} day{balance.remaining_days !== 1 ? 's' : ''}</span>
+                      <div className="flex justify-between mt-1.5 text-[9px] text-gray-500">
+                        <span>Used: {balance.used_days}d</span>
+                        <span>Avail: {balance.remaining_days}d</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="col-span-full text-center py-6 text-gray-500">
+                  <div className="col-span-full text-center py-4 text-xs text-gray-500">
                     No leave balances found for the current year.
                   </div>
                 )}
@@ -284,51 +283,49 @@ interface EmployeeLeavesProps {
           </Card>
 
           {/* Leave Applications */}
-          <Card className="shadow-sm">
-            <CardHeader className="bg-gray-50 border-b">
-              <div className="flex flex-col sm:flex-row justify-between gap-4">
+          <Card className="shadow-xs">
+            <CardHeader className="bg-gray-50/80 px-3 py-2 sm:px-4 border-b">
+              <div className="flex items-center justify-between gap-2">
                 <div>
-                  <CardTitle>Leave Applications</CardTitle>
-                  <CardDescription>History of all leave requests</CardDescription>
+                  <CardTitle className="text-xs font-bold tracking-wider text-gray-900 uppercase">Leave Applications</CardTitle>
+                  <CardDescription className="text-[10px] text-gray-500">History of all leave requests</CardDescription>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button onClick={downloadPdf} variant="outline" size="sm" className="flex items-center">
-                    <Download className="mr-1 h-4 w-4" />
-                    Export PDF
-                  </Button>
-                </div>
+                <Button onClick={downloadPdf} variant="outline" size="sm" className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs">
+                  <Download className="mr-1 h-3 w-3" />
+                  Export PDF
+                </Button>
               </div>
             </CardHeader>
 
-            <div className="p-4 border-b">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="p-2.5 sm:p-4 border-b bg-gray-50/30">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-2.5">
                 <div>
-                  <Label htmlFor="start_date">Start Date</Label>
+                  <Label htmlFor="start_date" className="text-[10px]">Start Date</Label>
                   <DatePicker
                     id="start_date"
                     selected={filterValues.startDate}
                     onSelect={(date) => setFilterValues({ ...filterValues, startDate: date })}
-                    placeholderText="Filter from date"
+                    placeholderText="From date"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="end_date">End Date</Label>
+                  <Label htmlFor="end_date" className="text-[10px]">End Date</Label>
                   <DatePicker
                     id="end_date"
                     selected={filterValues.endDate}
                     onSelect={(date) => setFilterValues({ ...filterValues, endDate: date })}
-                    placeholderText="Filter to date"
+                    placeholderText="To date"
                     minDate={filterValues.startDate || undefined}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status" className="text-[10px]">Status</Label>
                   <Select
                     value={filterValues.status}
                     onValueChange={(value) => setFilterValues({ ...filterValues, status: value })}
                   >
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Filter by Status" />
+                    <SelectTrigger id="status" className="h-8 text-xs">
+                      <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
@@ -339,13 +336,13 @@ interface EmployeeLeavesProps {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="leave_type">Leave Type</Label>
+                  <Label htmlFor="leave_type" className="text-[10px]">Leave Type</Label>
                   <Select
                     value={filterValues.leaveType}
                     onValueChange={(value) => setFilterValues({ ...filterValues, leaveType: value })}
                   >
-                    <SelectTrigger id="leave_type">
-                      <SelectValue placeholder="Filter by Leave Type" />
+                    <SelectTrigger id="leave_type" className="h-8 text-xs">
+                      <SelectValue placeholder="Leave Type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Leave Types</SelectItem>
@@ -359,21 +356,52 @@ interface EmployeeLeavesProps {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                <Button onClick={resetFilters} variant="outline" size="sm">
-                  Reset Filters
+              <div className="flex items-center gap-1.5 justify-end">
+                <Button onClick={resetFilters} variant="outline" size="sm" className="h-6.5 text-[10px] px-2">
+                  Reset
                 </Button>
-                <Button onClick={applyFilters} size="sm">
-                  Apply Filters
+                <Button onClick={applyFilters} size="sm" className="h-6.5 bg-emerald-600 text-[10px] px-2.5 hover:bg-emerald-700">
+                  Filter
                 </Button>
               </div>
             </div>
 
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              {/* Mobile Card List View (sm:hidden) */}
+              <div className="p-2 space-y-2 sm:hidden">
+                {leaveApplications.data.length > 0 ? (
+                  leaveApplications.data.map((leave) => (
+                    <div key={leave.id} className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-xs space-y-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-bold text-xs text-gray-900">{leave.leave_type.name}</span>
+                        {getLeaveStatusBadge(leave.status)}
+                      </div>
+                      <div className="text-[11px] font-medium text-gray-700">
+                        {formatDateRange(leave.start_date, leave.end_date)}
+                        <span className="ml-1 text-emerald-700 font-bold">({leave.days} day{leave.days !== 1 ? 's' : ''})</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-100">
+                        <span>Applied: {format(new Date(leave.created_at), 'PP')}</span>
+                        {leave.reason && (
+                          <span className="truncate max-w-[150px] text-gray-400" title={leave.reason}>
+                            {leave.reason}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-6 text-center text-xs text-gray-500">
+                    No leave applications found
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop Table View (hidden sm:block) */}
+              <div className="hidden sm:block overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className="bg-gray-50/50 text-[10px] uppercase">
                       <TableHead>Leave Type</TableHead>
                       <TableHead>Period</TableHead>
                       <TableHead>Days</TableHead>
@@ -386,13 +414,13 @@ interface EmployeeLeavesProps {
                     {leaveApplications.data.length > 0 ? (
                       leaveApplications.data.map((leave) => (
                         <TableRow key={leave.id}>
-                          <TableCell className="font-medium">{leave.leave_type.name}</TableCell>
-                          <TableCell>{formatDateRange(leave.start_date, leave.end_date)}</TableCell>
-                          <TableCell>{leave.days} day{leave.days !== 1 ? 's' : ''}</TableCell>
-                          <TableCell>{format(new Date(leave.created_at), 'PP')}</TableCell>
+                          <TableCell className="font-medium text-xs">{leave.leave_type.name}</TableCell>
+                          <TableCell className="text-xs">{formatDateRange(leave.start_date, leave.end_date)}</TableCell>
+                          <TableCell className="text-xs">{leave.days} day{leave.days !== 1 ? 's' : ''}</TableCell>
+                          <TableCell className="text-xs">{format(new Date(leave.created_at), 'PP')}</TableCell>
                           <TableCell>{getLeaveStatusBadge(leave.status)}</TableCell>
                           <TableCell>
-                            <div className="max-w-xs truncate" title={leave.reason || ''}>
+                            <div className="max-w-xs truncate text-xs" title={leave.reason || ''}>
                               {leave.reason || '-'}
                             </div>
                           </TableCell>
@@ -400,7 +428,7 @@ interface EmployeeLeavesProps {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-6 text-gray-500">
+                        <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-500">
                           No leave applications found
                         </TableCell>
                       </TableRow>
@@ -410,34 +438,34 @@ interface EmployeeLeavesProps {
               </div>
 
               {leaveApplications.last_page > 1 && (
-                <div className="flex items-center justify-end p-4 border-t">
-                  <Pagination>
+                <div className="flex items-center justify-between p-2.5 border-t text-xs">
+                  <span className="text-gray-500 text-[11px]">
+                    Page {leaveApplications.current_page} of {leaveApplications.last_page}
+                  </span>
+                  <div className="flex items-center gap-1">
                     <Link
                       href={leaveApplications.prev_page_url || '#'}
-                      className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border ${
+                      className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border ${
                         !leaveApplications.prev_page_url
-                          ? 'text-gray-300 cursor-not-allowed'
-                          : 'text-gray-700 hover:bg-gray-50'
+                          ? 'text-gray-300 cursor-not-allowed border-gray-100 bg-gray-50'
+                          : 'text-gray-700 bg-white hover:bg-gray-50 border-gray-200'
                       }`}
                       preserveScroll
                     >
-                      Previous
+                      Prev
                     </Link>
-                    <span className="mx-2 text-sm text-gray-700">
-                      Page {leaveApplications.current_page} of {leaveApplications.last_page}
-                    </span>
                     <Link
                       href={leaveApplications.next_page_url || '#'}
-                      className={`relative inline-flex items-center px-4 py-2 ml-3 text-sm font-medium rounded-md border ${
+                      className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border ${
                         !leaveApplications.next_page_url
-                          ? 'text-gray-300 cursor-not-allowed'
-                          : 'text-gray-700 hover:bg-gray-50'
+                          ? 'text-gray-300 cursor-not-allowed border-gray-100 bg-gray-50'
+                          : 'text-gray-700 bg-white hover:bg-gray-50 border-gray-200'
                       }`}
                       preserveScroll
                     >
                       Next
                     </Link>
-                  </Pagination>
+                  </div>
                 </div>
               )}
             </CardContent>

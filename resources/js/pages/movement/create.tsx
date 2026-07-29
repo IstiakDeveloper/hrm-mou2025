@@ -1,6 +1,7 @@
 import React, { useState, FormEvent, useEffect, useMemo } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
+import { PageSurface } from '@/components/page-surface';
 import {
     Card,
     CardContent,
@@ -450,17 +451,17 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         <Layout>
             <Head title="Create Movement" />
 
-            <div className="container mx-auto py-3 px-3 sm:py-5 sm:px-4 max-w-4xl animate-fade-in">
-                <div className="mb-4 flex items-center justify-between">
+            <PageSurface className="max-w-4xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-3 flex items-center justify-between">
                     <div>
                         <Link 
                             href={route('movements.index')} 
-                            className="inline-flex items-center text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors duration-200"
+                            className="inline-flex items-center text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors"
                         >
                             <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-                            Back to Movements
+                            <span>Back to Movements</span>
                         </Link>
-                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mt-0.5">New Movement</h1>
+                        <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 mt-0.5">New Movement</h1>
                     </div>
                 </div>
 
@@ -903,7 +904,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                         )}
                     </div>
                 </div>
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

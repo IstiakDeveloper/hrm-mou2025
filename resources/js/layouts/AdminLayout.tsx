@@ -4,19 +4,27 @@ import {
     ArrowLeftRight,
     Award,
     BarChart,
+    BarChart3,
     Bell,
     Boxes,
     BriefcaseBusiness,
     Building2,
+    Calendar,
     CalendarDays,
     ChevronDown,
     ChevronRight,
     ClipboardList,
+    Clock,
     Coins,
+    FileSpreadsheet,
+    HandCoins,
     Home,
     LayoutDashboard,
     LogOut,
+    MapPin,
     Menu,
+    MonitorSmartphone,
+    Package,
     Settings,
     User,
     Users,
@@ -24,6 +32,59 @@ import {
     X,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+
+function getSubNavIcon(title: string, path: string): React.ReactNode {
+    const t = title.toLowerCase();
+    const p = path.toLowerCase();
+
+    if (t.includes('dashboard') || t.includes('overview') || t.includes('my hr') || t.includes('my staff fund') || t.includes('my loan') || t.includes('my payroll')) {
+        return <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('daily attendance') || t.includes('attendance') || t.includes('punches')) {
+        return <Users className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('monthly') || t.includes('calendar') || t.includes('holiday')) {
+        return <CalendarDays className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('sheet') || t.includes('export')) {
+        return <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('report') || t.includes('summary')) {
+        return <BarChart3 className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('movement') || t.includes('transfer') || t.includes('location')) {
+        return <MapPin className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('device') || t.includes('terminal') || t.includes('sync')) {
+        return <MonitorSmartphone className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('employee') || t.includes('user') || t.includes('profile')) {
+        return <User className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('leave') || t.includes('application')) {
+        return <Calendar className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('loan') || t.includes('installment')) {
+        return <HandCoins className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('fund') || t.includes('pf') || t.includes('gratuity')) {
+        return <Coins className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('payroll') || t.includes('salary') || t.includes('payslip') || t.includes('bonus')) {
+        return <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('asset') || t.includes('custodian')) {
+        return <Boxes className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('inventory') || t.includes('product') || t.includes('stock')) {
+        return <Package className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('admin') || t.includes('role') || t.includes('setting')) {
+        return <Settings className="h-3.5 w-3.5 shrink-0" />;
+    }
+
+    return <Activity className="h-3.5 w-3.5 shrink-0" />;
+}
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -46,6 +107,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
 import { getActiveSectionId, getMenuKeysForSection, getSectionById, withSectionParam, type AdminSectionId } from '@/lib/admin-sections';
 import { EMPLOYEE_LOAN_NAV_GROUPS, employeeLoanPath } from '@/lib/employee-loan-nav';
 import { employeeLoanEmployeePath } from '@/lib/employee-loan-employee-nav';
@@ -57,6 +119,7 @@ import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead } fro
 import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { cn } from '@/lib/utils';
+import { resolveMovementStartPlace } from '@/lib/movement-start-place';
 import { format } from 'date-fns';
 
 interface AdminLayoutProps {
@@ -193,6 +256,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const [closeMovementId, setCloseMovementId] = useState<number | null>(null);
     const [forgotReturnTime, setForgotReturnTime] = useState(false);
     const [customReturnTime, setCustomReturnTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+    const [workResult, setWorkResult] = useState('');
+    const [startMeterReading, setStartMeterReading] = useState('');
+    const [endMeterReading, setEndMeterReading] = useState('');
+    const [personalKm, setPersonalKm] = useState('');
+    const [createLogBook, setCreateLogBook] = useState(true);
+    const [startPlace, setStartPlace] = useState('');
+    const [resolvingPlace, setResolvingPlace] = useState(false);
     const [closeError, setCloseError] = useState<string | null>(null);
     const [closing, setClosing] = useState(false);
 
@@ -263,18 +333,66 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const canCloseOwnMovement = Boolean(hasOwnActiveMovement && hasPermission('movements.complete'));
 
-    const openCloseMovementDialog = (movementId?: number) => {
+    const branchFallbackName = auth?.employee?.branch?.name || '';
+
+    const prepareCloseDialogFields = async () => {
         setCloseError(null);
         setForgotReturnTime(false);
+        setWorkResult('');
+        setStartMeterReading('');
+        setEndMeterReading('');
+        setPersonalKm('');
+        setCreateLogBook(true);
         setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setStartPlace(branchFallbackName);
+        setResolvingPlace(true);
+        try {
+            const place = await resolveMovementStartPlace(branchFallbackName);
+            setStartPlace(place);
+        } finally {
+            setResolvingPlace(false);
+        }
+    };
+
+    const openCloseMovementDialog = (movementId?: number) => {
         setCloseMovementId(typeof movementId === 'number' ? movementId : (activeMovement?.id ?? null));
         setShowCloseMovementDialog(true);
+        void prepareCloseDialogFields();
     };
 
     const handleCloseMovement = () => {
         setCloseError(null);
         const movementId = closeMovementId ?? activeMovement?.id;
         if (!movementId) return;
+
+        if (!workResult.trim() || workResult.trim().length < 5) {
+            setCloseError('Please write the work result / feedback (at least 5 characters).');
+            return;
+        }
+
+        const startReading = Number(startMeterReading);
+        const endReading = Number(endMeterReading);
+        const personal = personalKm.trim() === '' ? 0 : Number(personalKm);
+        if (createLogBook) {
+            if (startMeterReading.trim() === '' || Number.isNaN(startReading) || startReading < 0) {
+                setCloseError('Please enter a valid start meter reading.');
+                return;
+            }
+            if (endMeterReading.trim() === '' || Number.isNaN(endReading) || endReading < startReading) {
+                setCloseError('Closing meter reading must be greater than or equal to start reading.');
+                return;
+            }
+
+            const totalKm = Math.max(0, endReading - startReading);
+            if (personalKm.trim() !== '' && (Number.isNaN(personal) || personal < 0)) {
+                setCloseError('Please enter a valid personal distance.');
+                return;
+            }
+            if (personal > totalKm) {
+                setCloseError('Personal distance cannot exceed total distance.');
+                return;
+            }
+        }
 
         if (forgotReturnTime && !customReturnTime?.trim()) {
             setCloseError('Please select the actual date and time you returned.');
@@ -287,13 +405,28 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             {
                 forgot_return_time: forgotReturnTime ? '1' : '0',
                 actual_return_datetime: forgotReturnTime ? customReturnTime : null,
+                work_result: workResult.trim(),
+                start_place: createLogBook ? (startPlace.trim() || branchFallbackName || 'Unknown') : null,
+                start_meter_reading: createLogBook ? startReading : null,
+                end_meter_reading: createLogBook ? endReading : null,
+                personal_km: createLogBook && personalKm.trim() !== '' ? personal : null,
+                create_log_book: createLogBook ? '1' : '0',
             },
             {
                 preserveScroll: true,
-                onFinish: () => {
-                    setClosing(false);
-                    setShowCloseMovementDialog(false);
+                onSuccess: () => setShowCloseMovementDialog(false),
+                onError: (errors) => {
+                    setCloseError(
+                        (errors.work_result as string) ||
+                        (errors.start_meter_reading as string) ||
+                        (errors.end_meter_reading as string) ||
+                        (errors.personal_km as string) ||
+                        (errors.start_place as string) ||
+                        (errors.actual_return_datetime as string) ||
+                        'Could not close movement. Please check the form.'
+                    );
                 },
+                onFinish: () => setClosing(false),
             },
         );
     };
@@ -454,7 +587,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 path: '/movements',
                 hasSubmenu: true,
                 permission: 'movements.view',
-                submenu: [{ title: 'Movements', path: '/movements', permission: 'movements.view' }],
+                submenu: [
+                    { title: 'Movements', path: '/movements', permission: 'movements.view' },
+                    { title: 'Log Book Register', path: '/movement-log-books', permission: 'movements.view' },
+                    { title: 'Log Book Payment', path: '/movement-log-book-payments', permission: 'movements.view' },
+                ],
             },
             {
                 title: 'Transfer & Promotion',
@@ -750,7 +887,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 .filter((x): x is MenuItemType => Boolean(x));
         }
 
-        const globalKeys = [...(employee?.id ? (['my-assets'] as const) : [])];
+        const globalKeys: string[] = [];
         const mergedKeys = [...globalKeys, ...keys.filter((k) => !globalKeys.includes(k))];
         return mergedKeys.map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key)).filter((x): x is MenuItemType => Boolean(x));
     }, [activeSectionId, menuItemsForLayout, employee?.id, branchAccount]);
@@ -897,6 +1034,62 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 return [];
         }
     })();
+
+    const mobileSubNavItems = useMemo(() => {
+        if (!activeSectionId) return [];
+
+        const items: Array<{ title: string; href: string; icon: React.ReactNode }> = [];
+
+        sectionDashboardEntries.forEach((entry) => {
+            items.push({
+                title: entry.title,
+                href: entry.path,
+                icon: getSubNavIcon(entry.title, entry.path),
+            });
+        });
+
+        visibleMenuItems.forEach((item) => {
+            if (item.hrOnly && !canSeeHrOnlyMenu) return;
+            if (item.employeeOnly && !employee?.id) return;
+            if (item.anyPermissions?.length) {
+                if (!item.anyPermissions.some((p) => hasPermission(p))) return;
+            } else if (item.permission && !hasPermission(item.permission)) {
+                return;
+            }
+
+            if (item.hasSubmenu && item.submenu?.length) {
+                const permittedSubmenu = item.submenu.filter(
+                    (subItem) =>
+                        !subItem.isGroupLabel &&
+                        (!subItem.hrOnly || canSeeHrOnlyMenu) &&
+                        (!subItem.permission || hasPermission(subItem.permission)) &&
+                        (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
+                        (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p))),
+                );
+                permittedSubmenu.forEach((subItem) => {
+                    items.push({
+                        title: subItem.title,
+                        href: subItem.path,
+                        icon: getSubNavIcon(subItem.title, subItem.path),
+                    });
+                });
+            } else {
+                items.push({
+                    title: item.title,
+                    href: item.path,
+                    icon: getSubNavIcon(item.title, item.path),
+                });
+            }
+        });
+
+        const seen = new Set<string>();
+        return items.filter((item) => {
+            const clean = item.href.split('?')[0];
+            if (seen.has(clean)) return false;
+            seen.add(clean);
+            return true;
+        });
+    }, [activeSectionId, sectionDashboardEntries, visibleMenuItems, canSeeHrOnlyMenu, employee?.id]);
 
     // Automatically expand the menu item if a child is active
     useEffect(() => {
@@ -1377,6 +1570,47 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </div>
                     </header>
 
+                    {/* Global Mobile Section Sub-Navigation Bar (Active for all sections on mobile viewports) */}
+                    {mobileSubNavItems.length > 0 && (
+                        <div className="sticky top-16 z-20 flex w-full items-center border-b border-slate-200/80 bg-white/95 px-2 py-1.5 shadow-xs backdrop-blur-md md:hidden">
+                            <style>{`
+                                .mobile-subnav-scroll {
+                                    -ms-overflow-style: none;
+                                    scrollbar-width: none;
+                                }
+                                .mobile-subnav-scroll::-webkit-scrollbar {
+                                    display: none;
+                                }
+                            `}</style>
+                            <div className="relative flex w-full items-center overflow-hidden">
+                                <div className="mobile-subnav-scroll flex w-full items-center gap-1.5 overflow-x-auto scroll-smooth py-0.5 pr-8 pl-0.5">
+                                    {mobileSubNavItems.map((item) => {
+                                        const active = isActive(item.href);
+                                        return (
+                                            <Link
+                                                key={item.href}
+                                                href={item.href}
+                                                className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 focus:outline-none ${
+                                                    active
+                                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                                        : 'bg-slate-100/90 text-slate-700 hover:bg-slate-200/80 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                {item.icon}
+                                                <span className="whitespace-nowrap leading-none">{item.title}</span>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Right Gradient Overlay & Chevron hint indicating more swipeable items */}
+                                <div aria-hidden className="pointer-events-none absolute top-0 right-0 bottom-0 flex w-8 items-center justify-end bg-gradient-to-l from-white via-white/90 to-transparent pr-0.5">
+                                    <ChevronRight className="h-3.5 w-3.5 text-slate-400 opacity-90" />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {hasOwnActiveMovement && activeMovement && (
                         <div className="flex justify-center border-b border-slate-200/70 bg-white/60 px-4 py-2.5 backdrop-blur-sm">
                             <ActiveMovementBanner
@@ -1389,8 +1623,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     )}
 
                     {/* Main Content */}
-                    <main className="flex-1 overflow-auto bg-transparent px-4 py-6 lg:px-6 lg:py-8">
-                        <div className="w-full rounded-2xl border border-slate-200/70 bg-white/75 p-4 shadow-sm shadow-slate-200/40 backdrop-blur lg:p-6">
+                    <main className="flex-1 overflow-auto bg-transparent px-2.5 py-3 sm:px-4 sm:py-5 lg:px-6 lg:py-6">
+                        <div className="w-full rounded-2xl border border-slate-200/70 bg-white/75 p-2.5 shadow-sm shadow-slate-200/40 backdrop-blur sm:p-4 lg:p-6">
                             {children}
                         </div>
                     </main>
@@ -1475,79 +1709,210 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 onOpenChange={(open) => {
                     setShowCloseMovementDialog(open);
                     if (open) {
-                        setCloseError(null);
-                        setForgotReturnTime(false);
-                        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+                        void prepareCloseDialogFields();
                     }
                 }}
             >
-                <DialogContent className="max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
+                <DialogContent className="max-h-[88dvh] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto rounded-2xl p-3 sm:max-h-[90dvh] sm:p-5">
                     <DialogHeader>
                         <DialogTitle>Close Movement</DialogTitle>
                         <DialogDescription>
-                            You are confirming that you have returned from your movement. Your actual return time will be recorded.
+                            Return time and work result will be saved now. Log Book details are optional.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
-                        <p className="text-muted-foreground text-sm">
-                            By default, your return is recorded at <strong>the current time</strong> when you confirm.
-                        </p>
-
-                        <div className={`flex items-start space-x-3 rounded-md border p-4 transition-all duration-200 ${
-                            forgotReturnTime
-                                ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-500'
-                                : 'border-amber-200 bg-amber-50/20 hover:bg-amber-50/40'
-                        }`}>
-                            <Checkbox
-                                id="forgotReturnTimeGlobal"
-                                checked={forgotReturnTime}
-                                onCheckedChange={(checked) => {
-                                    setForgotReturnTime(checked === true);
-                                    setCloseError(null);
-                                    if (checked === true) {
-                                        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-                                    }
-                                }}
-                                className="mt-1 border-amber-400 data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
-                            />
-                            <div className="grid gap-1.5 leading-none">
-                                <Label htmlFor="forgotReturnTimeGlobal" className="cursor-pointer font-semibold text-amber-950">
-                                    আমি আগে ক্লোজ করতে ভুলে গিয়েছিলাম
-                                </Label>
-                                <p className="text-xs text-amber-800">
-                                    ইতিমধ্যে ফিরে এসে থাকলে, এটি টিক দিয়ে আপনার ফেরার সঠিক সময়টি সিলেক্ট করুন।
+                    <div className="space-y-2.5 py-1">
+                        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-semibold text-slate-900">Return Details</h3>
+                                <p className="text-xs text-slate-500">
+                                    Work result is required. Return time will be current time by default.
+                                </p>
+                            </div>
+                            <div className="space-y-2.5">
+                                <div className="space-y-2">
+                                    <Label htmlFor="workResultGlobal">
+                                        Work Result / Feedback <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Textarea
+                                        id="workResultGlobal"
+                                        value={workResult}
+                                        onChange={(e) => {
+                                            setWorkResult(e.target.value);
+                                            setCloseError(null);
+                                        }}
+                                        placeholder="কী কাজ করতে গিয়েছিলেন এবং কাজ সম্পূর্ণ হয়েছে কি না — সংক্ষেপে লিখুন..."
+                                        rows={3}
+                                        className="resize-y"
+                                    />
+                                </div>
+                                <p className="text-muted-foreground text-sm">
+                                    By default, your return is recorded at <strong>the current time</strong> when you confirm.
                                 </p>
                             </div>
                         </div>
 
-                        {forgotReturnTime && (
-                            <div className="space-y-2">
-                                <Label htmlFor="customTimeGlobal">Actual return date &amp; time</Label>
-                                <Input
-                                    id="customTimeGlobal"
-                                    type="datetime-local"
-                                    value={customReturnTime}
-                                    onChange={(e) => setCustomReturnTime(e.target.value)}
-                                />
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/30 p-3 sm:p-4">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-semibold text-amber-950">Backdated Return</h3>
+                                <p className="text-xs text-amber-800">
+                                    Only use this if you returned earlier but forgot to close the movement.
+                                </p>
                             </div>
-                        )}
+                            <div className={`flex items-start space-x-3 rounded-md border p-2.5 sm:p-3 transition-all duration-200 ${
+                                forgotReturnTime
+                                    ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-500'
+                                    : 'border-amber-200 bg-white/70'
+                            }`}>
+                                <Checkbox
+                                    id="forgotReturnTimeGlobal"
+                                    checked={forgotReturnTime}
+                                    onCheckedChange={(checked) => {
+                                        setForgotReturnTime(checked === true);
+                                        setCloseError(null);
+                                        if (checked === true) {
+                                            setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+                                        }
+                                    }}
+                                    className="mt-1 border-amber-400 data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
+                                />
+                                <div className="grid gap-1.5 leading-none">
+                                    <Label htmlFor="forgotReturnTimeGlobal" className="cursor-pointer font-semibold text-amber-950">
+                                        আমি আগে ক্লোজ করতে ভুলে গিয়েছিলাম
+                                    </Label>
+                                    <p className="text-xs text-amber-800">
+                                        এটি টিক দিলে নিচে সঠিক ফেরার সময় দিতে পারবেন।
+                                    </p>
+                                </div>
+                            </div>
+
+                            {forgotReturnTime && (
+                                <div className="mt-2.5 space-y-2">
+                                    <Label htmlFor="customTimeGlobal">Actual return date &amp; time</Label>
+                                    <Input
+                                        id="customTimeGlobal"
+                                        type="datetime-local"
+                                        value={customReturnTime}
+                                        onChange={(e) => setCustomReturnTime(e.target.value)}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50/20 p-3 sm:p-4">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-semibold text-slate-900">Log Book Register</h3>
+                                <p className="text-xs text-slate-500">
+                                    Log Book entry দরকার হলে checkbox checked রাখুন, না হলে unchecked করুন।
+                                </p>
+                            </div>
+
+                            <div className={`flex items-start space-x-3 rounded-md border p-2.5 sm:p-3 transition-all duration-200 ${
+                                createLogBook
+                                    ? 'border-emerald-300 bg-emerald-50/50'
+                                    : 'border-slate-200 bg-white/70'
+                            }`}>
+                                <Checkbox
+                                    id="globalCreateLogBook"
+                                    checked={createLogBook}
+                                    onCheckedChange={(checked) => setCreateLogBook(checked === true)}
+                                    className="mt-1 border-emerald-400 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                                />
+                                <div className="grid gap-1.5 leading-none">
+                                    <Label htmlFor="globalCreateLogBook" className="cursor-pointer font-semibold text-slate-900">
+                                        Log Book Register এ এন্ট্রি করুন
+                                    </Label>
+                                    <p className="text-xs text-slate-500">
+                                        Checked থাকলে নিচে meter reading input দেখাবে।
+                                    </p>
+                                </div>
+                            </div>
+
+                            {createLogBook && (
+                                <div className="mt-2.5 space-y-3 rounded-lg border border-emerald-100 bg-emerald-50/30 p-3 sm:p-4">
+                                <div className="text-xs text-muted-foreground">
+                                    {resolvingPlace
+                                        ? 'Detecting current location for start place...'
+                                        : 'Start place will be saved automatically from GPS short name, otherwise branch name.'}
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="startMeterGlobal">
+                                            Start meter reading <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Input
+                                            id="startMeterGlobal"
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={startMeterReading}
+                                            onChange={(e) => setStartMeterReading(e.target.value)}
+                                            placeholder="e.g. 12540.5"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="endMeterGlobal">
+                                            Closing meter reading <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Input
+                                            id="endMeterGlobal"
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={endMeterReading}
+                                            onChange={(e) => setEndMeterReading(e.target.value)}
+                                            placeholder="e.g. 12562.0"
+                                        />
+                                    </div>
+                                </div>
+                                {startMeterReading !== '' && endMeterReading !== '' && !Number.isNaN(Number(startMeterReading)) && !Number.isNaN(Number(endMeterReading)) && (
+                                    <div className="rounded-md border bg-white p-2.5 sm:p-3 space-y-2 text-sm">
+                                        <p className="text-muted-foreground">
+                                            Total distance:{' '}
+                                            <strong>{Math.max(0, Number(endMeterReading) - Number(startMeterReading)).toFixed(2)} km</strong>
+                                        </p>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="personalKmGlobal">Personal distance (optional)</Label>
+                                            <Input
+                                                id="personalKmGlobal"
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={personalKm}
+                                                onChange={(e) => setPersonalKm(e.target.value)}
+                                                placeholder="Personal use km, if any"
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Official distance = Total − Personal
+                                            </p>
+                                        </div>
+                                        <p className="text-muted-foreground">
+                                            Official distance:{' '}
+                                            <strong className="text-green-700">
+                                                {(() => {
+                                                    const total = Math.max(0, Number(endMeterReading) - Number(startMeterReading));
+                                                    const personal = personalKm.trim() === '' || Number.isNaN(Number(personalKm))
+                                                        ? 0
+                                                        : Number(personalKm);
+                                                    return Math.max(0, total - personal).toFixed(2);
+                                                })()} km
+                                            </strong>
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                            )}
+                        </div>
 
                         {closeError && <p className="text-sm font-medium text-red-600">{closeError}</p>}
-
-                        <div className="rounded-md bg-blue-50 p-3 flex items-start gap-2">
-                            <AlertCircle className="h-4 w-4 text-blue-700 shrink-0 mt-0.5" />
-                            <p className="text-sm text-blue-700">
-                                This will mark your movement as completed and update your attendance records.
-                            </p>
-                        </div>
                     </div>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowCloseMovementDialog(false)}>
+                    <DialogFooter className="flex-col gap-2 sm:flex-row">
+                        <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowCloseMovementDialog(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleCloseMovement} className="bg-green-600 hover:bg-green-700" disabled={closing}>
+                        <Button onClick={handleCloseMovement} className="w-full bg-green-600 hover:bg-green-700 sm:w-auto" disabled={closing || (createLogBook && resolvingPlace)}>
                             {closing ? 'Processing...' : 'Confirm Return'}
                         </Button>
                     </DialogFooter>

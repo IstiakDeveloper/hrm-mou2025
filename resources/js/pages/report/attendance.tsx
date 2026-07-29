@@ -938,7 +938,7 @@ export default function AttendanceReport({
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
                             <div className="rounded-lg border bg-card p-3">
                                 <div className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <p className="text-sm font-medium">Attendance Rate</p>

@@ -292,24 +292,22 @@ export default function StaffFundDashboard({ stats, userRole, showEmployeeTab: s
         <Layout>
             <Head title="Staff Fund Dashboard" />
 
-            <PageSurface className="max-w-full bg-[#f9fafb] px-3 py-3 md:px-4 md:py-4">
-                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-emerald-100 pb-3">
-                    <div className="flex items-center gap-2">
-                        <span className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-lg bg-emerald-600 text-white shadow-sm">
-                            <Coins className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            <PageSurface className="max-w-full bg-[#f9fafb] px-3 py-2.5 md:px-4 md:py-3.5">
+                <div className="mb-3 flex items-center justify-between gap-2 border-b border-emerald-100 pb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="grid h-7 w-7 sm:h-8 sm:w-8 place-items-center rounded-lg bg-emerald-600 text-white shadow-xs shrink-0">
+                            <Coins className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
                         </span>
-                        <div>
-                            <h1 className="text-sm sm:text-base font-bold text-zinc-800 tracking-tight leading-tight">Staff Fund Module</h1>
-                            <p className="text-[10px] sm:text-[11px] text-zinc-400 mt-0.5">
-                                {userRole} · Central hub for Employee Provident Fund (PF) & Gratuity ledger management.
+                        <div className="min-w-0">
+                            <h1 className="text-sm sm:text-base font-bold text-zinc-900 tracking-tight truncate leading-tight">Staff Fund Module</h1>
+                            <p className="text-[10px] sm:text-[11px] text-zinc-500 truncate hidden sm:block">
+                                {userRole} · Provident Fund (PF) & Gratuity ledger management.
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white text-zinc-600 hover:text-emerald-700 hover:bg-emerald-50">
-                            <Link href="/sections">Sections</Link>
-                        </Button>
-                    </div>
+                    <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-xs border-zinc-200 bg-white text-zinc-700 hover:text-emerald-700 hover:bg-emerald-50 shrink-0">
+                        <Link href="/sections">Sections</Link>
+                    </Button>
                 </div>
 
                 {showEmployeeTab ? (

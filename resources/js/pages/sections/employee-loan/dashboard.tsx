@@ -89,12 +89,12 @@ function StatCard({
     };
 
     return (
-        <div className="flex flex-col rounded-xl border border-zinc-200/90 bg-white p-3.5 shadow-sm">
-            <span className={cn('grid h-8 w-8 place-items-center rounded-lg ring-1', accentClasses[accent])}>
-                <Icon className="h-4 w-4" />
+        <div className="flex flex-col rounded-xl border border-zinc-200/90 bg-white p-2.5 sm:p-3.5 shadow-sm">
+            <span className={cn('grid h-7 w-7 sm:h-8 sm:w-8 place-items-center rounded-lg ring-1', accentClasses[accent])}>
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </span>
-            <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-            <p className="mt-0.5 text-xl font-bold tabular-nums tracking-tight text-zinc-900">{display}</p>
+            <p className="mt-2 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-zinc-500 truncate">{label}</p>
+            <p className="mt-0.5 text-xs sm:text-lg md:text-xl font-bold tabular-nums tracking-tight text-zinc-900 truncate">{display}</p>
         </div>
     );
 }
@@ -117,7 +117,7 @@ export default function EmployeeLoanDashboard({ stats, userRole, showEmployeeTab
         <>
             <section className="mb-6">
                 <SectionTitle>Loan portfolio</SectionTitle>
-                <div className="grid grid-cols-1 gap-2.5 min-[340px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5">
                     <StatCard label="Active loans" value={stats.activeLoans} icon={HandCoins} accent="emerald" />
                     <StatCard label="Employees with loan" value={stats.employeesWithActiveLoan} icon={Users} accent="teal" />
                     <StatCard label="Completed" value={stats.completedLoans} icon={CheckCircle2} accent="indigo" />
@@ -129,7 +129,7 @@ export default function EmployeeLoanDashboard({ stats, userRole, showEmployeeTab
 
             <section className="mb-6">
                 <SectionTitle>Financial summary (Tk)</SectionTitle>
-                <div className="grid grid-cols-1 gap-2.5 min-[340px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
                     <StatCard label="Outstanding (active)" value={stats.totalOutstanding} icon={CircleDollarSign} format="currency" accent="emerald" />
                     <StatCard label="Principal (active)" value={stats.totalPrincipalActive} icon={Wallet} format="currency" accent="teal" />
                     <StatCard label="Recovered (active)" value={stats.totalRecoveredActive} icon={Banknote} format="currency" accent="indigo" />
@@ -138,21 +138,21 @@ export default function EmployeeLoanDashboard({ stats, userRole, showEmployeeTab
                 </div>
             </section>
 
-            <div className="mb-6 grid gap-6 lg:grid-cols-2">
+            <div className="mb-6 grid gap-4 lg:grid-cols-2">
                 <section>
                     <SectionTitle>Application pipeline</SectionTitle>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                         <StatCard label="Pending approval" value={stats.pendingApplications} icon={Clock} accent="amber" />
-                        <StatCard label="Approved (not disbursed)" value={stats.approvedAwaitingDisburse} icon={FileText} accent="indigo" />
+                        <StatCard label="Approved (awaiting disburse)" value={stats.approvedAwaitingDisburse} icon={FileText} accent="indigo" />
                     </div>
                 </section>
 
                 <section>
                     <SectionTitle>Installments & collection</SectionTitle>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5">
                         <StatCard label="Pending installments" value={stats.pendingInstallments} icon={ListChecks} accent="amber" />
-                        <StatCard label="On payroll (scheduled)" value={stats.scheduledInstallments} icon={ListChecks} accent="teal" />
-                        <StatCard label="Collection batches (month)" value={stats.collectionBatchesThisMonth} icon={Banknote} accent="emerald" />
+                        <StatCard label="On payroll" value={stats.scheduledInstallments} icon={ListChecks} accent="teal" />
+                        <StatCard label="Collection batches" value={stats.collectionBatchesThisMonth} icon={Banknote} accent="emerald" />
                     </div>
                 </section>
             </div>
@@ -165,7 +165,30 @@ export default function EmployeeLoanDashboard({ stats, userRole, showEmployeeTab
                             <CardTitle className="text-xs font-semibold text-zinc-700">Breakdown</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <div className="overflow-x-auto">
+                            {/* Mobile Card List View */}
+                            <div className="p-3 space-y-2.5 sm:hidden">
+                                {stats.byLoanType.map((row) => (
+                                    <div key={row.loan_type} className="rounded-xl border border-zinc-200 bg-white p-3 shadow-xs space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-zinc-900">{row.label}</span>
+                                            <span className="text-xs font-mono bg-zinc-100 px-2 py-0.5 rounded text-zinc-700 font-semibold">Count: {fmtInt(row.loan_count)}</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                                            <div className="bg-zinc-50 p-2 rounded">
+                                                <p className="text-[9px] uppercase font-bold text-zinc-500">Principal</p>
+                                                <p className="font-mono font-semibold text-zinc-800 text-[11px]">{fmt(row.principal)}</p>
+                                            </div>
+                                            <div className="bg-emerald-50 p-2 rounded">
+                                                <p className="text-[9px] uppercase font-bold text-emerald-700">Outstanding</p>
+                                                <p className="font-mono font-bold text-emerald-800 text-[11px]">{fmt(row.outstanding)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Desktop Table View */}
+                            <div className="hidden sm:block overflow-x-auto">
                                 <table className="w-full text-xs">
                                     <thead>
                                         <tr className="border-b border-zinc-100 bg-zinc-50/80 text-left text-[10px] font-semibold uppercase tracking-wide text-zinc-500">

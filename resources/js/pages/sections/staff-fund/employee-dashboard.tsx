@@ -96,35 +96,37 @@ export function StaffFundEmployeeDashboardView({
 
     const dashboardBody = (
         <>
-            <Card className="overflow-hidden border-zinc-200/90 border-t-4 border-t-cyan-500 bg-gradient-to-b from-white to-cyan-50/30 shadow-sm">
-                <CardContent className="space-y-4 p-4 sm:p-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <Card className="overflow-hidden border-zinc-200/90 border-t-3 border-t-cyan-500 bg-gradient-to-b from-white to-cyan-50/20 shadow-xs">
+                <CardContent className="p-3 sm:p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
-                            <p className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-cyan-700/90">
-                                <Coins className="h-3.5 w-3.5" />
-                                Staff Fund · My account
-                            </p>
-                            <h1 className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-zinc-900 md:text-2xl">
-                                My Staff Fund
-                            </h1>
-                            <p className="mt-1 line-clamp-2 text-xs text-zinc-600 sm:text-sm">
-                                Provident Fund balance and gratuity entitlement from your HR records.
-                            </p>
-                            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[10px] sm:text-[11px] text-zinc-500">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-base sm:text-lg font-bold tracking-tight text-zinc-900">
+                                    My Staff Fund
+                                </h1>
+                                <Badge variant="outline" className="border-cyan-200 bg-cyan-50 text-[10px] text-cyan-800 font-semibold px-2 py-0.5">
+                                    My Account
+                                </Badge>
+                            </div>
+                            <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-zinc-500">
                                 <UserRound className="inline h-3.5 w-3.5 text-zinc-400" />
-                                <span className="font-medium text-zinc-700">{auth?.user?.name ?? '—'}</span>
+                                <span className="font-semibold text-zinc-800">{auth?.user?.name ?? '—'}</span>
                                 {employee.pin && (
                                     <>
                                         <span className="text-zinc-300">·</span>
-                                        <span className="font-mono text-zinc-600">{employee.pin}</span>
+                                        <span className="font-mono text-zinc-600 font-medium">{employee.pin}</span>
                                     </>
                                 )}
-                                <span className="text-zinc-300">·</span>
-                                <span className="truncate">{employee?.department?.name ?? 'Department'}</span>
+                                {employee?.department?.name && (
+                                    <>
+                                        <span className="text-zinc-300">·</span>
+                                        <span className="truncate text-zinc-600">{employee.department.name}</span>
+                                    </>
+                                )}
                             </p>
                         </div>
-                        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                            <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs">
+                        <div className="flex shrink-0 gap-2 sm:justify-end">
+                            <Button asChild variant="outline" size="sm" className="h-8 px-3 text-xs bg-white">
                                 <Link href="/sections">Sections</Link>
                             </Button>
                         </div>
@@ -153,18 +155,18 @@ export function StaffFundEmployeeDashboardView({
                         </div>
                     </CardHeader>
                     <CardContent className="p-4 sm:p-5">
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Balance</p>
-                                <p className="mt-1 font-mono text-xl font-bold tabular-nums text-emerald-700">{fmtPf(pf.balance)}</p>
+                        <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-2.5 shadow-2xs">
+                                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide text-emerald-800 truncate">Balance</p>
+                                <p className="mt-0.5 font-mono text-xs sm:text-lg font-bold tabular-nums text-emerald-900 truncate">{fmtPf(pf.balance)}</p>
                             </div>
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">My contribution</p>
-                                <p className="mt-1 font-mono text-lg font-bold tabular-nums text-zinc-900">{fmtPf(pf.own_contribution)}</p>
+                            <div className="rounded-xl border border-zinc-200/80 bg-white p-2.5 shadow-2xs">
+                                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide text-zinc-500 truncate">My contribution</p>
+                                <p className="mt-0.5 font-mono text-xs sm:text-base font-bold tabular-nums text-zinc-900 truncate">{fmtPf(pf.own_contribution)}</p>
                             </div>
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Org contribution</p>
-                                <p className="mt-1 font-mono text-lg font-bold tabular-nums text-zinc-900">{fmtPf(pf.org_contribution)}</p>
+                            <div className="rounded-xl border border-zinc-200/80 bg-white p-2.5 shadow-2xs">
+                                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide text-zinc-500 truncate">Org contribution</p>
+                                <p className="mt-0.5 font-mono text-xs sm:text-base font-bold tabular-nums text-zinc-900 truncate">{fmtPf(pf.org_contribution)}</p>
                             </div>
                         </div>
 

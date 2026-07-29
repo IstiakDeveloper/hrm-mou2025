@@ -462,97 +462,102 @@ export default function DailyBranchSummary({
 
                 {singleBranchData ? (
                     <div className="flex flex-col gap-3 lg:h-[calc(100vh-7rem)] lg:min-h-[500px] lg:overflow-hidden">
-                        <div className="flex shrink-0 flex-wrap items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-xs">
-                            {portalMode ? (
-                                <Link
-                                    href={route('sections.index')}
-                                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
-                                    title="Back to Modules"
-                                >
-                                    <ArrowLeft className="h-4.5 w-4.5" />
-                                </Link>
-                            ) : (
-                                <Link
-                                    href={route('attendance.index')}
-                                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
-                                    title="Back to Daily Attendance"
-                                >
-                                    <ArrowLeft className="h-4.5 w-4.5" />
-                                </Link>
-                            )}
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                    <h1 className="truncate text-base font-black text-slate-900 tracking-tight sm:text-lg">
-                                        {singleBranchData.branch.name}
-                                    </h1>
-                                    <span className={cn(
-                                        "px-2 py-0.5 text-[10px] font-bold rounded-full border shrink-0",
-                                        singleBranchData.stats.workingTotal > 0 && (singleBranchData.stats.present / singleBranchData.stats.workingTotal) < 0.75 ? 'bg-rose-50 text-rose-700 border-rose-100' :
-                                        singleBranchData.stats.workingTotal > 0 && (singleBranchData.stats.present / singleBranchData.stats.workingTotal) < 0.90 ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                        'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                    )}>
-                                        {singleBranchData.stats.workingTotal > 0 
-                                            ? `${Math.round((singleBranchData.stats.present / singleBranchData.stats.workingTotal) * 105) / 1.05}% Attendance`
-                                            : '0% Attendance'
-                                        }
-                                    </span>
-                                    {portalMode && <ReportHelpPopover />}
+                        <div className="flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:px-3 sm:py-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                                {portalMode ? (
+                                    <Link
+                                        href={route('sections.index')}
+                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+                                        title="Back to Modules"
+                                    >
+                                        <ArrowLeft className="h-4 w-4" />
+                                    </Link>
+                                ) : (
+                                    <Link
+                                        href={route('attendance.index')}
+                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+                                        title="Back to Daily Attendance"
+                                    >
+                                        <ArrowLeft className="h-4 w-4" />
+                                    </Link>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <h1 className="truncate text-sm font-black text-slate-900 tracking-tight sm:text-lg">
+                                            {singleBranchData.branch.name}
+                                        </h1>
+                                        <span className={cn(
+                                            "px-2 py-0.5 text-[9px] sm:text-[10px] font-bold rounded-full border shrink-0",
+                                            singleBranchData.stats.workingTotal > 0 && (singleBranchData.stats.present / singleBranchData.stats.workingTotal) < 0.75 ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                                            singleBranchData.stats.workingTotal > 0 && (singleBranchData.stats.present / singleBranchData.stats.workingTotal) < 0.90 ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                            'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        )}>
+                                            {singleBranchData.stats.workingTotal > 0 
+                                                ? `${Math.round((singleBranchData.stats.present / singleBranchData.stats.workingTotal) * 105) / 1.05}% Attendance`
+                                                : '0% Attendance'
+                                            }
+                                        </span>
+                                        {portalMode && <ReportHelpPopover />}
+                                    </div>
+                                    <p className="truncate text-[10px] sm:text-[11px] font-medium text-slate-500">{readableDate}</p>
                                 </div>
-                                <p className="truncate text-[11px] font-medium text-slate-550">{readableDate}</p>
                             </div>
-                            <div className="w-[140px] shrink-0">
-                                <DatePicker 
-                                    selected={selectedDate} 
-                                    onSelect={portalMode ? handlePortalDateChange : (d) => {
-                                        setSelectedDate(d);
-                                        router.get(
-                                            route(summaryRoute),
-                                            {
-                                                date: d ? format(d, 'yyyy-MM-dd') : '',
-                                                branch_id: branch !== 'all' ? branch : '',
-                                                department_id: department !== 'all' ? department : '',
-                                                search: search || '',
-                                            },
-                                            { preserveState: true }
-                                        );
-                                    }} 
-                                />
-                            </div>
-                            <div className="relative min-w-[150px] flex-1 sm:max-w-[220px]">
-                                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                                <Input
-                                    value={localSearch}
-                                    onChange={(e) => setLocalSearch(e.target.value)}
-                                    placeholder="Quick search staff name/ID..."
-                                    className="h-9 pl-8 text-xs bg-slate-50 focus:bg-white rounded-xl border-slate-200"
-                                />
-                                {localSearch && (
-                                    <button
-                                        onClick={() => setLocalSearch('')}
-                                        className="absolute right-2.5 top-2.5 text-xs text-slate-450 hover:text-slate-700 font-semibold"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                                {!portalMode && (
+
+                            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:gap-2">
+                                <div className="w-full sm:w-[130px] shrink-0">
+                                    <DatePicker 
+                                        selected={selectedDate} 
+                                        onSelect={portalMode ? handlePortalDateChange : (d) => {
+                                            setSelectedDate(d);
+                                            router.get(
+                                                route(summaryRoute),
+                                                {
+                                                    date: d ? format(d, 'yyyy-MM-dd') : '',
+                                                    branch_id: branch !== 'all' ? branch : '',
+                                                    department_id: department !== 'all' ? department : '',
+                                                    search: search || '',
+                                                },
+                                                { preserveState: true }
+                                            );
+                                        }} 
+                                    />
+                                </div>
+                                <div className="relative w-full sm:max-w-[200px]">
+                                    <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                    <Input
+                                        value={localSearch}
+                                        onChange={(e) => setLocalSearch(e.target.value)}
+                                        placeholder="Search staff..."
+                                        className="h-8 pl-8 text-xs bg-slate-50 focus:bg-white rounded-xl border-slate-200"
+                                    />
+                                    {localSearch && (
+                                        <button
+                                            onClick={() => setLocalSearch('')}
+                                            className="absolute right-2 top-2 text-[10px] text-slate-450 hover:text-slate-700 font-semibold"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-1.5 shrink-0">
+                                    {!portalMode && (
+                                        <Button
+                                            variant="outline"
+                                            onClick={resetFilters}
+                                            className="h-8 text-xs font-bold px-2.5 rounded-xl border-slate-200 text-slate-600 flex-1 sm:flex-none"
+                                        >
+                                            Reset
+                                        </Button>
+                                    )}
                                     <Button
-                                        variant="outline"
-                                        onClick={resetFilters}
-                                        className="h-9 text-xs font-bold px-3 rounded-xl border-slate-200 text-slate-600"
+                                        type="button"
+                                        onClick={() => window.print()}
+                                        className="h-8 bg-slate-900 px-3 text-xs font-bold text-white hover:bg-slate-800 rounded-xl shadow-xs inline-flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
                                     >
-                                        Reset Filters
+                                        <Printer className="h-3.5 w-3.5" />
+                                        <span>Print</span>
                                     </Button>
-                                )}
-                                <Button
-                                    type="button"
-                                    onClick={() => window.print()}
-                                    className="h-9 bg-slate-900 px-3.5 text-xs font-bold text-white hover:bg-slate-800 rounded-xl shadow-sm inline-flex items-center gap-1.5"
-                                >
-                                    <Printer className="h-3.5 w-3.5" />
-                                    <span>Print Board</span>
-                                </Button>
+                                </div>
                             </div>
                         </div>
 
@@ -683,9 +688,9 @@ export default function DailyBranchSummary({
 
                 {/* Filters & Actions */}
                 <div className="bg-white border border-slate-200 rounded-xl p-3 mb-5 shadow-xs">
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-12 md:items-end">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-12 md:items-end">
                         {/* Date field */}
-                        <div className="md:col-span-2">
+                        <div className="col-span-2 md:col-span-2">
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Date</label>
                             <div className="mt-1">
                                 <DatePicker selected={selectedDate} onSelect={setSelectedDate} />
@@ -694,7 +699,7 @@ export default function DailyBranchSummary({
 
                         {/* Branch Selector */}
                         {!portalMode && (
-                        <div className="md:col-span-3">
+                        <div className="col-span-1 md:col-span-3">
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Filter Branch</label>
                             <div className="mt-1">
                                 <Select value={branch} onValueChange={setBranch}>
@@ -715,7 +720,7 @@ export default function DailyBranchSummary({
                         )}
 
                         {/* Department Selector */}
-                        <div className="md:col-span-3">
+                        <div className="col-span-1 md:col-span-3">
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Filter Dept</label>
                             <div className="mt-1">
                                 <Select value={department} onValueChange={setDepartment}>
@@ -735,7 +740,7 @@ export default function DailyBranchSummary({
                         </div>
 
                         {/* Search Bar */}
-                        <div className="md:col-span-3">
+                        <div className="col-span-2 md:col-span-3">
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Search Staff</label>
                             <div className="mt-1 relative">
                                 <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
@@ -749,7 +754,7 @@ export default function DailyBranchSummary({
                         </div>
 
                         {/* Action buttons */}
-                        <div className="md:col-span-1 flex gap-1.5 justify-end">
+                        <div className="col-span-2 md:col-span-1 flex gap-1.5 justify-end">
                             <Button variant="outline" onClick={resetFilters} className="h-9 text-xs font-semibold px-2 flex-1">
                                 Reset
                             </Button>

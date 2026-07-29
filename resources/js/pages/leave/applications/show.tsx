@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
+import { PageSurface } from '@/components/page-surface';
 import {
     Card,
     CardContent,
@@ -166,24 +167,25 @@ export default function Show({ application, canApprove }: ShowProps) {
         <Layout>
             <Head title="Leave Application Details" />
 
-            <div className="container mx-auto py-8">
-                <div className="mb-6">
-                    <Link href={route('leave.applications.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
-                        <ArrowLeft className="mr-1 h-4 w-4" />
+            <PageSurface className="max-w-4xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-2">
+                    <Link href={route('leave.applications.index')} className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700">
+                        <ArrowLeft className="mr-1 h-3.5 w-3.5" />
                         Back to Leave Applications
                     </Link>
                 </div>
 
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Leave Application Details</h1>
-                    <div className="flex items-center space-x-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2 border-b pb-3">
+                    <h1 className="text-base sm:text-xl font-bold text-gray-900">Leave Application Details</h1>
+                    <div className="flex items-center space-x-1.5">
 
                         <Button
                             variant="outline"
-                            className="text-blue-600 border-blue-600"
+                            size="sm"
+                            className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs text-blue-600 border-blue-200"
                             onClick={handleDownloadPdf}
                         >
-                            <FileDown className="mr-1 h-4 w-4" />
+                            <FileDown className="mr-1 h-3 w-3" />
                             Download PDF
                         </Button>
 
@@ -441,7 +443,7 @@ export default function Show({ application, canApprove }: ShowProps) {
                         </Card>
                     </div>
                 </div>
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

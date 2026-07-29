@@ -155,21 +155,26 @@ class PermissionRegistry
         ];
 
         foreach ($sectionIds as $sectionId) {
-            $prefix = match ($sectionId) {
-                'employee-loan' => 'employee-loan.',
-                'staff-fund' => 'staff-fund.',
-                'fixed-asset' => 'fixed-assets.',
-                'inventory' => 'inventory.',
-                default => null,
+            $prefixes = match ($sectionId) {
+                'employee-loan' => ['employee-loan.'],
+                'staff-fund' => ['staff-fund.'],
+                'fixed-asset' => ['fixed-assets.'],
+                'inventory' => ['inventory.'],
+                'attendance-movement' => ['attendance.', 'movements.'],
+                'leave' => ['leave-types.', 'leave-balances.', 'leave-applications.'],
+                default => [],
             };
 
-            if ($prefix === null) {
+            if (empty($prefixes)) {
                 continue;
             }
 
             foreach (self::keys() as $key) {
-                if (str_starts_with($key, $prefix) && ! str_ends_with($key, '.delete')) {
-                    $resolved[] = $key;
+                foreach ($prefixes as $prefix) {
+                    if (str_starts_with($key, $prefix) && ! str_ends_with($key, '.delete')) {
+                        $resolved[] = $key;
+                        break;
+                    }
                 }
             }
         }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
+import { PageSurface } from '@/components/page-surface';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
@@ -350,6 +351,12 @@ export default function AttendanceMonthly({
         return !!attendance && !!attendance.check_in && !attendance.check_out;
     };
 
+    const getAttendanceRecord = (employeeId: number, day: number) => {
+        if (!attendances[employeeId]) return null;
+        const dateToFind = toYmd(day);
+        return attendances[employeeId]?.find((a) => a.date === dateToFind) || null;
+    };
+
     // Fix the tooltip function to properly display times
     const getAttendanceTooltip = (employeeId: number, day: number, branchId: number) => {
         const serverStatus = dailyStatusByEmployee?.[employeeId]?.[day]?.status;
@@ -511,306 +518,429 @@ export default function AttendanceMonthly({
         <Layout>
             <Head title="Monthly Attendance" />
 
-            <div className="container mx-auto py-8">
-                <div className="mb-6">
+            <PageSurface className="max-w-7xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-2">
                     <Link
                         href={route('attendance.index')}
-                        className="flex w-fit items-center text-gray-500 hover:text-gray-700 transition-colors font-medium text-sm"
+                        className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
                     >
-                        <ArrowLeft className="mr-1.5 h-4 w-4" />
+                        <ArrowLeft className="mr-1 h-3.5 w-3.5" />
                         <span>Back to Daily Attendance</span>
                     </Link>
                 </div>
 
-                <div className="mb-6 space-y-4">
+                <div className="mb-4 space-y-3">
                     {/* Top row: Title and primary actions */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Monthly Attendance</h1>
-                            <p className="mt-1 text-sm text-slate-500">
+                            <h1 className="text-lg font-bold text-gray-900 tracking-tight sm:text-2xl">Monthly Attendance</h1>
+                            <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
                                 View attendance records for {monthLabel}
                             </p>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium"
-                                onClick={() => handleMonthChange(prevMonthString)}
-                            >
-                                <Calendar className="mr-2 h-4 w-4 text-slate-400" />
-                                {format(prevMonth, 'MMM yyyy')}
-                            </Button>
-
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 bg-blue-50 border-blue-200 text-blue-700 shadow-sm font-semibold pointer-events-none"
-                            >
-                                <Calendar className="mr-2 h-4 w-4 text-blue-600" />
-                                {format(monthDate, 'MMM yyyy')}
-                            </Button>
-
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium"
-                                onClick={() => handleMonthChange(nextMonthString)}
-                            >
-                                <Calendar className="mr-2 h-4 w-4 text-slate-400" />
-                                {format(nextMonth, 'MMM yyyy')}
-                            </Button>
-
-                            <Link href={route('attendance.report')}>
-                                <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
-                                    <BarChart className="mr-2 h-4 w-4 text-slate-500" />
-                                    View Report
+                        {/* Month navigation & quick actions */}
+                        <div className="flex flex-col gap-2 w-full sm:w-auto">
+                            <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-700 shadow-xs font-medium px-2"
+                                    onClick={() => handleMonthChange(prevMonthString)}
+                                >
+                                    <Calendar className="mr-1 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span>{format(prevMonth, 'MMM')}</span>
                                 </Button>
-                            </Link>
 
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium"
-                                onClick={handleExportPDF}
-                            >
-                                <Download className="mr-2 h-4 w-4 text-slate-500" />
-                                Export PDF
-                            </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs bg-blue-50 border-blue-200 text-blue-700 shadow-xs font-bold pointer-events-none px-2"
+                                >
+                                    <span>{format(monthDate, 'MMM yyyy')}</span>
+                                </Button>
 
-                            {userPermissions.canCreate && (
-                                <Link href={route('attendance.create')}>
-                                    <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-medium">
-                                        <Clock className="mr-1 h-4 w-4" />
-                                        Add Attendance
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-700 shadow-xs font-medium px-2"
+                                    onClick={() => handleMonthChange(nextMonthString)}
+                                >
+                                    <span>{format(nextMonth, 'MMM')}</span>
+                                    <Calendar className="ml-1 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                </Button>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5 w-full">
+                                <Link href={route('attendance.report')} className="flex-1 sm:flex-none">
+                                    <Button variant="outline" size="sm" className="h-8 text-xs w-full sm:w-auto bg-white border-slate-200 text-slate-700 shadow-xs font-medium">
+                                        <BarChart className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                                        Report
                                     </Button>
                                 </Link>
-                            )}
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs flex-1 sm:flex-none bg-white border-slate-200 text-slate-700 shadow-xs font-medium"
+                                    onClick={handleExportPDF}
+                                >
+                                    <Download className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                                    Export PDF
+                                </Button>
+                            </div>
                         </div>
                     </div>
 
                     {/* Role-based Context Message */}
                     {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
-                        <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+                        <Alert className="bg-blue-50 text-blue-800 border-blue-200 py-2">
                             <Info className="h-4 w-4 text-blue-600" />
-                            <AlertDescription className="text-sm">
+                            <AlertDescription className="text-xs">
                                 You are viewing your own monthly attendance records.
                             </AlertDescription>
                         </Alert>
                     )}
 
                     {/* Compact Filter Bar */}
-                    <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 w-full bg-slate-50/50 p-3 rounded-xl border border-slate-200">
-                        <div className="relative flex-1 min-w-[200px]">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <div className="flex flex-col gap-2 w-full bg-slate-50/50 p-2.5 rounded-xl border border-slate-200 sm:flex-row sm:items-center">
+                        <div className="relative flex-1 w-full">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                             <Input
-                                placeholder="Search by name or employee ID..."
+                                placeholder="Search by name or ID..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+                                className="pl-8 h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg w-full"
                             />
                         </div>
 
-                        {canFilterByBranch && branches.length > 1 && (
-                            <Select value={branchId || undefined} onValueChange={(value) => setBranchId(value === "all" ? null : value)}>
-                                <SelectTrigger className="w-[160px] h-9 text-sm bg-white border-slate-200 rounded-lg">
-                                    <SelectValue placeholder="Select branch" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Branches</SelectItem>
-                                    {sortPayrollBranches(branches).map((b) => <SelectItem key={b.id} value={b.id.toString()}>{formatBranchSelectLabel(b)}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        )}
+                        <div className="grid grid-cols-2 gap-1.5 w-full sm:flex sm:w-auto sm:items-center">
+                            {canFilterByBranch && branches.length > 1 && (
+                                <Select value={branchId || undefined} onValueChange={(value) => setBranchId(value === "all" ? null : value)}>
+                                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                        <SelectValue placeholder="Branch" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Branches</SelectItem>
+                                        {sortPayrollBranches(branches).map((b) => <SelectItem key={b.id} value={b.id.toString()}>{formatBranchSelectLabel(b)}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
 
-                        {canFilterByDepartment && departments.length > 1 && (
-                            <Select value={departmentId || undefined} onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}>
-                                <SelectTrigger className="w-[160px] h-9 text-sm bg-white border-slate-200 rounded-lg">
-                                    <SelectValue placeholder="Select department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Depts</SelectItem>
-                                    {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        )}
+                            {canFilterByDepartment && departments.length > 1 && (
+                                <Select value={departmentId || undefined} onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}>
+                                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                        <SelectValue placeholder="Department" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Depts</SelectItem>
+                                        {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
 
-                        <div className="flex items-center gap-2">
-                            <Button variant="ghost" onClick={resetFilters} size="sm" className="h-9 text-slate-500 hover:text-slate-700">
-                                Reset
-                            </Button>
-                            <Button onClick={handleSearch} size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">
-                                Apply Filters
-                            </Button>
+                            <div className="flex items-center gap-1.5 col-span-2 sm:col-span-1 justify-end">
+                                <Button variant="ghost" onClick={resetFilters} size="sm" className="h-8 text-xs text-slate-500 hover:text-slate-700 px-2.5">
+                                    Reset
+                                </Button>
+                                <Button onClick={handleSearch} size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3">
+                                    Apply
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Legend */}
-                <div className="mb-4 flex flex-wrap gap-4">
+                <div className="mb-3 flex flex-wrap gap-2 text-xs bg-slate-50 p-2 rounded-lg border border-slate-200">
                     <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-green-100 mr-2 flex items-center justify-center text-xs font-bold text-green-800">P</span>
-                        <span className="text-sm">Present</span>
+                        <span className="w-5 h-5 rounded-full bg-green-100 mr-1 flex items-center justify-center text-[10px] font-bold text-green-800">P</span>
+                        <span className="text-[11px] text-slate-700">Present</span>
                     </div>
                     <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-red-100 mr-2 flex items-center justify-center text-xs font-bold text-red-800">A</span>
-                        <span className="text-sm">Absent</span>
+                        <span className="w-5 h-5 rounded-full bg-red-100 mr-1 flex items-center justify-center text-[10px] font-bold text-red-800">A</span>
+                        <span className="text-[11px] text-slate-700">Absent</span>
                     </div>
                     <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-orange-100 mr-2 flex items-center justify-center text-xs font-bold text-orange-800">L</span>
-                        <span className="text-sm">Late</span>
+                        <span className="w-5 h-5 rounded-full bg-orange-100 mr-1 flex items-center justify-center text-[10px] font-bold text-orange-800">L</span>
+                        <span className="text-[11px] text-slate-700">Late</span>
                     </div>
                     <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-yellow-100 mr-2 flex items-center justify-center text-xs font-bold text-yellow-800">H</span>
-                        <span className="text-sm">Half Day</span>
+                        <span className="w-5 h-5 rounded-full bg-yellow-100 mr-1 flex items-center justify-center text-[10px] font-bold text-yellow-800">H</span>
+                        <span className="text-[11px] text-slate-700">Half Day</span>
                     </div>
                     <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 mr-2 flex items-center justify-center text-xs font-bold text-blue-800">LV</span>
-                        <span className="text-sm">Leave</span>
+                        <span className="w-5 h-5 rounded-full bg-blue-100 mr-1 flex items-center justify-center text-[10px] font-bold text-blue-800">LV</span>
+                        <span className="text-[11px] text-slate-700">Leave</span>
                     </div>
                     <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-indigo-100 mr-2 flex items-center justify-center text-xs font-bold text-indigo-800">OD</span>
-                        <span className="text-sm">On Duty</span>
+                        <span className="w-5 h-5 rounded-full bg-indigo-100 mr-1 flex items-center justify-center text-[10px] font-bold text-indigo-800">OD</span>
+                        <span className="text-[11px] text-slate-700">On Duty</span>
                     </div>
                     <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-purple-100 mr-2 flex items-center justify-center text-xs font-bold text-purple-800">H</span>
-                        <span className="text-sm">Holiday</span>
+                        <span className="w-5 h-5 rounded-full bg-purple-100 mr-1 flex items-center justify-center text-[10px] font-bold text-purple-800">H</span>
+                        <span className="text-[11px] text-slate-700">Holiday</span>
                     </div>
                     <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-teal-200 mr-2 flex items-center justify-center text-xs font-bold text-gray-800">W</span>
-                        <span className="text-sm">Weekend</span>
-                    </div>
-                    <div className="flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-gray-100 mr-2 flex items-center justify-center text-xs font-bold text-gray-800">-</span>
-                        <span className="text-sm">No Record</span>
+                        <span className="w-5 h-5 rounded-full bg-teal-200 mr-1 flex items-center justify-center text-[10px] font-bold text-gray-800">W</span>
+                        <span className="text-[11px] text-slate-700">Weekend</span>
                     </div>
                 </div>
 
-                {/* Monthly Attendance Table */}
-                <Card className="overflow-x-auto">
-                    <CardContent className="p-0">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-gray-50">
-                                    <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[200px]">Employee</TableHead>
-                                    {days.map(day => (
-                                        <TableHead key={day} className="text-center min-w-[40px]">{day}</TableHead>
-                                    ))}
-                                    <TableHead className="text-center min-w-[60px] bg-green-50">P</TableHead>
-                                    <TableHead className="text-center min-w-[60px] bg-red-50">A</TableHead>
-                                    <TableHead className="text-center min-w-[60px] bg-orange-50">L</TableHead>
-                                    <TableHead className="text-center min-w-[60px] bg-yellow-50">H</TableHead>
-                                    <TableHead className="text-center min-w-[60px] bg-blue-50">LV</TableHead>
-                                    <TableHead className="text-center min-w-[60px] bg-indigo-50">OD</TableHead>
-                                    <TableHead className="text-center min-w-[60px] bg-teal-50">W</TableHead>
-                                    <TableHead className="text-center min-w-[60px] bg-purple-50">HO</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {employees.data && employees.data.length > 0 ? (
-                                    employees.data.map((employee) => {
-                                        const summary = getEmployeeSummary(employee.id, employee.branch.id);
-                                        return (
-                                            <TableRow key={employee.id} className="hover:bg-gray-50">
-                                                <TableCell className="font-medium sticky left-0 bg-white z-10 hover:bg-gray-50">
-                                                    <div className="flex items-center space-x-2">
-                                                        <User className="h-4 w-4 text-gray-400" />
-                                                        <div>
-                                                            <div className="font-medium">{employeeDisplayName(employee)}</div>
-                                                            <div className="text-xs text-gray-500 flex items-center">
-                                                                <span className="mr-1">{employee.employee_id}</span>
-                                                                <span className="mx-1">•</span>
-                                                                <span>{employee.department.name}</span>
+                {/* Conditional View: Calendar View for Single Employee Role vs Matrix Table for Admins/Managers */}
+                {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && employees.data && employees.data.length > 0 ? (
+                    (() => {
+                        const singleEmp = employees.data[0];
+                        const summary = getEmployeeSummary(singleEmp.id, singleEmp.branch?.id || 0);
+                        const firstDayOfWeek = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
+
+                        return (
+                            <div className="space-y-4">
+                                {/* Monthly Summary Badges */}
+                                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-emerald-800 block">Present</span>
+                                        <span className="text-base font-bold text-emerald-900">{summary.present}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-red-200 bg-red-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-red-800 block">Absent</span>
+                                        <span className="text-base font-bold text-red-900">{summary.absent}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-amber-800 block">Late</span>
+                                        <span className="text-base font-bold text-amber-900">{summary.late}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-yellow-200 bg-yellow-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-yellow-800 block">Half Day</span>
+                                        <span className="text-base font-bold text-yellow-900">{summary.half_day}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-blue-800 block">Leave</span>
+                                        <span className="text-base font-bold text-blue-900">{summary.leave}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-indigo-800 block">On Duty</span>
+                                        <span className="text-base font-bold text-indigo-900">{summary.on_duty}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-teal-800 block">Weekend</span>
+                                        <span className="text-base font-bold text-teal-900">{summary.weekend}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-2 text-center shadow-2xs">
+                                        <span className="text-[10px] uppercase font-bold text-purple-800 block">Holiday</span>
+                                        <span className="text-base font-bold text-purple-900">{summary.holiday}</span>
+                                    </div>
+                                </div>
+
+                                {/* Calendar Card */}
+                                <Card className="rounded-xl border-slate-200 shadow-sm overflow-hidden bg-white">
+                                    <CardHeader className="p-3.5 border-b border-slate-100 bg-slate-50/60 flex flex-row items-center justify-between">
+                                        <div>
+                                            <CardTitle className="text-sm sm:text-base font-bold text-slate-900">
+                                                {monthLabel} Calendar
+                                            </CardTitle>
+                                            <CardDescription className="text-xs text-slate-500">
+                                                {employeeDisplayName(singleEmp)} ({singleEmp.employee_id}) • {singleEmp.department?.name}
+                                            </CardDescription>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-2 sm:p-4">
+                                        {/* Day Headers */}
+                                        <div className="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-600 mb-2">
+                                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                                                <div key={d} className="py-1.5 bg-slate-100/80 rounded-md text-[11px] sm:text-xs">
+                                                    {d}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Calendar Grid */}
+                                        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                                            {/* Padding slots */}
+                                            {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                                                <div key={`empty-${i}`} className="min-h-[56px] sm:min-h-[76px] rounded-lg border border-slate-100 bg-slate-50/20" />
+                                            ))}
+
+                                            {/* Day Cells */}
+                                            {days.map(day => {
+                                                const status = getAttendanceStatus(singleEmp.id, day, singleEmp.branch?.id || 0);
+                                                const tooltip = getAttendanceTooltip(singleEmp.id, day, singleEmp.branch?.id || 0);
+                                                const attRecord = getAttendanceRecord(singleEmp.id, day);
+                                                const missingOut = hasMissingCheckout(singleEmp.id, day);
+
+                                                return (
+                                                    <div
+                                                        key={day}
+                                                        title={tooltip || ''}
+                                                        className={cn(
+                                                            "min-h-[58px] sm:min-h-[78px] rounded-xl border p-1 sm:p-1.5 flex flex-col justify-between transition-all relative group hover:shadow-xs",
+                                                            status ? getStatusColor(status) : 'bg-white border-slate-200 text-slate-800',
+                                                            missingOut && 'ring-2 ring-red-400'
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="font-bold text-xs sm:text-sm">{day}</span>
+                                                            {status && (
+                                                                <span className={cn(
+                                                                    "w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[9px] sm:text-[11px] font-bold shadow-2xs",
+                                                                    getStatusColor(status)
+                                                                )}>
+                                                                    {getStatusCode(status)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {attRecord?.check_in && (
+                                                            <div className="text-[9px] sm:text-[11px] font-medium leading-tight mt-1">
+                                                                <span className="block text-emerald-800">In: {attRecord.check_in.substring(0, 5)}</span>
+                                                                {attRecord.check_out ? (
+                                                                    <span className="block text-slate-700">Out: {attRecord.check_out.substring(0, 5)}</span>
+                                                                ) : missingOut ? (
+                                                                    <span className="block text-red-700 font-bold">No Out</span>
+                                                                ) : null}
+                                                            </div>
+                                                        )}
+
+                                                        {!attRecord?.check_in && status && status !== 'present' && status !== 'absent' && (
+                                                            <div className="text-[9px] sm:text-[10px] font-semibold capitalize truncate mt-1">
+                                                                {status.replace('_', ' ')}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        );
+                    })()
+                ) : (
+                    /* Multi-Employee Matrix Table View for Admins & Managers */
+                    <Card className="overflow-x-auto">
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50">
+                                        <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[200px]">Employee</TableHead>
+                                        {days.map(day => (
+                                            <TableHead key={day} className="text-center min-w-[40px]">{day}</TableHead>
+                                        ))}
+                                        <TableHead className="text-center min-w-[60px] bg-green-50">P</TableHead>
+                                        <TableHead className="text-center min-w-[60px] bg-red-50">A</TableHead>
+                                        <TableHead className="text-center min-w-[60px] bg-orange-50">L</TableHead>
+                                        <TableHead className="text-center min-w-[60px] bg-yellow-50">H</TableHead>
+                                        <TableHead className="text-center min-w-[60px] bg-blue-50">LV</TableHead>
+                                        <TableHead className="text-center min-w-[60px] bg-indigo-50">OD</TableHead>
+                                        <TableHead className="text-center min-w-[60px] bg-teal-50">W</TableHead>
+                                        <TableHead className="text-center min-w-[60px] bg-purple-50">HO</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {employees.data && employees.data.length > 0 ? (
+                                        employees.data.map((employee) => {
+                                            const summary = getEmployeeSummary(employee.id, employee.branch.id);
+                                            return (
+                                                <TableRow key={employee.id} className="hover:bg-gray-50">
+                                                    <TableCell className="font-medium sticky left-0 bg-white z-10 hover:bg-gray-50">
+                                                        <div className="flex items-center space-x-2">
+                                                            <User className="h-4 w-4 text-gray-400" />
+                                                            <div>
+                                                                <div className="font-medium">{employeeDisplayName(employee)}</div>
+                                                                <div className="text-xs text-gray-500 flex items-center">
+                                                                    <span className="mr-1">{employee.employee_id}</span>
+                                                                    <span className="mx-1">•</span>
+                                                                    <span>{employee.department.name}</span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                </TableCell>
-                                                {days.map(day => {
-                                                    const status = getAttendanceStatus(employee.id, day, employee.branch.id);
-                                                    const tooltip = getAttendanceTooltip(employee.id, day, employee.branch.id);
-                                                    return (
-                                                        <TableCell key={day} className="p-1 text-center">
-                                                            {status ? (
-                                                                <div
-                                                                    className={cn(
-                                                                        `w-8 h-8 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-xs font-medium cursor-help relative`,
-                                                                        hasMissingCheckout(employee.id, day) && 'ring-2 ring-red-400'
-                                                                    )}
-                                                                    title={tooltip || status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-                                                                >
-                                                                    {getStatusCode(status)}
-                                                                    {hasMissingCheckout(employee.id, day) && (
-                                                                        <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center">
-                                                                            !
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto text-xs text-gray-500">
-                                                                    -
-                                                                </div>
-                                                            )}
-                                                        </TableCell>
-                                                    );
-                                                })}
-                                                <TableCell className="text-center bg-green-50">
-                                                    <Badge variant="outline" className="bg-green-100 text-green-800 border-0">{summary.present}</Badge>
-                                                </TableCell>
-                                                <TableCell className="text-center bg-red-50">
-                                                    <Badge variant="outline" className="bg-red-100 text-red-800 border-0">{summary.absent}</Badge>
-                                                </TableCell>
-                                                <TableCell className="text-center bg-orange-50">
-                                                    <Badge variant="outline" className="bg-orange-100 text-orange-800 border-0">{summary.late}</Badge>
-                                                </TableCell>
-                                                <TableCell className="text-center bg-yellow-50">
-                                                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-0">{summary.half_day}</Badge>
-                                                </TableCell>
-                                                <TableCell className="text-center bg-blue-50">
-                                                    <Badge variant="outline" className="bg-blue-100 text-blue-800 border-0">{summary.leave}</Badge>
-                                                </TableCell>
-                                                <TableCell className="text-center bg-indigo-50">
-                                                    <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-0">{summary.on_duty}</Badge>
-                                                </TableCell>
-                                                {/* New columns for Weekend and Holiday */}
-                                                <TableCell className="text-center bg-blue-50">
-                                                    <Badge variant="outline" className="bg-teal-100 text-teal-800 border-0">{summary.weekend}</Badge>
-                                                </TableCell>
-                                                <TableCell className="text-center bg-purple-50">
-                                                    <Badge variant="outline" className="bg-purple-100 text-purple-800 border-0">{summary.holiday}</Badge>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={days.length + 8} className="h-24 text-center">
-                                            <div className="flex flex-col items-center justify-center text-gray-500">
-                                                <AlertCircle className="h-8 w-8 mb-2" />
-                                                <h3 className="font-medium">No employees found</h3>
-                                                <p className="text-sm mt-1">
-                                                    {(search || branchId || departmentId)
-                                                        ? "Try adjusting your filters to see more results."
-                                                        : "There are no employees to display for this month."}
-                                                </p>
-                                                {(search || branchId || departmentId) && (
-                                                    <Button
-                                                        variant="outline"
-                                                        onClick={resetFilters}
-                                                        className="mt-4"
-                                                    >
-                                                        Reset Filters
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                                                    </TableCell>
+                                                    {days.map(day => {
+                                                        const status = getAttendanceStatus(employee.id, day, employee.branch.id);
+                                                        const tooltip = getAttendanceTooltip(employee.id, day, employee.branch.id);
+                                                        return (
+                                                            <TableCell key={day} className="p-1 text-center">
+                                                                {status ? (
+                                                                    <div
+                                                                        className={cn(
+                                                                            `w-8 h-8 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-xs font-medium cursor-help relative`,
+                                                                            hasMissingCheckout(employee.id, day) && 'ring-2 ring-red-400'
+                                                                        )}
+                                                                        title={tooltip || status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                                                                    >
+                                                                        {getStatusCode(status)}
+                                                                        {hasMissingCheckout(employee.id, day) && (
+                                                                            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center">
+                                                                                !
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto text-xs text-gray-500">
+                                                                        -
+                                                                    </div>
+                                                                )}
+                                                            </TableCell>
+                                                        );
+                                                    })}
+                                                    <TableCell className="text-center bg-green-50">
+                                                        <Badge variant="outline" className="bg-green-100 text-green-800 border-0">{summary.present}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center bg-red-50">
+                                                        <Badge variant="outline" className="bg-red-100 text-red-800 border-0">{summary.absent}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center bg-orange-50">
+                                                        <Badge variant="outline" className="bg-orange-100 text-orange-800 border-0">{summary.late}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center bg-yellow-50">
+                                                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-0">{summary.half_day}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center bg-blue-50">
+                                                        <Badge variant="outline" className="bg-blue-100 text-blue-800 border-0">{summary.leave}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center bg-indigo-50">
+                                                        <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-0">{summary.on_duty}</Badge>
+                                                    </TableCell>
+                                                    {/* New columns for Weekend and Holiday */}
+                                                    <TableCell className="text-center bg-blue-50">
+                                                        <Badge variant="outline" className="bg-teal-100 text-teal-800 border-0">{summary.weekend}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center bg-purple-50">
+                                                        <Badge variant="outline" className="bg-purple-100 text-purple-800 border-0">{summary.holiday}</Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={days.length + 8} className="h-24 text-center">
+                                                <div className="flex flex-col items-center justify-center text-gray-500">
+                                                    <AlertCircle className="h-8 w-8 mb-2" />
+                                                    <h3 className="font-medium">No employees found</h3>
+                                                    <p className="text-sm mt-1">
+                                                        {(search || branchId || departmentId)
+                                                            ? "Try adjusting your filters to see more results."
+                                                            : "There are no employees to display for this month."}
+                                                    </p>
+                                                    {(search || branchId || departmentId) && (
+                                                        <Button
+                                                            variant="outline"
+                                                            onClick={resetFilters}
+                                                            className="mt-4"
+                                                        >
+                                                            Reset Filters
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Pagination */}
                 {hasPagination && employees.meta.last_page > 1 && (
@@ -882,7 +1012,7 @@ export default function AttendanceMonthly({
                         </Pagination>
                     </div>
                 )}
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

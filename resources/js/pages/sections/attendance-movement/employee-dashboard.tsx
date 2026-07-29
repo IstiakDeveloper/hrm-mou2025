@@ -144,112 +144,97 @@ export function AttendanceMovementEmployeeDashboardView({
                 {/* Compact light header + today stats */}
                 <Card
                     className={cn(
-                        'overflow-hidden border-zinc-200/90 bg-gradient-to-b from-white to-zinc-50/90 shadow-sm',
+                        'overflow-hidden border-zinc-200/90 bg-gradient-to-b from-white to-zinc-50/90 shadow-xs',
                         'border-t-4',
                         topBorder,
                     )}
                 >
-                    <CardContent className="space-y-4 p-4 sm:p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <CardContent className="space-y-3 p-2.5 sm:p-3.5">
+                        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
-                                <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
                                     Attendance & movement · {format(new Date(), 'EEE d MMM yyyy')}
                                 </p>
-                                <h1 className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-zinc-900 md:text-2xl">
-                                    My overview
-                                </h1>
-                                <p className="mt-1 line-clamp-2 text-xs text-zinc-600 sm:text-sm">
-                                    Today&apos;s punches and your latest records — same light theme as the rest of the
-                                    app.
-                                </p>
-                                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-zinc-500">
-                                    <UserRound className="inline h-3.5 w-3.5 text-zinc-400" />
-                                    <span className="font-medium text-zinc-700">{auth?.user?.name ?? '—'}</span>
-                                    <span className="text-zinc-300">·</span>
-                                    <span className="truncate">{employee?.department?.name ?? 'Department'}</span>
-                                </p>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                                    <h1 className="text-xs sm:text-sm font-bold tracking-tight text-zinc-900">
+                                        My overview
+                                    </h1>
+                                    <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                                        <UserRound className="h-3 w-3 text-zinc-400" />
+                                        <span className="font-medium text-zinc-700">{auth?.user?.name ?? '—'}</span>
+                                        <span className="text-zinc-300">·</span>
+                                        <span className="truncate">{employee?.department?.name ?? 'Department'}</span>
+                                    </span>
+                                </div>
                             </div>
-                            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                                <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs min-h-0">
+                            <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-center">
+                                <Button asChild variant="outline" size="sm" className="h-6.5 border-zinc-200 bg-white px-2 text-[10px] text-zinc-700 hover:bg-zinc-50">
                                     <Link href="/sections">Sections</Link>
                                 </Button>
-                                <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs min-h-0 bg-indigo-600 hover:bg-indigo-700">
+                                <Button asChild size="sm" className="h-6.5 bg-sky-600 px-2.5 text-[10px] font-medium text-white hover:bg-sky-700">
                                     <Link href="/movements/create?section=attendance-movement">
-                                        <Plus className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-3.5 sm:w-3.5" />
+                                        <Plus className="mr-1 h-3 w-3" />
                                         Movement
                                     </Link>
                                 </Button>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Today</p>
-                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                    <span className="text-sm font-semibold capitalize text-zinc-900">{todayStatus}</span>
-                                    {todayAttendance?.status ? (
-                                        <Badge
-                                            variant="outline"
-                                            className={cn(
-                                                'text-[10px] font-semibold capitalize',
-                                                listStatusBadgeClass(todayAttendance.status),
-                                            )}
-                                        >
-                                            {String(todayAttendance.status).replace(/_/g, ' ')}
-                                        </Badge>
-                                    ) : null}
+                        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+                            <div className="rounded-lg border border-zinc-100 bg-white p-2 sm:p-3 shadow-xs">
+                                <p className="truncate text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Today</p>
+                                <div className="mt-1 flex flex-wrap items-center gap-1">
+                                    <span className="text-xs font-bold capitalize text-zinc-900 truncate">{todayStatus}</span>
                                 </div>
                             </div>
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                                    <LogIn className="h-3 w-3 text-emerald-600" />
+                            <div className="rounded-lg border border-zinc-100 bg-white p-2 sm:p-3 shadow-xs">
+                                <p className="flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                                    <LogIn className="h-3 w-3 text-emerald-600 shrink-0" />
                                     In
                                 </p>
-                                <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-zinc-900">
+                                <p className="mt-0.5 font-mono text-xs sm:text-base font-bold tabular-nums text-zinc-900">
                                     {checkIn}
                                 </p>
                             </div>
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                                    <LogOut className="h-3 w-3 text-sky-600" />
+                            <div className="rounded-lg border border-zinc-100 bg-white p-2 sm:p-3 shadow-xs">
+                                <p className="flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                                    <LogOut className="h-3 w-3 text-sky-600 shrink-0" />
                                     Out
                                 </p>
-                                <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-zinc-900">
+                                <p className="mt-0.5 font-mono text-xs sm:text-base font-bold tabular-nums text-zinc-900">
                                     {checkOut}
                                 </p>
                             </div>
                         </div>
 
-
-
-                        <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        <div className="flex flex-col gap-2 border-t border-zinc-100 pt-2.5 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-600">
                                     Self attendance
                                 </span>
-                                <span className="text-xs text-zinc-600">Uses your device location (geofence).</span>
+                                <span className="text-[10px] text-zinc-400">Device GPS (geofence)</span>
                             </div>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex items-center gap-2 self-start sm:self-center">
                                 {(!todayAttendance || !todayAttendance.check_in) && (
                                     <Button
                                         type="button"
-                                        className="h-10 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-md shadow-emerald-600/10 hover:shadow-lg hover:shadow-emerald-600/20 active:scale-95 transition-all duration-200"
+                                        className="h-8 px-3.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-medium shadow-xs active:scale-95 transition-all"
                                         onClick={handleCheckIn}
                                         disabled={isSubmitting}
                                     >
-                                        <LogIn className="mr-2 h-4.5 w-4.5" />
-                                        {isSubmitting ? 'Locking GPS...' : 'Check in'}
+                                        <LogIn className="mr-1.5 h-3.5 w-3.5" />
+                                        {isSubmitting ? 'GPS...' : 'Check in'}
                                     </Button>
                                 )}
                                 {todayAttendance?.check_in && (
                                     <Button
                                         type="button"
-                                        className="h-10 px-5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold shadow-md shadow-rose-600/10 hover:shadow-lg hover:shadow-rose-600/20 active:scale-95 transition-all duration-200"
+                                        className="h-8 px-3.5 rounded-lg bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-medium shadow-xs active:scale-95 transition-all"
                                         onClick={handleCheckOut}
                                         disabled={isSubmitting}
                                     >
-                                        <LogOut className="mr-2 h-4.5 w-4.5" />
-                                        {isSubmitting ? 'Locking GPS...' : 'Check out'}
+                                        <LogOut className="mr-1.5 h-3.5 w-3.5" />
+                                        {isSubmitting ? 'GPS...' : 'Check out'}
                                     </Button>
                                 )}
                             </div>
@@ -257,18 +242,18 @@ export function AttendanceMovementEmployeeDashboardView({
                     </CardContent>
                 </Card>
 
-                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
-                    <div className="grid grid-cols-1 gap-4 lg:col-span-8 lg:grid-cols-2">
-                        <Card className="overflow-hidden border-zinc-200/90 shadow-sm">
-                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3 sm:px-5">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+                    <div className="grid grid-cols-1 gap-3 lg:col-span-8 lg:grid-cols-2">
+                        <Card className="overflow-hidden border-zinc-200/90 shadow-xs">
+                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-3 py-2">
                                 <div className="flex items-center justify-between gap-2">
                                     <div>
-                                        <CardTitle className="text-base font-semibold text-zinc-900">
+                                        <CardTitle className="text-xs font-bold tracking-wider text-zinc-900 uppercase">
                                             Recent attendance
                                         </CardTitle>
-                                        <CardDescription className="text-xs">Last 10 records</CardDescription>
+                                        <CardDescription className="text-[10px] text-zinc-500">Last 10 records</CardDescription>
                                     </div>
-                                    <CalendarDays className="hidden h-4 w-4 text-zinc-400 sm:block" />
+                                    <CalendarDays className="hidden h-3.5 w-3.5 text-zinc-400 sm:block" />
                                 </div>
                             </CardHeader>
                             <CardContent className="p-0">
@@ -278,25 +263,25 @@ export function AttendanceMovementEmployeeDashboardView({
                                             <li
                                                 key={`${x.date ?? idx}-${idx}`}
                                                 className={cn(
-                                                    'border-l-4 px-3 py-3 transition-colors hover:bg-zinc-50/80 sm:px-4',
+                                                    'border-l-4 px-2.5 py-2 transition-colors hover:bg-zinc-50/80',
                                                     attendanceRowBorder(x.status),
                                                 )}
                                             >
-                                                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                                                    <p className="text-sm font-semibold text-zinc-900">
+                                                <div className="flex items-center justify-between gap-1">
+                                                    <p className="text-xs font-semibold text-zinc-900">
                                                         {formatDay(x.date ?? null)}
                                                     </p>
                                                     <Badge
                                                         variant="outline"
                                                         className={cn(
-                                                            'w-fit text-[10px] font-semibold capitalize',
+                                                            'text-[9px] font-semibold uppercase py-0 px-1.5',
                                                             listStatusBadgeClass(x.status),
                                                         )}
                                                     >
                                                         {statusLabel(x.status)}
                                                     </Badge>
                                                 </div>
-                                                <p className="text-xs text-zinc-600">
+                                                <p className="text-[10px] text-zinc-500 mt-0.5">
                                                     <span className="font-medium text-zinc-700">In</span>{' '}
                                                     {formatClock(x.check_in ?? null)}
                                                     <span className="mx-1 text-zinc-300">·</span>
@@ -307,48 +292,48 @@ export function AttendanceMovementEmployeeDashboardView({
                                         ))}
                                     </ul>
                                 ) : (
-                                    <div className="px-4 py-10 text-center text-sm text-zinc-600">
-                                        No attendance rows yet.
+                                    <div className="px-3 py-6 text-center text-xs text-zinc-500">
+                                        No attendance records found.
                                     </div>
                                 )}
                             </CardContent>
                         </Card>
 
-                        <Card className="overflow-hidden border-zinc-200/90 shadow-sm">
-                            <CardHeader className="border-b border-zinc-100 bg-indigo-50/40 px-4 py-3 sm:px-5">
-                                <CardTitle className="text-base font-semibold text-zinc-900">Recent movements</CardTitle>
-                                <CardDescription className="text-xs">Open a request for details</CardDescription>
+                        <Card className="overflow-hidden border-zinc-200/90 shadow-xs">
+                            <CardHeader className="border-b border-zinc-100 bg-indigo-50/40 px-3 py-2">
+                                <CardTitle className="text-xs font-bold tracking-wider text-zinc-900 uppercase">Recent movements</CardTitle>
+                                <CardDescription className="text-[10px] text-zinc-500">Open a request for details</CardDescription>
                             </CardHeader>
-                            <CardContent className="p-3 sm:p-4">
+                            <CardContent className="p-2.5 sm:p-3">
                                 {recentMovements?.length ? (
                                     <div className="space-y-1.5">
                                         {recentMovements.map((x) => (
                                             <Link
                                                 key={x.id}
                                                 href={route('movements.show', x.id)}
-                                                className="group flex min-h-[44px] items-center gap-2.5 rounded-lg border border-zinc-100 bg-white p-2.5 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 sm:gap-3 sm:p-3"
+                                                className="group flex items-center gap-2 rounded-lg border border-zinc-100 bg-white p-2 shadow-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 sm:p-2.5"
                                             >
-                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                                                    <Clock className="h-4 w-4" />
+                                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                                                    <Clock className="h-3.5 w-3.5" />
                                                 </div>
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="truncate text-sm font-medium text-zinc-900 group-hover:text-indigo-900">
+                                                    <p className="truncate text-xs font-semibold text-zinc-900 group-hover:text-indigo-900">
                                                         {x.purpose?.trim() ? x.purpose : 'Movement'}
                                                     </p>
-                                                    <p className="truncate text-[11px] text-zinc-500">
+                                                    <p className="truncate text-[10px] text-zinc-500">
                                                         {x.from_datetime
                                                             ? format(parseISO(x.from_datetime), 'd MMM, h:mm a')
                                                             : ''}
                                                         {x.status ? ` · ${x.status}` : ''}
                                                     </p>
                                                 </div>
-                                                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 group-hover:text-indigo-400" />
+                                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-300 group-hover:text-indigo-400" />
                                             </Link>
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="rounded-lg border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-600">
-                                        No movements in this list.
+                                    <div className="rounded-lg border border-dashed border-zinc-200 py-6 text-center text-xs text-zinc-500">
+                                        No movement records found.
                                     </div>
                                 )}
                             </CardContent>
@@ -356,19 +341,19 @@ export function AttendanceMovementEmployeeDashboardView({
                     </div>
 
                     <div className="lg:col-span-4">
-                        <Card className="border-zinc-200/90 shadow-sm lg:sticky lg:top-4">
-                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                    <LayoutGrid className="h-4 w-4 text-zinc-500" />
-                                    <CardTitle className="text-sm font-semibold text-zinc-900">Quick links</CardTitle>
+                        <Card className="border-zinc-200/90 shadow-xs lg:sticky lg:top-4">
+                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-3 py-2">
+                                <div className="flex items-center gap-1.5">
+                                    <LayoutGrid className="h-3.5 w-3.5 text-zinc-500" />
+                                    <CardTitle className="text-xs font-bold tracking-wider text-zinc-900 uppercase">Quick links</CardTitle>
                                 </div>
                             </CardHeader>
-                            <CardContent className="flex flex-col gap-1.5 p-3">
+                            <CardContent className="grid grid-cols-2 gap-1.5 p-2 lg:grid-cols-1">
                                 <Button
                                     asChild
                                     variant="outline"
                                     size="sm"
-                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
+                                    className="h-8 justify-between rounded-lg border-zinc-200 px-2.5 text-xs font-medium"
                                 >
                                     <Link href={route('employee.dashboard')}>
                                         Full report
@@ -379,7 +364,7 @@ export function AttendanceMovementEmployeeDashboardView({
                                     asChild
                                     variant="outline"
                                     size="sm"
-                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
+                                    className="h-8 justify-between rounded-lg border-zinc-200 px-2.5 text-xs font-medium"
                                 >
                                     <Link href="/employee/movements?section=attendance-movement">
                                         My movements
@@ -390,7 +375,7 @@ export function AttendanceMovementEmployeeDashboardView({
                                     asChild
                                     variant="outline"
                                     size="sm"
-                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
+                                    className="h-8 justify-between rounded-lg border-zinc-200 px-2.5 text-xs font-medium col-span-2 lg:col-span-1"
                                 >
                                     <Link href="/employee/attendance?section=attendance-movement">
                                         PWA attendance
@@ -420,7 +405,9 @@ export function AttendanceMovementEmployeeDashboardView({
             ) : (
                 <Layout>
                     <Head title="My attendance & movements" />
-                    <PageSurface className="px-3 sm:px-4">{dashboardBody}</PageSurface>
+                    <PageSurface className="max-w-7xl space-y-2.5 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                        {dashboardBody}
+                    </PageSurface>
                 </Layout>
             )}
         </>

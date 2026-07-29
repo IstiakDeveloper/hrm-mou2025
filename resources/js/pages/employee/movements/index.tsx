@@ -213,72 +213,70 @@ export default function EmployeeMovements({
         <Layout>
             <Head title={`Movements - ${employeeDisplayName(employee)}`} />
 
-            <PageSurface>
-                <div className="mb-6">
+            <PageSurface className="max-w-7xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-2">
                     <Link
                         href={route('employees.show', employee.id)}
-                        className="flex w-fit items-center text-gray-500 hover:text-gray-700"
+                        className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700"
                     >
-                        <ArrowLeft className="mr-1 h-4 w-4" />
+                        <ArrowLeft className="mr-1 h-3.5 w-3.5" />
                         <span>Back to Employee Profile</span>
                     </Link>
                 </div>
 
-                <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-gray-900">
+                <div className="mb-3">
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900">
                         Movement Tracking: {employeeDisplayName(employee)}
                     </h1>
-                    <div className="mt-1 text-gray-500">
+                    <div className="mt-0.5 text-xs text-gray-500">
                         {employee.designation.name} • {employee.department.name} • {employee.employee_id}
                     </div>
                 </div>
 
                 {/* Movement List */}
-                <Card className="shadow-sm">
-                    <CardHeader className="bg-gray-50 border-b">
-                        <div className="flex flex-col sm:flex-row justify-between gap-4">
+                <Card className="shadow-xs border-slate-200">
+                    <CardHeader className="bg-gray-50/80 px-3 py-2 sm:px-4 border-b">
+                        <div className="flex items-center justify-between gap-2">
                             <div>
-                                <CardTitle>Movements</CardTitle>
-                                <CardDescription>Official and personal movements</CardDescription>
+                                <CardTitle className="text-xs font-bold tracking-wider text-gray-900 uppercase">Movements</CardTitle>
+                                <CardDescription className="text-[10px] text-gray-500">Official and personal movements</CardDescription>
                             </div>
-                            <div className="flex flex-col sm:flex-row gap-3">
-                                <Button onClick={downloadPdf} variant="outline" size="sm" className="flex items-center">
-                                    <Download className="mr-1 h-4 w-4" />
-                                    Export PDF
-                                </Button>
-                            </div>
+                            <Button onClick={downloadPdf} variant="outline" size="sm" className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs">
+                                <Download className="mr-1 h-3 w-3" />
+                                Export PDF
+                            </Button>
                         </div>
                     </CardHeader>
 
-                    <div className="p-4 border-b">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <div className="p-2.5 sm:p-4 border-b bg-gray-50/30">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-2.5">
                             <div>
-                                <Label htmlFor="start_date">Start Date</Label>
+                                <Label htmlFor="start_date" className="text-[10px]">Start Date</Label>
                                 <DatePicker
                                     id="start_date"
                                     selected={filterValues.startDate}
                                     onSelect={(date) => setFilterValues({ ...filterValues, startDate: date })}
-                                    placeholderText="Filter from date"
+                                    placeholderText="From date"
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="end_date">End Date</Label>
+                                <Label htmlFor="end_date" className="text-[10px]">End Date</Label>
                                 <DatePicker
                                     id="end_date"
                                     selected={filterValues.endDate}
                                     onSelect={(date) => setFilterValues({ ...filterValues, endDate: date })}
-                                    placeholderText="Filter to date"
+                                    placeholderText="To date"
                                     minDate={filterValues.startDate || undefined}
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="status">Status</Label>
+                                <Label htmlFor="status" className="text-[10px]">Status</Label>
                                 <Select
                                     value={filterValues.status}
                                     onValueChange={(value) => setFilterValues({ ...filterValues, status: value })}
                                 >
-                                    <SelectTrigger id="status">
-                                        <SelectValue placeholder="Filter by Status" />
+                                    <SelectTrigger id="status" className="h-8 text-xs">
+                                        <SelectValue placeholder="Status" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Statuses</SelectItem>
@@ -290,13 +288,13 @@ export default function EmployeeMovements({
                                 </Select>
                             </div>
                             <div>
-                                <Label htmlFor="type">Movement Type</Label>
+                                <Label htmlFor="type" className="text-[10px]">Movement Type</Label>
                                 <Select
                                     value={filterValues.type}
                                     onValueChange={(value) => setFilterValues({ ...filterValues, type: value })}
                                 >
-                                    <SelectTrigger id="type">
-                                        <SelectValue placeholder="Filter by Type" />
+                                    <SelectTrigger id="type" className="h-8 text-xs">
+                                        <SelectValue placeholder="Type" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Types</SelectItem>
@@ -307,21 +305,54 @@ export default function EmployeeMovements({
                             </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                            <Button onClick={resetFilters} variant="outline" size="sm">
-                                Reset Filters
+                        <div className="flex items-center gap-1.5 justify-end">
+                            <Button onClick={resetFilters} variant="outline" size="sm" className="h-6.5 text-[10px] px-2">
+                                Reset
                             </Button>
-                            <Button onClick={applyFilters} size="sm">
-                                Apply Filters
+                            <Button onClick={applyFilters} size="sm" className="h-6.5 bg-emerald-600 text-[10px] px-2.5 hover:bg-emerald-700">
+                                Filter
                             </Button>
                         </div>
                     </div>
 
                     <CardContent className="p-0">
-                        <div className="overflow-x-auto">
+                        {/* Mobile Card List View (sm:hidden) */}
+                        <div className="p-2 space-y-2 sm:hidden">
+                            {movements.data.length > 0 ? (
+                                movements.data.map((movement) => (
+                                    <div key={movement.id} className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-xs space-y-1.5">
+                                        <div className="flex items-center justify-between gap-1">
+                                            {getMovementTypeBadge(movement.movement_type)}
+                                            {getMovementStatusBadge(movement.status)}
+                                        </div>
+                                        <div className="font-bold text-xs text-gray-900 truncate">
+                                            {movement.purpose}
+                                        </div>
+                                        <div className="flex items-center text-[10px] text-gray-600">
+                                            <Timer className="h-3 w-3 mr-1 text-gray-400 shrink-0" />
+                                            <span className="truncate">{formatDateTimeRange(movement.from_datetime, movement.actual_return_datetime)}</span>
+                                            <span className="ml-1 text-emerald-700 font-bold">({calculateDuration(movement.from_datetime, movement.actual_return_datetime)}h)</span>
+                                        </div>
+                                        {movement.destination && (
+                                            <div className="flex items-center text-[10px] text-gray-500 pt-1 border-t border-gray-100">
+                                                <MapPin className="h-3 w-3 mr-1 text-gray-400 shrink-0" />
+                                                <span className="truncate">{movement.destination}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="py-6 text-center text-xs text-gray-500">
+                                    No movement records found.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Desktop Table View (hidden sm:block) */}
+                        <div className="hidden sm:block overflow-x-auto">
                             <Table>
                                 <TableHeader>
-                                    <TableRow>
+                                    <TableRow className="bg-gray-50/50 text-[10px] uppercase">
                                         <TableHead>Type</TableHead>
                                         <TableHead>Purpose</TableHead>
                                         <TableHead>Time Period</TableHead>
@@ -334,24 +365,24 @@ export default function EmployeeMovements({
                                     {movements.data.length > 0 ? (
                                         movements.data.map((movement) => (
                                             <TableRow key={movement.id}>
-                                                <TableCell>{getMovementTypeBadge(movement.movement_type)}</TableCell>
-                                                <TableCell className="font-medium">
+                                                <TableCell className="py-2">{getMovementTypeBadge(movement.movement_type)}</TableCell>
+                                                <TableCell className="font-medium text-xs py-2">
                                                     <div className="max-w-xs truncate" title={movement.purpose}>
                                                         {movement.purpose}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center text-sm">
-                                                        <Timer className="h-4 w-4 mr-1.5 text-gray-400 flex-shrink-0" />
+                                                <TableCell className="py-2">
+                                                    <div className="flex items-center text-xs">
+                                                        <Timer className="h-3.5 w-3.5 mr-1 text-gray-400 shrink-0" />
                                                         <span className="truncate">{formatDateTimeRange(movement.from_datetime, movement.actual_return_datetime)}</span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{calculateDuration(movement.from_datetime, movement.actual_return_datetime)} hours</TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center text-sm">
+                                                <TableCell className="text-xs py-2">{calculateDuration(movement.from_datetime, movement.actual_return_datetime)} hours</TableCell>
+                                                <TableCell className="py-2">
+                                                    <div className="flex items-center text-xs">
                                                         {movement.destination ? (
                                                             <>
-                                                                <MapPin className="h-4 w-4 mr-1.5 text-gray-400 flex-shrink-0" />
+                                                                <MapPin className="h-3.5 w-3.5 mr-1 text-gray-400 shrink-0" />
                                                                 <span className="truncate">{movement.destination}</span>
                                                             </>
                                                         ) : (
@@ -359,12 +390,12 @@ export default function EmployeeMovements({
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{getMovementStatusBadge(movement.status)}</TableCell>
+                                                <TableCell className="py-2">{getMovementStatusBadge(movement.status)}</TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="text-center py-6 text-gray-500">
+                                            <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-500">
                                                 No movement records found
                                             </TableCell>
                                         </TableRow>
@@ -374,32 +405,32 @@ export default function EmployeeMovements({
                         </div>
 
                         {movements.last_page > 1 && (
-                            <div className="flex items-center justify-end p-4 border-t">
-                                <Pagination>
+                            <div className="flex items-center justify-between p-2.5 border-t text-xs">
+                                <span className="text-gray-500 text-[11px]">
+                                    Page {movements.current_page} of {movements.last_page}
+                                </span>
+                                <div className="flex items-center gap-1">
                                     <Link
                                         href={movements.prev_page_url || '#'}
-                                        className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border ${!movements.prev_page_url
-                                                ? 'text-gray-300 cursor-not-allowed'
-                                                : 'text-gray-700 hover:bg-gray-50'
+                                        className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border ${!movements.prev_page_url
+                                                ? 'text-gray-300 cursor-not-allowed border-gray-100 bg-gray-50'
+                                                : 'text-gray-700 bg-white hover:bg-gray-50 border-gray-200'
                                             }`}
                                         preserveScroll
                                     >
-                                        Previous
+                                        Prev
                                     </Link>
-                                    <span className="mx-2 text-sm text-gray-700">
-                                        Page {movements.current_page} of {movements.last_page}
-                                    </span>
                                     <Link
                                         href={movements.next_page_url || '#'}
-                                        className={`relative inline-flex items-center px-4 py-2 ml-3 text-sm font-medium rounded-md border ${!movements.next_page_url
-                                                ? 'text-gray-300 cursor-not-allowed'
-                                                : 'text-gray-700 hover:bg-gray-50'
+                                        className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border ${!movements.next_page_url
+                                                ? 'text-gray-300 cursor-not-allowed border-gray-100 bg-gray-50'
+                                                : 'text-gray-700 bg-white hover:bg-gray-50 border-gray-200'
                                             }`}
                                         preserveScroll
                                     >
                                         Next
                                     </Link>
-                                </Pagination>
+                                </div>
                             </div>
                         )}
                     </CardContent>

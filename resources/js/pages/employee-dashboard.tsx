@@ -233,10 +233,10 @@ export function EmployeeDashboardView({
         return () => clearInterval(interval);
     }, [activeMovements]);
 
-    // Clock timer
+    // Clock timer (12-hour AM/PM)
     useEffect(() => {
         const timer = setInterval(() => {
-            setClockTime(format(new Date(), "HH:mm:ss"));
+            setClockTime(format(new Date(), "hh:mm:ss a"));
         }, 1000);
         return () => clearInterval(timer);
     }, []);
@@ -315,62 +315,87 @@ export function EmployeeDashboardView({
 
     const dashboardBody = (
             <div className="flex flex-col gap-6">
-                {/* Header Section */}
-                <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between border-b border-slate-100 pb-5">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
-                        <Avatar className="h-16 w-16 sm:h-20 sm:w-20 shrink-0 shadow-xs border-2 border-white ring-1 ring-zinc-200/60">
-                            <AvatarImage src={photoUrl || undefined} alt={fullName} />
-                            <AvatarFallback className="text-xl font-bold bg-emerald-50 text-emerald-800">
-                                {employeeInitials(employee)}
-                            </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight leading-tight">Human resources</h1>
-                            <p className="mt-1 text-base sm:text-lg font-semibold text-gray-800 leading-normal">{fullName}</p>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-gray-500 text-xs sm:text-sm mt-2">
-                                <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100/80">
-                                    <UserCircle className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                    <span className="font-medium text-slate-700">{employee?.employee_id || "N/A"}</span>
+                {/* Light Theme Employee HR Header */}
+                <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs">
+                    <div className="flex flex-col lg:flex-row gap-5 items-start lg:items-center justify-between">
+                        {/* Employee Avatar & Info */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
+                            <div className="relative shrink-0">
+                                <Avatar className="h-16 w-16 sm:h-20 sm:w-20 shadow-xs border-2 border-white ring-2 ring-emerald-500/10">
+                                    <AvatarImage src={photoUrl || undefined} alt={fullName} />
+                                    <AvatarFallback className="text-xl font-bold bg-emerald-50 text-emerald-800">
+                                        {employeeInitials(employee)}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white ring-1 ring-emerald-400" title="Active Employee" />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                                        Human Resources
+                                    </span>
+                                    {hrProfile.designation && (
+                                        <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80">
+                                            {hrProfile.designation}
+                                        </span>
+                                    )}
                                 </div>
-                                <span className="text-gray-300 hidden sm:inline">•</span>
-                                <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100/80">
-                                    <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                    <span className="font-medium text-slate-700">{employee?.department?.name || "N/A"}</span>
-                                </div>
-                                <span className="text-gray-300 hidden sm:inline">•</span>
-                                <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100/80">
-                                    <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                    <span className="font-medium text-slate-700">{employee?.branch?.name || "N/A"}</span>
+                                <h1 className="mt-1 text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight">
+                                    {fullName}
+                                </h1>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 mt-2">
+                                    <div className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">
+                                        <UserCircle className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                        <span className="font-semibold text-slate-800">ID: {employee?.employee_id || "N/A"}</span>
+                                    </div>
+                                    <div className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">
+                                        <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                        <span className="font-medium text-slate-700">{employee?.department?.name || "N/A"}</span>
+                                    </div>
+                                    <div className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">
+                                        <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                        <span className="font-medium text-slate-700">{employee?.branch?.name || "N/A"}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end gap-4 w-full lg:w-auto justify-between shrink-0">
-                        {/* Action Buttons */}
-                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                            <Button
-                                onClick={goToCreateLeave}
-                                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-xs"
-                            >
-                                <CalendarDays className="h-4 w-4 mr-2" />
-                                Apply Leave
-                            </Button>
-                            <Button
-                                onClick={goToCreateMovement}
-                                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Movement
-                            </Button>
-                        </div>
-
-                        {/* Date and Time */}
-                        <div className="text-left lg:text-right">
-                            <div className="text-xs sm:text-sm text-gray-500 font-medium">
-                                {format(new Date(), "EEEE, MMMM d, yyyy")}
+                        {/* Right: Quick Action Buttons & Live AM/PM Clock */}
+                        <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end gap-3 w-full lg:w-auto justify-between shrink-0">
+                            {/* Action Buttons */}
+                            <div className="flex flex-col sm:flex-row gap-2.5 w-full sm:w-auto">
+                                <Button
+                                    onClick={goToCreateLeave}
+                                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9.5 px-4 rounded-xl shadow-xs transition-all duration-200"
+                                >
+                                    <CalendarDays className="h-4 w-4 mr-2" />
+                                    Apply Leave
+                                </Button>
+                                <Button
+                                    onClick={goToCreateMovement}
+                                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold h-9.5 px-4 rounded-xl shadow-xs transition-all duration-200"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add Movement
+                                </Button>
                             </div>
-                            <div className="text-lg sm:text-xl font-mono text-gray-900 mt-0.5">{clockTime}</div>
+
+                            {/* Live AM/PM Clock Badge */}
+                            <div className="flex items-center gap-3 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/80 w-full sm:w-auto justify-between sm:justify-end">
+                                <div className="text-left sm:text-right">
+                                    <div className="text-[11px] text-slate-500 font-medium leading-none">
+                                        {format(new Date(), "EEEE, MMM d, yyyy")}
+                                    </div>
+                                    <div className="text-sm sm:text-base font-mono font-black text-emerald-700 mt-1 leading-none">
+                                        {clockTime}
+                                    </div>
+                                </div>
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>

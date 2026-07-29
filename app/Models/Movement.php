@@ -18,6 +18,7 @@ class Movement extends Model
         'purpose',
         'destination',
         'remarks',
+        'work_result',
         'status',
         'is_returned',
         'actual_return_datetime',
@@ -33,6 +34,11 @@ class Movement extends Model
     public function employee()
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function logBook()
+    {
+        return $this->hasOne(MovementLogBook::class);
     }
 
     // অ্যাটেন্ডেন্স রেকর্ডগুলির সাথে রিলেশন

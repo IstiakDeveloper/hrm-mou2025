@@ -109,7 +109,7 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                     </div>
                 )}
 
-                <div className="grid gap-4 lg:grid-cols-4">
+                <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
                     <SummaryCard label="Principal" value={fmt(loan.principal_amount)} />
                     <SummaryCard label="Service charge" value={fmt(loan.service_charge_amount)} />
                     <SummaryCard label="Outstanding" value={fmt(loan.outstanding_balance)} accent="amber" />
@@ -145,7 +145,47 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                             <CardTitle className="text-sm font-semibold text-zinc-900">Installment schedule</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <div className="overflow-x-auto">
+                            {/* Mobile Card View */}
+                            <div className="p-3 space-y-2.5 sm:hidden">
+                                {schedule.map((row) => (
+                                    <div key={row.id} className="rounded-xl border border-zinc-200 bg-white p-3 shadow-xs space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono text-xs font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">
+                                                    #{row.installment_no}
+                                                </span>
+                                                <span className="text-xs text-zinc-600 font-medium">{row.due_date || '—'}</span>
+                                            </div>
+                                            <Badge variant="outline" className="capitalize text-[10px]">{row.status}</Badge>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-1.5 pt-1 text-xs">
+                                            <div className="bg-zinc-50 p-1.5 rounded text-center">
+                                                <p className="text-[9px] uppercase text-zinc-500 font-bold">Principal</p>
+                                                <p className="font-mono font-semibold text-zinc-900 text-[11px]">{fmt(row.principal_amount)}</p>
+                                            </div>
+                                            <div className="bg-violet-50 p-1.5 rounded text-center">
+                                                <p className="text-[9px] uppercase text-violet-700 font-bold">SC</p>
+                                                <p className="font-mono font-semibold text-violet-800 text-[11px]">{fmt(row.service_charge_amount)}</p>
+                                            </div>
+                                            <div className="bg-amber-50 p-1.5 rounded text-center">
+                                                <p className="text-[9px] uppercase text-amber-800 font-bold">Total</p>
+                                                <p className="font-mono font-semibold text-amber-900 text-[11px]">{fmt(row.total_amount)}</p>
+                                            </div>
+                                        </div>
+
+                                        {row.paid_amount ? (
+                                            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-100 text-emerald-800">
+                                                <span>Paid: <strong>{fmt(row.paid_amount)}</strong></span>
+                                                <span>{row.paid_at || ''}</span>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Desktop Table View */}
+                            <div className="hidden sm:block overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-zinc-100 bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-zinc-500">

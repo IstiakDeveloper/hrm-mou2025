@@ -802,7 +802,112 @@ export default function EmployeeIndex({
                     </CardHeader>
 
                     <CardContent className="p-0">
-                        <div className="overflow-x-auto">
+                        {/* Mobile Card List View (sm:hidden) */}
+                        <div className="p-2 space-y-2 sm:hidden">
+                            {employees.data.length === 0 ? (
+                                <div className="py-10 text-center text-xs text-slate-500">
+                                    <Users className="h-7 w-7 text-slate-400 mx-auto mb-1.5" />
+                                    <p className="font-semibold text-slate-700">No Employees Found</p>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">Try adjusting your search or filters.</p>
+                                </div>
+                            ) : (
+                                employees.data.map((employee) => (
+                                    <div
+                                        key={employee.id}
+                                        className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs space-y-2"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center space-x-2.5 min-w-0">
+                                                <Avatar className="h-9 w-9 shrink-0">
+                                                    {employee.photo ? (
+                                                        <AvatarImage src={`/storage/${employee.photo}`} alt={employeeDisplayName(employee)} />
+                                                    ) : (
+                                                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                                                            {employeeInitials(employee)}
+                                                        </AvatarFallback>
+                                                    )}
+                                                </Avatar>
+                                                <div className="min-w-0">
+                                                    <Link
+                                                        href={route('employees.show', employee.id)}
+                                                        className="font-bold text-xs text-slate-900 hover:text-emerald-600 block truncate"
+                                                    >
+                                                        {employeeDisplayName(employee)}
+                                                    </Link>
+                                                    <div className="text-[11px] font-medium text-emerald-600 truncate">
+                                                        {employee.designation?.name}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0">
+                                                <span className="font-mono text-[10px] font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+                                                    {employee.pin || employee.employee_id}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-2 rounded-lg text-xs">
+                                            <div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-400 block">Department</span>
+                                                <span className="text-slate-800 font-semibold text-[11px] truncate block">{employee.department?.name || '—'}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-400 block">Branch</span>
+                                                <span className="text-slate-800 font-semibold text-[11px] truncate block">{employee.branch?.name || '—'}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                                            <div className="flex items-center gap-2">
+                                                <Switch
+                                                    checked={employee.status === 'active'}
+                                                    onCheckedChange={(checked) => handleStatusChange(employee, checked)}
+                                                    aria-label="Toggle active status"
+                                                    className="scale-90"
+                                                />
+                                                <span className={employee.status === 'active' ? 'font-semibold text-emerald-600 text-[11px]' : 'text-slate-500 text-[11px]'}>
+                                                    {employee.status === 'active' ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Link href={route('employees.show', employee.id)}>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                                        title="View"
+                                                    >
+                                                        <Eye className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </Link>
+                                                <Link href={route('employees.edit', employee.id)}>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </Link>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                                                    title="Delete"
+                                                    onClick={() => setEmployeeToDelete(employee)}
+                                                >
+                                                    <Trash className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Desktop Table View (hidden sm:block) */}
+                        <div className="hidden sm:block overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="border-b border-slate-200 bg-slate-50/80">

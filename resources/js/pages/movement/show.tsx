@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
+import { PageSurface } from '@/components/page-surface';
 import {
     Card,
     CardContent,
@@ -25,7 +26,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { resolveMovementStartPlace } from '@/lib/movement-start-place';
 
 interface Employee extends EmployeeNameFields {
     id: number;
@@ -38,6 +41,10 @@ interface Employee extends EmployeeNameFields {
         id: number;
         name: string;
     };
+    branch?: {
+        id: number;
+        name: string;
+    } | null;
 }
 
 interface Movement {
@@ -50,6 +57,7 @@ interface Movement {
     purpose: string;
     destination: string;
     remarks: string | null;
+    work_result: string | null;
     status: string;
     is_returned: boolean;
     actual_return_datetime: string | null;
@@ -70,11 +78,68 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
     const [customReturnTime, setCustomReturnTime] = useState(
         format(new Date(), "yyyy-MM-dd'T'HH:mm")
     );
+    const [workResult, setWorkResult] = useState('');
+    const [startMeterReading, setStartMeterReading] = useState('');
+    const [endMeterReading, setEndMeterReading] = useState('');
+    const [personalKm, setPersonalKm] = useState('');
+    const [createLogBook, setCreateLogBook] = useState(true);
+    const [startPlace, setStartPlace] = useState(movement.employee?.branch?.name || '');
+    const [resolvingPlace, setResolvingPlace] = useState(false);
     const [closeError, setCloseError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
+    const branchFallbackName = movement.employee?.branch?.name || '';
+
+    const prepareCloseDialogFields = async () => {
+        setForgotReturnTime(false);
+        setWorkResult('');
+        setStartMeterReading('');
+        setEndMeterReading('');
+        setPersonalKm('');
+        setCreateLogBook(true);
+        setCloseError(null);
+        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setStartPlace(branchFallbackName);
+        setResolvingPlace(true);
+        try {
+            const place = await resolveMovementStartPlace(branchFallbackName);
+            setStartPlace(place);
+        } finally {
+            setResolvingPlace(false);
+        }
+    };
+
     const handleClose = () => {
         setCloseError(null);
+        if (!workResult.trim() || workResult.trim().length < 5) {
+            setCloseError('Please write the work result / feedback (at least 5 characters).');
+            return;
+        }
+
+        const startReading = Number(startMeterReading);
+        const endReading = Number(endMeterReading);
+        const personal = personalKm.trim() === '' ? 0 : Number(personalKm);
+        if (createLogBook) {
+            if (startMeterReading.trim() === '' || Number.isNaN(startReading) || startReading < 0) {
+                setCloseError('Please enter a valid start meter reading.');
+                return;
+            }
+            if (endMeterReading.trim() === '' || Number.isNaN(endReading) || endReading < startReading) {
+                setCloseError('Closing meter reading must be greater than or equal to start reading.');
+                return;
+            }
+
+            const totalKm = Math.max(0, endReading - startReading);
+            if (personalKm.trim() !== '' && (Number.isNaN(personal) || personal < 0)) {
+                setCloseError('Please enter a valid personal distance.');
+                return;
+            }
+            if (personal > totalKm) {
+                setCloseError('Personal distance cannot exceed total distance.');
+                return;
+            }
+        }
+
         if (forgotReturnTime && !customReturnTime?.trim()) {
             setCloseError('Please select the actual date and time you returned.');
             return;
@@ -85,11 +150,26 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
         router.post(route('movements.complete', movement.id), {
             forgot_return_time: forgotReturnTime ? '1' : '0',
             actual_return_datetime: forgotReturnTime ? customReturnTime : null,
+            work_result: workResult.trim(),
+            start_place: createLogBook ? (startPlace.trim() || branchFallbackName || 'Unknown') : null,
+            start_meter_reading: createLogBook ? startReading : null,
+            end_meter_reading: createLogBook ? endReading : null,
+            personal_km: createLogBook && personalKm.trim() !== '' ? personal : null,
+            create_log_book: createLogBook ? '1' : '0',
         }, {
-            onFinish: () => {
-                setSubmitting(false);
-                setShowCloseDialog(false);
-            }
+            onSuccess: () => setShowCloseDialog(false),
+            onError: (errors) => {
+                setCloseError(
+                    (errors.work_result as string) ||
+                    (errors.start_meter_reading as string) ||
+                    (errors.end_meter_reading as string) ||
+                    (errors.personal_km as string) ||
+                    (errors.start_place as string) ||
+                    (errors.actual_return_datetime as string) ||
+                    'Could not close movement. Please check the form.'
+                );
+            },
+            onFinish: () => setSubmitting(false),
         });
     };
 
@@ -123,11 +203,11 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
         <Layout>
             <Head title="Movement Details" />
 
-            <div className="container mx-auto py-8">
-                <div className="mb-6">
-                    <Link href={route('movements.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Back to Movement Requests
+            <PageSurface className="max-w-7xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-2">
+                    <Link href={route('movements.index')} className="inline-flex items-center text-xs font-medium text-blue-600 hover:text-blue-800">
+                        <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                        <span>Back to Movement Requests</span>
                     </Link>
                 </div>
 
@@ -271,6 +351,15 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                                         </div>
                                     )}
 
+                                    {movement.work_result && (
+                                        <div>
+                                            <h3 className="text-sm font-medium text-gray-500 mb-1">Work Result / Feedback</h3>
+                                            <p className="text-gray-700 bg-green-50 border border-green-100 p-3 rounded-md whitespace-pre-wrap">
+                                                {movement.work_result}
+                                            </p>
+                                        </div>
+                                    )}
+
                                     <Separator />
 
                                     <div className="text-sm text-gray-500">
@@ -349,8 +438,7 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                             </CardContent>
                         </Card>
                     </div>
-                </div>
-            </div>
+            </PageSurface>
 
             {/* Close Movement Dialog */}
             <Dialog
@@ -358,84 +446,216 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                 onOpenChange={(open) => {
                     setShowCloseDialog(open);
                     if (open) {
-                        setForgotReturnTime(false);
-                        setCloseError(null);
-                        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+                        void prepareCloseDialogFields();
                     }
                 }}
             >
-                <DialogContent className="max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
+                <DialogContent className="max-h-[88dvh] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto rounded-2xl p-3 sm:max-h-[90dvh] sm:p-5">
                     <DialogHeader>
                         <DialogTitle>Close Movement</DialogTitle>
                         <DialogDescription>
-                            You are confirming that you have returned from your movement. Your actual return time will be recorded.
+                            Return time and work result will be saved now. Log Book details are optional.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
-                        <p className="text-sm text-muted-foreground">
-                            By default, your return is recorded at <strong>the current time</strong> when you confirm.
-                        </p>
-
-                        <div className={`flex items-start space-x-3 rounded-md border p-4 transition-all duration-200 ${
-                            forgotReturnTime 
-                                ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-500' 
-                                : 'border-amber-200 bg-amber-50/20 hover:bg-amber-50/40'
-                        }`}>
-                            <Checkbox
-                                id="forgotReturnTime"
-                                checked={forgotReturnTime}
-                                onCheckedChange={(checked) => {
-                                    setForgotReturnTime(checked === true);
-                                    setCloseError(null);
-                                    if (checked === true) {
-                                        setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-                                    }
-                                }}
-                                className="mt-1 border-amber-400 data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
-                            />
-                            <div className="grid gap-1.5 leading-none">
-                                <Label htmlFor="forgotReturnTime" className="cursor-pointer font-semibold text-amber-950">
-                                    আমি আগে ক্লোজ করতে ভুলে গিয়েছিলাম
-                                </Label>
-                                <p className="text-xs text-amber-800">
-                                    ইতিমধ্যে ফিরে এসে থাকলে, এটি টিক দিয়ে আপনার ফেরার সঠিক সময়টি সিলেক্ট করুন।
+                    <div className="space-y-2.5 py-1">
+                        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-semibold text-slate-900">Return Details</h3>
+                                <p className="text-xs text-slate-500">
+                                    Work result is required. Return time will be current time by default.
+                                </p>
+                            </div>
+                            <div className="space-y-2.5">
+                                <div className="space-y-2">
+                                    <Label htmlFor="workResult">
+                                        Work Result / Feedback <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Textarea
+                                        id="workResult"
+                                        value={workResult}
+                                        onChange={(e) => {
+                                            setWorkResult(e.target.value);
+                                            setCloseError(null);
+                                        }}
+                                        placeholder="কী কাজ করতে গিয়েছিলেন এবং কাজ সম্পূর্ণ হয়েছে কি না — সংক্ষেপে লিখুন..."
+                                        rows={3}
+                                        className="resize-y"
+                                    />
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    By default, your return is recorded at <strong>the current time</strong> when you confirm.
                                 </p>
                             </div>
                         </div>
 
-                        {forgotReturnTime && (
-                            <div className="space-y-2">
-                                <Label htmlFor="customTime">Actual return date &amp; time</Label>
-                                <Input
-                                    id="customTime"
-                                    type="datetime-local"
-                                    value={customReturnTime}
-                                    onChange={(e) => setCustomReturnTime(e.target.value)}
-                                />
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/30 p-3 sm:p-4">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-semibold text-amber-950">Backdated Return</h3>
+                                <p className="text-xs text-amber-800">
+                                    Only use this if you returned earlier but forgot to close the movement.
+                                </p>
                             </div>
-                        )}
+                            <div className={`flex items-start space-x-3 rounded-md border p-2.5 sm:p-3 transition-all duration-200 ${
+                                forgotReturnTime
+                                    ? 'border-amber-500 bg-amber-50/70 ring-1 ring-amber-500'
+                                    : 'border-amber-200 bg-white/70'
+                            }`}>
+                                <Checkbox
+                                    id="forgotReturnTime"
+                                    checked={forgotReturnTime}
+                                    onCheckedChange={(checked) => {
+                                        setForgotReturnTime(checked === true);
+                                        setCloseError(null);
+                                        if (checked === true) {
+                                            setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+                                        }
+                                    }}
+                                    className="mt-1 border-amber-400 data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
+                                />
+                                <div className="grid gap-1.5 leading-none">
+                                    <Label htmlFor="forgotReturnTime" className="cursor-pointer font-semibold text-amber-950">
+                                        আমি আগে ক্লোজ করতে ভুলে গিয়েছিলাম
+                                    </Label>
+                                    <p className="text-xs text-amber-800">
+                                        এটি টিক দিলে নিচে সঠিক ফেরার সময় দিতে পারবেন।
+                                    </p>
+                                </div>
+                            </div>
+
+                            {forgotReturnTime && (
+                                <div className="mt-2.5 space-y-2">
+                                    <Label htmlFor="customTime">Actual return date &amp; time</Label>
+                                    <Input
+                                        id="customTime"
+                                        type="datetime-local"
+                                        value={customReturnTime}
+                                        onChange={(e) => setCustomReturnTime(e.target.value)}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50/20 p-3 sm:p-4">
+                            <div className="mb-2">
+                                <h3 className="text-sm font-semibold text-slate-900">Log Book Register</h3>
+                                <p className="text-xs text-slate-500">
+                                    Log Book entry দরকার হলে checkbox checked রাখুন, না হলে unchecked করুন।
+                                </p>
+                            </div>
+
+                            <div className={`flex items-start space-x-3 rounded-md border p-2.5 sm:p-3 transition-all duration-200 ${
+                                createLogBook
+                                    ? 'border-emerald-300 bg-emerald-50/50'
+                                    : 'border-slate-200 bg-white/70'
+                            }`}>
+                                <Checkbox
+                                    id="createLogBook"
+                                    checked={createLogBook}
+                                    onCheckedChange={(checked) => setCreateLogBook(checked === true)}
+                                    className="mt-1 border-emerald-400 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                                />
+                                <div className="grid gap-1.5 leading-none">
+                                    <Label htmlFor="createLogBook" className="cursor-pointer font-semibold text-slate-900">
+                                        Log Book Register এ এন্ট্রি করুন
+                                    </Label>
+                                    <p className="text-xs text-slate-500">
+                                        Checked থাকলে নিচে meter reading input দেখাবে।
+                                    </p>
+                                </div>
+                            </div>
+
+                            {createLogBook && (
+                                <div className="mt-2.5 space-y-3 rounded-lg border border-emerald-100 bg-emerald-50/30 p-3 sm:p-4">
+                                <div className="text-xs text-muted-foreground">
+                                    {resolvingPlace
+                                        ? 'Detecting current location for start place...'
+                                        : 'Start place will be saved automatically from GPS short name, otherwise branch name.'}
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="startMeter">
+                                            Start meter reading <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Input
+                                            id="startMeter"
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={startMeterReading}
+                                            onChange={(e) => setStartMeterReading(e.target.value)}
+                                            placeholder="e.g. 12540.5"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="endMeter">
+                                            Closing meter reading <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Input
+                                            id="endMeter"
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={endMeterReading}
+                                            onChange={(e) => setEndMeterReading(e.target.value)}
+                                            placeholder="e.g. 12562.0"
+                                        />
+                                    </div>
+                                </div>
+
+                                {startMeterReading !== '' && endMeterReading !== '' && !Number.isNaN(Number(startMeterReading)) && !Number.isNaN(Number(endMeterReading)) && (
+                                    <div className="rounded-md border bg-white p-2.5 sm:p-3 space-y-2 text-sm">
+                                        <p className="text-muted-foreground">
+                                            Total distance:{' '}
+                                            <strong>{Math.max(0, Number(endMeterReading) - Number(startMeterReading)).toFixed(2)} km</strong>
+                                        </p>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="personalKm">Personal distance (optional)</Label>
+                                            <Input
+                                                id="personalKm"
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={personalKm}
+                                                onChange={(e) => setPersonalKm(e.target.value)}
+                                                placeholder="Personal use km, if any"
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Official distance = Total − Personal
+                                            </p>
+                                        </div>
+                                        <p className="text-muted-foreground">
+                                            Official distance:{' '}
+                                            <strong className="text-green-700">
+                                                {(() => {
+                                                    const total = Math.max(0, Number(endMeterReading) - Number(startMeterReading));
+                                                    const personal = personalKm.trim() === '' || Number.isNaN(Number(personalKm))
+                                                        ? 0
+                                                        : Number(personalKm);
+                                                    return Math.max(0, total - personal).toFixed(2);
+                                                })()} km
+                                            </strong>
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                            )}
+                        </div>
 
                         {closeError && (
                             <p className="text-sm font-medium text-red-600">{closeError}</p>
                         )}
-
-                        <div className="bg-blue-50 p-3 rounded-md flex items-start gap-2">
-                            <AlertCircle className="h-4 w-4 text-blue-700 shrink-0 mt-0.5" />
-                            <p className="text-sm text-blue-700">
-                                This will mark your movement as completed and update your attendance records.
-                            </p>
-                        </div>
                     </div>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowCloseDialog(false)}>
+                    <DialogFooter className="flex-col gap-2 sm:flex-row">
+                        <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowCloseDialog(false)}>
                             Cancel
                         </Button>
                         <Button
                             onClick={handleClose}
-                            className="bg-green-600 hover:bg-green-700"
-                            disabled={submitting}
+                            className="w-full bg-green-600 hover:bg-green-700 sm:w-auto"
+                            disabled={submitting || (createLogBook && resolvingPlace)}
                         >
                             {submitting ? 'Processing...' : 'Confirm Return'}
                         </Button>

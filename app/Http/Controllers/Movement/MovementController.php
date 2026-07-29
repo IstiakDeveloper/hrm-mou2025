@@ -10,6 +10,7 @@ use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Movement;
+use App\Models\MovementLogBook;
 use App\Models\RegionalOffice;
 use App\Models\User;
 use App\Models\Zone;
@@ -20,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use App\Support\ProjectPdf;
 use Shuchkin\SimpleXLSXGen;
@@ -141,7 +143,23 @@ class MovementController extends Controller
             }
         }
 
+        if (! $request->filled('from_date') && ! $request->filled('to_date') && ! $request->filled('search')) {
+            $request->merge([
+                'from_date' => now()->startOfMonth()->toDateString(),
+                'to_date' => now()->endOfMonth()->toDateString(),
+            ]);
+        }
+
         $query = $this->buildMovementIndexQuery($request, $user);
+
+        $summaryQuery = clone $query;
+        $summary = [
+            'total' => $summaryQuery->count(),
+            'active' => (clone $summaryQuery)->where('status', 'active')->count(),
+            'completed' => (clone $summaryQuery)->where('status', 'completed')->count(),
+            'pending' => (clone $summaryQuery)->where('status', 'pending')->count(),
+            'approved' => (clone $summaryQuery)->where('status', 'approved')->count(),
+        ];
 
         $perPage = $this->resolvePerPage($request->get('per_page'), 10);
 
@@ -156,6 +174,7 @@ class MovementController extends Controller
 
         return Inertia::render('movement/index', [
             'movements' => $this->inertiaPagination($movements),
+            'summary' => $summary,
             'departments' => $departments,
             'employees' => $employees,
             'zones' => $organizationFilters['zones'],
@@ -215,6 +234,8 @@ class MovementController extends Controller
             'movements' => $movements,
             'filterSummary' => $this->movementIndexFilterSummary($request),
             'generatedAt' => now()->toIso8601String(),
+            'companyName' => config('payroll_reports.company_name', config('app.name')),
+            'companyAddress' => config('payroll_reports.company_address', ''),
         ]);
     }
 
@@ -878,7 +899,7 @@ class MovementController extends Controller
     public function show(Movement $movement)
     {
         // Eager load related models to avoid N+1 issues
-        $movement->load(['employee.department', 'employee.designation']);
+        $movement->load(['employee.department', 'employee.designation', 'employee.branch']);
 
         // Get the currently authenticated user and their associated employee record
         $user = Auth::user();
@@ -932,10 +953,27 @@ class MovementController extends Controller
 
         $forgotReturn = $request->boolean('forgot_return_time');
 
+        $createLogBook = $request->boolean('create_log_book', true);
+
         $request->validate([
             'forgot_return_time' => 'sometimes|boolean',
+            'create_log_book' => 'sometimes|boolean',
             'actual_return_datetime' => $forgotReturn ? 'required|date' : 'nullable|date',
+            'work_result' => 'required|string|min:5|max:2000',
+            'start_place' => $createLogBook ? 'nullable|string|max:255' : 'nullable',
+            'start_meter_reading' => $createLogBook ? 'required|numeric|min:0' : 'nullable',
+            'end_meter_reading' => $createLogBook ? 'required|numeric|gte:start_meter_reading' : 'nullable',
+            'personal_km' => $createLogBook ? 'nullable|numeric|min:0' : 'nullable',
         ]);
+
+        if ($createLogBook) {
+            $totalKm = round((float) $request->end_meter_reading - (float) $request->start_meter_reading, 2);
+            if ($request->filled('personal_km') && (float) $request->personal_km > $totalKm) {
+                throw ValidationException::withMessages([
+                    'personal_km' => 'Personal distance cannot exceed total distance.',
+                ]);
+            }
+        }
 
         // Start a database transaction
         DB::beginTransaction();
@@ -944,6 +982,7 @@ class MovementController extends Controller
             // Update movement status
             $movement->status = 'completed';
             $movement->is_returned = true;
+            $movement->work_result = trim($request->work_result);
 
             // Default: close at current time. If user forgot to close, they check the box and set actual return time.
             $returnDateTime = $forgotReturn
@@ -954,19 +993,23 @@ class MovementController extends Controller
             if ($returnDateTime->lt($from)) {
                 DB::rollBack();
 
-                return redirect()->route('movements.show', $movement->id)
+                return redirect()->route('movements.index')
                     ->with('error', 'Return time cannot be before the movement start time.');
             }
 
             if ($returnDateTime->gt(Carbon::now()->addMinutes(2))) {
                 DB::rollBack();
 
-                return redirect()->route('movements.show', $movement->id)
+                return redirect()->route('movements.index')
                     ->with('error', 'Return time cannot be in the future.');
             }
 
             $movement->actual_return_datetime = $returnDateTime;
             $movement->save();
+
+            if ($createLogBook) {
+                $this->createLogBookFromMovement($movement, $request, $returnDateTime);
+            }
 
             // Update attendance records for official movements
             if ($movement->movement_type === 'official') {
@@ -978,8 +1021,10 @@ class MovementController extends Controller
 
             DB::commit();
 
-            return redirect()->route('movements.show', $movement->id)
-                ->with('success', 'Movement closed successfully.');
+            return redirect()->route('movements.index')
+                ->with('success', $createLogBook
+                    ? 'Movement closed successfully. Log book entry created and pending approval.'
+                    : 'Movement closed successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -1622,6 +1667,49 @@ class MovementController extends Controller
 
             $attendance->save();
         }
+    }
+
+    /**
+     * Create a pending log-book register entry when a movement is closed.
+     */
+    private function createLogBookFromMovement(Movement $movement, Request $request, Carbon $returnDateTime): void
+    {
+        if (MovementLogBook::where('movement_id', $movement->id)->exists()) {
+            return;
+        }
+
+        $movement->loadMissing('employee.branch');
+        $branch = $movement->employee?->branch;
+        $isHeadOffice = (bool) ($branch?->is_head_office);
+
+        $startReading = (float) $request->start_meter_reading;
+        $endReading = (float) $request->end_meter_reading;
+        $totalKm = round($endReading - $startReading, 2);
+        $personalKm = $request->filled('personal_km') ? round((float) $request->personal_km, 2) : null;
+        $officialKm = round($totalKm - ($personalKm ?? 0), 2);
+        $startPlace = trim((string) $request->start_place);
+        if ($startPlace === '') {
+            $startPlace = $branch?->name ?: 'Unknown';
+        }
+
+        MovementLogBook::create([
+            'movement_id' => $movement->id,
+            'employee_id' => $movement->employee_id,
+            'date' => Carbon::parse($movement->from_datetime)->toDateString(),
+            'start_time' => $movement->from_datetime,
+            'start_place' => $startPlace,
+            'start_meter_reading' => $startReading,
+            'destination' => $movement->destination,
+            'purpose' => $movement->purpose,
+            'work_result' => $movement->work_result,
+            'return_time' => $returnDateTime,
+            'end_meter_reading' => $endReading,
+            'distance_km' => $totalKm,
+            'personal_km' => $personalKm,
+            'official_km' => $officialKm,
+            'approval_scope' => $isHeadOffice ? 'head_office' : 'branch',
+            'payment_status' => 'unpaid',
+        ]);
     }
 
     /**

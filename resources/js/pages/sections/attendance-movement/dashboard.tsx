@@ -79,19 +79,19 @@ function KpiCard({
     const inner = (
         <div
             className={cn(
-                'group relative flex items-center gap-2.5 overflow-hidden rounded-xl border border-zinc-200/90 bg-white p-2.5 shadow-sm',
-                'transition-all duration-250 hover:border-zinc-300 hover:shadow-md',
+                'group relative flex items-center gap-2 overflow-hidden rounded-xl border border-zinc-200/90 bg-white p-2 shadow-xs sm:gap-2.5 sm:p-2.5',
+                'transition-all duration-200 hover:border-zinc-300 hover:shadow-md',
                 href && 'cursor-pointer',
             )}
         >
             <div className={cn('absolute top-0 left-0 h-full w-[3px] bg-gradient-to-b', accentBar)} />
-            <div className={cn('flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset', iconBg)}>
-                <Icon className="h-4 w-4" strokeWidth={2} />
+            <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset sm:h-7.5 sm:w-7.5', iconBg)}>
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
             </div>
             <div className="min-w-0 flex-1 pl-0.5">
                 <p className="mb-0.5 truncate text-[9px] leading-none font-bold tracking-wider text-zinc-500 uppercase">{label}</p>
                 <div className="flex items-baseline gap-1">
-                    <span className="text-base leading-tight font-extrabold tracking-tight text-zinc-900 tabular-nums">
+                    <span className="text-sm leading-tight font-extrabold tracking-tight text-zinc-900 tabular-nums sm:text-base">
                         {Number(value || 0).toLocaleString()}
                     </span>
                     {sub && <span className="text-zinc-450 hidden truncate text-[9px] xl:inline">({sub})</span>}
@@ -116,7 +116,7 @@ function ShortcutTile({ href, title, icon: Icon }: { href: string; title: string
     return (
         <Link
             href={href}
-            className="flex items-center gap-2 rounded-lg border border-zinc-200/80 bg-white px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 shadow-sm transition-all duration-150 hover:border-sky-200 hover:bg-sky-50/25 hover:text-sky-950"
+            className="flex items-center gap-2 rounded-lg border border-zinc-200/80 bg-white px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 shadow-xs transition-all duration-150 hover:border-sky-200 hover:bg-sky-50/25 hover:text-sky-950"
         >
             <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-zinc-100/70 text-zinc-500 ring-1 ring-zinc-200/50">
                 <Icon className="h-3.5 w-3.5" />
@@ -129,8 +129,8 @@ function ShortcutTile({ href, title, icon: Icon }: { href: string; title: string
 
 function RecentMovementsTable({ movements }: { movements: Movement[] }) {
     return (
-        <Card className="border-zinc-200/90 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between border-b border-zinc-100 px-4 py-2.5">
+        <Card className="border-zinc-200/90 shadow-xs">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-zinc-100 px-3 py-2.5 sm:px-4">
                 <div>
                     <CardTitle className="text-xs font-bold tracking-wider text-zinc-950 uppercase">Recent Movements</CardTitle>
                     <CardDescription className="text-[10px] text-zinc-500">Field visits and travel requests logs</CardDescription>
@@ -224,35 +224,35 @@ export default function AttendanceMovementDashboard(props: Props) {
         <Layout>
             <Head title="Attendance & Movement" />
 
-            <PageSurface className="max-w-7xl space-y-3 px-3 py-3 sm:px-4">
+            <PageSurface className="max-w-7xl space-y-2.5 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
                 {/* Compact Header */}
-                <div className="flex flex-col gap-2 rounded-xl border border-zinc-200/80 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-700 ring-1 ring-sky-600/10">
-                            <Clock className="h-5 w-5" />
+                <div className="flex flex-col gap-2 rounded-xl border border-zinc-200/80 bg-white p-2.5 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-3">
+                    <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700 ring-1 ring-sky-600/10">
+                            <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
                         </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-sm font-bold text-zinc-950">Attendance & Movement</h1>
-                                <span className="text-sky-850 rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[9px] leading-none font-semibold">
+                        <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h1 className="truncate text-xs font-bold text-zinc-950 sm:text-sm">Attendance & Movement</h1>
+                                <span className="text-sky-800 rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[9px] font-semibold leading-none">
                                     {props.userRole || 'User'}
                                 </span>
                             </div>
-                            <p className="mt-0.5 text-[10px] text-zinc-500">
+                            <p className="mt-0.5 truncate text-[10px] text-zinc-500">
                                 Signed in as <span className="font-semibold text-zinc-700">{auth?.user?.name}</span>
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-center">
-                        {/* Inline Mode Selector (Saves layout space compared to separate Tabs bar!) */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
+                        {/* Inline Mode Selector */}
                         {showEmployeeTab && (
                             <div className="flex rounded-lg bg-zinc-100 p-0.5 ring-1 ring-zinc-200/50">
                                 <button
                                     onClick={() => setDashboardMode('admin')}
                                     className={cn(
-                                        'h-6 rounded-md px-2.5 text-[10px] font-semibold transition-all',
-                                        dashboardMode === 'admin' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800',
+                                        'h-6 rounded-md px-2 text-[10px] font-semibold transition-all',
+                                        dashboardMode === 'admin' ? 'bg-white text-zinc-950 shadow-xs' : 'text-zinc-500 hover:text-zinc-800',
                                     )}
                                 >
                                     Admin View
@@ -260,9 +260,9 @@ export default function AttendanceMovementDashboard(props: Props) {
                                 <button
                                     onClick={() => setDashboardMode('employee')}
                                     className={cn(
-                                        'flex h-6 items-center gap-1 rounded-md px-2.5 text-[10px] font-semibold transition-all',
+                                        'flex h-6 items-center gap-1 rounded-md px-2 text-[10px] font-semibold transition-all',
                                         dashboardMode === 'employee'
-                                            ? 'bg-sky-650 bg-sky-600 text-white shadow-sm'
+                                            ? 'bg-sky-600 text-white shadow-xs'
                                             : 'text-zinc-500 hover:text-zinc-800',
                                     )}
                                 >
@@ -272,18 +272,20 @@ export default function AttendanceMovementDashboard(props: Props) {
                             </div>
                         )}
 
-                        <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="h-7 border-zinc-200 bg-white px-2.5 text-[10px] text-zinc-700 hover:bg-zinc-50"
-                        >
-                            <Link href="/sections">Sections</Link>
-                        </Button>
+                        <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
+                            <Button
+                                asChild
+                                variant="outline"
+                                size="sm"
+                                className="h-6.5 border-zinc-200 bg-white px-2 text-[10px] text-zinc-700 hover:bg-zinc-50"
+                            >
+                                <Link href="/sections">Sections</Link>
+                            </Button>
 
-                        <Button asChild size="sm" className="h-7 bg-sky-600 px-2.5 text-[10px] font-medium text-white hover:bg-sky-700">
-                            <Link href="/attendance?section=attendance-movement">Daily Attendance</Link>
-                        </Button>
+                            <Button asChild size="sm" className="h-6.5 bg-sky-600 px-2.5 text-[10px] font-medium text-white hover:bg-sky-700">
+                                <Link href="/attendance?section=attendance-movement">Daily Attendance</Link>
+                            </Button>
+                        </div>
                     </div>
                 </div>
 

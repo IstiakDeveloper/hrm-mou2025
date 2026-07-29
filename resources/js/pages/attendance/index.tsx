@@ -369,26 +369,28 @@ export default function AttendanceIndex({
     const canFilterByBranch = userPermissions.isBranchManager || !userPermissions.isEmployee;
     const canFilterByDepartment = userPermissions.isDepartmentHead || userPermissions.isBranchManager || !userPermissions.isEmployee;
 
+    const showAdminActions = !userPermissions.isEmployee || userPermissions.isBranchManager || userPermissions.isDepartmentHead;
+
     return (
         <Layout>
             <Head title="Daily Attendance" />
 
-            <PageSurface>
-                <div className="mb-6 space-y-4">
+            <PageSurface className="max-w-7xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-3 space-y-2">
                     {/* Top row: Title and primary actions */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-2.5">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Daily Attendance</h1>
-                            <p className="mt-1 text-sm text-slate-500">
+                            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Daily Attendance</h1>
+                            <p className="text-xs text-slate-500">
                                 View and manage attendance records for {readableDate}
                             </p>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto justify-end">
                             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
-                                        <CalendarIcon className="mr-2 h-4 w-4 text-emerald-600" />
+                                    <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-white border-slate-200 text-slate-700 font-medium">
+                                        <CalendarIcon className="mr-1 h-3 w-3 text-emerald-600" />
                                         {currentDate ? format(new Date(currentDate), 'MMM d, yyyy') : 'Select date'}
                                     </Button>
                                 </PopoverTrigger>
@@ -403,40 +405,40 @@ export default function AttendanceIndex({
                             </Popover>
 
                             <Link href={route('attendance.monthly')}>
-                                <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
-                                    <Calendar className="mr-2 h-4 w-4 text-slate-500" />
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-white border-slate-200 text-slate-700 font-medium">
+                                    <Calendar className="mr-1 h-3 w-3 text-slate-500" />
                                     Monthly
                                 </Button>
                             </Link>
 
                             <Link href={route('attendance.sheet-report')}>
-                                <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
-                                    <FileText className="mr-2 h-4 w-4 text-slate-500" />
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-white border-slate-200 text-slate-700 font-medium">
+                                    <FileText className="mr-1 h-3 w-3 text-slate-500" />
                                     Report
                                 </Button>
                             </Link>
 
-                            {userPermissions.canSyncDevices && (
+                            {showAdminActions && userPermissions.canSyncDevices && (
                                 <>
                                     <Link href={route('attendance.devices.index')}>
-                                        <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
-                                            <Clock className="mr-2 h-4 w-4 text-slate-500" />
+                                        <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-white border-slate-200 text-slate-700 font-medium">
+                                            <Clock className="mr-1 h-3 w-3 text-slate-500" />
                                             Devices
                                         </Button>
                                     </Link>
                                     <Link href={route('attendance.settings.index')}>
-                                        <Button variant="outline" size="sm" className="h-9 bg-white border-slate-200 text-slate-700 shadow-sm font-medium">
-                                            <Building className="mr-2 h-4 w-4 text-slate-500" />
+                                        <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-white border-slate-200 text-slate-700 font-medium">
+                                            <Building className="mr-1 h-3 w-3 text-slate-500" />
                                             Settings
                                         </Button>
                                     </Link>
                                 </>
                             )}
 
-                            {userPermissions.canCreate && (
+                            {showAdminActions && userPermissions.canCreate && (
                                 <Link href={route('attendance.create')}>
-                                    <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-medium">
-                                        <Plus className="mr-1 h-4 w-4" />
+                                    <Button size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
+                                        <Plus className="mr-1 h-3 w-3" />
                                         Add Attendance
                                     </Button>
                                 </Link>
@@ -446,92 +448,174 @@ export default function AttendanceIndex({
 
                     {/* Role-based Context Message */}
                     {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
-                        <Alert className="bg-blue-50 text-blue-800 border-blue-200">
-                            <Info className="h-4 w-4 text-blue-600" />
-                            <AlertDescription className="text-sm">
-                                You are viewing your own attendance records.
-                                {userPermissions.canCreate && " You can add your own attendance records."}
+                        <Alert className="bg-blue-50 text-blue-800 border-blue-200 py-2 text-xs">
+                            <Info className="h-3.5 w-3.5 text-blue-600" />
+                            <AlertDescription className="text-xs">
+                                You are viewing your daily attendance records.
                             </AlertDescription>
                         </Alert>
                     )}
 
-                    {/* Compact Filter Bar */}
-                    <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 w-full bg-slate-50/50 p-3 rounded-xl border border-slate-200">
-                        <div className="relative flex-1 min-w-[200px]">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    {/* Compact Mobile-Friendly Filter Bar */}
+                    <div className="space-y-2 w-full bg-slate-50/80 p-2.5 sm:p-3 rounded-xl border border-slate-200">
+                        <div className="relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                             <Input
                                 placeholder="Search employee..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+                                className="pl-9 h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg w-full"
                             />
                         </div>
 
-                        {canFilterByBranch && branches.length > 1 && (
-                            <Select value={branchId || undefined} onValueChange={(value) => setBranchId(value === "all" ? null : value)}>
-                                <SelectTrigger className="w-[140px] h-9 text-sm bg-white border-slate-200 rounded-lg">
-                                    <SelectValue placeholder="Branch" />
+                        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                            {canFilterByBranch && branches.length > 1 && (
+                                <Select value={branchId || undefined} onValueChange={(value) => setBranchId(value === "all" ? null : value)}>
+                                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                        <SelectValue placeholder="Branch" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Branches</SelectItem>
+                                        {sortPayrollBranches(branches).map((b) => <SelectItem key={b.id} value={b.id.toString()}>{formatBranchSelectLabel(b)}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
+
+                            {canFilterByDepartment && departments.length > 1 && (
+                                <Select value={departmentId || undefined} onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}>
+                                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                        <SelectValue placeholder="Department" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Depts</SelectItem>
+                                        {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
+
+                            <Select value={movementFilter || undefined} onValueChange={(value) => setMovementFilter(value === "all" ? null : value)}>
+                                <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                    <SelectValue placeholder="Movement" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Branches</SelectItem>
-                                    {sortPayrollBranches(branches).map((b) => <SelectItem key={b.id} value={b.id.toString()}>{formatBranchSelectLabel(b)}</SelectItem>)}
+                                    <SelectItem value="all">All Records</SelectItem>
+                                    <SelectItem value="with-movement">With Movement</SelectItem>
+                                    <SelectItem value="without-movement">No Movement</SelectItem>
                                 </SelectContent>
                             </Select>
-                        )}
 
-                        {canFilterByDepartment && departments.length > 1 && (
-                            <Select value={departmentId || undefined} onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}>
-                                <SelectTrigger className="w-[140px] h-9 text-sm bg-white border-slate-200 rounded-lg">
-                                    <SelectValue placeholder="Department" />
+                            <Select value={status || undefined} onValueChange={(value) => setStatus(value === "all" ? null : value)}>
+                                <SelectTrigger className="w-full sm:w-[120px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                    <SelectValue placeholder="Status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Depts</SelectItem>
-                                    {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    <SelectItem value="present">Present</SelectItem>
+                                    <SelectItem value="absent">Absent</SelectItem>
+                                    <SelectItem value="late">Late</SelectItem>
+                                    <SelectItem value="half_day">Half Day</SelectItem>
+                                    <SelectItem value="leave">Leave</SelectItem>
                                 </SelectContent>
                             </Select>
-                        )}
 
-                        <Select value={movementFilter || undefined} onValueChange={(value) => setMovementFilter(value === "all" ? null : value)}>
-                            <SelectTrigger className="w-[140px] h-9 text-sm bg-white border-slate-200 rounded-lg">
-                                <SelectValue placeholder="Movement" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Records</SelectItem>
-                                <SelectItem value="with-movement">With Movement</SelectItem>
-                                <SelectItem value="without-movement">No Movement</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={status || undefined} onValueChange={(value) => setStatus(value === "all" ? null : value)}>
-                            <SelectTrigger className="w-[120px] h-9 text-sm bg-white border-slate-200 rounded-lg">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="present">Present</SelectItem>
-                                <SelectItem value="absent">Absent</SelectItem>
-                                <SelectItem value="late">Late</SelectItem>
-                                <SelectItem value="half_day">Half Day</SelectItem>
-                                <SelectItem value="leave">Leave</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <div className="flex items-center gap-2">
-                            <Button variant="ghost" onClick={resetFilters} size="sm" className="h-9 text-slate-500 hover:text-slate-700">
-                                Reset
-                            </Button>
-                            <Button onClick={handleSearch} size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">
-                                Apply
-                            </Button>
+                            <div className="col-span-2 sm:col-span-1 sm:ml-auto flex items-center justify-end gap-1.5 pt-0.5 sm:pt-0">
+                                <Button variant="outline" onClick={resetFilters} size="sm" className="h-8 text-xs text-slate-600 px-3 flex-1 sm:flex-initial">
+                                    Reset
+                                </Button>
+                                <Button onClick={handleSearch} size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 rounded-lg flex-1 sm:flex-initial">
+                                    Apply
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Attendance Table */}
-                <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
+                <Card className="shadow-xs border-slate-200 rounded-xl overflow-hidden bg-white">
                     <CardContent className="p-0">
-                        <div className="overflow-x-auto">
+                        {/* Mobile Card View (sm:hidden) */}
+                        <div className="p-2 space-y-2 sm:hidden">
+                            {attendances.data && attendances.data.length > 0 ? (
+                                attendances.data.map((attendance) => (
+                                    <div
+                                        key={attendance.id}
+                                        className={cn(
+                                            "rounded-xl border border-slate-200 bg-white p-2.5 shadow-xs space-y-2",
+                                            attendance.has_movement ? "border-l-4 border-l-blue-500 bg-blue-50/15" : ""
+                                        )}
+                                    >
+                                        <div className="flex items-start justify-between gap-1.5">
+                                            <div className="flex items-center space-x-2 min-w-0">
+                                                <div className="h-7 w-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                                                    <User className="h-3.5 w-3.5" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="font-bold text-xs text-slate-800 truncate">
+                                                        {employeeDisplayName(attendance.employee)}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 truncate">
+                                                        {attendance.employee.department.name} • ID: {attendance.employee.employee_id}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0">
+                                                {getStatusBadge(attendance.status)}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-2 rounded-lg text-xs">
+                                            <div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-400 block">Check In</span>
+                                                {attendance.check_in_formatted ? (
+                                                    <span className="text-emerald-700 font-semibold flex items-center mt-0.5 text-xs">
+                                                        <Clock className="inline mr-1 h-3 w-3 text-emerald-600 shrink-0" />
+                                                        {attendance.check_in_formatted}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 italic text-[11px]">Not checked in</span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-400 block">Check Out</span>
+                                                {attendance.check_out_formatted ? (
+                                                    <span className="text-amber-700 font-semibold flex items-center mt-0.5 text-xs">
+                                                        <Clock className="inline mr-1 h-3 w-3 text-amber-600 shrink-0" />
+                                                        {attendance.check_out_formatted}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 italic text-[11px]">Not checked out</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                                            <div className="flex items-center gap-1">
+                                                <span className="font-medium text-slate-600">Source:</span>
+                                                {attendance.device ? (
+                                                    <span className="text-blue-600 font-medium">{attendance.device.name}</span>
+                                                ) : (
+                                                    <span>Manual</span>
+                                                )}
+                                            </div>
+                                            {attendance.has_movement && (
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[9px] px-1.5 py-0">
+                                                    <Navigation className="mr-1 h-2.5 w-2.5" />
+                                                    {attendance.multiple_movements ? `${attendance.total_movements} Movements` : 'Movement'}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="py-6 text-center text-xs text-slate-500">
+                                    No attendance records found for this date.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Desktop Table View (hidden sm:block) */}
+                        <div className="hidden sm:block overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/80 border-b border-slate-200">

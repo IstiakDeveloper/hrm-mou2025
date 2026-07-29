@@ -22,12 +22,10 @@ return [
             'permissions' => '*-no-delete-no-admin',
         ],
         'Accountant' => [
-            'description' => 'Accounts modules: Employee Loan, Staff Fund, Fixed Asset, and Inventory. Cannot delete records.',
-            'permissions' => 'sections:employee-loan,staff-fund,fixed-asset,inventory',
+            'description' => 'Accounts modules: Employee Loan, Staff Fund, Fixed Asset, Inventory, plus Attendance, Movement and Leave. Cannot delete records.',
+            'permissions' => 'sections:employee-loan,staff-fund,fixed-asset,inventory,attendance-movement,leave',
             'blocked_sections' => [
                 'human-resources',
-                'attendance-movement',
-                'leave',
                 'payroll',
                 'store',
                 'recruitment',

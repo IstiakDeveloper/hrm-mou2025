@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { PageSurface } from '@/components/page-surface';
+import { cn } from '@/lib/utils';
 
 interface Notice {
     id: string;
@@ -189,64 +190,55 @@ export default function MyNoticesIndex({ notices, filters, stats }: Props) {
                     </div>
                 )}
 
-                {/* Stats */}
-                <div className="mb-6 grid gap-4 sm:grid-cols-3">
-                    <Card>
-                        <CardContent className="flex items-center gap-4 p-4">
-                            <div className="rounded-full bg-blue-100 p-3">
-                                <Bell className="h-5 w-5 text-blue-700" />
-                            </div>
-                            <div>
-                                <p className="text-xs font-medium uppercase text-muted-foreground">Total notices</p>
-                                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="flex items-center gap-4 p-4">
-                            <div className="rounded-full bg-amber-100 p-3">
-                                <Mail className="h-5 w-5 text-amber-700" />
-                            </div>
-                            <div>
-                                <p className="text-xs font-medium uppercase text-muted-foreground">Unread</p>
-                                <p className="text-2xl font-bold text-gray-900">{stats.unread}</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="flex items-center gap-4 p-4">
-                            <div className="rounded-full bg-green-100 p-3">
-                                <MailOpen className="h-5 w-5 text-green-700" />
-                            </div>
-                            <div>
-                                <p className="text-xs font-medium uppercase text-muted-foreground">Read</p>
-                                <p className="text-2xl font-bold text-gray-900">{Math.max(0, stats.total - stats.unread)}</p>
-                            </div>
-                        </CardContent>
-                    </Card>
+                {/* Compact 1-Row Stats Bar */}
+                <div className="mb-4 grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-center shadow-xs">
+                        <div className="mb-1 rounded-lg bg-blue-50 p-1.5 text-blue-600">
+                            <Bell className="h-4 w-4" />
+                        </div>
+                        <span className="text-base font-black text-slate-900 leading-none">{stats.total}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">Total</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-center shadow-xs">
+                        <div className="mb-1 rounded-lg bg-amber-50 p-1.5 text-amber-600">
+                            <Mail className="h-4 w-4" />
+                        </div>
+                        <span className="text-base font-black text-slate-900 leading-none">{stats.unread}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">Unread</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-center shadow-xs">
+                        <div className="mb-1 rounded-lg bg-emerald-50 p-1.5 text-emerald-600">
+                            <MailOpen className="h-4 w-4" />
+                        </div>
+                        <span className="text-base font-black text-slate-900 leading-none">{Math.max(0, stats.total - stats.unread)}</span>
+                        <span className="mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">Read</span>
+                    </div>
                 </div>
 
-                {/* List card */}
-                <Card className="shadow-sm">
-                    <CardHeader className="border-b bg-gray-50 pb-4">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <CardTitle>All notices</CardTitle>
-                            <form onSubmit={submitFilters} className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
-                                <div className="relative">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-                                    <Input
-                                        type="search"
-                                        placeholder="Search title or message…"
-                                        value={data.search}
-                                        onChange={(e) => setData('search', e.target.value)}
-                                        className="pl-8 sm:w-60"
-                                    />
-                                </div>
+                {/* Filter Bar */}
+                <div className="mb-4 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xs">
+                    <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+                        <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                            <Megaphone className="h-4 w-4 text-emerald-600" />
+                            All Notices
+                        </h2>
+                        <form onSubmit={submitFilters} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <div className="relative w-full sm:w-56">
+                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                <Input
+                                    type="search"
+                                    placeholder="Search notices…"
+                                    value={data.search}
+                                    onChange={(e) => setData('search', e.target.value)}
+                                    className="pl-8 w-full h-8 text-xs rounded-lg"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-center">
                                 <Select
                                     value={data.type || '__any__'}
                                     onValueChange={(v) => setData('type', v === '__any__' ? '' : v)}
                                 >
-                                    <SelectTrigger className="w-full sm:w-32">
+                                    <SelectTrigger className="w-full sm:w-28 h-8 text-xs rounded-lg">
                                         <SelectValue placeholder="Type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -261,7 +253,7 @@ export default function MyNoticesIndex({ notices, filters, stats }: Props) {
                                     value={data.status || '__any__'}
                                     onValueChange={(v) => setData('status', v === '__any__' ? '' : v)}
                                 >
-                                    <SelectTrigger className="w-full sm:w-36">
+                                    <SelectTrigger className="w-full sm:w-28 h-8 text-xs rounded-lg">
                                         <SelectValue placeholder="Status" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -270,154 +262,130 @@ export default function MyNoticesIndex({ notices, filters, stats }: Props) {
                                         <SelectItem value="read">Read</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <div className="flex gap-2">
-                                    <Button type="submit" variant="secondary" disabled={processing}>
-                                        Apply
+                            </div>
+                            <div className="flex gap-1.5">
+                                <Button type="submit" variant="secondary" className="h-8 text-xs font-bold px-3 rounded-lg flex-1 sm:flex-none" disabled={processing}>
+                                    Apply
+                                </Button>
+                                {hasFilters && (
+                                    <Button type="button" variant="ghost" className="h-8 text-xs font-semibold px-2.5 rounded-lg flex-1 sm:flex-none" onClick={resetFilters}>
+                                        Reset
                                     </Button>
-                                    {hasFilters && (
-                                        <Button type="button" variant="ghost" onClick={resetFilters}>
-                                            Reset
-                                        </Button>
+                                )}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                {/* Notices Compact List */}
+                {notices.data.length === 0 ? (
+                    <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-xs">
+                        <Megaphone className="h-8 w-8 text-slate-300 mx-auto mb-1.5" />
+                        <h3 className="text-sm font-bold text-slate-900">No Notices Found</h3>
+                        <p className="max-w-xs text-[11px] text-slate-500 mx-auto mt-0.5">
+                            {hasFilters
+                                ? 'No notice matches your filters. Try resetting filters.'
+                                : 'When the administrator sends a notice, it will show up here.'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {notices.data.map((n) => {
+                            const meta = TYPE_META[n.type] ?? TYPE_META.info;
+                            const isUnread = !n.read_at;
+                            return (
+                                <div
+                                    key={n.id}
+                                    className={cn(
+                                        'group relative flex items-center justify-between gap-3 rounded-xl border bg-white p-2.5 sm:p-3 shadow-xs transition-all duration-150 hover:border-emerald-300 hover:shadow-sm',
+                                        isUnread ? 'border-blue-200 bg-blue-50/40 ring-1 ring-blue-500/10' : 'border-slate-200/90'
                                     )}
+                                >
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                        <div className={cn('p-2 rounded-lg shrink-0', meta.className)}>
+                                            {meta.icon}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <Link href={route('my-notices.show', n.id)} className="min-w-0">
+                                                    <span className={cn('truncate text-xs block font-bold', isUnread ? 'text-slate-900' : 'text-slate-700')}>
+                                                        {n.title}
+                                                    </span>
+                                                </Link>
+                                                {isUnread && (
+                                                    <span className="shrink-0 rounded-full bg-rose-500 px-1.5 py-0.2 text-[9px] font-extrabold text-white">
+                                                        NEW
+                                                    </span>
+                                                )}
+                                                {n.attachment_url && (
+                                                    <Paperclip className="h-3 w-3 text-slate-400 shrink-0" title="Has attachment" />
+                                                )}
+                                            </div>
+                                            <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                                <span className="text-slate-400 font-medium">{relativeTime(n.created_at)}</span>
+                                                <span className="mx-1 text-slate-300">•</span>
+                                                <span>{n.message}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <Link
+                                        href={route('my-notices.show', n.id)}
+                                        className="shrink-0 inline-flex items-center justify-center h-8 w-8 rounded-lg bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                                        title="Read Notice"
+                                    >
+                                        <ChevronRightIcon className="h-4 w-4" />
+                                    </Link>
                                 </div>
-                            </form>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {notices.last_page > 1 && (
+                    <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs text-xs">
+                        <p className="text-slate-600">
+                            Showing{' '}
+                            <span className="font-semibold text-slate-900">
+                                {(notices.current_page - 1) * notices.per_page + 1}
+                            </span>{' '}
+                            to{' '}
+                            <span className="font-semibold text-slate-900">
+                                {Math.min(notices.current_page * notices.per_page, notices.total)}
+                            </span>{' '}
+                            of <span className="font-semibold text-slate-900">{notices.total}</span> notices
+                        </p>
+
+                        <div className="flex items-center gap-1">
+                            {notices.links.map((link, i) => {
+                                const isLabelPrev = link.label.includes('Previous');
+                                const isLabelNext = link.label.includes('Next');
+
+                                return (
+                                    <Button
+                                        key={i}
+                                        variant={link.active ? 'default' : 'outline'}
+                                        size="sm"
+                                        disabled={!link.url}
+                                        onClick={() => link.url && router.get(link.url, {}, { preserveState: true, preserveScroll: true })}
+                                        className={cn(
+                                            'h-8 min-w-[32px] text-xs font-bold rounded-lg',
+                                            link.active ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'text-slate-700'
+                                        )}
+                                    >
+                                        {isLabelPrev ? (
+                                            <ChevronLeft className="h-3.5 w-3.5" />
+                                        ) : isLabelNext ? (
+                                            <ChevronRight className="h-3.5 w-3.5" />
+                                        ) : (
+                                            <span dangerouslySetInnerHTML={{ __html: link.label }} />
+                                        )}
+                                    </Button>
+                                );
+                            })}
                         </div>
-                    </CardHeader>
-
-                    <CardContent className="p-0">
-                        {notices.data.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-                                <Megaphone className="h-10 w-10 text-gray-300" />
-                                <h3 className="text-lg font-medium text-gray-900">No notices</h3>
-                                <p className="max-w-sm text-sm text-gray-500">
-                                    {hasFilters
-                                        ? 'No notice matches your filters. Try adjusting them.'
-                                        : 'When the administrator sends a notice, it will show up here.'}
-                                </p>
-                            </div>
-                        ) : (
-                            <ul className="divide-y">
-                                {notices.data.map((n) => {
-                                    const meta = TYPE_META[n.type] ?? TYPE_META.info;
-                                    const isUnread = !n.read_at;
-                                    return (
-                                        <li key={n.id}>
-                                            <Link
-                                                href={route('my-notices.show', n.id)}
-                                                className={`block border-l-4 px-4 py-4 transition hover:bg-gray-50 md:px-6 ${
-                                                    meta.accent
-                                                } ${isUnread ? 'bg-blue-50/50' : ''}`}
-                                            >
-                                                <div className="flex items-start gap-3">
-                                                    <div className="mt-1 flex-shrink-0">
-                                                        {isUnread ? (
-                                                            <div className="relative">
-                                                                <Mail className="h-5 w-5 text-blue-600" />
-                                                                <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />
-                                                            </div>
-                                                        ) : (
-                                                            <MailOpen className="h-5 w-5 text-gray-400" />
-                                                        )}
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <span
-                                                                className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium ${meta.className}`}
-                                                            >
-                                                                {meta.icon}
-                                                                {meta.label}
-                                                            </span>
-                                                            {isUnread && (
-                                                                <Badge className="bg-red-500 text-white hover:bg-red-500">
-                                                                    New
-                                                                </Badge>
-                                                            )}
-                                                            {n.attachment_url && (
-                                                                <span
-                                                                    className="inline-flex items-center gap-0.5 text-xs text-muted-foreground"
-                                                                    title="Has attachment"
-                                                                >
-                                                                    <Paperclip className="h-3.5 w-3.5" />
-                                                                </span>
-                                                            )}
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {relativeTime(n.created_at)} · {formatDateTime(n.created_at)}
-                                                            </span>
-                                                        </div>
-                                                        <h3
-                                                            className={`mt-1 truncate text-base ${
-                                                                isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-800'
-                                                            }`}
-                                                        >
-                                                            {n.title}
-                                                        </h3>
-                                                        <p className="mt-1 line-clamp-2 text-sm text-gray-600">
-                                                            {n.message}
-                                                        </p>
-                                                    </div>
-                                                    <ChevronRightIcon className="mt-2 h-5 w-5 flex-shrink-0 text-gray-400" />
-                                                </div>
-                                            </Link>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        )}
-
-                        {notices.last_page > 1 && (
-                            <div className="flex items-center justify-between border-t px-4 py-3 md:px-6">
-                                <p className="text-sm text-gray-700">
-                                    Showing{' '}
-                                    <span className="font-medium">
-                                        {(notices.current_page - 1) * notices.per_page + 1}
-                                    </span>{' '}
-                                    to{' '}
-                                    <span className="font-medium">
-                                        {Math.min(notices.current_page * notices.per_page, notices.total)}
-                                    </span>{' '}
-                                    of <span className="font-medium">{notices.total}</span>
-                                </p>
-                                <nav className="inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                    {notices.current_page > 1 && (
-                                        <Link
-                                            href={route('my-notices.index', {
-                                                ...queryParams,
-                                                page: notices.current_page - 1,
-                                            })}
-                                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                                        >
-                                            <ChevronLeft className="h-5 w-5" />
-                                        </Link>
-                                    )}
-                                    {notices.links.slice(1, -1).map((link, i) => (
-                                        <Link
-                                            key={i}
-                                            href={link.url ?? '#'}
-                                            className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${
-                                                link.active
-                                                    ? 'z-10 bg-green-600 text-white'
-                                                    : 'text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            {link.label}
-                                        </Link>
-                                    ))}
-                                    {notices.current_page < notices.last_page && (
-                                        <Link
-                                            href={route('my-notices.index', {
-                                                ...queryParams,
-                                                page: notices.current_page + 1,
-                                            })}
-                                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                                        >
-                                            <ChevronRight className="h-5 w-5" />
-                                        </Link>
-                                    )}
-                                </nav>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                    </div>
+                )}
             </PageSurface>
         </Layout>
     );

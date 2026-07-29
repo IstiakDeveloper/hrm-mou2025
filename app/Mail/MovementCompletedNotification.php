@@ -41,7 +41,7 @@ class MovementCompletedNotification extends Mailable
         $returnDate = $this->returnDateTime->format('M d, Y h:i A');
 
         return $this->subject('Movement Completed: ' . $employeeName)
-            ->view('emails.movement-completed')
+            ->view('emails.movements.complete')
             ->with([
                 'movement' => $this->movement,
                 'employee' => $employee,
@@ -52,6 +52,7 @@ class MovementCompletedNotification extends Mailable
                 'purpose' => $this->movement->purpose,
                 'destination' => $this->movement->destination,
                 'movementType' => $this->movement->movement_type,
+                'workResult' => $this->movement->work_result,
             ]);
     }
 }

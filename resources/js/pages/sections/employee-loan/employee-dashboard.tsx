@@ -128,17 +128,17 @@ export function EmployeeLoanEmployeeDashboardView({
                                 <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-zinc-700">{employee.department?.name || 'Department'}</span>
                             </div>
                         </div>
-                        <div className="flex shrink-0 flex-wrap gap-2">
-                            <Button asChild variant="outline" size="sm" className="h-9 px-3 text-xs">
+                        <div className="flex shrink-0 gap-2 w-full lg:w-auto">
+                            <Button asChild variant="outline" size="sm" className="h-9 px-3 text-xs flex-1 lg:flex-none justify-center">
                                 <Link href="/sections">Sections</Link>
                             </Button>
-                            <Button asChild size="sm" className="h-9 bg-amber-600 px-3 text-xs hover:bg-amber-700">
+                            <Button asChild size="sm" className="h-9 bg-amber-600 px-3 text-xs hover:bg-amber-700 flex-1 lg:flex-none justify-center">
                                 <Link href={employeeLoanEmployeePath('/employee/loan')}>My loans</Link>
                             </Button>
                         </div>
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
                         <MetricCard label="Total outstanding" value={summary.total_outstanding} tone="amber" />
                         <MetricCard label="Out. PR" value={summary.outstanding_principal} tone="slate" />
                         <MetricCard label="Out. SC" value={summary.outstanding_service_charge} tone="slate" />
@@ -150,40 +150,40 @@ export function EmployeeLoanEmployeeDashboardView({
             </Card>
 
             <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="space-y-4">
+                <div className="space-y-4 min-w-0">
                     <Card className="overflow-hidden border-zinc-200/90 shadow-sm">
-                        <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-4 sm:px-5">
-                            <CardTitle className="text-base font-semibold text-zinc-950">Active loans</CardTitle>
+                        <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3.5 sm:px-5">
+                            <CardTitle className="text-sm sm:text-base font-semibold text-zinc-950">Active loans</CardTitle>
                             <CardDescription className="text-xs">Your current loan accounts with progress and next due date.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-3 p-4 sm:p-5">
+                        <CardContent className="space-y-3 p-3.5 sm:p-5">
                             {activeLoanCards.length > 0 ? (
                                 activeLoanCards.map((loan) => (
-                                    <div key={loan.id} className="rounded-2xl border border-zinc-200 bg-white p-4">
-                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                            <div>
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="text-sm font-semibold text-zinc-950">{loan.loan_type_label}</h3>
-                                                    <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                                    <div key={loan.id} className="rounded-xl sm:rounded-2xl border border-zinc-200 bg-white p-3 sm:p-4 space-y-3">
+                                        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <h3 className="text-xs sm:text-sm font-bold text-zinc-950">{loan.loan_type_label}</h3>
+                                                    <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800 text-[10px] px-2 py-0.5">
                                                         {loan.loan_number}
                                                     </Badge>
                                                 </div>
-                                                <p className="mt-1 text-xs text-zinc-500">
+                                                <p className="mt-1 text-[11px] text-zinc-500 leading-snug">
                                                     {loan.policy_name || 'Policy not assigned'}
                                                     {loan.disbursement_date ? ` · Disbursed ${loan.disbursement_date}` : ''}
                                                 </p>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <Button asChild variant="outline" size="sm" className="h-8 px-3 text-xs">
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Button asChild variant="outline" size="sm" className="h-7.5 px-2.5 text-xs flex-1 sm:flex-none justify-center">
                                                     <Link href={employeeLoanEmployeePath(`/employee/loan/${loan.id}`)}>Details</Link>
                                                 </Button>
-                                                <Button asChild variant="outline" size="sm" className="h-8 px-3 text-xs">
+                                                <Button asChild variant="outline" size="sm" className="h-7.5 px-2.5 text-xs flex-1 sm:flex-none justify-center">
                                                     <Link href={employeeLoanEmployeePath(`/employee/loan/${loan.id}/ledger`)}>Ledger</Link>
                                                 </Button>
                                             </div>
                                         </div>
 
-                                        <div className="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 sm:gap-2">
                                             <MiniMetric label="Out. PR" value={fmt(loan.outstanding_principal)} accent="text-zinc-900" />
                                             <MiniMetric label="Out. SC" value={fmt(loan.outstanding_service_charge)} accent="text-violet-900" />
                                             <MiniMetric label="Outstanding" value={fmt(loan.outstanding_balance)} accent="text-amber-800" />
@@ -194,7 +194,7 @@ export function EmployeeLoanEmployeeDashboardView({
                                     </div>
                                 ))
                             ) : (
-                                <div className="rounded-2xl border border-dashed border-zinc-200 py-12 text-center text-sm text-zinc-600">
+                                <div className="rounded-xl border border-dashed border-zinc-200 py-8 text-center text-xs text-zinc-600">
                                     No active loans found.
                                 </div>
                             )}
@@ -202,7 +202,7 @@ export function EmployeeLoanEmployeeDashboardView({
                     </Card>
 
                     <Card className="overflow-hidden border-zinc-200/90 shadow-sm">
-                        <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-4">
+                        <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3.5">
                             <CardTitle className="text-sm font-semibold text-zinc-950">Recent loan transactions</CardTitle>
                             <CardDescription className="text-xs">Latest loan deductions, manual payments, or adjustments.</CardDescription>
                         </CardHeader>
@@ -213,32 +213,34 @@ export function EmployeeLoanEmployeeDashboardView({
                                         <Link
                                             key={tx.id}
                                             href={employeeLoanEmployeePath(`/employee/loan/${tx.loan_id}/ledger`)}
-                                            className="group flex items-start gap-3 rounded-xl border border-zinc-200 bg-white p-3 transition-colors hover:border-amber-200 hover:bg-amber-50/30"
+                                            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-white p-3 transition-colors hover:border-amber-200 hover:bg-amber-50/30"
                                         >
-                                            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
-                                                <ReceiptText className="h-4 w-4" />
+                                            <div className="flex items-start gap-2.5 min-w-0">
+                                                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+                                                    <ReceiptText className="h-4 w-4" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-xs sm:text-sm font-bold text-zinc-900 group-hover:text-amber-900 truncate">{tx.transaction_type_label}</p>
+                                                    <p className="text-[11px] text-zinc-500 truncate">
+                                                        {tx.loan_number || 'Loan'}
+                                                        {tx.transaction_date ? ` · ${tx.transaction_date}` : ''}
+                                                    </p>
+                                                    {(tx.notes || tx.reference_no) && (
+                                                        <p className="mt-0.5 truncate text-[10px] text-zinc-400">{tx.notes || tx.reference_no}</p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-sm font-medium text-zinc-900 group-hover:text-amber-900">{tx.transaction_type_label}</p>
-                                                <p className="text-[11px] text-zinc-500">
-                                                    {tx.loan_number || 'Loan'}
-                                                    {tx.transaction_date ? ` · ${tx.transaction_date}` : ''}
-                                                </p>
-                                                {(tx.notes || tx.reference_no) && (
-                                                    <p className="mt-1 truncate text-[11px] text-zinc-500">{tx.notes || tx.reference_no}</p>
-                                                )}
-                                            </div>
-                                            <div className="shrink-0 text-right">
-                                                <p className={`text-sm font-bold tabular-nums ${tx.credit_amount > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                            <div className="flex items-center justify-between sm:flex-col sm:items-end shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 text-right">
+                                                <p className={`text-xs sm:text-sm font-extrabold tabular-nums ${tx.credit_amount > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                                                     {fmt(tx.credit_amount > 0 ? tx.credit_amount : tx.debit_amount)}
                                                 </p>
-                                                <p className="text-[10px] text-zinc-500">Balance {fmt(tx.balance_after)}</p>
+                                                <p className="text-[10px] text-zinc-400 font-medium">Bal: {fmt(tx.balance_after)}</p>
                                             </div>
                                         </Link>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="rounded-xl border border-dashed border-zinc-200 py-10 text-center text-sm text-zinc-600">
+                                <div className="rounded-xl border border-dashed border-zinc-200 py-8 text-center text-xs text-zinc-600">
                                     No recent loan transactions yet.
                                 </div>
                             )}
@@ -356,18 +358,18 @@ function MetricCard({ label, value, tone }: { label: string; value: number; tone
     }[tone];
 
     return (
-        <div className={`rounded-2xl border p-4 ${toneClass}`}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-            <p className="mt-2 font-mono text-2xl font-bold tabular-nums">{fmt(value)}</p>
+        <div className={`rounded-xl border p-2.5 sm:p-4 ${toneClass}`}>
+            <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wide text-zinc-500 truncate">{label}</p>
+            <p className="mt-1 font-mono text-xs sm:text-base md:text-xl font-bold tabular-nums truncate">{fmt(value)}</p>
         </div>
     );
 }
 
 function MiniMetric({ label, value, accent }: { label: string; value: string; accent: string }) {
     return (
-        <div className="rounded-xl bg-white/80 px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-            <p className={`mt-1 text-sm font-semibold ${accent}`}>{value}</p>
+        <div className="rounded-lg border border-zinc-200/60 bg-zinc-50/70 px-2.5 py-1.5">
+            <p className="text-[9px] font-semibold uppercase tracking-wide text-zinc-500 truncate">{label}</p>
+            <p className={`mt-0.5 text-xs font-bold tabular-nums truncate ${accent}`}>{value}</p>
         </div>
     );
 }

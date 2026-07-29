@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building2, Printer } from 'lucide-react';
+import { ArrowLeft, Printer } from 'lucide-react';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { PayrollReportDocumentHeader } from '@/components/payroll/PayrollReportDocumentHeader';
 
 interface Employee extends EmployeeNameFields {
     id: number;
@@ -29,6 +30,8 @@ type Props = {
     movements: Movement[];
     filterSummary: string;
     generatedAt: string;
+    companyName?: string;
+    companyAddress?: string;
 };
 
 function durationLabel(movement: Movement) {
@@ -40,9 +43,17 @@ function durationLabel(movement: Movement) {
     return `${hours}h ${minutes}m`;
 }
 
-export default function MovementPrint({ movements, filterSummary, generatedAt }: Props) {
+export default function MovementPrint({ movements, filterSummary, generatedAt, companyName, companyAddress }: Props) {
     useEffect(() => {
-        const timer = window.setTimeout(() => window.print(), 250);
+        const tryPrint = () => {
+            const splash = document.querySelector('[aria-busy="true"][role="status"]');
+            if (splash) {
+                const timer = window.setTimeout(tryPrint, 200);
+                return () => window.clearTimeout(timer);
+            }
+            window.print();
+        };
+        const timer = window.setTimeout(tryPrint, 600);
         return () => window.clearTimeout(timer);
     }, []);
 
@@ -169,34 +180,22 @@ export default function MovementPrint({ movements, filterSummary, generatedAt }:
                 </div>
 
                 <div data-print-page className="print-card rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-                    <div className="mb-4 flex items-end justify-between border-b-2 border-slate-950 pb-2.5">
-                        <div>
-                            <div className="flex items-center gap-1">
-                                <Building2 className="h-4 w-4 text-slate-900" />
-                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">
-                                    HRM System
-                                </span>
-                            </div>
-                            <h1 className="mt-0.5 text-base font-black uppercase tracking-tight text-slate-950">
-                                Movement Register
-                            </h1>
-                            <p className="text-[10px] font-medium text-slate-500">
-                                Employee movement listing for office out and return tracking
-                            </p>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-[10px] font-bold text-slate-800">
-                                Generated:{' '}
-                                <span className="font-extrabold text-slate-950">
-                                    {format(new Date(generatedAt), 'dd MMM yyyy, hh:mm a')}
-                                </span>
-                            </div>
-                            <div className="mt-0.5 text-[9px] text-slate-500">{filterSummary || 'All movements'}</div>
-                        </div>
-                    </div>
+                    <PayrollReportDocumentHeader
+                        companyName={companyName}
+                        companyAddress={companyAddress}
+                        title="Movement Register"
+                    />
 
-                    <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-600">
-                        <span className="font-semibold text-slate-800">Total records:</span> {movements.length}
+                    <div className="mb-3 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-600">
+                        <div>
+                            <span className="font-semibold text-slate-800">Total records:</span> {movements.length}
+                            {filterSummary && filterSummary !== 'All movements' && (
+                                <span className="ml-3 text-slate-500">({filterSummary})</span>
+                            )}
+                        </div>
+                        <div className="text-[9px] text-slate-500">
+                            Generated: {format(new Date(generatedAt), 'dd MMM yyyy, hh:mm a')}
+                        </div>
                     </div>
 
                     <div>

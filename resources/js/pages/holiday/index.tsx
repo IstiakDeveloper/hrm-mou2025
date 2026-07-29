@@ -201,7 +201,74 @@ export default function HolidayIndex({ holidays, years, year, filters }: Holiday
         {/* Holidays Table */}
         <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            {/* Mobile Card List View (sm:hidden) */}
+            <div className="p-2 space-y-2 sm:hidden">
+              {holidays.data.length > 0 ? (
+                holidays.data.map((holiday, idx) => (
+                  <div key={holiday.id} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                          <CalendarIcon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-xs text-slate-900 block truncate">{holiday.title}</span>
+                          <span className="text-[11px] font-semibold text-emerald-600 block">
+                            {format(new Date(holiday.date), 'MMMM d, yyyy')}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="shrink-0">
+                        {holiday.is_recurring ? (
+                          <Badge className="bg-purple-100 text-purple-700 border-0 text-[10px]">
+                            Recurring
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-blue-100 text-blue-700 border-0 text-[10px]">
+                            One-time
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {holiday.description && (
+                      <p className="text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded">{holiday.description}</p>
+                    )}
+
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                      <span>SL #{serialBase + idx + 1}</span>
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg" 
+                          title="Edit"
+                          onClick={() => router.get(route('holidays.edit', holiday.id))}
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg" 
+                          title="Delete"
+                          onClick={() => handleDelete(holiday.id)}
+                        >
+                          <Trash className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  No holidays found for the selected criteria.
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Table View (hidden sm:block) */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/80 border-b border-slate-200">

@@ -316,7 +316,7 @@ export default function HolidayCalendar({ calendarData, year, month, years, mont
                                             <div
                                                 key={`${weekIndex}-${dayIndex}`}
                                                 className={cn(
-                                                    'group flex min-h-[4.5rem] flex-col rounded-xl border p-1.5 shadow-sm transition-all duration-150 md:min-h-[5.25rem] md:p-2',
+                                                    'group flex min-h-[3.25rem] sm:min-h-[4.5rem] md:min-h-[5.25rem] flex-col rounded-xl border p-1 sm:p-1.5 md:p-2 shadow-xs transition-all duration-150',
                                                     inMonth
                                                         ? 'border-zinc-200/80 bg-white hover:border-emerald-200/80 hover:shadow-md'
                                                         : 'border-transparent bg-zinc-50/80 text-zinc-400',
@@ -329,8 +329,8 @@ export default function HolidayCalendar({ calendarData, year, month, years, mont
                                                 <div className="flex items-start justify-between gap-0.5">
                                                     <span
                                                         className={cn(
-                                                            'flex h-7 w-7 items-center justify-center rounded-lg text-xs font-semibold tabular-nums',
-                                                            today && inMonth && 'bg-emerald-600 text-white shadow-sm',
+                                                            'flex h-5 w-5 sm:h-7 sm:w-7 items-center justify-center rounded-lg text-[10px] sm:text-xs font-semibold tabular-nums',
+                                                            today && inMonth && 'bg-emerald-600 text-white shadow-xs',
                                                             !today &&
                                                                 inMonth &&
                                                                 holidays.length > 0 &&

@@ -142,8 +142,17 @@ interface MovementsResponse {
     meta?: PaginationMeta;
 }
 
+interface MovementSummary {
+    total: number;
+    active: number;
+    completed: number;
+    pending: number;
+    approved: number;
+}
+
 interface MovementIndexProps {
     movements: MovementsResponse;
+    summary: MovementSummary;
     departments: Department[];
     employees: Employee[];
     zones: ZoneOption[];
@@ -188,6 +197,7 @@ function parseFilterDate(value?: string): Date | undefined {
 
 export default function MovementIndex({
     movements,
+    summary,
     departments,
     employees,
     zones = [],
@@ -742,6 +752,35 @@ export default function MovementIndex({
                     </div>
                 </div>
 
+                {/* Summary cards */}
+                <div className="mb-2 flex items-baseline gap-2">
+                    <h2 className="text-sm font-semibold text-slate-700">
+                        {fromDate && toDate && format(fromDate, 'yyyy-MM') === format(toDate, 'yyyy-MM')
+                            ? format(fromDate, 'MMMM yyyy')
+                            : fromDate || toDate
+                                ? `${fromDate ? format(fromDate, 'dd MMM yyyy') : '...'} — ${toDate ? format(toDate, 'dd MMM yyyy') : '...'}`
+                                : 'All time'}
+                    </h2>
+                    <span className="text-xs text-slate-400">Summary</span>
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 md:mb-4">
+                    {[
+                        { label: 'Total', value: summary.total, icon: Activity, color: 'text-slate-700', bg: 'bg-slate-50' },
+                        { label: 'Active', value: summary.active, icon: Activity, color: 'text-blue-700', bg: 'bg-blue-50' },
+                        { label: 'Pending', value: summary.pending, icon: AlertCircle, color: 'text-amber-700', bg: 'bg-amber-50' },
+                        { label: 'Approved', value: summary.approved, icon: Check, color: 'text-emerald-700', bg: 'bg-emerald-50' },
+                        { label: 'Completed', value: summary.completed, icon: Check, color: 'text-teal-700', bg: 'bg-teal-50' },
+                    ].map((card) => (
+                        <div key={card.label} className={cn('flex items-center gap-2.5 rounded-xl border border-slate-200 px-3 py-2.5', card.bg)}>
+                            <card.icon className={cn('h-4 w-4 shrink-0', card.color)} />
+                            <div className="min-w-0">
+                                <p className="truncate text-[11px] font-medium text-slate-500">{card.label}</p>
+                                <p className={cn('text-sm font-bold', card.color)}>{card.value.toLocaleString()}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
                 <Card className="overflow-hidden rounded-xl border-slate-200 bg-white shadow-sm">
                     <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 md:px-4 md:py-2.5">
                         <form
@@ -870,7 +909,121 @@ export default function MovementIndex({
                     </Sheet>
 
                     <CardContent className="p-0">
-                        <div className="overflow-x-auto">
+                        {/* Mobile Card List View (sm:hidden) */}
+                        <div className="p-2 space-y-2 sm:hidden">
+                            {movements.data.length > 0 ? (
+                                movements.data.map((movement) => (
+                                    <div
+                                        key={movement.id}
+                                        className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-xs space-y-2"
+                                    >
+                                        <div className="flex items-start justify-between gap-1.5">
+                                            <div className="flex items-center space-x-2 min-w-0">
+                                                <div className="h-7 w-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                                                    <Activity className="h-3.5 w-3.5" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <Link
+                                                        href={route('movements.show', movement.id)}
+                                                        className="font-bold text-xs text-slate-800 hover:text-emerald-600 block truncate"
+                                                    >
+                                                        {employeeDisplayName(movement.employee)}
+                                                    </Link>
+                                                    <div className="text-[10px] text-slate-500 truncate">
+                                                        {movement.employee.department?.name} • ID: {movement.employee.pin || movement.employee.employee_id}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 flex items-center gap-1">
+                                                {getMovementTypeBadge(movement.movement_type)}
+                                                {getStatusBadge(movement.status)}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-2 rounded-lg text-xs">
+                                            <div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-400 block">From</span>
+                                                <span className="text-slate-700 font-semibold text-[11px]">
+                                                    {format(new Date(movement.from_datetime), 'MMM dd, HH:mm')}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-400 block">Return</span>
+                                                {movement.status === 'completed' && movement.actual_return_datetime ? (
+                                                    <span className="text-emerald-700 font-semibold text-[11px]">
+                                                        {format(new Date(movement.actual_return_datetime), 'MMM dd, HH:mm')}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 italic text-[10px]">In progress</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {movement.destination && (
+                                            <div className="text-[11px] text-slate-600 truncate">
+                                                <span className="font-semibold text-slate-500">Destination:</span> {movement.destination}
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-100">
+                                            <div className="text-slate-500">
+                                                {movement.employee.branch?.name ? (
+                                                    <span className="truncate">{movement.employee.branch.name}</span>
+                                                ) : null}
+                                                {calculateDuration(movement) && (
+                                                    <span className="ml-1 text-emerald-700 font-bold">({calculateDuration(movement)})</span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                                    title="View"
+                                                    onClick={() => router.get(route('movements.show', movement.id))}
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                </Button>
+                                                {canEditMovement(movement) && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                                        title="Edit"
+                                                        onClick={() =>
+                                                            router.get(
+                                                                route('movements.edit', movement.id),
+                                                                buildFilterParams(),
+                                                            )
+                                                        }
+                                                    >
+                                                        <Edit className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
+                                                {canCloseMovement(movement) && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 rounded-lg bg-green-50 text-green-600 hover:bg-green-100"
+                                                        title="Close"
+                                                        onClick={() => router.get(route('movements.show', movement.id))}
+                                                    >
+                                                        <Check className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="py-6 text-center text-xs text-slate-500">
+                                    No movement requests found.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Desktop Table View (hidden sm:block) */}
+                        <div className="hidden sm:block overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="border-b border-slate-200 bg-slate-50/80">

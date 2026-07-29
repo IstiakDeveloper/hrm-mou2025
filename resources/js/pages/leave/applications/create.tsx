@@ -1,6 +1,7 @@
 import React, { useState, FormEvent, useRef, ChangeEvent, useEffect } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
+import { PageSurface } from '@/components/page-surface';
 import {
     Card,
     CardContent,
@@ -171,48 +172,49 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
         <Layout>
             <Head title="Apply for Leave" />
 
-            <div className="container mx-auto py-8">
-                {/* Header and navigation */}
-                <div className="mb-6">
-                    <Link href={route('leave.applications.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Back to Leave Applications
+            <PageSurface className="max-w-4xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-2">
+                    <Link
+                        href={route('leave.applications.index')}
+                        className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700"
+                    >
+                        <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                        <span>Back to Leave Applications</span>
                     </Link>
                 </div>
 
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Apply for Leave</h1>
+                <div className="flex items-center justify-between mb-3">
+                    <h1 className="text-base sm:text-xl font-bold text-gray-900">Apply for Leave</h1>
                 </div>
 
                 {/* Help information based on user role */}
                 {userPermissions.canApprove && (
-                    <Alert className="mb-6">
-                        <InfoIcon className="h-4 w-4" />
-                        <AlertDescription>
+                    <Alert className="mb-3 p-2.5 text-xs">
+                        <InfoIcon className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <AlertDescription className="text-xs">
                             If your role matches the leave approval tier for the number of days you selected, you can auto-approve.
-                            For longer leaves a higher approver is required — auto-approve will not be offered.
                         </AlertDescription>
                     </Alert>
                 )}
 
                 {/* Main form layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                     <div className="lg:col-span-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Leave Application</CardTitle>
-                                <CardDescription>Submit your leave request for approval</CardDescription>
+                        <Card className="shadow-xs border-slate-200">
+                            <CardHeader className="bg-gray-50/80 px-3 py-2 sm:px-4 border-b">
+                                <CardTitle className="text-xs font-bold tracking-wider text-gray-900 uppercase">Leave Application</CardTitle>
+                                <CardDescription className="text-[10px] text-gray-500">Submit your leave request for approval</CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleSubmit} className="space-y-6">
+                            <CardContent className="p-3 sm:p-5">
+                                <form onSubmit={handleSubmit} className="space-y-4">
                                     {/* Leave type selector */}
-                                    <div className="space-y-2">
-                                        <Label htmlFor="leaveType">Leave Type</Label>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="leaveType" className="text-xs">Leave Type</Label>
                                         <Select
                                             value={leaveTypeId}
                                             onValueChange={setLeaveTypeId}
                                         >
-                                            <SelectTrigger id="leaveType">
+                                            <SelectTrigger id="leaveType" className="h-8 text-xs">
                                                 <SelectValue placeholder="Select Leave Type" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -224,15 +226,15 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
                                             </SelectContent>
                                         </Select>
                                         {errors.leaveTypeId && (
-                                            <p className="text-sm font-medium text-red-500">{errors.leaveTypeId}</p>
+                                            <p className="text-xs font-medium text-red-500">{errors.leaveTypeId}</p>
                                         )}
                                         {errors.leave_type_id && (
-                                            <p className="text-sm font-medium text-red-500">{errors.leave_type_id}</p>
+                                            <p className="text-xs font-medium text-red-500">{errors.leave_type_id}</p>
                                         )}
                                     </div>
 
                                     {/* Date selection fields */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-2 gap-2 sm:gap-4">
                                         {/* Start date picker */}
                                         <div className="space-y-2">
                                             <Label>Start Date</Label>
@@ -462,7 +464,7 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
                         </Card>
                     </div>
                 </div>
-            </div>
+            </PageSurface>
         </Layout>
     );
 }
@@ -520,11 +522,11 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
         <Layout>
             <Head title="Create Leave Application" />
 
-            <div className="container mx-auto py-8">
-                <div className="mb-6">
-                    <Link href={route('leave.applications.index')} className="text-blue-600 hover:text-blue-800 flex items-center">
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Back to Leave Applications
+            <PageSurface className="max-w-xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="mb-2">
+                    <Link href={route('leave.applications.index')} className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700">
+                        <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                        <span>Back to Leave Applications</span>
                     </Link>
                 </div>
 
@@ -576,7 +578,7 @@ export function AdminCreate({ employees, leaveTypes }: { employees: Employee[], 
                         </div>
                     </CardContent>
                 </Card>
-            </div>
+            </PageSurface>
         </Layout>
     );
 }

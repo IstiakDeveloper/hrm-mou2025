@@ -95,7 +95,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Asset tracking across branches',
         icon: Boxes,
         href: '/sections/fixed-asset',
-        menuKeys: ['fa-settings', 'fa-custodian', 'fa-purchase', 'fa-asset', 'fa-stock', 'fa-depreciation', 'fa-transfer', 'fa-disposal', 'fa-reports'],
+        menuKeys: ['my-assets', 'fa-settings', 'fa-custodian', 'fa-purchase', 'fa-asset', 'fa-stock', 'fa-depreciation', 'fa-transfer', 'fa-disposal', 'fa-reports'],
     },
     {
         id: 'inventory',
@@ -177,7 +177,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     if (p.startsWith('/reports/movement')) return 'attendance-movement';
     if (p.startsWith('/reports/transfer')) return 'human-resources';
     if (p.startsWith('/reports/employee')) return 'human-resources';
-    if (p.startsWith('/attendance') || p.startsWith('/movements') || p.startsWith('/zkteco')) {
+    if (p.startsWith('/attendance') || p.startsWith('/movements') || p.startsWith('/movement-log-books') || p.startsWith('/movement-log-book-payments') || p.startsWith('/zkteco')) {
         return 'attendance-movement';
     }
     if (

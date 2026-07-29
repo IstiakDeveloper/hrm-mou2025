@@ -155,6 +155,18 @@ class OrganogramAccessService
     }
 
     /**
+     * Director (Microfinance) via role name and/or organogram permission marker.
+     */
+    public static function isMicrofinanceDirector(User $user): bool
+    {
+        if (in_array('Director (Microfinance)', self::mergedRoleNames($user), true)) {
+            return true;
+        }
+
+        return $user->hasDirectPermission('organogram.microfinance_director');
+    }
+
+    /**
      * HR / leave-desk users who may see all leave applications (not organogram-limited).
      */
     public static function hasUnrestrictedLeaveApplicationAccess(User $user): bool

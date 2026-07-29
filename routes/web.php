@@ -58,6 +58,8 @@ use App\Http\Controllers\Leave\LeaveBalanceController;
 use App\Http\Controllers\Leave\LeaveSettingController;
 use App\Http\Controllers\Leave\LeaveTypeController;
 use App\Http\Controllers\Movement\MovementController;
+use App\Http\Controllers\Movement\MovementLogBookController;
+use App\Http\Controllers\Movement\MovementLogBookPaymentController;
 use App\Http\Controllers\MyNoticeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Organization\EmployeeTypeController;
@@ -1597,6 +1599,25 @@ Route::middleware(['auth'])->group(function () {
     // ====================
     // MOVEMENT MANAGEMENT
     // ====================
+    Route::prefix('movement-log-books')->name('movement-log-books.')->middleware('permission:movements.view')->group(function () {
+        Route::get('/', [MovementLogBookController::class, 'index'])->name('index');
+        Route::get('/print', [MovementLogBookController::class, 'printIndex'])->name('print');
+        Route::get('/export/xlsx', [MovementLogBookController::class, 'exportXlsx'])->name('export.xlsx');
+        Route::get('/{logBook}/edit', [MovementLogBookController::class, 'edit'])->name('edit');
+        Route::put('/{logBook}', [MovementLogBookController::class, 'update'])->name('update');
+        Route::delete('/{logBook}', [MovementLogBookController::class, 'destroy'])->name('destroy');
+        Route::get('/{logBook}', [MovementLogBookController::class, 'show'])->name('show');
+    });
+
+    Route::prefix('movement-log-book-payments')->name('movement-log-book-payments.')->middleware('permission:movements.view')->group(function () {
+        Route::get('/', [MovementLogBookPaymentController::class, 'index'])->name('index');
+        Route::post('/process', [MovementLogBookPaymentController::class, 'process'])->name('process');
+        Route::get('/{payment}', [MovementLogBookPaymentController::class, 'show'])->name('show');
+        Route::get('/{payment}/voucher', [MovementLogBookPaymentController::class, 'voucher'])->name('voucher');
+        Route::post('/{payment}/approve', [MovementLogBookPaymentController::class, 'approve'])->name('approve');
+        Route::post('/{payment}/reject', [MovementLogBookPaymentController::class, 'reject'])->name('reject');
+    });
+
     Route::prefix('movements')->name('movements.')->group(function () {
         // View movements
         Route::get('/', [MovementController::class, 'index'])
@@ -1847,3 +1868,4 @@ Route::middleware(['auth'])->group(function () {
         });
     });
 });
+

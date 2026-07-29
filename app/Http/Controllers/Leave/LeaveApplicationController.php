@@ -7,16 +7,20 @@ use App\Mail\LeaveApplicationNotification;
 use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\Department;
+use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\LeaveApplication;
 use App\Models\LeaveApproval;
 use App\Models\LeaveApprovalTier;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
+use App\Models\RegionalOffice;
 use App\Models\User;
+use App\Models\Zone;
 use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -57,7 +61,7 @@ class LeaveApplicationController extends Controller
     {
         $name = strtolower(trim((string) $designationName));
         if ($name === '') {
-            return 'branch';
+            return 'none';
         }
         if (str_contains($name, 'regional')) {
             return 'regional_office';
@@ -69,7 +73,115 @@ class LeaveApplicationController extends Controller
             return 'branch';
         }
 
-        return 'branch';
+        // Directors and other HO-level designations are not scoped to the applicant's branch.
+        return 'none';
+    }
+
+    /**
+     * Graded designation family for a configured tier designation
+     * (e.g. "Branch Manager" → Branch Manager, Branch Manager-1/2/3).
+     *
+     * @return Collection<int, int>
+     */
+    private function designationFamilyIds(int $designationId, ?string $designationName): Collection
+    {
+        $ids = collect([(int) $designationId]);
+        $name = trim((string) $designationName);
+        if ($name === '') {
+            return $ids;
+        }
+
+        $base = trim((string) preg_replace('/\s*-\s*\d+\s*$/u', '', $name));
+        if ($base === '') {
+            return $ids;
+        }
+
+        $family = Designation::query()
+            ->where(function ($q) use ($base) {
+                $q->where('name', $base)
+                    ->orWhere('name', 'like', $base.'-%');
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        return $ids->merge($family)->unique()->values();
+    }
+
+    /**
+     * Resolve active employees who should approve under a designation-based leave tier.
+     * Uses graded designation families and geography: branch / regional office / zone / none.
+     *
+     * @return Collection<int, Employee>
+     */
+    private function resolveDesignationTierApproverEmployees(
+        Employee $applicant,
+        int $designationId,
+        ?string $designationName,
+        string $routingScope
+    ): Collection {
+        $applicant->loadMissing(['currentBranch.regionalOffice']);
+        $branch = $applicant->currentBranch;
+        $familyIds = $this->designationFamilyIds($designationId, $designationName);
+
+        if ($routingScope === 'regional_office') {
+            $ro = $branch?->regional_office_id
+                ? RegionalOffice::query()->find($branch->regional_office_id)
+                : null;
+            if ($ro?->regional_manager_employee_id) {
+                $official = Employee::query()
+                    ->with('designation')
+                    ->where('status', 'active')
+                    ->where('id', $ro->regional_manager_employee_id)
+                    ->first();
+                if ($official) {
+                    return collect([$official]);
+                }
+            }
+        }
+
+        if ($routingScope === 'zone') {
+            $zoneId = $branch?->regionalOffice?->zone_id;
+            $zone = $zoneId ? Zone::query()->find($zoneId) : null;
+            if ($zone?->zone_manager_employee_id) {
+                $official = Employee::query()
+                    ->with('designation')
+                    ->where('status', 'active')
+                    ->where('id', $zone->zone_manager_employee_id)
+                    ->first();
+                if ($official) {
+                    return collect([$official]);
+                }
+            }
+        }
+
+        $q = Employee::query()
+            ->with('designation')
+            ->where('status', 'active')
+            ->whereIn('designation_id', $familyIds->all());
+
+        if ($routingScope === 'branch') {
+            if (! $applicant->current_branch_id) {
+                return collect();
+            }
+            $q->where('current_branch_id', $applicant->current_branch_id);
+        } elseif ($routingScope === 'regional_office') {
+            $roId = $branch?->regional_office_id;
+            if (! $roId) {
+                return collect();
+            }
+            $branchIds = Branch::query()->where('regional_office_id', $roId)->pluck('id');
+            $q->whereIn('current_branch_id', $branchIds);
+        } elseif ($routingScope === 'zone') {
+            $zoneId = $branch?->regionalOffice?->zone_id;
+            if (! $zoneId) {
+                return collect();
+            }
+            $roIds = RegionalOffice::query()->where('zone_id', $zoneId)->pluck('id');
+            $branchIds = Branch::query()->whereIn('regional_office_id', $roIds)->pluck('id');
+            $q->whereIn('current_branch_id', $branchIds);
+        }
+
+        return $q->orderBy('id')->get();
     }
 
     /**
@@ -120,7 +232,6 @@ class LeaveApplicationController extends Controller
     {
         $branch = $employee->currentBranch ?: $employee->branch;
         $context = $this->leaveTierContext($employee);
-        $isHeadOffice = $context === 'head_office';
 
         /** @var ?LeaveApprovalTier $tier */
         $tier = LeaveApprovalTier::query()
@@ -233,22 +344,22 @@ class LeaveApplicationController extends Controller
                 ];
             }
         } elseif ($approverType === 'designation' && $tier->designation_id) {
-            $q = Employee::query()
-                ->where('status', 'active')
-                ->where('designation_id', $tier->designation_id);
+            $routingScope = $this->routingScopeForDesignationTierName($tier->designation?->name);
+            $approverEmployees = $this->resolveDesignationTierApproverEmployees(
+                $employee,
+                (int) $tier->designation_id,
+                $tier->designation?->name,
+                $routingScope
+            );
 
-            if (! $isHeadOffice) {
-                $q->where('current_branch_id', $employee->current_branch_id);
-            }
-
-            $employeeIds = $q->pluck('id');
-            if ($employeeIds->isNotEmpty()) {
-                $recipients = User::whereIn('employee_id', $employeeIds)->get();
+            if ($approverEmployees->isNotEmpty()) {
+                $recipients = User::whereIn('employee_id', $approverEmployees->pluck('id'))->get();
+                $primary = $approverEmployees->first();
                 $addressee = [
                     'type' => 'designation',
-                    'title' => $tier->designation?->name ?? 'Approver',
-                    'name' => null,
-                    'routing_scope' => $this->routingScopeForDesignationTierName($tier->designation?->name),
+                    'title' => $primary->designation?->name ?? $tier->designation?->name ?? 'Approver',
+                    'name' => $primary->full_name_en ?? $primary->full_name ?? null,
+                    'routing_scope' => $routingScope,
                 ];
             }
         }
@@ -288,6 +399,7 @@ class LeaveApplicationController extends Controller
         // If a user can approve up to N days, they can also approve any shorter request,
         // even if there are smaller tiers configured for those shorter durations.
         $tiers = LeaveApprovalTier::query()
+            ->with('designation')
             ->where('context', $context)
             ->where('is_active', true)
             ->where('max_leave_days', '>=', $days)
@@ -326,14 +438,14 @@ class LeaveApplicationController extends Controller
                     return true;
                 }
             } elseif ($type === 'designation' && $tier->designation_id && $user->employee_id) {
-                $eu = Employee::find($user->employee_id);
-                if (! $eu || (int) $eu->designation_id !== (int) $tier->designation_id) {
-                    continue;
-                }
-                if ($context === 'head_office') {
-                    return true;
-                }
-                if ((int) $eu->current_branch_id === (int) $applicant->current_branch_id) {
+                $routingScope = $this->routingScopeForDesignationTierName($tier->designation?->name);
+                $approvers = $this->resolveDesignationTierApproverEmployees(
+                    $applicant,
+                    (int) $tier->designation_id,
+                    $tier->designation?->name,
+                    $routingScope
+                );
+                if ($approvers->contains(fn (Employee $e) => (int) $e->id === (int) $user->employee_id)) {
                     return true;
                 }
             }

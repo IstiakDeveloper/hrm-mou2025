@@ -116,91 +116,89 @@ export function LeaveEmployeeDashboardView({
     }, [leaveBalances]);
 
     const dashboardBody = (
-            <>
-                <Card className="overflow-hidden border-zinc-200/90 border-t-4 border-t-emerald-500 bg-gradient-to-b from-white to-emerald-50/30 shadow-sm">
-                    <CardContent className="space-y-4 p-4 sm:p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-3">
+                <Card className="overflow-hidden border-zinc-200/90 border-t-4 border-t-emerald-500 bg-gradient-to-b from-white to-emerald-50/30 shadow-xs">
+                    <CardContent className="space-y-3 p-2.5 sm:p-3.5">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
-                                <p className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-emerald-700/90">
-                                    <Leaf className="h-3.5 w-3.5" />
+                                <p className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
+                                    <Leaf className="h-3 w-3" />
                                     Leave · {new Date().getFullYear()}
                                 </p>
-                                <h1 className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-zinc-900 md:text-2xl">
-                                    My leave
-                                </h1>
-                                <p className="mt-1 line-clamp-2 text-xs text-zinc-600 sm:text-sm">
-                                    Totals and balances match HR records; applications open in one tap.
-                                </p>
-                                <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[10px] sm:text-[11px] text-zinc-500">
-                                    <UserRound className="inline h-3.5 w-3.5 text-zinc-400" />
-                                    <span className="font-medium text-zinc-700">{auth?.user?.name ?? '—'}</span>
-                                    <span className="text-zinc-300">·</span>
-                                    <span className="truncate">{employee?.department?.name ?? 'Department'}</span>
-                                </p>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                                    <h1 className="text-xs sm:text-sm font-bold tracking-tight text-zinc-900">
+                                        My leave
+                                    </h1>
+                                    <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                                        <UserRound className="h-3 w-3 text-zinc-400" />
+                                        <span className="font-medium text-zinc-700">{auth?.user?.name ?? '—'}</span>
+                                        <span className="text-zinc-300">·</span>
+                                        <span className="truncate">{employee?.department?.name ?? 'Department'}</span>
+                                    </span>
+                                </div>
                             </div>
-                            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                                <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs">
+                            <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-center">
+                                <Button asChild variant="outline" size="sm" className="h-6.5 border-zinc-200 bg-white px-2 text-[10px] text-zinc-700 hover:bg-zinc-50">
                                     <Link href="/sections">Sections</Link>
                                 </Button>
-                                <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-xs bg-emerald-600 hover:bg-emerald-700">
+                                <Button asChild size="sm" className="h-6.5 bg-emerald-600 px-2.5 text-[10px] font-medium text-white hover:bg-emerald-700">
                                     <Link href="/leave/applications/create?section=leave">
-                                        <Plus className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-3.5 sm:w-3.5" />
+                                        <Plus className="mr-1 h-3 w-3" />
                                         Apply
                                     </Link>
                                 </Button>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+                            <div className="rounded-lg border border-zinc-100 bg-white p-2 sm:p-3 shadow-xs">
+                                <div className="flex items-center justify-between gap-1">
+                                    <p className="truncate text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                                         Allocated
                                     </p>
-                                    <TreePine className="h-3.5 w-3.5 text-emerald-600" />
+                                    <TreePine className="h-3 w-3 text-emerald-600 shrink-0" />
                                 </div>
-                                <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-zinc-900">
+                                <p className="mt-0.5 font-mono text-base sm:text-xl font-bold tabular-nums text-zinc-900">
                                     {totals.allocated}
                                 </p>
-                                <p className="text-[10px] text-zinc-500">Balance rows</p>
+                                <p className="text-[9px] text-zinc-400 truncate">Total days</p>
                             </div>
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Used</p>
-                                    <PiggyBank className="h-3.5 w-3.5 text-amber-600" />
+                            <div className="rounded-lg border border-zinc-100 bg-white p-2 sm:p-3 shadow-xs">
+                                <div className="flex items-center justify-between gap-1">
+                                    <p className="truncate text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Used</p>
+                                    <PiggyBank className="h-3 w-3 text-amber-600 shrink-0" />
                                 </div>
-                                <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-zinc-900">{totals.used}</p>
-                                <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-100">
+                                <p className="mt-0.5 font-mono text-base sm:text-xl font-bold tabular-nums text-zinc-900">{totals.used}</p>
+                                <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100">
                                     <div
                                         className="h-full rounded-full bg-emerald-500/80"
                                         style={{ width: `${usedPct}%` }}
                                     />
                                 </div>
-                                <p className="mt-1 text-[10px] text-zinc-500">{usedPct}% of allocated</p>
                             </div>
-                            <div className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                            <div className="rounded-lg border border-zinc-100 bg-white p-2 sm:p-3 shadow-xs">
+                                <div className="flex items-center justify-between gap-1">
+                                    <p className="truncate text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                                         Remaining
                                     </p>
-                                    <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                                    <Sparkles className="h-3 w-3 text-emerald-600 shrink-0" />
                                 </div>
-                                <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-emerald-700">
+                                <p className="mt-0.5 font-mono text-base sm:text-xl font-bold tabular-nums text-emerald-700">
                                     {totals.remaining}
                                 </p>
-                                <p className="text-[10px] text-zinc-500">Across types</p>
+                                <p className="text-[9px] text-zinc-400 truncate">Available</p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
                 {sortedBalances.length > 0 && (
-                    <Card className="mt-4 overflow-hidden border-zinc-200/90 shadow-sm">
-                        <CardHeader className="border-b border-zinc-100 bg-emerald-50/50 px-4 py-3 sm:px-5">
-                            <CardTitle className="text-base font-semibold text-zinc-900">By leave type</CardTitle>
-                            <CardDescription className="text-xs">Remaining / allocated · used %</CardDescription>
+                    <Card className="overflow-hidden border-zinc-200/90 shadow-xs">
+                        <CardHeader className="border-b border-zinc-100 bg-emerald-50/50 px-3 py-2 sm:px-4">
+                            <CardTitle className="text-xs font-bold tracking-wider text-zinc-900 uppercase">By leave type</CardTitle>
+                            <CardDescription className="text-[10px] text-zinc-500">Remaining / allocated · used %</CardDescription>
                         </CardHeader>
-                        <CardContent className="grid grid-cols-1 min-[450px]:grid-cols-2 gap-2 p-3 sm:p-4">
+                        <CardContent className="grid grid-cols-2 min-[640px]:grid-cols-3 gap-2 p-2.5 sm:p-3.5">
                             {sortedBalances.map((b) => {
                                 const alloc = num(b.allocated_days);
                                 const used = num(b.used_days);
@@ -208,28 +206,28 @@ export function LeaveEmployeeDashboardView({
                                 return (
                                     <div
                                         key={`${b.leave_type?.id ?? 'lt'}-${b.year}`}
-                                        className="rounded-lg border border-zinc-100 bg-white p-3 shadow-sm"
+                                        className="rounded-lg border border-zinc-100 bg-white p-2 sm:p-2.5 shadow-xs"
                                     >
-                                        <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-start justify-between gap-1">
                                             <div className="min-w-0">
-                                                <p className="truncate text-sm font-semibold text-zinc-900">
+                                                <p className="truncate text-xs font-bold text-zinc-900">
                                                     {b.leave_type?.name ?? 'Leave'}
                                                 </p>
-                                                <p className="text-[10px] text-zinc-500">
+                                                <p className="text-[9px] text-zinc-400">
                                                     {b.leave_type?.is_paid ? 'Paid' : 'Unpaid'} · {b.year}
                                                 </p>
                                             </div>
-                                            <span className="shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-emerald-900 ring-1 ring-emerald-100">
+                                            <span className="shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-emerald-900 ring-1 ring-emerald-100">
                                                 {num(b.remaining_days)}
                                                 <span className="font-normal text-emerald-600">/{alloc}</span>
                                             </span>
                                         </div>
-                                        <div className="mt-2 space-y-1">
-                                            <div className="flex justify-between text-[10px] text-zinc-500">
+                                        <div className="mt-1.5 space-y-0.5">
+                                            <div className="flex justify-between text-[9px] text-zinc-500">
                                                 <span>Used {used}d</span>
                                                 <span>{Math.round(pct)}%</span>
                                             </div>
-                                            <Progress value={pct} className="h-1.5 bg-zinc-100" />
+                                            <Progress value={pct} className="h-1 bg-zinc-100" />
                                         </div>
                                     </div>
                                 );
@@ -238,56 +236,56 @@ export function LeaveEmployeeDashboardView({
                     </Card>
                 )}
 
-                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
                     <div className="lg:col-span-8">
-                        <Card className="overflow-hidden border-zinc-200/90 shadow-sm">
-                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3 sm:px-5">
+                        <Card className="overflow-hidden border-zinc-200/90 shadow-xs">
+                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-3 py-2 sm:px-4">
                                 <div className="flex items-center justify-between gap-2">
                                     <div>
-                                        <CardTitle className="text-base font-semibold text-zinc-900">
+                                        <CardTitle className="text-xs font-bold tracking-wider text-zinc-900 uppercase">
                                             Recent applications
                                         </CardTitle>
-                                        <CardDescription className="text-xs">Tap to open</CardDescription>
+                                        <CardDescription className="text-[10px] text-zinc-500">Tap to view application details</CardDescription>
                                     </div>
                                     <CalendarHeart className="hidden h-4 w-4 text-emerald-600 sm:block" />
                                 </div>
                             </CardHeader>
-                            <CardContent className="p-3 sm:p-4">
+                            <CardContent className="p-2.5 sm:p-3">
                                 {recentLeaves?.length ? (
                                     <div className="space-y-1.5">
                                         {recentLeaves.map((x) => (
                                             <Link
                                                 key={x.id}
                                                 href={`/leave/applications/${x.id}?section=leave`}
-                                                className="group flex min-h-[44px] items-center gap-2.5 rounded-lg border border-zinc-100 bg-white p-2.5 shadow-sm transition-colors hover:border-emerald-200 hover:bg-emerald-50/20 sm:gap-3 sm:p-3"
+                                                className="group flex items-center gap-2 rounded-lg border border-zinc-100 bg-white p-2 shadow-xs transition-colors hover:border-emerald-200 hover:bg-emerald-50/20 sm:p-2.5"
                                             >
-                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-                                                    <CalendarHeart className="h-4 w-4" />
+                                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                                                    <CalendarHeart className="h-3.5 w-3.5" />
                                                 </div>
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="truncate text-sm font-medium text-zinc-900 group-hover:text-emerald-900">
+                                                    <p className="truncate text-xs font-semibold text-zinc-900 group-hover:text-emerald-900">
                                                         {x.leave_type?.name ?? 'Leave'}
                                                     </p>
-                                                    <p className="truncate text-[11px] text-zinc-500">
+                                                    <p className="truncate text-[10px] text-zinc-500">
                                                         {formatRange(x.start_date, x.end_date)}
                                                     </p>
                                                 </div>
                                                 <Badge
                                                     variant="outline"
                                                     className={cn(
-                                                        'shrink-0 text-[10px] font-semibold capitalize',
+                                                        'shrink-0 text-[9px] font-semibold uppercase',
                                                         applicationStatusClass(x.status),
                                                     )}
                                                 >
                                                     {x.status}
                                                 </Badge>
-                                                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 group-hover:text-emerald-500" />
+                                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-300 group-hover:text-emerald-500" />
                                             </Link>
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="rounded-lg border border-dashed border-zinc-200 py-10 text-center text-sm text-zinc-600">
-                                        No applications yet.
+                                    <div className="rounded-lg border border-dashed border-zinc-200 py-6 text-center text-xs text-zinc-500">
+                                        No applications found.
                                     </div>
                                 )}
                             </CardContent>
@@ -295,16 +293,16 @@ export function LeaveEmployeeDashboardView({
                     </div>
 
                     <div className="lg:col-span-4">
-                        <Card className="border-zinc-200/90 shadow-sm lg:sticky lg:top-4">
-                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3">
-                                <CardTitle className="text-sm font-semibold text-zinc-900">Quick links</CardTitle>
+                        <Card className="border-zinc-200/90 shadow-xs lg:sticky lg:top-4">
+                            <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-3 py-2">
+                                <CardTitle className="text-xs font-bold tracking-wider text-zinc-900 uppercase">Quick links</CardTitle>
                             </CardHeader>
-                            <CardContent className="flex flex-col gap-1.5 p-3">
+                            <CardContent className="grid grid-cols-2 gap-1.5 p-2 lg:grid-cols-1">
                                 <Button
                                     asChild
                                     variant="outline"
                                     size="sm"
-                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
+                                    className="h-8 justify-between rounded-lg border-zinc-200 px-2.5 text-xs font-medium"
                                 >
                                     <Link href="/leave/applications?section=leave">
                                         Applications
@@ -315,7 +313,7 @@ export function LeaveEmployeeDashboardView({
                                     asChild
                                     variant="outline"
                                     size="sm"
-                                    className="h-10 justify-between rounded-lg border-zinc-200 px-3 text-xs font-medium"
+                                    className="h-8 justify-between rounded-lg border-zinc-200 px-2.5 text-xs font-medium"
                                 >
                                     <Link href="/employee/leaves?section=leave">
                                         Balance
@@ -326,7 +324,7 @@ export function LeaveEmployeeDashboardView({
                         </Card>
                     </div>
                 </div>
-            </>
+            </div>
     );
 
     if (embedded) {
@@ -336,7 +334,7 @@ export function LeaveEmployeeDashboardView({
     return (
         <Layout>
             <Head title="My leave" />
-            <PageSurface className="px-3 sm:px-4">{dashboardBody}</PageSurface>
+            <PageSurface className="max-w-7xl space-y-2.5 px-1.5 py-1.5 sm:px-3 sm:py-2.5">{dashboardBody}</PageSurface>
         </Layout>
     );
 }

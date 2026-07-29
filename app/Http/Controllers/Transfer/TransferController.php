@@ -247,10 +247,10 @@ class TransferController extends Controller
         }
 
         $validated = $request->validate([
-            'to_branch_id' => ['required', Rule::exists('branches', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'reason' => 'required|string',
             'rows' => 'required|array|min:1',
             'rows.*.employee_id' => 'required|exists:employees,id|distinct',
+            'rows.*.to_branch_id' => ['required', Rule::exists('branches', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'rows.*.effective_date' => 'required|date',
             'rows.*.transfer_order_no' => 'nullable|string|max:50',
             'rows.*.to_department_id' => 'nullable|exists:departments,id',
@@ -273,9 +273,9 @@ class TransferController extends Controller
                 ]);
             }
 
-            if ((int) $fromBranchId === (int) $validated['to_branch_id']) {
+            if ((int) $fromBranchId === (int) $row['to_branch_id']) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    "rows.{$index}.employee_id" => 'Destination branch must be different from current branch.',
+                    "rows.{$index}.to_branch_id" => 'Destination branch must be different from current branch.',
                 ]);
             }
         }
@@ -292,7 +292,7 @@ class TransferController extends Controller
                 $this->createApprovedTransfer([
                     'employee_id' => $employee->id,
                     'from_branch_id' => $employee->current_branch_id,
-                    'to_branch_id' => $validated['to_branch_id'],
+                    'to_branch_id' => $row['to_branch_id'],
                     'from_department_id' => $employee->department_id,
                     'to_department_id' => $row['to_department_id'] ?? null,
                     'from_designation_id' => $employee->designation_id,

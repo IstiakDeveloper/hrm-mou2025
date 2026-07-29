@@ -65,6 +65,7 @@ interface BulkTransferProps {
 type TransferRow = {
     id: string;
     employeeId: string;
+    toBranchId: string;
     effectiveDate: string;
     transferOrderNo: string;
     toDepartmentId: string;
@@ -131,12 +132,12 @@ export default function BulkTransfer({
         [designations],
     );
 
-    const [toBranchId, setToBranchId] = useState('');
     const [reason, setReason] = useState('');
     const [rows, setRows] = useState<TransferRow[]>([
         {
             id: newRowId(),
             employeeId: '',
+            toBranchId: '',
             effectiveDate: todayIso(),
             transferOrderNo: suggestedOrderNo ?? generateOrderNo(),
             toDepartmentId: 'same',
@@ -190,6 +191,7 @@ export default function BulkTransfer({
             {
                 id: newRowId(),
                 employeeId: '',
+                toBranchId: '',
                 effectiveDate: todayIso(),
                 transferOrderNo: generateOrderNo(),
                 toDepartmentId: 'same',
@@ -212,10 +214,6 @@ export default function BulkTransfer({
     const validate = () => {
         const nextErrors: Record<string, string> = {};
 
-        if (!toBranchId) {
-            nextErrors.to_branch_id = 'Destination branch is required';
-        }
-
         if (!reason.trim()) {
             nextErrors.reason = 'Reason is required';
         }
@@ -226,13 +224,17 @@ export default function BulkTransfer({
         }
 
         filledRows.forEach((row, index) => {
+            if (!row.toBranchId) {
+                nextErrors[`rows.${index}.to_branch_id`] = 'Destination branch is required';
+            }
+
             if (!row.effectiveDate) {
                 nextErrors[`rows.${index}.effective_date`] = 'Effective date is required';
             }
 
             const employee = employeesById.get(row.employeeId);
-            if (employee?.current_branch_id?.toString() === toBranchId) {
-                nextErrors[`rows.${index}.employee_id`] = 'Destination must differ from current branch';
+            if (employee?.current_branch_id?.toString() === row.toBranchId) {
+                nextErrors[`rows.${index}.to_branch_id`] = 'Destination must differ from current branch';
             }
         });
 
@@ -251,12 +253,12 @@ export default function BulkTransfer({
         router.post(
             route('transfers.bulk.store'),
             {
-                to_branch_id: toBranchId,
                 reason,
                 rows: rows
                     .filter((r) => r.employeeId)
                     .map((r) => ({
                         employee_id: r.employeeId,
+                        to_branch_id: r.toBranchId,
                         effective_date: r.effectiveDate,
                         transfer_order_no: r.transferOrderNo || null,
                         to_department_id: r.toDepartmentId === 'same' ? null : r.toDepartmentId,
@@ -304,23 +306,11 @@ export default function BulkTransfer({
                         <CardHeader className="py-3">
                             <CardTitle className="text-sm">Common details</CardTitle>
                             <CardDescription className="text-xs">
-                                Destination branch and reason apply to all rows. Department and designation stay the same unless expanded per employee.
+                                Reason applies to all rows. Each employee can go to a different branch, with its own effective date and order number.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="grid gap-4 pt-0 sm:grid-cols-2">
+                        <CardContent className="pt-0">
                             <div className="space-y-1.5">
-                                <Label className="text-xs">Destination branch</Label>
-                                <ComboSelect<string>
-                                    value={toBranchId || null}
-                                    onChange={(v) => setToBranchId(v ?? '')}
-                                    placeholder="Select destination branch…"
-                                    items={branchItems}
-                                />
-                                {errors.to_branch_id && (
-                                    <p className="text-xs font-medium text-red-500">{errors.to_branch_id}</p>
-                                )}
-                            </div>
-                            <div className="space-y-1.5 sm:col-span-2">
                                 <Label className="text-xs">Reason for transfer</Label>
                                 <Textarea
                                     rows={2}
@@ -357,7 +347,8 @@ export default function BulkTransfer({
                                         <TableHead className="w-10 text-xs">#</TableHead>
                                         <TableHead className="min-w-[220px] text-xs">Employee</TableHead>
                                         <TableHead className="min-w-[140px] text-xs">Current branch</TableHead>
-                                        <TableHead className="min-w-[120px] text-xs">Department</TableHead>
+                                        <TableHead className="min-w-[160px] text-xs">To branch</TableHead>
+                                        <TableHead className="min-w-[110px] text-xs">Department</TableHead>
                                         <TableHead className="min-w-[120px] text-xs">Designation</TableHead>
                                         <TableHead className="min-w-[130px] text-xs">Effective date</TableHead>
                                         <TableHead className="min-w-[150px] text-xs">Order no.</TableHead>
@@ -375,6 +366,10 @@ export default function BulkTransfer({
                                                 String(item.value) === row.employeeId ||
                                                 !usedEmployeeIds.has(String(item.value)),
                                         );
+
+                                        const rowBranchItems = employee?.current_branch_id
+                                            ? branchItems.filter((b) => String(b.value) !== String(employee.current_branch_id))
+                                            : branchItems;
 
                                         return (
                                             <React.Fragment key={row.id}>
@@ -395,6 +390,19 @@ export default function BulkTransfer({
                                                     </TableCell>
                                                     <TableCell className="py-2 text-xs text-gray-700">
                                                         {currentBranch?.name ?? '—'}
+                                                    </TableCell>
+                                                    <TableCell className="py-2">
+                                                        <ComboSelect<string>
+                                                            value={row.toBranchId || null}
+                                                            onChange={(v) => updateRow(row.id, { toBranchId: v ?? '' })}
+                                                            placeholder="Select branch…"
+                                                            items={rowBranchItems}
+                                                        />
+                                                        {errors[`rows.${index}.to_branch_id`] && (
+                                                            <p className="mt-1 text-[11px] text-red-500">
+                                                                {errors[`rows.${index}.to_branch_id`]}
+                                                            </p>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell className="py-2 text-xs text-gray-700">
                                                         {employee?.department?.name ?? '—'}
@@ -456,7 +464,7 @@ export default function BulkTransfer({
                                                 {row.expanded && (
                                                     <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
                                                         <TableCell />
-                                                        <TableCell colSpan={7} className="py-3">
+                                                        <TableCell colSpan={8} className="py-3">
                                                             <div className="grid gap-3 sm:grid-cols-2">
                                                                 <div className="space-y-1">
                                                                     <Label className="text-[11px] text-gray-500">Destination department</Label>
@@ -488,7 +496,7 @@ export default function BulkTransfer({
 
                     <Alert className="border-blue-200 bg-blue-50">
                         <AlertDescription className="text-xs text-blue-700">
-                            Each row gets its own effective date and transfer order number. Transfers are approved on creation; past or today&apos;s dates apply immediately, future dates complete automatically.
+                            Each row can have a different destination branch, effective date, and transfer order number. Transfers are approved on creation; past or today&apos;s dates apply immediately, future dates complete automatically.
                         </AlertDescription>
                     </Alert>
 

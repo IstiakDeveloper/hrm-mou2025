@@ -261,49 +261,49 @@ export default function ApplicationsIndex({
         <Layout>
             <Head title="Leave Applications" />
 
-            <PageSurface>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-5">
+            <PageSurface className="max-w-7xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2 border-b border-slate-200 pb-3">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Leave Applications</h1>
-                        <p className="mt-1 text-sm text-slate-500">
+                        <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Leave Applications</h1>
+                        <p className="text-xs text-slate-500">
                             Manage employee leave requests and approvals
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full md:w-auto">
+                    <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
                         <Button
                             variant="outline"
                             size="sm"
-                            className="h-9 flex items-center bg-white"
+                            className="h-7 px-2 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-white"
                             onClick={() => router.visit(route('leave.applications.report'))}
                         >
-                            <FileText className="mr-1 h-4 w-4" />
+                            <FileText className="mr-1 h-3 w-3" />
                             Report
                         </Button>
-                        <Button onClick={goToCreatePage} size="sm" className="h-9 flex items-center bg-emerald-600 hover:bg-emerald-700">
-                            <Plus className="mr-1 h-4 w-4" />
+                        <Button onClick={goToCreatePage} size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-emerald-600 hover:bg-emerald-700">
+                            <Plus className="mr-1 h-3 w-3" />
                             Apply for Leave
                         </Button>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <Card className="mb-6 shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
-                    <CardContent className="p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div className="space-y-2">
-                                <Label>From Date</Label>
+                <Card className="shadow-xs border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <CardContent className="p-2.5 sm:p-4">
+                        <div className="grid grid-cols-2 gap-2 mb-2.5">
+                            <div className="space-y-1">
+                                <Label className="text-[10px]">From Date</Label>
                                 <Popover open={fromDateOpen} onOpenChange={setFromDateOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
                                             className={cn(
-                                                "w-full justify-start text-left font-normal",
+                                                "w-full justify-start text-left font-normal h-8 text-xs px-2.5",
                                                 !fromDate && "text-muted-foreground"
                                             )}
                                         >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {fromDate ? format(fromDate, 'PPP') : <span>Pick a date</span>}
+                                            <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                                            {fromDate ? format(fromDate, 'PP') : <span>Pick a date</span>}
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0">
@@ -320,19 +320,19 @@ export default function ApplicationsIndex({
                                 </Popover>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>To Date</Label>
+                            <div className="space-y-1">
+                                <Label className="text-[10px]">To Date</Label>
                                 <Popover open={toDateOpen} onOpenChange={setToDateOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
                                             className={cn(
-                                                "w-full justify-start text-left font-normal",
+                                                "w-full justify-start text-left font-normal h-8 text-xs px-2.5",
                                                 !toDate && "text-muted-foreground"
                                             )}
                                         >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {toDate ? format(toDate, 'PPP') : <span>Pick a date</span>}
+                                            <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                                            {toDate ? format(toDate, 'PP') : <span>Pick a date</span>}
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0">
@@ -350,26 +350,24 @@ export default function ApplicationsIndex({
                             </div>
                         </div>
 
-                        <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-                            <div className="flex-1">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                                    <Input
-                                        placeholder="Search by employee name or ID..."
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        className="pl-10"
-                                    />
-                                </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+                                <Input
+                                    placeholder="Search name or ID..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    className="pl-8 h-8 text-xs"
+                                />
                             </div>
 
-                            <div className="w-full md:w-48">
+                            <div>
                                 <Select
                                     value={status}
                                     onValueChange={setStatus}
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger className="h-8 text-xs">
                                         <SelectValue placeholder="Status" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -382,12 +380,12 @@ export default function ApplicationsIndex({
                                 </Select>
                             </div>
 
-                            <div className="w-full md:w-64">
+                            <div>
                                 <Select
                                     value={departmentId}
                                     onValueChange={setDepartmentId}
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger className="h-8 text-xs">
                                         <SelectValue placeholder="Department" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -401,12 +399,12 @@ export default function ApplicationsIndex({
                                 </Select>
                             </div>
 
-                            <div className="w-full md:w-64">
+                            <div>
                                 <Select
                                     value={employeeId}
                                     onValueChange={setEmployeeId}
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger className="h-8 text-xs">
                                         <SelectValue placeholder="Employee" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -419,112 +417,217 @@ export default function ApplicationsIndex({
                                     </SelectContent>
                                 </Select>
                             </div>
+                        </div>
 
-                            <div className="flex space-x-2">
-                                <Button variant="outline" onClick={resetFilters} className="h-10 rounded-lg">
-                                    Reset
-                                </Button>
-                                <Button onClick={handleSearch} className="h-10 rounded-lg bg-emerald-600 hover:bg-emerald-700">
-                                    Apply
-                                </Button>
-                            </div>
+                        <div className="mt-2.5 flex items-center justify-end gap-1.5">
+                            <Button variant="outline" size="sm" onClick={resetFilters} className="h-7 px-2 text-[10px]">
+                                Reset
+                            </Button>
+                            <Button size="sm" onClick={handleSearch} className="h-7 px-2.5 text-[10px] bg-emerald-600 hover:bg-emerald-700">
+                                Apply Filters
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* Applications Table */}
-                <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
+                {/* Applications Card / Table */}
+                <Card className="shadow-xs border-slate-200 rounded-xl overflow-hidden bg-white">
                     <CardContent className="p-0">
-                        <div className="overflow-x-auto">
+                        {/* Mobile Card List View (sm:hidden) */}
+                        <div className="p-2 space-y-2 sm:hidden">
+                            {applications.data.length > 0 ? (
+                                applications.data.map((application) => (
+                                    <div key={application.id} className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-xs space-y-1.5">
+                                        <div className="flex items-center justify-between gap-1">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <div className="h-6 w-6 rounded bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                                                    <User className="h-3 w-3" />
+                                                </div>
+                                                <span className="font-bold text-xs text-slate-900 truncate">
+                                                    {employeeDisplayName(application.employee)}
+                                                </span>
+                                            </div>
+                                            {getStatusBadge(application.status)}
+                                        </div>
+                                        
+                                        <div className="flex items-center justify-between text-[11px] text-slate-700 font-medium">
+                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] py-0 px-1.5">
+                                                {application.leaveType?.name ?? application.leave_type?.name ?? '—'}
+                                            </Badge>
+                                            <span>
+                                                {application.days} day{application.days > 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+
+                                        <div className="text-[10px] text-slate-500">
+                                            {application.start_date && format(new Date(application.start_date), 'dd MMM yyyy')}
+                                            {application.start_date !== application.end_date && (
+                                                <span> - {format(new Date(application.end_date), 'dd MMM yyyy')}</span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 text-[10px] text-slate-500">
+                                            <span className="truncate max-w-[160px]">
+                                                Appr: {application.approver_display?.label || '—'}
+                                            </span>
+                                            <div className="flex items-center gap-1">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6.5 w-6.5 text-blue-600 bg-blue-50" 
+                                                    title="View"
+                                                    onClick={() => router.visit(route('leave.applications.show', application.id))}
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                </Button>
+
+                                                {application.status === 'pending' && application.employee_id === userPermissions.employeeId && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-6.5 w-6.5 text-slate-600 bg-slate-50" 
+                                                        title="Cancel"
+                                                        onClick={() => {
+                                                            if (confirm('Are you sure you want to cancel this leave application?')) {
+                                                                router.post(route('leave.applications.cancel', application.id));
+                                                            }
+                                                        }}
+                                                    >
+                                                        <UserX className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
+
+                                                {application.status === 'pending' && application.can_approve_action && (
+                                                    <>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-6.5 w-6.5 text-green-600 bg-green-50" 
+                                                            title="Approve"
+                                                            onClick={() => router.post(route('leave.applications.approve', application.id))}
+                                                        >
+                                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-6.5 w-6.5 text-red-600 bg-red-50" 
+                                                            title="Reject"
+                                                            onClick={() => {
+                                                                const reason = prompt('Please enter a reason for rejection:');
+                                                                if (reason) {
+                                                                    router.post(route('leave.applications.reject', application.id), {
+                                                                        rejection_reason: reason
+                                                                    });
+                                                                }
+                                                            }}
+                                                        >
+                                                            <XCircle className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="py-6 text-center text-xs text-slate-500">
+                                    No leave applications found.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Desktop Table View (hidden sm:block) */}
+                        <div className="hidden sm:block overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/80 border-b border-slate-200">
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider pl-6">Employee</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Leave Type</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Duration</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Days</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Approver</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Applied On</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider text-right pr-6">Actions</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider pl-4">Employee</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Leave Type</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Duration</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Days</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Status</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Approver</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Applied On</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider text-right pr-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {applications.data.length > 0 ? (
                                         applications.data.map((application) => (
                                             <TableRow key={application.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
-                                                <TableCell className="pl-6">
-                                                    <div className="flex items-center space-x-3">
+                                                <TableCell className="pl-4 py-2">
+                                                    <div className="flex items-center space-x-2.5">
                                                         <div className="flex-shrink-0">
-                                                            <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-                                                                <User className="h-4 w-4" />
+                                                            <div className="h-7 w-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                                                <User className="h-3.5 w-3.5" />
                                                             </div>
                                                         </div>
                                                         <div>
-                                                            <div className="font-semibold text-[13px] text-slate-800">
+                                                            <div className="font-semibold text-xs text-slate-800">
                                                                 {employeeDisplayName(application.employee)}
                                                             </div>
-                                                            <div className="text-xs text-slate-500 font-mono">
+                                                            <div className="text-[10px] text-slate-500 font-mono">
                                                                 ID: {application.employee.employee_id}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                                <TableCell className="py-2">
+                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
                                                         {application.leaveType?.name ?? application.leave_type?.name ?? '—'}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell>
-                                                    <div className="text-sm">
+                                                <TableCell className="py-2">
+                                                    <div className="text-xs">
                                                         {application.start_date && format(new Date(application.start_date), 'dd MMM yyyy')}
                                                         {application.start_date !== application.end_date && (
                                                             <span> to {format(new Date(application.end_date), 'dd MMM yyyy')}</span>
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>
-                                                    <div className="font-medium">
+                                                <TableCell className="py-2">
+                                                    <div className="font-medium text-xs">
                                                         {application.days} {application.days > 1 ? 'days' : 'day'}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="py-2">
                                                     {getStatusBadge(application.status)}
                                                 </TableCell>
-                                                <TableCell>
-                                                    <div className="max-w-[220px]">
-                                                        <div className="text-[13px] font-medium text-slate-800 truncate" title={application.approver_display?.label || '—'}>
+                                                <TableCell className="py-2">
+                                                    <div className="max-w-[200px]">
+                                                        <div className="text-xs font-medium text-slate-800 truncate" title={application.approver_display?.label || '—'}>
                                                             {application.approver_display?.label || '—'}
                                                         </div>
                                                         {application.status === 'pending' && application.approver_display?.title && application.approver_display?.name && (
-                                                            <div className="text-[11px] text-slate-500 truncate">
+                                                            <div className="text-[10px] text-slate-500 truncate">
                                                                 {application.approver_display.title}
                                                             </div>
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>
-                                                    <div className="text-sm">
+                                                <TableCell className="py-2">
+                                                    <div className="text-xs">
                                                         {application.applied_at && format(new Date(application.applied_at), 'dd MMM yyyy')}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-right pr-6">
-                                                    <div className="flex items-center justify-end gap-2">
+                                                <TableCell className="text-right pr-4 py-2">
+                                                    <div className="flex items-center justify-end gap-1.5">
                                                         <Button 
                                                             variant="ghost" 
                                                             size="icon" 
-                                                            className="h-8 w-8 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors" 
+                                                            className="h-7 w-7 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors" 
                                                             title="View Details"
                                                             onClick={() => router.visit(route('leave.applications.show', application.id))}
                                                         >
-                                                            <Eye className="h-4 w-4" />
+                                                            <Eye className="h-3.5 w-3.5" />
                                                         </Button>
 
                                                         {application.status === 'pending' && application.employee_id === userPermissions.employeeId && (
                                                             <Button 
                                                                 variant="ghost" 
                                                                 size="icon" 
-                                                                className="h-8 w-8 text-slate-600 bg-slate-50 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors" 
+                                                                className="h-7 w-7 text-slate-600 bg-slate-50 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors" 
                                                                 title="Cancel"
                                                                 onClick={() => {
                                                                     if (confirm('Are you sure you want to cancel this leave application?')) {
@@ -532,7 +635,7 @@ export default function ApplicationsIndex({
                                                                     }
                                                                 }}
                                                             >
-                                                                <UserX className="h-4 w-4" />
+                                                                <UserX className="h-3.5 w-3.5" />
                                                             </Button>
                                                         )}
 
@@ -541,16 +644,16 @@ export default function ApplicationsIndex({
                                                                 <Button 
                                                                     variant="ghost" 
                                                                     size="icon" 
-                                                                    className="h-8 w-8 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700 rounded-lg transition-colors" 
+                                                                    className="h-7 w-7 text-green-600 bg-green-50 hover:bg-green-100 hover:text-green-700 rounded-lg transition-colors" 
                                                                     title="Approve"
                                                                     onClick={() => router.post(route('leave.applications.approve', application.id))}
                                                                 >
-                                                                    <CheckCircle2 className="h-4 w-4" />
+                                                                    <CheckCircle2 className="h-3.5 w-3.5" />
                                                                 </Button>
                                                                 <Button 
                                                                     variant="ghost" 
                                                                     size="icon" 
-                                                                    className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
+                                                                    className="h-7 w-7 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
                                                                     title="Reject"
                                                                     onClick={() => {
                                                                         const reason = prompt('Please enter a reason for rejection:');
@@ -561,7 +664,7 @@ export default function ApplicationsIndex({
                                                                         }
                                                                     }}
                                                                 >
-                                                                    <XCircle className="h-4 w-4" />
+                                                                    <XCircle className="h-3.5 w-3.5" />
                                                                 </Button>
                                                             </>
                                                         )}
@@ -571,13 +674,13 @@ export default function ApplicationsIndex({
                                         ))
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="h-24 text-center">
+                                            <TableCell colSpan={8} className="h-20 text-center text-xs">
                                                 No leave applications found.
                                                 {(search || status !== 'all' || departmentId !== 'all' || employeeId !== 'all' || fromDate || toDate) && (
                                                     <Button
                                                         variant="link"
                                                         onClick={resetFilters}
-                                                        className="px-2 font-normal"
+                                                        className="px-2 font-normal text-xs"
                                                     >
                                                         Clear filters
                                                     </Button>

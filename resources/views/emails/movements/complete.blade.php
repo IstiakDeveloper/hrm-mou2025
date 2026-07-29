@@ -85,6 +85,12 @@
                     <th>Destination</th>
                     <td>{{ $destination }}</td>
                 </tr>
+                @if (!empty($workResult))
+                <tr>
+                    <th>Work Result / Feedback</th>
+                    <td>{{ $workResult }}</td>
+                </tr>
+                @endif
             </table>
 
             <p>This movement has been marked as completed in the system.</p>

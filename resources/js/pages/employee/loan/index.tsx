@@ -152,7 +152,7 @@ export default function EmployeeLoanIndex({ employee, filters: initialFilters, l
                                         </div>
                                     </div>
 
-                                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                    <div className="mt-3 grid gap-2 grid-cols-2 sm:grid-cols-2 xl:grid-cols-4">
                                         <Metric label="Principal (PR)" value={fmt(loan.principal_amount)} accent="text-zinc-900" />
                                         <Metric label="Service charge (SC)" value={fmt(loan.service_charge_amount)} accent="text-violet-900" />
                                         <Metric label="Out. PR" value={fmt(loan.outstanding_principal)} accent="text-zinc-900" />

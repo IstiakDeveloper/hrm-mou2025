@@ -77,9 +77,67 @@ function TableContent({ rows, emptyMessage }: { rows: LoanInstallmentLedgerRow[]
     );
 
     return (
-        <div className="overflow-x-auto">
-            <Table className="border-collapse">
-                <TableHeader>
+        <div>
+            {/* Mobile Card List View */}
+            <div className="p-3 space-y-2.5 sm:hidden">
+                {rows.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-zinc-200 py-8 text-center text-xs text-zinc-500">
+                        {emptyMessage}
+                    </div>
+                ) : (
+                    rows.map((row) => {
+                        const isPaid = row.status_label === 'PAID';
+                        return (
+                            <div key={row.id} className="rounded-xl border border-zinc-200 bg-white p-3 shadow-xs space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">
+                                            #{row.installment_no}
+                                        </span>
+                                        <span className="text-xs text-zinc-700 font-semibold">{row.scheduled_month || '—'}</span>
+                                    </div>
+                                    <Badge
+                                        variant="outline"
+                                        className={cn(
+                                            'text-[10px] uppercase',
+                                            isPaid ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-zinc-200 bg-zinc-50 text-zinc-600'
+                                        )}
+                                    >
+                                        {row.status_label}
+                                    </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-1.5 pt-1 text-xs">
+                                    <div className="bg-zinc-50 p-1.5 rounded text-center">
+                                        <p className="text-[9px] uppercase text-zinc-500 font-bold">Scheduled</p>
+                                        <p className="font-mono font-semibold text-zinc-900 text-[11px]">{fmt(row.total_amount)}</p>
+                                    </div>
+                                    <div className="bg-emerald-50 p-1.5 rounded text-center">
+                                        <p className="text-[9px] uppercase text-emerald-700 font-bold">Paid</p>
+                                        <p className="font-mono font-semibold text-emerald-800 text-[11px]">{numCell(row.paid_amount, true)}</p>
+                                    </div>
+                                    <div className="bg-amber-50 p-1.5 rounded text-center">
+                                        <p className="text-[9px] uppercase text-amber-800 font-bold">Remaining</p>
+                                        <p className="font-mono font-semibold text-amber-900 text-[11px]">{isPaid ? fmt(row.balance_total) : fmt(0)}</p>
+                                    </div>
+                                </div>
+
+                                {isPaid && (row.payment_month || row.payment_branch) && (
+                                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-100 text-zinc-500">
+                                        <span>Paid Month: {row.payment_month || '—'}</span>
+                                        <span>Branch: {row.payment_branch || '—'}</span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
+                <Table className="border-collapse">
+                    <TableHeader>
                     <TableRow className="bg-zinc-50/80 hover:bg-zinc-50/80">
                         <TableHead className={cn(headGroup, 'text-left')} rowSpan={2}>Scheduled month</TableHead>
                         <TableHead className={headGroup} colSpan={3}>Schedule</TableHead>
@@ -163,6 +221,7 @@ function TableContent({ rows, emptyMessage }: { rows: LoanInstallmentLedgerRow[]
                     )}
                 </TableBody>
             </Table>
+        </div>
         </div>
     );
 }
