@@ -438,6 +438,7 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                             </CardContent>
                         </Card>
                     </div>
+                </div>
             </PageSurface>
 
             {/* Close Movement Dialog */}
