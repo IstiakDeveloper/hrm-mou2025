@@ -1,7 +1,7 @@
 import React from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ADMIN_SECTIONS, type AdminSectionId, storeSection } from '@/lib/admin-sections';
-import { CheckCircle2, Lock, XCircle, Sparkles } from 'lucide-react';
+import { CheckCircle2, Lock, XCircle, Sparkles, LayoutGrid } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
@@ -211,6 +211,17 @@ export default function SectionsIndex() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                            <a
+                                href="https://app.mousumibd.org"
+                                target="_self"
+                                className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-500 font-bold text-xs shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 mr-1"
+                                title="Return to Mousumi Apps"
+                            >
+                                <div className="flex items-center justify-center w-5 h-5 rounded-lg bg-sky-500 dark:bg-white/20 text-white p-0.5 shadow-sm group-hover:rotate-12 transition-transform duration-300">
+                                    <LayoutGrid className="w-3.5 h-3.5" />
+                                </div>
+                                <span className="tracking-wide">Mousumi Apps</span>
+                            </a>
                             <NotificationDropdown />
                             <TooltipProvider delayDuration={150}>
                                 <Tooltip>

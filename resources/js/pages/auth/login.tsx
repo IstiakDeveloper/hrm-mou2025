@@ -16,6 +16,7 @@ import {
   KeyRound,
   LockIcon,
   UserIcon,
+  LayoutGrid,
 } from 'lucide-react';
 
 type LoginMode = 'staff' | 'branch';
@@ -93,7 +94,21 @@ export default function Login({ branches, errors }: LoginProps) {
   return (
     <>
       <Head title="Log in" />
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 px-4 py-10">
+      <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 px-4 py-10">
+        {/* Top-Right Return to Mousumi Apps Button */}
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+          <a
+            href="https://app.mousumibd.org"
+            target="_self"
+            className="group inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 text-white hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-500 font-bold text-xs shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+            title="Return to Mousumi Apps Launcher"
+          >
+            <div className="flex items-center justify-center w-5 h-5 rounded-lg bg-sky-500 dark:bg-white/20 text-white p-0.5 shadow-sm group-hover:rotate-12 transition-transform duration-300">
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </div>
+            <span className="tracking-wide">Mousumi Apps</span>
+          </a>
+        </div>
         <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-2">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/20">
