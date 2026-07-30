@@ -34,12 +34,22 @@ interface LogBook {
     employee: Employee;
 }
 
+interface SingleEmployeeSummary extends EmployeeNameFields {
+    id: number;
+    employee_id?: string | null;
+    pin?: string | null;
+    department?: { id: number; name: string } | null;
+    designation?: { id: number; name: string } | null;
+    branch?: { id: number; name: string; branch_code?: string | null } | null;
+}
+
 type Props = {
     logBooks: LogBook[];
     filterSummary: string;
     generatedAt: string;
     companyName?: string;
     companyAddress?: string;
+    singleEmployee?: SingleEmployeeSummary | null;
 };
 
 function paymentLabel(lb: LogBook): string {
@@ -48,7 +58,17 @@ function paymentLabel(lb: LogBook): string {
     return 'Unpaid';
 }
 
-export default function LogBookPrint({ logBooks, filterSummary, generatedAt, companyName, companyAddress }: Props) {
+export default function LogBookPrint({ logBooks, filterSummary, generatedAt, companyName, companyAddress, singleEmployee }: Props) {
+    const showEmployeeColumn = !singleEmployee;
+    const totals = logBooks.reduce(
+        (acc, lb) => ({
+            totalKm: acc.totalKm + Number(lb.distance_km || 0),
+            personalKm: acc.personalKm + Number(lb.personal_km || 0),
+            officialKm: acc.officialKm + Number(lb.official_km || 0),
+        }),
+        { totalKm: 0, personalKm: 0, officialKm: 0 },
+    );
+
     useEffect(() => {
         const tryPrint = () => {
             const splash = document.querySelector('[aria-busy="true"][role="status"]');
@@ -121,18 +141,47 @@ export default function LogBookPrint({ logBooks, filterSummary, generatedAt, com
                     </div>
                 </div>
 
+                {singleEmployee && (
+                    <div className="mb-3 rounded-lg border border-slate-300 bg-slate-50/60 p-2.5 print:border-slate-400 print:bg-transparent">
+                        <div className="mb-1.5 flex items-center justify-between border-b border-slate-200 pb-1 text-[10px] font-bold text-slate-800 uppercase tracking-wider">
+                            <span>Employee Information</span>
+                            <span className="text-[9px] font-semibold text-slate-600">Movement Log Book Scoped Report</span>
+                        </div>
+                        <div className="grid grid-cols-5 gap-2 text-[10px] text-slate-800">
+                            <div>
+                                <span className="block text-[9px] font-medium text-slate-500 uppercase">Employee Name</span>
+                                <span className="font-bold text-slate-900">{employeeDisplayName(singleEmployee)}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[9px] font-medium text-slate-500 uppercase">PIN / ID</span>
+                                <span className="font-mono font-medium">{singleEmployee.pin || singleEmployee.employee_id || '—'}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[9px] font-medium text-slate-500 uppercase">Branch</span>
+                                <span className="font-medium">{singleEmployee.branch?.name || '—'}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[9px] font-medium text-slate-500 uppercase">Department</span>
+                                <span className="font-medium">{singleEmployee.department?.name || '—'}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[9px] font-medium text-slate-500 uppercase">Designation</span>
+                                <span className="font-medium">{singleEmployee.designation?.name || '—'}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <table className="print-table w-full border-collapse text-[10px]">
                     <thead>
                         <tr className="border-b border-gray-300 bg-gray-50">
                             <th className="p-1.5 text-left font-semibold">Date</th>
-                            <th className="p-1.5 text-left font-semibold">PIN</th>
-                            <th className="p-1.5 text-left font-semibold">Employee</th>
-                            <th className="p-1.5 text-left font-semibold">Branch</th>
+                            {showEmployeeColumn && <th className="p-1.5 text-left font-semibold">PIN</th>}
+                            {showEmployeeColumn && <th className="p-1.5 text-left font-semibold">Employee</th>}
+                            {showEmployeeColumn && <th className="p-1.5 text-left font-semibold">Branch</th>}
                             <th className="p-1.5 text-left font-semibold">Start Place</th>
                             <th className="p-1.5 text-left font-semibold">Destination</th>
                             <th className="p-1.5 text-left font-semibold">Purpose</th>
-                            <th className="p-1.5 text-left font-semibold">Start</th>
-                            <th className="p-1.5 text-left font-semibold">Return</th>
                             <th className="p-1.5 text-right font-semibold">Start Meter</th>
                             <th className="p-1.5 text-right font-semibold">End Meter</th>
                             <th className="p-1.5 text-right font-semibold">Total</th>
@@ -145,14 +194,12 @@ export default function LogBookPrint({ logBooks, filterSummary, generatedAt, com
                         {logBooks.map((lb) => (
                             <tr key={lb.id} className="border-b border-gray-200">
                                 <td className="whitespace-nowrap p-1.5">{format(new Date(lb.date), 'dd/MM/yy')}</td>
-                                <td className="whitespace-nowrap p-1.5 font-mono">{lb.employee.pin || lb.employee.employee_id}</td>
-                                <td className="p-1.5">{employeeDisplayName(lb.employee)}</td>
-                                <td className="p-1.5">{lb.employee.branch?.name || '—'}</td>
+                                {showEmployeeColumn && <td className="whitespace-nowrap p-1.5 font-mono">{lb.employee.pin || lb.employee.employee_id}</td>}
+                                {showEmployeeColumn && <td className="p-1.5">{employeeDisplayName(lb.employee)}</td>}
+                                {showEmployeeColumn && <td className="p-1.5">{lb.employee.branch?.name || '—'}</td>}
                                 <td className="max-w-[80px] truncate p-1.5">{lb.start_place}</td>
                                 <td className="max-w-[80px] truncate p-1.5">{lb.destination || '—'}</td>
                                 <td className="max-w-[100px] truncate p-1.5">{lb.purpose}</td>
-                                <td className="whitespace-nowrap p-1.5">{format(new Date(lb.start_time), 'HH:mm')}</td>
-                                <td className="whitespace-nowrap p-1.5">{format(new Date(lb.return_time), 'HH:mm')}</td>
                                 <td className="whitespace-nowrap p-1.5 text-right font-mono">{formatSmartNumber(lb.start_meter_reading)}</td>
                                 <td className="whitespace-nowrap p-1.5 text-right font-mono">{formatSmartNumber(lb.end_meter_reading)}</td>
                                 <td className="whitespace-nowrap p-1.5 text-right">{formatSmartKm(lb.distance_km)}</td>
@@ -163,9 +210,18 @@ export default function LogBookPrint({ logBooks, filterSummary, generatedAt, com
                                 <td className="whitespace-nowrap p-1.5">{paymentLabel(lb)}</td>
                             </tr>
                         ))}
+                        {logBooks.length > 0 && (
+                            <tr className="bg-gray-50 font-bold border-t-2 border-slate-400">
+                                <td colSpan={showEmployeeColumn ? 9 : 6} className="p-1.5 text-right uppercase tracking-wider text-[9px] text-slate-700">Total</td>
+                                <td className="whitespace-nowrap p-1.5 text-right font-mono">{formatSmartKm(totals.totalKm)}</td>
+                                <td className="whitespace-nowrap p-1.5 text-right font-mono">{formatSmartKm(totals.personalKm)}</td>
+                                <td className="whitespace-nowrap p-1.5 text-right font-mono text-emerald-800">{formatSmartKm(totals.officialKm)}</td>
+                                <td className="p-1.5" />
+                            </tr>
+                        )}
                         {logBooks.length === 0 && (
                             <tr>
-                                <td colSpan={15} className="p-4 text-center text-gray-400">
+                                <td colSpan={showEmployeeColumn ? 13 : 10} className="p-4 text-center text-gray-400">
                                     No log book entries found.
                                 </td>
                             </tr>

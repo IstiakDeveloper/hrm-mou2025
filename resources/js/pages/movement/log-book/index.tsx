@@ -127,12 +127,22 @@ interface Summary {
     personalKm: number;
 }
 
+interface SingleEmployeeSummary extends EmployeeNameFields {
+    id: number;
+    pin?: string | null;
+    employee_id?: string | null;
+    department?: { id: number; name: string } | null;
+    designation?: { id: number; name: string } | null;
+    branch?: { id: number; name: string; branch_code?: string | null } | null;
+}
+
 interface Props {
     logBooks: LogBooksResponse;
     summary: Summary;
     filters: Record<string, string | undefined>;
     departments: IdName[];
     employees: { id: number; name_en?: string; employee_id?: string; pin?: string }[];
+    singleEmployee?: SingleEmployeeSummary | null;
     zones: IdName[];
     regionalOffices: IdName[];
     branches: IdName[];
@@ -243,6 +253,7 @@ export default function MovementLogBookIndex({
     filters,
     departments,
     employees: _employees,
+    singleEmployee,
     zones,
     regionalOffices,
     branches,
@@ -250,9 +261,11 @@ export default function MovementLogBookIndex({
     canManageLogBook,
 }: Props) {
     const { flash } = usePage<{ flash?: { success?: string; error?: string } }>().props;
+    const showEmployeeColumn = _employees.length > 1 && !singleEmployee;
 
     const [search, setSearch] = useState(filters.search || '');
     const [paymentStatus, setPaymentStatus] = useState(filters.payment_status || '');
+    const [employeeId, setEmployeeId] = useState(filters.employee_id || '');
     const [fromDate, setFromDate] = useState(filters.from_date || '');
     const [toDate, setToDate] = useState(filters.to_date || '');
     const [zoneId, setZoneId] = useState(filters.zone_id || '');
@@ -283,6 +296,7 @@ export default function MovementLogBookIndex({
         const params: Record<string, string> = {};
         if (search) params.search = search;
         if (paymentStatus && paymentStatus !== 'all') params.payment_status = paymentStatus;
+        if (employeeId && employeeId !== 'all') params.employee_id = employeeId;
         if (fromDate) params.from_date = fromDate;
         if (toDate) params.to_date = toDate;
         if (zoneId && zoneId !== 'all') params.zone_id = zoneId;
@@ -303,7 +317,7 @@ export default function MovementLogBookIndex({
     };
 
     const resetFilters = () => {
-        setSearch(''); setStatus(''); setFromDate(''); setToDate('');
+        setSearch(''); setPaymentStatus(''); setEmployeeId(''); setFromDate(''); setToDate('');
         setZoneId(''); setRegionalOfficeId(''); setBranchId(''); setDepartmentId('');
         setPerPage('10'); setShowFilters(false); setFilterSheetOpen(false);
         router.get(route('movement-log-books.index'), {}, { preserveState: true });
@@ -323,6 +337,7 @@ export default function MovementLogBookIndex({
             [
                 search,
                 paymentStatus && paymentStatus !== 'all',
+                employeeId && employeeId !== 'all',
                 fromDate,
                 toDate,
                 zoneId && zoneId !== 'all',
@@ -330,7 +345,7 @@ export default function MovementLogBookIndex({
                 branchId && branchId !== 'all',
                 departmentId && departmentId !== 'all',
             ].filter(Boolean).length,
-        [search, paymentStatus, fromDate, toDate, zoneId, regionalOfficeId, branchId, departmentId],
+        [search, paymentStatus, employeeId, fromDate, toDate, zoneId, regionalOfficeId, branchId, departmentId],
     );
 
     const hasActiveFilters = activeFilterCount > 0;
@@ -338,6 +353,23 @@ export default function MovementLogBookIndex({
 
     const filterFields = (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Employee Filter */}
+            {_employees.length > 0 && (
+                <Select value={employeeId || 'all'} onValueChange={setEmployeeId}>
+                    <SelectTrigger className="h-9 border-slate-200">
+                        <SelectValue placeholder="Employee" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                        <SelectItem value="all">All employees</SelectItem>
+                        {_employees.map((emp) => (
+                            <SelectItem key={emp.id} value={String(emp.id)}>
+                                {emp.name_en || `Employee #${emp.id}`} {emp.pin ? `(${emp.pin})` : ''}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+
             {/* Status */}
             <Select value={paymentStatus || 'all'} onValueChange={setPaymentStatus}>
                 <SelectTrigger className="h-9 border-slate-200">
@@ -512,6 +544,71 @@ export default function MovementLogBookIndex({
                     ))}
                 </div>
 
+                {singleEmployee && (
+                    <Card className="mb-3 overflow-hidden rounded-xl border-emerald-100 bg-gradient-to-br from-emerald-50/50 via-white to-slate-50/50 shadow-sm md:mb-4">
+                        <CardContent className="p-4 sm:p-5">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 font-bold text-white shadow-sm shadow-emerald-200 text-base">
+                                        {singleEmployee.name_en ? singleEmployee.name_en.charAt(0).toUpperCase() : 'E'}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h2 className="truncate text-base font-bold text-slate-900">
+                                                {employeeDisplayName(singleEmployee)}
+                                            </h2>
+                                            <Badge variant="outline" className="border-emerald-200 bg-emerald-100/70 text-emerald-800 text-[11px] font-semibold">
+                                                Single Employee View
+                                            </Badge>
+                                        </div>
+                                        <p className="mt-0.5 truncate text-xs text-slate-500">
+                                            {singleEmployee.designation?.name || 'Designation N/A'} • {singleEmployee.department?.name || 'Department N/A'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {hasActiveFilters && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={resetFilters}
+                                        className="self-start text-xs text-slate-500 hover:text-slate-800 sm:self-center"
+                                    >
+                                        <X className="mr-1 h-3.5 w-3.5" /> Reset filter
+                                    </Button>
+                                )}
+                            </div>
+
+                            <div className="mt-3.5 grid grid-cols-2 gap-2.5 border-t border-slate-100 pt-3 text-xs sm:grid-cols-4">
+                                <div className="rounded-lg border border-slate-100 bg-white/90 p-2.5">
+                                    <span className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider">PIN / ID</span>
+                                    <span className="mt-0.5 block font-mono font-bold text-slate-900">
+                                        {singleEmployee.pin || singleEmployee.employee_id || '—'}
+                                    </span>
+                                </div>
+                                <div className="rounded-lg border border-slate-100 bg-white/90 p-2.5">
+                                    <span className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider">Branch</span>
+                                    <span className="mt-0.5 block truncate font-semibold text-slate-900">
+                                        {singleEmployee.branch?.name || '—'}
+                                    </span>
+                                </div>
+                                <div className="rounded-lg border border-slate-100 bg-white/90 p-2.5">
+                                    <span className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider">Department</span>
+                                    <span className="mt-0.5 block truncate font-semibold text-slate-900">
+                                        {singleEmployee.department?.name || '—'}
+                                    </span>
+                                </div>
+                                <div className="rounded-lg border border-slate-100 bg-white/90 p-2.5">
+                                    <span className="block text-[10px] font-medium text-slate-400 uppercase tracking-wider">Designation</span>
+                                    <span className="mt-0.5 block truncate font-semibold text-slate-900">
+                                        {singleEmployee.designation?.name || '—'}
+                                    </span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 <Card className="overflow-hidden rounded-xl border-slate-200 bg-white shadow-sm">
                     <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 md:px-4 md:py-2.5">
                         <form
@@ -623,9 +720,15 @@ export default function MovementLogBookIndex({
                                 <TableHeader>
                                     <TableRow className="border-b border-slate-200 bg-slate-50/80">
                                         <TableHead className="h-11 pl-6 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Date</TableHead>
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">PIN</TableHead>
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Employee</TableHead>
-                                        <TableHead className="hidden h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase lg:table-cell">Branch</TableHead>
+                                        {showEmployeeColumn && (
+                                            <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">PIN</TableHead>
+                                        )}
+                                        {showEmployeeColumn && (
+                                            <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Employee</TableHead>
+                                        )}
+                                        {showEmployeeColumn && (
+                                            <TableHead className="hidden h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase lg:table-cell">Branch</TableHead>
+                                        )}
                                         <TableHead className="hidden h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase xl:table-cell">Start place</TableHead>
                                         <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Destination</TableHead>
                                         <TableHead className="h-11 text-right text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Start meter</TableHead>
@@ -639,44 +742,68 @@ export default function MovementLogBookIndex({
                                 </TableHeader>
                                 <TableBody>
                                     {logBooks.data.length > 0 ? (
-                                        logBooks.data.map((row) => (
-                                            <TableRow key={row.id} className="group border-b border-slate-100 transition-colors hover:bg-slate-50">
-                                                <TableCell className="whitespace-nowrap pl-6 text-[13px] text-slate-600">{format(new Date(row.date), 'dd MMM yyyy')}</TableCell>
-                                                <TableCell className="whitespace-nowrap font-mono text-[13px] text-slate-700">{row.employee.pin || row.employee.employee_id}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex min-w-[180px] items-center">
-                                                        <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                                                            <BookOpen className="h-4 w-4" />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <Link href={route('movement-log-books.show', row.id)} className="block truncate text-[13px] font-semibold text-slate-800 transition-colors hover:text-emerald-600">
-                                                                {employeeDisplayName(row.employee)}
-                                                            </Link>
-                                                            <div className="truncate text-xs text-slate-500">
-                                                                {row.employee.department?.name || '—'} • {row.employee.designation?.name || '—'}
+                                        <>
+                                            {logBooks.data.map((row) => (
+                                                <TableRow key={row.id} className="group border-b border-slate-100 transition-colors hover:bg-slate-50">
+                                                    <TableCell className="whitespace-nowrap pl-6 text-[13px] text-slate-600">{format(new Date(row.date), 'dd MMM yyyy')}</TableCell>
+                                                    {showEmployeeColumn && (
+                                                        <TableCell className="whitespace-nowrap font-mono text-[13px] text-slate-700">{row.employee.pin || row.employee.employee_id}</TableCell>
+                                                    )}
+                                                    {showEmployeeColumn && (
+                                                        <TableCell>
+                                                            <div className="flex min-w-[180px] items-center">
+                                                                <div className="mr-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                                                                    <BookOpen className="h-4 w-4" />
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <Link href={route('movement-log-books.show', row.id)} className="block truncate text-[13px] font-semibold text-slate-800 transition-colors hover:text-emerald-600">
+                                                                        {employeeDisplayName(row.employee)}
+                                                                    </Link>
+                                                                    <div className="truncate text-xs text-slate-500">
+                                                                        {row.employee.department?.name || '—'} • {row.employee.designation?.name || '—'}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    </div>
+                                                        </TableCell>
+                                                    )}
+                                                    {showEmployeeColumn && (
+                                                        <TableCell className="hidden whitespace-nowrap text-[13px] text-slate-600 lg:table-cell">{row.employee.branch?.name || '—'}</TableCell>
+                                                    )}
+                                                    <TableCell className="hidden max-w-[140px] truncate text-[13px] text-slate-600 xl:table-cell">{row.start_place}</TableCell>
+                                                    <TableCell><span className="block max-w-[140px] truncate text-[13px] text-slate-600">{row.destination || '—'}</span></TableCell>
+                                                    <TableCell className="whitespace-nowrap text-right font-mono text-[13px] text-slate-700">{formatSmartNumber(row.start_meter_reading)}</TableCell>
+                                                    <TableCell className="whitespace-nowrap text-right font-mono text-[13px] text-slate-700">{formatSmartNumber(row.end_meter_reading)}</TableCell>
+                                                    <TableCell className="hidden whitespace-nowrap text-right text-[13px] text-slate-600 lg:table-cell">{formatSmartKm(row.distance_km)}</TableCell>
+                                                    <TableCell className="hidden whitespace-nowrap text-right text-[13px] text-slate-600 xl:table-cell">
+                                                        {row.personal_km != null && Number(row.personal_km) > 0 ? formatSmartKm(row.personal_km) : '—'}
+                                                    </TableCell>
+                                                    <TableCell className="whitespace-nowrap text-right text-[13px] font-semibold text-emerald-700">{formatSmartKm(row.official_km)}</TableCell>
+                                                    <TableCell>{getPaymentBadge(row)}</TableCell>
+                                                    <TableCell className="pr-6 text-right">
+                                                        <LogBookActionButtons row={row} canManageLogBook={canManageLogBook} />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            <TableRow className="bg-slate-50/80">
+                                                <TableCell colSpan={showEmployeeColumn ? 8 : 5} className="pl-6 text-[13px] font-semibold text-slate-800">
+                                                    Total
                                                 </TableCell>
-                                                <TableCell className="hidden whitespace-nowrap text-[13px] text-slate-600 lg:table-cell">{row.employee.branch?.name || '—'}</TableCell>
-                                                <TableCell className="hidden max-w-[140px] truncate text-[13px] text-slate-600 xl:table-cell">{row.start_place}</TableCell>
-                                                <TableCell><span className="block max-w-[140px] truncate text-[13px] text-slate-600">{row.destination || '—'}</span></TableCell>
-                                                <TableCell className="whitespace-nowrap text-right font-mono text-[13px] text-slate-700">{formatSmartNumber(row.start_meter_reading)}</TableCell>
-                                                <TableCell className="whitespace-nowrap text-right font-mono text-[13px] text-slate-700">{formatSmartNumber(row.end_meter_reading)}</TableCell>
-                                                <TableCell className="hidden whitespace-nowrap text-right text-[13px] text-slate-600 lg:table-cell">{formatSmartKm(row.distance_km)}</TableCell>
-                                                <TableCell className="hidden whitespace-nowrap text-right text-[13px] text-slate-600 xl:table-cell">
-                                                    {row.personal_km != null && Number(row.personal_km) > 0 ? formatSmartKm(row.personal_km) : '—'}
+                                                <TableCell className="hidden whitespace-nowrap text-right text-[13px] font-semibold text-slate-800 lg:table-cell">
+                                                    {formatSmartKm(summary.totalKm)}
                                                 </TableCell>
-                                                <TableCell className="whitespace-nowrap text-right text-[13px] font-semibold text-emerald-700">{formatSmartKm(row.official_km)}</TableCell>
-                                                <TableCell>{getPaymentBadge(row)}</TableCell>
-                                                <TableCell className="pr-6 text-right">
-                                                    <LogBookActionButtons row={row} canManageLogBook={canManageLogBook} />
+                                                <TableCell className="hidden whitespace-nowrap text-right text-[13px] font-semibold text-slate-800 xl:table-cell">
+                                                    {formatSmartKm(summary.personalKm)}
                                                 </TableCell>
+                                                <TableCell className="whitespace-nowrap text-right text-[13px] font-semibold text-emerald-700">
+                                                    {formatSmartKm(summary.officialKm)}
+                                                </TableCell>
+                                                <TableCell />
+                                                <TableCell className="pr-6" />
                                             </TableRow>
-                                        ))
+                                        </>
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={13} className="h-24 text-center">
+                                            <TableCell colSpan={showEmployeeColumn ? 13 : 10} className="h-24 text-center">
                                                 No log book entries found.
                                                 {hasActiveFilters && (
                                                     <Button variant="link" onClick={resetFilters} className="px-2 font-normal">Clear filters</Button>

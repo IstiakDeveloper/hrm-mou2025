@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\Zone;
 use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -186,6 +187,90 @@ class MovementLogBookController extends Controller
         return $q->get();
     }
 
+    private function getSingleAccessibleEmployeeSummary(User $user, ?Request $request = null): ?array
+    {
+        if ($request && $request->filled('employee_id') && $request->employee_id !== 'all') {
+            $employee = Employee::query()
+                ->with([
+                    'department:id,name',
+                    'designation:id,name',
+                    'branch:id,name,branch_code',
+                ])
+                ->find($request->employee_id);
+
+            if ($employee) {
+                return [
+                    'id' => $employee->id,
+                    'name_en' => $employee->name_en,
+                    'employee_id' => $employee->employee_id,
+                    'pin' => $employee->pin,
+                    'department' => $employee->department ? [
+                        'id' => $employee->department->id,
+                        'name' => $employee->department->name,
+                    ] : null,
+                    'designation' => $employee->designation ? [
+                        'id' => $employee->designation->id,
+                        'name' => $employee->designation->name,
+                    ] : null,
+                    'branch' => $employee->branch ? [
+                        'id' => $employee->branch->id,
+                        'name' => $employee->branch->name,
+                        'branch_code' => $employee->branch->branch_code,
+                    ] : null,
+                ];
+            }
+        }
+
+        /** @var Builder $employees */
+        $employees = Employee::query();
+        $employees
+            ->where('status', 'active')
+            ->with([
+                'department:id,name',
+                'designation:id,name',
+                'branch:id,name,branch_code',
+            ])
+            ->orderBy('name_en');
+
+        OrganogramAccessService::constrainVisibleEmployees($employees, $user);
+
+        $visibleEmployees = $employees->limit(2)->get([
+            'id',
+            'name_en',
+            'employee_id',
+            'pin',
+            'department_id',
+            'designation_id',
+            'current_branch_id',
+        ]);
+
+        if ($visibleEmployees->count() !== 1) {
+            return null;
+        }
+
+        $employee = $visibleEmployees->first();
+
+        return [
+            'id' => $employee->id,
+            'name_en' => $employee->name_en,
+            'employee_id' => $employee->employee_id,
+            'pin' => $employee->pin,
+            'department' => $employee->department ? [
+                'id' => $employee->department->id,
+                'name' => $employee->department->name,
+            ] : null,
+            'designation' => $employee->designation ? [
+                'id' => $employee->designation->id,
+                'name' => $employee->designation->name,
+            ] : null,
+            'branch' => $employee->branch ? [
+                'id' => $employee->branch->id,
+                'name' => $employee->branch->name,
+                'branch_code' => $employee->branch->branch_code,
+            ] : null,
+        ];
+    }
+
     // ─── Index ────────────────────────────────────────────────────
     public function index(Request $request)
     {
@@ -225,6 +310,7 @@ class MovementLogBookController extends Controller
             'summary' => $summary,
             'departments' => $this->getAccessibleDepartments($user),
             'employees' => $this->getAccessibleEmployees($user),
+            'singleEmployee' => $this->getSingleAccessibleEmployeeSummary($user, $request),
             'zones' => $orgFilters['zones'],
             'regionalOffices' => $orgFilters['regionalOffices'],
             'branches' => $orgFilters['branches'],
@@ -251,6 +337,7 @@ class MovementLogBookController extends Controller
             'generatedAt' => now()->toIso8601String(),
             'companyName' => config('payroll_reports.company_name', config('app.name')),
             'companyAddress' => config('payroll_reports.company_address', ''),
+            'singleEmployee' => $this->getSingleAccessibleEmployeeSummary($user, $request),
         ]);
     }
 

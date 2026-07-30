@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, MapPin } from 'lucide-react';
+import { CheckCircle2, MapPin, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -35,14 +35,19 @@ function StatPill({
     return (
         <div
             className={cn(
-                'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs',
-                tone === 'success' && 'border-emerald-200/80 bg-emerald-50/70 text-emerald-800',
-                tone === 'danger' && 'border-rose-200/80 bg-rose-50/70 text-rose-800',
-                tone === 'neutral' && 'border-slate-200/80 bg-white text-slate-700',
+                'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs shadow-2xs',
+                tone === 'success' && 'border-emerald-300/80 bg-emerald-50/90 text-emerald-950',
+                tone === 'danger' && 'border-rose-300/80 bg-rose-50/90 text-rose-950',
+                tone === 'neutral' && 'border-slate-200/80 bg-white text-slate-800',
             )}
         >
-            <span className="font-medium text-slate-500">{label}</span>
-            <span className="font-semibold tabular-nums">{value}</span>
+            <span className={cn(
+                'font-medium text-[11px]',
+                tone === 'success' && 'text-emerald-700',
+                tone === 'danger' && 'text-rose-700',
+                tone === 'neutral' && 'text-slate-500',
+            )}>{label}:</span>
+            <span className="font-bold tabular-nums text-xs">{value}</span>
         </div>
     );
 }
@@ -71,7 +76,6 @@ export default function ActiveMovementBanner({
     canClose = true,
     className,
 }: ActiveMovementBannerProps) {
-    const [countdown, setCountdown] = useState('…');
     const [elapsed, setElapsed] = useState('…');
     const [isOverdue, setIsOverdue] = useState(false);
 
@@ -81,13 +85,6 @@ export default function ActiveMovementBanner({
             const expectedReturn = new Date(movement.to_datetime);
             const overdue = now > expectedReturn;
             setIsOverdue(overdue);
-
-            if (overdue) {
-                setCountdown('Return time passed');
-            } else {
-                const diffMs = expectedReturn.getTime() - now.getTime();
-                setCountdown(`${formatDurationMs(diffMs)} left`);
-            }
 
             const startTime = new Date(movement.from_datetime);
             if (startTime > now) {
@@ -158,17 +155,16 @@ export default function ActiveMovementBanner({
                 <span className="truncate text-sm font-medium text-slate-900">{destination}</span>
             </div>
 
-            <span className="hidden shrink-0 text-xs text-slate-500 sm:inline">
-                {format(new Date(movement.from_datetime), 'h:mm a')} – {format(new Date(movement.to_datetime), 'h:mm a')}
-            </span>
+            <div className="hidden shrink-0 items-center gap-1.5 text-xs text-slate-500 sm:inline-flex">
+                <Clock className="h-3.5 w-3.5 text-slate-400" />
+                <span>Start: <strong className="font-semibold text-slate-800">{format(new Date(movement.from_datetime), 'h:mm a')}</strong></span>
+            </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2">
-                <StatPill label="Out" value={elapsed} tone="neutral" />
-                <StatPill
-                    label={isOverdue ? 'Status' : 'Left'}
-                    value={isOverdue ? 'Return time passed' : countdown}
-                    tone={isOverdue ? 'danger' : 'success'}
-                />
+                <StatPill label="Duration Out" value={elapsed} tone="success" />
+                {isOverdue && (
+                    <StatPill label="Status" value="Overdue" tone="danger" />
+                )}
             </div>
 
             {canClose && onClose && (

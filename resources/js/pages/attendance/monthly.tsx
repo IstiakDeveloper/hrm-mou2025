@@ -65,12 +65,19 @@ interface Designation {
     name: string;
 }
 
+interface Project {
+    id: number;
+    name: string;
+    code?: string;
+}
+
 interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
     department: Department;
     designation: Designation;
     branch: Branch;
+    project?: Project;
 }
 
 interface Attendance {
@@ -103,13 +110,19 @@ interface PaginationMeta {
 
 interface EmployeesResponse {
     data: Employee[];
-    links: {
+    links?: PaginationLinks[] | {
         first: string;
         last: string;
         prev: string | null;
         next: string | null;
     };
-    meta: PaginationMeta;
+    meta?: PaginationMeta;
+    current_page?: number;
+    from?: number;
+    last_page?: number;
+    per_page?: number;
+    to?: number;
+    total?: number;
 }
 
 interface UserPermissions {
@@ -143,11 +156,14 @@ interface AttendanceMonthlyProps {
     summaryByEmployee: Record<string, Record<string, number>>;
     branches: Branch[];
     departments: Department[];
+    projects?: Project[];
     filters: {
         month: string;
         branch_id: string;
         department_id: string;
+        project_id?: string;
         search: string;
+        per_page?: number | string;
     };
     month: string;
     daysInMonth: number;
@@ -161,6 +177,7 @@ export default function AttendanceMonthly({
     attendances,
     branches,
     departments,
+    projects = [],
     filters,
     month,
     daysInMonth,
@@ -172,9 +189,18 @@ export default function AttendanceMonthly({
     summaryByEmployee = {}
 }: AttendanceMonthlyProps) {
     const [search, setSearch] = useState(filters.search || '');
-    const [branchId, setBranchId] = useState(filters.branch_id || null);
-    const [departmentId, setDepartmentId] = useState(filters.department_id || null);
+    const [branchId, setBranchId] = useState(filters.branch_id && filters.branch_id !== 'all' ? filters.branch_id : null);
+    const [departmentId, setDepartmentId] = useState(filters.department_id && filters.department_id !== 'all' ? filters.department_id : null);
+    const [projectId, setProjectId] = useState(filters.project_id && filters.project_id !== 'all' ? filters.project_id : null);
+    const [perPage, setPerPage] = useState<string>(String(filters.per_page || '20'));
     const [currentMonth, setCurrentMonth] = useState(month);
+
+    // Derived pagination info with fallbacks for raw Laravel paginator or API Resource responses
+    const totalCount = employees.total ?? employees.meta?.total ?? employees.data?.length ?? 0;
+    const fromCount = employees.from ?? employees.meta?.from ?? (totalCount > 0 ? 1 : 0);
+    const toCount = employees.to ?? employees.meta?.to ?? employees.data?.length ?? 0;
+    const lastPage = employees.last_page ?? employees.meta?.last_page ?? 1;
+    const paginationLinks: PaginationLinks[] = Array.isArray(employees.links) ? employees.links : (employees.meta?.links || []);
 
     // Generate array of days for the month
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -227,8 +253,10 @@ export default function AttendanceMonthly({
             search,
             month: currentMonth,
             branch_id: branchId || '',
-            department_id: departmentId || ''
-        }, { preserveState: true });
+            department_id: departmentId || '',
+            project_id: projectId || '',
+            per_page: perPage,
+        }, { preserveState: true, preserveScroll: true });
     };
 
     const handleExportPDF = () => {
@@ -236,7 +264,8 @@ export default function AttendanceMonthly({
             search,
             month: currentMonth,
             branch_id: branchId || '',
-            department_id: departmentId || ''
+            department_id: departmentId || '',
+            project_id: projectId || '',
         });
 
         window.open(url, '_blank');
@@ -251,7 +280,9 @@ export default function AttendanceMonthly({
         setSearch('');
         setBranchId(null);
         setDepartmentId(null);
-        router.get(route('attendance.monthly'), { month: currentMonth }, { preserveState: true });
+        setProjectId(null);
+        setPerPage('20');
+        router.get(route('attendance.monthly'), { month: currentMonth, per_page: '20' }, { preserveState: true, preserveScroll: true });
     };
 
     const handleMonthChange = (month: string) => {
@@ -260,8 +291,29 @@ export default function AttendanceMonthly({
             month,
             search,
             branch_id: branchId || '',
-            department_id: departmentId || ''
-        }, { preserveState: true });
+            department_id: departmentId || '',
+            project_id: projectId || '',
+            per_page: perPage,
+        }, { preserveState: true, preserveScroll: true });
+    };
+
+    const handlePerPageChange = (value: string) => {
+        setPerPage(value);
+        router.get(route('attendance.monthly'), {
+            month: currentMonth,
+            search,
+            branch_id: branchId || '',
+            department_id: departmentId || '',
+            project_id: projectId || '',
+            per_page: value,
+            page: 1,
+        }, { preserveState: true, preserveScroll: true });
+    };
+
+    const handlePaginationClick = (url: string | null, e: React.MouseEvent) => {
+        e.preventDefault();
+        if (!url) return;
+        router.get(url, {}, { preserveState: true, preserveScroll: true });
     };
 
     const getStatusColor = (status: string): string => {
@@ -518,7 +570,7 @@ export default function AttendanceMonthly({
         <Layout>
             <Head title="Monthly Attendance" />
 
-            <PageSurface className="max-w-7xl space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
+            <PageSurface className="max-w-none w-full space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
                 <div className="mb-2">
                     <Link
                         href={route('attendance.index')}
@@ -636,6 +688,22 @@ export default function AttendanceMonthly({
                                     <SelectContent>
                                         <SelectItem value="all">All Depts</SelectItem>
                                         {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
+
+                            {projects && projects.length > 0 && (
+                                <Select value={projectId || undefined} onValueChange={(value) => setProjectId(value === "all" ? null : value)}>
+                                    <SelectTrigger className="w-full sm:w-[150px] h-8 text-xs bg-white border-slate-200 rounded-lg">
+                                        <SelectValue placeholder="Project" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Projects</SelectItem>
+                                        {projects.map((p) => (
+                                            <SelectItem key={p.id} value={p.id.toString()}>
+                                                {p.name} {p.code ? `(${p.code})` : ''}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             )}
@@ -818,156 +886,203 @@ export default function AttendanceMonthly({
                     })()
                 ) : (
                     /* Multi-Employee Matrix Table View for Admins & Managers */
-                    <Card className="overflow-x-auto">
+                    <Card className="rounded-xl border-slate-200 shadow-xs overflow-hidden bg-white">
                         <CardContent className="p-0">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-gray-50">
-                                        <TableHead className="sticky left-0 bg-gray-50 z-10 min-w-[200px]">Employee</TableHead>
-                                        {days.map(day => (
-                                            <TableHead key={day} className="text-center min-w-[40px]">{day}</TableHead>
-                                        ))}
-                                        <TableHead className="text-center min-w-[60px] bg-green-50">P</TableHead>
-                                        <TableHead className="text-center min-w-[60px] bg-red-50">A</TableHead>
-                                        <TableHead className="text-center min-w-[60px] bg-orange-50">L</TableHead>
-                                        <TableHead className="text-center min-w-[60px] bg-yellow-50">H</TableHead>
-                                        <TableHead className="text-center min-w-[60px] bg-blue-50">LV</TableHead>
-                                        <TableHead className="text-center min-w-[60px] bg-indigo-50">OD</TableHead>
-                                        <TableHead className="text-center min-w-[60px] bg-teal-50">W</TableHead>
-                                        <TableHead className="text-center min-w-[60px] bg-purple-50">HO</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {employees.data && employees.data.length > 0 ? (
-                                        employees.data.map((employee) => {
-                                            const summary = getEmployeeSummary(employee.id, employee.branch.id);
-                                            return (
-                                                <TableRow key={employee.id} className="hover:bg-gray-50">
-                                                    <TableCell className="font-medium sticky left-0 bg-white z-10 hover:bg-gray-50">
-                                                        <div className="flex items-center space-x-2">
-                                                            <User className="h-4 w-4 text-gray-400" />
-                                                            <div>
-                                                                <div className="font-medium">{employeeDisplayName(employee)}</div>
-                                                                <div className="text-xs text-gray-500 flex items-center">
-                                                                    <span className="mr-1">{employee.employee_id}</span>
-                                                                    <span className="mx-1">•</span>
-                                                                    <span>{employee.department.name}</span>
+                            <div className="relative w-full overflow-auto max-h-[calc(100vh-270px)] scrollbar-thin">
+                                <table className="w-full border-separate border-spacing-0 text-xs text-left">
+                                    <thead>
+                                        <tr className="bg-slate-100">
+                                            <th className="sticky top-0 left-0 z-40 bg-slate-100 border-b border-r border-slate-200 p-2 font-bold text-slate-700 min-w-[170px] lg:min-w-[190px]">
+                                                Employee
+                                            </th>
+                                            {days.map(day => (
+                                                <th key={day} className="sticky top-0 z-20 bg-slate-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-slate-700 min-w-[26px] sm:min-w-[30px] text-[11px]">
+                                                    {day}
+                                                </th>
+                                            ))}
+                                            <th className="sticky top-0 z-20 bg-green-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-green-900 min-w-[30px] sm:min-w-[34px] text-[10px]">P</th>
+                                            <th className="sticky top-0 z-20 bg-red-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-red-900 min-w-[30px] sm:min-w-[34px] text-[10px]">A</th>
+                                            <th className="sticky top-0 z-20 bg-amber-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-amber-900 min-w-[30px] sm:min-w-[34px] text-[10px]">L</th>
+                                            <th className="sticky top-0 z-20 bg-yellow-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-yellow-900 min-w-[30px] sm:min-w-[34px] text-[10px]">H</th>
+                                            <th className="sticky top-0 z-20 bg-blue-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-blue-900 min-w-[30px] sm:min-w-[34px] text-[10px]">LV</th>
+                                            <th className="sticky top-0 z-20 bg-indigo-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-indigo-900 min-w-[30px] sm:min-w-[34px] text-[10px]">OD</th>
+                                            <th className="sticky top-0 z-20 bg-teal-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-teal-900 min-w-[30px] sm:min-w-[34px] text-[10px]">W</th>
+                                            <th className="sticky top-0 z-20 bg-purple-100 border-b border-r border-slate-200 p-0.5 text-center font-bold text-purple-900 min-w-[30px] sm:min-w-[34px] text-[10px]">HO</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 bg-white">
+                                        {employees.data && employees.data.length > 0 ? (
+                                            employees.data.map((employee) => {
+                                                const summary = getEmployeeSummary(employee.id, employee.branch.id);
+                                                return (
+                                                    <tr key={employee.id} className="hover:bg-slate-50/90 transition-colors">
+                                                        <td className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 py-1.5 px-2 font-medium shadow-[1px_0_0_0_rgba(0,0,0,0.05)]">
+                                                            <div className="flex items-center space-x-1.5">
+                                                                <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+                                                                    <User className="h-3 w-3" />
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <div className="font-semibold text-slate-900 text-[11px] truncate max-w-[140px]">
+                                                                        {employeeDisplayName(employee)}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-500 flex items-center flex-wrap gap-0.5">
+                                                                        <span>{employee.employee_id}</span>
+                                                                        {employee.department?.name && (
+                                                                            <>
+                                                                                <span>•</span>
+                                                                                <span className="truncate max-w-[80px]">{employee.department.name}</span>
+                                                                            </>
+                                                                        )}
+                                                                        {employee.project?.name && (
+                                                                            <Badge variant="outline" className="text-[8px] px-0.5 py-0 h-3.5 bg-blue-50 text-blue-700 border-blue-200">
+                                                                                {employee.project.name}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    </TableCell>
-                                                    {days.map(day => {
-                                                        const status = getAttendanceStatus(employee.id, day, employee.branch.id);
-                                                        const tooltip = getAttendanceTooltip(employee.id, day, employee.branch.id);
-                                                        return (
-                                                            <TableCell key={day} className="p-1 text-center">
-                                                                {status ? (
-                                                                    <div
-                                                                        className={cn(
-                                                                            `w-8 h-8 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-xs font-medium cursor-help relative`,
-                                                                            hasMissingCheckout(employee.id, day) && 'ring-2 ring-red-400'
-                                                                        )}
-                                                                        title={tooltip || status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-                                                                    >
-                                                                        {getStatusCode(status)}
-                                                                        {hasMissingCheckout(employee.id, day) && (
-                                                                            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center">
-                                                                                !
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto text-xs text-gray-500">
-                                                                        -
-                                                                    </div>
-                                                                )}
-                                                            </TableCell>
-                                                        );
-                                                    })}
-                                                    <TableCell className="text-center bg-green-50">
-                                                        <Badge variant="outline" className="bg-green-100 text-green-800 border-0">{summary.present}</Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-center bg-red-50">
-                                                        <Badge variant="outline" className="bg-red-100 text-red-800 border-0">{summary.absent}</Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-center bg-orange-50">
-                                                        <Badge variant="outline" className="bg-orange-100 text-orange-800 border-0">{summary.late}</Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-center bg-yellow-50">
-                                                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-0">{summary.half_day}</Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-center bg-blue-50">
-                                                        <Badge variant="outline" className="bg-blue-100 text-blue-800 border-0">{summary.leave}</Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-center bg-indigo-50">
-                                                        <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-0">{summary.on_duty}</Badge>
-                                                    </TableCell>
-                                                    {/* New columns for Weekend and Holiday */}
-                                                    <TableCell className="text-center bg-blue-50">
-                                                        <Badge variant="outline" className="bg-teal-100 text-teal-800 border-0">{summary.weekend}</Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-center bg-purple-50">
-                                                        <Badge variant="outline" className="bg-purple-100 text-purple-800 border-0">{summary.holiday}</Badge>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell colSpan={days.length + 8} className="h-24 text-center">
-                                                <div className="flex flex-col items-center justify-center text-gray-500">
-                                                    <AlertCircle className="h-8 w-8 mb-2" />
-                                                    <h3 className="font-medium">No employees found</h3>
-                                                    <p className="text-sm mt-1">
-                                                        {(search || branchId || departmentId)
-                                                            ? "Try adjusting your filters to see more results."
-                                                            : "There are no employees to display for this month."}
-                                                    </p>
-                                                    {(search || branchId || departmentId) && (
-                                                        <Button
-                                                            variant="outline"
-                                                            onClick={resetFilters}
-                                                            className="mt-4"
-                                                        >
-                                                            Reset Filters
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                                                        </td>
+                                                        {days.map(day => {
+                                                            const status = getAttendanceStatus(employee.id, day, employee.branch.id);
+                                                            const tooltip = getAttendanceTooltip(employee.id, day, employee.branch.id);
+                                                            return (
+                                                                <td key={day} className="p-0 border-b border-r border-slate-100 text-center">
+                                                                    {status ? (
+                                                                        <div
+                                                                            className={cn(
+                                                                                `w-6 h-6 sm:w-6.5 sm:h-6.5 rounded-full ${getStatusColor(status)} flex items-center justify-center mx-auto text-[10px] sm:text-[11px] font-bold cursor-help relative shadow-2xs transition-transform hover:scale-110`,
+                                                                                hasMissingCheckout(employee.id, day) && 'ring-2 ring-red-400'
+                                                                            )}
+                                                                            title={tooltip || status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                                                                        >
+                                                                            {getStatusCode(status)}
+                                                                            {hasMissingCheckout(employee.id, day) && (
+                                                                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 text-white text-[7px] flex items-center justify-center font-bold">
+                                                                                    !
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="w-6 h-6 sm:w-6.5 sm:h-6.5 rounded-full bg-slate-50 flex items-center justify-center mx-auto text-[9px] text-slate-300">
+                                                                            -
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                        <td className="text-center bg-green-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-green-100 text-green-800 border-0 font-bold text-[10px] px-1 py-0">{summary.present}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-red-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-red-100 text-red-800 border-0 font-bold text-[10px] px-1 py-0">{summary.absent}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-amber-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-0 font-bold text-[10px] px-1 py-0">{summary.late}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-yellow-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-0 font-bold text-[10px] px-1 py-0">{summary.half_day}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-blue-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-0 font-bold text-[10px] px-1 py-0">{summary.leave}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-indigo-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-0 font-bold text-[10px] px-1 py-0">{summary.on_duty}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-teal-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-teal-100 text-teal-800 border-0 font-bold text-[10px] px-1 py-0">{summary.weekend}</Badge>
+                                                        </td>
+                                                        <td className="text-center bg-purple-50/50 p-0.5 border-b border-r border-slate-100">
+                                                            <Badge variant="outline" className="bg-purple-100 text-purple-800 border-0 font-bold text-[10px] px-1 py-0">{summary.holiday}</Badge>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={days.length + 9} className="h-32 text-center border-b border-slate-100">
+                                                    <div className="flex flex-col items-center justify-center text-slate-500 py-6">
+                                                        <AlertCircle className="h-8 w-8 mb-2 text-slate-400" />
+                                                        <h3 className="font-semibold text-slate-700">No employees found</h3>
+                                                        <p className="text-xs text-slate-500 mt-1">
+                                                            {(search || branchId || departmentId || projectId)
+                                                                ? "Try adjusting your filters to see more results."
+                                                                : "There are no employees to display for this month."}
+                                                        </p>
+                                                        {(search || branchId || departmentId || projectId) && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={resetFilters}
+                                                                className="mt-3 text-xs bg-white"
+                                                            >
+                                                                Reset Filters
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </CardContent>
                     </Card>
                 )}
 
-                {/* Pagination */}
-                {hasPagination && employees.meta.last_page > 1 && (
-                    <div className="mt-6">
-                        <Pagination>
-                            <PaginationContent>
-                                {employees.meta.current_page > 1 && (
-                                    <PaginationItem>
-                                        <PaginationPrevious
-                                            href={route('attendance.monthly', {
-                                                page: employees.meta.current_page - 1,
-                                                search,
-                                                month: currentMonth,
-                                                branch_id: branchId || '',
-                                                department_id: departmentId || ''
-                                            })}
-                                        />
-                                    </PaginationItem>
-                                )}
+                {/* Pagination & Footer Controls */}
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 w-full sm:w-auto justify-between sm:justify-start">
+                        <span>
+                            Showing <strong className="text-slate-900 font-semibold">{fromCount}</strong> to <strong className="text-slate-900 font-semibold">{toCount}</strong> of <strong className="text-slate-900 font-semibold">{totalCount}</strong> employees
+                        </span>
+                        <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                            <span className="text-slate-500 font-medium">Per page:</span>
+                            <Select value={perPage} onValueChange={handlePerPageChange}>
+                                <SelectTrigger className="h-7 w-[75px] text-xs bg-white border-slate-200 rounded-md">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="10">10</SelectItem>
+                                    <SelectItem value="20">20</SelectItem>
+                                    <SelectItem value="50">50</SelectItem>
+                                    <SelectItem value="100">100</SelectItem>
+                                    <SelectItem value="all">All</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
 
-                                {employees.meta.links.map((link, i) => {
-                                    // Skip previous/next links as we handle them separately
-                                    if (link.label === '&laquo; Previous' || link.label === 'Next &raquo;') {
-                                        return null;
+                    {lastPage > 1 && paginationLinks.length > 0 && (
+                        <Pagination className="justify-end w-auto m-0">
+                            <PaginationContent>
+                                {paginationLinks.map((link, i) => {
+                                    const isPrev = link.label.includes('Previous') || link.label.includes('&laquo;');
+                                    const isNext = link.label.includes('Next') || link.label.includes('&raquo;');
+
+                                    if (isPrev) {
+                                        return (
+                                            <PaginationItem key={i}>
+                                                <PaginationPrevious
+                                                    href={link.url || '#'}
+                                                    onClick={(e) => handlePaginationClick(link.url, e)}
+                                                    className={!link.url ? 'pointer-events-none opacity-50' : ''}
+                                                />
+                                            </PaginationItem>
+                                        );
                                     }
 
-                                    // For ellipsis
+                                    if (isNext) {
+                                        return (
+                                            <PaginationItem key={i}>
+                                                <PaginationNext
+                                                    href={link.url || '#'}
+                                                    onClick={(e) => handlePaginationClick(link.url, e)}
+                                                    className={!link.url ? 'pointer-events-none opacity-50' : ''}
+                                                />
+                                            </PaginationItem>
+                                        );
+                                    }
+
                                     if (link.label === '...') {
                                         return (
                                             <PaginationItem key={`ellipsis-${i}`}>
@@ -976,42 +1091,22 @@ export default function AttendanceMonthly({
                                         );
                                     }
 
-                                    // For numbered links
                                     return (
                                         <PaginationItem key={i}>
                                             <PaginationLink
-                                                href={route('attendance.monthly', {
-                                                    page: link.label,
-                                                    search,
-                                                    month: currentMonth,
-                                                    branch_id: branchId || '',
-                                                    department_id: departmentId || ''
-                                                })}
+                                                href={link.url || '#'}
                                                 isActive={link.active}
+                                                onClick={(e) => handlePaginationClick(link.url, e)}
                                             >
                                                 {link.label}
                                             </PaginationLink>
                                         </PaginationItem>
                                     );
                                 })}
-
-                                {employees.meta.current_page < employees.meta.last_page && (
-                                    <PaginationItem>
-                                        <PaginationNext
-                                            href={route('attendance.monthly', {
-                                                page: employees.meta.current_page + 1,
-                                                search,
-                                                month: currentMonth,
-                                                branch_id: branchId || '',
-                                                department_id: departmentId || ''
-                                            })}
-                                        />
-                                    </PaginationItem>
-                                )}
                             </PaginationContent>
                         </Pagination>
-                    </div>
-                )}
+                    )}
+                </div>
             </PageSurface>
         </Layout>
     );

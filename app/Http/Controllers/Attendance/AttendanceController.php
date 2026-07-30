@@ -12,13 +12,17 @@ use App\Models\Employee;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\Movement;
+use App\Models\Project;
 use App\Services\OrganogramAccessService;
 use App\Support\BranchOrganogram;
 use App\Support\HeadOfficeOrganogram;
 use App\Support\MonthlyAttendanceCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use App\Support\ProjectPdf;
 
@@ -92,6 +96,33 @@ class AttendanceController extends Controller
         return 'absent';
     }
 
+    private function buildDailyAttendanceRemark(?Attendance $attendance, string $status, ?string $leaveType = null): ?string
+    {
+        if ($status === 'leave') {
+            return $leaveType ? 'Leave ('.$leaveType.')' : 'Leave';
+        }
+
+        if ($status === 'weekend') {
+            return 'Weekend';
+        }
+
+        if ($status === 'holiday') {
+            return 'Public Holiday';
+        }
+
+        if ($status === 'on_duty') {
+            return 'On duty';
+        }
+
+        if ($attendance) {
+            $this->generateRemarks($attendance);
+
+            return $attendance->auto_remarks ?: $attendance->remarks;
+        }
+
+        return $status === 'absent' ? 'Absent' : null;
+    }
+
     /**
      * Display a listing of attendances.
      */
@@ -102,123 +133,191 @@ class AttendanceController extends Controller
     {
         $user = Auth::user();
         $date = $request->date ? Carbon::parse($request->date) : Carbon::today();
-
-        // Change this line to include movement relationship
-        $query = Attendance::with(['employee.department', 'employee.designation', 'device'])
-            ->whereDate('attendances.date', $date);
-
-        $this->applyUserFilters($query, $user, $request);
-
-        $query->when($request->status, function ($query, $status) {
-            $query->where('attendances.status', $status);
-        })->when($request->search, function ($query, $search) {
-            $query->whereHas('employee', function ($q) use ($search) {
-                $q->where('name_en', 'like', "%{$search}%")
-                    ->orWhere('name_bn', 'like', "%{$search}%")
-                    ->orWhere('employee_id', 'like', "%{$search}%");
-            });
-        });
-
         $perPage = $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
+        $ymd = $date->format('Y-m-d');
 
-        HeadOfficeOrganogram::applyToAttendanceQuery($query);
+        $employeesQuery = Employee::with(['department', 'designation', 'branch'])
+            ->where('employees.status', 'active');
 
-        $attendances = $query->paginate($perPage)->withQueryString();
+        $this->applyEmployeeFilters($employeesQuery, $user, $request);
+        $this->applyOrganogramEmployeeOrder($employeesQuery);
 
-        // Format times, remarks, and ADD MOVEMENT DATA
-        $attendances->getCollection()->transform(function ($attendance) use ($date) {
-            if ($attendance->check_in) {
-                $attendance->check_in_formatted = date('h:i A', strtotime($attendance->check_in));
+        $employees = $employeesQuery->get();
+        $employeeIds = $employees->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+
+        $attendanceRows = Attendance::with(['employee.department', 'employee.designation', 'employee.branch', 'device'])
+            ->whereIn('employee_id', $employeeIds)
+            ->whereDate('date', $ymd)
+            ->get()
+            ->keyBy('employee_id');
+
+        $leaveApps = LeaveApplication::with('leaveType')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $ymd)
+            ->whereDate('end_date', '>=', $ymd)
+            ->get();
+
+        $leaveTypeByEmployee = [];
+        foreach ($leaveApps as $app) {
+            $empId = (int) $app->employee_id;
+            if (! method_exists($app, 'coversCalendarDate') || $app->coversCalendarDate($ymd)) {
+                $leaveTypeByEmployee[$empId] = $app->leaveType?->name ?? 'Leave';
             }
-            if ($attendance->check_out) {
-                $attendance->check_out_formatted = date('h:i A', strtotime($attendance->check_out));
+        }
+
+        $movementsByEmployee = Movement::whereIn('employee_id', $employeeIds)
+            ->whereIn('status', ['active', 'completed'])
+            ->where('movement_type', 'official')
+            ->whereDate('from_datetime', '<=', $ymd)
+            ->whereRaw('DATE(COALESCE(actual_return_datetime, to_datetime)) >= ?', [$ymd])
+            ->orderBy('from_datetime')
+            ->get()
+            ->groupBy('employee_id');
+
+        $holidays = Holiday::where(function ($query) use ($date, $ymd) {
+            $query->whereDate('date', $ymd)
+                ->orWhere(function ($q) use ($date) {
+                    $q->where('is_recurring', true)
+                        ->whereRaw('MONTH(date) = ? AND DAY(date) = ?', [$date->month, $date->day]);
+                });
+        })->get();
+
+        $holidayApplicable = [];
+        foreach ($holidays as $holiday) {
+            $branchesRaw = $holiday->applicable_branches;
+            $applicable = is_array($branchesRaw) ? $branchesRaw : (is_string($branchesRaw) ? (json_decode($branchesRaw, true) ?: []) : []);
+            if (empty($applicable)) {
+                $holidayApplicable['*'][$ymd] = true;
+
+                continue;
+            }
+            foreach ($applicable as $branchId) {
+                $holidayApplicable[(string) $branchId][$ymd] = true;
+            }
+        }
+
+        $branchIds = $employees->pluck('current_branch_id')->filter()->unique()->values()->toArray();
+        $attendanceSettings = AttendanceSetting::whereIn('branch_id', $branchIds)
+            ->get()
+            ->mapWithKeys(fn ($setting) => [
+                (int) $setting->branch_id => [
+                    'weekend_days' => $this->normalizeJsonArray($setting->weekend_days),
+                ],
+            ])->toArray();
+
+        $defaultWeekendDays = $this->normalizeJsonArray(AttendanceSetting::global()->weekend_days);
+        if (empty($defaultWeekendDays)) {
+            $defaultWeekendDays = [5, 6];
+        }
+
+        $rows = $employees->map(function ($employee) use ($attendanceRows, $leaveTypeByEmployee, $movementsByEmployee, $attendanceSettings, $defaultWeekendDays, $holidayApplicable, $ymd) {
+            $employeeId = (int) $employee->id;
+            $branchIdInt = (int) ($employee->current_branch_id ?? ($employee->branch?->id ?? 0));
+            $branchIdStr = $branchIdInt > 0 ? (string) $branchIdInt : '';
+
+            $attendance = $attendanceRows->get($employeeId);
+            $leaveType = $leaveTypeByEmployee[$employeeId] ?? null;
+            $isOnLeave = $leaveType !== null;
+            $movementCollection = $movementsByEmployee->get($employeeId, collect());
+            $hasMovement = $movementCollection->count() > 0;
+            $isHoliday = ! empty($holidayApplicable['*'][$ymd]) || ($branchIdStr !== '' && ! empty($holidayApplicable[$branchIdStr][$ymd]));
+            $weekendDays = $attendanceSettings[$branchIdInt]['weekend_days'] ?? [];
+            if (! is_array($weekendDays) || empty($weekendDays)) {
+                $weekendDays = $defaultWeekendDays;
             }
 
-            // Get ALL movements for this employee on this date
-            $movements = \App\Models\Movement::where('employee_id', $attendance->employee_id)
-                ->where(function ($query) use ($date) {
-                    $dateStr = $date->format('Y-m-d');
-                    $query->whereDate('from_datetime', '<=', $dateStr)
-                        ->where(function ($q) use ($dateStr) {
-                            // Active movements have no actual_return_datetime yet; use planned to_datetime
-                            $q->where(function ($qq) use ($dateStr) {
-                                $qq->where('status', 'active')
-                                    ->whereDate('to_datetime', '>=', $dateStr);
-                            })->orWhere(function ($qq) use ($dateStr) {
-                                // Completed movements: prefer actual_return_datetime, fallback to to_datetime
-                                $qq->where('status', 'completed')
-                                    ->where(function ($retQ) use ($dateStr) {
-                                        $retQ->whereNotNull('actual_return_datetime')
-                                            ->whereDate('actual_return_datetime', '>=', $dateStr)
-                                            ->orWhere(function ($fallbackQ) use ($dateStr) {
-                                                $fallbackQ->whereNull('actual_return_datetime')
-                                                    ->whereDate('to_datetime', '>=', $dateStr);
-                                            });
-                                    });
-                            });
-                        });
-                })
-                ->whereIn('status', ['active', 'completed'])
-                ->orderBy('from_datetime')
-                ->get();
+            $hasValidAttendance = (bool) ($attendance && $attendance->check_in);
+            $attendanceRowStatus = $attendance ? (is_string($attendance->status) ? $attendance->status : null) : null;
+            $status = $this->determineDateStatusEnhanced(
+                $ymd,
+                array_map('intval', $weekendDays),
+                (bool) $isHoliday,
+                (bool) $isOnLeave,
+                (bool) $hasMovement,
+                $hasValidAttendance,
+                $attendanceRowStatus
+            );
 
-            if ($movements->count() > 0) {
-                $attendance->has_movement = true;
-
-                if ($movements->count() > 1) {
-                    // Multiple movements on the same day
-                    $attendance->multiple_movements = true;
-                    $attendance->movements = $movements->map(function ($movement) {
-                        return [
-                            'id' => $movement->id,
-                            'movement_type' => $movement->movement_type,
-                            'purpose' => $movement->purpose,
-                            'destination' => $movement->destination,
-                            'status' => $movement->status,
-                            'from_datetime' => $movement->from_datetime,
-                            'actual_return_datetime' => $movement->actual_return_datetime,
-                        ];
-                    });
-                    $attendance->total_movements = $movements->count();
-
-                    // For display purposes, use the first movement details
-                    $firstMovement = $movements->first();
-                    $attendance->movement_type = $firstMovement->movement_type;
-                    $attendance->movement_purpose = $firstMovement->purpose;
-                    $attendance->movement_destination = $firstMovement->destination;
-                    $attendance->movement_status = $firstMovement->status;
-                    $attendance->movement_from = Carbon::parse($firstMovement->from_datetime)->format('h:i A');
-                    $movementTo = $firstMovement->actual_return_datetime ?: $firstMovement->to_datetime;
-                    $attendance->movement_to = $movementTo ? Carbon::parse($movementTo)->format('h:i A') : null;
-                    $attendance->movement_id = $firstMovement->id;
-                } else {
-                    // Single movement
-                    $movement = $movements->first();
-                    $attendance->multiple_movements = false;
-                    $attendance->movement_type = $movement->movement_type;
-                    $attendance->movement_purpose = $movement->purpose;
-                    $attendance->movement_destination = $movement->destination;
-                    $attendance->movement_status = $movement->status;
-                    $attendance->movement_from = Carbon::parse($movement->from_datetime)->format('h:i A');
-                    $movementTo = $movement->actual_return_datetime ?: $movement->to_datetime;
-                    $attendance->movement_to = $movementTo ? Carbon::parse($movementTo)->format('h:i A') : null;
-                    $attendance->movement_id = $movement->id;
-                }
-            } else {
-                $attendance->has_movement = false;
-                $attendance->multiple_movements = false;
+            if ($hasValidAttendance && in_array($attendanceRowStatus, ['late', 'half_day'], true)) {
+                $status = $attendanceRowStatus;
             }
 
-            $this->generateRemarks($attendance);
+            $showMovement = $hasMovement && $status !== 'leave';
+            $movements = $showMovement
+                ? $movementCollection->map(function ($movement) {
+                    return [
+                        'id' => $movement->id,
+                        'movement_type' => $movement->movement_type,
+                        'purpose' => $movement->purpose,
+                        'destination' => $movement->destination,
+                        'status' => $movement->status,
+                        'from_datetime' => $movement->from_datetime,
+                        'actual_return_datetime' => $movement->actual_return_datetime ?: $movement->to_datetime,
+                    ];
+                })->values()->all()
+                : [];
 
-            return $attendance;
+            $firstMovement = $showMovement ? $movementCollection->first() : null;
+            $movementTo = $firstMovement ? ($firstMovement->actual_return_datetime ?: $firstMovement->to_datetime) : null;
+
+            return [
+                'id' => $attendance?->id ?? 'employee-'.$employeeId.'-'.$ymd,
+                'attendance_record_id' => $attendance?->id,
+                'employee_id' => $employeeId,
+                'date' => $ymd,
+                'check_in' => $attendance?->check_in ? Carbon::parse($attendance->check_in)->format('H:i:s') : null,
+                'check_out' => $attendance?->check_out ? Carbon::parse($attendance->check_out)->format('H:i:s') : null,
+                'check_in_formatted' => $attendance?->check_in ? Carbon::parse($attendance->check_in)->format('h:i A') : null,
+                'check_out_formatted' => $attendance?->check_out ? Carbon::parse($attendance->check_out)->format('h:i A') : null,
+                'status' => $status,
+                'device_id' => $attendance?->device_id,
+                'location_coordinates' => $attendance?->location_coordinates,
+                'remarks' => $attendance?->remarks,
+                'auto_remarks' => $this->buildDailyAttendanceRemark($attendance, $status, $leaveType),
+                'employee' => $employee,
+                'device' => $attendance?->device,
+                'has_movement' => $showMovement,
+                'multiple_movements' => $showMovement && count($movements) > 1,
+                'movements' => $movements,
+                'total_movements' => $showMovement ? count($movements) : 0,
+                'movement_type' => $firstMovement?->movement_type,
+                'movement_purpose' => $firstMovement?->purpose,
+                'movement_destination' => $firstMovement?->destination,
+                'movement_status' => $firstMovement?->status,
+                'movement_from' => $firstMovement?->from_datetime ? Carbon::parse($firstMovement->from_datetime)->format('h:i A') : null,
+                'movement_to' => $movementTo ? Carbon::parse($movementTo)->format('h:i A') : null,
+                'movement_id' => $firstMovement?->id,
+            ];
         });
 
-        // Rest of your existing code...
+        if ($request->status) {
+            $rows = $rows->filter(fn ($row) => ($row['status'] ?? null) === $request->status)->values();
+        }
+
+        $movementFilter = $request->input('movement_filter');
+        if ($movementFilter === 'with-movement') {
+            $rows = $rows->filter(fn ($row) => ! empty($row['has_movement']))->values();
+        } elseif ($movementFilter === 'without-movement') {
+            $rows = $rows->filter(fn ($row) => empty($row['has_movement']))->values();
+        }
+
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $pagedItems = $rows->slice(($currentPage - 1) * $perPage, $perPage)->values();
+        $attendances = new LengthAwarePaginator(
+            $pagedItems,
+            $rows->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => LengthAwarePaginator::resolveCurrentPath(),
+                'query' => $request->query(),
+            ]
+        );
 
         $formattedAttendances = [
-            'data' => $attendances->items(),
+            'data' => $pagedItems->values()->all(),
             'meta' => [
                 'current_page' => $attendances->currentPage(),
                 'from' => $attendances->firstItem(),
@@ -241,7 +340,8 @@ class AttendanceController extends Controller
             'attendances' => $formattedAttendances,
             'branches' => $this->getAccessibleBranches($user),
             'departments' => $this->getAccessibleDepartments($user),
-            'filters' => $request->only(['date', 'branch_id', 'department_id', 'status', 'search', 'per_page']),
+            'projects' => Project::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
+            'filters' => $request->only(['date', 'branch_id', 'department_id', 'project_id', 'status', 'search', 'movement_filter', 'per_page']),
             'date' => $date->format('Y-m-d'),
             'readableDate' => $date->format('l, F j, Y'),
             'userPermissions' => [
@@ -261,6 +361,57 @@ class AttendanceController extends Controller
      */
     private function generateRemarks($attendance)
     {
+        if ($attendance->status === 'leave') {
+            $attendance->auto_remarks = 'Leave';
+
+            return;
+        }
+
+        if ($attendance->status === 'holiday') {
+            $attendance->auto_remarks = 'Public Holiday';
+
+            return;
+        }
+
+        if ($attendance->status === 'on_duty') {
+            $attendance->auto_remarks = 'On duty';
+
+            return;
+        }
+
+        $weekendDays = [];
+        try {
+            $attendanceDate = Carbon::parse($attendance->date);
+            $branchId = $attendance->employee?->current_branch_id
+                ?? $attendance->employee?->branch_id
+                ?? null;
+
+            if ($branchId) {
+                $settings = AttendanceSetting::where('branch_id', $branchId)->first();
+                if ($settings) {
+                    $weekendDays = $this->normalizeJsonArray($settings->weekend_days);
+                }
+            }
+
+            if (empty($weekendDays)) {
+                $weekendDays = $this->normalizeJsonArray(AttendanceSetting::global()->weekend_days);
+            }
+
+            if (empty($weekendDays)) {
+                $weekendDays = [5, 6];
+            }
+
+            if (in_array($attendanceDate->dayOfWeek, array_map('intval', $weekendDays), true)
+                && ! $attendance->check_in
+                && ! $attendance->check_out) {
+                $attendance->auto_remarks = 'Weekend';
+
+                return;
+            }
+        } catch (\Throwable $e) {
+            // Fall through to the regular attendance remark calculation below.
+        }
+
         // Skip if no check-in or check-out
         if (! $attendance->check_in || ! $attendance->check_out) {
             if (! $attendance->check_in && ! $attendance->check_out) {
@@ -446,7 +597,16 @@ class AttendanceController extends Controller
 
         $this->applyOrganogramEmployeeOrder($employeesQuery);
 
-        $employees = $employeesQuery->paginate(100)->withQueryString();
+        $perPageInput = $request->input('per_page', '20');
+        if ($perPageInput === 'all') {
+            $perPage = 5000;
+        } else {
+            $perPage = (int) $perPageInput;
+            if ($perPage <= 0) {
+                $perPage = 20;
+            }
+        }
+        $employees = $employeesQuery->paginate($perPage)->withQueryString();
         $employeeIds = $employees->pluck('id')->toArray();
 
         $attendances = Attendance::whereIn('employee_id', $employeeIds)
@@ -613,6 +773,8 @@ class AttendanceController extends Controller
             ];
         }
 
+        $projects = Project::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
+
         return Inertia::render('attendance/monthly', [
             'employees' => $employees,
             'attendances' => $attendances,
@@ -621,7 +783,8 @@ class AttendanceController extends Controller
             'summaryByEmployee' => $summaryByEmployee,
             'branches' => $branches,
             'departments' => $departments,
-            'filters' => $request->only(['month', 'branch_id', 'department_id', 'search']),
+            'projects' => $projects,
+            'filters' => array_merge(['per_page' => $perPageInput], $request->only(['month', 'branch_id', 'department_id', 'project_id', 'search', 'per_page'])),
             'month' => $month->format('Y-m'),
             'daysInMonth' => $daysInMonth,
             'holidays' => $holidays,
@@ -1724,21 +1887,26 @@ class AttendanceController extends Controller
     private function applyEmployeeFilters($query, $user, $request)
     {
         // Apply search filter (applies to all user types)
-        $query->when($request->search, function ($query, $search) {
+        if ($request->filled('search')) {
+            $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('employees.name_en', 'like', "%{$search}%")
                     ->orWhere('employees.name_bn', 'like', "%{$search}%")
                     ->orWhere('employees.employee_id', 'like', "%{$search}%")
                     ->orWhere('employees.pin', 'like', "%{$search}%");
             });
-        });
+        }
+
+        if ($request->filled('project_id') && $request->project_id !== 'all') {
+            $query->where('employees.project_id', $request->project_id);
+        }
 
         if (OrganogramAccessService::hasUnrestrictedAttendanceScope($user)) {
-            if ($request->branch_id) {
-                $query->where('current_branch_id', $request->branch_id);
+            if ($request->filled('branch_id') && $request->branch_id !== 'all') {
+                $query->where('employees.current_branch_id', $request->branch_id);
             }
-            if ($request->department_id) {
-                $query->where('department_id', $request->department_id);
+            if ($request->filled('department_id') && $request->department_id !== 'all') {
+                $query->where('employees.department_id', $request->department_id);
             }
 
             return;
@@ -1746,11 +1914,11 @@ class AttendanceController extends Controller
 
         OrganogramAccessService::constrainVisibleEmployees($query, $user);
 
-        if ($request->branch_id) {
-            $query->where('current_branch_id', $request->branch_id);
+        if ($request->filled('branch_id') && $request->branch_id !== 'all') {
+            $query->where('employees.current_branch_id', $request->branch_id);
         }
-        if ($request->department_id) {
-            $query->where('department_id', $request->department_id);
+        if ($request->filled('department_id') && $request->department_id !== 'all') {
+            $query->where('employees.department_id', $request->department_id);
         }
     }
 

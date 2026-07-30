@@ -791,14 +791,152 @@ class DashboardController extends Controller
             return null;
         }
 
-        $todayAttendance = Attendance::where('employee_id', $employee->id)
-            ->where('date', $today)
-            ->first();
+        $todayYmd = $today->toDateString();
+        $rangeStart = $today->copy()->subDays(9)->startOfDay();
+        $rangeEnd = $today->copy()->endOfDay();
 
-        $recentAttendance = Attendance::where('employee_id', $employee->id)
+        $attendanceRows = Attendance::where('employee_id', $employee->id)
+            ->whereBetween('date', [$rangeStart->toDateString(), $rangeEnd->toDateString()])
             ->orderBy('date', 'desc')
-            ->take(10)
+            ->get()
+            ->keyBy(fn (Attendance $attendance) => Carbon::parse($attendance->date)->toDateString());
+
+        $leaveRows = LeaveApplication::with('leaveType')
+            ->where('employee_id', $employee->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $rangeEnd->toDateString())
+            ->whereDate('end_date', '>=', $rangeStart->toDateString())
             ->get();
+
+        $movements = Movement::where('employee_id', $employee->id)
+            ->whereIn('status', ['active', 'completed'])
+            ->where('movement_type', 'official')
+            ->whereDate('from_datetime', '<=', $rangeEnd->toDateString())
+            ->whereDate(DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $rangeStart->toDateString())
+            ->get();
+
+        $branchId = (int) ($employee->current_branch_id ?: $employee->branch_id ?: 0);
+        $weekendDays = [];
+        if ($branchId > 0) {
+            $attendanceSettings = AttendanceSetting::where('branch_id', $branchId)->first();
+            if ($attendanceSettings) {
+                $rawWeekend = $attendanceSettings->weekend_days ?? [];
+                $weekendDays = is_array($rawWeekend) ? $rawWeekend : (json_decode($rawWeekend ?? '[]', true) ?: []);
+            }
+        }
+        if (empty($weekendDays)) {
+            $globalWeekend = AttendanceSetting::global()->weekend_days;
+            $weekendDays = is_array($globalWeekend)
+                ? $globalWeekend
+                : (json_decode($globalWeekend ?? '[]', true) ?: []);
+        }
+        $weekendDays = array_values(array_map('intval', $weekendDays));
+        if ($weekendDays === []) {
+            $weekendDays = [5, 6];
+        }
+
+        $holidayRows = Holiday::query()
+            ->where(function ($query) use ($rangeStart, $rangeEnd) {
+                $query->whereBetween('date', [$rangeStart->toDateString(), $rangeEnd->toDateString()])
+                    ->orWhere(function ($q) use ($rangeStart, $rangeEnd) {
+                        $q->where('is_recurring', true)
+                            ->where(function ($inner) use ($rangeStart, $rangeEnd) {
+                                $cursor = $rangeStart->copy();
+                                while ($cursor->lte($rangeEnd)) {
+                                    $inner->orWhere(function ($dateMatch) use ($cursor) {
+                                        $dateMatch->whereMonth('date', $cursor->month)
+                                            ->whereDay('date', $cursor->day);
+                                    });
+                                    $cursor->addDay();
+                                }
+                            });
+                    });
+            })
+            ->get();
+
+        $holidayApplicable = [];
+        $cursor = $rangeStart->copy();
+        while ($cursor->lte($rangeEnd)) {
+            $ymd = $cursor->toDateString();
+            foreach ($holidayRows as $holiday) {
+                $holidayDate = Carbon::parse($holiday->date);
+                $matchesDate = $holiday->is_recurring
+                    ? ($holidayDate->month === $cursor->month && $holidayDate->day === $cursor->day)
+                    : ($holidayDate->toDateString() === $ymd);
+
+                if (! $matchesDate) {
+                    continue;
+                }
+
+                $branchesRaw = $holiday->applicable_branches;
+                $applicable = is_array($branchesRaw) ? $branchesRaw : (is_string($branchesRaw) ? (json_decode($branchesRaw ?? '[]', true) ?: []) : []);
+                if (empty($applicable)) {
+                    $holidayApplicable['*'][$ymd] = true;
+
+                    continue;
+                }
+
+                foreach ($applicable as $applicableBranchId) {
+                    $holidayApplicable[(string) $applicableBranchId][$ymd] = true;
+                }
+            }
+            $cursor->addDay();
+        }
+
+        $recentAttendance = collect();
+        $cursor = $today->copy()->startOfDay();
+        while ($cursor->gte($rangeStart)) {
+            $ymd = $cursor->toDateString();
+            $attendance = $attendanceRows->get($ymd);
+            $attendanceStatus = is_string($attendance?->status) ? $attendance->status : null;
+            $hasValidAttendance = (bool) ($attendance && $attendance->check_in);
+            $isOnLeave = $leaveRows->contains(fn (LeaveApplication $leave) => ! method_exists($leave, 'coversCalendarDate') || $leave->coversCalendarDate($ymd));
+            $hasMovement = $movements->contains(function (Movement $movement) use ($ymd) {
+                $from = Carbon::parse($movement->from_datetime)->toDateString();
+                $toSource = $movement->status === 'completed' && $movement->actual_return_datetime
+                    ? $movement->actual_return_datetime
+                    : $movement->to_datetime;
+                $to = $toSource ? Carbon::parse($toSource)->toDateString() : $from;
+
+                return $ymd >= $from && $ymd <= $to;
+            });
+            $isHoliday = ! empty($holidayApplicable['*'][$ymd]) || ($branchId > 0 && ! empty($holidayApplicable[(string) $branchId][$ymd]));
+
+            $status = 'absent';
+            if ($hasValidAttendance) {
+                $status = 'present';
+            } elseif ($isOnLeave) {
+                $status = 'leave';
+            } elseif ($hasMovement) {
+                $status = 'on_duty';
+            } elseif ($attendanceStatus === 'on_duty') {
+                $status = 'on_duty';
+            } elseif ($attendanceStatus === 'leave') {
+                $status = 'leave';
+            } elseif ($attendanceStatus === 'holiday') {
+                $status = 'holiday';
+            } elseif ($isHoliday) {
+                $status = 'holiday';
+            } elseif (in_array($cursor->dayOfWeek, $weekendDays, true)) {
+                $status = 'weekend';
+            }
+
+            if ($hasValidAttendance && in_array($attendanceStatus, ['late', 'half_day'], true)) {
+                $status = $attendanceStatus;
+            }
+
+            $recentAttendance->push([
+                'date' => $ymd,
+                'status' => $status,
+                'check_in' => $attendance?->check_in,
+                'check_out' => $attendance?->check_out,
+            ]);
+
+            $cursor->subDay();
+        }
+
+        $todayAttendance = $recentAttendance
+            ->first(fn (array $row) => ($row['date'] ?? null) === $todayYmd);
 
         $recentMovements = Movement::where('employee_id', $employee->id)
             ->orderBy('created_at', 'desc')
@@ -807,8 +945,8 @@ class DashboardController extends Controller
 
         return [
             'employee' => $employee,
-            'todayAttendance' => $todayAttendance,
-            'recentAttendance' => $recentAttendance,
+            'todayAttendance' => $todayAttendance ?: null,
+            'recentAttendance' => $recentAttendance->values()->all(),
             'recentMovements' => $recentMovements,
         ];
     }
@@ -1453,7 +1591,6 @@ class DashboardController extends Controller
             : Carbon::parse($today)->toDateString();
 
         $visibleIds = $this->dashboardVisibleEmployeeIds($user);
-
         $row = DB::table('employees as e')
             ->leftJoin('attendances as a', function ($join) use ($date) {
                 $join->on('a.employee_id', '=', 'e.id')

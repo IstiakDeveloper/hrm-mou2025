@@ -14,13 +14,6 @@ import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-bran
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from '@/components/ui/select';
-import {
     Pagination,
     PaginationContent,
     PaginationEllipsis,
@@ -71,6 +64,7 @@ import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PageSurface } from '@/components/page-surface';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { ComboSelect } from '@/components/ComboSelect';
 
 interface Department {
     id: number;
@@ -80,6 +74,12 @@ interface Department {
 interface Branch {
     id: number;
     name: string;
+}
+
+interface Project {
+    id: number;
+    name: string;
+    code?: string | null;
 }
 
 interface Employee extends EmployeeNameFields {
@@ -108,7 +108,8 @@ interface Movement {
 }
 
 interface Attendance {
-    id: number;
+    id: number | string;
+    attendance_record_id?: number | null;
     employee_id: number;
     date: string;
     check_in: string | null;
@@ -179,12 +180,15 @@ interface AttendanceIndexProps {
     attendances: AttendancesResponse;
     branches: Branch[];
     departments: Department[];
+    projects: Project[];
     filters: {
         date: string;
         branch_id: string;
         department_id: string;
+        project_id?: string;
         status: string;
         search: string;
+        movement_filter?: string;
         per_page?: string;
     };
     date: string;
@@ -196,6 +200,7 @@ export default function AttendanceIndex({
     attendances,
     branches,
     departments,
+    projects,
     filters,
     date,
     readableDate,
@@ -204,10 +209,11 @@ export default function AttendanceIndex({
     const [search, setSearch] = useState(filters.search || '');
     const [branchId, setBranchId] = useState(filters.branch_id || null);
     const [departmentId, setDepartmentId] = useState(filters.department_id || null);
+    const [projectId, setProjectId] = useState(filters.project_id || null);
     const [status, setStatus] = useState(filters.status || null);
     const [currentDate, setCurrentDate] = useState(date);
     const [calendarOpen, setCalendarOpen] = useState(false);
-    const [movementFilter, setMovementFilter] = useState(null);
+    const [movementFilter, setMovementFilter] = useState(filters.movement_filter || null);
     const [perPage, setPerPage] = useState(filters.per_page || '10');
 
     const handleSearch = () => {
@@ -216,6 +222,7 @@ export default function AttendanceIndex({
             date: currentDate,
             branch_id: branchId || '',
             department_id: departmentId || '',
+            project_id: projectId || '',
             status: status || '',
             movement_filter: movementFilter || '',
             per_page: perPage
@@ -229,6 +236,7 @@ export default function AttendanceIndex({
             date: currentDate,
             branch_id: branchId || '',
             department_id: departmentId || '',
+            project_id: projectId || '',
             status: status || '',
             movement_filter: movementFilter || '',
             per_page: value
@@ -245,7 +253,9 @@ export default function AttendanceIndex({
         setSearch('');
         setBranchId(null);
         setDepartmentId(null);
+        setProjectId(null);
         setStatus(null);
+        setMovementFilter(null);
         setPerPage('10');
         router.get(route('attendance.index'), { date: currentDate, per_page: '10' }, { preserveState: true });
     };
@@ -260,7 +270,9 @@ export default function AttendanceIndex({
                 search,
                 branch_id: branchId || '',
                 department_id: departmentId || '',
+                project_id: projectId || '',
                 status: status || '',
+                movement_filter: movementFilter || '',
                 per_page: perPage
             }, { preserveState: true });
         }
@@ -365,9 +377,10 @@ export default function AttendanceIndex({
     // Check if pagination data exists
     const hasPagination = attendances.meta && attendances.links;
 
-    // Check if user can see branch/department filters
+    // Check if user can see branch/department/project filters
     const canFilterByBranch = userPermissions.isBranchManager || !userPermissions.isEmployee;
     const canFilterByDepartment = userPermissions.isDepartmentHead || userPermissions.isBranchManager || !userPermissions.isEmployee;
+    const canFilterByProject = !userPermissions.isEmployee || userPermissions.isBranchManager || userPermissions.isDepartmentHead;
 
     const showAdminActions = !userPermissions.isEmployee || userPermissions.isBranchManager || userPermissions.isDepartmentHead;
 
@@ -471,53 +484,71 @@ export default function AttendanceIndex({
 
                         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
                             {canFilterByBranch && branches.length > 1 && (
-                                <Select value={branchId || undefined} onValueChange={(value) => setBranchId(value === "all" ? null : value)}>
-                                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs bg-white border-slate-200 rounded-lg">
-                                        <SelectValue placeholder="Branch" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Branches</SelectItem>
-                                        {sortPayrollBranches(branches).map((b) => <SelectItem key={b.id} value={b.id.toString()}>{formatBranchSelectLabel(b)}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
+                                <ComboSelect
+                                    value={branchId}
+                                    onChange={setBranchId}
+                                    items={sortPayrollBranches(branches).map((branch) => ({
+                                        value: branch.id.toString(),
+                                        label: formatBranchSelectLabel(branch),
+                                    }))}
+                                    placeholder="All Branches"
+                                    className="w-full sm:w-[170px]"
+                                />
                             )}
 
                             {canFilterByDepartment && departments.length > 1 && (
-                                <Select value={departmentId || undefined} onValueChange={(value) => setDepartmentId(value === "all" ? null : value)}>
-                                    <SelectTrigger className="w-full sm:w-[140px] h-8 text-xs bg-white border-slate-200 rounded-lg">
-                                        <SelectValue placeholder="Department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Depts</SelectItem>
-                                        {departments.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
+                                <ComboSelect
+                                    value={departmentId}
+                                    onChange={setDepartmentId}
+                                    items={departments.map((department) => ({
+                                        value: department.id.toString(),
+                                        label: department.name,
+                                    }))}
+                                    placeholder="All Depts"
+                                    className="w-full sm:w-[180px]"
+                                />
                             )}
 
-                            <Select value={movementFilter || undefined} onValueChange={(value) => setMovementFilter(value === "all" ? null : value)}>
-                                <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs bg-white border-slate-200 rounded-lg">
-                                    <SelectValue placeholder="Movement" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Records</SelectItem>
-                                    <SelectItem value="with-movement">With Movement</SelectItem>
-                                    <SelectItem value="without-movement">No Movement</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            {canFilterByProject && projects.length > 0 && (
+                                <ComboSelect
+                                    value={projectId}
+                                    onChange={setProjectId}
+                                    items={projects.map((project) => ({
+                                        value: project.id.toString(),
+                                        label: project.code ? `${project.code} — ${project.name}` : project.name,
+                                    }))}
+                                    placeholder="All Projects"
+                                    className="w-full sm:w-[190px]"
+                                />
+                            )}
 
-                            <Select value={status || undefined} onValueChange={(value) => setStatus(value === "all" ? null : value)}>
-                                <SelectTrigger className="w-full sm:w-[120px] h-8 text-xs bg-white border-slate-200 rounded-lg">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Statuses</SelectItem>
-                                    <SelectItem value="present">Present</SelectItem>
-                                    <SelectItem value="absent">Absent</SelectItem>
-                                    <SelectItem value="late">Late</SelectItem>
-                                    <SelectItem value="half_day">Half Day</SelectItem>
-                                    <SelectItem value="leave">Leave</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <ComboSelect
+                                value={movementFilter}
+                                onChange={setMovementFilter}
+                                items={[
+                                    { value: 'with-movement', label: 'With Movement' },
+                                    { value: 'without-movement', label: 'No Movement' },
+                                ]}
+                                placeholder="All Records"
+                                className="w-full sm:w-[160px]"
+                            />
+
+                            <ComboSelect
+                                value={status}
+                                onChange={setStatus}
+                                items={[
+                                    { value: 'present', label: 'Present' },
+                                    { value: 'absent', label: 'Absent' },
+                                    { value: 'late', label: 'Late' },
+                                    { value: 'half_day', label: 'Half Day' },
+                                    { value: 'leave', label: 'Leave' },
+                                    { value: 'on_duty', label: 'On Duty' },
+                                    { value: 'holiday', label: 'Holiday' },
+                                    { value: 'weekend', label: 'Weekend' },
+                                ]}
+                                placeholder="All Statuses"
+                                className="w-full sm:w-[150px]"
+                            />
 
                             <div className="col-span-2 sm:col-span-1 sm:ml-auto flex items-center justify-end gap-1.5 pt-0.5 sm:pt-0">
                                 <Button variant="outline" onClick={resetFilters} size="sm" className="h-8 text-xs text-slate-600 px-3 flex-1 sm:flex-initial">
@@ -992,7 +1023,8 @@ export default function AttendanceIndex({
                                                                     size="icon" 
                                                                     className="h-8 w-8 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-colors" 
                                                                     title="Edit Attendance"
-                                                                    onClick={() => router.get(route('attendance.edit', attendance.id))}
+                                                                    onClick={() => attendance.attendance_record_id && router.get(route('attendance.edit', attendance.attendance_record_id))}
+                                                                    disabled={!attendance.attendance_record_id}
                                                                 >
                                                                     <Edit className="h-4 w-4" />
                                                                 </Button>
@@ -1014,7 +1046,8 @@ export default function AttendanceIndex({
                                                                     size="icon" 
                                                                     className="h-8 w-8 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg transition-colors" 
                                                                     title="Delete Attendance"
-                                                                    onClick={() => handleDelete(attendance.id)}
+                                                                    onClick={() => attendance.attendance_record_id && handleDelete(attendance.attendance_record_id)}
+                                                                    disabled={!attendance.attendance_record_id}
                                                                 >
                                                                     <Trash2 className="h-4 w-4" />
                                                                 </Button>
@@ -1063,22 +1096,21 @@ export default function AttendanceIndex({
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2 text-[13px] text-slate-500">
                                 <span className="hidden sm:inline">Rows per page:</span>
-                                <Select
+                                <ComboSelect
                                     value={perPage}
-                                    onValueChange={handlePerPageChange}
-                                >
-                                    <SelectTrigger className="h-8 w-[70px] text-[13px] bg-white border-slate-200">
-                                        <SelectValue placeholder="10" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="10">10</SelectItem>
-                                        <SelectItem value="25">25</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
-                                        <SelectItem value="100">100</SelectItem>
-                                        <SelectItem value="200">200</SelectItem>
-                                        <SelectItem value="500">500</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    onChange={(value) => value && handlePerPageChange(value)}
+                                    items={[
+                                        { value: '10', label: '10' },
+                                        { value: '25', label: '25' },
+                                        { value: '50', label: '50' },
+                                        { value: '100', label: '100' },
+                                        { value: '200', label: '200' },
+                                        { value: '500', label: '500' },
+                                    ]}
+                                    placeholder="10"
+                                    clearable={false}
+                                    className="w-[90px]"
+                                />
                             </div>
                             <div className="hidden sm:block">
                                 <p className="text-[13px] text-slate-500">

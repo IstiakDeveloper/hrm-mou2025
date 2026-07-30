@@ -11,6 +11,8 @@ use App\Models\Department;
 use App\Models\Attendance;
 use App\Models\LeaveApplication;
 use App\Support\MonthlyAttendanceCalculator;
+use App\Support\PayrollReportPrintPdf;
+use Mpdf\Mpdf;
 use App\Support\HeadOfficeOrganogram;
 use App\Services\OrganogramAccessService;
 use Illuminate\Http\Request;
@@ -24,9 +26,11 @@ class AttendanceExportController extends Controller
      */
     public function exportMonthlyPdf(Request $request)
     {
-        // Set longer execution time and increased memory for PDF generation
-        ini_set('max_execution_time', 300);
-        ini_set('memory_limit', '512M');
+        // Set longer execution time, PCRE backtrack limit, and increased memory for PDF generation
+        ini_set('max_execution_time', 600);
+        ini_set('memory_limit', '2048M');
+        ini_set('pcre.backtrack_limit', '100000000');
+        ini_set('pcre.recursion_limit', '100000000');
 
         $user = Auth::user();
 
@@ -53,8 +57,8 @@ class AttendanceExportController extends Controller
 
             HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
 
-            // Limit to a reasonable number of employees for PDF generation
-            $employees = $employeesQuery->take(50)->get();
+            // Fetch all matching employees for PDF generation
+            $employees = $employeesQuery->get();
 
             if ($employees->isEmpty()) {
                 return back()->with('error', 'No employees found with the current filters.');
@@ -165,28 +169,29 @@ class AttendanceExportController extends Controller
                 $defaultWeekendDays = [5, 6];
             }
 
-            // Calculate status codes and summary for each employee
+            // Calculate status codes and summary for all employees at once
+            $calc = MonthlyAttendanceCalculator::compute(
+                $employees,
+                $month,
+                $daysInMonth,
+                $maxDate,
+                $attendanceSettings,
+                $movementsByEmployee,
+                $leaveDays,
+                $holidayApplicable,
+                $attendanceByEmployeeDate,
+                $defaultWeekendDays
+            );
+
             $employeesWithSummary = collect();
 
             foreach ($employees as $employee) {
-                $calc = MonthlyAttendanceCalculator::compute(
-                    [$employee],
-                    $month,
-                    $daysInMonth,
-                    $maxDate,
-                    $attendanceSettings,
-                    $movementsByEmployee,
-                    $leaveDays,
-                    $holidayApplicable,
-                    $attendanceByEmployeeDate,
-                    $defaultWeekendDays
-                );
-
-                $summary = $calc['summaryByEmployee'][(int) $employee->id] ?? [
+                $empId = (int) $employee->id;
+                $summary = $calc['summaryByEmployee'][$empId] ?? [
                     'present' => 0, 'absent' => 0, 'late' => 0, 'half_day' => 0, 'leave' => 0, 'on_duty' => 0, 'weekend' => 0, 'holiday' => 0,
                 ];
 
-                $dailyStatus = $calc['dailyStatusByEmployee'][(int) $employee->id] ?? [];
+                $dailyStatus = $calc['dailyStatusByEmployee'][$empId] ?? [];
 
                 $employeesWithSummary->push([
                     'employee' => $employee,
@@ -229,12 +234,43 @@ class AttendanceExportController extends Controller
                 'departmentName' => $departmentName,
             ])->render();
 
-            // Create PDF with minimal options
+            // Fast PDF Engine 1: Chrome Browsershot (Super fast, ~1-2 seconds)
+            if (PayrollReportPrintPdf::canGenerate()) {
+                $pdfBinary = PayrollReportPrintPdf::generate($html);
+                return response()->make($pdfBinary, 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                    'Cache-Control' => 'private, max-age=0, must-revalidate',
+                ]);
+            }
+
+            // Fast PDF Engine 2: mPDF (~2-3 seconds)
+            if (class_exists(Mpdf::class)) {
+                $mpdf = new Mpdf([
+                    'mode' => 'utf-8',
+                    'format' => 'A4-L',
+                    'margin_left' => 4,
+                    'margin_right' => 4,
+                    'margin_top' => 4,
+                    'margin_bottom' => 4,
+                    'default_font' => 'dejavusans',
+                    'shrink_tables_to_fit' => 1.2,
+                ]);
+                $mpdf->WriteHTML($html);
+                return response()->make($mpdf->Output($fileName, 'S'), 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                    'Cache-Control' => 'private, max-age=0, must-revalidate',
+                ]);
+            }
+
+            // Engine 3: Dompdf Fallback
             $dompdf = new \Dompdf\Dompdf([
-                'enable_remote' => true,
+                'enable_remote' => false,
                 'enable_php' => false,
                 'enable_javascript' => false,
-                'enable_html5_parser' => true,
+                'enable_html5_parser' => false,
+                'isFontSubsettingEnabled' => true,
             ]);
 
             $dompdf->loadHtml($html);
@@ -289,14 +325,19 @@ class AttendanceExportController extends Controller
         }
 
         // Apply branch filter if provided and user has permission
-        if ($request->branch_id && ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager'))) {
+        if ($request->filled('branch_id') && $request->branch_id !== 'all' && ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager'))) {
             $query->where('employees.current_branch_id', $request->branch_id);
         }
 
         // Apply department filter if provided and user has permission
-        if ($request->department_id &&
+        if ($request->filled('department_id') && $request->department_id !== 'all' &&
             ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager') || OrganogramAccessService::isHeadOfficeDepartmentHead($user))) {
             $query->where('employees.department_id', $request->department_id);
+        }
+
+        // Apply project filter if provided
+        if ($request->filled('project_id') && $request->project_id !== 'all') {
+            $query->where('employees.project_id', $request->project_id);
         }
 
         return $query;
