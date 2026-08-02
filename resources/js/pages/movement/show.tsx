@@ -50,6 +50,8 @@ interface Movement {
     destination: string;
     remarks: string | null;
     work_result: string | null;
+    start_meter_reading?: number | string | null;
+    start_place?: string | null;
     status: string;
     is_returned: boolean;
     actual_return_datetime: string | null;
@@ -341,6 +343,8 @@ export default function ShowMovement({ movement, canClose, canEdit = false, canD
                 open={showCloseDialog}
                 onOpenChange={setShowCloseDialog}
                 movementId={movement.id}
+                startMeterReading={movement.start_meter_reading}
+                startPlace={movement.start_place}
                 branchFallbackName={branchFallbackName}
             />
         </Layout>

@@ -615,6 +615,8 @@ class MovementController extends Controller
             'purpose' => 'required|string|max:500',
             'destination' => 'required|string|max:255',
             'remarks' => 'nullable|string|max:1000',
+            'start_meter_reading' => 'nullable|numeric|min:0',
+            'start_place' => 'nullable|string|max:255',
         ]);
 
         // Movement start must be within the last 5 minutes or in the future (small clock / form delay tolerance)
@@ -673,6 +675,8 @@ class MovementController extends Controller
             'purpose' => $request->purpose,
             'destination' => $request->destination,
             'remarks' => $request->remarks,
+            'start_meter_reading' => $request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null,
+            'start_place' => $request->filled('start_place') ? trim($request->start_place) : null,
             'status' => 'active', // Set as active instead of pending
         ]);
 
@@ -927,6 +931,27 @@ class MovementController extends Controller
     }
 
     /**
+     * Get lightweight JSON details of a movement for modals.
+     */
+    public function details(Movement $movement)
+    {
+        $movement->loadMissing('employee.branch');
+
+        return response()->json([
+            'id' => $movement->id,
+            'employee_id' => $movement->employee_id,
+            'start_meter_reading' => $movement->start_meter_reading !== null ? (float) $movement->start_meter_reading : null,
+            'start_place' => $movement->start_place,
+            'movement_type' => $movement->movement_type,
+            'from_datetime' => $movement->from_datetime?->toIso8601String(),
+            'to_datetime' => $movement->to_datetime?->toIso8601String(),
+            'purpose' => $movement->purpose,
+            'destination' => $movement->destination,
+            'branch_name' => $movement->employee?->branch?->name ?: '',
+        ]);
+    }
+
+    /**
      * Mark the movement as completed.
      */
     public function complete(Request $request, Movement $movement)
@@ -955,19 +980,36 @@ class MovementController extends Controller
 
         $createLogBook = $request->boolean('create_log_book', true);
 
-        $request->validate([
+        // Determine start reading: prefer movement's stored start_meter_reading, fallback to request for legacy records
+        $startReading = $movement->start_meter_reading !== null
+            ? (float) $movement->start_meter_reading
+            : ($request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null);
+
+        $rules = [
             'forgot_return_time' => 'sometimes|boolean',
             'create_log_book' => 'sometimes|boolean',
             'actual_return_datetime' => $forgotReturn ? 'required|date' : 'nullable|date',
             'work_result' => 'required|string|min:5|max:2000',
-            'start_place' => $createLogBook ? 'nullable|string|max:255' : 'nullable',
-            'start_meter_reading' => $createLogBook ? 'required|numeric|min:0' : 'nullable',
-            'end_meter_reading' => $createLogBook ? 'required|numeric|gte:start_meter_reading' : 'nullable',
+            'start_place' => 'nullable|string|max:255',
             'personal_km' => $createLogBook ? 'nullable|numeric|min:0' : 'nullable',
-        ]);
+        ];
 
         if ($createLogBook) {
-            $totalKm = round((float) $request->end_meter_reading - (float) $request->start_meter_reading, 2);
+            if ($startReading !== null) {
+                $rules['end_meter_reading'] = "required|numeric|gte:{$startReading}";
+            } else {
+                $rules['start_meter_reading'] = 'required|numeric|min:0';
+                $rules['end_meter_reading'] = 'required|numeric|gte:start_meter_reading';
+            }
+        } else {
+            $rules['end_meter_reading'] = 'nullable';
+        }
+
+        $request->validate($rules);
+
+        if ($createLogBook) {
+            $effectiveStart = $startReading ?? (float) $request->start_meter_reading;
+            $totalKm = round((float) $request->end_meter_reading - $effectiveStart, 2);
             if ($request->filled('personal_km') && (float) $request->personal_km > $totalKm) {
                 throw ValidationException::withMessages([
                     'personal_km' => 'Personal distance cannot exceed total distance.',
@@ -1109,6 +1151,8 @@ class MovementController extends Controller
             'purpose' => 'required|string',
             'destination' => 'required|string',
             'remarks' => 'nullable|string',
+            'start_meter_reading' => 'nullable|numeric|min:0',
+            'start_place' => 'nullable|string|max:255',
         ];
 
         if ($isCompleted && $isAdminEditor) {
@@ -1131,6 +1175,8 @@ class MovementController extends Controller
         $movement->purpose = $request->purpose;
         $movement->destination = $request->destination;
         $movement->remarks = $request->remarks;
+        $movement->start_meter_reading = $request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null;
+        $movement->start_place = $request->filled('start_place') ? trim($request->start_place) : null;
 
         // Update employee_id if admin
         if ($user->hasPermission('movements.edit')) {
@@ -1682,12 +1728,16 @@ class MovementController extends Controller
         $branch = $movement->employee?->branch;
         $isHeadOffice = (bool) ($branch?->is_head_office);
 
-        $startReading = (float) $request->start_meter_reading;
+        $startReading = $movement->start_meter_reading !== null
+            ? (float) $movement->start_meter_reading
+            : (float) $request->start_meter_reading;
         $endReading = (float) $request->end_meter_reading;
         $totalKm = round($endReading - $startReading, 2);
         $personalKm = $request->filled('personal_km') ? round((float) $request->personal_km, 2) : null;
         $officialKm = round($totalKm - ($personalKm ?? 0), 2);
-        $startPlace = trim((string) $request->start_place);
+        $startPlace = $movement->start_place
+            ? trim($movement->start_place)
+            : trim((string) $request->start_place);
         if ($startPlace === '') {
             $startPlace = $branch?->name ?: 'Unknown';
         }

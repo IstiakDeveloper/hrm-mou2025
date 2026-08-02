@@ -1646,6 +1646,9 @@ Route::middleware(['auth'])->group(function () {
             ->name('show')
             ->middleware('permission:movements.view');
 
+        Route::get('/{movement}/details', [MovementController::class, 'details'])
+            ->name('details');
+
         // Edit / delete movement (admin / HR with permission)
         Route::middleware(['permission:movements.edit'])->group(function () {
             Route::get('/{movement}/edit', [MovementController::class, 'edit'])->name('edit');

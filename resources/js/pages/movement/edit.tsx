@@ -27,7 +27,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { format, formatISO, isAfter } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Calendar as CalendarIcon, CalendarClock, MapPin } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, CalendarClock, MapPin, Gauge } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
@@ -55,6 +55,8 @@ interface Movement {
   purpose: string;
   destination: string;
   remarks: string | null;
+  start_meter_reading?: number | string | null;
+  start_place?: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed' | 'active';
 }
 
@@ -89,6 +91,8 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
   const [toTime, setToTime] = useState<string>(formatTimeString(toDateTime));
   const [purpose, setPurpose] = useState(movement.purpose);
   const [destination, setDestination] = useState(movement.destination);
+  const [startMeterReading, setStartMeterReading] = useState(movement.start_meter_reading !== undefined && movement.start_meter_reading !== null ? String(movement.start_meter_reading) : '');
+  const [startPlace, setStartPlace] = useState(movement.start_place || '');
   const [remarks, setRemarks] = useState(movement.remarks || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -175,6 +179,8 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
       purpose,
       destination,
       remarks,
+      start_meter_reading: startMeterReading ? String(startMeterReading) : undefined,
+      start_place: startPlace.trim() || undefined,
     };
 
     if (showReturnEditor && actualReturnLocal) {
@@ -405,6 +411,46 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
                       )}
                     </div>
                   )}
+
+                  {/* Log Book Start Meter Reading section */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-emerald-200/80 bg-emerald-50/20">
+                    <div className="space-y-1">
+                      <Label htmlFor="startMeterReading" className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                        <Gauge className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>Start Meter Reading (স্টার্ট মিটার)</span>
+                      </Label>
+                      <Input
+                        id="startMeterReading"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        placeholder="e.g. 12540"
+                        value={startMeterReading}
+                        onChange={(e) => setStartMeterReading(e.target.value)}
+                        className="h-9 text-xs bg-white border-slate-200 focus:ring-emerald-500/20"
+                      />
+                      {errors.start_meter_reading && (
+                        <p className="text-xs font-medium text-red-500 mt-0.5">{errors.start_meter_reading}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="startPlace" className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>Start Place (শুরুর স্থান)</span>
+                      </Label>
+                      <Input
+                        id="startPlace"
+                        placeholder="e.g. Head Office / Branch"
+                        value={startPlace}
+                        onChange={(e) => setStartPlace(e.target.value)}
+                        className="h-9 text-xs bg-white border-slate-200 focus:ring-emerald-500/20"
+                      />
+                      {errors.start_place && (
+                        <p className="text-xs font-medium text-red-500 mt-0.5">{errors.start_place}</p>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="destination">Destination</Label>

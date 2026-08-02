@@ -19,6 +19,8 @@ class Movement extends Model
         'destination',
         'remarks',
         'work_result',
+        'start_meter_reading',
+        'start_place',
         'status',
         'is_returned',
         'actual_return_datetime',
@@ -29,6 +31,7 @@ class Movement extends Model
         'to_datetime' => 'datetime',
         'actual_return_datetime' => 'datetime',
         'is_returned' => 'boolean',
+        'start_meter_reading' => 'decimal:2',
     ];
 
     public function employee()

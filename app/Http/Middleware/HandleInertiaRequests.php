@@ -74,6 +74,8 @@ class HandleInertiaRequests extends Middleware
                     'to_datetime',
                     'destination',
                     'status',
+                    'start_meter_reading',
+                    'start_place',
                 ]);
         }
 

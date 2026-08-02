@@ -21,6 +21,8 @@ interface CloseMovementModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     movementId?: number | null;
+    startMeterReading?: number | string | null;
+    startPlace?: string | null;
     branchFallbackName?: string;
     onSuccess?: () => void;
 }
@@ -29,6 +31,8 @@ export function CloseMovementModal({
     open,
     onOpenChange,
     movementId,
+    startMeterReading: propStartMeterReading,
+    startPlace: propStartPlace,
     branchFallbackName = '',
     onSuccess,
 }: CloseMovementModalProps) {
@@ -39,7 +43,8 @@ export function CloseMovementModal({
     const [startMeterReading, setStartMeterReading] = useState('');
     const [endMeterReading, setEndMeterReading] = useState('');
     const [personalKm, setPersonalKm] = useState('');
-    const [startPlace, setStartPlace] = useState(branchFallbackName);
+    const [startPlace, setStartPlace] = useState(propStartPlace || branchFallbackName);
+    const [fetchedStartMeter, setFetchedStartMeter] = useState<number | null>(null);
     const [resolvingPlace, setResolvingPlace] = useState(false);
     const [closeError, setCloseError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -54,15 +59,62 @@ export function CloseMovementModal({
             setPersonalKm('');
             setCreateLogBook(true);
             setCustomReturnTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-            setStartPlace(branchFallbackName);
-            setResolvingPlace(true);
+            setStartPlace(propStartPlace || branchFallbackName);
 
-            resolveMovementStartPlace(branchFallbackName)
-                .then((place) => setStartPlace(place))
-                .catch(() => setStartPlace(branchFallbackName))
-                .finally(() => setResolvingPlace(false));
+            const initialProp = (propStartMeterReading !== undefined && propStartMeterReading !== null && propStartMeterReading !== '')
+                ? Number(propStartMeterReading)
+                : null;
+            setFetchedStartMeter(initialProp && !Number.isNaN(initialProp) && initialProp > 0 ? initialProp : null);
+
+            if (movementId) {
+                fetch(`/movements/${movementId}/details`)
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (data?.start_meter_reading !== null && data?.start_meter_reading !== undefined && data?.start_meter_reading !== '') {
+                            const val = Number(data.start_meter_reading);
+                            if (!Number.isNaN(val) && val > 0) {
+                                setFetchedStartMeter(val);
+                            }
+                        }
+                        if (data?.start_place) {
+                            setStartPlace(data.start_place);
+                        }
+                    })
+                    .catch(() => {});
+            }
+
+            if (!propStartPlace) {
+                setResolvingPlace(true);
+                resolveMovementStartPlace(branchFallbackName)
+                    .then((place) => setStartPlace(place))
+                    .catch(() => setStartPlace(branchFallbackName))
+                    .finally(() => setResolvingPlace(false));
+            }
         }
-    }, [open, branchFallbackName]);
+    }, [open, movementId, branchFallbackName, propStartMeterReading, propStartPlace]);
+
+    // Check if start meter reading was pre-recorded when creating movement (from DB/props)
+    const presetStartMeter = (fetchedStartMeter !== null && !Number.isNaN(fetchedStartMeter) && fetchedStartMeter > 0)
+        ? fetchedStartMeter
+        : (propStartMeterReading !== undefined && propStartMeterReading !== null && propStartMeterReading !== '' && !Number.isNaN(Number(propStartMeterReading)) && Number(propStartMeterReading) > 0)
+            ? Number(propStartMeterReading)
+            : null;
+
+    const hasPresetStartMeter = presetStartMeter !== null;
+
+    const startMeterValue = hasPresetStartMeter ? presetStartMeter : (startMeterReading.trim() !== '' ? Number(startMeterReading) : null);
+    const endMeterValue = endMeterReading.trim() !== '' ? Number(endMeterReading) : null;
+    const personalKmNum = personalKm.trim() === '' || Number.isNaN(Number(personalKm)) ? 0 : Number(personalKm);
+
+    const hasValidReadings =
+        startMeterValue !== null &&
+        endMeterValue !== null &&
+        !Number.isNaN(startMeterValue) &&
+        !Number.isNaN(endMeterValue) &&
+        endMeterValue >= startMeterValue;
+
+    const totalKm = hasValidReadings ? Math.max(0, endMeterValue - startMeterValue) : 0;
+    const officialKm = Math.max(0, totalKm - personalKmNum);
 
     const handleClose = () => {
         setCloseError(null);
@@ -73,26 +125,26 @@ export function CloseMovementModal({
             return;
         }
 
-        const startReading = Number(startMeterReading);
+        const effectiveStartMeter = hasPresetStartMeter ? presetStartMeter : Number(startMeterReading);
         const endReading = Number(endMeterReading);
         const personal = personalKm.trim() === '' ? 0 : Number(personalKm);
 
         if (createLogBook) {
-            if (startMeterReading.trim() === '' || Number.isNaN(startReading) || startReading < 0) {
+            if (!hasPresetStartMeter && (startMeterReading.trim() === '' || Number.isNaN(effectiveStartMeter) || effectiveStartMeter < 0)) {
                 setCloseError('Please enter a valid start meter reading.');
                 return;
             }
-            if (endMeterReading.trim() === '' || Number.isNaN(endReading) || endReading < startReading) {
-                setCloseError('Closing meter reading must be greater than or equal to start reading.');
+            if (endMeterReading.trim() === '' || Number.isNaN(endReading) || endReading < effectiveStartMeter) {
+                setCloseError(`Closing meter reading must be greater than or equal to start reading (${effectiveStartMeter}).`);
                 return;
             }
 
-            const totalKm = Math.max(0, endReading - startReading);
+            const totalKmCalc = Math.max(0, endReading - effectiveStartMeter);
             if (personalKm.trim() !== '' && (Number.isNaN(personal) || personal < 0)) {
                 setCloseError('Please enter a valid personal distance.');
                 return;
             }
-            if (personal > totalKm) {
+            if (personal > totalKmCalc) {
                 setCloseError('Personal distance cannot exceed total distance.');
                 return;
             }
@@ -111,7 +163,7 @@ export function CloseMovementModal({
                 actual_return_datetime: forgotReturnTime ? customReturnTime : null,
                 work_result: workResult.trim(),
                 start_place: createLogBook ? (startPlace.trim() || branchFallbackName || 'Unknown') : null,
-                start_meter_reading: createLogBook ? startReading : null,
+                start_meter_reading: createLogBook ? effectiveStartMeter : null,
                 end_meter_reading: createLogBook ? endReading : null,
                 personal_km: createLogBook && personalKm.trim() !== '' ? personal : null,
                 create_log_book: createLogBook ? '1' : '0',
@@ -137,19 +189,6 @@ export function CloseMovementModal({
             }
         );
     };
-
-    const startReadingNum = Number(startMeterReading);
-    const endReadingNum = Number(endMeterReading);
-    const personalKmNum = personalKm.trim() === '' || Number.isNaN(Number(personalKm)) ? 0 : Number(personalKm);
-    const hasValidReadings =
-        startMeterReading !== '' &&
-        endMeterReading !== '' &&
-        !Number.isNaN(startReadingNum) &&
-        !Number.isNaN(endReadingNum) &&
-        endReadingNum >= startReadingNum;
-
-    const totalKm = hasValidReadings ? Math.max(0, endReadingNum - startReadingNum) : 0;
-    const officialKm = Math.max(0, totalKm - personalKmNum);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -257,38 +296,62 @@ export function CloseMovementModal({
 
                         {createLogBook && (
                             <div className="space-y-2.5 pt-1">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                        <Label htmlFor="modalStartMeter" className="text-[11px] font-medium text-slate-600">
-                                            Start Meter <span className="text-rose-500">*</span>
-                                        </Label>
-                                        <Input
-                                            id="modalStartMeter"
-                                            type="number"
-                                            min={0}
-                                            step="0.01"
-                                            value={startMeterReading}
-                                            onChange={(e) => setStartMeterReading(e.target.value)}
-                                            placeholder="e.g. 12540"
-                                            className="h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="modalEndMeter" className="text-[11px] font-medium text-slate-600">
-                                            Closing Meter <span className="text-rose-500">*</span>
-                                        </Label>
+                                {hasPresetStartMeter ? (
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="modalEndMeter" className="text-xs font-semibold text-slate-800 flex items-center gap-1">
+                                                <span>Closing Meter (এন্ড মিটার)</span>
+                                                <span className="text-rose-500 font-bold">*</span>
+                                            </Label>
+                                            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                                                Start: <strong className="text-emerald-950 tabular-nums">{presetStartMeter}</strong> km
+                                            </span>
+                                        </div>
                                         <Input
                                             id="modalEndMeter"
                                             type="number"
-                                            min={0}
+                                            min={presetStartMeter}
                                             step="0.01"
                                             value={endMeterReading}
                                             onChange={(e) => setEndMeterReading(e.target.value)}
-                                            placeholder="e.g. 12565"
-                                            className="h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
+                                            placeholder={`e.g. ${Number(presetStartMeter) + 25}`}
+                                            className="h-8.5 text-xs sm:text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
                                         />
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label htmlFor="modalStartMeter" className="text-[11px] font-medium text-slate-600">
+                                                Start Meter <span className="text-rose-500">*</span>
+                                            </Label>
+                                            <Input
+                                                id="modalStartMeter"
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={startMeterReading}
+                                                onChange={(e) => setStartMeterReading(e.target.value)}
+                                                placeholder="e.g. 12540"
+                                                className="h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label htmlFor="modalEndMeter" className="text-[11px] font-medium text-slate-600">
+                                                Closing Meter <span className="text-rose-500">*</span>
+                                            </Label>
+                                            <Input
+                                                id="modalEndMeter"
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={endMeterReading}
+                                                onChange={(e) => setEndMeterReading(e.target.value)}
+                                                placeholder="e.g. 12565"
+                                                className="h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
 
                                 {hasValidReadings && (
                                     <div className="rounded-lg border border-emerald-200/80 bg-white p-2.5 space-y-2 text-xs">

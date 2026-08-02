@@ -1617,6 +1617,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 open={showCloseMovementDialog}
                 onOpenChange={setShowCloseMovementDialog}
                 movementId={closeMovementId ?? activeMovement?.id}
+                startMeterReading={activeMovement?.start_meter_reading}
+                startPlace={activeMovement?.start_place}
                 branchFallbackName={branchFallbackName}
             />
         </div>
