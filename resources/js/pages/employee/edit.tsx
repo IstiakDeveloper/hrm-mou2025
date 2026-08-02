@@ -762,6 +762,7 @@ export default function EmployeeEdit({
     }>({ open: false, target: 'present', name: '', error: '', saving: false });
     const [salaryAdditionRows, setSalaryAdditionRows] = useState<SalaryComponentRow[]>(salaryAssignment?.addition_rows ?? []);
     const [salaryDeductionRows, setSalaryDeductionRows] = useState<SalaryComponentRow[]>(salaryAssignment?.deduction_rows ?? []);
+    const [salaryComponentsEditing, setSalaryComponentsEditing] = useState(false);
 
     useEffect(() => {
         setData('salary_lines_json', buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows));
@@ -1108,11 +1109,15 @@ export default function EmployeeEdit({
             transform: (formData) => ({
                 ...formData,
                 _method: 'PUT',
-                salary_lines_json: buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows),
+                sync_salary_components: salaryComponentsEditing ? 1 : 0,
+                salary_lines_json: salaryComponentsEditing
+                    ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
+                    : '',
             }),
             onSuccess: () => {
                 clearEmployeeDraft(editDraftKey);
                 setTabStepBlockMessages(null);
+                setSalaryComponentsEditing(false);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             },
             onError: (errs) => {
@@ -2282,6 +2287,24 @@ export default function EmployeeEdit({
                                                 previewUrl={route('employees.salary-assignment-preview')}
                                                 employeeId={employee.id}
                                                 stepBasicSalary={salaryAssignment?.step_basic_salary ?? 0}
+                                                componentsReadOnly={!salaryComponentsEditing}
+                                                componentsEditing={salaryComponentsEditing}
+                                                onToggleComponentsEdit={() => {
+                                                    setSalaryComponentsEditing((prev) => {
+                                                        if (prev) {
+                                                            // cancel: restore preview rows from server snapshot
+                                                            setSalaryAdditionRows(salaryAssignment?.addition_rows ?? []);
+                                                            setSalaryDeductionRows(salaryAssignment?.deduction_rows ?? []);
+                                                            setData(
+                                                                'basic_salary',
+                                                                employee.basic_salary != null && employee.basic_salary !== ''
+                                                                    ? String(employee.basic_salary)
+                                                                    : '',
+                                                            );
+                                                        }
+                                                        return !prev;
+                                                    });
+                                                }}
                                                 errors={errors}
                                             />
                                         </div>

@@ -38,6 +38,15 @@ class SeparationCompletionService
         if ($separation->final_payment_date) {
             $employee->final_payment_date = Carbon::parse($separation->final_payment_date);
         }
+
+        app(EmployeeAssignmentHistoryService::class)->queueContext($employee, [
+            'effective_from' => $separationDate->toDateString(),
+            'source_type' => \App\Models\EmployeeAssignmentHistory::SOURCE_SEPARATION,
+            'source_id' => $separation->id,
+            'created_by' => $actorUserId,
+            'notes' => 'Separation completed',
+        ]);
+
         $employee->save();
 
         $employee->syncLinkedUserActiveStatus();
@@ -136,6 +145,14 @@ class SeparationCompletionService
         $employee->dropout_date = null;
         $employee->dropout_reason = null;
         $employee->final_payment_date = null;
+
+        app(EmployeeAssignmentHistoryService::class)->queueContext($employee, [
+            'effective_from' => now()->toDateString(),
+            'source_type' => \App\Models\EmployeeAssignmentHistory::SOURCE_SEPARATION_RESTORE,
+            'source_id' => $separation->id,
+            'notes' => 'Separation deleted — employee restored to active',
+        ]);
+
         $employee->save();
 
         $employee->syncLinkedUserActiveStatus();

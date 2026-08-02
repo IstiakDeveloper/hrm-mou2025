@@ -34,6 +34,16 @@ class DemotionCompletionService
 
         $this->syncEmployeeFromDemotion($demotion, $toPayscaleId);
 
+        app(EmployeeAssignmentHistoryService::class)->queueContext($employee, [
+            'effective_from' => $demotion->effective_date
+                ? Carbon::parse($demotion->effective_date)->toDateString()
+                : now()->toDateString(),
+            'source_type' => \App\Models\EmployeeAssignmentHistory::SOURCE_DEMOTION,
+            'source_id' => $demotion->id,
+            'created_by' => $actorUserId,
+            'notes' => 'Demotion completed',
+        ]);
+
         $employee->save();
 
         DemotionHistory::create([
@@ -65,11 +75,19 @@ class DemotionCompletionService
             $employee->salary_grade_id = $demotion->to_salary_grade_id;
             $employee->salary_step_id = $demotion->to_salary_step_id;
 
+            if ($demotion->to_basic_salary !== null && $demotion->to_basic_salary !== '') {
+                $employee->basic_salary = $demotion->to_basic_salary;
+            }
+
             return;
         }
 
         if ($demotion->to_salary_grade_id) {
             $employee->salary_grade_id = $demotion->to_salary_grade_id;
+        }
+
+        if ($demotion->to_basic_salary !== null && $demotion->to_basic_salary !== '') {
+            $employee->basic_salary = $demotion->to_basic_salary;
         }
     }
 

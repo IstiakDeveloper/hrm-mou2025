@@ -37,6 +37,17 @@ class PromotionCompletionService
         /** @var mixed $lastPromotionDate */
         $lastPromotionDate = $promotion->effective_date ? Carbon::parse($promotion->effective_date) : now();
         $employee->last_promotion_date = $lastPromotionDate;
+
+        app(EmployeeAssignmentHistoryService::class)->queueContext($employee, [
+            'effective_from' => $promotion->effective_date
+                ? Carbon::parse($promotion->effective_date)->toDateString()
+                : now()->toDateString(),
+            'source_type' => \App\Models\EmployeeAssignmentHistory::SOURCE_PROMOTION,
+            'source_id' => $promotion->id,
+            'created_by' => $actorUserId,
+            'notes' => 'Promotion completed',
+        ]);
+
         $employee->save();
 
         PromotionHistory::create([
@@ -68,11 +79,19 @@ class PromotionCompletionService
             $employee->salary_grade_id = $promotion->to_salary_grade_id;
             $employee->salary_step_id = $promotion->to_salary_step_id;
 
+            if ($promotion->to_basic_salary !== null && $promotion->to_basic_salary !== '') {
+                $employee->basic_salary = $promotion->to_basic_salary;
+            }
+
             return;
         }
 
         if ($promotion->to_salary_grade_id) {
             $employee->salary_grade_id = $promotion->to_salary_grade_id;
+        }
+
+        if ($promotion->to_basic_salary !== null && $promotion->to_basic_salary !== '') {
+            $employee->basic_salary = $promotion->to_basic_salary;
         }
     }
 

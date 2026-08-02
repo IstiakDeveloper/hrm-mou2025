@@ -15,6 +15,7 @@ use App\Models\EmployeeType;
 use App\Models\LocationUnion;
 use App\Models\LocationVillage;
 use App\Models\Payscale;
+use App\Models\Payslip;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\PromotionHistory;
@@ -28,6 +29,7 @@ use App\Models\Zone;
 use App\Services\EmployeeSalaryAssignmentService;
 use App\Services\MisLoanFieldOfficerSyncService;
 use App\Services\OrganogramAccessService;
+use App\Services\PayrollCalculationService;
 use App\Support\BranchOrganogram;
 use App\Support\EmployeeExport;
 use App\Support\EmployeeImportCsv;
@@ -55,6 +57,7 @@ class EmployeeController extends Controller
 
     public function __construct(
         protected EmployeeSalaryAssignmentService $employeeSalaryAssignmentService,
+        protected PayrollCalculationService $payrollCalculationService,
     ) {}
 
     private const EMPLOYEE_IMPORT_MAX_ROWS = 5000;
@@ -813,20 +816,156 @@ class EmployeeController extends Controller
             'salary_grade_id' => 'required|exists:salary_grades,id',
             'salary_step_id' => 'required|exists:salary_steps,id',
             'employee_id' => 'nullable|exists:employees,id',
+            'year' => 'nullable|integer|min:2000|max:2100',
+            'month' => 'nullable|integer|min:1|max:12',
         ]);
 
         $employee = isset($validated['employee_id'])
-            ? Employee::query()->find($validated['employee_id'])
+            ? Employee::query()
+                ->with(['employeeType', 'salaryGrade', 'salaryStep', 'payscale'])
+                ->find($validated['employee_id'])
             : null;
 
-        return response()->json(
-            $this->employeeSalaryAssignmentService->resolveRows(
-                (int) $validated['payscale_id'],
-                (int) $validated['salary_grade_id'],
-                (int) $validated['salary_step_id'],
-                $employee,
-            )
+        $payload = $this->employeeSalaryAssignmentService->resolveRows(
+            (int) $validated['payscale_id'],
+            (int) $validated['salary_grade_id'],
+            (int) $validated['salary_step_id'],
+            $employee,
         );
+
+        if ($employee) {
+            $assignmentUnchanged =
+                (int) $validated['payscale_id'] === (int) $employee->payscale_id
+                && (int) $validated['salary_grade_id'] === (int) $employee->salary_grade_id
+                && (int) $validated['salary_step_id'] === (int) $employee->salary_step_id;
+
+            $year = isset($validated['year']) ? (int) $validated['year'] : null;
+            $month = isset($validated['month']) ? (int) $validated['month'] : null;
+
+            // Prefer the latest processed salary month so Tax/PF/Loan match salary process.
+            $existingPayslip = null;
+            if ($assignmentUnchanged) {
+                $payslipQuery = Payslip::query()
+                    ->where('employee_id', $employee->id)
+                    ->whereHas('payrollRun', function ($q) use ($year, $month) {
+                        $q->where('salary_type', 'salary');
+                        if ($year !== null && $month !== null) {
+                            $q->where('year', $year)->where('month', $month);
+                        }
+                    })
+                    ->with(['lines', 'payrollRun'])
+                    ->latest('id');
+
+                $existingPayslip = $payslipQuery->first();
+                if ($existingPayslip?->payrollRun) {
+                    $year = (int) $existingPayslip->payrollRun->year;
+                    $month = (int) $existingPayslip->payrollRun->month;
+                }
+            }
+
+            $year ??= (int) now()->year;
+            $month ??= (int) now()->month;
+            $asOf = Carbon::create($year, $month, 1)->endOfMonth()->startOfDay();
+
+            if ($existingPayslip) {
+                $taxLine = $existingPayslip->lines->first(function ($l) {
+                    $name = strtolower((string) $l->head_name);
+
+                    return $name === 'tax' || str_contains($name, 'tax') || str_contains($name, 'ait');
+                });
+                $pfLine = $existingPayslip->lines->first(function ($l) {
+                    $name = strtolower((string) $l->head_name);
+
+                    return $name === 'pf'
+                        || str_contains($name, 'provident')
+                        || (str_starts_with($name, 'pf') && ! str_contains($name, 'loan'));
+                });
+
+                $payrollLines = $existingPayslip->lines->map(fn ($line) => [
+                    'salary_head_id' => $line->salary_head_id ? (int) $line->salary_head_id : null,
+                    'head_name' => $line->head_name,
+                    'type' => $line->type,
+                    'computed_amount' => (float) $line->computed_amount,
+                ])->values()->all();
+
+                $payload['payroll_preview'] = [
+                    'year' => $year,
+                    'month' => $month,
+                    'source' => 'payslip',
+                    'basic_salary' => (float) $existingPayslip->basic_salary,
+                    'gross_salary' => (float) $existingPayslip->gross_salary,
+                    'total_deduction' => (float) $existingPayslip->total_deduction,
+                    'net_payable' => (float) $existingPayslip->net_payable,
+                    'income_tax' => (float) ($taxLine?->computed_amount ?? 0),
+                    'pf_employee_contribution' => (float) ($pfLine?->computed_amount ?? 0),
+                    'loan_total' => (float) $existingPayslip->lines
+                        ->filter(fn ($l) => $l->type === 'deduction' && str_contains(strtolower((string) $l->head_name), 'loan'))
+                        ->sum('computed_amount'),
+                    'lines' => $payrollLines,
+                ];
+
+                $payload = $this->employeeSalaryAssignmentService->applyPayrollLinesToRows(
+                    $payload,
+                    $payrollLines,
+                    (float) $existingPayslip->basic_salary,
+                );
+            } else {
+                // Preview uses the selected grade/step without forcing custom overrides.
+                $previewEmployee = $employee->replicate();
+                $previewEmployee->id = $employee->id;
+                $previewEmployee->exists = true;
+                $previewEmployee->payscale_id = (int) $validated['payscale_id'];
+                $previewEmployee->salary_grade_id = (int) $validated['salary_grade_id'];
+                $previewEmployee->salary_step_id = (int) $validated['salary_step_id'];
+                $previewEmployee->setRelation('salaryGrade', $employee->salaryGrade);
+                $previewEmployee->setRelation('salaryStep', $employee->salaryStep);
+                $previewEmployee->setRelation('payscale', $employee->payscale);
+                $previewEmployee->setRelation('employeeType', $employee->employeeType);
+
+                // Clear incomplete custom flags so estimate matches salary-process grade/step path.
+                if (! $employee->hasEffectiveCustomBasic()) {
+                    $previewEmployee->basic_salary = null;
+                    $previewEmployee->custom_salary_assigned_at = null;
+                }
+
+                $calc = $this->payrollCalculationService->calculateForEmployee(
+                    $previewEmployee,
+                    $asOf,
+                    'salary',
+                    $year,
+                    $month,
+                );
+
+                $payrollLines = collect($calc['lines'] ?? [])->map(fn (array $line) => [
+                    'salary_head_id' => isset($line['salary_head_id']) ? (int) $line['salary_head_id'] : null,
+                    'head_name' => $line['head_name'],
+                    'type' => $line['type'],
+                    'computed_amount' => $line['computed_amount'],
+                ])->values()->all();
+
+                $payload['payroll_preview'] = [
+                    'year' => $year,
+                    'month' => $month,
+                    'source' => 'estimate',
+                    'basic_salary' => $calc['basic_salary'],
+                    'gross_salary' => $calc['gross_salary'],
+                    'total_deduction' => $calc['total_deduction'],
+                    'net_payable' => $calc['net_payable'],
+                    'income_tax' => $calc['income_tax'] ?? 0,
+                    'pf_employee_contribution' => $calc['pf_employee_contribution'] ?? 0,
+                    'loan_total' => collect($calc['loan_deductions'] ?? [])->sum('amount'),
+                    'lines' => $payrollLines,
+                ];
+
+                $payload = $this->employeeSalaryAssignmentService->applyPayrollLinesToRows(
+                    $payload,
+                    $payrollLines,
+                    (float) $calc['basic_salary'],
+                );
+            }
+        }
+
+        return response()->json($payload);
     }
 
     /**
@@ -2542,6 +2681,7 @@ class EmployeeController extends Controller
                 'salary_lines.*.amount_type' => 'required_with:salary_lines|in:percentage,fixed',
                 'salary_lines.*.amount' => 'required_with:salary_lines|numeric|min:0',
                 'salary_lines_json' => 'nullable|string',
+                'sync_salary_components' => 'nullable|boolean',
 
                 // Nested tab payloads
                 'addresses' => 'nullable|array',
@@ -2679,6 +2819,7 @@ class EmployeeController extends Controller
                 'signature',
                 'salary_lines',
                 'salary_lines_json',
+                'sync_salary_components',
             ]);
 
             $employeeData['employee_id'] = $employeeData['pin'];
@@ -2722,7 +2863,11 @@ class EmployeeController extends Controller
                     );
                 }
 
-                $createdEmployee = Employee::create($employeeData);
+                if (! $request->boolean('sync_salary_components')) {
+                    unset($employeeData['basic_salary']);
+                }
+
+                                $createdEmployee = Employee::create($employeeData);
                 $createdEmployee->load('designation');
                 $this->syncZoneRegionalManagerAssignment($createdEmployee);
                 $this->syncUserAccountForEmployee($createdEmployee);
@@ -2875,7 +3020,9 @@ class EmployeeController extends Controller
                 }
 
                 $this->syncEmployeeDocumentsFromTabbedForm($request, $createdEmployee, true);
-                $this->syncEmployeeSalaryComponents($createdEmployee, $validated);
+                if ($request->boolean('sync_salary_components')) {
+                    $this->syncEmployeeSalaryComponents($createdEmployee, $validated);
+                }
             });
 
             return redirect()->route('employees.index')
@@ -3070,6 +3217,7 @@ class EmployeeController extends Controller
                 'salary_lines.*.amount_type' => 'required_with:salary_lines|in:percentage,fixed',
                 'salary_lines.*.amount' => 'required_with:salary_lines|numeric|min:0',
                 'salary_lines_json' => 'nullable|string',
+                'sync_salary_components' => 'nullable|boolean',
 
                 // Nested tab payloads
                 'addresses' => 'nullable|array',
@@ -3202,6 +3350,7 @@ class EmployeeController extends Controller
                 'signature',
                 'salary_lines',
                 'salary_lines_json',
+                'sync_salary_components',
             ]);
 
             $employeeData['employee_id'] = $employeeData['pin'];
@@ -3236,6 +3385,10 @@ class EmployeeController extends Controller
                         (string) ($employeeData['pin'] ?? $employee->pin ?? 'emp'),
                         $employee->signature
                     );
+                }
+
+                if (! $request->boolean('sync_salary_components')) {
+                    unset($employeeData['basic_salary']);
                 }
 
                 $employee->update($employeeData);
@@ -3403,7 +3556,9 @@ class EmployeeController extends Controller
 
                 $this->syncEmployeeDocumentsFromTabbedForm($request, $employee, false);
                 $employee->refresh();
-                $this->syncEmployeeSalaryComponents($employee, $validated);
+                if ($request->boolean('sync_salary_components')) {
+                    $this->syncEmployeeSalaryComponents($employee, $validated);
+                }
             });
 
             return redirect()
@@ -3586,7 +3741,7 @@ class EmployeeController extends Controller
         $headOffice = Branch::query()
             ->with([
                 'headEmployee' => fn ($q) => $q->where('status', 'active')->with('designation'),
-                'employees' => fn ($q) => $q->where('status', 'active')->with('designation')->orderBy('name_en'),
+                'employees' => fn ($q) => $q->where('status', 'active')->with(['designation', 'project', 'employeeType'])->orderBy('name_en'),
             ])
             ->withCount([
                 'employees' => fn ($q) => $q->where('status', 'active'),

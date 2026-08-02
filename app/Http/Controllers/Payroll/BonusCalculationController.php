@@ -11,6 +11,8 @@ use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
 use App\Services\BonusCalculationService;
+use App\Services\EmployeeAssignmentHistoryService;
+use App\Services\PayrollAsOfEmployeeService;
 use App\Support\BranchOrganogram;
 use App\Support\HeadOfficeOrganogram;
 use App\Support\PayrollFormHelper;
@@ -26,7 +28,9 @@ class BonusCalculationController extends Controller
     use ProvidesPayrollFilters;
 
     public function __construct(
-        protected BonusCalculationService $calculator
+        protected BonusCalculationService $calculator,
+        protected EmployeeAssignmentHistoryService $assignmentHistory,
+        protected PayrollAsOfEmployeeService $asOfEmployees,
     ) {}
 
     public function index(Request $request)
@@ -133,10 +137,16 @@ class BonusCalculationController extends Controller
             $processDate = PayrollFormHelper::parseDisplayDate($validated['process_date'])
                 ?? throw ValidationException::withMessages(['process_date' => 'Invalid process date. Use dd-mm-yyyy.']);
 
+            $asOfDate = $this->assignmentHistory->asOfForPayrollPeriod(
+                (int) $validated['year'],
+                (int) $validated['month'],
+                $processDate,
+            );
+
             $processAllBranches = empty($validated['branch_id']);
 
             if ($processAllBranches) {
-                $summary = $this->processAllBranches($request, $validated, $configuration, $processDate);
+                $summary = $this->processAllBranches($request, $validated, $configuration, $processDate, $asOfDate);
 
                 return redirect()
                     ->route('bonus-post.index', [
@@ -152,6 +162,7 @@ class BonusCalculationController extends Controller
                 $validated,
                 $configuration,
                 $processDate,
+                $asOfDate,
                 (int) $validated['branch_id']
             ));
 
@@ -193,9 +204,10 @@ class BonusCalculationController extends Controller
         Request $request,
         array $validated,
         BonusConfiguration $configuration,
-        string $processDate
+        string $processDate,
+        Carbon $asOfDate,
     ): array {
-        $branchIds = $this->resolveBranchIdsForBulkProcess($request, $validated);
+        $branchIds = $this->resolveBranchIdsForBulkProcess($request, $validated, $asOfDate);
 
         if ($branchIds === []) {
             throw ValidationException::withMessages([
@@ -208,7 +220,7 @@ class BonusCalculationController extends Controller
         $skippedEmpty = [];
 
         foreach ($branchIds as $branchId) {
-            $result = $this->processSingleBranch($request, $validated, $configuration, $processDate, $branchId);
+            $result = $this->processSingleBranch($request, $validated, $configuration, $processDate, $asOfDate, $branchId);
 
             match ($result['status']) {
                 'processed' => $processed[] = "{$result['branch_label']} ({$result['employee_count']})",
@@ -249,33 +261,67 @@ class BonusCalculationController extends Controller
      * @param  array<string, mixed>  $validated
      * @return list<int>
      */
-    private function resolveBranchIdsForBulkProcess(Request $request, array $validated): array
+    private function resolveBranchIdsForBulkProcess(Request $request, array $validated, Carbon $asOfDate): array
     {
         if (! empty($validated['employee_id'])) {
-            $branchId = Employee::query()
+            $employee = Employee::query()
                 ->where('id', $validated['employee_id'])
                 ->where('status', 'active')
-                ->value('current_branch_id');
+                ->first();
 
-            return $branchId ? [(int) $branchId] : [];
+            if (! $employee) {
+                return [];
+            }
+
+            $history = $this->assignmentHistory->resolveAsOf($employee->id, $asOfDate);
+            $this->assignmentHistory->applyToEmployee($employee, $history);
+
+            return $employee->current_branch_id ? [(int) $employee->current_branch_id] : [];
         }
 
-        return $this->applyPayrollEmployeeFilters(Employee::query(), $request, payrollReadyOnly: true)
-            ->whereNotNull('current_branch_id')
-            ->distinct()
+        $candidates = $this->applyPayrollEmployeeFilters(
+            Employee::query(),
+            $request,
+            payrollReadyOnly: false,
+            payrollYear: (int) $validated['year'],
+            payrollMonth: (int) $validated['month'],
+            applyLiveOrgFilters: false,
+        )
+            ->with(['salaryGrade', 'salaryStep', 'payscale', 'employeeType'])
+            ->get();
+
+        $orgFilters = [
+            'department_id' => $validated['department_id'] ?? null,
+            'designation_id' => $validated['designation_id'] ?? null,
+            'program_id' => $validated['program_id'] ?? null,
+            'project_id' => $validated['project_id'] ?? null,
+        ];
+
+        $eligible = $this->asOfEmployees->finalizeCandidates(
+            $candidates,
+            $asOfDate,
+            (int) $validated['year'],
+            (int) $validated['month'],
+            $orgFilters,
+            requirePayrollReady: true,
+        );
+
+        $ids = $eligible
             ->pluck('current_branch_id')
+            ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()
-            ->pipe(function ($ids) {
-                if ($ids->isEmpty()) {
-                    return collect();
-                }
+            ->values();
 
-                return Branch::query()
-                    ->whereIn('branches.id', $ids)
-                    ->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))
-                    ->pluck('branches.id');
-            })
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return Branch::query()
+            ->whereIn('branches.id', $ids)
+            ->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))
+            ->pluck('branches.id')
+            ->map(fn ($id) => (int) $id)
             ->values()
             ->all();
     }
@@ -295,6 +341,7 @@ class BonusCalculationController extends Controller
         array $validated,
         BonusConfiguration $configuration,
         string $processDate,
+        Carbon $asOfDate,
         int $branchId
     ): array {
         $branch = Branch::query()->find($branchId);
@@ -313,22 +360,45 @@ class BonusCalculationController extends Controller
         $branchRequest = clone $request;
         $branchRequest->merge(['branch_id' => $branchId]);
 
-        $activeCount = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest)->count();
+        $orgFilters = [
+            'branch_id' => $branchId,
+            'department_id' => $validated['department_id'] ?? null,
+            'designation_id' => $validated['designation_id'] ?? null,
+            'program_id' => $validated['program_id'] ?? null,
+            'project_id' => $validated['project_id'] ?? null,
+        ];
 
-        $employeesQuery = $this->applyPayrollEmployeeFilters(Employee::query(), $branchRequest, payrollReadyOnly: true)
-            ->with(['salaryGrade', 'salaryStep', 'payscale', 'designation:id,name', 'branch:id,name,branch_code']);
+        $candidatesQuery = $this->applyPayrollEmployeeFilters(
+            Employee::query(),
+            $branchRequest,
+            payrollReadyOnly: false,
+            payrollYear: (int) $validated['year'],
+            payrollMonth: (int) $validated['month'],
+            applyLiveOrgFilters: false,
+        )
+            ->whereIn('employees.id', $this->assignmentHistory->employeeIdsForBranchAsOf($branchId, $asOfDate) ?: [0])
+            ->with(['salaryGrade', 'salaryStep', 'payscale', 'employeeType', 'designation:id,name', 'branch:id,name,branch_code']);
 
-        HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
+        HeadOfficeOrganogram::applyToEmployeeQuery($candidatesQuery, 'organogram', 'asc');
 
-        $employees = $employeesQuery
-            ->get()
+        $candidates = $candidatesQuery->get();
+        $candidateCount = $candidates->count();
+
+        $employees = $this->asOfEmployees->finalizeCandidates(
+            $candidates,
+            $asOfDate,
+            (int) $validated['year'],
+            (int) $validated['month'],
+            $orgFilters,
+            requirePayrollReady: true,
+        )
             ->filter(fn (Employee $employee) => $this->calculator->employeeMatchesConfiguration($employee, $configuration))
             ->values();
 
         if ($employees->isEmpty()) {
-            $message = $activeCount > 0
-                ? "{$activeCount} active employee(s) in {$branchLabel}, but none match this bonus configuration or payroll assignment."
-                : "No active employees in {$branchLabel} for the selected filters.";
+            $message = $candidateCount > 0
+                ? "{$candidateCount} employee(s) considered for {$branchLabel} as of ".$asOfDate->format('d-m-Y').', but none match this bonus configuration or payroll assignment.'
+                : "No eligible employees in {$branchLabel} for the selected filters.";
 
             return [
                 'status' => 'skipped_no_employees',
@@ -360,10 +430,12 @@ class BonusCalculationController extends Controller
         $totalGross = 0.0;
         $totalDeduction = 0.0;
         $totalNet = 0.0;
-        $processCarbon = Carbon::parse($processDate);
+        $processCarbon = $asOfDate->copy();
 
         foreach ($employees as $employee) {
             $calc = $this->calculator->calculateForEmployee($employee, $configuration, $processCarbon);
+
+            $employee->loadMissing(['designation:id,name', 'branch:id,name,branch_code', 'salaryGrade', 'salaryStep']);
 
             $payslip = Payslip::query()->create([
                 'payroll_run_id' => $run->id,

@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { format } from 'date-fns';
+import { format, lastDayOfMonth, min } from 'date-fns';
 import Layout from '@/layouts/AdminLayout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -84,6 +84,19 @@ function reviewBranchHref(batch: PeriodBatch, branchId: number): string {
         return payrollPostRoutes('bonus').show(branchId);
     }
     return payrollPostRoutes('salary').show(branchId);
+}
+
+function periodAsOfDisplayDate(year: string, month: string): string {
+    const y = Number(year);
+    const m = Number(month);
+    if (!y || !m) {
+        return format(new Date(), DISPLAY_DATE_FMT);
+    }
+
+    const monthEnd = lastDayOfMonth(new Date(y, m - 1, 1));
+    const asOf = min([monthEnd, new Date()]);
+
+    return format(asOf, DISPLAY_DATE_FMT);
 }
 
 function ProcessBatchCard({ batch }: { batch: PeriodBatch }) {
@@ -190,7 +203,26 @@ export default function SalaryProcessIndex({ filters: init, pendingBatches, canP
     const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({});
     const [listSearch, setListSearch] = useState('');
 
-    const setFilter = (key: string, value: string) => setFilters((f) => ({ ...f, [key]: value }));
+    const setFilter = (key: string, value: string) => {
+        setFilters((f) => {
+            const next = { ...f, [key]: value };
+            if (key === 'year' || key === 'month') {
+                const year = key === 'year' ? value : next.year;
+                const month = key === 'month' ? value : next.month;
+                if (year && month) {
+                    next.process_date = periodAsOfDisplayDate(year, month);
+                }
+            }
+            return next;
+        });
+    };
+
+    useEffect(() => {
+        if (filters.year && filters.month && !String(init.process_date || '').trim()) {
+            setFilters((f) => ({ ...f, process_date: periodAsOfDisplayDate(f.year, f.month) }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only seed when month/year present on mount
+    }, []);
 
     const allErrors = useMemo(
         () => flattenErrors({ ...pageErrors, ...submitErrors }),
@@ -255,7 +287,7 @@ export default function SalaryProcessIndex({ filters: init, pendingBatches, canP
                 <PayrollPageHeader
                     icon={Calculator}
                     title="Salary process"
-                    description="Calculate payroll for active employees, then review and post from the list below."
+                    description="Payroll uses each employee’s branch, grade, and salary as of the salary month (Process date, clamped to month end). Later transfers or promotions do not rewrite that month."
                 />
 
                 {flash?.success && (
@@ -311,7 +343,7 @@ export default function SalaryProcessIndex({ filters: init, pendingBatches, canP
                 <div className="flex flex-col gap-6">
                     <PayrollSectionCard
                         title="Calculate payroll"
-                        description="Calculate payroll for active employees. After undoing one employee, run again with that employee selected — others already in payroll are skipped automatically."
+                        description="Assignment (branch / designation / grade) is taken as of Process date within the selected month. Changing year or month auto-sets Process date to that month’s last day (or today if the month is current). After undoing one employee, run again with that employee selected."
                     >
                         <PayrollFilterGrid
                             filters={filters}

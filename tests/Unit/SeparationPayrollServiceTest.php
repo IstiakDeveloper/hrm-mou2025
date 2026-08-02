@@ -68,3 +68,30 @@ test('mid-month separation still prorates from month start when joined earlier',
         ->and($result['payable_days'])->toBe(14)
         ->and($result['factor'])->toEqual(14 / 30);
 });
+
+test('separation on first day of next month pays full previous month', function () {
+    $employee = new Employee([
+        'joining_date' => Carbon::create(2023, 8, 24),
+        'dropout_date' => Carbon::create(2026, 8, 1),
+    ]);
+
+    $result = app(SeparationPayrollService::class)->resolveForPayrollMonth($employee, 2026, 7);
+
+    expect($result['eligible'])->toBeTrue()
+        ->and($result['payable_days'])->toBe(31)
+        ->and($result['days_in_month'])->toBe(31)
+        ->and($result['factor'])->toEqual(1.0)
+        ->and($result['is_partial'])->toBeFalse();
+});
+
+test('separation on first day of salary month is not eligible that month', function () {
+    $employee = new Employee([
+        'joining_date' => Carbon::create(2023, 8, 24),
+        'dropout_date' => Carbon::create(2026, 8, 1),
+    ]);
+
+    $result = app(SeparationPayrollService::class)->resolveForPayrollMonth($employee, 2026, 8);
+
+    expect($result['eligible'])->toBeFalse()
+        ->and($result['payable_days'])->toBe(0);
+});

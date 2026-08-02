@@ -108,21 +108,28 @@ class PayrollCalculationService
 
         $structure = null;
         $basic = $employee->resolveBasicSalary();
-        $hasCustomSalary = $employee->custom_salary_assigned_at !== null;
+        $hasCustomSalary = $employee->hasEffectiveCustomBasic();
         $gradeLabel = null;
         $stepNumber = null;
         $hasPayrollAssignment = $employee->payscale_id
             && $employee->salary_grade_id
             && $employee->salary_step_id;
 
+        // Custom path only when assignment component overrides exist.
+        // Stale custom_salary_assigned_at + step basic (no mods) must not suppress HR/PF/etc.
+        $assignmentMods = ($hasCustomSalary && $hasPayrollAssignment)
+            ? $this->activeAssignmentModifications($employee->id, $processDate)
+            : collect();
+        $hasCustomComponentOverrides = $assignmentMods->isNotEmpty();
+
         if ($hasPayrollAssignment) {
-            $structure = $hasCustomSalary ? null : $this->resolveSalaryStructure($employee);
+            $structure = $hasCustomComponentOverrides ? null : $this->resolveSalaryStructure($employee);
 
             $gradeLabel = $structure?->grade?->name ?? $employee->salaryGrade?->name;
             $stepNumber = $structure?->step?->step_number ?? $employee->salaryStep?->step_number;
 
             if ($hasCustomSalary) {
-                $basic = SalaryStructureCalculator::roundTaka((float) ($employee->basic_salary ?? 0));
+                $basic = SalaryStructureCalculator::roundTaka((float) $employee->basic_salary);
             } elseif ($employee->basic_salary !== null && (float) $employee->basic_salary > 0) {
                 $basic = (float) $employee->basic_salary;
             } elseif ($structure) {
@@ -148,8 +155,8 @@ class PayrollCalculationService
             'sort_order' => $sort++,
         ];
 
-        if ($hasCustomSalary && $hasPayrollAssignment) {
-            foreach ($this->activeAssignmentModifications($employee->id, $processDate) as $mod) {
+        if ($hasCustomComponentOverrides) {
+            foreach ($assignmentMods as $mod) {
                 $head = $mod->relationLoaded('head') ? $mod->head : $mod->head()->first();
                 if (! $head || $head->is_basic_head) {
                     continue;
@@ -174,8 +181,9 @@ class PayrollCalculationService
                     }
 
                     $mod = $modifications->get($head->id);
+                    // Leftover assignment overlays apply only with custom basic; otherwise use structure.
                     if ($mod && $mod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
-                        continue;
+                        $mod = null;
                     }
 
                     $lines[] = $this->buildComponentLine(
@@ -190,7 +198,7 @@ class PayrollCalculationService
                 foreach ($this->activeComponentHeads() as $head) {
                     $mod = $modifications->get($head->id);
                     if ($mod && $mod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
-                        continue;
+                        $mod = null;
                     }
 
                     $lines[] = $this->buildComponentLine(
@@ -215,7 +223,7 @@ class PayrollCalculationService
         $pf = ['employee' => 0.0, 'employer' => 0.0];
         $incomeTax = 0.0;
 
-        if ($hasCustomSalary) {
+        if ($hasCustomComponentOverrides) {
             $pfHead = $this->resolvePfHead();
             $taxHead = $this->resolveTaxHead();
 
@@ -262,8 +270,8 @@ class PayrollCalculationService
         $loanYear = $payrollYear ?? (int) $processDate->year;
         $loanMonth = $payrollMonth ?? (int) $processDate->month;
 
-        $customAssignmentHeadIds = $hasCustomSalary
-            ? $this->activeAssignmentModifications($employee->id, $processDate)
+        $customAssignmentHeadIds = $hasCustomComponentOverrides
+            ? $assignmentMods
                 ->pluck('salary_head_id')
                 ->map(fn ($id) => (int) $id)
                 ->all()
@@ -858,43 +866,71 @@ class PayrollCalculationService
     protected function scalePayrollResultBySeparationFactor(array $result, array $proration): array
     {
         $factor = (float) $proration['factor'];
+        $taxHead = $this->resolveTaxHead();
+        $taxHeadId = (int) $taxHead->id;
+        $welfareHeadIds = $this->welfareHeadIds();
 
-        foreach ($result['lines'] as &$line) {
-            $line['computed_amount'] = SalaryStructureCalculator::roundTaka((float) $line['computed_amount'] * $factor);
-            if (($line['amount_type'] ?? '') === 'fixed') {
-                $line['input_value'] = SalaryStructureCalculator::roundTaka((float) $line['input_value'] * $factor);
-            }
-        }
-        unset($line);
-
-        $gross = 0.0;
-        $deduction = 0.0;
-        $pfEmployee = 0.0;
-        $incomeTax = 0.0;
+        $scaledLines = [];
+        $maxSort = 0;
 
         foreach ($result['lines'] as $line) {
+            $headId = (int) ($line['salary_head_id'] ?? 0);
+            $maxSort = max($maxSort, (int) ($line['sort_order'] ?? 0));
+
+            // Tax is recomputed on the prorated gross — drop the full-month tax line here.
+            if ($headId === $taxHeadId || $this->lineLooksLikeIncomeTax($line)) {
+                continue;
+            }
+
+            // Staff welfare (and similar) always deduct the full monthly amount.
+            if ($headId > 0 && in_array($headId, $welfareHeadIds, true)) {
+                $scaledLines[] = $line;
+
+                continue;
+            }
+
+            $scaled = $line;
+            $scaled['computed_amount'] = SalaryStructureCalculator::roundTaka((float) $line['computed_amount'] * $factor);
+            if (($line['amount_type'] ?? '') === 'fixed') {
+                $scaled['input_value'] = SalaryStructureCalculator::roundTaka((float) $line['input_value'] * $factor);
+            }
+            $scaledLines[] = $scaled;
+        }
+
+        $gross = 0.0;
+        foreach ($scaledLines as $line) {
             if ($line['type'] === 'earning') {
                 $gross += (float) $line['computed_amount'];
-            } elseif ($line['type'] === 'deduction') {
+            }
+        }
+        $gross = SalaryStructureCalculator::roundTaka($gross);
+
+        $incomeTax = $this->taxSlabService->taxForGross($gross);
+        if ($incomeTax > 0) {
+            $scaledLines[] = [
+                'salary_head_id' => $taxHeadId,
+                'head_name' => $taxHead->short_name ?? $taxHead->name,
+                'type' => 'deduction',
+                'amount_type' => 'fixed',
+                'input_value' => $incomeTax,
+                'computed_amount' => $incomeTax,
+                'sort_order' => $maxSort + 1,
+            ];
+        }
+
+        $deduction = 0.0;
+        $pfEmployee = 0.0;
+        foreach ($scaledLines as $line) {
+            if ($line['type'] === 'deduction') {
                 $deduction += (float) $line['computed_amount'];
+            }
+            if ($line['type'] === 'deduction' && $this->lineLooksLikePf($line)) {
+                $pfEmployee += (float) $line['computed_amount'];
             }
         }
 
         $gross = SalaryStructureCalculator::roundTaka($gross);
         $deduction = SalaryStructureCalculator::roundTaka($deduction);
-
-        foreach ($result['lines'] as $line) {
-            $headName = strtolower((string) ($line['head_name'] ?? ''));
-            if ($line['type'] !== 'deduction') {
-                continue;
-            }
-            if (str_contains($headName, 'pf') || str_contains($headName, 'provident')) {
-                $pfEmployee += (float) $line['computed_amount'];
-            }
-            if (str_contains($headName, 'tax')) {
-                $incomeTax += (float) $line['computed_amount'];
-            }
-        }
 
         $loanDeductions = [];
         foreach ($result['loan_deductions'] ?? [] as $loanRow) {
@@ -921,12 +957,53 @@ class PayrollCalculationService
             'pf_employer_contribution' => SalaryStructureCalculator::roundTaka((float) ($result['pf_employer_contribution'] ?? 0) * $factor),
             'income_tax' => SalaryStructureCalculator::roundTaka($incomeTax),
             'loan_deductions' => $loanDeductions,
-            'lines' => $result['lines'],
+            'lines' => array_values($scaledLines),
             'warnings' => $warnings,
             'payable_days' => $proration['payable_days'],
             'days_in_month' => $proration['days_in_month'],
             'separation_proration_factor' => $factor,
             'payroll_remark' => $proration['payroll_remark'] ?? $proration['note'] ?? null,
         ]);
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function welfareHeadIds(): array
+    {
+        return SalaryHead::query()
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->where('is_welfare', true)
+                    ->orWhere('name', 'like', '%welfare%')
+                    ->orWhere('short_name', 'like', '%welfare%');
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $line
+     */
+    protected function lineLooksLikeIncomeTax(array $line): bool
+    {
+        $name = strtolower((string) ($line['head_name'] ?? ''));
+
+        return $name === 'tax'
+            || str_contains($name, 'income tax')
+            || (str_contains($name, 'tax') && ! str_contains($name, 'loan'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $line
+     */
+    protected function lineLooksLikePf(array $line): bool
+    {
+        $name = strtolower((string) ($line['head_name'] ?? ''));
+
+        return $name === 'pf'
+            || str_contains($name, 'provident')
+            || (str_starts_with($name, 'pf') && ! str_contains($name, 'loan'));
     }
 }

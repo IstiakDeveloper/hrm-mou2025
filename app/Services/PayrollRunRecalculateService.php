@@ -17,6 +17,7 @@ class PayrollRunRecalculateService
         protected PayrollCalculationService $calculator,
         protected EmployeeProvidentFundService $pfService,
         protected EmployeeLoanService $loanService,
+        protected EmployeeAssignmentHistoryService $assignmentHistory,
     ) {}
 
     public function recalculate(PayrollRun $run): void
@@ -49,16 +50,31 @@ class PayrollRunRecalculateService
             ]);
         }
 
-        $processCarbon = Carbon::parse($run->process_date);
+        $asOfDate = $this->assignmentHistory->asOfForPayrollPeriod(
+            (int) $run->year,
+            (int) $run->month,
+            Carbon::parse($run->process_date),
+        );
+
         $employees = $run->payslips
-            ->map(fn (Payslip $payslip) => $payslip->employee)
+            ->map(function (Payslip $payslip) use ($asOfDate) {
+                $employee = $payslip->employee;
+                if (! $employee) {
+                    return null;
+                }
+
+                $history = $this->assignmentHistory->resolveAsOf($employee->id, $asOfDate);
+                $this->assignmentHistory->applyToEmployee($employee, $history);
+
+                return $employee;
+            })
             ->filter()
             ->values();
 
-        DB::transaction(function () use ($run, $processCarbon, $employees) {
+        DB::transaction(function () use ($run, $asOfDate, $employees) {
             $this->calculator->preloadBatch(
                 $employees,
-                $processCarbon,
+                $asOfDate,
                 $run->salary_type,
                 (int) $run->year,
                 (int) $run->month,
@@ -71,7 +87,7 @@ class PayrollRunRecalculateService
 
             try {
                 foreach ($run->payslips as $payslip) {
-                    $employee = $payslip->employee;
+                    $employee = $employees->firstWhere('id', $payslip->employee_id);
                     if (! $employee) {
                         continue;
                     }
@@ -81,11 +97,13 @@ class PayrollRunRecalculateService
 
                     $calc = $this->calculator->calculateForEmployee(
                         $employee,
-                        $processCarbon,
+                        $asOfDate,
                         $run->salary_type,
                         (int) $run->year,
                         (int) $run->month,
                     );
+
+                    $employee->loadMissing(['designation:id,name', 'branch:id,name,branch_code', 'salaryGrade', 'salaryStep']);
 
                     $payslip->update([
                         ...Payslip::snapshotFromEmployee($employee, $run->branch),
@@ -118,7 +136,7 @@ class PayrollRunRecalculateService
 
                     if (
                         ! ($calc['is_withheld'] ?? false)
-                        && $this->pfService->isEligible($employee, $processCarbon)
+                        && $this->pfService->isEligible($employee, $asOfDate)
                         && ($calc['pf_employee_contribution'] ?? 0) > 0
                     ) {
                         $this->pfService->recordForPayslip(
@@ -126,7 +144,7 @@ class PayrollRunRecalculateService
                             $payslip,
                             (float) $calc['pf_employee_contribution'],
                             (float) $calc['pf_employer_contribution'],
-                            $processCarbon
+                            $asOfDate
                         );
                     }
 

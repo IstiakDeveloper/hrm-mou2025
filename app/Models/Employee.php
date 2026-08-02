@@ -12,6 +12,13 @@ class Employee extends Model
 {
     use HasFactory;
 
+    /**
+     * Transient metadata for EmployeeAssignmentObserver (not persisted).
+     *
+     * @var array{effective_from?: mixed, source_type?: string, source_id?: ?int, created_by?: ?int, notes?: ?string}|null
+     */
+    public ?array $assignmentHistoryContext = null;
+
     protected $fillable = [
         'employee_id',
         'pin',
@@ -199,10 +206,18 @@ class Employee extends Model
         return '';
     }
 
+    public function hasEffectiveCustomBasic(): bool
+    {
+        // basic_salary may be 0 for intentional custom packages (e.g. ECC: zero earnings, PF only).
+        // Null basic + custom timestamp is incomplete/legacy and is not treated as custom.
+        return $this->custom_salary_assigned_at !== null
+            && $this->basic_salary !== null;
+    }
+
     public function resolveBasicSalary(): float
     {
-        if ($this->custom_salary_assigned_at !== null) {
-            return (float) ($this->basic_salary ?? 0);
+        if ($this->hasEffectiveCustomBasic()) {
+            return (float) $this->basic_salary;
         }
 
         if ($this->basic_salary !== null && (float) $this->basic_salary > 0) {
@@ -438,6 +453,16 @@ class Employee extends Model
     public function loans()
     {
         return $this->hasMany(EmployeeLoan::class);
+    }
+
+    public function assignmentHistories()
+    {
+        return $this->hasMany(EmployeeAssignmentHistory::class);
+    }
+
+    public function salaryHeadModifications()
+    {
+        return $this->hasMany(SalaryHeadModification::class);
     }
 
     public function gratuityPayments()

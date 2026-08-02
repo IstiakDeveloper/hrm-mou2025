@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Employee;
 use App\Models\Holiday;
+use App\Observers\EmployeeAssignmentObserver;
 use App\Observers\HolidayObserver;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Validator;
@@ -24,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Holiday::observe(HolidayObserver::class);
+        Employee::observe(EmployeeAssignmentObserver::class);
 
         Blade::directive('taka', function (string $expression) {
             return "<?php echo \\App\\Support\\TakaFormat::amount($expression); ?>";

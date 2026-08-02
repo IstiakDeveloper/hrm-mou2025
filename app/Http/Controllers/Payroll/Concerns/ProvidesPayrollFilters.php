@@ -78,37 +78,46 @@ trait ProvidesPayrollFilters
         bool $payrollReadyOnly = false,
         ?int $payrollYear = null,
         ?int $payrollMonth = null,
+        bool $applyLiveOrgFilters = true,
     ): Builder {
         $year = $payrollYear ?? ($request->filled('year') ? (int) $request->input('year') : null);
         $month = $payrollMonth ?? ($request->filled('month') ? (int) $request->input('month') : null);
 
         if ($year && $month) {
             $monthStart = sprintf('%04d-%02d-01', $year, $month);
-            $monthEnd = date('Y-m-t', strtotime($monthStart));
 
-            $query->where(function (Builder $q) use ($monthStart, $monthEnd) {
-                $q->where('status', 'active')
-                    ->orWhere(function (Builder $q2) use ($monthStart, $monthEnd) {
-                        $q2->where('status', 'inactive')
-                            ->whereNotNull('dropout_date')
-                            ->whereDate('dropout_date', '>=', $monthStart)
-                            ->whereDate('dropout_date', '<=', $monthEnd);
+            $query->where(function (Builder $q) use ($monthStart) {
+                $q->where('employees.status', 'active')
+                    ->orWhere(function (Builder $q2) use ($monthStart) {
+                        // Dropout is the first day off payroll. Include anyone still payable
+                        // for at least one day in this salary month (e.g. dropout 1 Aug → full July).
+                        // Do NOT require dropout within the salary month — that wrongly excludes
+                        // next-month effective separations from the prior month's process.
+                        $q2->where('employees.status', 'inactive')
+                            ->whereNotNull('employees.dropout_date')
+                            ->whereDate('employees.dropout_date', '>', $monthStart);
                     });
             });
         } else {
-            $query->where('status', 'active');
+            $query->where('employees.status', 'active');
+        }
+
+        if ($applyLiveOrgFilters) {
+            $query
+                ->when($request->filled('branch_id'), fn ($q) => $q->where('employees.current_branch_id', $request->integer('branch_id')))
+                ->when($request->filled('department_id'), fn ($q) => $q->where('employees.department_id', $request->integer('department_id')))
+                ->when($request->filled('designation_id'), fn ($q) => $q->where('employees.designation_id', $request->integer('designation_id')))
+                ->when($request->filled('program_id'), fn ($q) => $q->where('employees.program_id', $request->integer('program_id')))
+                ->when($request->filled('project_id'), fn ($q) => $q->where('employees.project_id', $request->integer('project_id')));
         }
 
         $query
-            ->when($request->filled('branch_id'), fn ($q) => $q->where('current_branch_id', $request->integer('branch_id')))
-            ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
-            ->when($request->filled('designation_id'), fn ($q) => $q->where('designation_id', $request->integer('designation_id')))
-            ->when($request->filled('program_id'), fn ($q) => $q->where('program_id', $request->integer('program_id')))
-            ->when($request->filled('project_id'), fn ($q) => $q->where('project_id', $request->integer('project_id')))
-            ->when($request->filled('employee_id'), fn ($q) => $q->where('id', $request->integer('employee_id')))
-            ->when($request->filled('employee_type_id'), fn ($q) => $q->where('employee_type_id', $request->integer('employee_type_id')));
+            ->when($request->filled('employee_id'), fn ($q) => $q->where('employees.id', $request->integer('employee_id')))
+            ->when($request->filled('employee_type_id'), fn ($q) => $q->where('employees.employee_type_id', $request->integer('employee_type_id')));
 
-        if ($payrollReadyOnly) {
+        // Live payroll-ready scope is skipped when org filters are as-of based;
+        // callers apply readiness after overlaying assignment history.
+        if ($payrollReadyOnly && $applyLiveOrgFilters) {
             $this->applyPayrollReadyScope($query);
 
             $activePayscaleId = Payscale::activeId();

@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\PaginatesForInertia;
+use App\Models\Employee;
 use App\Models\SalaryHead;
 use App\Models\SalaryStructureLine;
+use App\Services\EmployeeSalaryAssignmentService;
 use App\Support\PayrollFormHelper;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,6 +15,10 @@ use Inertia\Inertia;
 class SalaryHeadController extends Controller
 {
     use PaginatesForInertia;
+
+    public function __construct(
+        protected EmployeeSalaryAssignmentService $salaryAssignmentService,
+    ) {}
 
     public function index(Request $request)
     {
@@ -32,8 +38,82 @@ class SalaryHeadController extends Controller
 
         return Inertia::render('payroll/salary-heads/index', [
             'heads' => $this->inertiaPagination($paginator),
-            'filters' => $request->only(['search', 'per_page', 'type']),
+            'filters' => $request->only(['search', 'per_page', 'type', 'override_search']),
+            'customOverrides' => $this->salaryAssignmentService->listCustomAssignmentOverrides(
+                $request->input('override_search')
+            ),
+            'canResetOverrides' => $request->user()?->hasPermission('payroll.edit') ?? false,
         ]);
+    }
+
+    public function resetCustomOverride(Request $request, Employee $employee)
+    {
+        if (! $request->user()?->hasPermission('payroll.edit')) {
+            return redirect()
+                ->route('salary-heads.index')
+                ->with('error', 'You do not have permission to reset custom salary overrides.');
+        }
+
+        if (! $this->salaryAssignmentService->resetCustomAssignment($employee)) {
+            return redirect()
+                ->route('salary-heads.index', $request->only(['search', 'override_search']))
+                ->with('warning', 'No custom salary override found for this employee.');
+        }
+
+        return redirect()
+            ->route('salary-heads.index', $request->only(['search', 'override_search']))
+            ->with('success', "Custom salary reset for {$employee->pin}. Payroll will use grade/step components.");
+    }
+
+    public function resetAllCustomOverrides(Request $request)
+    {
+        if (! $request->user()?->hasPermission('payroll.edit')) {
+            return redirect()
+                ->route('salary-heads.index')
+                ->with('error', 'You do not have permission to reset custom salary overrides.');
+        }
+
+        $count = $this->salaryAssignmentService->resetAllCustomAssignments(
+            $request->input('override_search')
+        );
+
+        return redirect()
+            ->route('salary-heads.index', $request->only(['search', 'override_search']))
+            ->with(
+                'success',
+                $count > 0
+                    ? "Custom salary reset for {$count} employee(s). Payroll will use grade/step components."
+                    : 'No custom salary overrides to reset.'
+            );
+    }
+
+    public function resetSelectedCustomOverrides(Request $request)
+    {
+        if (! $request->user()?->hasPermission('payroll.edit')) {
+            return redirect()
+                ->route('salary-heads.index')
+                ->with('error', 'You do not have permission to reset custom salary overrides.');
+        }
+
+        $validated = $request->validate([
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'integer|exists:employees,id',
+            'search' => 'nullable|string',
+            'override_search' => 'nullable|string',
+        ]);
+
+        $count = $this->salaryAssignmentService->resetSelectedCustomAssignments(
+            $validated['employee_ids']
+        );
+
+        return redirect()
+            ->route('salary-heads.index', $request->only(['search', 'override_search']))
+            ->with(
+                'success',
+                $count > 0
+                    ? "Custom salary reset for {$count} selected employee(s). Payroll will use grade/step components."
+                    : 'No custom salary overrides found for the selected employees.'
+            );
     }
 
     public function create()

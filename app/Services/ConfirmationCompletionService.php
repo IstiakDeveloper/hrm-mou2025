@@ -45,6 +45,15 @@ class ConfirmationCompletionService
         }
 
         $this->syncEmployeeFromConfirmation($confirmation, $toPayscaleId);
+
+        app(EmployeeAssignmentHistoryService::class)->queueContext($employee, [
+            'effective_from' => $confirmationDate->toDateString(),
+            'source_type' => \App\Models\EmployeeAssignmentHistory::SOURCE_CONFIRMATION,
+            'source_id' => $confirmation->id,
+            'created_by' => $actorUserId,
+            'notes' => 'Confirmation completed',
+        ]);
+
         $employee->save();
 
         ConfirmationHistory::create([

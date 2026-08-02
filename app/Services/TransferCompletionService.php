@@ -43,6 +43,16 @@ class TransferCompletionService
             $employee->designation_id = $transfer->to_designation_id;
         }
 
+        app(EmployeeAssignmentHistoryService::class)->queueContext($employee, [
+            'effective_from' => $transfer->effective_date
+                ? Carbon::parse($transfer->effective_date)->toDateString()
+                : now()->toDateString(),
+            'source_type' => \App\Models\EmployeeAssignmentHistory::SOURCE_TRANSFER,
+            'source_id' => $transfer->id,
+            'created_by' => $actorUserId,
+            'notes' => 'Transfer completed',
+        ]);
+
         $employee->save();
 
         $this->syncUserBranchFromEmployee($employee);

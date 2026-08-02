@@ -838,6 +838,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/', [SalaryHeadController::class, 'index'])->name('index');
             Route::get('/create', [SalaryHeadController::class, 'create'])->name('create')->middleware('permission:payroll.create');
             Route::post('/', [SalaryHeadController::class, 'store'])->name('store')->middleware('permission:payroll.create');
+            Route::post('/custom-overrides/reset-all', [SalaryHeadController::class, 'resetAllCustomOverrides'])->name('custom-overrides.reset-all')->middleware('permission:payroll.edit');
+            Route::post('/custom-overrides/reset-selected', [SalaryHeadController::class, 'resetSelectedCustomOverrides'])->name('custom-overrides.reset-selected')->middleware('permission:payroll.edit');
+            Route::post('/custom-overrides/{employee}/reset', [SalaryHeadController::class, 'resetCustomOverride'])->name('custom-overrides.reset')->middleware('permission:payroll.edit');
             Route::get('/{salary_head}/edit', [SalaryHeadController::class, 'edit'])->name('edit')->middleware('permission:payroll.edit');
             Route::put('/{salary_head}', [SalaryHeadController::class, 'update'])->name('update')->middleware('permission:payroll.edit');
             Route::delete('/{salary_head}', [SalaryHeadController::class, 'destroy'])->name('destroy')->middleware('permission:payroll.delete');

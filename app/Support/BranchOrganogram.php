@@ -64,6 +64,10 @@ final class BranchOrganogram
         $normalized = self::sqlNormalizedDesignationExpr($designationColumn);
 
         return "CASE
+            WHEN {$normalized} REGEXP '(zonal|regional|branch) manager[ -]*[0-9]+'
+                THEN CAST(REGEXP_SUBSTR({$normalized}, '[0-9]+') AS UNSIGNED)
+            WHEN {$normalized} REGEXP '(^| )(zm|rm|bm)[ -]*[0-9]+($| )'
+                THEN CAST(REGEXP_SUBSTR({$normalized}, '[0-9]+') AS UNSIGNED)
             WHEN {$normalized} REGEXP '(^| )accountant[ -]*[0-9]+($| )'
                 THEN CAST(REGEXP_SUBSTR({$normalized}, '[0-9]+') AS UNSIGNED)
             WHEN {$normalized} REGEXP '(^| )accountant[ -]*iii($| )' THEN 3
@@ -151,6 +155,11 @@ final class BranchOrganogram
         $out = [];
         foreach ($buckets as $level => $group) {
             usort($group, static function (Employee $a, Employee $b): int {
+                $statusCmp = self::employmentStatusRank($a->status ?? null) <=> self::employmentStatusRank($b->status ?? null);
+                if ($statusCmp !== 0) {
+                    return $statusCmp;
+                }
+
                 $designationCmp = self::compareDesignationSequence(
                     $a->designation?->name,
                     $b->designation?->name
@@ -368,11 +377,13 @@ final class BranchOrganogram
         $like = static fn (string $needle): string => "{$normalizedExpr} LIKE '%".str_replace("'", "''", $needle)."%'";
 
         return match ($tierLabel) {
-            'Branch Manager' => "({$like('branch manager')} AND {$normalizedExpr} NOT LIKE '%assistant branch manager%' AND {$normalizedExpr} NOT LIKE '%probationary%')",
-            'Assistant Branch Manager' => "({$like('assistant branch manager')} AND {$normalizedExpr} NOT LIKE '%probationary%')",
+            'Zonal Manager' => "(({$like('zonal manager')} OR {$normalizedExpr} = 'zm' OR {$normalizedExpr} LIKE 'zm-%' OR {$normalizedExpr} REGEXP '(^| )zm[ -]*[0-9]+($| )') AND {$normalizedExpr} NOT LIKE '%trainee%')",
+            'Regional Manager' => "(({$like('regional manager')} OR {$normalizedExpr} = 'rm' OR {$normalizedExpr} LIKE 'rm-%' OR {$normalizedExpr} REGEXP '(^| )rm[ -]*[0-9]+($| )') AND {$normalizedExpr} NOT LIKE '%trainee%' AND {$normalizedExpr} NOT LIKE '%zonal%')",
+            'Branch Manager' => "(({$like('branch manager')} OR {$normalizedExpr} = 'bm' OR {$normalizedExpr} LIKE 'bm-%' OR {$normalizedExpr} REGEXP '(^| )bm[ -]*[0-9]+($| )') AND {$normalizedExpr} NOT LIKE '%assistant branch manager%' AND {$normalizedExpr} NOT LIKE '%probationary%' AND {$normalizedExpr} NOT LIKE '%trainee%' AND {$normalizedExpr} NOT LIKE '%zonal%' AND {$normalizedExpr} NOT LIKE '%regional%')",
+            'Assistant Branch Manager' => "({$like('assistant branch manager')} AND {$normalizedExpr} NOT LIKE '%probationary%' AND {$normalizedExpr} NOT LIKE '%trainee%')",
             'Accountant' => "({$normalizedExpr} LIKE '%accountant%' AND {$normalizedExpr} NOT LIKE '%probationary%' AND {$normalizedExpr} NOT LIKE '%trainee%' AND {$normalizedExpr} NOT LIKE '%accounts officer%')",
             'Probationary Accountant' => "({$normalizedExpr} LIKE '%accountant%' AND ({$normalizedExpr} LIKE '%probationary%' OR {$normalizedExpr} LIKE '%trainee%') AND {$normalizedExpr} NOT LIKE '%accounts officer%')",
-            'Officer' => '('.self::branchOfficerDesignationSqlCondition($normalizedExpr)." AND {$normalizedExpr} NOT LIKE '%accountant%' AND {$normalizedExpr} NOT LIKE '%probationary%' AND {$normalizedExpr} NOT LIKE '%accounts officer%' AND {$normalizedExpr} NOT LIKE '%branch manager%' AND {$normalizedExpr} NOT LIKE '%assistant branch manager%')",
+            'Officer' => '('.self::branchOfficerDesignationSqlCondition($normalizedExpr)." AND {$normalizedExpr} NOT LIKE '%accountant%' AND {$normalizedExpr} NOT LIKE '%probationary%' AND {$normalizedExpr} NOT LIKE '%accounts officer%' AND {$normalizedExpr} NOT LIKE '%branch manager%' AND {$normalizedExpr} NOT LIKE '%assistant branch manager%' AND {$normalizedExpr} NOT LIKE '%zonal manager%' AND {$normalizedExpr} NOT LIKE '%regional manager%')",
             'Probationary Staff' => "(({$normalizedExpr} LIKE '%probationary%' OR {$normalizedExpr} LIKE '%trainee%') AND {$normalizedExpr} NOT LIKE '%accountant%')",
             'Cashier' => '('.self::cashierDesignationSqlCondition($normalizedExpr).')',
             default => null,
@@ -383,6 +394,8 @@ final class BranchOrganogram
     {
         $name = mb_strtolower(trim((string) $name));
         $name = str_replace(['.', '(', ')'], ['', ' ', ' '], $name);
+        // Keep designation tier match when "অব্যাহতি" / relieved is annotated on the title.
+        $name = preg_replace('/\s*(অব্যাহতি|obbahoti|relieved)\s*/ui', ' ', $name) ?? $name;
         $name = preg_replace('/\s+/u', ' ', $name) ?? $name;
 
         return trim($name);
@@ -391,11 +404,20 @@ final class BranchOrganogram
     private static function designationMatchesTier(string $normalized, string $tierLabel): bool
     {
         return match ($tierLabel) {
-            'Branch Manager' => self::containsPhrase($normalized, 'branch manager')
+            'Zonal Manager' => (self::containsPhrase($normalized, 'zonal manager') || self::matchesManagerAcronym($normalized, 'zm'))
+                && ! self::containsPhrase($normalized, 'trainee'),
+            'Regional Manager' => (self::containsPhrase($normalized, 'regional manager') || self::matchesManagerAcronym($normalized, 'rm'))
+                && ! self::containsPhrase($normalized, 'trainee')
+                && ! self::containsPhrase($normalized, 'zonal'),
+            'Branch Manager' => (self::containsPhrase($normalized, 'branch manager') || self::matchesManagerAcronym($normalized, 'bm'))
                 && ! self::containsPhrase($normalized, 'assistant branch manager')
-                && ! self::containsPhrase($normalized, 'probationary'),
+                && ! self::containsPhrase($normalized, 'probationary')
+                && ! self::containsPhrase($normalized, 'trainee')
+                && ! self::containsPhrase($normalized, 'zonal')
+                && ! self::containsPhrase($normalized, 'regional'),
             'Assistant Branch Manager' => self::containsPhrase($normalized, 'assistant branch manager')
-                && ! self::containsPhrase($normalized, 'probationary'),
+                && ! self::containsPhrase($normalized, 'probationary')
+                && ! self::containsPhrase($normalized, 'trainee'),
             'Accountant' => self::containsPhrase($normalized, 'accountant')
                 && ! self::containsPhrase($normalized, 'probationary')
                 && ! self::containsPhrase($normalized, 'trainee')
@@ -408,7 +430,9 @@ final class BranchOrganogram
                 && ! self::containsPhrase($normalized, 'probationary')
                 && ! self::containsPhrase($normalized, 'accounts officer')
                 && ! self::containsPhrase($normalized, 'branch manager')
-                && ! self::containsPhrase($normalized, 'assistant branch manager'),
+                && ! self::containsPhrase($normalized, 'assistant branch manager')
+                && ! self::containsPhrase($normalized, 'zonal manager')
+                && ! self::containsPhrase($normalized, 'regional manager'),
             'Probationary Staff' => (self::containsPhrase($normalized, 'probationary')
                 || self::containsPhrase($normalized, 'trainee'))
                 && ! self::containsPhrase($normalized, 'accountant'),
@@ -420,6 +444,21 @@ final class BranchOrganogram
     private static function containsPhrase(string $haystack, string $phrase): bool
     {
         return str_contains($haystack, $phrase);
+    }
+
+    private static function matchesManagerAcronym(string $normalized, string $acronym): bool
+    {
+        return preg_match('/(^|\s)'.preg_quote($acronym, '/').'([ -]*\d+)?($|\s)/u', $normalized) === 1;
+    }
+
+    private static function employmentStatusRank(mixed $status): int
+    {
+        return match ((string) $status) {
+            'active' => 0,
+            'on_leave' => 1,
+            'inactive' => 2,
+            default => 3,
+        };
     }
 
     private static function compareDesignationSequence(?string $designationA, ?string $designationB): int
@@ -440,6 +479,12 @@ final class BranchOrganogram
     private static function designationSequenceRank(?string $designation): int
     {
         $normalized = self::normalizeDesignationName($designation);
+        if (preg_match('/(zonal|regional|branch) manager[ -]*(\d+)/u', $normalized, $matches) === 1) {
+            return (int) $matches[2];
+        }
+        if (preg_match('/(^|\s)(zm|rm|bm)[ -]*(\d+)($|\s)/u', $normalized, $matches) === 1) {
+            return (int) $matches[3];
+        }
         if (preg_match('/(^| )accountant[ -]*(\d+)($| )/u', $normalized, $matches) === 1) {
             return (int) $matches[2];
         }
@@ -514,6 +559,9 @@ final class BranchOrganogram
 
     private static function sqlNormalizedDesignationExpr(string $column): string
     {
-        return "LOWER(REPLACE(REPLACE(REPLACE(TRIM(COALESCE({$column}, '')), '.', ''), '(', ' '), ')', ' '))";
+        $base = "LOWER(REPLACE(REPLACE(REPLACE(TRIM(COALESCE({$column}, '')), '.', ''), '(', ' '), ')', ' '))";
+
+        // Ignore relieved / অব্যাহতি annotations so titles still match their tier.
+        return "TRIM(REPLACE(REPLACE(REPLACE({$base}, 'অব্যাহতি', ''), 'obbahoti', ''), 'relieved', ''))";
     }
 }

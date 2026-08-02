@@ -44,9 +44,8 @@ final class HeadOfficeOrganogram
 
     /**
      * Default employee directory order:
-     * - active first, inactive last
-     * - permanent / non-project first, project staff last
-     * - Head Office: designation tier, then PIN
+     * - Head Office: permanent staff, then Microfinance project, then other projects;
+     *   within each block: designation tier, then PIN serial
      * - Branches (after HO): per zone → zonal manager, then each regional office’s
      *   regional manager and branch staff (designation tier, PIN), then next zone
      *
@@ -56,16 +55,18 @@ final class HeadOfficeOrganogram
     {
         self::ensureDesignationJoin($query);
 
-        $query->orderByRaw(self::employmentStatusBucketSql('employees.status').' ASC');
-
         $sortBy = $sortBy ?: 'organogram';
         $sortDir = strtolower($sortDir) === 'desc' ? 'desc' : 'asc';
 
         if ($sortBy === 'organogram') {
+            // Employee Index: active staff first, then on_leave / inactive.
+            $query->orderByRaw(self::employmentStatusBucketSql('employees.status').' ASC');
             self::applyOrganogramHierarchyOrder($query);
 
             return;
         }
+
+        $query->orderByRaw(self::employmentStatusBucketSql('employees.status').' ASC');
 
         if ($sortBy === 'pin') {
             $query->orderByRaw('COALESCE(employees.pin, employees.employee_id) '.$sortDir);
@@ -98,6 +99,7 @@ final class HeadOfficeOrganogram
         self::ensureDesignationJoin($query);
         self::ensureBranchJoin($query);
         self::ensureEmployeeTypeJoin($query);
+        self::ensureProjectJoin($query);
 
         $headOfficeWhen = self::headOfficeWhenSql();
         $branchWhen = self::branchOfficeWhenSql();
@@ -105,8 +107,9 @@ final class HeadOfficeOrganogram
         $projectBucketSql = self::projectEmployeeBucketSql();
 
         $query->orderByRaw("CASE WHEN {$headOfficeWhen} THEN 0 ELSE 1 END ASC");
-        $query->orderByRaw("CASE WHEN {$headOfficeWhen} THEN {$tierSql} END ASC");
         $query->orderByRaw("CASE WHEN {$headOfficeWhen} THEN {$projectBucketSql} END ASC");
+        $query->orderByRaw("CASE WHEN {$headOfficeWhen} THEN {$tierSql} END ASC");
+        $query->orderByRaw("CASE WHEN {$headOfficeWhen} THEN ".self::employmentStatusBucketSql('employees.status').' END ASC');
         self::applyPinSortToQuery($query, 'asc', $headOfficeWhen);
 
         BranchOrganogram::ensureHierarchyJoins($query);
@@ -121,8 +124,9 @@ final class HeadOfficeOrganogram
         $query->orderByRaw("CASE WHEN {$branchWhen} THEN COALESCE(branches.branch_code, branches.name, '') END ASC");
         $query->orderByRaw("CASE WHEN {$branchWhen} THEN branches.name END ASC");
         $query->orderByRaw("CASE WHEN {$branchWhen} THEN {$branchTierSql} END ASC");
-        $query->orderByRaw("CASE WHEN {$branchWhen} THEN {$projectBucketSql} END ASC");
+        $query->orderByRaw("CASE WHEN {$branchWhen} THEN ".self::employmentStatusBucketSql('employees.status').' END ASC');
         $query->orderByRaw("CASE WHEN {$branchWhen} THEN ".BranchOrganogram::designationSequenceOrderSql().' END ASC');
+        $query->orderByRaw("CASE WHEN {$branchWhen} THEN {$projectBucketSql} END ASC");
         self::applyPinSortToQuery($query, 'asc', $branchWhen);
     }
 
@@ -153,7 +157,6 @@ final class HeadOfficeOrganogram
             }
         }
 
-        $query->orderByRaw(self::employmentStatusBucketSql('employees.status').' ASC');
         self::applyOrganogramHierarchyOrder($query);
     }
 
@@ -184,7 +187,6 @@ final class HeadOfficeOrganogram
             }
         }
 
-        $query->orderByRaw(self::employmentStatusBucketSql('employees.status').' ASC');
         self::applyOrganogramHierarchyOrder($query);
     }
 
@@ -215,7 +217,6 @@ final class HeadOfficeOrganogram
             }
         }
 
-        $query->orderByRaw(self::employmentStatusBucketSql('employees.status').' ASC');
         self::applyOrganogramHierarchyOrder($query);
     }
 
@@ -229,12 +230,20 @@ final class HeadOfficeOrganogram
         END";
     }
 
-    /** 0 = permanent / regular staff, 1 = project staff (listed last). */
+    /**
+     * 0 = permanent / regular staff,
+     * 1 = Microfinance project staff (priority among projects),
+     * 2 = other project staff (listed last).
+     */
     public static function projectEmployeeBucketSql(): string
     {
+        $isProject = "(COALESCE(employees.is_project_employee, 0) = 1
+            OR LOWER(TRIM(COALESCE(employee_types.name, ''))) LIKE '%project%')";
+        $isMicrofinance = "LOWER(TRIM(COALESCE(projects.name, ''))) LIKE '%microfinance%'";
+
         return "CASE
-            WHEN COALESCE(employees.is_project_employee, 0) = 1 THEN 1
-            WHEN LOWER(TRIM(COALESCE(employee_types.name, ''))) LIKE '%project%' THEN 1
+            WHEN {$isProject} AND {$isMicrofinance} THEN 1
+            WHEN {$isProject} THEN 2
             ELSE 0
         END";
     }
@@ -374,6 +383,25 @@ final class HeadOfficeOrganogram
     /**
      * @param  Builder<Employee>  $query
      */
+    private static function ensureProjectJoin(Builder $query): void
+    {
+        $joins = $query->getQuery()->joins ?? [];
+        foreach ($joins as $join) {
+            if (($join->table ?? null) === 'projects') {
+                return;
+            }
+        }
+
+        $query->leftJoin('projects', 'employees.project_id', '=', 'projects.id');
+
+        if ($query->getQuery()->columns === null) {
+            $query->select('employees.*');
+        }
+    }
+
+    /**
+     * @param  Builder<Employee>  $query
+     */
     private static function ensureDesignationJoin(Builder $query): void
     {
         $joins = $query->getQuery()->joins ?? [];
@@ -409,6 +437,10 @@ final class HeadOfficeOrganogram
             'Deputy Assistant Director' => $like('deputy assistant director'),
             'Senior Manager' => $like('senior manager'),
             'Manager' => "({$normalizedExpr} LIKE '%manager%' AND {$normalizedExpr} NOT LIKE '%senior manager%' AND {$normalizedExpr} NOT LIKE '%assistant manager%' AND {$normalizedExpr} NOT LIKE '%branch manager%' AND {$normalizedExpr} NOT LIKE '%junior branch manager%')",
+            'Resident Physician' => $like('resident physician'),
+            'Agriculture Officer' => "({$like('agriculture officer')} AND {$normalizedExpr} NOT LIKE '%assistant%' AND {$normalizedExpr} NOT LIKE '%asst%')",
+            'Livestock Officer' => "({$like('livestock officer')} AND {$normalizedExpr} NOT LIKE '%assistant%' AND {$normalizedExpr} NOT LIKE '%asst%')",
+            'Fisheries Officer' => "({$like('fisheries officer')} AND {$normalizedExpr} NOT LIKE '%assistant%' AND {$normalizedExpr} NOT LIKE '%asst%')",
             'Assistant Manager' => "({$like('assistant manager')} OR {$like('asst manager')})",
             'Co-Ordinator' => "({$like('co ordinator')} OR {$like('coordinator')})",
             'Technical Officer' => $like('technical officer'),
@@ -421,11 +453,20 @@ final class HeadOfficeOrganogram
             'Accounts Officer' => $like('accounts officer'),
             'Accountant III' => "({$like('accountant iii')} OR {$like('accountant 3')})",
             'VCF' => "({$normalizedExpr} LIKE '% vcf %' OR {$normalizedExpr} LIKE 'vcf %' OR {$normalizedExpr} LIKE '% vcf' OR {$normalizedExpr} = 'vcf')",
-            'Resident Physician' => $like('resident physician'),
             'Accountant' => "({$normalizedExpr} LIKE '%accountant%' AND {$normalizedExpr} NOT LIKE '%accounts officer%' AND {$normalizedExpr} NOT LIKE '%accountant iii%' AND {$normalizedExpr} NOT LIKE '%accountant 3%')",
             'Sub Assistant Engineer' => "({$like('sub assistant engineer')} OR {$like('sub asst engineer')})",
+            'ALO' => '('.self::sqlAcronymMatch($normalizedExpr, 'alo')
+                ." OR (({$like('livestock officer')}) AND ({$like('asst')} OR {$like('assistant')})))",
+            'AFO' => '('.self::sqlAcronymMatch($normalizedExpr, 'afo')
+                ." OR (({$like('fisheries officer')}) AND ({$like('asst')} OR {$like('assistant')})))",
+            'AAO' => '('.self::sqlAcronymMatch($normalizedExpr, 'aao')
+                ." OR (({$like('agriculture officer')}) AND ({$like('asst')} OR {$like('assistant')})))",
             'Office Assistant' => $like('office assistant'),
             'Driver' => "({$normalizedExpr} LIKE '% driver %' OR {$normalizedExpr} LIKE 'driver %' OR {$normalizedExpr} LIKE '% driver' OR {$normalizedExpr} = 'driver')",
+            'MTO' => '('.self::sqlAcronymMatch($normalizedExpr, 'mto')
+                ." OR {$like('management trainee officer')} OR {$like('management trainee')})",
+            'Security Guard' => "({$like('security guard')} OR {$like('security')})",
+            'CSO' => self::sqlAcronymMatch($normalizedExpr, 'cso'),
             default => null,
         };
     }
@@ -464,7 +505,7 @@ final class HeadOfficeOrganogram
         $out = [];
         foreach ($buckets as $level => $group) {
             usort($group, static function (Employee $a, Employee $b): int {
-                $projectCmp = self::isProjectEmployee($a) <=> self::isProjectEmployee($b);
+                $projectCmp = self::projectSortBucket($a) <=> self::projectSortBucket($b);
                 if ($projectCmp !== 0) {
                     return $projectCmp;
                 }
@@ -553,6 +594,16 @@ final class HeadOfficeOrganogram
                 && ! self::containsPhrase($normalized, 'assistant manager')
                 && ! self::containsPhrase($normalized, 'branch manager')
                 && ! self::containsPhrase($normalized, 'junior branch manager'),
+            'Resident Physician' => self::containsPhrase($normalized, 'resident physician'),
+            'Agriculture Officer' => self::containsPhrase($normalized, 'agriculture officer')
+                && ! self::containsPhrase($normalized, 'assistant')
+                && ! preg_match('/\basst\b/u', $normalized),
+            'Livestock Officer' => self::containsPhrase($normalized, 'livestock officer')
+                && ! self::containsPhrase($normalized, 'assistant')
+                && ! preg_match('/\basst\b/u', $normalized),
+            'Fisheries Officer' => self::containsPhrase($normalized, 'fisheries officer')
+                && ! self::containsPhrase($normalized, 'assistant')
+                && ! preg_match('/\basst\b/u', $normalized),
             'Assistant Manager' => self::containsPhrase($normalized, 'assistant manager')
                 || self::containsPhrase($normalized, 'asst manager')
                 || self::containsPhrase($normalized, 'asst  manager'),
@@ -574,15 +625,29 @@ final class HeadOfficeOrganogram
             'Accountant III' => self::containsPhrase($normalized, 'accountant iii')
                 || self::containsPhrase($normalized, 'accountant 3'),
             'VCF' => preg_match('/\bvcf\b/u', $normalized) === 1,
-            'Resident Physician' => self::containsPhrase($normalized, 'resident physician'),
             'Accountant' => self::containsPhrase($normalized, 'accountant')
                 && ! self::containsPhrase($normalized, 'accounts officer')
                 && ! self::containsPhrase($normalized, 'accountant iii')
                 && ! self::containsPhrase($normalized, 'accountant 3'),
             'Sub Assistant Engineer' => self::containsPhrase($normalized, 'sub assistant engineer')
                 || self::containsPhrase($normalized, 'sub asst engineer'),
+            'ALO' => self::matchesAcronym($normalized, 'alo')
+                || (self::containsPhrase($normalized, 'livestock officer')
+                    && (self::containsPhrase($normalized, 'assistant') || preg_match('/\basst\b/u', $normalized) === 1)),
+            'AFO' => self::matchesAcronym($normalized, 'afo')
+                || (self::containsPhrase($normalized, 'fisheries officer')
+                    && (self::containsPhrase($normalized, 'assistant') || preg_match('/\basst\b/u', $normalized) === 1)),
+            'AAO' => self::matchesAcronym($normalized, 'aao')
+                || (self::containsPhrase($normalized, 'agriculture officer')
+                    && (self::containsPhrase($normalized, 'assistant') || preg_match('/\basst\b/u', $normalized) === 1)),
             'Office Assistant' => self::containsPhrase($normalized, 'office assistant'),
             'Driver' => preg_match('/\bdriver\b/u', $normalized) === 1,
+            'MTO' => self::matchesAcronym($normalized, 'mto')
+                || self::containsPhrase($normalized, 'management trainee officer')
+                || self::containsPhrase($normalized, 'management trainee'),
+            'Security Guard' => self::containsPhrase($normalized, 'security guard')
+                || self::containsPhrase($normalized, 'security'),
+            'CSO' => self::matchesAcronym($normalized, 'cso'),
             default => false,
         };
     }
@@ -592,24 +657,51 @@ final class HeadOfficeOrganogram
         return str_contains($haystack, $phrase);
     }
 
+    private static function matchesAcronym(string $normalized, string $acronym): bool
+    {
+        return preg_match('/\b'.preg_quote($acronym, '/').'\b/u', $normalized) === 1;
+    }
+
+    /** Word-boundary-ish match for short acronym designations in SQL. */
+    private static function sqlAcronymMatch(string $normalizedExpr, string $acronym): string
+    {
+        $a = str_replace("'", "''", strtolower($acronym));
+
+        return "({$normalizedExpr} = '{$a}' OR {$normalizedExpr} LIKE '{$a} %' OR {$normalizedExpr} LIKE '% {$a}' OR {$normalizedExpr} LIKE '% {$a} %')";
+    }
+
     private static function containsManager(string $normalized): bool
     {
         return str_contains($normalized, 'manager');
     }
 
-    private static function isProjectEmployee(Employee $employee): int
+    /** @return int 0 permanent, 1 Microfinance project, 2 other project */
+    private static function projectSortBucket(Employee $employee): int
+    {
+        if (! self::isProjectEmployee($employee)) {
+            return 0;
+        }
+
+        $employee->loadMissing('project');
+        $projectName = mb_strtolower(trim((string) ($employee->project?->name ?? '')));
+
+        if ($projectName !== '' && str_contains($projectName, 'microfinance')) {
+            return 1;
+        }
+
+        return 2;
+    }
+
+    private static function isProjectEmployee(Employee $employee): bool
     {
         $employee->loadMissing('employeeType');
 
         if ($employee->is_project_employee) {
-            return 1;
+            return true;
         }
 
         $typeName = mb_strtolower(trim((string) ($employee->employeeType?->name ?? '')));
-        if ($typeName !== '' && str_contains($typeName, 'project')) {
-            return 1;
-        }
 
-        return 0;
+        return $typeName !== '' && str_contains($typeName, 'project');
     }
 }

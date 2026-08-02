@@ -645,6 +645,7 @@ export default function EmployeeCreate({
     }>({ open: false, target: 'present', name: '', error: '', saving: false });
     const [salaryAdditionRows, setSalaryAdditionRows] = useState<SalaryComponentRow[]>([]);
     const [salaryDeductionRows, setSalaryDeductionRows] = useState<SalaryComponentRow[]>([]);
+    const [salaryComponentsEditing, setSalaryComponentsEditing] = useState(false);
 
     useEffect(() => {
         setData('salary_lines_json', buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows));
@@ -978,7 +979,10 @@ export default function EmployeeCreate({
             forceFormData: true,
             transform: (formData) => ({
                 ...formData,
-                salary_lines_json: buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows),
+                sync_salary_components: salaryComponentsEditing ? 1 : 0,
+                salary_lines_json: salaryComponentsEditing
+                    ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
+                    : '',
             }),
             onSuccess: () => {
                 clearEmployeeDraft(EMPLOYEE_V2_CREATE_DRAFT_KEY);
@@ -2149,6 +2153,9 @@ export default function EmployeeCreate({
                                                 onAdditionRowsChange={setSalaryAdditionRows}
                                                 onDeductionRowsChange={setSalaryDeductionRows}
                                                 previewUrl={route('employees.salary-assignment-preview')}
+                                                componentsReadOnly={!salaryComponentsEditing}
+                                                componentsEditing={salaryComponentsEditing}
+                                                onToggleComponentsEdit={() => setSalaryComponentsEditing((prev) => !prev)}
                                                 errors={errors}
                                             />
                                         </div>

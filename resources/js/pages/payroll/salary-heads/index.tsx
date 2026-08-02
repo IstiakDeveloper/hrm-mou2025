@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Plus, Search, Trash2, Wallet, X } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Edit, Plus, RotateCcw, Search, Trash2, UserRound, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatTakaWithSymbol } from '@/lib/taka-format';
 import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
@@ -22,6 +24,19 @@ type Head = {
     is_active: boolean;
 };
 
+type CustomOverride = {
+    employee_id: number;
+    pin: string;
+    name: string;
+    branch?: string | null;
+    grade?: string | null;
+    step?: number | null;
+    has_custom_basic: boolean;
+    custom_basic?: number | null;
+    override_count: number;
+    custom_assigned_at?: string | null;
+};
+
 type Paginated = { data: Head[]; meta: PaginationMeta; links: any };
 
 function formatDefault(type: string, amount: string | number): string {
@@ -30,14 +45,126 @@ function formatDefault(type: string, amount: string | number): string {
     return formatTakaWithSymbol(n);
 }
 
-export default function SalaryHeadIndex({ heads, filters }: { heads: Paginated; filters: { search?: string } }) {
+export default function SalaryHeadIndex({
+    heads,
+    filters,
+    customOverrides = [],
+    canResetOverrides = false,
+}: {
+    heads: Paginated;
+    filters: { search?: string; override_search?: string };
+    customOverrides?: CustomOverride[];
+    canResetOverrides?: boolean;
+}) {
+    const { flash } = usePage().props as {
+        flash?: { success?: string; error?: string; warning?: string };
+    };
     const [search, setSearch] = useState(filters.search || '');
+    const [overrideSearch, setOverrideSearch] = useState(filters.override_search || '');
+    const [resetting, setResetting] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-    const handleSearch = () => router.get(route('salary-heads.index'), { search }, { preserveState: true });
+    const listedIds = useMemo(
+        () => customOverrides.map((row) => row.employee_id),
+        [customOverrides],
+    );
+
+    useEffect(() => {
+        setSelectedIds((prev) => prev.filter((id) => listedIds.includes(id)));
+    }, [listedIds]);
+
+    const allListedSelected = listedIds.length > 0 && listedIds.every((id) => selectedIds.includes(id));
+    const someListedSelected = listedIds.some((id) => selectedIds.includes(id));
+
+    const toggleOne = (employeeId: number, checked: boolean) => {
+        setSelectedIds((prev) => {
+            if (checked) {
+                return prev.includes(employeeId) ? prev : [...prev, employeeId];
+            }
+            return prev.filter((id) => id !== employeeId);
+        });
+    };
+
+    const toggleAllListed = (checked: boolean) => {
+        if (checked) {
+            setSelectedIds((prev) => Array.from(new Set([...prev, ...listedIds])));
+            return;
+        }
+        setSelectedIds((prev) => prev.filter((id) => !listedIds.includes(id)));
+    };
+
+    const handleSearch = () =>
+        router.get(route('salary-heads.index'), { search, override_search: overrideSearch }, { preserveState: true });
+
+    const handleOverrideSearch = () =>
+        router.get(route('salary-heads.index'), { search, override_search: overrideSearch }, { preserveState: true });
+
     const handleDelete = (id: number, name: string) => {
         if (confirm(`Remove "${name}"? This cannot be undone if unused in structures.`)) {
             router.delete(route('salary-heads.destroy', id));
         }
+    };
+
+    const resetOne = (row: CustomOverride) => {
+        if (
+            !confirm(
+                `Reset custom salary for ${row.pin} — ${row.name}?\n\nBasic and component overrides will be cleared. Payroll will use grade/step (or component defaults).`,
+            )
+        ) {
+            return;
+        }
+        setResetting(true);
+        router.post(
+            route('salary-heads.custom-overrides.reset', row.employee_id),
+            { search, override_search: overrideSearch },
+            {
+                preserveScroll: true,
+                onFinish: () => setResetting(false),
+                onSuccess: () => setSelectedIds((prev) => prev.filter((id) => id !== row.employee_id)),
+            },
+        );
+    };
+
+    const resetSelected = () => {
+        if (selectedIds.length === 0) return;
+        if (
+            !confirm(
+                `Reset custom salary for ${selectedIds.length} selected employee(s)?\n\nCustom basic and assignment component overrides will be cleared.`,
+            )
+        ) {
+            return;
+        }
+        setResetting(true);
+        router.post(
+            route('salary-heads.custom-overrides.reset-selected'),
+            { employee_ids: selectedIds, search, override_search: overrideSearch },
+            {
+                preserveScroll: true,
+                onFinish: () => setResetting(false),
+                onSuccess: () => setSelectedIds([]),
+            },
+        );
+    };
+
+    const resetAll = () => {
+        if (customOverrides.length === 0) return;
+        if (
+            !confirm(
+                `Reset custom salary for all ${customOverrides.length} listed employee(s)?\n\nThis clears custom basic and "Employee salary assignment" component overrides so grade/step applies.`,
+            )
+        ) {
+            return;
+        }
+        setResetting(true);
+        router.post(
+            route('salary-heads.custom-overrides.reset-all'),
+            { search, override_search: overrideSearch },
+            {
+                preserveScroll: true,
+                onFinish: () => setResetting(false),
+                onSuccess: () => setSelectedIds([]),
+            },
+        );
     };
 
     const additions = heads.data.filter((h) => h.type === 'earning');
@@ -66,7 +193,10 @@ export default function SalaryHeadIndex({ heads, filters }: { heads: Paginated; 
                             />
                             {search && (
                                 <button
-                                    onClick={() => { setSearch(''); router.get(route('salary-heads.index'), { search: '' }, { preserveState: true }); }}
+                                    onClick={() => {
+                                        setSearch('');
+                                        router.get(route('salary-heads.index'), { search: '', override_search: overrideSearch }, { preserveState: true });
+                                    }}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                                 >
                                     <X className="h-4 w-4" />
@@ -86,6 +216,25 @@ export default function SalaryHeadIndex({ heads, filters }: { heads: Paginated; 
                         </div>
                     </div>
                 </div>
+
+                {flash?.success && (
+                    <Alert className="mb-4 border-emerald-100 bg-emerald-50/40 text-emerald-900 rounded-xl">
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wider text-emerald-800">Success</AlertTitle>
+                        <AlertDescription className="text-xs text-emerald-700/90 mt-1">{flash.success}</AlertDescription>
+                    </Alert>
+                )}
+                {flash?.warning && (
+                    <Alert className="mb-4 border-amber-100 bg-amber-50/40 text-amber-900 rounded-xl">
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wider text-amber-800">Notice</AlertTitle>
+                        <AlertDescription className="text-xs text-amber-800/90 mt-1">{flash.warning}</AlertDescription>
+                    </Alert>
+                )}
+                {flash?.error && (
+                    <Alert variant="destructive" className="mb-4 rounded-xl">
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wider">Error</AlertTitle>
+                        <AlertDescription className="text-xs mt-1">{flash.error}</AlertDescription>
+                    </Alert>
+                )}
 
                 <div className="mb-4 grid gap-3 sm:grid-cols-3">
                     <Card className="shadow-sm">
@@ -107,6 +256,192 @@ export default function SalaryHeadIndex({ heads, filters }: { heads: Paginated; 
                         </CardContent>
                     </Card>
                 </div>
+
+                <Card className="mb-6 shadow-sm border-amber-200 rounded-xl overflow-hidden bg-white">
+                    <CardHeader className="bg-amber-50/60 border-b border-amber-100">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-2 text-base text-amber-950">
+                                    <UserRound className="h-5 w-5 text-amber-700" />
+                                    Custom / override salary ({customOverrides.length})
+                                </CardTitle>
+                                <CardDescription className="mt-1 text-amber-900/70">
+                                    Employees who have grade &amp; step, but also have custom basic or component overrides
+                                    from employee salary assignment. Reset removes those so payroll uses grade/step (or
+                                    component defaults).
+                                </CardDescription>
+                            </div>
+                            {canResetOverrides && customOverrides.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={resetting || selectedIds.length === 0}
+                                        onClick={resetSelected}
+                                        className="h-9 border-amber-300 bg-white text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                                    >
+                                        <RotateCcw className="mr-1.5 h-4 w-4" />
+                                        Reset selected{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={resetting}
+                                        onClick={resetAll}
+                                        className="h-9 border-amber-300 bg-white text-amber-900 hover:bg-amber-50"
+                                    >
+                                        <RotateCcw className="mr-1.5 h-4 w-4" />
+                                        Reset all
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <div className="relative w-full sm:max-w-xs">
+                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                    placeholder="Filter by PIN or name..."
+                                    value={overrideSearch}
+                                    onChange={(e) => setOverrideSearch(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleOverrideSearch()}
+                                    className="h-9 rounded-lg border-amber-200 bg-white pl-9 text-sm"
+                                />
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="h-9"
+                                onClick={handleOverrideSearch}
+                            >
+                                Filter
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {customOverrides.length === 0 ? (
+                            <p className="py-10 text-center text-sm text-muted-foreground">
+                                No grade/step employees with custom salary overrides.
+                            </p>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-b border-amber-100 bg-amber-50/40">
+                                        {canResetOverrides && (
+                                            <TableHead className="h-11 w-12 pl-4">
+                                                <Checkbox
+                                                    checked={
+                                                        allListedSelected
+                                                            ? true
+                                                            : someListedSelected
+                                                              ? 'indeterminate'
+                                                              : false
+                                                    }
+                                                    onCheckedChange={(value) => toggleAllListed(value === true)}
+                                                    aria-label="Select all listed employees"
+                                                />
+                                            </TableHead>
+                                        )}
+                                        <TableHead className="h-11 pl-6 text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                                            PIN
+                                        </TableHead>
+                                        <TableHead className="h-11 text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                                            Employee
+                                        </TableHead>
+                                        <TableHead className="hidden h-11 text-[11px] font-semibold uppercase tracking-wider text-slate-700 md:table-cell">
+                                            Branch
+                                        </TableHead>
+                                        <TableHead className="h-11 text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                                            Grade / Step
+                                        </TableHead>
+                                        <TableHead className="h-11 text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                                            Override
+                                        </TableHead>
+                                        <TableHead className="h-11 w-28 pr-6 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-700">
+                                            Action
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {customOverrides.map((row) => (
+                                        <TableRow
+                                            key={row.employee_id}
+                                            className={cn(
+                                                'border-b border-slate-100',
+                                                selectedIds.includes(row.employee_id) && 'bg-amber-50/40',
+                                            )}
+                                        >
+                                            {canResetOverrides && (
+                                                <TableCell className="pl-4">
+                                                    <Checkbox
+                                                        checked={selectedIds.includes(row.employee_id)}
+                                                        onCheckedChange={(value) =>
+                                                            toggleOne(row.employee_id, value === true)
+                                                        }
+                                                        aria-label={`Select ${row.pin}`}
+                                                    />
+                                                </TableCell>
+                                            )}
+                                            <TableCell className="pl-6 font-mono text-[13px] font-semibold text-slate-800">
+                                                {row.pin}
+                                            </TableCell>
+                                            <TableCell className="text-[13px] text-slate-800">{row.name}</TableCell>
+                                            <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                                                {row.branch || '—'}
+                                            </TableCell>
+                                            <TableCell className="text-sm text-slate-700">
+                                                {row.grade || '—'}
+                                                {row.step != null ? ` / Step ${row.step}` : ''}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {row.has_custom_basic && (
+                                                        <Badge variant="secondary" className="font-normal">
+                                                            Custom basic
+                                                            {row.custom_basic != null
+                                                                ? `: ${formatTakaWithSymbol(row.custom_basic)}`
+                                                                : ''}
+                                                        </Badge>
+                                                    )}
+                                                    {row.override_count > 0 && (
+                                                        <Badge variant="outline" className="font-normal">
+                                                            {row.override_count} component
+                                                            {row.override_count === 1 ? '' : 's'}
+                                                        </Badge>
+                                                    )}
+                                                    {!row.has_custom_basic && row.override_count === 0 && (
+                                                        <Badge variant="outline" className="font-normal">
+                                                            Flagged
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="pr-6 text-right">
+                                                {canResetOverrides ? (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        disabled={resetting}
+                                                        onClick={() => resetOne(row)}
+                                                        className="h-8 text-amber-800 hover:bg-amber-50 hover:text-amber-950"
+                                                    >
+                                                        <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                                                        Reset
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">View only</span>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </CardContent>
+                </Card>
 
                 <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
                     <CardHeader className="bg-white border-b border-slate-200">
@@ -192,9 +527,9 @@ export default function SalaryHeadIndex({ heads, filters }: { heads: Paginated; 
                         <DataTablePagination
                             meta={heads.meta}
                             links={heads.links}
-                            perPage={filters.search ? '10' : '10'} // In future implement per_page to the table if needed
-                            onPerPageChange={(val) => {
-                                router.get(route('salary-heads.index'), { search: filters.search }, { preserveState: true });
+                            perPage={filters.search ? '10' : '10'}
+                            onPerPageChange={() => {
+                                router.get(route('salary-heads.index'), { search: filters.search, override_search: overrideSearch }, { preserveState: true });
                             }}
                         />
                     </CardContent>

@@ -19,7 +19,6 @@ import { PayrollComboField, PayrollField, PayrollBranchSelect, PayrollEmployeeSe
 import { PayrollPage, PayrollPageHeader, PayrollEmptyState } from '@/components/payroll/PayrollPageShell';
 import { Banknote, Pencil, Plus, Save, UserRound, SlidersHorizontal } from 'lucide-react';
 import { formatTakaWhole } from '@/lib/taka-format';
-import { formatTakaWhole } from '@/lib/taka-format';
 
 type EmployeeRow = {
     employee_id: number;

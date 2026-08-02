@@ -18,6 +18,22 @@ export type SalaryComponentRow = {
     name: string;
     amount_type: string;
     amount: string;
+    /** PF / Tax / Loan — shown for preview, not saved as custom overrides. */
+    locked?: boolean;
+};
+
+export type PayrollPreviewSummary = {
+    year: number;
+    month: number;
+    source: 'payslip' | 'estimate';
+    basic_salary: number;
+    gross_salary: number;
+    total_deduction: number;
+    net_payable: number;
+    income_tax: number;
+    pf_employee_contribution: number;
+    loan_total: number;
+    lines: Array<{ head_name: string; type: string; computed_amount: number }>;
 };
 
 export type SalaryAssignmentPreview = {
@@ -26,15 +42,18 @@ export type SalaryAssignmentPreview = {
     addition_rows: SalaryComponentRow[];
     deduction_rows: SalaryComponentRow[];
     totals: { total_addition: number; total_deduction: number; net_payable: number };
+    payroll_preview?: PayrollPreviewSummary | null;
 };
 
 export function buildSalaryLinesJson(additionRows: SalaryComponentRow[], deductionRows: SalaryComponentRow[]): string {
     return JSON.stringify(
-        [...additionRows, ...deductionRows].map((row) => ({
-            salary_head_id: row.salary_head_id,
-            amount_type: row.amount_type,
-            amount: parseFloat(row.amount) || 0,
-        })),
+        [...additionRows, ...deductionRows]
+            .filter((row) => !row.locked)
+            .map((row) => ({
+                salary_head_id: row.salary_head_id,
+                amount_type: row.amount_type,
+                amount: parseFloat(row.amount) || 0,
+            })),
     );
 }
 
@@ -90,6 +109,7 @@ function SalaryComponentsTable({
     basicAmount = '',
     onBasicChange,
     stepBasicSalary = 0,
+    readOnly = false,
 }: {
     title: string;
     rows: SalaryComponentRow[];
@@ -99,6 +119,7 @@ function SalaryComponentsTable({
     basicAmount?: string;
     onBasicChange?: (value: string) => void;
     stepBasicSalary?: number;
+    readOnly?: boolean;
 }) {
     const total = useMemo(() => {
         const components = sumComponentRows(rows, basicSalary);
@@ -122,7 +143,7 @@ function SalaryComponentsTable({
                         </tr>
                     </thead>
                     <tbody>
-                        {includeBasicRow && onBasicChange && (
+                        {includeBasicRow && (
                             <tr className="border-b border-zinc-100 bg-amber-50/30">
                                 <td className="px-3 py-2">
                                     <div className="font-semibold text-zinc-800">Basic</div>
@@ -136,17 +157,23 @@ function SalaryComponentsTable({
                                     </span>
                                 </td>
                                 <td className="px-2 py-2">
-                                    <Input
-                                        type="number"
-                                        min={0}
-                                        step="1"
-                                        value={basicAmount}
-                                        onChange={(e) => onBasicChange(e.target.value)}
-                                        className="h-7 border-zinc-200 px-2 text-right text-[11px] font-mono"
-                                    />
+                                    {readOnly || !onBasicChange ? (
+                                        <div className="h-7 px-2 text-right font-mono text-[11px] text-zinc-700">
+                                            {basicAmount !== '' ? formatAmountDisplay(basicAmount, 'fixed') : formatTakaWhole(stepBasicSalary || basicSalary)}
+                                        </div>
+                                    ) : (
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            step="1"
+                                            value={basicAmount}
+                                            onChange={(e) => onBasicChange(e.target.value)}
+                                            className="h-7 border-zinc-200 px-2 text-right text-[11px] font-mono"
+                                        />
+                                    )}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono font-semibold text-zinc-700">
-                                    ৳{formatTakaWhole(basicAmount || 0)}
+                                    ৳{formatTakaWhole(basicAmount || stepBasicSalary || basicSalary || 0)}
                                 </td>
                             </tr>
                         )}
@@ -155,28 +182,45 @@ function SalaryComponentsTable({
                             const evaluated = isPercentage
                                 ? Math.round((basicSalary * (parseFloat(row.amount) || 0)) / 100)
                                 : Math.round(parseFloat(row.amount) || 0);
+                            const rowReadOnly = readOnly || Boolean(row.locked);
 
                             return (
                                 <tr key={row.salary_head_id} className="border-b border-zinc-50 last:border-b-0">
                                     <td className="px-3 py-2">
                                         <div className="font-semibold text-zinc-800">{row.short_name}</div>
                                         <div className="truncate text-[10px] text-zinc-400">{row.name}</div>
+                                        {row.locked && (
+                                            <div className="text-[10px] text-amber-600">Auto from salary process</div>
+                                        )}
                                     </td>
                                     <td className="px-2 py-2">
-                                        <AmountTypeSelect
-                                            value={row.amount_type}
-                                            onChange={(v) => onChange(row.salary_head_id, { amount_type: v })}
-                                        />
+                                        {rowReadOnly ? (
+                                            <span className="inline-flex h-7 items-center rounded-md bg-zinc-100 px-2 text-[10px] font-semibold text-zinc-600">
+                                                {isPercentage ? '%' : 'Fixed'}
+                                            </span>
+                                        ) : (
+                                            <AmountTypeSelect
+                                                value={row.amount_type}
+                                                onChange={(v) => onChange(row.salary_head_id, { amount_type: v })}
+                                            />
+                                        )}
                                     </td>
                                     <td className="px-2 py-2">
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            step={isPercentage ? '0.01' : '1'}
-                                            value={row.amount}
-                                            onChange={(e) => onChange(row.salary_head_id, { amount: e.target.value })}
-                                            className="h-7 border-zinc-200 px-2 text-right text-[11px] font-mono"
-                                        />
+                                        {rowReadOnly ? (
+                                            <div className="h-7 px-2 text-right font-mono text-[11px] text-zinc-700">
+                                                {formatAmountDisplay(row.amount, row.amount_type)}
+                                                {isPercentage ? '%' : ''}
+                                            </div>
+                                        ) : (
+                                            <Input
+                                                type="number"
+                                                min={0}
+                                                step={isPercentage ? '0.01' : '1'}
+                                                value={row.amount}
+                                                onChange={(e) => onChange(row.salary_head_id, { amount: e.target.value })}
+                                                className="h-7 border-zinc-200 px-2 text-right text-[11px] font-mono"
+                                            />
+                                        )}
                                     </td>
                                     <td className="px-3 py-2 text-right font-mono text-[11px] font-semibold text-indigo-600">
                                         ৳{formatTakaWhole(evaluated)}
@@ -218,6 +262,10 @@ type Props = {
     previewUrl?: string;
     employeeId?: number;
     stepBasicSalary?: number;
+    /** When true, salary component amounts are display-only until the parent enables editing. */
+    componentsReadOnly?: boolean;
+    onToggleComponentsEdit?: () => void;
+    componentsEditing?: boolean;
 };
 
 export function EmployeeSalaryAssignment({
@@ -242,14 +290,19 @@ export function EmployeeSalaryAssignment({
     previewUrl,
     employeeId,
     stepBasicSalary: stepBasicSalaryProp = 0,
+    componentsReadOnly = false,
+    onToggleComponentsEdit,
+    componentsEditing = false,
 }: Props) {
     const lockedPayscaleId = activePayscaleId ?? (payscales.length === 1 ? String(payscales[0].id) : null);
     const payscaleLocked = Boolean(lockedPayscaleId);
     const effectivePayscaleId = payscaleId || lockedPayscaleId || '';
     const [previewLoading, setPreviewLoading] = useState(false);
     const [stepBasicSalary, setStepBasicSalary] = useState(stepBasicSalaryProp);
+    const [payrollPreview, setPayrollPreview] = useState<PayrollPreviewSummary | null>(null);
     const previewRequestId = useRef(0);
     const lastPreviewKey = useRef<string | null>(null);
+    const initialRowsApplied = useRef(false);
 
     useEffect(() => {
         setStepBasicSalary(stepBasicSalaryProp);
@@ -297,17 +350,23 @@ export function EmployeeSalaryAssignment({
         [filteredSteps, salaryStepId],
     );
 
-    const basicNum = Math.round(parseFloat(basicSalary) || 0);
+    // Prefer saved/custom basic; otherwise use grade-step basic so preview totals are correct
+    // even when employees.basic_salary is null (normal grade/step payroll).
+    const basicNum = Math.round(
+        parseFloat(basicSalary) || stepBasicSalary || Number(selectedStep?.basic_salary) || 0,
+    );
     const assignmentKey = `${effectivePayscaleId}-${salaryGradeId}-${salaryStepId}`;
 
     const normalizePreviewRows = (rows: SalaryComponentRow[]) =>
         rows.map((row) => ({
             ...row,
             amount: formatAmountDisplay(row.amount, row.amount_type),
+            locked: Boolean(row.locked),
         }));
 
-    const applyPreview = (preview: SalaryAssignmentPreview) => {
-        onBasicSalaryChange(String(Math.round(preview.basic_salary) || ''));
+    const applyComponentPreview = (preview: SalaryAssignmentPreview) => {
+        const nextBasic = Math.round(preview.basic_salary) || Math.round(preview.step_basic_salary) || 0;
+        onBasicSalaryChange(nextBasic > 0 ? String(nextBasic) : '');
         setStepBasicSalary(preview.step_basic_salary);
         onAdditionRowsChange?.(normalizePreviewRows(preview.addition_rows));
         onDeductionRowsChange?.(normalizePreviewRows(preview.deduction_rows));
@@ -318,6 +377,7 @@ export function EmployeeSalaryAssignment({
         if (!effectivePayscaleId || !salaryGradeId || !salaryStepId) {
             onAdditionRowsChange?.([]);
             onDeductionRowsChange?.([]);
+            setPayrollPreview(null);
             lastPreviewKey.current = null;
             return;
         }
@@ -327,9 +387,21 @@ export function EmployeeSalaryAssignment({
         }
 
         const hasLoadedRows = additionRows.length > 0 || deductionRows.length > 0;
-        if (lastPreviewKey.current === null && employeeId && hasLoadedRows) {
-            lastPreviewKey.current = assignmentKey;
-            return;
+        const seedBasicOnly =
+            !initialRowsApplied.current && Boolean(employeeId) && hasLoadedRows && lastPreviewKey.current === null;
+
+        if (seedBasicOnly) {
+            initialRowsApplied.current = true;
+            // Seed basic from step when employees.basic_salary is empty (normal grade/step path).
+            if ((!basicSalary || Number(basicSalary) <= 0) && (stepBasicSalaryProp > 0 || selectedStep?.basic_salary)) {
+                const seed = Math.round(stepBasicSalaryProp || Number(selectedStep?.basic_salary) || 0);
+                if (seed > 0) {
+                    onBasicSalaryChange(String(seed));
+                }
+            }
+            if (stepBasicSalaryProp > 0) {
+                setStepBasicSalary(stepBasicSalaryProp);
+            }
         }
 
         lastPreviewKey.current = assignmentKey;
@@ -351,7 +423,9 @@ export function EmployeeSalaryAssignment({
             .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Preview failed'))))
             .then((preview: SalaryAssignmentPreview) => {
                 if (requestId !== previewRequestId.current) return;
-                applyPreview(preview);
+                // Always apply server preview so Tax/PF/Loan and totals match salary process.
+                applyComponentPreview(preview);
+                setPayrollPreview(preview.payroll_preview ?? null);
             })
             .catch(() => {
                 if (requestId !== previewRequestId.current) return;
@@ -359,6 +433,7 @@ export function EmployeeSalaryAssignment({
                     onBasicSalaryChange(String(selectedStep.basic_salary ?? ''));
                     setStepBasicSalary(Number(selectedStep.basic_salary) || 0);
                 }
+                setPayrollPreview(null);
             })
             .finally(() => {
                 if (requestId === previewRequestId.current) {
@@ -386,6 +461,13 @@ export function EmployeeSalaryAssignment({
     };
 
     const liveTotals = useMemo(() => {
+        if (payrollPreview) {
+            return {
+                total_addition: Math.round(payrollPreview.gross_salary),
+                total_deduction: Math.round(payrollPreview.total_deduction),
+                net_payable: Math.round(payrollPreview.net_payable),
+            };
+        }
         const totalAddition = basicNum + sumComponentRows(additionRows, basicNum);
         const totalDeduction = sumComponentRows(deductionRows, basicNum);
         return {
@@ -393,7 +475,7 @@ export function EmployeeSalaryAssignment({
             total_deduction: totalDeduction,
             net_payable: totalAddition - totalDeduction,
         };
-    }, [additionRows, deductionRows, basicNum]);
+    }, [additionRows, deductionRows, basicNum, payrollPreview]);
 
     const hasAssignment = Boolean(effectivePayscaleId && salaryGradeId && salaryStepId);
 
@@ -457,6 +539,27 @@ export function EmployeeSalaryAssignment({
 
             {showSalaryComponents && hasAssignment && (
                 <div className="space-y-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2.5">
+                        <div>
+                            <p className="text-[11px] font-semibold text-zinc-800">
+                                {componentsReadOnly ? 'Salary components (preview)' : 'Custom salary components (editing)'}
+                            </p>
+                            <p className="text-[10px] text-zinc-500">
+                                {componentsReadOnly
+                                    ? 'Shown from grade/step or saved values. Saving the employee will not make this custom unless you click Edit components.'
+                                    : 'Changes will be saved as a custom salary override when you update the employee.'}
+                            </p>
+                        </div>
+                        {onToggleComponentsEdit && (
+                            <button
+                                type="button"
+                                onClick={onToggleComponentsEdit}
+                                className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-[11px] font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
+                            >
+                                {componentsEditing ? 'Cancel component edit' : 'Edit components'}
+                            </button>
+                        )}
+                    </div>
                     {previewLoading && (
                         <p className="text-[11px] text-muted-foreground">Loading salary components…</p>
                     )}
@@ -470,30 +573,94 @@ export function EmployeeSalaryAssignment({
                             basicAmount={basicSalary}
                             onBasicChange={onBasicSalaryChange}
                             stepBasicSalary={stepBasicSalary}
+                            readOnly={componentsReadOnly}
                         />
                         <SalaryComponentsTable
                             title="Deduction"
                             rows={deductionRows}
                             basicSalary={basicNum}
                             onChange={patchDeduction}
+                            readOnly={componentsReadOnly}
                         />
                     </div>
-                    <div className="grid grid-cols-3 gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5">
-                        <div>
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Gross</p>
-                            <p className="font-mono text-[12px] font-bold text-zinc-800">৳{formatTakaWhole(liveTotals.total_addition)}</p>
+                    {payrollPreview ? (
+                        <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-[11px] font-semibold text-emerald-900">
+                                    Salary process preview
+                                    {payrollPreview.month && payrollPreview.year
+                                        ? ` — ${String(payrollPreview.month).padStart(2, '0')}/${payrollPreview.year}`
+                                        : ''}
+                                </p>
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-700/80">
+                                    {payrollPreview.source === 'payslip' ? 'From processed payslip' : 'Live estimate'}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                                <div>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Gross</p>
+                                    <p className="font-mono text-[12px] font-bold text-zinc-800">
+                                        ৳{formatTakaWhole(payrollPreview.gross_salary)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Tax</p>
+                                    <p className="font-mono text-[12px] font-bold text-zinc-800">
+                                        ৳{formatTakaWhole(payrollPreview.income_tax)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">PF</p>
+                                    <p className="font-mono text-[12px] font-bold text-zinc-800">
+                                        ৳{formatTakaWhole(payrollPreview.pf_employee_contribution)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Loan</p>
+                                    <p className="font-mono text-[12px] font-bold text-zinc-800">
+                                        ৳{formatTakaWhole(payrollPreview.loan_total)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Total ded.</p>
+                                    <p className="font-mono text-[12px] font-bold text-zinc-800">
+                                        ৳{formatTakaWhole(payrollPreview.total_deduction)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Net</p>
+                                    <p className="font-mono text-[12px] font-bold text-emerald-700">
+                                        ৳{formatTakaWhole(payrollPreview.net_payable)}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Deduction</p>
-                            <p className="font-mono text-[12px] font-bold text-zinc-800">৳{formatTakaWhole(liveTotals.total_deduction)}</p>
+                    ) : (
+                        <div className="grid grid-cols-3 gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2.5">
+                            <div>
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Gross</p>
+                                <p className="font-mono text-[12px] font-bold text-zinc-800">
+                                    ৳{formatTakaWhole(liveTotals.total_addition)}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Deduction</p>
+                                <p className="font-mono text-[12px] font-bold text-zinc-800">
+                                    ৳{formatTakaWhole(liveTotals.total_deduction)}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Net</p>
+                                <p className="font-mono text-[12px] font-bold text-emerald-700">
+                                    ৳{formatTakaWhole(liveTotals.net_payable)}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Net</p>
-                            <p className="font-mono text-[12px] font-bold text-emerald-700">৳{formatTakaWhole(liveTotals.net_payable)}</p>
-                        </div>
-                    </div>
+                    )}
                     <p className="text-[11px] text-muted-foreground">
-                        Saved amounts are used for payroll, including PF and other deductions. Active loan installments still apply unless you set a custom amount for that loan head.
+                        {componentsReadOnly
+                            ? 'Totals above match salary process (tax, PF, loans included). Component table is preview-only until you click Edit components — saving will not create a custom salary.'
+                            : 'Editing components will save a custom salary override. Tax, PF, and loans still follow salary-process rules unless those heads are customized.'}
                     </p>
                     {errors.basic_salary && <p className="text-[11px] text-red-500">{errors.basic_salary}</p>}
                 </div>
