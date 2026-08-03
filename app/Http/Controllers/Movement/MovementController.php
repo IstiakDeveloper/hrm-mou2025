@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use App\Support\ProjectPdf;
@@ -667,7 +668,7 @@ class MovementController extends Controller
         }
 
         // Create movement
-        $movement = Movement::create([
+        $movementData = [
             'employee_id' => $employeeId,
             'movement_type' => $request->movement_type,
             'from_datetime' => $from->format('Y-m-d H:i:s'),
@@ -675,10 +676,17 @@ class MovementController extends Controller
             'purpose' => $request->purpose,
             'destination' => $request->destination,
             'remarks' => $request->remarks,
-            'start_meter_reading' => $request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null,
-            'start_place' => $request->filled('start_place') ? trim($request->start_place) : null,
             'status' => 'active', // Set as active instead of pending
-        ]);
+        ];
+
+        if (Schema::hasColumn('movements', 'start_meter_reading')) {
+            $movementData['start_meter_reading'] = $request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null;
+        }
+        if (Schema::hasColumn('movements', 'start_place')) {
+            $movementData['start_place'] = $request->filled('start_place') ? trim($request->start_place) : null;
+        }
+
+        $movement = Movement::create($movementData);
 
         // Send notifications to department heads and branch heads
         $this->sendNotificationsToManagers($movement, $targetEmployee);
@@ -937,11 +945,14 @@ class MovementController extends Controller
     {
         $movement->loadMissing('employee.branch');
 
+        $hasStartMeter = Schema::hasColumn('movements', 'start_meter_reading');
+        $hasStartPlace = Schema::hasColumn('movements', 'start_place');
+
         return response()->json([
             'id' => $movement->id,
             'employee_id' => $movement->employee_id,
-            'start_meter_reading' => $movement->start_meter_reading !== null ? (float) $movement->start_meter_reading : null,
-            'start_place' => $movement->start_place,
+            'start_meter_reading' => $hasStartMeter && $movement->start_meter_reading !== null ? (float) $movement->start_meter_reading : null,
+            'start_place' => $hasStartPlace ? $movement->start_place : null,
             'movement_type' => $movement->movement_type,
             'from_datetime' => $movement->from_datetime?->toIso8601String(),
             'to_datetime' => $movement->to_datetime?->toIso8601String(),
@@ -980,9 +991,12 @@ class MovementController extends Controller
 
         $createLogBook = $request->boolean('create_log_book', true);
 
+        $hasStartMeterCol = Schema::hasColumn('movements', 'start_meter_reading');
+        $movementStartMeter = $hasStartMeterCol ? $movement->start_meter_reading : null;
+
         // Determine start reading: prefer movement's stored start_meter_reading, fallback to request for legacy records
-        $startReading = $movement->start_meter_reading !== null
-            ? (float) $movement->start_meter_reading
+        $startReading = $movementStartMeter !== null
+            ? (float) $movementStartMeter
             : ($request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null);
 
         $rules = [
@@ -1175,8 +1189,12 @@ class MovementController extends Controller
         $movement->purpose = $request->purpose;
         $movement->destination = $request->destination;
         $movement->remarks = $request->remarks;
-        $movement->start_meter_reading = $request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null;
-        $movement->start_place = $request->filled('start_place') ? trim($request->start_place) : null;
+        if (Schema::hasColumn('movements', 'start_meter_reading')) {
+            $movement->start_meter_reading = $request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null;
+        }
+        if (Schema::hasColumn('movements', 'start_place')) {
+            $movement->start_place = $request->filled('start_place') ? trim($request->start_place) : null;
+        }
 
         // Update employee_id if admin
         if ($user->hasPermission('movements.edit')) {

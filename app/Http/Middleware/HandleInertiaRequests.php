@@ -62,21 +62,28 @@ class HandleInertiaRequests extends Middleware
         }
 
         if ($employee) {
+            $selectCols = [
+                'id',
+                'employee_id',
+                'movement_type',
+                'from_datetime',
+                'to_datetime',
+                'destination',
+                'status',
+            ];
+
+            if (Schema::hasColumn('movements', 'start_meter_reading')) {
+                $selectCols[] = 'start_meter_reading';
+            }
+            if (Schema::hasColumn('movements', 'start_place')) {
+                $selectCols[] = 'start_place';
+            }
+
             $activeMovement = Movement::query()
                 ->where('employee_id', $employee->id)
                 ->where('status', 'active')
                 ->orderByDesc('id')
-                ->first([
-                    'id',
-                    'employee_id',
-                    'movement_type',
-                    'from_datetime',
-                    'to_datetime',
-                    'destination',
-                    'status',
-                    'start_meter_reading',
-                    'start_place',
-                ]);
+                ->first($selectCols);
         }
 
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
