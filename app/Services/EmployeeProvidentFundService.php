@@ -83,18 +83,25 @@ class EmployeeProvidentFundService
         $credit = SalaryStructureCalculator::roundTaka($employeeContribution + $employerContribution);
 
         $payslip->loadMissing('payrollRun');
+        $run = $payslip->payrollRun;
+
+        // Always stamp PF with the salary run's process date so late-added
+        // employees match colleagues in the same payroll (not "today").
+        $pfDate = $run?->process_date
+            ? Carbon::parse($run->process_date)->startOfDay()
+            : $transactionDate->copy()->startOfDay();
 
         return $this->postTransaction($employee, [
             'transaction_type' => self::TYPE_PAYROLL,
             'payslip_id' => $payslip->id,
             'payroll_run_id' => $payslip->payroll_run_id,
-            'payroll_year' => $payslip->payrollRun?->year,
-            'payroll_month' => $payslip->payrollRun?->month,
+            'payroll_year' => $run?->year,
+            'payroll_month' => $run?->month,
             'employee_contribution' => $employeeContribution,
             'employer_contribution' => $employerContribution,
             'credit_amount' => $credit,
             'debit_amount' => 0,
-            'transaction_date' => $transactionDate,
+            'transaction_date' => $pfDate,
             'notes' => sprintf(
                 'Salary process — employee %.0f%% + employer %.0f%% of basic',
                 config('payroll.pf_employee_percent', 10),
