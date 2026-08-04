@@ -11,6 +11,7 @@ import {
     Send,
     Settings,
     Shield,
+    ShieldAlert,
     UserPlus,
     Users,
 } from 'lucide-react';
@@ -208,6 +209,7 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
                             <>
                                 <ShortcutTile href="/admin/notices?section=administration" title="Notices" icon={Megaphone} />
                                 <ShortcutTile href="/admin/notices/create?section=administration" title="Send notice" icon={Send} />
+                                <ShortcutTile href="/movement-penalties" title="Movement Penalties" icon={ShieldAlert} />
                             </>
                         )}
                         {hasPermission('reports.view') && (

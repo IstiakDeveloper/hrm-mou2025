@@ -50,6 +50,16 @@ class Movement extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function penalties()
+    {
+        return $this->hasMany(MovementPenalty::class);
+    }
+
+    public function latestPenalty()
+    {
+        return $this->hasOne(MovementPenalty::class)->latestOfMany();
+    }
+
     // মুভমেন্ট সম্পূর্ণ হয়েছে কিনা চেক করা
     public function isCompleted()
     {

@@ -60,6 +60,7 @@ use App\Http\Controllers\Leave\LeaveTypeController;
 use App\Http\Controllers\Movement\MovementController;
 use App\Http\Controllers\Movement\MovementLogBookController;
 use App\Http\Controllers\Movement\MovementLogBookPaymentController;
+use App\Http\Controllers\Movement\MovementPenaltyController;
 use App\Http\Controllers\MyNoticeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Organization\EmployeeTypeController;
@@ -1683,6 +1684,17 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/report', [MovementController::class, 'report'])->name('report');
             Route::get('/report/download', [MovementController::class, 'downloadReport'])->name('report.download');
         });
+    });
+
+    // Movement Penalty & Account Lock Payment routes
+    Route::get('/movement/penalty-payment', [MovementPenaltyController::class, 'showPaymentPage'])->name('movement.penalty.payment');
+    Route::post('/movement/penalty-submit', [MovementPenaltyController::class, 'submitTransaction'])->name('movement.penalty.submit');
+
+    Route::prefix('movement-penalties')->name('movement-penalties.')->group(function () {
+        Route::get('/', [MovementPenaltyController::class, 'adminIndex'])->name('index');
+        Route::post('/sync', [MovementPenaltyController::class, 'syncPenalties'])->name('sync');
+        Route::post('/{id}/approve', [MovementPenaltyController::class, 'approvePenalty'])->name('approve');
+        Route::post('/{id}/reject', [MovementPenaltyController::class, 'rejectPenalty'])->name('reject');
     });
 
     // ====================

@@ -2,11 +2,14 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 use Carbon\Carbon;
 use App\Models\Attendance;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\Movement;
+
+Schedule::command('movements:check-overdue')->dailyAt('00:00');
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

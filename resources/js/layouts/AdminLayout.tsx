@@ -490,6 +490,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     { title: 'Movements', path: '/movements', permission: 'movements.view' },
                     { title: 'Log Book Register', path: '/movement-log-books', permission: 'movements.view' },
                     { title: 'Log Book Payment', path: '/movement-log-book-payments', permission: 'movements.view' },
+                    { title: 'Movement Penalties', path: '/movement-penalties', anyPermissions: ['admin.access', 'movements.approve', 'movements.view'] },
                 ],
             },
             {
@@ -688,6 +689,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     { title: 'Roles & Permissions', path: withSectionParam('/admin/roles', 'administration'), permission: 'roles.view' },
                     { title: 'Notices', path: withSectionParam('/admin/notices', 'administration'), permission: 'admin.access' },
                     { title: 'Send notice', path: withSectionParam('/admin/notices/create', 'administration'), permission: 'admin.access' },
+                    { title: 'Movement Penalties', path: '/movement-penalties', anyPermissions: ['admin.access', 'movements.approve', 'movements.view'] },
                 ],
             },
             {

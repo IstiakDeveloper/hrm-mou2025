@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ActivateScheduledHrActions;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\EnsureMovementFinePaid;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             ActivateScheduledHrActions::class,
+            EnsureMovementFinePaid::class,
         ]);
 
         // API middleware
@@ -29,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Alias middleware
         $middleware->alias([
             'permission' => CheckPermission::class,
+            'movement.fine' => EnsureMovementFinePaid::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

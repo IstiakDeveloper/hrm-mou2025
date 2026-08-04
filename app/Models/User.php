@@ -56,6 +56,18 @@ class User extends Authenticatable
         return $this->hasMany(PushSubscription::class);
     }
 
+    public function movementPenalties()
+    {
+        return $this->hasMany(MovementPenalty::class);
+    }
+
+    public function activeMovementPenalty()
+    {
+        return $this->hasOne(MovementPenalty::class)
+            ->whereIn('status', ['unpaid', 'pending_verification'])
+            ->latestOfMany();
+    }
+
     public function setUsernameAttribute(?string $value): void
     {
         $this->attributes['username'] = $value !== null && $value !== ''
