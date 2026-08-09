@@ -112,7 +112,7 @@ class Attendance extends Model
             ->exists();
 
         $employee = Employee::find($employeeId);
-        $branchId = $employee?->current_branch_id ?: ($employee?->branch_id ?: null);
+        $branchId = $employee?->current_branch_id ?: null;
 
         $weekendDays = AttendanceSetting::weekendDaysForBranch($branchId ? (int) $branchId : null);
 

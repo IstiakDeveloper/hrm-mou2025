@@ -46,7 +46,7 @@ class MovementController extends Controller
     private function getBranchWorkTimesForEmployee(int $employeeId): array
     {
         $employee = \App\Models\Employee::find($employeeId);
-        $branchId = $employee?->current_branch_id ?? $employee?->branch_id ?? null;
+        $branchId = $employee?->current_branch_id ?? null;
 
         $default = ['work_start_time' => '09:00:00', 'work_end_time' => '18:00:00'];
         if (! $branchId) {

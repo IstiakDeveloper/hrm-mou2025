@@ -160,10 +160,10 @@ class AttendanceSetting extends Model
         }
 
         $employee = Employee::query()
-            ->select(['id', 'current_branch_id', 'branch_id'])
+            ->select(['id', 'current_branch_id'])
             ->find($employeeId);
 
-        $branchId = $employee?->current_branch_id ?: $employee?->branch_id;
+        $branchId = $employee?->current_branch_id;
 
         return static::weekendDaysForBranch($branchId ? (int) $branchId : null);
     }
