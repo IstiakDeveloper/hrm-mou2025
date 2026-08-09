@@ -1534,8 +1534,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     )}
 
                     {/* Main Content */}
-                    <main className="flex-1 overflow-auto bg-transparent px-2.5 py-3 sm:px-4 sm:py-5 lg:px-6 lg:py-6">
-                        <div className="w-full rounded-2xl border border-slate-200/70 bg-white/75 p-2.5 shadow-sm shadow-slate-200/40 backdrop-blur sm:p-4 lg:p-6">
+                    <main className="flex-1 overflow-auto bg-slate-50/50 dark:bg-slate-950 px-2.5 py-3 sm:px-4 sm:py-5 lg:px-6 lg:py-6">
+                        <div className="w-full rounded-2xl border border-slate-300/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-md shadow-slate-200/60 sm:p-5 lg:p-6">
                             {children}
                         </div>
                     </main>
@@ -1619,7 +1619,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 open={showCloseMovementDialog}
                 onOpenChange={setShowCloseMovementDialog}
                 movementId={closeMovementId ?? activeMovement?.id}
-                startMeterReading={activeMovement?.start_meter_reading}
+                movementType={activeMovement?.movement_type}
+                startMeterReading={activeMovement?.last_end_meter_reading ?? activeMovement?.start_meter_reading}
                 startPlace={activeMovement?.start_place}
                 branchFallbackName={branchFallbackName}
             />

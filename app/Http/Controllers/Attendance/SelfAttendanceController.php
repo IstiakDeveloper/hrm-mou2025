@@ -43,6 +43,13 @@ class SelfAttendanceController extends Controller
         ]);
 
         $today = Carbon::today()->format('Y-m-d');
+
+        if (\App\Models\AttendanceSetting::isWeekendForEmployee($today, (int) $employee->id)) {
+            return back()->withErrors([
+                'attendance' => 'Weekend-এ attendance দেওয়া যাবে না (Attendance settings অনুযায়ী Friday/Saturday)।',
+            ]);
+        }
+
         $deviceFingerprint = (string) $validated['device_fingerprint'];
 
         $deviceLockError = app(SelfAttendanceDeviceLockService::class)

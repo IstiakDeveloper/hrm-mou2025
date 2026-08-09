@@ -115,23 +115,42 @@ class Movement extends Model
         }
     }
 
-    // এই মুভমেন্টের তারিখগুলি জেনারেট করার ফাংশন
+    /**
+     * Calendar dates this movement may affect attendance.
+     * Movements are single-day only — always just the start date.
+     */
     public function getDatesAttribute()
     {
-        $dates = [];
-        $currentDate = $this->from_datetime->copy()->startOfDay();
+        return [$this->from_datetime->copy()->format('Y-m-d')];
+    }
 
-        // Use actual return date if available, otherwise use planned end date
-        $endDate = ($this->actual_return_datetime ?
-            $this->actual_return_datetime->copy() :
-            $this->to_datetime->copy())->startOfDay();
+    /**
+     * Official movements mark attendance only on the start calendar day.
+     */
+    public function scopeCoveringAttendanceDate($query, string $ymd)
+    {
+        return $query
+            ->where('movement_type', 'official')
+            ->whereIn('status', ['active', 'completed'])
+            ->whereDate('from_datetime', $ymd);
+    }
 
-        while ($currentDate->lte($endDate)) {
-            $dates[] = $currentDate->copy()->format('Y-m-d');
-            $currentDate->addDay();
+    /**
+     * Whether this movement covers attendance for the given calendar date.
+     */
+    public function coversAttendanceDate(Carbon|string $date): bool
+    {
+        if ($this->movement_type !== 'official') {
+            return false;
         }
 
-        return $dates;
+        if (! in_array($this->status, ['active', 'completed'], true)) {
+            return false;
+        }
+
+        $ymd = $date instanceof Carbon ? $date->toDateString() : Carbon::parse($date)->toDateString();
+
+        return $this->from_datetime->toDateString() === $ymd;
     }
 
     // পূর্বের অনুমোদন সম্পর্কিত মেথড গুলি সাপোর্ট হিসেবে রাখা হয়েছে

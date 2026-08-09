@@ -26,6 +26,7 @@ interface MovementPenaltyProps {
             destination?: string | null;
             from_datetime: string;
             to_datetime: string;
+            movement_type?: 'official' | 'personal' | string;
             start_meter_reading?: number | null;
             actual_return_datetime?: string | null;
             work_result?: string | null;
@@ -44,9 +45,10 @@ interface MovementPenaltyProps {
         bkash: string;
         nagad: string;
     };
+    lastEndMeterReading?: number | null;
 }
 
-export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPenaltyProps) {
+export default function PenaltyPayment({ penalty, merchantNumbers, lastEndMeterReading = null }: MovementPenaltyProps) {
     const numberToCopy = '01717893432';
     const [copied, setCopied] = useState(false);
     const [step, setStep] = useState<1 | 2>(1);
@@ -66,20 +68,24 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
         return now.toISOString().slice(0, 16);
     };
 
-    const initialStartReading = penalty?.movement?.start_meter_reading ?? '';
+    const hasPresetStartMeter = lastEndMeterReading !== null && lastEndMeterReading !== undefined;
+    const initialStartReading = hasPresetStartMeter
+        ? String(lastEndMeterReading)
+        : (penalty?.movement?.start_meter_reading != null ? String(penalty.movement.start_meter_reading) : '');
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, transform } = useForm({
         penalty_id: penalty?.id || '',
         payment_method: selectedMethod,
         sender_number: penalty?.sender_number || '',
         transaction_id: penalty?.transaction_id || '',
         actual_return_datetime: getDefaultReturnTime(),
         work_result: penalty?.movement?.work_result || '',
-        create_log_book: true,
-        start_meter_reading: initialStartReading !== null ? String(initialStartReading) : '',
+        start_meter_reading: initialStartReading,
         end_meter_reading: penalty?.movement?.logBook?.end_meter_reading ? String(penalty.movement.logBook.end_meter_reading) : '',
         personal_km: penalty?.movement?.logBook?.personal_km ? String(penalty.movement.logBook.personal_km) : '',
     });
+
+    const isPersonalMovement = (penalty?.movement?.movement_type || '').toLowerCase() === 'personal';
 
     const handleCopyNumber = () => {
         navigator.clipboard.writeText(numberToCopy);
@@ -126,6 +132,16 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
             }
         }
 
+        transform((form) => {
+            const startReading = Number(form.start_meter_reading) || 0;
+            const endReading = Number(form.end_meter_reading) || 0;
+            const tripKm = Math.max(0, Math.round((endReading - startReading) * 100) / 100);
+            return {
+                ...form,
+                personal_km: isPersonalMovement ? String(tripKm) : form.personal_km,
+            };
+        });
+
         post(route('movement.penalty.submit'));
     };
 
@@ -152,9 +168,9 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
     // Calculations for Log Book
     const startKm = parseFloat(data.start_meter_reading) || 0;
     const endKm = parseFloat(data.end_meter_reading) || 0;
-    const personalKm = parseFloat(data.personal_km) || 0;
     const totalKm = endKm > startKm ? round(endKm - startKm, 2) : 0;
-    const officialKm = round(Math.max(0, totalKm - personalKm), 2);
+    const personalKm = isPersonalMovement ? totalKm : (parseFloat(data.personal_km) || 0);
+    const officialKm = isPersonalMovement ? 0 : round(Math.max(0, totalKm - personalKm), 2);
 
     function round(num: number, decimalPlaces: number) {
         const p = Math.pow(10, decimalPlaces);
@@ -422,6 +438,9 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                                             <div className="space-y-1">
                                                 <Label htmlFor="start_meter_reading" className="text-[11px] font-semibold text-zinc-700">
                                                     শুরুর মিটার রিডিং
+                                                    {hasPresetStartMeter && (
+                                                        <span className="ml-1 font-normal text-emerald-600">(সর্বশেষ close)</span>
+                                                    )}
                                                 </Label>
                                                 <Input
                                                     id="start_meter_reading"
@@ -430,6 +449,7 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                                                     placeholder="যেমন: 1250.0"
                                                     value={data.start_meter_reading}
                                                     onChange={(e) => setData('start_meter_reading', e.target.value)}
+                                                    readOnly={hasPresetStartMeter}
                                                     className="bg-zinc-50/50 border-zinc-300 text-zinc-900 text-xs h-9 font-mono font-bold"
                                                 />
                                             </div>
@@ -449,21 +469,29 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                                                 />
                                             </div>
 
-                                            <div className="space-y-1">
-                                                <Label htmlFor="personal_km" className="text-[11px] font-semibold text-zinc-700">
-                                                    ব্যক্তিগত ব্যবহার (কিমি)
-                                                </Label>
-                                                <Input
-                                                    id="personal_km"
-                                                    type="number"
-                                                    step="0.01"
-                                                    placeholder="যেমন: 5.0"
-                                                    value={data.personal_km}
-                                                    onChange={(e) => setData('personal_km', e.target.value)}
-                                                    className="bg-white border-zinc-300 text-zinc-900 text-xs h-9 font-mono font-bold"
-                                                />
-                                            </div>
+                                            {!isPersonalMovement && (
+                                                <div className="space-y-1">
+                                                    <Label htmlFor="personal_km" className="text-[11px] font-semibold text-zinc-700">
+                                                        ব্যক্তিগত ব্যবহার (কিমি)
+                                                    </Label>
+                                                    <Input
+                                                        id="personal_km"
+                                                        type="number"
+                                                        step="0.01"
+                                                        placeholder="যেমন: 5.0"
+                                                        value={data.personal_km}
+                                                        onChange={(e) => setData('personal_km', e.target.value)}
+                                                        className="bg-white border-zinc-300 text-zinc-900 text-xs h-9 font-mono font-bold"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
+
+                                        {isPersonalMovement && (
+                                            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                                                Personal movement — পুরো দূরত্ব Personal km হিসেবে গণনা হবে।
+                                            </p>
+                                        )}
 
                                         {/* PROFESSIONAL DYNAMIC CALCULATION BREAKDOWN GRID */}
                                         <div className="bg-gradient-to-r from-zinc-50 to-emerald-50/30 border border-zinc-200 rounded-xl p-3.5 space-y-2">
@@ -486,12 +514,16 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                                                 </div>
 
                                                 <div className="p-2 bg-white rounded-lg border border-emerald-300">
-                                                    <p className="text-[10px] text-emerald-700 font-bold">অফিসিয়াল দূরত্ব</p>
-                                                    <p className="text-sm font-mono font-extrabold text-emerald-700">{officialKm} KM</p>
+                                                    <p className="text-[10px] text-emerald-700 font-bold">
+                                                        {isPersonalMovement ? 'পার্সোনাল দূরত্ব' : 'অফিসিয়াল দূরত্ব'}
+                                                    </p>
+                                                    <p className="text-sm font-mono font-extrabold text-emerald-700">
+                                                        {isPersonalMovement ? personalKm : officialKm} KM
+                                                    </p>
                                                 </div>
                                             </div>
 
-                                            {personalKm > 0 && (
+                                            {!isPersonalMovement && personalKm > 0 && (
                                                 <p className="text-[11px] text-zinc-600 font-medium text-right pt-0.5">
                                                     ব্যক্তিগত ব্যবহায়ের জন্য কর্তন: <span className="font-mono font-bold text-amber-700">{personalKm} KM</span>
                                                 </p>

@@ -71,7 +71,7 @@ export default function Create({ branches }: CreateProps) {
   const [workEndTime, setWorkEndTime] = useState('17:00');
   const [lateThresholdMinutes, setLateThresholdMinutes] = useState('15');
   const [halfDayHours, setHalfDayHours] = useState('4');
-  const [weekendDays, setWeekendDays] = useState<number[]>([0, 6]); // Default to Saturday and Sunday
+  const [weekendDays, setWeekendDays] = useState<number[]>([5, 6]); // Default: Friday + Saturday
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 

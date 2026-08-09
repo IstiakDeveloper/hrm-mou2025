@@ -80,4 +80,28 @@ class MovementLogBook extends Model
     {
         return $this->approval_scope === 'head_office';
     }
+
+    /**
+     * Latest closing meter reading for an employee (used as next movement start meter).
+     */
+    public static function lastEndMeterReadingForEmployee(int $employeeId, ?int $excludeMovementId = null): ?float
+    {
+        $query = static::query()
+            ->where('employee_id', $employeeId)
+            ->whereNotNull('end_meter_reading')
+            ->orderByDesc('date')
+            ->orderByDesc('return_time')
+            ->orderByDesc('id');
+
+        if ($excludeMovementId !== null) {
+            $query->where(function ($q) use ($excludeMovementId) {
+                $q->whereNull('movement_id')
+                    ->orWhere('movement_id', '!=', $excludeMovementId);
+            });
+        }
+
+        $value = $query->value('end_meter_reading');
+
+        return $value !== null ? (float) $value : null;
+    }
 }

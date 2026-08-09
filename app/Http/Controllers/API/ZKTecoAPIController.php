@@ -470,6 +470,32 @@ class ZKTecoAPIController extends Controller
     private function saveAttendanceRecord($employee, $device, $date, $time)
     {
         return DB::transaction(function () use ($employee, $device, $date, $time) {
+            // Weekend (attendance settings): no punch/attendance marks
+            if (\App\Models\AttendanceSetting::isWeekendForEmployee($date, (int) $employee->id)) {
+                $weekendRow = Attendance::where('employee_id', $employee->id)
+                    ->where('date', $date)
+                    ->first();
+
+                if (! $weekendRow) {
+                    $weekendRow = new Attendance;
+                    $weekendRow->employee_id = $employee->id;
+                    $weekendRow->date = $date;
+                }
+
+                $weekendRow->status = 'weekend';
+                $weekendRow->check_in = null;
+                $weekendRow->check_out = null;
+                $weekendRow->movement_id = null;
+                $weekendRow->save();
+
+                Log::info('ZKTeco sync: Skipped punch on weekend', [
+                    'employee_id' => $employee->id,
+                    'date' => $date,
+                ]);
+
+                return true;
+            }
+
             $attendance = Attendance::where('employee_id', $employee->id)
                 ->where('date', $date)
                 ->first();
@@ -564,6 +590,15 @@ class ZKTecoAPIController extends Controller
      */
     private function updateAttendanceStatus($attendance)
     {
+        if (\App\Models\AttendanceSetting::isWeekendForEmployee($attendance->date, (int) $attendance->employee_id)) {
+            $attendance->status = 'weekend';
+            $attendance->check_in = null;
+            $attendance->check_out = null;
+            $attendance->movement_id = null;
+
+            return;
+        }
+
         if ($this->isEmployeeOnLeave($attendance->employee_id, $attendance->date)) {
             $attendance->status = 'leave';
 
@@ -584,17 +619,10 @@ class ZKTecoAPIController extends Controller
      */
     private function isEmployeeOnMovement($employeeId, $date)
     {
-        $dateObj = Carbon::parse($date);
-
-        // Check for approved movement that covers this date
-        $movementExists = \App\Models\Movement::where('employee_id', $employeeId)
-            ->whereIn('status', ['approved', 'completed'])
-            ->where('movement_type', 'official') // শুধু অফিশিয়াল মুভমেন্ট চেক করুন
-            ->where('from_datetime', '<=', $dateObj->endOfDay())
-            ->where('to_datetime', '>=', $dateObj->startOfDay())
+        // Official movement marks attendance only on its start calendar day
+        return \App\Models\Movement::where('employee_id', $employeeId)
+            ->coveringAttendanceDate(Carbon::parse($date)->format('Y-m-d'))
             ->exists();
-
-        return $movementExists;
     }
 
     /**
@@ -631,41 +659,36 @@ class ZKTecoAPIController extends Controller
                 $attendance->date = $today;
                 $attendance->status = 'absent'; // ডিফল্ট স্ট্যাটাস
 
+                // Weekend (attendance settings): total weekend — no absent/present/movement
+                if (\App\Models\AttendanceSetting::isWeekendForEmployee($today, (int) $employee->id)) {
+                    $attendance->status = 'weekend';
+                }
                 // If today is a holiday for this employee's branch, mark as holiday (not absent)
-                if ($this->isHolidayForEmployeeOnDate($employee, $today)) {
+                elseif ($this->isHolidayForEmployeeOnDate($employee, $today)) {
                     $attendance->status = 'holiday';
                 }
-
                 // Check if employee is on leave
-                if ($this->isEmployeeOnLeave($employee->id, $today)) {
+                elseif ($this->isEmployeeOnLeave($employee->id, $today)) {
                     $attendance->status = 'leave';
                 }
                 // Check if employee is on movement
-                else if ($this->isEmployeeOnMovement($employee->id, $today)) {
+                elseif ($this->isEmployeeOnMovement($employee->id, $today)) {
                     $attendance->status = 'on_duty';
 
                     // Find the relevant movement
                     $movement = \App\Models\Movement::where('employee_id', $employee->id)
-                        ->whereIn('status', ['approved', 'completed'])
-                        ->where('movement_type', 'official')
-                        ->where('from_datetime', '<=', Carbon::today()->endOfDay())
-                        ->where('to_datetime', '>=', Carbon::today()->startOfDay())
+                        ->coveringAttendanceDate($today)
                         ->first();
 
                     // Link attendance to movement
                     if ($movement) {
                         $attendance->movement_id = $movement->id;
 
-                        // Set check-in and check-out if the movement starts or ends today
+                        // Set check-in if the movement starts today
                         $fromDate = Carbon::parse($movement->from_datetime)->format('Y-m-d');
-                        $toDate = Carbon::parse($movement->to_datetime)->format('Y-m-d');
 
                         if ($fromDate == $today) {
                             $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
-                        }
-
-                        if ($toDate == $today) {
-                            $attendance->check_out = Carbon::parse($movement->to_datetime)->format('H:i:s');
                         }
                     }
                 }

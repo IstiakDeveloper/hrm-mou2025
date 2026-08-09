@@ -27,14 +27,12 @@ import {
 } from '@/components/ui/popover';
 import { format, formatISO, parse, isAfter, isBefore, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Calendar as CalendarIcon, Clock, MapPin, AlertCircle, User, BriefcaseBusiness, FileText, Sparkles, CheckCircle2, Gauge } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Clock, MapPin, AlertCircle, User, BriefcaseBusiness, FileText, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from '@/components/ui/calendar';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
-import { resolveMovementStartPlace } from '@/lib/movement-start-place';
-
 interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
@@ -270,8 +268,6 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
     const [durationHours, setDurationHours] = useState(8);
     const [purpose, setPurpose] = useState('');
     const [destination, setDestination] = useState('');
-    const [startMeterReading, setStartMeterReading] = useState('');
-    const [startPlace, setStartPlace] = useState('');
     const [remarks, setRemarks] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
@@ -317,28 +313,25 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
         if (!fromDate) {
             setFromDate(new Date());
         }
-        const branchName = currentEmployee?.branch?.name || '';
-        resolveMovementStartPlace(branchName)
-            .then((place) => setStartPlace(place))
-            .catch(() => setStartPlace(branchName));
-    }, [currentEmployee]);
+    }, []);
 
-    // Background calculation for return time
+    // Background calculation for return time (same calendar day only)
     useEffect(() => {
         if (!fromDate || !fromTime) return;
-        
+
         const hm = parseHourMinute24(fromTime);
         if (!hm) return;
-        
-        const targetDate = new Date(fromDate);
+
+        // Movement is single-day: clamp expected return to 23:59 same day
         let endHours = hm.hours + durationHours;
+        let endMinutes = hm.minutes;
         if (endHours >= 24) {
-            endHours -= 24;
-            targetDate.setDate(targetDate.getDate() + 1);
+            endHours = 23;
+            endMinutes = 59;
         }
-        
-        setToDate(targetDate);
-        setToTime(`${endHours.toString().padStart(2, '0')}:${hm.minutes.toString().padStart(2, '0')}`);
+
+        setToDate(new Date(fromDate));
+        setToTime(`${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`);
     }, [fromDate, fromTime, durationHours]);
 
     const getFromDateTime = () => {
@@ -423,6 +416,20 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
             return;
         }
 
+        const sameDay =
+            fromDateTime.getFullYear() === toDateTime.getFullYear() &&
+            fromDateTime.getMonth() === toDateTime.getMonth() &&
+            fromDateTime.getDate() === toDateTime.getDate();
+        if (!sameDay) {
+            setErrors((prev) => ({
+                ...prev,
+                to_datetime: 'Movement is allowed for one day only. Expected return must be on the same date.',
+            }));
+            setSubmitting(false);
+            setActiveTab('details');
+            return;
+        }
+
         router.post(route('movements.store'), {
             employee_id: isAdmin ? employeeId : undefined,
             movement_type: movementType,
@@ -431,8 +438,6 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
             purpose,
             destination,
             remarks,
-            start_meter_reading: startMeterReading ? Number(startMeterReading) : undefined,
-            start_place: startPlace.trim() || undefined,
         }, {
             onError: (errs) => {
                 const normalized = Object.fromEntries(
@@ -657,35 +662,6 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                             {errors.remarks && (
                                                 <p className="text-xs font-medium text-red-500">{errors.remarks}</p>
                                             )}
-
-                                            {/* Log Book Start Meter Reading section */}
-                                            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/20 p-3 space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <Label htmlFor="startMeterReading" className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                                                        <Gauge className="h-4 w-4 text-emerald-600" />
-                                                        <span>Start Meter Reading (স্টার্ট মিটার)</span>
-                                                    </Label>
-                                                    {startPlace && (
-                                                        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-100/80 border border-emerald-200 px-2 py-0.5 rounded-md font-medium">
-                                                            <MapPin className="h-3 w-3 text-emerald-600" />
-                                                            <span>{startPlace}</span>
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <Input
-                                                    id="startMeterReading"
-                                                    type="number"
-                                                    min={0}
-                                                    step="0.01"
-                                                    placeholder="e.g. 12540"
-                                                    value={startMeterReading}
-                                                    onChange={(e) => setStartMeterReading(e.target.value)}
-                                                    className="h-9 text-xs sm:text-sm bg-white border-slate-200 focus:ring-emerald-500/20 rounded-lg"
-                                                />
-                                                {errors.start_meter_reading && (
-                                                    <p className="text-xs font-medium text-red-500 mt-0.5">{errors.start_meter_reading}</p>
-                                                )}
-                                            </div>
 
                                             <div className="space-y-1 relative">
                                                 <Label htmlFor="destination" className="text-xs font-semibold text-slate-700">Destination</Label>

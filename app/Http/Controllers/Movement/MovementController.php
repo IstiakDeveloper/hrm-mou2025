@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Mail\NewMovementNotification;
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
@@ -616,8 +617,6 @@ class MovementController extends Controller
             'purpose' => 'required|string|max:500',
             'destination' => 'required|string|max:255',
             'remarks' => 'nullable|string|max:1000',
-            'start_meter_reading' => 'nullable|numeric|min:0',
-            'start_place' => 'nullable|string|max:255',
         ]);
 
         // Movement start must be within the last 5 minutes or in the future (small clock / form delay tolerance)
@@ -631,6 +630,16 @@ class MovementController extends Controller
             if ($to->lte($from)) {
                 $to = $from->copy()->addHours(8);
             }
+        }
+
+        // Movements are single calendar day only — clamp expected return to end of start day
+        if (! $to->isSameDay($from)) {
+            $to = $from->copy()->endOfDay()->seconds(0);
+        }
+        if ($to->lte($from)) {
+            return redirect()->back()
+                ->withErrors(['to_datetime' => 'Expected return must be after start time on the same day. Movement is allowed for one day only.'])
+                ->withInput();
         }
 
         if ($from->lt($now->copy()->subMinutes(5))) {
@@ -662,6 +671,13 @@ class MovementController extends Controller
             ? $employee
             : Employee::findOrFail($employeeId);
 
+        // Weekend (from attendance settings, usually Fri+Sat): no movement allowed
+        if (AttendanceSetting::isWeekendForEmployee($from, $employeeId)) {
+            return redirect()->back()
+                ->withErrors(['from_datetime' => 'Weekend-এ movement তৈরি করা যাবে না (Attendance settings অনুযায়ী Friday/Saturday)।'])
+                ->withInput();
+        }
+
         $activeMovement = $this->getActiveMovementForEmployee($employeeId);
         if ($activeMovement) {
             return $this->redirectForActiveMovement($activeMovement);
@@ -678,13 +694,6 @@ class MovementController extends Controller
             'remarks' => $request->remarks,
             'status' => 'active', // Set as active instead of pending
         ];
-
-        if (Schema::hasColumn('movements', 'start_meter_reading')) {
-            $movementData['start_meter_reading'] = $request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null;
-        }
-        if (Schema::hasColumn('movements', 'start_place')) {
-            $movementData['start_place'] = $request->filled('start_place') ? trim($request->start_place) : null;
-        }
 
         $movement = Movement::create($movementData);
 
@@ -711,17 +720,18 @@ class MovementController extends Controller
      * Update attendance records for a movement
      */
     /**
-     * Update attendance records for a movement.
-     *
-     * Only touch the movement start day while active.
-     * Planned to_datetime often spans past midnight (e.g. default +8h), and filling
-     * those next days with branch work_start (09:00) was inventing false attendance.
-     * Extra days are applied only when the movement is closed (actual return).
+     * Update attendance for a movement — start calendar day only (on_duty + movement_id).
+     * Never invent next-day attendance while the movement stays open.
      */
     private function updateAttendanceForMovement(Movement $movement)
     {
         $movementStart = Carbon::parse($movement->from_datetime);
         $dateStr = $movementStart->format('Y-m-d');
+
+        // Never mark attendance on configured weekend days
+        if (AttendanceSetting::isWeekendForEmployee($movementStart, (int) $movement->employee_id)) {
+            return;
+        }
 
         $attendance = Attendance::where('employee_id', $movement->employee_id)
             ->where('date', $dateStr)
@@ -929,6 +939,12 @@ class MovementController extends Controller
             $canClose = true;
         }
 
+        $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+            (int) $movement->employee_id,
+            (int) $movement->id
+        );
+        $movement->setAttribute('last_end_meter_reading', $lastEndMeter);
+
         // Render the inertia view with the movement details and permission flag
         return Inertia::render('movement/show', [
             'movement' => $movement,
@@ -945,13 +961,22 @@ class MovementController extends Controller
     {
         $movement->loadMissing('employee.branch');
 
-        $hasStartMeter = Schema::hasColumn('movements', 'start_meter_reading');
         $hasStartPlace = Schema::hasColumn('movements', 'start_place');
+        $hasStartMeter = Schema::hasColumn('movements', 'start_meter_reading');
+        $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+            (int) $movement->employee_id,
+            (int) $movement->id
+        );
+        $legacyStartMeter = $hasStartMeter && $movement->start_meter_reading !== null
+            ? (float) $movement->start_meter_reading
+            : null;
+        $presetStartMeter = $lastEndMeter ?? $legacyStartMeter;
 
         return response()->json([
             'id' => $movement->id,
             'employee_id' => $movement->employee_id,
-            'start_meter_reading' => $hasStartMeter && $movement->start_meter_reading !== null ? (float) $movement->start_meter_reading : null,
+            'last_end_meter_reading' => $lastEndMeter,
+            'start_meter_reading' => $presetStartMeter,
             'start_place' => $hasStartPlace ? $movement->start_place : null,
             'movement_type' => $movement->movement_type,
             'from_datetime' => $movement->from_datetime?->toIso8601String(),
@@ -989,46 +1014,46 @@ class MovementController extends Controller
 
         $forgotReturn = $request->boolean('forgot_return_time');
 
-        $createLogBook = $request->boolean('create_log_book', true);
-
-        $hasStartMeterCol = Schema::hasColumn('movements', 'start_meter_reading');
-        $movementStartMeter = $hasStartMeterCol ? $movement->start_meter_reading : null;
-
-        // Determine start reading: prefer movement's stored start_meter_reading, fallback to request for legacy records
-        $startReading = $movementStartMeter !== null
-            ? (float) $movementStartMeter
-            : ($request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null);
+        // Start meter = employee's last log-book close meter; first-time employees enter it manually
+        $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+            (int) $movement->employee_id,
+            (int) $movement->id
+        );
+        $legacyStartMeter = Schema::hasColumn('movements', 'start_meter_reading') && $movement->start_meter_reading !== null
+            ? (float) $movement->start_meter_reading
+            : null;
+        $startReading = $lastEndMeter
+            ?? $legacyStartMeter
+            ?? ($request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null);
 
         $rules = [
             'forgot_return_time' => 'sometimes|boolean',
-            'create_log_book' => 'sometimes|boolean',
             'actual_return_datetime' => $forgotReturn ? 'required|date' : 'nullable|date',
             'work_result' => 'required|string|min:5|max:2000',
             'start_place' => 'nullable|string|max:255',
-            'personal_km' => $createLogBook ? 'nullable|numeric|min:0' : 'nullable',
+            'personal_km' => 'nullable|numeric|min:0',
         ];
 
-        if ($createLogBook) {
-            if ($startReading !== null) {
-                $rules['end_meter_reading'] = "required|numeric|gte:{$startReading}";
-            } else {
-                $rules['start_meter_reading'] = 'required|numeric|min:0';
-                $rules['end_meter_reading'] = 'required|numeric|gte:start_meter_reading';
-            }
+        if ($startReading !== null) {
+            $rules['end_meter_reading'] = "required|numeric|gte:{$startReading}";
         } else {
-            $rules['end_meter_reading'] = 'nullable';
+            $rules['start_meter_reading'] = 'required|numeric|min:0';
+            $rules['end_meter_reading'] = 'required|numeric|gte:start_meter_reading';
         }
 
         $request->validate($rules);
 
-        if ($createLogBook) {
-            $effectiveStart = $startReading ?? (float) $request->start_meter_reading;
-            $totalKm = round((float) $request->end_meter_reading - $effectiveStart, 2);
-            if ($request->filled('personal_km') && (float) $request->personal_km > $totalKm) {
-                throw ValidationException::withMessages([
-                    'personal_km' => 'Personal distance cannot exceed total distance.',
-                ]);
-            }
+        $effectiveStart = $startReading ?? (float) $request->start_meter_reading;
+        $totalKm = round((float) $request->end_meter_reading - $effectiveStart, 2);
+        // Personal movements always count full distance as personal_km — skip partial personal check
+        if (
+            $movement->movement_type !== 'personal'
+            && $request->filled('personal_km')
+            && (float) $request->personal_km > $totalKm
+        ) {
+            throw ValidationException::withMessages([
+                'personal_km' => 'Personal distance cannot exceed total distance.',
+            ]);
         }
 
         // Start a database transaction
@@ -1063,9 +1088,7 @@ class MovementController extends Controller
             $movement->actual_return_datetime = $returnDateTime;
             $movement->save();
 
-            if ($createLogBook) {
-                $this->createLogBookFromMovement($movement, $request, $returnDateTime);
-            }
+            $this->createLogBookFromMovement($movement, $request, $returnDateTime, $effectiveStart);
 
             // Update attendance records for official movements
             if ($movement->movement_type === 'official') {
@@ -1078,9 +1101,7 @@ class MovementController extends Controller
             DB::commit();
 
             return redirect()->route('movements.index')
-                ->with('success', $createLogBook
-                    ? 'Movement closed successfully. Log book entry created and pending approval.'
-                    : 'Movement closed successfully.');
+                ->with('success', 'Movement closed successfully. Log book entry created and pending approval.');
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -1165,8 +1186,6 @@ class MovementController extends Controller
             'purpose' => 'required|string',
             'destination' => 'required|string',
             'remarks' => 'nullable|string',
-            'start_meter_reading' => 'nullable|numeric|min:0',
-            'start_place' => 'nullable|string|max:255',
         ];
 
         if ($isCompleted && $isAdminEditor) {
@@ -1182,6 +1201,26 @@ class MovementController extends Controller
         $fromParsed = $this->parseMovementDateTimeToApp($request->from_datetime);
         $toParsed = $this->parseMovementDateTimeToApp($request->to_datetime);
 
+        // Movements are single calendar day only
+        if (! $toParsed->isSameDay($fromParsed)) {
+            $toParsed = $fromParsed->copy()->endOfDay()->seconds(0);
+        }
+        if ($toParsed->lte($fromParsed)) {
+            return redirect()->back()
+                ->withErrors(['to_datetime' => 'Expected return must be after start time on the same day. Movement is allowed for one day only.'])
+                ->withInput();
+        }
+
+        $employeeIdForWeekend = $user->hasPermission('movements.edit') && $request->filled('employee_id')
+            ? (int) $request->employee_id
+            : (int) $movement->employee_id;
+
+        if (AttendanceSetting::isWeekendForEmployee($fromParsed, $employeeIdForWeekend)) {
+            return redirect()->back()
+                ->withErrors(['from_datetime' => 'Weekend-এ movement রাখা যাবে না (Attendance settings অনুযায়ী Friday/Saturday)।'])
+                ->withInput();
+        }
+
         // Update fields except for employee_id if not admin
         $movement->movement_type = $request->movement_type;
         $movement->from_datetime = $fromParsed->format('Y-m-d H:i:s');
@@ -1189,12 +1228,6 @@ class MovementController extends Controller
         $movement->purpose = $request->purpose;
         $movement->destination = $request->destination;
         $movement->remarks = $request->remarks;
-        if (Schema::hasColumn('movements', 'start_meter_reading')) {
-            $movement->start_meter_reading = $request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null;
-        }
-        if (Schema::hasColumn('movements', 'start_place')) {
-            $movement->start_place = $request->filled('start_place') ? trim($request->start_place) : null;
-        }
 
         // Update employee_id if admin
         if ($user->hasPermission('movements.edit')) {
@@ -1627,51 +1660,41 @@ class MovementController extends Controller
      */
     private function updateAttendanceForCompletion(Movement $movement, $returnDateTime)
     {
-        // Dates from start through actual return only (not planned to_datetime spillover)
-        $movementDates = $movement->getDatesAttribute();
+        // Single-day only: never invent next-day attendance when closed late
         $workTimes = $this->getBranchWorkTimesForEmployee((int) $movement->employee_id);
         $movementStart = Carbon::parse($movement->from_datetime);
         $return = $returnDateTime instanceof Carbon ? $returnDateTime : Carbon::parse($returnDateTime);
         $workStartNormalized = Carbon::parse($workTimes['work_start_time'])->format('H:i:s');
+        $startDate = $movementStart->format('Y-m-d');
 
-        foreach ($movementDates as $date) {
-            // Find attendance record for this date
+        // Never mark attendance on configured weekend days
+        if (! AttendanceSetting::isWeekendForEmployee($movementStart, (int) $movement->employee_id)) {
             $attendance = Attendance::where('employee_id', $movement->employee_id)
-                ->where('date', $date)
+                ->where('date', $startDate)
                 ->first();
 
             if (! $attendance) {
-                // Create new attendance record if none exists
                 $attendance = new Attendance;
                 $attendance->employee_id = $movement->employee_id;
-                $attendance->date = $date;
+                $attendance->date = $startDate;
                 $attendance->status = 'on_duty';
-            } else {
-                // Only bump absent -> on_duty
-                if ($attendance->status == 'absent') {
-                    $attendance->status = 'on_duty';
-                }
+            } elseif ($attendance->status == 'absent') {
+                $attendance->status = 'on_duty';
             }
 
-            $isStartDay = $movementStart->format('Y-m-d') === $date;
-            $isReturnDay = $return->format('Y-m-d') === $date;
-
-            // Only set check-in if there is no existing check-in
             $inCandidate = null;
             if (! $attendance->check_in) {
-                $inCandidate = $isStartDay ? $movementStart->format('H:i:s') : $workTimes['work_start_time'];
+                $inCandidate = $movementStart->format('H:i:s');
             }
 
-            // Set check-out to the return time on the return day
-            $outCandidate = $isReturnDay ? $return->format('H:i:s') : null;
+            // Check-out only when actually returned on the same calendar day
+            $outCandidate = $return->isSameDay($movementStart) ? $return->format('H:i:s') : null;
 
             $this->mergeAttendanceTimes($attendance, $inCandidate, $outCandidate);
 
-            // Link attendance to movement (this is the key part)
             $attendance->movement_id = $movement->id;
 
-            // Add remarks about movement completion
-            $returnInfo = 'Movement completed: '.$returnDateTime->format('Y-m-d H:i:s');
+            $returnInfo = 'Movement completed: '.$return->format('Y-m-d H:i:s');
             if ($attendance->remarks) {
                 if (strpos($attendance->remarks, 'Movement completed:') === false) {
                     $attendance->remarks .= ' | '.$returnInfo;
@@ -1683,19 +1706,21 @@ class MovementController extends Controller
             $attendance->save();
         }
 
-        // Clear invented next-day rows created earlier from planned to_datetime (e.g. 09:00 auto check-in)
-        $this->clearMovementAttendanceSpillover($movement, $return, $workStartNormalized);
+        // Unlink any non-start-day rows previously linked to this movement
+        $this->clearMovementAttendanceSpillover($movement, $workStartNormalized);
     }
 
     /**
-     * Remove false attendance days created when planned to_datetime crossed midnight
-     * but the employee actually returned earlier (same calendar day as start, or earlier than planned end).
+     * Remove false attendance days linked to a movement that are not the start day.
+     * (Legacy multi-day spillover / late close must not keep next-day present/on_duty.)
      */
-    private function clearMovementAttendanceSpillover(Movement $movement, Carbon $return, string $workStartNormalized): void
+    private function clearMovementAttendanceSpillover(Movement $movement, string $workStartNormalized): void
     {
+        $startDate = Carbon::parse($movement->from_datetime)->toDateString();
+
         $spillover = Attendance::where('employee_id', $movement->employee_id)
             ->where('movement_id', $movement->id)
-            ->whereDate('date', '>', $return->toDateString())
+            ->whereDate('date', '!=', $startDate)
             ->get();
 
         foreach ($spillover as $attendance) {
@@ -1736,7 +1761,7 @@ class MovementController extends Controller
     /**
      * Create a pending log-book register entry when a movement is closed.
      */
-    private function createLogBookFromMovement(Movement $movement, Request $request, Carbon $returnDateTime): void
+    private function createLogBookFromMovement(Movement $movement, Request $request, Carbon $returnDateTime, ?float $startReading = null): void
     {
         if (MovementLogBook::where('movement_id', $movement->id)->exists()) {
             return;
@@ -1746,13 +1771,27 @@ class MovementController extends Controller
         $branch = $movement->employee?->branch;
         $isHeadOffice = (bool) ($branch?->is_head_office);
 
-        $startReading = $movement->start_meter_reading !== null
-            ? (float) $movement->start_meter_reading
-            : (float) $request->start_meter_reading;
+        if ($startReading === null) {
+            $startReading = MovementLogBook::lastEndMeterReadingForEmployee(
+                (int) $movement->employee_id,
+                (int) $movement->id
+            );
+        }
+        if ($startReading === null) {
+            $startReading = (float) $request->start_meter_reading;
+        }
         $endReading = (float) $request->end_meter_reading;
         $totalKm = round($endReading - $startReading, 2);
-        $personalKm = $request->filled('personal_km') ? round((float) $request->personal_km, 2) : null;
-        $officialKm = round($totalKm - ($personalKm ?? 0), 2);
+
+        // Personal movement: entire trip distance is personal (no official km)
+        if ($movement->movement_type === 'personal') {
+            $personalKm = $totalKm;
+            $officialKm = 0.0;
+        } else {
+            $personalKm = $request->filled('personal_km') ? round((float) $request->personal_km, 2) : null;
+            $officialKm = round($totalKm - ($personalKm ?? 0), 2);
+        }
+
         $startPlace = $movement->start_place
             ? trim($movement->start_place)
             : trim((string) $request->start_place);

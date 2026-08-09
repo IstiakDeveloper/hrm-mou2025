@@ -19,6 +19,7 @@ class MovementPenalty extends Model
         'payment_method',
         'sender_number',
         'transaction_id',
+        'payment_submitted_at',
         'status',
         'admin_remarks',
         'approved_by',
@@ -29,6 +30,7 @@ class MovementPenalty extends Model
         'overdue_days' => 'integer',
         'fine_per_day' => 'decimal:2',
         'total_fine' => 'decimal:2',
+        'payment_submitted_at' => 'datetime',
         'approved_at' => 'datetime',
     ];
 

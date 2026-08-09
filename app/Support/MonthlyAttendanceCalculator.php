@@ -90,12 +90,10 @@ class MonthlyAttendanceCalculator
                 $hasMovement = false;
                 if (isset($movementsByEmployeeId[$empId])) {
                     foreach ($movementsByEmployeeId[$empId] as $m) {
+                        // Single-day only: movement covers attendance on start date
                         $from = Carbon::parse($m['from_datetime'] ?? $m->from_datetime)->format('Y-m-d');
-                        $toSrc = ($m['status'] ?? $m->status) === 'completed' && !empty($m['actual_return_datetime'] ?? $m->actual_return_datetime)
-                            ? ($m['actual_return_datetime'] ?? $m->actual_return_datetime)
-                            : ($m['to_datetime'] ?? $m->to_datetime);
-                        $to = Carbon::parse($toSrc)->format('Y-m-d');
-                        if ($ymd >= $from && $ymd <= $to) {
+                        $status = $m['status'] ?? $m->status;
+                        if (in_array($status, ['active', 'completed'], true) && $ymd === $from) {
                             $hasMovement = true;
                             break;
                         }
@@ -143,6 +141,12 @@ class MonthlyAttendanceCalculator
         bool $hasValidAttendance,
         ?string $attendanceRowStatus
     ): string {
+        $dayOfWeek = Carbon::parse($date)->dayOfWeek;
+        // Weekend is total — no present / movement / absent on configured weekend days
+        if (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend') {
+            return 'weekend';
+        }
+
         if ($hasValidAttendance) return 'present';
         if ($isOnLeave) return 'leave';
         if ($hasMovement) return 'on_duty';
@@ -150,9 +154,6 @@ class MonthlyAttendanceCalculator
         if ($attendanceRowStatus === 'leave') return 'leave';
         if ($attendanceRowStatus === 'holiday') return 'holiday';
         if ($isHoliday) return 'holiday';
-
-        $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-        if (in_array($dayOfWeek, $weekendDays, true)) return 'weekend';
 
         return 'absent';
     }

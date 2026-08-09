@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Movement;
+use App\Models\MovementLogBook;
 use App\Models\User;
 use App\Services\AssetFinancialYearService;
 use App\Services\WebPushService;
@@ -84,6 +85,22 @@ class HandleInertiaRequests extends Middleware
                 ->where('status', 'active')
                 ->orderByDesc('id')
                 ->first($selectCols);
+
+            if ($activeMovement) {
+                $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+                    (int) $employee->id,
+                    (int) $activeMovement->id
+                );
+                $legacyStart = Schema::hasColumn('movements', 'start_meter_reading')
+                    ? ($activeMovement->getAttribute('start_meter_reading') !== null
+                        ? (float) $activeMovement->getAttribute('start_meter_reading')
+                        : null)
+                    : null;
+                // Prefer last close meter; fall back to legacy create-time start for in-flight movements
+                $presetStart = $lastEndMeter ?? $legacyStart;
+                $activeMovement->setAttribute('last_end_meter_reading', $presetStart);
+                $activeMovement->setAttribute('start_meter_reading', $presetStart);
+            }
         }
 
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');

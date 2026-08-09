@@ -462,26 +462,7 @@ class AttendanceReportController extends Controller
                         $defaultAttendance->auto_remarks = 'On official movement';
                         // Fetch movement details
                         $movement = Movement::where('employee_id', $employeeId)
-                            ->where('movement_type', 'official')
-                            ->whereIn('status', ['active', 'completed'])
-                            ->whereDate('from_datetime', '<=', $date)
-                            ->where(function ($query) use ($date) {
-                                $query->where(function ($q) use ($date) {
-                                    $q->where('status', 'active')
-                                        ->whereDate('to_datetime', '>=', $date);
-                                })->orWhere(function ($q) use ($date) {
-                                    $q->where('status', 'completed')
-                                        ->where(function ($subQ) use ($date) {
-                                            $subQ->where(function ($x) use ($date) {
-                                                $x->whereNotNull('actual_return_datetime')
-                                                    ->whereDate('actual_return_datetime', '>=', $date);
-                                            })->orWhere(function ($fallbackQ) use ($date) {
-                                                $fallbackQ->whereNull('actual_return_datetime')
-                                                    ->whereDate('to_datetime', '>=', $date);
-                                            });
-                                        });
-                                });
-                            })
+                            ->coveringAttendanceDate($date)
                             ->first();
 
                         if ($movement) {

@@ -371,15 +371,15 @@ export default function EmployeeIndex({
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'active':
-                return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+                return <Badge className="border-emerald-300 bg-emerald-100 text-emerald-950 font-bold dark:bg-emerald-950 dark:text-emerald-300">Active</Badge>;
             case 'inactive':
-                return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>;
+                return <Badge className="border-slate-300 bg-slate-100 text-slate-900 font-bold dark:bg-slate-800 dark:text-slate-200">Inactive</Badge>;
             case 'on_leave':
-                return <Badge className="bg-blue-100 text-blue-800">On Leave</Badge>;
+                return <Badge className="border-amber-300 bg-amber-100 text-amber-950 font-bold dark:bg-amber-950 dark:text-amber-300">On Leave</Badge>;
             case 'terminated':
-                return <Badge className="bg-red-100 text-red-800">Terminated</Badge>;
+                return <Badge className="border-red-300 bg-red-100 text-red-950 font-bold dark:bg-red-950 dark:text-red-300">Terminated</Badge>;
             default:
-                return <Badge className="bg-gray-100 text-gray-800">{status}</Badge>;
+                return <Badge className="border-slate-300 bg-slate-100 text-slate-900 font-bold">{status}</Badge>;
         }
     };
 
@@ -388,14 +388,15 @@ export default function EmployeeIndex({
             <Head title="Employee Management" />
 
             <PageSurface className="max-w-[96rem]">
-                <div className="mb-8 flex items-center justify-between">
+                <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-slate-300 pb-5">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Employee Management</h1>
-                        <p className="mt-1 text-gray-500">Manage all employees across branches and departments</p>
+                        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Employee Directory</h1>
+                        <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-300">Manage all employees across branches and departments with complete control</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" className="flex items-center gap-2" onClick={() => setExportOpen(true)}>
-                            <Download className="h-4 w-4" />
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button type="button" variant="outline" className="flex items-center gap-2 font-bold border-slate-300 hover:bg-slate-100" onClick={() => setExportOpen(true)}>
+                            <Download className="h-4 w-4 text-slate-700" />
                             <span>Download XLSX</span>
                         </Button>
                         <Dialog open={exportOpen} onOpenChange={setExportOpen}>
@@ -483,8 +484,8 @@ export default function EmployeeIndex({
                             }}
                         >
                             <DialogTrigger asChild>
-                                <Button variant="outline" className="flex items-center gap-2">
-                                    <Upload className="h-4 w-4" />
+                                <Button variant="outline" className="flex items-center gap-2 font-bold border-slate-300 hover:bg-slate-100">
+                                    <Upload className="h-4 w-4 text-slate-700" />
                                     <span>Import Employees</span>
                                 </Button>
                             </DialogTrigger>
@@ -586,11 +587,60 @@ export default function EmployeeIndex({
                         </Dialog>
 
                         <Link href={route('employees.create')}>
-                            <Button className="flex items-center gap-1">
+                            <Button className="flex items-center gap-1 bg-emerald-600 font-bold text-white hover:bg-emerald-700 shadow-sm">
                                 <UserPlus className="h-4 w-4" />
                                 <span>Add Employee</span>
                             </Button>
                         </Link>
+                    </div>
+                </div>
+
+                {/* HR KPI Stat Overview (Shomvob HR style high contrast) */}
+                <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="rounded-xl border border-slate-300 bg-white dark:bg-slate-900 p-4 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Total Employees</p>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{employees.total}</p>
+                        </div>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
+                            <Users className="h-6 w-6" />
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-300 bg-white dark:bg-slate-900 p-4 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Active Employees</p>
+                            <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
+                                {employees.data.filter((e) => e.status === 'active').length}
+                            </p>
+                        </div>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-300">
+                            <Check className="h-6 w-6" />
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-300 bg-white dark:bg-slate-900 p-4 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">On Leave</p>
+                            <p className="text-2xl font-black text-amber-700 dark:text-amber-400 mt-1">
+                                {employees.data.filter((e) => e.status === 'on_leave').length}
+                            </p>
+                        </div>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                            <Filter className="h-6 w-6" />
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-300 bg-white dark:bg-slate-900 p-4 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Inactive / Terminated</p>
+                            <p className="text-2xl font-black text-red-700 dark:text-red-400 mt-1">
+                                {employees.data.filter((e) => e.status !== 'active' && e.status !== 'on_leave').length}
+                            </p>
+                        </div>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300">
+                            <Users className="h-6 w-6" />
+                        </div>
                     </div>
                 </div>
 

@@ -223,6 +223,11 @@ class EmployeeDashboardController extends Controller
         $currentDate = Carbon::parse($date);
         $dayOfWeek = $currentDate->dayOfWeek;
 
+        // Weekend is total — no present / movement / absent on configured weekend days
+        if (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend') {
+            return 'weekend';
+        }
+
         if ($hasValidAttendance) {
             return 'present';
         }
@@ -249,10 +254,6 @@ class EmployeeDashboardController extends Controller
 
         if (in_array($date, $holidays, true)) {
             return 'holiday';
-        }
-
-        if (in_array($dayOfWeek, $weekendDays, true)) {
-            return 'weekend';
         }
 
         return 'absent';
@@ -347,17 +348,11 @@ class EmployeeDashboardController extends Controller
             ->whereBetween('attendances.date', [$fromDate, $toDate])
             ->get();
 
-        // Get all movements that overlap with the date range
+        // Official movements in range (attendance mark is start-day only)
         $movements = Movement::where('employee_id', $employeeId)
-            ->where(function ($query) use ($fromDate, $toDate) {
-                $query->whereBetween(DB::raw('DATE(from_datetime)'), [$fromDate, $toDate])
-                    ->orWhereBetween(DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), [$fromDate, $toDate])
-                    ->orWhere(function ($q) use ($fromDate, $toDate) {
-                        $q->where(DB::raw('DATE(from_datetime)'), '<=', $fromDate)
-                            ->where(DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $toDate);
-                    });
-            })
+            ->where('movement_type', 'official')
             ->whereIn('status', ['active', 'completed'])
+            ->whereBetween(DB::raw('DATE(from_datetime)'), [$fromDate, $toDate])
             ->get();
 
         // Get leave applications for the period
@@ -427,14 +422,9 @@ class EmployeeDashboardController extends Controller
                 'auto_remarks' => null,
             ];
 
-            // Check for movements on this specific date
+            // Check for movements on this specific date (start day only — never next day)
             $movementsOnDate = $movements->filter(function ($movement) use ($date) {
-                $fromDate = Carbon::parse($movement->from_datetime)->format('Y-m-d');
-                $toDate = ($movement->status === 'completed' && $movement->actual_return_datetime)
-                    ? Carbon::parse($movement->actual_return_datetime)->format('Y-m-d')
-                    : Carbon::parse($movement->to_datetime)->format('Y-m-d');
-
-                return $date >= $fromDate && $date <= $toDate;
+                return Carbon::parse($movement->from_datetime)->format('Y-m-d') === $date;
             });
 
             // Check for leave on this date (Carbon-safe + respect `days` vs end_date)

@@ -74,8 +74,8 @@ class AttendanceDataUpdateController extends Controller
                 while ($currentDate->lte($endDate)) {
                     $summary['total_days']++;
 
-                    // Skip weekends (Only Friday = 5 for Bangladesh, Saturday is working day)
-                    if (in_array($currentDate->dayOfWeek, [5])) {
+                    // Skip weekends from attendance settings (usually Friday + Saturday)
+                    if (\App\Models\AttendanceSetting::isWeekendDate($currentDate)) {
                         $summary['skipped_weekend']++;
                         $currentDate->addDay();
                         continue;
@@ -351,29 +351,9 @@ class AttendanceDataUpdateController extends Controller
      */
     protected function isEmployeeOnMovement($employeeId, $date)
     {
-        $dayStart = $date->copy()->startOfDay();
-        $dayEnd = $date->copy()->endOfDay();
-
+        // Official movement marks attendance only on its start calendar day
         return Movement::where('employee_id', $employeeId)
-            ->whereIn('status', ['approved', 'completed', 'active'])
-            ->where('movement_type', 'official')
-            ->where('from_datetime', '<=', $dayEnd)
-            ->where(function ($query) use ($dayStart) {
-                $query->where(function ($q) use ($dayStart) {
-                    // Closed: only days up to actual return
-                    $q->where('status', 'completed')
-                        ->whereNotNull('actual_return_datetime')
-                        ->where('actual_return_datetime', '>=', $dayStart);
-                })->orWhere(function ($q) use ($dayStart) {
-                    // Still open: covers this day if started on/before it
-                    $q->whereIn('status', ['active', 'approved']);
-                })->orWhere(function ($q) use ($dayStart) {
-                    // Completed but missing return time — fall back to planned end
-                    $q->where('status', 'completed')
-                        ->whereNull('actual_return_datetime')
-                        ->where('to_datetime', '>=', $dayStart);
-                });
-            })
+            ->coveringAttendanceDate($date->format('Y-m-d'))
             ->exists();
     }
 
@@ -388,11 +368,11 @@ class AttendanceDataUpdateController extends Controller
 
         Log::info("=== UPDATING SPECIFIC DATE: {$date->format('Y-m-d')} ===");
 
-        // Check if it's weekend (Only Friday)
-        if (in_array($date->dayOfWeek, [5])) {
+        // Check if it's weekend (attendance settings — usually Friday + Saturday)
+        if (\App\Models\AttendanceSetting::isWeekendDate($date)) {
             return response()->json([
                 'status' => false,
-                'message' => 'Cannot update weekend date (Friday)',
+                'message' => 'Cannot update weekend date (per attendance settings)',
                 'date' => $date->format('Y-m-d'),
                 'day' => $date->format('l')
             ]);
@@ -497,7 +477,7 @@ class AttendanceDataUpdateController extends Controller
             $isOnLeave = $this->isEmployeeOnLeave($employee->id, $date);
             $isOnMovement = $this->isEmployeeOnMovement($employee->id, $date);
             $isHoliday = $this->isHoliday($date);
-            $isWeekend = in_array($date->dayOfWeek, [5, 6]);
+            $isWeekend = \App\Models\AttendanceSetting::isWeekendForEmployee($date, (int) $employee->id);
 
             Log::info("Employee: {$employee->name} (ID: {$employee->id})", [
                 'has_attendance' => $attendance ? 'Yes' : 'No',

@@ -39,7 +39,14 @@ class EnsureMovementFinePaid
             return $next($request);
         }
 
-        // Check if this user or employee has an active unpaid/pending movement penalty
+        // Auto sync overdue movements if needed
+        try {
+            \Illuminate\Support\Facades\Artisan::call('movements:check-overdue');
+        } catch (\Throwable $e) {
+            // Ignore error if command fails
+        }
+
+        // Check if this user or employee has an active unpaid/pending/rejected movement penalty
         $activePenalty = MovementPenalty::query()
             ->where(function ($query) use ($user) {
                 $query->where('user_id', $user->id);
@@ -47,7 +54,7 @@ class EnsureMovementFinePaid
                     $query->orWhere('employee_id', $user->employee_id);
                 }
             })
-            ->whereIn('status', ['unpaid', 'pending_verification'])
+            ->whereIn('status', ['unpaid', 'pending_verification', 'rejected'])
             ->first();
 
         if ($activePenalty) {

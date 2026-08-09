@@ -60,6 +60,12 @@ class AttendanceController extends Controller
         bool $hasValidAttendance,
         ?string $attendanceRowStatus
     ): string {
+        // Weekend is total — no present / movement / absent on configured weekend days
+        $dayOfWeek = Carbon::parse($date)->dayOfWeek;
+        if (in_array($dayOfWeek, $weekendDays, true) || $attendanceRowStatus === 'weekend') {
+            return 'weekend';
+        }
+
         if ($hasValidAttendance) {
             return 'present';
         }
@@ -86,11 +92,6 @@ class AttendanceController extends Controller
 
         if ($isHoliday) {
             return 'holiday';
-        }
-
-        $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-        if (in_array($dayOfWeek, $weekendDays, true)) {
-            return 'weekend';
         }
 
         return 'absent';
@@ -168,10 +169,7 @@ class AttendanceController extends Controller
         }
 
         $movementsByEmployee = Movement::whereIn('employee_id', $employeeIds)
-            ->whereIn('status', ['active', 'completed'])
-            ->where('movement_type', 'official')
-            ->whereDate('from_datetime', '<=', $ymd)
-            ->whereRaw('DATE(COALESCE(actual_return_datetime, to_datetime)) >= ?', [$ymd])
+            ->coveringAttendanceDate($ymd)
             ->orderBy('from_datetime')
             ->get()
             ->groupBy('employee_id');
@@ -650,18 +648,11 @@ class AttendanceController extends Controller
             }
         }
 
-        // Movements overlapping this month (official movements only affect on_duty)
+        // Official movements whose start day falls in this month (single-day attendance mark)
         $movements = Movement::whereIn('employee_id', $employeeIds)
             ->whereIn('status', ['active', 'completed'])
             ->where('movement_type', 'official')
-            ->where(function ($q) use ($startDate, $endDate) {
-                $q->whereBetween(\DB::raw('DATE(from_datetime)'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                    ->orWhereBetween(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                    ->orWhere(function ($qq) use ($startDate, $endDate) {
-                        $qq->where(\DB::raw('DATE(from_datetime)'), '<=', $startDate->format('Y-m-d'))
-                            ->where(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $endDate->format('Y-m-d'));
-                    });
-            })
+            ->whereBetween(\DB::raw('DATE(from_datetime)'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->get()
             ->groupBy('employee_id');
 
@@ -859,6 +850,12 @@ class AttendanceController extends Controller
         if (! $this->canManageEmployeeAttendance($user, $employee)) {
             return redirect()->back()->withErrors([
                 'employee_id' => 'You do not have permission to create attendance records for this employee.',
+            ]);
+        }
+
+        if (\App\Models\AttendanceSetting::isWeekendForEmployee($request->date, (int) $employee->id)) {
+            return redirect()->back()->withErrors([
+                'date' => 'Weekend-এ attendance দেওয়া যাবে না (Attendance settings অনুযায়ী Friday/Saturday)।',
             ]);
         }
 
@@ -1074,10 +1071,7 @@ class AttendanceController extends Controller
         }
 
         $movementsByEmployee = Movement::whereIn('employee_id', $employeeIds)
-            ->whereIn('status', ['active', 'completed'])
-            ->where('movement_type', 'official')
-            ->whereDate('from_datetime', '<=', $ymd)
-            ->whereDate(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $ymd)
+            ->coveringAttendanceDate($ymd)
             ->get()
             ->groupBy('employee_id');
 
@@ -1438,30 +1432,9 @@ class AttendanceController extends Controller
                         $attendance->check_out_formatted = date('h:i A', strtotime($attendance->check_out));
                     }
 
-                    // Get ALL movements for this employee on this date
+                    // Get ALL movements for this employee on this date (start day only)
                     $movements = \App\Models\Movement::where('employee_id', $attendance->employee_id)
-                        ->where(function ($query) use ($date) {
-                            $query->whereDate('from_datetime', '<=', $date)
-                                ->where(function ($q) use ($date) {
-                                    // Active movements have no actual_return_datetime yet; use planned to_datetime
-                                    $q->where(function ($qq) use ($date) {
-                                        $qq->where('status', 'active')
-                                            ->whereDate('to_datetime', '>=', $date);
-                                    })->orWhere(function ($qq) use ($date) {
-                                        // Completed movements: prefer actual_return_datetime, fallback to to_datetime
-                                        $qq->where('status', 'completed')
-                                            ->where(function ($retQ) use ($date) {
-                                                $retQ->whereNotNull('actual_return_datetime')
-                                                    ->whereDate('actual_return_datetime', '>=', $date)
-                                                    ->orWhere(function ($fallbackQ) use ($date) {
-                                                        $fallbackQ->whereNull('actual_return_datetime')
-                                                            ->whereDate('to_datetime', '>=', $date);
-                                                    });
-                                            });
-                                    });
-                                });
-                        })
-                        ->whereIn('status', ['active', 'completed'])
+                        ->coveringAttendanceDate($date)
                         ->orderBy('from_datetime')
                         ->get();
 

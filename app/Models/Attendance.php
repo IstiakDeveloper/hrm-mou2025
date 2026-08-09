@@ -15,8 +15,8 @@ class Attendance extends Model
 {
     use HasFactory;
 
-    /** Statuses set by leave/movement/holiday workflows — not overwritten by punch rules. */
-    private const PROGRAMMATIC_STATUSES = ['leave', 'on_duty', 'holiday'];
+    /** Statuses set by leave/movement/holiday/weekend workflows — not overwritten by punch rules. */
+    private const PROGRAMMATIC_STATUSES = ['leave', 'on_duty', 'holiday', 'weekend'];
 
     protected $fillable = [
         'employee_id',
@@ -105,36 +105,16 @@ class Attendance extends Model
             ->whereDate('end_date', '>=', $carbonDate->format('Y-m-d'))
             ->exists();
 
+        // Single-day movements only cover the start calendar day (never next day while unclosed)
         $hasMovement = Movement::query()
             ->where('employee_id', $employeeId)
-            ->where('movement_type', 'official')
-            ->whereIn('status', ['active', 'completed'])
-            ->where(function ($query) use ($carbonDate) {
-                $date = $carbonDate->format('Y-m-d');
-                $query->where(function ($q) use ($date) {
-                    $q->where('status', 'active')
-                        ->whereDate('from_datetime', '<=', $date)
-                        ->whereDate('to_datetime', '>=', $date);
-                })->orWhere(function ($q) use ($date) {
-                    $q->where('status', 'completed')
-                        ->whereDate('from_datetime', '<=', $date)
-                        ->where(function ($subQ) use ($date) {
-                            $subQ->where(function ($x) use ($date) {
-                                $x->whereNotNull('actual_return_datetime')
-                                    ->whereDate('actual_return_datetime', '>=', $date);
-                            })->orWhere(function ($fallbackQ) use ($date) {
-                                $fallbackQ->whereNull('actual_return_datetime')
-                                    ->whereDate('to_datetime', '>=', $date);
-                            });
-                        });
-                });
-            })
+            ->coveringAttendanceDate($carbonDate->format('Y-m-d'))
             ->exists();
 
         $employee = Employee::find($employeeId);
         $branchId = $employee?->current_branch_id ?: ($employee?->branch_id ?: null);
 
-        $weekendDays = AttendanceSetting::global()->weekendDayNumbers();
+        $weekendDays = AttendanceSetting::weekendDaysForBranch($branchId ? (int) $branchId : null);
 
         $isHoliday = Holiday::query()
             ->whereDate('date', $carbonDate->format('Y-m-d'))
@@ -147,6 +127,11 @@ class Attendance extends Model
                 })
             )
             ->exists();
+
+        // Weekend is total: no movement/attendance marks on configured weekend days
+        if (in_array((int) $carbonDate->dayOfWeek, $weekendDays, true)) {
+            return 'weekend';
+        }
 
         if ($hasValidAttendance) {
             return $attendanceRowStatus ?: 'present';
@@ -169,9 +154,6 @@ class Attendance extends Model
         if ($isHoliday) {
             return 'holiday';
         }
-        if (in_array($carbonDate->dayOfWeek, $weekendDays, true)) {
-            return 'weekend';
-        }
 
         return 'absent';
     }
@@ -181,6 +163,12 @@ class Attendance extends Model
      */
     public function applyPunchStatus(?AttendanceSetting $settings = null): void
     {
+        if ($this->date && AttendanceSetting::isWeekendForEmployee($this->date, $this->employee_id ? (int) $this->employee_id : null)) {
+            $this->status = 'weekend';
+
+            return;
+        }
+
         if ($this->shouldSkipPunchStatus()) {
             return;
         }

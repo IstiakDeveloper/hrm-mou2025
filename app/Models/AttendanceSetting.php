@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -113,5 +114,71 @@ class AttendanceSetting extends Model
         }
 
         return [];
+    }
+
+    /**
+     * Branch attendance settings, falling back to company-wide / defaults.
+     */
+    public static function forBranch(?int $branchId): self
+    {
+        if ($branchId) {
+            $setting = static::query()
+                ->where('branch_id', $branchId)
+                ->orderBy('id')
+                ->first();
+
+            if ($setting) {
+                return $setting;
+            }
+        }
+
+        return static::global();
+    }
+
+    /**
+     * Weekend day numbers for a branch (Carbon: 0=Sun … 5=Fri, 6=Sat).
+     * Empty settings fall back to Friday + Saturday.
+     *
+     * @return list<int>
+     */
+    public static function weekendDaysForBranch(?int $branchId): array
+    {
+        $days = static::forBranch($branchId)->weekendDayNumbers();
+
+        return $days !== [] ? $days : [5, 6];
+    }
+
+    /**
+     * Weekend day numbers for an employee's current branch.
+     *
+     * @return list<int>
+     */
+    public static function weekendDaysForEmployee(?int $employeeId): array
+    {
+        if (! $employeeId) {
+            return static::weekendDaysForBranch(null);
+        }
+
+        $employee = Employee::query()
+            ->select(['id', 'current_branch_id', 'branch_id'])
+            ->find($employeeId);
+
+        $branchId = $employee?->current_branch_id ?: $employee?->branch_id;
+
+        return static::weekendDaysForBranch($branchId ? (int) $branchId : null);
+    }
+
+    public static function isWeekendDate(Carbon|string $date, ?int $branchId = null): bool
+    {
+        $carbon = $date instanceof Carbon ? $date : Carbon::parse($date);
+
+        return in_array((int) $carbon->dayOfWeek, static::weekendDaysForBranch($branchId), true);
+    }
+
+    public static function isWeekendForEmployee(Carbon|string $date, ?int $employeeId): bool
+    {
+        $carbon = $date instanceof Carbon ? $date : Carbon::parse($date);
+
+        return in_array((int) $carbon->dayOfWeek, static::weekendDaysForEmployee($employeeId), true);
     }
 }

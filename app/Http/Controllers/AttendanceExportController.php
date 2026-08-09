@@ -143,18 +143,11 @@ class AttendanceExportController extends Controller
                 }
             }
 
-            // Movements overlapping month (same as show page priority)
+            // Official movements whose start day falls in this month (single-day attendance mark)
             $movementsByEmployee = \App\Models\Movement::whereIn('employee_id', $employeeIds)
                 ->whereIn('status', ['active', 'completed'])
                 ->where('movement_type', 'official')
-                ->where(function ($q) use ($startDate, $endDate) {
-                    $q->whereBetween(\DB::raw('DATE(from_datetime)'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                        ->orWhereBetween(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                        ->orWhere(function ($qq) use ($startDate, $endDate) {
-                            $qq->where(\DB::raw('DATE(from_datetime)'), '<=', $startDate->format('Y-m-d'))
-                                ->where(\DB::raw('DATE(COALESCE(actual_return_datetime, to_datetime))'), '>=', $endDate->format('Y-m-d'));
-                        });
-                })
+                ->whereBetween(\DB::raw('DATE(from_datetime)'), [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                 ->get()
                 ->groupBy('employee_id')
                 ->map(fn ($ms) => $ms->values()->all())

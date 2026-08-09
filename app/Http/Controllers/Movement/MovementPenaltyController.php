@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Movement;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\Movement;
+use App\Models\MovementLogBook;
 use App\Models\MovementPenalty;
 use App\Models\User;
 use Carbon\Carbon;
@@ -41,8 +43,17 @@ class MovementPenaltyController extends Controller
             return redirect()->route('dashboard');
         }
 
+        $lastEndMeter = null;
+        if ($penalty?->movement) {
+            $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+                (int) $penalty->movement->employee_id,
+                (int) $penalty->movement->id
+            );
+        }
+
         return Inertia::render('movement/penalty-payment', [
             'penalty' => $penalty,
+            'lastEndMeterReading' => $lastEndMeter,
             'merchantNumbers' => [
                 'bkash' => config('services.payment.bkash_number', '01717893432'),
                 'nagad' => config('services.payment.nagad_number', '01717893432'),
@@ -62,10 +73,9 @@ class MovementPenaltyController extends Controller
             'transaction_id' => 'nullable|string|max:30',
             'actual_return_datetime' => 'required|date',
             'work_result' => 'required|string|min:3|max:2000',
-            'create_log_book' => 'nullable|boolean',
             'start_place' => 'nullable|string|max:255',
             'start_meter_reading' => 'nullable|numeric|min:0',
-            'end_meter_reading' => 'nullable|numeric|min:0',
+            'end_meter_reading' => 'required|numeric|min:0',
             'personal_km' => 'nullable|numeric|min:0',
         ]);
 
@@ -104,80 +114,76 @@ class MovementPenaltyController extends Controller
                 if (! empty($validated['work_result'])) {
                     $movement->work_result = trim($validated['work_result']);
                 }
-                if ($movement->start_meter_reading === null && $request->filled('start_meter_reading')) {
-                    $movement->start_meter_reading = (float) $request->start_meter_reading;
-                }
                 $movement->save();
 
-                // 2. Optional Log Book Creation
-                if ($request->boolean('create_log_book') && $request->filled('end_meter_reading')) {
-                    $startReading = $request->filled('start_meter_reading')
-                        ? (float) $request->start_meter_reading
-                        : (float) ($movement->start_meter_reading ?? 0);
-                    $endReading = (float) $request->end_meter_reading;
+                // 2. Always create log book on close; start = last close meter for employee
+                $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
+                    (int) $movement->employee_id,
+                    (int) $movement->id
+                );
+                $startReading = $lastEndMeter !== null
+                    ? $lastEndMeter
+                    : ($request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null);
 
-                    if ($endReading < $startReading) {
-                        DB::rollBack();
-                        return redirect()->back()->with('error', 'মিটার শেষের রিডিং মিটার শুরুর রিডিং (' . $startReading . ') এর চেয়ে কম হতে পারবে না।');
-                    }
+                if ($startReading === null) {
+                    DB::rollBack();
+                    return redirect()->back()->with('error', 'শুরুর মিটার রিডিং প্রয়োজন।');
+                }
 
-                    $totalKm = round($endReading - $startReading, 2);
+                $endReading = (float) $request->end_meter_reading;
+
+                if ($endReading < $startReading) {
+                    DB::rollBack();
+                    return redirect()->back()->with('error', 'মিটার শেষের রিডিং মিটার শুরুর রিডিং (' . $startReading . ') এর চেয়ে কম হতে পারবে না।');
+                }
+
+                $totalKm = round($endReading - $startReading, 2);
+
+                // Personal movement: entire trip distance is personal (no official km)
+                if ($movement->movement_type === 'personal') {
+                    $personalKm = $totalKm;
+                    $officialKm = 0.0;
+                } else {
                     $personalKm = $request->filled('personal_km') ? round((float) $request->personal_km, 2) : null;
                     $officialKm = round($totalKm - ($personalKm ?? 0), 2);
-                    $branch = $movement->employee?->branch;
-                    $startPlace = $movement->start_place
-                        ? trim($movement->start_place)
-                        : trim((string) ($request->start_place ?? $branch?->name ?? 'Unknown'));
-
-                    \App\Models\MovementLogBook::updateOrCreate(
-                        ['movement_id' => $movement->id],
-                        [
-                            'employee_id' => $movement->employee_id,
-                            'date' => Carbon::parse($movement->from_datetime)->toDateString(),
-                            'start_time' => $movement->from_datetime,
-                            'start_place' => $startPlace,
-                            'start_meter_reading' => $startReading,
-                            'destination' => $movement->destination,
-                            'purpose' => $movement->purpose,
-                            'work_result' => $movement->work_result,
-                            'return_time' => $returnTime,
-                            'end_meter_reading' => $endReading,
-                            'distance_km' => $totalKm,
-                            'personal_km' => $personalKm,
-                            'official_km' => $officialKm,
-                            'approval_scope' => $branch?->is_head_office ? 'head_office' : 'branch',
-                            'payment_status' => 'unpaid',
-                        ]
-                    );
                 }
 
-                // 3. Update/create Attendance record for completion date
-                $dateStr = $returnTime->format('Y-m-d');
-                $attendance = Attendance::where('employee_id', $movement->employee_id)
-                    ->where('date', $dateStr)
-                    ->first();
+                $branch = $movement->employee?->branch;
+                $startPlace = $movement->start_place
+                    ? trim($movement->start_place)
+                    : trim((string) ($request->start_place ?? $branch?->name ?? 'Unknown'));
 
-                if (! $attendance) {
-                    $attendance = new Attendance;
-                    $attendance->employee_id = $movement->employee_id;
-                    $attendance->date = $dateStr;
-                    $attendance->status = 'on_duty';
-                    $attendance->check_in = Carbon::parse($movement->from_datetime)->format('H:i:s');
-                } elseif ($attendance->status === 'absent') {
-                    $attendance->status = 'on_duty';
-                }
+                MovementLogBook::updateOrCreate(
+                    ['movement_id' => $movement->id],
+                    [
+                        'employee_id' => $movement->employee_id,
+                        'date' => Carbon::parse($movement->from_datetime)->toDateString(),
+                        'start_time' => $movement->from_datetime,
+                        'start_place' => $startPlace,
+                        'start_meter_reading' => $startReading,
+                        'destination' => $movement->destination,
+                        'purpose' => $movement->purpose,
+                        'work_result' => $movement->work_result,
+                        'return_time' => $returnTime,
+                        'end_meter_reading' => $endReading,
+                        'distance_km' => $totalKm,
+                        'personal_km' => $personalKm,
+                        'official_km' => $officialKm,
+                        'approval_scope' => $branch?->is_head_office ? 'head_office' : 'branch',
+                        'payment_status' => 'unpaid',
+                    ]
+                );
 
-                if (! $attendance->check_out) {
-                    $attendance->check_out = $returnTime->format('H:i:s');
-                }
-                $attendance->save();
+                // Attendance is applied only after admin approves the payment,
+                // using payment_submitted_at (when they paid) — not return time.
             }
 
-            // 4. Update Penalty Record to pending_verification
+            // Update Penalty Record to pending_verification
             $penalty->update([
                 'payment_method' => $validated['payment_method'],
                 'sender_number' => trim($validated['sender_number'] ?? ''),
                 'transaction_id' => strtoupper(trim($validated['transaction_id'])),
+                'payment_submitted_at' => now(),
                 'status' => 'pending_verification',
             ]);
 
@@ -209,9 +215,10 @@ class MovementPenaltyController extends Controller
                 $q->where('sender_number', 'like', "%{$search}%")
                     ->orWhere('transaction_id', 'like', "%{$search}%")
                     ->orWhereHas('employee', function ($empQ) use ($search) {
-                        $empQ->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhere('employee_id', 'like', "%{$search}%");
+                        $empQ->where('name_en', 'like', "%{$search}%")
+                            ->orWhere('name_bn', 'like', "%{$search}%")
+                            ->orWhere('employee_id', 'like', "%{$search}%")
+                            ->orWhere('pin', 'like', "%{$search}%");
                     });
             });
         }
@@ -236,6 +243,10 @@ class MovementPenaltyController extends Controller
         $pendingCount = (clone $baseQuery)->where('status', 'pending_verification')->count();
         $defaultTab = $pendingCount > 0 ? 'pending' : 'all';
         $tab = $request->input('tab', $defaultTab);
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $tab = 'all';
+        }
 
         // Tab 1: Pending Payment Submissions Query (tab = pending)
         $pendingQuery = (clone $baseQuery)->where('status', 'pending_verification');
@@ -339,12 +350,19 @@ class MovementPenaltyController extends Controller
         $this->authorizeAdmin($request);
 
         $penalty = MovementPenalty::with('movement')->findOrFail($id);
+        $wasUnpaidOrRejected = in_array($penalty->status, ['unpaid', 'rejected'], true);
 
         DB::beginTransaction();
         try {
-            $defaultRemark = $penalty->status === 'unpaid' 
-                ? 'Waived by Admin without payment and account unlocked.' 
+            $defaultRemark = $wasUnpaidOrRejected
+                ? 'Waived by Admin without payment and account unlocked.'
                 : 'Payment verified and account unlocked.';
+
+            // If waiving a rejected/unpaid penalty, clear invalid transaction details so it ranks as waived
+            if ($wasUnpaidOrRejected) {
+                $penalty->sender_number = null;
+                $penalty->transaction_id = null;
+            }
 
             $penalty->update([
                 'status' => 'approved',
@@ -353,18 +371,28 @@ class MovementPenaltyController extends Controller
                 'admin_remarks' => $request->input('admin_remarks', $defaultRemark),
             ]);
 
-            // If movement was still active, mark as completed
-            if ($penalty->movement && $penalty->movement->status === 'active') {
-                $penalty->movement->update([
-                    'status' => 'completed',
-                    'is_returned' => true,
-                    'actual_return_datetime' => $penalty->movement->actual_return_datetime ?? now(),
-                ]);
+            $movement = $penalty->movement;
+            if ($movement) {
+                // If movement was still active (waive path), mark as completed
+                if ($movement->status === 'active') {
+                    $movement->status = 'completed';
+                    $movement->is_returned = true;
+                    $movement->actual_return_datetime = $movement->actual_return_datetime ?? now();
+                    $movement->save();
+                }
+
+                // Attendance on approval uses when they paid (payment_submitted_at),
+                // not the movement return time and not the approval clock time.
+                $this->applyAttendanceOnPenaltyApproval(
+                    $movement->fresh(),
+                    $penalty->fresh(),
+                    $wasUnpaidOrRejected
+                );
             }
 
             DB::commit();
 
-            $message = $penalty->status === 'unpaid'
+            $message = $wasUnpaidOrRejected
                 ? 'Penalty waived without payment and account unlocked successfully.'
                 : 'Penalty payment approved successfully and account unlocked.';
 
@@ -456,5 +484,123 @@ class MovementPenaltyController extends Controller
         if (! $user->isSuperAdmin() && ! $user->hasPermission('movements.approve') && ! $user->hasPermission('movements.edit')) {
             abort(403, 'Unauthorized access to movement penalties administration.');
         }
+    }
+
+    /**
+     * Apply attendance after penalty is approved.
+     *
+     * Attendance time = when the employee paid (payment_submitted_at),
+     * NOT the movement return time and NOT the admin approval time.
+     *
+     * Example: yesterday's movement open → today 7:00 AM they pay (any return time in form)
+     * → pending: no payment-day attendance yet → approve → today's attendance at 7:00 AM.
+     */
+    private function applyAttendanceOnPenaltyApproval(
+        Movement $movement,
+        MovementPenalty $penalty,
+        bool $wasWaivedWithoutPayment
+    ): void {
+        if ($movement->movement_type !== 'official') {
+            return;
+        }
+
+        $movementStart = Carbon::parse($movement->from_datetime);
+
+        // Always keep/confirm movement start-day mark (from movement create) — never on weekend
+        $this->upsertOfficialMovementAttendance(
+            $movement,
+            $movementStart->toDateString(),
+            $movementStart->format('H:i:s'),
+            null,
+            'On official movement: '.$movement->purpose
+        );
+
+        // Waive without payment: no payment-time attendance day
+        if ($wasWaivedWithoutPayment) {
+            return;
+        }
+
+        $paidAt = $penalty->payment_submitted_at
+            ? Carbon::parse($penalty->payment_submitted_at)
+            : Carbon::parse($penalty->updated_at ?? now());
+
+        // Weekend payment day: no attendance mark
+        if (AttendanceSetting::isWeekendForEmployee($paidAt, (int) $movement->employee_id)) {
+            return;
+        }
+
+        $remark = 'Penalty payment attendance: '.$paidAt->format('Y-m-d H:i:s');
+
+        if ($paidAt->isSameDay($movementStart)) {
+            // Paid on movement day — use payment time as check-out on start day
+            $this->upsertOfficialMovementAttendance(
+                $movement,
+                $movementStart->toDateString(),
+                $movementStart->format('H:i:s'),
+                $paidAt->format('H:i:s'),
+                $remark
+            );
+
+            return;
+        }
+
+        // Paid on a later day — mark that payment day's attendance at payment time
+        $this->upsertOfficialMovementAttendance(
+            $movement,
+            $paidAt->toDateString(),
+            $paidAt->format('H:i:s'),
+            null,
+            $remark
+        );
+    }
+
+    private function upsertOfficialMovementAttendance(
+        Movement $movement,
+        string $dateStr,
+        string $checkInTime,
+        ?string $checkOutTime,
+        string $remark
+    ): void {
+        if (AttendanceSetting::isWeekendForEmployee($dateStr, (int) $movement->employee_id)) {
+            return;
+        }
+
+        $attendance = Attendance::where('employee_id', $movement->employee_id)
+            ->where('date', $dateStr)
+            ->first();
+
+        if (! $attendance) {
+            $attendance = new Attendance;
+            $attendance->employee_id = $movement->employee_id;
+            $attendance->date = $dateStr;
+            $attendance->status = 'on_duty';
+        } elseif ($attendance->status === 'absent') {
+            $attendance->status = 'on_duty';
+        }
+
+        if (! $attendance->check_in) {
+            $attendance->check_in = $checkInTime;
+        }
+
+        if ($checkOutTime) {
+            if (! $attendance->check_out || Carbon::parse($attendance->check_out)->format('H:i:s') < $checkOutTime) {
+                $attendance->check_out = $checkOutTime;
+            }
+        }
+
+        $attendance->movement_id = $movement->id;
+
+        if (! $attendance->remarks) {
+            $attendance->remarks = $remark;
+        } elseif (stripos($attendance->remarks, $remark) === false) {
+            // Avoid duplicating the same penalty-payment note
+            $isPaymentRemark = str_starts_with($remark, 'Penalty payment attendance');
+            $alreadyHasPaymentRemark = stripos($attendance->remarks, 'Penalty payment attendance') !== false;
+            if (! ($isPaymentRemark && $alreadyHasPaymentRemark)) {
+                $attendance->remarks .= ' | '.$remark;
+            }
+        }
+
+        $attendance->save();
     }
 }

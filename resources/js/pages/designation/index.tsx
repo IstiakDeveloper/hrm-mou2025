@@ -116,39 +116,31 @@ export default function DesignationIndex({ designations, filters }: DesignationI
       <Head title="Designations" />
 
       <PageSurface>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-5">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-300 pb-5">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Designations</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Manage job positions and titles within your organization
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Designations Directory</h1>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1">
+              Manage job positions, ranks, and titles within your organization
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
               <Input
                 placeholder="Search designations..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg transition-all"
+                className="pl-9 h-10 text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus-visible:ring-emerald-500 rounded-lg transition-all font-medium"
               />
-              {search && (
-                <button
-                  onClick={resetFilters}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button onClick={handleSearch} size="sm" className="h-9 w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700">
+              <Button onClick={handleSearch} size="sm" className="h-10 w-full sm:w-auto bg-slate-900 text-white font-bold hover:bg-slate-800">
                 Search
               </Button>
               <Link href={route('designations.create')} className="w-full sm:w-auto">
-                <Button size="sm" className="h-9 w-full sm:w-auto flex items-center bg-emerald-600 hover:bg-emerald-700">
+                <Button size="sm" className="h-10 w-full sm:w-auto flex items-center bg-emerald-600 font-bold text-white hover:bg-emerald-700 shadow-sm">
                   <Plus className="mr-1 h-4 w-4" />
                   Add Designation
                 </Button>

@@ -80,64 +80,64 @@
     }
 }
 
-/* Light Theme - Blue & Green Color Scheme */
+/* Light Theme - High Contrast Blue & Emerald Green Color Scheme */
 :root {
     /* Base colors */
-    --background: oklch(0.99 0.01 180); /* Very light blue-white */
-    --foreground: oklch(0.15 0.02 220); /* Dark blue-gray */
+    --background: oklch(0.97 0.01 180); /* Crisp light background */
+    --foreground: oklch(0.18 0.04 220); /* Dark slate text - high contrast */
 
     /* Card colors */
-    --card: oklch(1 0 0); /* Pure white for cards */
-    --card-foreground: oklch(0.15 0.02 220);
+    --card: oklch(1 0 0); /* Pure solid white for cards */
+    --card-foreground: oklch(0.18 0.04 220);
 
     /* Popover colors */
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.15 0.02 220);
+    --popover-foreground: oklch(0.18 0.04 220);
 
     /* Primary - Green */
-    --primary: oklch(0.55 0.20 142); /* Green-600 equivalent */
-    --primary-foreground: oklch(0.98 0.01 142);
+    --primary: oklch(0.50 0.22 142); /* Deep vibrant green-600 */
+    --primary-foreground: oklch(0.99 0.01 142);
 
-    /* Secondary - Light Blue */
-    --secondary: oklch(0.94 0.05 220); /* Light blue */
-    --secondary-foreground: oklch(0.25 0.08 220); /* Dark blue */
+    /* Secondary - Light Slate Blue */
+    --secondary: oklch(0.93 0.04 220);
+    --secondary-foreground: oklch(0.20 0.08 220);
 
-    /* Muted - Subtle blue-gray */
-    --muted: oklch(0.96 0.02 220);
-    --muted-foreground: oklch(0.55 0.05 220);
+    /* Muted - High Contrast slate-600 */
+    --muted: oklch(0.94 0.02 220);
+    --muted-foreground: oklch(0.38 0.04 220); /* Darker slate for high legibility */
 
-    /* Accent - Bright Blue */
-    --accent: oklch(0.92 0.08 220); /* Light blue accent */
-    --accent-foreground: oklch(0.25 0.12 220); /* Dark blue */
+    /* Accent - Bright Emerald/Blue */
+    --accent: oklch(0.90 0.06 220);
+    --accent-foreground: oklch(0.20 0.10 220);
 
-    /* Destructive - Red (unchanged) */
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.98 0.01 27.325);
+    /* Destructive - Red */
+    --destructive: oklch(0.55 0.25 27.325);
+    --destructive-foreground: oklch(0.99 0.01 27.325);
 
-    /* Border and input - Subtle blue-gray */
-    --border: oklch(0.90 0.03 220);
-    --input: oklch(0.90 0.03 220);
-    --ring: oklch(0.55 0.20 142); /* Green ring for focus */
+    /* Border and input - High visibility slate-300 */
+    --border: oklch(0.82 0.03 220); /* Crisp border */
+    --input: oklch(0.80 0.03 220);
+    --ring: oklch(0.50 0.22 142);
 
     /* Chart colors - Blue & Green spectrum */
-    --chart-1: oklch(0.55 0.20 142); /* Green */
-    --chart-2: oklch(0.55 0.20 220); /* Blue */
-    --chart-3: oklch(0.60 0.18 180); /* Cyan */
-    --chart-4: oklch(0.50 0.22 160); /* Teal */
-    --chart-5: oklch(0.65 0.15 200); /* Light Blue */
+    --chart-1: oklch(0.50 0.22 142); /* Green */
+    --chart-2: oklch(0.50 0.22 220); /* Blue */
+    --chart-3: oklch(0.55 0.20 180); /* Cyan */
+    --chart-4: oklch(0.48 0.24 160); /* Teal */
+    --chart-5: oklch(0.60 0.18 200); /* Light Blue */
 
     /* Radius */
     --radius: 0.625rem;
 
-    /* Sidebar - Blue theme */
-    --sidebar: oklch(0.97 0.02 220); /* Very light blue */
-    --sidebar-foreground: oklch(0.20 0.05 220); /* Dark blue */
-    --sidebar-primary: oklch(0.55 0.20 142); /* Green primary */
-    --sidebar-primary-foreground: oklch(0.98 0.01 142);
-    --sidebar-accent: oklch(0.92 0.08 220); /* Light blue accent */
-    --sidebar-accent-foreground: oklch(0.25 0.12 220);
-    --sidebar-border: oklch(0.88 0.04 220);
-    --sidebar-ring: oklch(0.55 0.20 142);
+    /* Sidebar - High Contrast Theme */
+    --sidebar: oklch(0.98 0.01 220);
+    --sidebar-foreground: oklch(0.18 0.04 220);
+    --sidebar-primary: oklch(0.50 0.22 142);
+    --sidebar-primary-foreground: oklch(0.99 0.01 142);
+    --sidebar-accent: oklch(0.92 0.05 220);
+    --sidebar-accent-foreground: oklch(0.20 0.10 220);
+    --sidebar-border: oklch(0.82 0.03 220);
+    --sidebar-ring: oklch(0.50 0.22 142);
 }
 
 /* Dark Theme - Blue & Green Color Scheme */
