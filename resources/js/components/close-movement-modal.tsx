@@ -41,6 +41,7 @@ export function CloseMovementModal({
     const [workResult, setWorkResult] = useState('');
     const [forgotReturnTime, setForgotReturnTime] = useState(false);
     const [customReturnTime, setCustomReturnTime] = useState('');
+    const [createLogBook, setCreateLogBook] = useState(true);
     const [startMeterReading, setStartMeterReading] = useState('');
     const [endMeterReading, setEndMeterReading] = useState('');
     const [personalKm, setPersonalKm] = useState('');
@@ -58,6 +59,7 @@ export function CloseMovementModal({
             setCloseError(null);
             setForgotReturnTime(false);
             setWorkResult('');
+            setCreateLogBook(true);
             setStartMeterReading('');
             setEndMeterReading('');
             setPersonalKm('');
@@ -146,24 +148,26 @@ export function CloseMovementModal({
         const endReading = Number(endMeterReading);
         const personal = personalKm.trim() === '' ? 0 : Number(personalKm);
 
-        if (!hasPresetStartMeter && (startMeterReading.trim() === '' || Number.isNaN(effectiveStartMeter) || effectiveStartMeter < 0)) {
-            setCloseError('Please enter a valid start meter reading.');
-            return;
-        }
-        if (endMeterReading.trim() === '' || Number.isNaN(endReading) || endReading < effectiveStartMeter) {
-            setCloseError(`Closing meter reading must be greater than or equal to start reading (${effectiveStartMeter}).`);
-            return;
-        }
-
-        const totalKmCalc = Math.max(0, endReading - effectiveStartMeter);
-        if (!isPersonalMovement) {
-            if (personalKm.trim() !== '' && (Number.isNaN(personal) || personal < 0)) {
-                setCloseError('Please enter a valid personal distance.');
+        if (createLogBook) {
+            if (!hasPresetStartMeter && (startMeterReading.trim() === '' || Number.isNaN(effectiveStartMeter) || effectiveStartMeter < 0)) {
+                setCloseError('Please enter a valid start meter reading.');
                 return;
             }
-            if (personal > totalKmCalc) {
-                setCloseError('Personal distance cannot exceed total distance.');
+            if (endMeterReading.trim() === '' || Number.isNaN(endReading) || endReading < effectiveStartMeter) {
+                setCloseError(`Closing meter reading must be greater than or equal to start reading (${effectiveStartMeter}).`);
                 return;
+            }
+
+            const totalKmCalc = Math.max(0, endReading - effectiveStartMeter);
+            if (!isPersonalMovement) {
+                if (personalKm.trim() !== '' && (Number.isNaN(personal) || personal < 0)) {
+                    setCloseError('Please enter a valid personal distance.');
+                    return;
+                }
+                if (personal > totalKmCalc) {
+                    setCloseError('Personal distance cannot exceed total distance.');
+                    return;
+                }
             }
         }
 
@@ -179,12 +183,15 @@ export function CloseMovementModal({
                 forgot_return_time: forgotReturnTime ? '1' : '0',
                 actual_return_datetime: forgotReturnTime ? customReturnTime : null,
                 work_result: workResult.trim(),
-                start_place: startPlace.trim() || branchFallbackName || 'Unknown',
-                start_meter_reading: effectiveStartMeter,
-                end_meter_reading: endReading,
-                personal_km: isPersonalMovement
-                    ? totalKmCalc
-                    : (personalKm.trim() !== '' ? personal : null),
+                create_log_book: createLogBook ? '1' : '0',
+                start_place: createLogBook ? (startPlace.trim() || branchFallbackName || 'Unknown') : null,
+                start_meter_reading: createLogBook ? effectiveStartMeter : null,
+                end_meter_reading: createLogBook ? endReading : null,
+                personal_km: createLogBook
+                    ? (isPersonalMovement
+                        ? Math.max(0, endReading - Number(effectiveStartMeter))
+                        : (personalKm.trim() !== '' ? personal : null))
+                    : null,
             },
             {
                 preserveScroll: true,
@@ -288,119 +295,131 @@ export function CloseMovementModal({
                         )}
                     </div>
 
-                    {/* Log Book Meter Inputs (always created on close) */}
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/20 p-3 space-y-2.5">
+                    {/* Log Book Register Toggle & Meter Inputs */}
+                    <div className={`rounded-xl border transition-all p-3 space-y-2.5 ${
+                        createLogBook ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200/80 bg-slate-50/30'
+                    }`}>
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-                                <Gauge className="h-3.5 w-3.5 text-emerald-600" />
-                                <span>Log Book Meter Reading</span>
+                            <div className="flex items-center space-x-2.5">
+                                <Checkbox
+                                    id="modalCreateLogBook"
+                                    checked={createLogBook}
+                                    onCheckedChange={(checked) => setCreateLogBook(checked === true)}
+                                    className="h-4 w-4 rounded border-emerald-500 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                                />
+                                <Label htmlFor="modalCreateLogBook" className="cursor-pointer text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                                    <Gauge className="h-3.5 w-3.5 text-emerald-600" />
+                                    <span>Log Book এন্ট্রি রেজিস্টার করুন</span>
+                                </Label>
                             </div>
-                            {resolvingPlace && (
+                            {createLogBook && resolvingPlace && (
                                 <span className="text-[10px] text-amber-600 animate-pulse flex items-center gap-1">
                                     <MapPin className="h-3 w-3" /> GPS...
                                 </span>
                             )}
                         </div>
 
-                        <div className="space-y-2.5 pt-1">
-                            {hasPresetStartMeter ? (
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="modalEndMeter" className="text-xs font-semibold text-slate-800 flex items-center gap-1">
-                                            <span>Closing Meter (এন্ড মিটার)</span>
-                                            <span className="text-rose-500 font-bold">*</span>
-                                        </Label>
-                                        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                                            Start: <strong className="text-emerald-950 tabular-nums">{presetStartMeter}</strong> km
-                                        </span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-500">
-                                        Start meter = এই employee-এর সর্বশেষ close meter reading
-                                    </p>
-                                    <Input
-                                        id="modalEndMeter"
-                                        type="number"
-                                        min={presetStartMeter}
-                                        step="0.01"
-                                        value={endMeterReading}
-                                        onChange={(e) => setEndMeterReading(e.target.value)}
-                                        placeholder={`e.g. ${Number(presetStartMeter) + 25}`}
-                                        className="h-8.5 text-xs sm:text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                        <Label htmlFor="modalStartMeter" className="text-[11px] font-medium text-slate-600">
-                                            Start Meter <span className="text-rose-500">*</span>
-                                        </Label>
-                                        <Input
-                                            id="modalStartMeter"
-                                            type="number"
-                                            min={0}
-                                            step="0.01"
-                                            value={startMeterReading}
-                                            onChange={(e) => setStartMeterReading(e.target.value)}
-                                            placeholder="e.g. 12540"
-                                            className="h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="modalEndMeter" className="text-[11px] font-medium text-slate-600">
-                                            Closing Meter <span className="text-rose-500">*</span>
-                                        </Label>
+                        {createLogBook && (
+                            <div className="space-y-2.5 pt-1">
+                                {hasPresetStartMeter ? (
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="modalEndMeter" className="text-xs font-semibold text-slate-800 flex items-center gap-1">
+                                                <span>Closing Meter (এন্ড মিটার)</span>
+                                                <span className="text-rose-500 font-bold">*</span>
+                                            </Label>
+                                            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                                                Start: <strong className="text-emerald-950 tabular-nums">{presetStartMeter}</strong> km
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500">
+                                            Start meter = এই employee-এর সর্বশেষ close meter reading
+                                        </p>
                                         <Input
                                             id="modalEndMeter"
                                             type="number"
-                                            min={0}
+                                            min={presetStartMeter}
                                             step="0.01"
                                             value={endMeterReading}
                                             onChange={(e) => setEndMeterReading(e.target.value)}
-                                            placeholder="e.g. 12565"
-                                            className="h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
+                                            placeholder={`e.g. ${Number(presetStartMeter) + 25}`}
+                                            className="h-8.5 text-xs sm:text-sm bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
                                         />
                                     </div>
-                                </div>
-                            )}
-
-                            {hasValidReadings && (
-                                <div className="rounded-lg border border-emerald-200/80 bg-white p-2.5 space-y-2 text-xs">
-                                    <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 text-slate-600">
-                                        <span>Total Distance:</span>
-                                        <span className="font-bold text-slate-900">{parseFloat(totalKm.toFixed(2))} km</span>
-                                    </div>
-
-                                    {isPersonalMovement ? (
-                                        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
-                                            Personal movement — পুরো দূরত্ব Personal km হিসেবে গণনা হবে।
-                                        </p>
-                                    ) : (
-                                        <div className="flex items-center justify-between gap-2">
-                                            <Label htmlFor="modalPersonalKm" className="text-[11px] text-slate-500 shrink-0">
-                                                Personal (km):
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label htmlFor="modalStartMeter" className="text-[11px] font-medium text-slate-600">
+                                                Start Meter <span className="text-rose-500">*</span>
                                             </Label>
                                             <Input
-                                                id="modalPersonalKm"
+                                                id="modalStartMeter"
                                                 type="number"
                                                 min={0}
                                                 step="0.01"
-                                                value={personalKm}
-                                                onChange={(e) => setPersonalKm(e.target.value)}
-                                                placeholder="0"
-                                                className="h-7 text-xs w-24 text-right bg-slate-50 border-slate-200 rounded"
+                                                value={startMeterReading}
+                                                onChange={(e) => setStartMeterReading(e.target.value)}
+                                                placeholder="e.g. 12540"
+                                                className="h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
                                             />
                                         </div>
-                                    )}
-
-                                    <div className="flex items-center justify-between pt-1 font-semibold text-emerald-800">
-                                        <span>{isPersonalMovement ? 'Personal Distance:' : 'Official Distance:'}</span>
-                                        <span className="text-sm font-bold text-emerald-700">
-                                            {parseFloat((isPersonalMovement ? effectivePersonalKm : officialKm).toFixed(2))} km
-                                        </span>
+                                        <div className="space-y-1">
+                                            <Label htmlFor="modalEndMeter" className="text-[11px] font-medium text-slate-600">
+                                                Closing Meter <span className="text-rose-500">*</span>
+                                            </Label>
+                                            <Input
+                                                id="modalEndMeter"
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={endMeterReading}
+                                                onChange={(e) => setEndMeterReading(e.target.value)}
+                                                placeholder="e.g. 12565"
+                                                className="h-8 text-xs bg-white border-slate-200 focus-visible:ring-emerald-500 rounded-lg"
+                                            />
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
+                                )}
+
+                                {hasValidReadings && (
+                                    <div className="rounded-lg border border-emerald-200/80 bg-white p-2.5 space-y-2 text-xs">
+                                        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 text-slate-600">
+                                            <span>Total Distance:</span>
+                                            <span className="font-bold text-slate-900">{parseFloat(totalKm.toFixed(2))} km</span>
+                                        </div>
+
+                                        {isPersonalMovement ? (
+                                            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                                                Personal movement — পুরো দূরত্ব Personal km হিসেবে গণনা হবে।
+                                            </p>
+                                        ) : (
+                                            <div className="flex items-center justify-between gap-2">
+                                                <Label htmlFor="modalPersonalKm" className="text-[11px] text-slate-500 shrink-0">
+                                                    Personal (km):
+                                                </Label>
+                                                <Input
+                                                    id="modalPersonalKm"
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={personalKm}
+                                                    onChange={(e) => setPersonalKm(e.target.value)}
+                                                    placeholder="0"
+                                                    className="h-7 text-xs w-24 text-right bg-slate-50 border-slate-200 rounded"
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between pt-1 font-semibold text-emerald-800">
+                                            <span>{isPersonalMovement ? 'Personal Distance:' : 'Official Distance:'}</span>
+                                            <span className="text-sm font-bold text-emerald-700">
+                                                {parseFloat((isPersonalMovement ? effectivePersonalKm : officialKm).toFixed(2))} km
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Error Banner */}
@@ -424,7 +443,7 @@ export function CloseMovementModal({
                     <Button
                         type="button"
                         onClick={handleClose}
-                        disabled={submitting || resolvingPlace}
+                        disabled={submitting || (createLogBook && resolvingPlace)}
                         className="flex-1 h-9 text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm"
                     >
                         {submitting ? 'Processing...' : 'Confirm Return'}

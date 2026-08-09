@@ -1013,6 +1013,7 @@ class MovementController extends Controller
         }
 
         $forgotReturn = $request->boolean('forgot_return_time');
+        $createLogBook = $request->boolean('create_log_book', true);
 
         // Start meter = employee's last log-book close meter; first-time employees enter it manually
         $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
@@ -1028,32 +1029,41 @@ class MovementController extends Controller
 
         $rules = [
             'forgot_return_time' => 'sometimes|boolean',
+            'create_log_book' => 'sometimes|boolean',
             'actual_return_datetime' => $forgotReturn ? 'required|date' : 'nullable|date',
             'work_result' => 'required|string|min:5|max:2000',
             'start_place' => 'nullable|string|max:255',
-            'personal_km' => 'nullable|numeric|min:0',
+            'personal_km' => $createLogBook ? 'nullable|numeric|min:0' : 'nullable',
         ];
 
-        if ($startReading !== null) {
-            $rules['end_meter_reading'] = "required|numeric|gte:{$startReading}";
+        if ($createLogBook) {
+            if ($startReading !== null) {
+                $rules['end_meter_reading'] = "required|numeric|gte:{$startReading}";
+            } else {
+                $rules['start_meter_reading'] = 'required|numeric|min:0';
+                $rules['end_meter_reading'] = 'required|numeric|gte:start_meter_reading';
+            }
         } else {
-            $rules['start_meter_reading'] = 'required|numeric|min:0';
-            $rules['end_meter_reading'] = 'required|numeric|gte:start_meter_reading';
+            $rules['end_meter_reading'] = 'nullable';
+            $rules['start_meter_reading'] = 'nullable';
         }
 
         $request->validate($rules);
 
-        $effectiveStart = $startReading ?? (float) $request->start_meter_reading;
-        $totalKm = round((float) $request->end_meter_reading - $effectiveStart, 2);
-        // Personal movements always count full distance as personal_km — skip partial personal check
-        if (
-            $movement->movement_type !== 'personal'
-            && $request->filled('personal_km')
-            && (float) $request->personal_km > $totalKm
-        ) {
-            throw ValidationException::withMessages([
-                'personal_km' => 'Personal distance cannot exceed total distance.',
-            ]);
+        $effectiveStart = null;
+        if ($createLogBook) {
+            $effectiveStart = $startReading ?? (float) $request->start_meter_reading;
+            $totalKm = round((float) $request->end_meter_reading - $effectiveStart, 2);
+            // Personal movements always count full distance as personal_km — skip partial personal check
+            if (
+                $movement->movement_type !== 'personal'
+                && $request->filled('personal_km')
+                && (float) $request->personal_km > $totalKm
+            ) {
+                throw ValidationException::withMessages([
+                    'personal_km' => 'Personal distance cannot exceed total distance.',
+                ]);
+            }
         }
 
         // Start a database transaction
@@ -1088,7 +1098,9 @@ class MovementController extends Controller
             $movement->actual_return_datetime = $returnDateTime;
             $movement->save();
 
-            $this->createLogBookFromMovement($movement, $request, $returnDateTime, $effectiveStart);
+            if ($createLogBook) {
+                $this->createLogBookFromMovement($movement, $request, $returnDateTime, $effectiveStart);
+            }
 
             // Update attendance records for official movements
             if ($movement->movement_type === 'official') {
@@ -1101,7 +1113,9 @@ class MovementController extends Controller
             DB::commit();
 
             return redirect()->route('movements.index')
-                ->with('success', 'Movement closed successfully. Log book entry created and pending approval.');
+                ->with('success', $createLogBook
+                    ? 'Movement closed successfully. Log book entry created and pending approval.'
+                    : 'Movement closed successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
 
