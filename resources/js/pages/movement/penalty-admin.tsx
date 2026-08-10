@@ -758,11 +758,13 @@ export default function PenaltyAdmin({
                                                 </div>
 
                                                 <div className="bg-zinc-50 p-2.5 rounded-xl space-y-1 text-[11px] border border-zinc-100">
-                                                    <p className="font-semibold text-zinc-900">
+                                                    <span className="font-semibold text-zinc-900 block">
                                                         Movement #{item.movement?.id}: {item.movement?.purpose || 'N/A'}
-                                                    </p>
-                                                    <p className="text-zinc-500">Start: {formatDateTime(item.movement?.from_datetime)}</p>
-                                                    <p className="text-emerald-700 font-medium">Return: {formatDateTime(item.movement?.actual_return_datetime)}</p>
+                                                    </span>
+                                                    <span className="text-zinc-500 block">Start: {formatDateTime(item.movement?.from_datetime)}</span>
+                                                    <span className="text-amber-700 font-medium block">
+                                                        Return: {item.movement?.actual_return_datetime ? formatDateTime(item.movement.actual_return_datetime) : 'Still Open (Not Closed)'}
+                                                    </span>
                                                 </div>
 
                                                 <div className="flex items-center justify-between pt-1">
@@ -837,8 +839,8 @@ export default function PenaltyAdmin({
                                                             <p className="text-[11px] text-zinc-500 mt-0.5">
                                                                 Start: {formatDateTime(item.movement?.from_datetime)}
                                                             </p>
-                                                            <p className="text-[11px] text-emerald-700 font-medium">
-                                                                Return: {formatDateTime(item.movement?.actual_return_datetime)}
+                                                            <p className="text-[11px] text-amber-700 font-medium">
+                                                                Return: {item.movement?.actual_return_datetime ? formatDateTime(item.movement.actual_return_datetime) : 'Still Open (Not Closed)'}
                                                             </p>
                                                         </TableCell>
                                                         <TableCell className="text-zinc-900">

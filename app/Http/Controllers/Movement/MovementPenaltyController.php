@@ -27,7 +27,7 @@ class MovementPenaltyController extends Controller
     {
         $user = Auth::user();
 
-        $penalty = MovementPenalty::with(['movement.logBook', 'employee.branch'])
+        $penalty = MovementPenalty::with(['movement', 'employee.branch'])
             ->where(function ($query) use ($user) {
                 $query->where('user_id', $user->id);
                 if ($user->employee_id) {
@@ -43,17 +43,8 @@ class MovementPenaltyController extends Controller
             return redirect()->route('dashboard');
         }
 
-        $lastEndMeter = null;
-        if ($penalty?->movement) {
-            $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
-                (int) $penalty->movement->employee_id,
-                (int) $penalty->movement->id
-            );
-        }
-
         return Inertia::render('movement/penalty-payment', [
             'penalty' => $penalty,
-            'lastEndMeterReading' => $lastEndMeter,
             'merchantNumbers' => [
                 'bkash' => config('services.payment.bkash_number', '01717893432'),
                 'nagad' => config('services.payment.nagad_number', '01717893432'),
@@ -62,7 +53,7 @@ class MovementPenaltyController extends Controller
     }
 
     /**
-     * Submit payment bKash/Nagad Transaction ID, Movement Return Time & Log Book Details.
+     * Submit payment bKash/Nagad Sender Number / Transaction ID.
      */
     public function submitTransaction(Request $request)
     {
@@ -71,12 +62,6 @@ class MovementPenaltyController extends Controller
             'payment_method' => 'required|in:bkash,nagad',
             'sender_number' => 'nullable|string|max:14',
             'transaction_id' => 'nullable|string|max:30',
-            'actual_return_datetime' => 'required|date',
-            'work_result' => 'required|string|min:3|max:2000',
-            'start_place' => 'nullable|string|max:255',
-            'start_meter_reading' => 'nullable|numeric|min:0',
-            'end_meter_reading' => 'required|numeric|min:0',
-            'personal_km' => 'nullable|numeric|min:0',
         ]);
 
         if (empty($validated['sender_number']) && empty($validated['transaction_id'])) {
@@ -95,106 +80,16 @@ class MovementPenaltyController extends Controller
             })
             ->firstOrFail();
 
-        DB::beginTransaction();
-        try {
-            // 1. Log Movement Actual Return Datetime & Close Movement
-            $movement = $penalty->movement;
-            if ($movement && $movement->status === 'active') {
-                $returnTime = Carbon::parse($validated['actual_return_datetime']);
-                $fromTime = Carbon::parse($movement->from_datetime);
+        // Update Penalty Record to pending_verification
+        $penalty->update([
+            'payment_method' => $validated['payment_method'],
+            'sender_number' => trim($validated['sender_number'] ?? ''),
+            'transaction_id' => strtoupper(trim($validated['transaction_id'] ?? '')),
+            'payment_submitted_at' => now(),
+            'status' => 'pending_verification',
+        ]);
 
-                if ($returnTime->lt($fromTime)) {
-                    DB::rollBack();
-                    return redirect()->back()->with('error', 'রিটার্ন সময় মুভমেন্ট শুরুর সময়ের (' . $fromTime->format('d M Y, h:i A') . ') পূর্বের হতে পারবে না।');
-                }
-
-                $movement->actual_return_datetime = $returnTime;
-                $movement->is_returned = true;
-                $movement->status = 'completed';
-                if (! empty($validated['work_result'])) {
-                    $movement->work_result = trim($validated['work_result']);
-                }
-                $movement->save();
-
-                // 2. Always create log book on close; start = last close meter for employee
-                $lastEndMeter = MovementLogBook::lastEndMeterReadingForEmployee(
-                    (int) $movement->employee_id,
-                    (int) $movement->id
-                );
-                $startReading = $lastEndMeter !== null
-                    ? $lastEndMeter
-                    : ($request->filled('start_meter_reading') ? (float) $request->start_meter_reading : null);
-
-                if ($startReading === null) {
-                    DB::rollBack();
-                    return redirect()->back()->with('error', 'শুরুর মিটার রিডিং প্রয়োজন।');
-                }
-
-                $endReading = (float) $request->end_meter_reading;
-
-                if ($endReading < $startReading) {
-                    DB::rollBack();
-                    return redirect()->back()->with('error', 'মিটার শেষের রিডিং মিটার শুরুর রিডিং (' . $startReading . ') এর চেয়ে কম হতে পারবে না।');
-                }
-
-                $totalKm = round($endReading - $startReading, 2);
-
-                // Personal movement: entire trip distance is personal (no official km)
-                if ($movement->movement_type === 'personal') {
-                    $personalKm = $totalKm;
-                    $officialKm = 0.0;
-                } else {
-                    $personalKm = $request->filled('personal_km') ? round((float) $request->personal_km, 2) : null;
-                    $officialKm = round($totalKm - ($personalKm ?? 0), 2);
-                }
-
-                $branch = $movement->employee?->branch;
-                $startPlace = $movement->start_place
-                    ? trim($movement->start_place)
-                    : trim((string) ($request->start_place ?? $branch?->name ?? 'Unknown'));
-
-                MovementLogBook::updateOrCreate(
-                    ['movement_id' => $movement->id],
-                    [
-                        'employee_id' => $movement->employee_id,
-                        'date' => Carbon::parse($movement->from_datetime)->toDateString(),
-                        'start_time' => $movement->from_datetime,
-                        'start_place' => $startPlace,
-                        'start_meter_reading' => $startReading,
-                        'destination' => $movement->destination,
-                        'purpose' => $movement->purpose,
-                        'work_result' => $movement->work_result,
-                        'return_time' => $returnTime,
-                        'end_meter_reading' => $endReading,
-                        'distance_km' => $totalKm,
-                        'personal_km' => $personalKm,
-                        'official_km' => $officialKm,
-                        'approval_scope' => $branch?->is_head_office ? 'head_office' : 'branch',
-                        'payment_status' => 'unpaid',
-                    ]
-                );
-
-                // Attendance is applied only after admin approves the payment,
-                // using payment_submitted_at (when they paid) — not return time.
-            }
-
-            // Update Penalty Record to pending_verification
-            $penalty->update([
-                'payment_method' => $validated['payment_method'],
-                'sender_number' => trim($validated['sender_number'] ?? ''),
-                'transaction_id' => strtoupper(trim($validated['transaction_id'])),
-                'payment_submitted_at' => now(),
-                'status' => 'pending_verification',
-            ]);
-
-            DB::commit();
-
-            return redirect()->back()->with('success', 'Your movement return time, log book entry, and payment transaction ID have been submitted. An admin will verify the transaction and unlock your ID.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return redirect()->back()->with('error', 'Error submitting transaction: '.$e->getMessage());
-        }
+        return redirect()->back()->with('success', 'আপনার জরিমানা পেমেন্ট তথ্য জমা নেওয়া হয়েছে। এডমিন ভেরিফাই করে আপনার আইডি আনলক করবেন।');
     }
 
     /**
@@ -373,16 +268,8 @@ class MovementPenaltyController extends Controller
 
             $movement = $penalty->movement;
             if ($movement) {
-                // If movement was still active (waive path), mark as completed
-                if ($movement->status === 'active') {
-                    $movement->status = 'completed';
-                    $movement->is_returned = true;
-                    $movement->actual_return_datetime = $movement->actual_return_datetime ?? now();
-                    $movement->save();
-                }
-
-                // Attendance on approval uses when they paid (payment_submitted_at),
-                // not the movement return time and not the approval clock time.
+                // Note: The movement remains active (open) as per requirements.
+                // The employee will close their movement normally when they complete it.
                 $this->applyAttendanceOnPenaltyApproval(
                     $movement->fresh(),
                     $penalty->fresh(),
@@ -447,30 +334,43 @@ class MovementPenaltyController extends Controller
 
         foreach ($overdueMovements as $movement) {
             $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
-            $overdueDays = max(1, (int) $startDate->diffInDays($today));
+            $totalOverdueDays = max(1, (int) $startDate->diffInDays($today));
             $finePerDay = 20.00;
-            $totalFine = $overdueDays * $finePerDay;
 
-            // Find associated user account
-            $user = User::where('employee_id', $movement->employee_id)->first();
+            $approvedOverdueDays = (int) MovementPenalty::where('movement_id', $movement->id)
+                ->where('status', 'approved')
+                ->sum('overdue_days');
 
-            // Check if there is already an approved penalty for this movement
-            $existingPenalty = MovementPenalty::where('movement_id', $movement->id)->first();
-            if ($existingPenalty && $existingPenalty->status === 'approved') {
+            $unpaidOverdueDays = max(0, $totalOverdueDays - $approvedOverdueDays);
+
+            if ($unpaidOverdueDays <= 0) {
                 continue;
             }
 
-            MovementPenalty::updateOrCreate(
-                ['movement_id' => $movement->id],
-                [
-                    'employee_id' => $movement->employee_id,
-                    'user_id' => $user?->id,
-                    'overdue_days' => $overdueDays,
+            $totalFine = $unpaidOverdueDays * $finePerDay;
+            $user = User::where('employee_id', $movement->employee_id)->first();
+
+            $activePenalty = MovementPenalty::where('movement_id', $movement->id)
+                ->whereIn('status', ['unpaid', 'pending_verification', 'rejected'])
+                ->first();
+
+            if ($activePenalty) {
+                $activePenalty->update([
+                    'overdue_days' => $unpaidOverdueDays,
                     'fine_per_day' => $finePerDay,
                     'total_fine' => $totalFine,
-                    'status' => $existingPenalty ? $existingPenalty->status : 'unpaid',
-                ]
-            );
+                ]);
+            } else {
+                MovementPenalty::create([
+                    'movement_id' => $movement->id,
+                    'employee_id' => $movement->employee_id,
+                    'user_id' => $user?->id,
+                    'overdue_days' => $unpaidOverdueDays,
+                    'fine_per_day' => $finePerDay,
+                    'total_fine' => $totalFine,
+                    'status' => 'unpaid',
+                ]);
+            }
 
             $count++;
         }

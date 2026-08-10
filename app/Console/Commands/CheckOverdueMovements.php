@@ -40,31 +40,47 @@ class CheckOverdueMovements extends Command
 
         foreach ($overdueMovements as $movement) {
             $startDate = $movement->from_datetime->copy()->startOfDay();
-            $overdueDays = max(1, (int) $startDate->diffInDays($today));
+            $totalOverdueDays = max(1, (int) $startDate->diffInDays($today));
             $finePerDay = 20.00;
-            $totalFine = $overdueDays * $finePerDay;
+
+            $approvedOverdueDays = (int) MovementPenalty::where('movement_id', $movement->id)
+                ->where('status', 'approved')
+                ->sum('overdue_days');
+
+            $unpaidOverdueDays = max(0, $totalOverdueDays - $approvedOverdueDays);
+
+            if ($unpaidOverdueDays <= 0) {
+                // Fine paid up to current date
+                continue;
+            }
+
+            $totalFine = $unpaidOverdueDays * $finePerDay;
 
             // Find associated user account
             $user = User::where('employee_id', $movement->employee_id)->first();
 
-            // Check if there is already an approved penalty for this movement
-            $existingPenalty = MovementPenalty::where('movement_id', $movement->id)->first();
-            if ($existingPenalty && $existingPenalty->status === 'approved') {
-                // If already approved, skip re-penalizing
-                continue;
-            }
+            // Check if there is an active (unpaid, pending_verification, rejected) penalty for this movement
+            $activePenalty = MovementPenalty::where('movement_id', $movement->id)
+                ->whereIn('status', ['unpaid', 'pending_verification', 'rejected'])
+                ->first();
 
-            MovementPenalty::updateOrCreate(
-                ['movement_id' => $movement->id],
-                [
-                    'employee_id' => $movement->employee_id,
-                    'user_id' => $user?->id,
-                    'overdue_days' => $overdueDays,
+            if ($activePenalty) {
+                $activePenalty->update([
+                    'overdue_days' => $unpaidOverdueDays,
                     'fine_per_day' => $finePerDay,
                     'total_fine' => $totalFine,
-                    'status' => $existingPenalty ? $existingPenalty->status : 'unpaid',
-                ]
-            );
+                ]);
+            } else {
+                MovementPenalty::create([
+                    'movement_id' => $movement->id,
+                    'employee_id' => $movement->employee_id,
+                    'user_id' => $user?->id,
+                    'overdue_days' => $unpaidOverdueDays,
+                    'fine_per_day' => $finePerDay,
+                    'total_fine' => $totalFine,
+                    'status' => 'unpaid',
+                ]);
+            }
 
             $count++;
         }
