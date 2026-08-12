@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PayrollComboField } from '@/components/payroll/PayrollFilterGrid';
+import { formatLoanSelectLabel, loanSelectKeywords } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { estimateInstallmentCollectionAmount, fmt, type LoanOption } from './types';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
@@ -29,8 +30,12 @@ export default function LoanCollectionBatch({ loans, defaultCollectionDate }: Pr
         () =>
             loans.map((l) => ({
                 value: String(l.id),
-                label: `${l.employee_label} — ${l.loan_number} (${l.pending_installments} pending)`,
-                keywords: `${l.loan_number} ${l.employee_label}`,
+                label: formatLoanSelectLabel(l, {
+                    includeEmployee: true,
+                    includeOutstanding: false,
+                    includePending: true,
+                }),
+                keywords: loanSelectKeywords(l),
             })),
         [loans],
     );

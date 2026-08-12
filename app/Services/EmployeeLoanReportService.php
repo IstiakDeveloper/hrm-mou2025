@@ -326,7 +326,8 @@ class EmployeeLoanReportService
             ->when($filters['date_to'], fn (Builder $q) => $q->whereDate('transaction_date', '<=', $filters['date_to']))
             ->when($filters['employee_id'], fn (Builder $q) => $q->where('employee_id', $filters['employee_id']))
             ->when($filters['branch_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('current_branch_id', $filters['branch_id'])))
-            ->when($filters['department_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $filters['department_id'])));
+            ->when($filters['department_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $filters['department_id'])))
+            ->when($filters['loan_type'], fn (Builder $q) => $q->whereHas('loan', fn ($l) => $l->where('loan_type', $filters['loan_type'])));
 
         $filteredTx = $query->orderBy('transaction_date')->orderBy('id')->get();
         $loanIds = $filteredTx->pluck('employee_loan_id')->unique()->filter()->values();
@@ -340,6 +341,7 @@ class EmployeeLoanReportService
         $loans = EmployeeLoan::query()
             ->with(['policy', 'installments', 'transactions' => fn ($q) => $q->orderBy('transaction_date')->orderBy('id')])
             ->whereIn('id', $loanIds)
+            ->when($filters['loan_type'], fn (Builder $q) => $q->where('loan_type', $filters['loan_type']))
             ->get()
             ->keyBy('id');
 

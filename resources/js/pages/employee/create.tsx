@@ -211,6 +211,19 @@ interface EmployeeCreateFormData {
     documents: EmployeeDocumentFormRow[];
 }
 
+const safeParseCertificateLevels = (raw: any): string[] => {
+    if (Array.isArray(raw)) return raw.map(String);
+    if (typeof raw === 'string' && raw.trim()) {
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.map(String) : [];
+        } catch {
+            return raw.split(',').map((s) => s.trim()).filter(Boolean);
+        }
+    }
+    return [];
+};
+
 function emptyFormAddress(type: 'present' | 'permanent'): Address {
     return { type, division: '', district: '', upazila: '', union: '', village: '', address_details: '' };
 }
@@ -2694,36 +2707,38 @@ export default function EmployeeCreate({
                                                             Select Level(s)
                                                         </Label>
                                                         <div className="flex flex-wrap gap-4">
-                                                            {(
-                                                                [
-                                                                    { value: 'ssc', label: 'SSC' },
-                                                                    { value: 'hsc', label: 'HSC' },
-                                                                    { value: 'honors', label: 'Honors' },
-                                                                    { value: 'masters', label: 'Masters' },
-                                                                ] as const
-                                                            ).map(({ value, label }) => (
-                                                                <label
-                                                                    key={value}
-                                                                    className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-600"
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        className="h-3.5 w-3.5 rounded border-zinc-300 text-emerald-600"
-                                                                        checked={data.collateral.certificate_levels?.some(
-                                                                            (level) => level.toLowerCase() === value,
-                                                                        )}
-                                                                        onChange={(e) => {
-                                                                            const levels = data.collateral.certificate_levels ?? [];
-                                                                            const next = e.target.checked
-                                                                                ? [...levels.filter((level) => level.toLowerCase() !== value), value]
-                                                                                : levels.filter((level) => level.toLowerCase() !== value);
-                                                                            setData('collateral', { ...data.collateral, certificate_levels: next });
-                                                                        }}
-                                                                    />
-                                                                    <span>{label}</span>
-                                                                </label>
-                                                            ))}
-                                                        </div>
+                                                             {(() => {
+                                                                 const currentLevels = safeParseCertificateLevels(data.collateral?.certificate_levels);
+                                                                 return (
+                                                                     [
+                                                                         { value: 'ssc', label: 'SSC' },
+                                                                         { value: 'hsc', label: 'HSC' },
+                                                                         { value: 'honors', label: 'Honors' },
+                                                                         { value: 'masters', label: 'Masters' },
+                                                                     ] as const
+                                                                 ).map(({ value, label }) => (
+                                                                     <label
+                                                                         key={value}
+                                                                         className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-600"
+                                                                     >
+                                                                         <input
+                                                                             type="checkbox"
+                                                                             className="h-3.5 w-3.5 rounded border-zinc-300 text-emerald-600"
+                                                                             checked={currentLevels.some(
+                                                                                 (level) => String(level).toLowerCase() === value,
+                                                                             )}
+                                                                             onChange={(e) => {
+                                                                                 const next = e.target.checked
+                                                                                     ? [...currentLevels.filter((level) => String(level).toLowerCase() !== value), value]
+                                                                                     : currentLevels.filter((level) => String(level).toLowerCase() !== value);
+                                                                                 setData('collateral', { ...data.collateral, certificate_levels: next });
+                                                                             }}
+                                                                         />
+                                                                         <span>{label}</span>
+                                                                     </label>
+                                                                 ));
+                                                             })()}
+                                                         </div>
                                                         {errors.certificate_levels && (
                                                             <p className="text-xs font-semibold text-red-500">{errors.certificate_levels}</p>
                                                         )}

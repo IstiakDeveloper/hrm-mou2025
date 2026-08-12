@@ -315,6 +315,7 @@ class LegacyLoanRebuildService
      *   use_manual_terms?: bool,
      *   service_charge_amount?: float|null,
      *   outstanding_total: float,
+     *   total_installments?: int|null,
      * }  $snapshot
      */
     public function rebuildLoanFromLedgerSnapshot(EmployeeLoan $loan, array $snapshot): void
@@ -346,6 +347,7 @@ class LegacyLoanRebuildService
      *   use_manual_terms: bool,
      *   service_charge_amount: float|null,
      *   outstanding_total: float,
+     *   total_installments: int|null,
      * }
      */
     protected function snapshotFromMigrationItem(LoanMigrationItem $item): array
@@ -361,6 +363,9 @@ class LegacyLoanRebuildService
                 ? (float) $item->service_charge_amount
                 : null,
             'outstanding_total' => (float) $item->outstanding_total,
+            'total_installments' => $item->total_installments !== null
+                ? (int) $item->total_installments
+                : null,
         ];
     }
 
@@ -374,6 +379,7 @@ class LegacyLoanRebuildService
      *   use_manual_terms?: bool,
      *   service_charge_amount?: float|null,
      *   outstanding_total: float,
+     *   total_installments?: int|null,
      * }  $snapshot
      * @param  list<array<string, mixed>>  $payrollCollections
      */
@@ -393,9 +399,17 @@ class LegacyLoanRebuildService
             $policyInstallments = max(1, (int) ($policy->tenure_years ?? 1) * 12);
         }
 
-        $totalInstallments = $policy->loan_type === 'pf_loan' || $useManual
-            ? $policyInstallments
-            : max($policyInstallments, $passedMonths + max(1, (int) ceil($outTotal / max($installAmount, 1))));
+        $overrideInstallments = isset($snapshot['total_installments']) && $snapshot['total_installments'] !== null && $snapshot['total_installments'] !== ''
+            ? (int) $snapshot['total_installments']
+            : null;
+
+        if ($overrideInstallments !== null && $overrideInstallments >= 1) {
+            $totalInstallments = max($overrideInstallments, $passedMonths + ($outTotal > 0 ? 1 : 0));
+        } else {
+            $totalInstallments = $policy->loan_type === 'pf_loan' || $useManual
+                ? $policyInstallments
+                : max($policyInstallments, $passedMonths + max(1, (int) ceil($outTotal / max($installAmount, 1))));
+        }
 
         if ($useManual) {
             $serviceCharge = SalaryStructureCalculator::roundTaka((float) ($snapshot['service_charge_amount'] ?? 0));

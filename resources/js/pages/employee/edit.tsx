@@ -284,6 +284,19 @@ interface EmployeeEditFormData {
     disciplinary_actions: DisciplinaryActionFormRow[];
 }
 
+const safeParseCertificateLevels = (raw: any): string[] => {
+    if (Array.isArray(raw)) return raw.map(String);
+    if (typeof raw === 'string' && raw.trim()) {
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.map(String) : [];
+        } catch {
+            return raw.split(',').map((s) => s.trim()).filter(Boolean);
+        }
+    }
+    return [];
+};
+
 function emptyFormAddress(type: 'present' | 'permanent'): Address {
     return { type, division: '', district: '', upazila: '', union: '', village: '', address_details: '' };
 }
@@ -460,13 +473,13 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         nominees: hydrateNomineeFormRows(employee.nominees),
         guarantors: hydrateGuarantorFormRows(employee.guarantors),
         guarantor_cheques: (employee.guarantor_cheques as any[]) ?? [],
-        collateral: employee.collateral ?? {
-            has_certificate: false,
-            certificate_levels: [],
-            security_amount: '',
-            collateral_interest: '',
-            collateral_date: '',
-            notes: '',
+        collateral: {
+            has_certificate: !!(employee.collateral?.has_certificate),
+            certificate_levels: safeParseCertificateLevels(employee.collateral?.certificate_levels),
+            security_amount: employee.collateral?.security_amount ?? '',
+            collateral_interest: employee.collateral?.collateral_interest ?? '',
+            collateral_date: employee.collateral?.collateral_date ?? '',
+            notes: employee.collateral?.notes ?? '',
         },
         collateral_receive_cheques: (employee.collateral_receive_cheques as any[]) ?? [],
         assets: (employee.assets as any[]) ?? [],
@@ -3239,35 +3252,37 @@ export default function EmployeeEdit({
                                                             Select Level(s)
                                                         </Label>
                                                         <div className="flex flex-wrap gap-4">
-                                                            {(
-                                                                [
-                                                                    { value: 'ssc', label: 'SSC' },
-                                                                    { value: 'hsc', label: 'HSC' },
-                                                                    { value: 'honors', label: 'Honors' },
-                                                                    { value: 'masters', label: 'Masters' },
-                                                                ] as const
-                                                            ).map(({ value, label }) => (
-                                                                <label
-                                                                    key={value}
-                                                                    className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-600"
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        className="h-3.5 w-3.5 rounded border-zinc-300 text-emerald-600"
-                                                                        checked={data.collateral.certificate_levels?.some(
-                                                                            (level) => level.toLowerCase() === value,
-                                                                        )}
-                                                                        onChange={(e) => {
-                                                                            const levels = data.collateral.certificate_levels ?? [];
-                                                                            const next = e.target.checked
-                                                                                ? [...levels.filter((level) => level.toLowerCase() !== value), value]
-                                                                                : levels.filter((level) => level.toLowerCase() !== value);
-                                                                            setData('collateral', { ...data.collateral, certificate_levels: next });
-                                                                        }}
-                                                                    />
-                                                                    <span>{label}</span>
-                                                                </label>
-                                                            ))}
+                                                            {(() => {
+                                                                const currentLevels = safeParseCertificateLevels(data.collateral?.certificate_levels);
+                                                                return (
+                                                                    [
+                                                                        { value: 'ssc', label: 'SSC' },
+                                                                        { value: 'hsc', label: 'HSC' },
+                                                                        { value: 'honors', label: 'Honors' },
+                                                                        { value: 'masters', label: 'Masters' },
+                                                                    ] as const
+                                                                ).map(({ value, label }) => (
+                                                                    <label
+                                                                        key={value}
+                                                                        className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-600"
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="h-3.5 w-3.5 rounded border-zinc-300 text-emerald-600"
+                                                                            checked={currentLevels.some(
+                                                                                (level) => String(level).toLowerCase() === value,
+                                                                            )}
+                                                                            onChange={(e) => {
+                                                                                const next = e.target.checked
+                                                                                    ? [...currentLevels.filter((level) => String(level).toLowerCase() !== value), value]
+                                                                                    : currentLevels.filter((level) => String(level).toLowerCase() !== value);
+                                                                                setData('collateral', { ...data.collateral, certificate_levels: next });
+                                                                            }}
+                                                                        />
+                                                                        <span>{label}</span>
+                                                                    </label>
+                                                                ));
+                                                            })()}
                                                         </div>
                                                         {errors.certificate_levels && (
                                                             <p className="text-xs font-semibold text-red-500">{errors.certificate_levels}</p>

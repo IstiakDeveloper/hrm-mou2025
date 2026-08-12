@@ -135,8 +135,9 @@ export default function EmployeeLoanLedger({ loan, schedule, editTerms, policies
         () => ({
             ...editTerms,
             loan_id: loan.id,
+            total_installments: editTerms.total_installments ?? loan.installment_count,
         }),
-        [editTerms, loan.id],
+        [editTerms, loan.id, loan.installment_count],
     );
 
     const fullPaidForm = useForm({

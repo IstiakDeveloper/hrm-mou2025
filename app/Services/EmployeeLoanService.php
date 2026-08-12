@@ -1814,6 +1814,7 @@ class EmployeeLoanService
      *   disburse_amount: float,
      *   installment_amount: float,
      *   passed_months: int,
+     *   total_installments: int,
      *   service_charge_amount: ?float,
      *   outstanding_principal: float,
      *   outstanding_service_charge: float,
@@ -1837,6 +1838,7 @@ class EmployeeLoanService
                 'disburse_amount' => (float) $item->disburse_amount,
                 'installment_amount' => (float) $item->installment_amount,
                 'passed_months' => (int) $item->passed_months,
+                'total_installments' => (int) ($item->total_installments ?? $loan->installment_count),
                 'service_charge_amount' => $item->service_charge_amount !== null
                     ? (float) $item->service_charge_amount
                     : null,
@@ -1862,6 +1864,7 @@ class EmployeeLoanService
             'disburse_amount' => $principal,
             'installment_amount' => SalaryStructureCalculator::roundTaka((float) $loan->installment_amount),
             'passed_months' => max((int) ($loan->legacy_paid_installments ?? 0), $paidCount),
+            'total_installments' => (int) $loan->installment_count,
             'service_charge_amount' => SalaryStructureCalculator::roundTaka(max(0, $totalPayable - $principal)),
             'outstanding_principal' => (float) $breakdown['outstanding_principal'],
             'outstanding_service_charge' => (float) $breakdown['outstanding_service_charge'],

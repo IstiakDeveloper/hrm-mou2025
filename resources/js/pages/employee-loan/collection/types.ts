@@ -3,7 +3,9 @@ export type LoanOption = {
     loan_number: string;
     employee_id: number;
     employee_label: string;
+    loan_type_label?: string | null;
     policy_name: string | null;
+    policy_code?: string | null;
     outstanding_balance: number;
     installment_amount: number;
     pending_installments: number;

@@ -463,6 +463,7 @@ class EmployeeLoanController extends Controller
             'disburse_amount' => 'required|numeric|min:1',
             'installment_amount' => 'required|numeric|min:1',
             'passed_months' => 'required|integer|min:0|max:360',
+            'total_installments' => 'required|integer|min:1|max:360',
             'outstanding_principal' => 'required|numeric|min:0',
             'outstanding_service_charge' => 'required|numeric|min:0',
             'outstanding_total' => 'required|numeric|min:0.01',
@@ -472,6 +473,12 @@ class EmployeeLoanController extends Controller
         $validated['use_manual_terms'] = $useManual;
         if (array_key_exists('calculation_method', $validated) && $validated['calculation_method'] === null) {
             unset($validated['calculation_method']);
+        }
+
+        if ((int) $validated['total_installments'] <= (int) $validated['passed_months']) {
+            throw ValidationException::withMessages([
+                'total_installments' => 'Total installments must be greater than passed months.',
+            ]);
         }
 
         try {
@@ -572,6 +579,7 @@ class EmployeeLoanController extends Controller
             'status' => $loan->status,
             'loan_type_label' => $loan->typeLabel(),
             'policy_name' => $loan->policy?->name,
+            'policy_code' => $loan->policy?->code,
             'outstanding_balance' => (float) $loan->outstanding_balance,
             'pending_installments' => $pending,
         ];

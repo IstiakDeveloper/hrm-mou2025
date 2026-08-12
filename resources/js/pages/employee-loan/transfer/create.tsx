@@ -12,7 +12,7 @@ import {
     PayrollEmployeeSelect,
     PayrollField,
 } from '@/components/payroll/PayrollFilterGrid';
-import { fmtLoanAmount } from '@/lib/employee-loan-format';
+import { formatLoanSelectLabel, fmtLoanAmount, loanSelectKeywords } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { ArrowLeft, ArrowRight, Save } from 'lucide-react';
 
@@ -21,7 +21,9 @@ type LoanOption = {
     loan_number: string;
     employee_id: number;
     employee_label: string;
+    loan_type_label?: string | null;
     policy_name: string | null;
+    policy_code?: string | null;
     outstanding_balance: number;
     installment_amount: number;
     pending_installments: number;
@@ -67,10 +69,17 @@ export default function LoanTransferCreate({ filters, branches, employees, loans
         () =>
             fromLoans.map((l) => ({
                 value: String(l.id),
-                label: l.has_scheduled_installments
-                    ? `${l.loan_number} — on payroll (cannot transfer yet)`
-                    : `${l.loan_number} — out ${fmt(l.outstanding_balance)} (${l.pending_installments} pending)`,
-                keywords: `${l.loan_number} ${l.policy_name ?? ''} ${l.employee_label}`,
+                label: formatLoanSelectLabel(
+                    {
+                        ...l,
+                        note: l.has_scheduled_installments ? 'on payroll (cannot transfer yet)' : null,
+                    },
+                    {
+                        includeOutstanding: !l.has_scheduled_installments,
+                        includePending: !l.has_scheduled_installments,
+                    },
+                ),
+                keywords: loanSelectKeywords(l),
                 disabled: Boolean(l.has_scheduled_installments),
             })),
         [fromLoans],
@@ -171,7 +180,11 @@ export default function LoanTransferCreate({ filters, branches, employees, loans
                             )}
                             {selectedLoan && (
                                 <p className="mt-2 text-[10px] text-zinc-500">
-                                    {selectedLoan.policy_name} · Outstanding ৳{fmt(selectedLoan.outstanding_balance)} ·{' '}
+                                    {[selectedLoan.loan_type_label, selectedLoan.policy_name || selectedLoan.policy_code]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    {' · '}
+                                    Outstanding ৳{fmt(selectedLoan.outstanding_balance)} ·{' '}
                                     {selectedLoan.pending_installments} pending installments · Disbursed {selectedLoan.disbursement_date}
                                 </p>
                             )}

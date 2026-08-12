@@ -43,6 +43,7 @@ export type LoanTermsEditValues = {
     disburse_amount: number;
     installment_amount: number;
     passed_months: number;
+    total_installments: number;
     service_charge_amount: number | null;
     outstanding_principal: number;
     outstanding_service_charge: number;
@@ -81,6 +82,7 @@ type SavePayload = {
     service_charge_amount: number | null;
     installment_amount: number;
     passed_months: number;
+    total_installments: number;
     outstanding_principal: number;
     outstanding_service_charge: number;
     outstanding_total: number;
@@ -100,6 +102,7 @@ function buildSavePayload(
         service_charge_amount: string;
         installment_amount: string;
         passed_months: string;
+        total_installments: string;
         outstanding_principal: string;
         outstanding_service_charge: string;
         outstanding_total: string;
@@ -122,6 +125,7 @@ function buildSavePayload(
         service_charge_amount: data.use_manual_terms ? Number(data.service_charge_amount || 0) : null,
         installment_amount: Number(data.installment_amount),
         passed_months: Number(data.passed_months) || 0,
+        total_installments: Number(data.total_installments) || 0,
         outstanding_principal: Number(data.outstanding_principal),
         outstanding_service_charge: Number(data.outstanding_service_charge || 0),
         outstanding_total: Number(data.outstanding_total),
@@ -132,12 +136,18 @@ function snapshotPreviewMeta(
     passedMonths: number,
     installmentAmount: number,
     outstandingTotal: number,
+    totalInstallmentsOverride?: number | null,
 ): Pick<RowPreview, 'remaining_installments' | 'total_installments' | 'total_payable'> {
-    const remaining = Math.max(1, Math.ceil(outstandingTotal / Math.max(installmentAmount, 1)));
+    const remainingFromBalance = Math.max(1, Math.ceil(outstandingTotal / Math.max(installmentAmount, 1)));
+    const total =
+        totalInstallmentsOverride != null && totalInstallmentsOverride > 0
+            ? Math.max(totalInstallmentsOverride, passedMonths + 1)
+            : passedMonths + remainingFromBalance;
+    const remaining = Math.max(1, total - passedMonths);
 
     return {
         remaining_installments: remaining,
-        total_installments: passedMonths + remaining,
+        total_installments: total,
         total_payable: passedMonths * installmentAmount + outstandingTotal,
     };
 }
@@ -189,6 +199,7 @@ function termsToFormData(terms: LoanTermsEditValues) {
         service_charge_amount: terms.service_charge_amount != null ? String(terms.service_charge_amount) : '',
         installment_amount: String(terms.installment_amount),
         passed_months: String(terms.passed_months),
+        total_installments: String(terms.total_installments || ''),
         outstanding_principal: String(terms.outstanding_principal),
         outstanding_service_charge: String(terms.outstanding_service_charge),
         outstanding_total: String(terms.outstanding_total),
@@ -220,6 +231,7 @@ export function LoanTermsEditDialog({
         service_charge_amount: '',
         installment_amount: '',
         passed_months: '',
+        total_installments: '',
         outstanding_principal: '',
         outstanding_service_charge: '',
         outstanding_total: '',
@@ -260,7 +272,12 @@ export function LoanTermsEditDialog({
         itemForm.clearErrors();
 
         setPreviewMeta(
-            snapshotPreviewMeta(terms.passed_months, terms.installment_amount, terms.outstanding_total),
+            snapshotPreviewMeta(
+                terms.passed_months,
+                terms.installment_amount,
+                terms.outstanding_total,
+                terms.total_installments,
+            ),
         );
     }, [open, terms]);
 
@@ -295,6 +312,7 @@ export function LoanTermsEditDialog({
                 outstanding_principal: String(preview.outstanding_principal),
                 outstanding_service_charge: String(preview.outstanding_service_charge),
                 outstanding_total: String(preview.outstanding_total),
+                total_installments: String(preview.total_installments),
             };
 
             if (preview.service_charge_amount != null) {
@@ -354,8 +372,11 @@ export function LoanTermsEditDialog({
 
             if (!forcePolicy && Number.isFinite(install) && install > 0) {
                 const outTotal = parseFloat(data.outstanding_total);
+                const totalInstallments = parseInt(data.total_installments, 10) || 0;
                 if (Number.isFinite(outTotal) && outTotal > 0) {
-                    setPreviewMeta(snapshotPreviewMeta(passed, install, outTotal));
+                    setPreviewMeta(
+                        snapshotPreviewMeta(passed, install, outTotal, totalInstallments > 0 ? totalInstallments : null),
+                    );
                 }
             }
 
@@ -375,6 +396,11 @@ export function LoanTermsEditDialog({
                 outstanding_service_charge: parseFloat(data.outstanding_service_charge) || 0,
                 outstanding_total: parseFloat(data.outstanding_total) || 0,
             };
+
+            const totalInstallments = parseInt(data.total_installments, 10);
+            if (Number.isFinite(totalInstallments) && totalInstallments > 0) {
+                payload.total_installments = totalInstallments;
+            }
 
             const method = normalizeCalculationMethodForLoan(
                 data.calculation_method,
@@ -449,7 +475,8 @@ export function LoanTermsEditDialog({
         e.preventDefault();
         if (!terms || saveLoading || calcLoading) return;
 
-        const merged = { ...itemFormDataRef.current, ...itemForm.data };
+        // Ref is the source of truth for typed fields; Inertia form state can lag a render behind.
+        const merged = { ...itemForm.data, ...itemFormDataRef.current };
         const policyId = resolvePolicyId(merged);
         if (!policyId) {
             setSaveError('Loan policy নির্বাচন করুন।');
@@ -474,6 +501,17 @@ export function LoanTermsEditDialog({
             }
         }
 
+        const totalInstallments = parseInt(merged.total_installments, 10);
+        const passedMonths = parseInt(merged.passed_months, 10) || 0;
+        if (!Number.isFinite(totalInstallments) || totalInstallments < 1) {
+            setSaveError('Total installments দিন।');
+            return;
+        }
+        if (totalInstallments <= passedMonths) {
+            setSaveError('Total installments passed months-এর থেকে বেশি হতে হবে।');
+            return;
+        }
+
         const outPr = parseFloat(merged.outstanding_principal);
         const outSc = parseFloat(merged.outstanding_service_charge || '0');
         const outTotal = parseFloat(merged.outstanding_total);
@@ -482,8 +520,7 @@ export function LoanTermsEditDialog({
             return;
         }
 
-        const current = itemFormDataRef.current;
-        const payload = buildSavePayload(current, resolvePolicyId(current), policies);
+        const payload = buildSavePayload(merged, policyId, policies);
 
         setSaveLoading(true);
 
@@ -702,20 +739,65 @@ export function LoanTermsEditDialog({
                             </div>
                         )}
 
-                        <PayrollField label="Passed months" error={itemForm.errors.passed_months}>
-                            <Input
-                                type="text"
-                                inputMode="numeric"
-                                className="tabular-nums"
-                                value={itemForm.data.passed_months}
-                                onChange={(e) =>
-                                    patchItemForm({ passed_months: e.target.value.replace(/\D/g, '') })
-                                }
-                            />
-                            <p className="mt-1 text-[10px] text-zinc-500">
-                                Disburse-এর পর কত মাস installment paid — প্রথম N টা installment paid mark হবে।
-                            </p>
-                        </PayrollField>
+                        <div className="grid grid-cols-2 gap-3">
+                            <PayrollField label="Passed months" error={itemForm.errors.passed_months}>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="tabular-nums"
+                                    value={itemForm.data.passed_months}
+                                    onChange={(e) => {
+                                        const passed = e.target.value.replace(/\D/g, '');
+                                        const total = parseInt(itemFormDataRef.current.total_installments, 10) || 0;
+                                        const install = parseFloat(itemFormDataRef.current.installment_amount) || 0;
+                                        const outTotal = parseFloat(itemFormDataRef.current.outstanding_total) || 0;
+                                        patchItemForm({ passed_months: passed });
+                                        if (install > 0 && outTotal > 0) {
+                                            setPreviewMeta(
+                                                snapshotPreviewMeta(
+                                                    parseInt(passed, 10) || 0,
+                                                    install,
+                                                    outTotal,
+                                                    total > 0 ? total : null,
+                                                ),
+                                            );
+                                        }
+                                    }}
+                                />
+                                <p className="mt-1 text-[10px] text-zinc-500">
+                                    Disburse-এর পর কত মাস installment paid — প্রথম N টা installment paid mark হবে।
+                                </p>
+                            </PayrollField>
+                            <PayrollField label="Total installments" error={itemForm.errors.total_installments}>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="tabular-nums"
+                                    value={itemForm.data.total_installments}
+                                    onChange={(e) => {
+                                        const total = e.target.value.replace(/\D/g, '');
+                                        const passed = parseInt(itemFormDataRef.current.passed_months, 10) || 0;
+                                        const install = parseFloat(itemFormDataRef.current.installment_amount) || 0;
+                                        const outTotal = parseFloat(itemFormDataRef.current.outstanding_total) || 0;
+                                        patchItemForm({ total_installments: total });
+                                        if (install > 0 && outTotal > 0) {
+                                            setPreviewMeta(
+                                                snapshotPreviewMeta(
+                                                    passed,
+                                                    install,
+                                                    outTotal,
+                                                    parseInt(total, 10) || null,
+                                                ),
+                                            );
+                                        }
+                                    }}
+                                    placeholder="e.g. 30"
+                                />
+                                <p className="mt-1 text-[10px] text-zinc-500">
+                                    Policy default override — যেমন motorcycle ৫০ এর জায়গায় এই employee-এর ৩০।
+                                </p>
+                            </PayrollField>
+                        </div>
 
                         <div className="rounded-lg border border-amber-100 bg-amber-50/40 p-3">
                             <div className="mb-3 flex items-center justify-between gap-2">

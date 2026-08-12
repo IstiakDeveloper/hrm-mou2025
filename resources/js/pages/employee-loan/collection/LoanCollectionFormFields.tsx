@@ -8,6 +8,7 @@ import {
     PayrollEmployeeSelect,
     PayrollField,
 } from '@/components/payroll/PayrollFilterGrid';
+import { formatLoanSelectLabel, loanSelectKeywords } from '@/lib/employee-loan-format';
 import type { LoanOption } from './types';
 import { fmt } from './types';
 
@@ -67,8 +68,8 @@ export function LoanCollectionFormFields({
         () =>
             employeeLoans.map((l) => ({
                 value: String(l.id),
-                label: `${l.loan_number} — out ${fmt(l.outstanding_balance)} (${l.pending_installments} pending)`,
-                keywords: `${l.loan_number} ${l.employee_label} ${l.policy_name ?? ''}`,
+                label: formatLoanSelectLabel(l, { includeOutstanding: true, includePending: true }),
+                keywords: loanSelectKeywords(l),
             })),
         [employeeLoans],
     );
@@ -109,6 +110,10 @@ export function LoanCollectionFormFields({
                 {errors.employee_loan_id && <p className="mt-1 text-xs text-rose-600">{errors.employee_loan_id}</p>}
                 {selectedLoan && (
                     <p className="mt-1 text-[10px] text-zinc-500">
+                        {[selectedLoan.loan_type_label, selectedLoan.policy_name || selectedLoan.policy_code]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        {' · '}
                         Installment ৳{fmt(selectedLoan.installment_amount)} · Outstanding ৳{fmt(selectedLoan.outstanding_balance)} ·{' '}
                         {selectedLoan.pending_installments} pending
                     </p>

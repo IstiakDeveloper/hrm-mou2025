@@ -3,7 +3,7 @@ import axios from 'axios';
 import { router } from '@inertiajs/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { PayrollComboField, PayrollEmployeeSelect } from '@/components/payroll/PayrollFilterGrid';
-import { fmtLoanAmount } from '@/lib/employee-loan-format';
+import { formatLoanSelectLabel, loanSelectKeywords } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 
 export type LedgerNavLoan = {
@@ -12,6 +12,7 @@ export type LedgerNavLoan = {
     status: string;
     loan_type_label: string;
     policy_name: string | null;
+    policy_code?: string | null;
     outstanding_balance: number;
     pending_installments: number;
 };
@@ -21,13 +22,6 @@ type Props = {
     currentEmployeeId: number;
     employeeLoans: LedgerNavLoan[];
 };
-
-const fmt = fmtLoanAmount;
-
-function loanLabel(loan: LedgerNavLoan): string {
-    const status = loan.status === 'active' ? 'active' : loan.status;
-    return `${loan.loan_number} — ${status} — out ${fmt(loan.outstanding_balance)}`;
-}
 
 export function LedgerEmployeeLoanSwitcher({ currentLoanId, currentEmployeeId, employeeLoans }: Props) {
     const [employeeId, setEmployeeId] = useState(String(currentEmployeeId));
@@ -108,8 +102,8 @@ export function LedgerEmployeeLoanSwitcher({ currentLoanId, currentEmployeeId, e
         () =>
             loans.map((loan) => ({
                 value: String(loan.id),
-                label: loanLabel(loan),
-                keywords: `${loan.loan_number} ${loan.policy_name ?? ''} ${loan.loan_type_label}`,
+                label: formatLoanSelectLabel(loan, { includeStatus: true, includeOutstanding: true }),
+                keywords: loanSelectKeywords(loan),
             })),
         [loans],
     );
@@ -140,7 +134,12 @@ export function LedgerEmployeeLoanSwitcher({ currentLoanId, currentEmployeeId, e
                 {selectedLoan && !loansLoading && (
                     <p className="text-[11px] text-zinc-500 sm:col-span-2">
                         {selectedLoan.loan_type_label}
-                        {selectedLoan.policy_name ? ` · ${selectedLoan.policy_name}` : ''}
+                        {selectedLoan.policy_code
+                            ? ` · ${selectedLoan.policy_code}`
+                            : selectedLoan.policy_name
+                              ? ` · ${selectedLoan.policy_name}`
+                              : ''}
+                        {selectedLoan.policy_code && selectedLoan.policy_name ? ` · ${selectedLoan.policy_name}` : ''}
                         {' · '}
                         {selectedLoan.pending_installments} pending installment
                         {selectedLoan.pending_installments === 1 ? '' : 's'}

@@ -514,7 +514,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
         e.preventDefault();
         if (!editItem || saveLoading || calcLoading) return;
 
-        const merged = { ...itemFormDataRef.current, ...itemForm.data };
+        const merged = { ...itemForm.data, ...itemFormDataRef.current };
         const policyId = resolvePolicyId(merged);
         if (!policyId) {
             setSaveError('Loan policy নির্বাচন করুন।');
@@ -551,8 +551,7 @@ export default function LoanMigrationShow({ batch, canEdit, policies }: Props) {
             return;
         }
 
-        const current = itemFormDataRef.current;
-        const payload = buildSavePayload(current, resolvePolicyId(current), policies);
+        const payload = buildSavePayload(merged, policyId, policies);
 
         setSaveLoading(true);
 

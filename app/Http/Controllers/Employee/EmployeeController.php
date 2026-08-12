@@ -1084,7 +1084,15 @@ class EmployeeController extends Controller
         }
 
         $collateral = $request->input('collateral');
-        if (is_array($collateral) && is_array($collateral['certificate_levels'] ?? null)) {
+        if (is_array($collateral)) {
+            $rawLevels = $collateral['certificate_levels'] ?? [];
+            if (is_string($rawLevels)) {
+                $decoded = json_decode($rawLevels, true);
+                $rawLevels = is_array($decoded) ? $decoded : ($rawLevels !== '' ? explode(',', $rawLevels) : []);
+            }
+            if (! is_array($rawLevels)) {
+                $rawLevels = [];
+            }
             $levelMap = [
                 'ssc' => 'ssc',
                 'SSC' => 'ssc',
@@ -1096,7 +1104,7 @@ class EmployeeController extends Controller
                 'Masters' => 'masters',
             ];
             $normalizedLevels = [];
-            foreach ($collateral['certificate_levels'] as $level) {
+            foreach ($rawLevels as $level) {
                 $key = trim((string) $level);
                 if ($key === '') {
                     continue;
@@ -3111,8 +3119,11 @@ class EmployeeController extends Controller
             ->orderBy('event_date', 'asc')
             ->get();
 
-        if ($existingManualHistories->isNotEmpty()) {
-            $employeePayload['job_histories'] = $existingManualHistories->map(fn ($h) => [
+        $jobHistoryRows = [];
+        $existingTypes = [];
+
+        foreach ($existingManualHistories as $h) {
+            $jobHistoryRows[] = [
                 'id' => $h->id,
                 'event_type' => $h->event_type,
                 'event_date' => $h->event_date?->format('Y-m-d') ?? '',
@@ -3121,39 +3132,72 @@ class EmployeeController extends Controller
                 'from_branch_id' => $h->from_branch_id ? (string) $h->from_branch_id : '',
                 'to_branch_id' => $h->to_branch_id ? (string) $h->to_branch_id : '',
                 'remarks' => $h->remarks ?? '',
-            ])->all();
-        } else {
-            $initialRows = [];
+            ];
+            $existingTypes[$h->event_type] = true;
+        }
 
-            if ($employee->joining_date) {
-                $initialRows[] = [
-                    'event_type' => 'joining',
-                    'event_date' => $employee->joining_date->format('Y-m-d'),
-                    'from_designation_id' => '',
-                    'to_designation_id' => $employee->joining_designation_id ? (string) $employee->joining_designation_id : ($employee->designation_id ? (string) $employee->designation_id : ''),
-                    'from_branch_id' => '',
-                    'to_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
-                    'remarks' => 'Initial Joining',
-                ];
+        if (! isset($existingTypes['joining']) && $employee->joining_date) {
+            $jobHistoryRows[] = [
+                'event_type' => 'joining',
+                'event_date' => $employee->joining_date->format('Y-m-d'),
+                'from_designation_id' => '',
+                'to_designation_id' => $employee->joining_designation_id ? (string) $employee->joining_designation_id : ($employee->designation_id ? (string) $employee->designation_id : ''),
+                'from_branch_id' => '',
+                'to_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
+                'remarks' => 'Initial Joining',
+            ];
+        }
+
+        if (! isset($existingTypes['confirmation']) && $employee->confirmation_date) {
+            $jobHistoryRows[] = [
+                'event_type' => 'confirmation',
+                'event_date' => $employee->confirmation_date->format('Y-m-d'),
+                'from_designation_id' => '',
+                'to_designation_id' => $employee->designation_id ? (string) $employee->designation_id : '',
+                'from_branch_id' => '',
+                'to_branch_id' => '',
+                'remarks' => 'Service Confirmation',
+            ];
+        }
+
+        if (! isset($existingTypes['left']) && ($employee->resignation_date || $employee->dropout_date)) {
+            $jobHistoryRows[] = [
+                'event_type' => 'left',
+                'event_date' => ($employee->resignation_date ?? $employee->dropout_date)?->format('Y-m-d'),
+                'from_designation_id' => '',
+                'to_designation_id' => '',
+                'from_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
+                'to_branch_id' => '',
+                'remarks' => $employee->dropout_reason ?? 'Left Service',
+            ];
+        }
+
+        if (! isset($existingTypes['final_payment']) && $employee->final_payment_date) {
+            $jobHistoryRows[] = [
+                'event_type' => 'final_payment',
+                'event_date' => $employee->final_payment_date->format('Y-m-d'),
+                'from_designation_id' => '',
+                'to_designation_id' => '',
+                'from_branch_id' => '',
+                'to_branch_id' => '',
+                'remarks' => 'Final Payment Settled',
+            ];
+        }
+
+        $sysTransfers = TransferHistory::where('employee_id', $employee->id)->orderBy('transfer_date', 'asc')->get();
+        foreach ($sysTransfers as $th) {
+            $tDate = $th->transfer_date?->format('Y-m-d');
+            $alreadyAdded = false;
+            foreach ($jobHistoryRows as $row) {
+                if ($row['event_type'] === 'transfer' && $row['event_date'] === $tDate && (string) $row['to_branch_id'] === (string) $th->to_branch_id) {
+                    $alreadyAdded = true;
+                    break;
+                }
             }
-
-            if ($employee->confirmation_date && $employee->confirmation_date->format('Y-m-d') <= date('Y-m-d')) {
-                $initialRows[] = [
-                    'event_type' => 'confirmation',
-                    'event_date' => $employee->confirmation_date->format('Y-m-d'),
-                    'from_designation_id' => '',
-                    'to_designation_id' => $employee->designation_id ? (string) $employee->designation_id : '',
-                    'from_branch_id' => '',
-                    'to_branch_id' => '',
-                    'remarks' => 'Service Confirmation',
-                ];
-            }
-
-            $sysTransfers = TransferHistory::where('employee_id', $employee->id)->orderBy('transfer_date', 'asc')->get();
-            foreach ($sysTransfers as $th) {
-                $initialRows[] = [
+            if (! $alreadyAdded && $tDate) {
+                $jobHistoryRows[] = [
                     'event_type' => 'transfer',
-                    'event_date' => $th->transfer_date?->format('Y-m-d') ?? '',
+                    'event_date' => $tDate,
                     'from_designation_id' => '',
                     'to_designation_id' => '',
                     'from_branch_id' => $th->from_branch_id ? (string) $th->from_branch_id : '',
@@ -3161,12 +3205,22 @@ class EmployeeController extends Controller
                     'remarks' => 'System Transfer',
                 ];
             }
+        }
 
-            $sysPromotions = PromotionHistory::where('employee_id', $employee->id)->orderBy('promotion_date', 'asc')->get();
-            foreach ($sysPromotions as $ph) {
-                $initialRows[] = [
+        $sysPromotions = PromotionHistory::where('employee_id', $employee->id)->orderBy('promotion_date', 'asc')->get();
+        foreach ($sysPromotions as $ph) {
+            $pDate = $ph->promotion_date?->format('Y-m-d');
+            $alreadyAdded = false;
+            foreach ($jobHistoryRows as $row) {
+                if ($row['event_type'] === 'promotion' && $row['event_date'] === $pDate && (string) $row['to_designation_id'] === (string) $ph->to_designation_id) {
+                    $alreadyAdded = true;
+                    break;
+                }
+            }
+            if (! $alreadyAdded && $pDate) {
+                $jobHistoryRows[] = [
                     'event_type' => 'promotion',
-                    'event_date' => $ph->promotion_date?->format('Y-m-d') ?? '',
+                    'event_date' => $pDate,
                     'from_designation_id' => $ph->from_designation_id ? (string) $ph->from_designation_id : '',
                     'to_designation_id' => $ph->to_designation_id ? (string) $ph->to_designation_id : '',
                     'from_branch_id' => '',
@@ -3174,12 +3228,22 @@ class EmployeeController extends Controller
                     'remarks' => 'System Promotion',
                 ];
             }
+        }
 
-            $sysDemotions = DemotionHistory::where('employee_id', $employee->id)->orderBy('demotion_date', 'asc')->get();
-            foreach ($sysDemotions as $dh) {
-                $initialRows[] = [
+        $sysDemotions = DemotionHistory::where('employee_id', $employee->id)->orderBy('demotion_date', 'asc')->get();
+        foreach ($sysDemotions as $dh) {
+            $dDate = $dh->demotion_date?->format('Y-m-d');
+            $alreadyAdded = false;
+            foreach ($jobHistoryRows as $row) {
+                if ($row['event_type'] === 'demotion' && $row['event_date'] === $dDate && (string) $row['to_designation_id'] === (string) $dh->to_designation_id) {
+                    $alreadyAdded = true;
+                    break;
+                }
+            }
+            if (! $alreadyAdded && $dDate) {
+                $jobHistoryRows[] = [
                     'event_type' => 'demotion',
-                    'event_date' => $dh->demotion_date?->format('Y-m-d') ?? '',
+                    'event_date' => $dDate,
                     'from_designation_id' => $dh->from_designation_id ? (string) $dh->from_designation_id : '',
                     'to_designation_id' => $dh->to_designation_id ? (string) $dh->to_designation_id : '',
                     'from_branch_id' => '',
@@ -3187,34 +3251,10 @@ class EmployeeController extends Controller
                     'remarks' => 'System Demotion',
                 ];
             }
-
-            if ($employee->resignation_date || $employee->dropout_date) {
-                $initialRows[] = [
-                    'event_type' => 'left',
-                    'event_date' => ($employee->resignation_date ?? $employee->dropout_date)?->format('Y-m-d'),
-                    'from_designation_id' => '',
-                    'to_designation_id' => '',
-                    'from_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
-                    'to_branch_id' => '',
-                    'remarks' => $employee->dropout_reason ?? 'Left Service',
-                ];
-            }
-
-            if ($employee->final_payment_date) {
-                $initialRows[] = [
-                    'event_type' => 'final_payment',
-                    'event_date' => $employee->final_payment_date->format('Y-m-d'),
-                    'from_designation_id' => '',
-                    'to_designation_id' => '',
-                    'from_branch_id' => '',
-                    'to_branch_id' => '',
-                    'remarks' => 'Final Payment Settled',
-                ];
-            }
-
-            usort($initialRows, fn ($a, $b) => strcmp((string) ($a['event_date'] ?? ''), (string) ($b['event_date'] ?? '')));
-            $employeePayload['job_histories'] = $initialRows;
         }
+
+        usort($jobHistoryRows, fn ($a, $b) => strcmp((string) ($a['event_date'] ?? ''), (string) ($b['event_date'] ?? '')));
+        $employeePayload['job_histories'] = $jobHistoryRows;
 
         $employeePayload['disciplinary_actions'] = EmployeeDisciplinaryAction::query()
             ->where('employee_id', $employee->id)
@@ -3730,30 +3770,61 @@ class EmployeeController extends Controller
 
                 $this->syncEmployeeDocumentsFromTabbedForm($request, $employee, false);
 
-                // Sync manual Job Histories
+                // Sync Job Histories & update core employee dates in sync
                 EmployeeJobHistory::where('employee_id', $eid)->delete();
                 $jobHistories = is_array($validated['job_histories'] ?? null) ? $validated['job_histories'] : [];
                 $jhRows = [];
+                $coreUpdates = [];
                 $authId = \Illuminate\Support\Facades\Auth::id();
                 $now = now();
+
                 foreach ($jobHistories as $jh) {
-                    if (! empty($jh['event_type']) && ! empty($jh['event_date'])) {
-                        $jhRows[] = [
-                            'employee_id' => $eid,
-                            'event_type' => $jh['event_type'],
-                            'event_date' => $jh['event_date'],
-                            'from_designation_id' => ! empty($jh['from_designation_id']) ? $jh['from_designation_id'] : null,
-                            'to_designation_id' => ! empty($jh['to_designation_id']) ? $jh['to_designation_id'] : null,
-                            'from_branch_id' => ! empty($jh['from_branch_id']) ? $jh['from_branch_id'] : null,
-                            'to_branch_id' => ! empty($jh['to_branch_id']) ? $jh['to_branch_id'] : null,
-                            'remarks' => $jh['remarks'] ?? null,
-                            'is_manual' => true,
-                            'created_by' => $authId,
-                            'created_at' => $now,
-                            'updated_at' => $now,
-                        ];
+                    if (empty($jh['event_type']) || empty($jh['event_date'])) {
+                        continue;
                     }
+                    $type = $jh['event_type'];
+                    $date = $jh['event_date'];
+
+                    if ($type === 'joining') {
+                        $coreUpdates['joining_date'] = $date;
+                        if (! empty($jh['to_designation_id'])) {
+                            $coreUpdates['joining_designation_id'] = $jh['to_designation_id'];
+                        }
+                        if (! empty($jh['to_branch_id'])) {
+                            $coreUpdates['current_branch_id'] = $jh['to_branch_id'];
+                        }
+                    } elseif ($type === 'confirmation') {
+                        $coreUpdates['confirmation_date'] = $date;
+                    } elseif ($type === 'left') {
+                        $coreUpdates['dropout_date'] = $date;
+                        $coreUpdates['resignation_date'] = $date;
+                        if (! empty($jh['remarks'])) {
+                            $coreUpdates['dropout_reason'] = $jh['remarks'];
+                        }
+                    } elseif ($type === 'final_payment') {
+                        $coreUpdates['final_payment_date'] = $date;
+                    }
+
+                    $jhRows[] = [
+                        'employee_id' => $eid,
+                        'event_type' => $type,
+                        'event_date' => $date,
+                        'from_designation_id' => ! empty($jh['from_designation_id']) ? $jh['from_designation_id'] : null,
+                        'to_designation_id' => ! empty($jh['to_designation_id']) ? $jh['to_designation_id'] : null,
+                        'from_branch_id' => ! empty($jh['from_branch_id']) ? $jh['from_branch_id'] : null,
+                        'to_branch_id' => ! empty($jh['to_branch_id']) ? $jh['to_branch_id'] : null,
+                        'remarks' => $jh['remarks'] ?? null,
+                        'is_manual' => true,
+                        'created_by' => $authId,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
                 }
+
+                if (! empty($coreUpdates)) {
+                    $employee->update($coreUpdates);
+                }
+
                 if (! empty($jhRows)) {
                     EmployeeJobHistory::insert($jhRows);
                 }
@@ -3916,10 +3987,27 @@ class EmployeeController extends Controller
             ->orderBy('action_date', 'asc')
             ->get();
 
-        // Build unified chronological Job History timeline
+        // Build unified chronological Job History timeline without duplicates
         $jobHistoryTimeline = [];
+        $manualTypes = [];
 
-        if ($employee->joining_date) {
+        foreach ($manualJobHistories as $mh) {
+            $mDate = $mh->event_date?->format('Y-m-d');
+            $jobHistoryTimeline[] = [
+                'id' => 'manual-'.$mh->id,
+                'event_type' => $mh->event_type,
+                'event_date' => $mDate,
+                'from_designation_name' => $mh->fromDesignation?->name,
+                'to_designation_name' => $mh->toDesignation?->name,
+                'from_branch_name' => $mh->fromBranch?->name,
+                'to_branch_name' => $mh->toBranch?->name,
+                'remarks' => $mh->remarks,
+                'is_manual' => true,
+            ];
+            $manualTypes[$mh->event_type] = true;
+        }
+
+        if (! isset($manualTypes['joining']) && $employee->joining_date) {
             $jobHistoryTimeline[] = [
                 'id' => 'auto-joining',
                 'event_type' => 'joining',
@@ -3931,7 +4019,7 @@ class EmployeeController extends Controller
             ];
         }
 
-        if ($employee->confirmation_date) {
+        if (! isset($manualTypes['confirmation']) && $employee->confirmation_date) {
             $jobHistoryTimeline[] = [
                 'id' => 'auto-confirmation',
                 'event_type' => 'confirmation',
@@ -3942,7 +4030,7 @@ class EmployeeController extends Controller
             ];
         }
 
-        if ($employee->resignation_date || $employee->dropout_date) {
+        if (! isset($manualTypes['left']) && ($employee->resignation_date || $employee->dropout_date)) {
             $jobHistoryTimeline[] = [
                 'id' => 'auto-left',
                 'event_type' => 'left',
@@ -3953,7 +4041,7 @@ class EmployeeController extends Controller
             ];
         }
 
-        if ($employee->final_payment_date) {
+        if (! isset($manualTypes['final_payment']) && $employee->final_payment_date) {
             $jobHistoryTimeline[] = [
                 'id' => 'auto-final_payment',
                 'event_type' => 'final_payment',
@@ -3964,56 +4052,72 @@ class EmployeeController extends Controller
         }
 
         foreach ($transferHistories as $th) {
-            $jobHistoryTimeline[] = [
-                'id' => 'sys-transfer-'.$th->id,
-                'event_type' => 'transfer',
-                'event_date' => $th->transfer_date?->format('Y-m-d'),
-                'from_branch_name' => $th->fromBranch?->name,
-                'to_branch_name' => $th->toBranch?->name,
-                'order_no' => $th->transfer?->transfer_order_no,
-                'transfer_id' => $th->transfer_id,
-                'is_manual' => false,
-            ];
+            $tDate = $th->transfer_date?->format('Y-m-d');
+            $alreadyAdded = false;
+            foreach ($jobHistoryTimeline as $item) {
+                if ($item['event_type'] === 'transfer' && $item['event_date'] === $tDate) {
+                    $alreadyAdded = true;
+                    break;
+                }
+            }
+            if (! $alreadyAdded && $tDate) {
+                $jobHistoryTimeline[] = [
+                    'id' => 'sys-transfer-'.$th->id,
+                    'event_type' => 'transfer',
+                    'event_date' => $tDate,
+                    'from_branch_name' => $th->fromBranch?->name,
+                    'to_branch_name' => $th->toBranch?->name,
+                    'order_no' => $th->transfer?->transfer_order_no,
+                    'transfer_id' => $th->transfer_id,
+                    'is_manual' => false,
+                ];
+            }
         }
 
         foreach ($promotionHistories as $ph) {
-            $jobHistoryTimeline[] = [
-                'id' => 'sys-promotion-'.$ph->id,
-                'event_type' => 'promotion',
-                'event_date' => $ph->promotion_date?->format('Y-m-d'),
-                'from_designation_name' => $ph->fromDesignation?->name,
-                'to_designation_name' => $ph->toDesignation?->name,
-                'order_no' => $ph->promotion?->promotion_order_no,
-                'promotion_id' => $ph->promotion_id,
-                'is_manual' => false,
-            ];
+            $pDate = $ph->promotion_date?->format('Y-m-d');
+            $alreadyAdded = false;
+            foreach ($jobHistoryTimeline as $item) {
+                if ($item['event_type'] === 'promotion' && $item['event_date'] === $pDate) {
+                    $alreadyAdded = true;
+                    break;
+                }
+            }
+            if (! $alreadyAdded && $pDate) {
+                $jobHistoryTimeline[] = [
+                    'id' => 'sys-promotion-'.$ph->id,
+                    'event_type' => 'promotion',
+                    'event_date' => $pDate,
+                    'from_designation_name' => $ph->fromDesignation?->name,
+                    'to_designation_name' => $ph->toDesignation?->name,
+                    'order_no' => $ph->promotion?->promotion_order_no,
+                    'promotion_id' => $ph->promotion_id,
+                    'is_manual' => false,
+                ];
+            }
         }
 
         foreach ($demotionHistories as $dh) {
-            $jobHistoryTimeline[] = [
-                'id' => 'sys-demotion-'.$dh->id,
-                'event_type' => 'demotion',
-                'event_date' => $dh->demotion_date?->format('Y-m-d'),
-                'from_designation_name' => $dh->fromDesignation?->name,
-                'to_designation_name' => $dh->toDesignation?->name,
-                'order_no' => $dh->demotion?->demotion_order_no,
-                'demotion_id' => $dh->demotion_id,
-                'is_manual' => false,
-            ];
-        }
-
-        foreach ($manualJobHistories as $mh) {
-            $jobHistoryTimeline[] = [
-                'id' => 'manual-'.$mh->id,
-                'event_type' => $mh->event_type,
-                'event_date' => $mh->event_date?->format('Y-m-d'),
-                'from_designation_name' => $mh->fromDesignation?->name,
-                'to_designation_name' => $mh->toDesignation?->name,
-                'from_branch_name' => $mh->fromBranch?->name,
-                'to_branch_name' => $mh->toBranch?->name,
-                'remarks' => $mh->remarks,
-                'is_manual' => true,
-            ];
+            $dDate = $dh->demotion_date?->format('Y-m-d');
+            $alreadyAdded = false;
+            foreach ($jobHistoryTimeline as $item) {
+                if ($item['event_type'] === 'demotion' && $item['event_date'] === $dDate) {
+                    $alreadyAdded = true;
+                    break;
+                }
+            }
+            if (! $alreadyAdded && $dDate) {
+                $jobHistoryTimeline[] = [
+                    'id' => 'sys-demotion-'.$dh->id,
+                    'event_type' => 'demotion',
+                    'event_date' => $dDate,
+                    'from_designation_name' => $dh->fromDesignation?->name,
+                    'to_designation_name' => $dh->toDesignation?->name,
+                    'order_no' => $dh->demotion?->demotion_order_no,
+                    'demotion_id' => $dh->demotion_id,
+                    'is_manual' => false,
+                ];
+            }
         }
 
         usort($jobHistoryTimeline, fn ($a, $b) => strcmp((string) ($a['event_date'] ?? ''), (string) ($b['event_date'] ?? '')));

@@ -308,9 +308,18 @@ class LoanMigrationService
         }
 
         $remainingMonths = max(1, (int) ceil($outTotal / max($installAmount, 1)));
-        $totalInstallments = $policy->loan_type === 'pf_loan' || ! empty($row['use_manual_terms'])
-            ? $policyInstallments
-            : max($policyInstallments, $passedMonths + $remainingMonths);
+        $overrideInstallments = isset($row['total_installments']) && $row['total_installments'] !== null && $row['total_installments'] !== ''
+            ? (int) $row['total_installments']
+            : null;
+
+        if ($overrideInstallments !== null && $overrideInstallments >= 1) {
+            $totalInstallments = max($overrideInstallments, $passedMonths + 1);
+            $remainingMonths = max(1, $totalInstallments - $passedMonths);
+        } else {
+            $totalInstallments = $policy->loan_type === 'pf_loan' || ! empty($row['use_manual_terms'])
+                ? $policyInstallments
+                : max($policyInstallments, $passedMonths + $remainingMonths);
+        }
         $totalPayable = SalaryStructureCalculator::roundTaka(($passedMonths * $installAmount) + $outTotal);
 
         return [
@@ -415,6 +424,15 @@ class LoanMigrationService
                 'outstanding_total' => SalaryStructureCalculator::roundTaka((float) $merged['outstanding_total']),
             ];
 
+            if (array_key_exists('total_installments', $data) && $data['total_installments'] !== null && $data['total_installments'] !== '') {
+                $totalInstallments = max(1, (int) $data['total_installments']);
+                $passed = max(0, (int) $merged['passed_months']);
+                if ($totalInstallments <= $passed) {
+                    throw new InvalidArgumentException('Total installments must be greater than passed months.');
+                }
+                $updates['total_installments'] = $totalInstallments;
+            }
+
             if (isset($data['loan_policy_id'])) {
                 $updates['loan_policy_id'] = (int) $data['loan_policy_id'];
             }
@@ -481,6 +499,7 @@ class LoanMigrationService
                 'outstanding_principal' => SalaryStructureCalculator::roundTaka($snapshot['outstanding_principal']),
                 'outstanding_service_charge' => SalaryStructureCalculator::roundTaka($snapshot['outstanding_service_charge']),
                 'outstanding_total' => SalaryStructureCalculator::roundTaka($snapshot['outstanding_total']),
+                'total_installments' => (int) $snapshot['total_installments'],
             ]);
 
             if ($item->employee_loan_id) {
@@ -557,6 +576,15 @@ class LoanMigrationService
             'outstanding_total' => (float) $merged['outstanding_total'],
         ];
 
+        if (array_key_exists('total_installments', $data) && $data['total_installments'] !== null && $data['total_installments'] !== '') {
+            $totalInstallments = max(1, (int) $data['total_installments']);
+            $passed = (int) $merged['passed_months'];
+            if ($totalInstallments <= $passed) {
+                throw new InvalidArgumentException('Total installments must be greater than passed months.');
+            }
+            $snapshot['total_installments'] = $totalInstallments;
+        }
+
         $this->rebuildService->rebuildLoanFromLedgerSnapshot($loan, $snapshot);
 
         return $loan->fresh();
@@ -598,6 +626,7 @@ class LoanMigrationService
             'disburse_amount' => $snapshot['disburse_amount'],
             'installment_amount' => $calc['installment_amount'],
             'passed_months' => $snapshot['passed_months'],
+            'total_installments' => $calc['total_installments'],
             'outstanding_principal' => $calc['outstanding_principal'],
             'outstanding_service_charge' => $calc['outstanding_service_charge'],
             'outstanding_total' => $calc['outstanding_total'],

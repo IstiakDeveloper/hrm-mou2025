@@ -28,7 +28,7 @@ return [
         'loan-collection-register' => [
             'title' => 'Loan Collection Register',
             'description' => 'All collections including payroll installment deductions, manual collections, advance payments, rebates, and waivers.',
-            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'employee_id'],
+            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'employee_id', 'loan_type'],
             'template' => 'loan-collection-register',
             'report' => 'loan_collection_register',
         ],
@@ -71,7 +71,7 @@ return [
         'loan-statement-branch' => [
             'title' => 'Loan Statement (Branch Wise)',
             'description' => 'Outstanding loans grouped by branch.',
-            'filters' => ['as_of', 'branch_id'],
+            'filters' => ['as_of', 'branch_id', 'loan_type'],
             'template' => 'loan-grouped',
             'report' => 'loan_statement_branch',
         ],
