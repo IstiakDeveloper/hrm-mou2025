@@ -117,6 +117,8 @@ interface Props {
     pendingPenalties: PaginatedPenalties;
     paidPenalties: PaginatedPenalties;
     waivedPenalties?: PaginatedPenalties;
+    rejectedPenalties?: PaginatedPenalties;
+    unpaidPenalties?: PaginatedPenalties;
     allPenalties: PaginatedPenalties;
     branches: Array<{ id: number; name: string }>;
     stats: {
@@ -155,6 +157,8 @@ export default function PenaltyAdmin({
     pendingPenalties,
     paidPenalties,
     waivedPenalties,
+    rejectedPenalties,
+    unpaidPenalties,
     allPenalties,
     branches,
     stats,
@@ -482,7 +486,19 @@ export default function PenaltyAdmin({
                 </div>
 
                 {/* 2. STATS KPI CARDS */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                    <Card className="bg-white border-zinc-200/80 shadow-sm hover:shadow transition-shadow">
+                        <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] sm:text-xs text-zinc-500 font-medium">Unpaid / Locked</p>
+                                <p className="text-lg sm:text-2xl font-black text-slate-700 mt-0.5">{stats.unpaid_count}</p>
+                            </div>
+                            <div className="p-2 sm:p-3 bg-slate-100 text-slate-700 rounded-xl">
+                                <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     <Card className="bg-white border-zinc-200/80 shadow-sm hover:shadow transition-shadow">
                         <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
                             <div>
@@ -515,6 +531,18 @@ export default function PenaltyAdmin({
                             </div>
                             <div className="p-2 sm:p-3 bg-indigo-50 text-indigo-600 rounded-xl">
                                 <ShieldOff className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-zinc-200/80 shadow-sm hover:shadow transition-shadow">
+                        <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] sm:text-xs text-zinc-500 font-medium">Rejected Submissions</p>
+                                <p className="text-lg sm:text-2xl font-black text-rose-600 mt-0.5">{stats.rejected_count}</p>
+                            </div>
+                            <div className="p-2 sm:p-3 bg-rose-50 text-rose-600 rounded-xl">
+                                <X className="w-4 h-4 sm:w-5 sm:h-5" />
                             </div>
                         </CardContent>
                     </Card>
@@ -667,6 +695,17 @@ export default function PenaltyAdmin({
                             </TabsTrigger>
 
                             <TabsTrigger
+                                value="unpaid"
+                                className="text-xs font-bold px-3.5 py-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-slate-800 transition-all flex items-center"
+                            >
+                                <Lock className="w-3.5 h-3.5 mr-1.5 text-slate-600 flex-shrink-0" />
+                                Unpaid / Locked
+                                <span className="ml-1.5 px-2 py-0.5 bg-slate-200 text-slate-900 rounded-full text-[10px] font-black">
+                                    {stats.unpaid_count}
+                                </span>
+                            </TabsTrigger>
+
+                            <TabsTrigger
                                 value="paid"
                                 className="text-xs font-bold px-3.5 py-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-800 transition-all flex items-center"
                             >
@@ -685,6 +724,17 @@ export default function PenaltyAdmin({
                                 Waived Fines
                                 <span className="ml-1.5 px-2 py-0.5 bg-indigo-100 text-indigo-900 rounded-full text-[10px] font-black">
                                     {stats.waived_count ?? 0}
+                                </span>
+                            </TabsTrigger>
+
+                            <TabsTrigger
+                                value="rejected"
+                                className="text-xs font-bold px-3.5 py-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-rose-800 transition-all flex items-center"
+                            >
+                                <X className="w-3.5 h-3.5 mr-1.5 text-rose-600 flex-shrink-0" />
+                                Rejected
+                                <span className="ml-1.5 px-2 py-0.5 bg-rose-100 text-rose-900 rounded-full text-[10px] font-black">
+                                    {stats.rejected_count}
                                 </span>
                             </TabsTrigger>
 
@@ -885,6 +935,127 @@ export default function PenaltyAdmin({
                                 </div>
 
                                 {renderPagination(pendingPenalties)}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* TAB UNPAID: UNPAID / LOCKED PENALTIES */}
+                    <TabsContent value="unpaid" className="mt-0">
+                        <Card className="bg-white border-zinc-200/80 shadow-sm overflow-hidden rounded-2xl">
+                            <CardHeader className="border-b border-zinc-100 py-3.5 px-4 sm:px-6">
+                                <CardTitle className="text-xs sm:text-sm font-bold text-zinc-900 flex items-center">
+                                    <Lock className="w-4 h-4 text-slate-600 mr-2 flex-shrink-0" />
+                                    Unpaid & Locked Accounts List
+                                </CardTitle>
+                                <CardDescription className="text-[11px] sm:text-xs text-zinc-500">
+                                    Employees with overdue movement penalties whose account IDs are currently locked until payment or fine waiver.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                {/* MOBILE CARDS VIEW */}
+                                <div className="block md:hidden divide-y divide-zinc-100">
+                                    {!unpaidPenalties?.data || unpaidPenalties.data.length === 0 ? (
+                                        <div className="p-8 text-center text-zinc-500 text-xs">
+                                            No unpaid/locked penalties found.
+                                        </div>
+                                    ) : (
+                                        unpaidPenalties.data.map((item) => (
+                                            <div key={item.id} className="p-4 space-y-3 bg-white">
+                                                <div className="flex items-start justify-between">
+                                                    <div>
+                                                        <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                        <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                            ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-md border border-rose-200/60">
+                                                        ৳ {Number(item.total_fine).toFixed(2)}
+                                                    </span>
+                                                </div>
+
+                                                <div className="bg-zinc-50 p-2.5 rounded-xl space-y-1 text-[11px] border border-zinc-100">
+                                                    <p className="font-semibold text-zinc-900">
+                                                        Movement #{item.movement?.id}: {item.movement?.purpose || 'N/A'}
+                                                    </p>
+                                                    <p className="text-zinc-500">Start: {formatDateTime(item.movement?.from_datetime)}</p>
+                                                </div>
+
+                                                <div className="flex items-center justify-between pt-1">
+                                                    <span className="text-[11px] text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</span>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => setApprovingPenalty(item)}
+                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-3 rounded-lg"
+                                                    >
+                                                        <Unlock className="w-3 h-3 mr-1" /> Waive Fine
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* DESKTOP TABLE VIEW */}
+                                <div className="hidden md:block overflow-x-auto w-full">
+                                    <Table className="w-full">
+                                        <TableHeader className="bg-zinc-50/80">
+                                            <TableRow className="border-zinc-200/80">
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Employee & Branch</TableHead>
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Movement & Return Time</TableHead>
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Overdue & Fine</TableHead>
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Status</TableHead>
+                                                <TableHead className="text-right text-zinc-600 text-xs font-semibold">Action</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {!unpaidPenalties?.data || unpaidPenalties.data.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} className="text-center py-8 text-zinc-500 text-xs">
+                                                        No unpaid/locked penalties found.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                unpaidPenalties.data.map((item) => (
+                                                    <TableRow key={item.id} className="border-zinc-100 hover:bg-zinc-50/60">
+                                                        <TableCell className="font-medium text-zinc-900">
+                                                            <div>
+                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                    ID: {item.employee?.employee_id || 'N/A'}{' '}
+                                                                    {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-zinc-700 text-xs">
+                                                            <p className="font-semibold text-zinc-900">
+                                                                #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
+                                                            </p>
+                                                            <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                Start: {formatDateTime(item.movement?.from_datetime)}
+                                                            </p>
+                                                        </TableCell>
+                                                        <TableCell className="text-zinc-900">
+                                                            <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
+                                                            <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
+                                                        </TableCell>
+                                                        <TableCell>{getStatusBadge(item.status)}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => setApprovingPenalty(item)}
+                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 rounded-lg"
+                                                            >
+                                                                <Unlock className="w-3.5 h-3.5 mr-1" /> Waive Fine (Unlock)
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                {renderPagination(unpaidPenalties)}
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -1181,6 +1352,136 @@ export default function PenaltyAdmin({
                                 </div>
 
                                 {renderPagination(waivedPenalties)}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* TAB REJECTED: REJECTED SUBMISSIONS */}
+                    <TabsContent value="rejected" className="mt-0">
+                        <Card className="bg-white border-zinc-200/80 shadow-sm overflow-hidden rounded-2xl">
+                            <CardHeader className="border-b border-zinc-100 py-3.5 px-4 sm:px-6">
+                                <CardTitle className="text-xs sm:text-sm font-bold text-zinc-900 flex items-center">
+                                    <X className="w-4 h-4 text-rose-600 mr-2 flex-shrink-0" />
+                                    Rejected Payment Submissions List
+                                </CardTitle>
+                                <CardDescription className="text-[11px] sm:text-xs text-zinc-500">
+                                    Penalties where payment submission was rejected by Admin. Employees can resubmit payment or Admin can waive the fine.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                {/* MOBILE CARDS VIEW */}
+                                <div className="block md:hidden divide-y divide-zinc-100">
+                                    {!rejectedPenalties?.data || rejectedPenalties.data.length === 0 ? (
+                                        <div className="p-8 text-center text-zinc-500 text-xs">
+                                            No rejected payment submissions found.
+                                        </div>
+                                    ) : (
+                                        rejectedPenalties.data.map((item) => (
+                                            <div key={item.id} className="p-4 space-y-3 bg-white">
+                                                <div className="flex items-start justify-between">
+                                                    <div>
+                                                        <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                        <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                            ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-md border border-rose-200/60">
+                                                        ৳ {Number(item.total_fine).toFixed(2)}
+                                                    </span>
+                                                </div>
+
+                                                <div className="bg-rose-50/50 p-2.5 rounded-xl space-y-1 text-[11px] border border-rose-100">
+                                                    <p className="font-semibold text-rose-900">Reason: {item.admin_remarks || 'Payment info rejected'}</p>
+                                                    <p className="text-zinc-600 font-mono">
+                                                        Sender: {item.sender_number || item.transaction_id || 'N/A'} ({item.payment_method?.toUpperCase() || '-'})
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex items-center justify-between pt-1">
+                                                    <span className="text-[11px] text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</span>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => setApprovingPenalty(item)}
+                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-3 rounded-lg"
+                                                    >
+                                                        <Unlock className="w-3 h-3 mr-1" /> Waive Fine
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* DESKTOP TABLE VIEW */}
+                                <div className="hidden md:block overflow-x-auto w-full">
+                                    <Table className="w-full">
+                                        <TableHeader className="bg-zinc-50/80">
+                                            <TableRow className="border-zinc-200/80">
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Employee & Branch</TableHead>
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Movement & Purpose</TableHead>
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Fine Amount</TableHead>
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Submitted Mobile / Trx ID</TableHead>
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Rejection Reason</TableHead>
+                                                <TableHead className="text-right text-zinc-600 text-xs font-semibold">Action</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {!rejectedPenalties?.data || rejectedPenalties.data.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="text-center py-8 text-zinc-500 text-xs">
+                                                        No rejected payment submissions found.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                rejectedPenalties.data.map((item) => (
+                                                    <TableRow key={item.id} className="border-zinc-100 hover:bg-zinc-50/60">
+                                                        <TableCell className="font-medium text-zinc-900">
+                                                            <div>
+                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                    ID: {item.employee?.employee_id || 'N/A'}{' '}
+                                                                    {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-zinc-700 text-xs">
+                                                            <p className="font-semibold text-zinc-900">
+                                                                #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
+                                                            </p>
+                                                            <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                Start: {formatDateTime(item.movement?.from_datetime)}
+                                                            </p>
+                                                        </TableCell>
+                                                        <TableCell className="text-zinc-900">
+                                                            <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
+                                                            <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
+                                                        </TableCell>
+                                                        <TableCell className="text-zinc-800 text-xs">
+                                                            <span className="font-mono font-bold text-zinc-900">
+                                                                {item.sender_number || item.transaction_id || 'N/A'}
+                                                            </span>
+                                                            <p className="text-zinc-500 text-[11px] uppercase">{item.payment_method || '-'}</p>
+                                                        </TableCell>
+                                                        <TableCell className="text-rose-700 text-xs font-medium">
+                                                            {item.admin_remarks || 'Payment info rejected'}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => setApprovingPenalty(item)}
+                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 rounded-lg"
+                                                            >
+                                                                <Unlock className="w-3.5 h-3.5 mr-1" /> Waive Fine
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                {renderPagination(rejectedPenalties)}
                             </CardContent>
                         </Card>
                     </TabsContent>

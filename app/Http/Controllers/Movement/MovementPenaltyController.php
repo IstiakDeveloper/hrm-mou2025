@@ -180,7 +180,17 @@ class MovementPenaltyController extends Controller
         $waivedPaginator = $waivedQuery->orderByDesc('id')->paginate($perPage, ['*'], 'waived_page')->withQueryString();
         $waivedPenalties = $this->inertiaPagination($waivedPaginator);
 
-        // Tab 4: All Penalties Query (tab = all)
+        // Tab 4: Rejected Penalties Query (tab = rejected -> status = rejected)
+        $rejectedQuery = (clone $baseQuery)->where('status', 'rejected');
+        $rejectedPaginator = $rejectedQuery->orderByDesc('id')->paginate($perPage, ['*'], 'rejected_page')->withQueryString();
+        $rejectedPenalties = $this->inertiaPagination($rejectedPaginator);
+
+        // Tab 5: Unpaid Penalties Query (tab = unpaid -> status = unpaid)
+        $unpaidQuery = (clone $baseQuery)->where('status', 'unpaid');
+        $unpaidPaginator = $unpaidQuery->orderByDesc('id')->paginate($perPage, ['*'], 'unpaid_page')->withQueryString();
+        $unpaidPenalties = $this->inertiaPagination($unpaidPaginator);
+
+        // Tab 6: All Penalties Query (tab = all)
         $allQuery = clone $baseQuery;
         if ($request->filled('status') && $request->status !== 'all') {
             $allQuery->where('status', $request->status);
@@ -188,28 +198,28 @@ class MovementPenaltyController extends Controller
         $allPaginator = $allQuery->orderByDesc('id')->paginate($perPage, ['*'], 'all_page')->withQueryString();
         $allPenalties = $this->inertiaPagination($allPaginator);
 
-        // Comprehensive Stats
+        // Comprehensive Stats - Using (clone $baseQuery) so filters update counts dynamically
         $stats = [
-            'unpaid_count' => MovementPenalty::where('status', 'unpaid')->count(),
-            'pending_count' => MovementPenalty::where('status', 'pending_verification')->count(),
-            'approved_count' => MovementPenalty::where('status', 'approved')->count(),
-            'paid_count' => MovementPenalty::where('status', 'approved')->where(function ($q) {
+            'unpaid_count' => (clone $baseQuery)->where('status', 'unpaid')->count(),
+            'pending_count' => (clone $baseQuery)->where('status', 'pending_verification')->count(),
+            'approved_count' => (clone $baseQuery)->where('status', 'approved')->count(),
+            'paid_count' => (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
                 $q->where(function ($sq) {
                     $sq->whereNotNull('sender_number')->where('sender_number', '!=', '');
                 })->orWhere(function ($sq) {
                     $sq->whereNotNull('transaction_id')->where('transaction_id', '!=', '');
                 });
             })->count(),
-            'waived_count' => MovementPenalty::where('status', 'approved')->where(function ($q) {
+            'waived_count' => (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
                 $q->where(function ($sq) {
                     $sq->whereNull('sender_number')->orWhere('sender_number', '');
                 })->where(function ($sq) {
                     $sq->whereNull('transaction_id')->orWhere('transaction_id', '');
                 });
             })->count(),
-            'rejected_count' => MovementPenalty::where('status', 'rejected')->count(),
-            'total_count' => MovementPenalty::count(),
-            'total_fine_amount' => (float) MovementPenalty::sum('total_fine'),
+            'rejected_count' => (clone $baseQuery)->where('status', 'rejected')->count(),
+            'total_count' => (clone $baseQuery)->count(),
+            'total_fine_amount' => (float) (clone $baseQuery)->sum('total_fine'),
         ];
 
         // Branches list for filter dropdown
@@ -219,6 +229,8 @@ class MovementPenaltyController extends Controller
             'pendingPenalties' => $pendingPenalties,
             'paidPenalties' => $paidPenalties,
             'waivedPenalties' => $waivedPenalties,
+            'rejectedPenalties' => $rejectedPenalties,
+            'unpaidPenalties' => $unpaidPenalties,
             'allPenalties' => $allPenalties,
             'stats' => $stats,
             'paidStats' => $paidStats,
