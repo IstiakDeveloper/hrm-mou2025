@@ -62,6 +62,7 @@ import {
     Briefcase,
     Building2,
     Check,
+    Clock,
     DollarSign,
     FileText,
     GraduationCap,
@@ -150,6 +151,65 @@ interface Training {
     remarks: string;
 }
 
+export interface JobHistoryFormRow {
+    id?: number;
+    event_type: string;
+    event_date: string;
+    from_designation_id: string;
+    to_designation_id: string;
+    from_branch_id: string;
+    to_branch_id: string;
+    remarks: string;
+}
+
+export interface DisciplinaryActionFormRow {
+    id?: number;
+    action_type: string;
+    action_date: string;
+    details: string;
+}
+
+const JOB_HISTORY_EVENT_TYPES = [
+    { value: 'joining', label: '1. Joining as Designation' },
+    { value: 'confirmation', label: '2. Confirmed as Designation' },
+    { value: 'transfer', label: '3. Transferred from Branch to Branch' },
+    { value: 'promotion', label: '4. Promoted as Designation' },
+    { value: 'demotion', label: '5. Demoted as Designation' },
+    { value: 'left', label: '6. Left from Branch' },
+    { value: 'final_payment', label: '7. Final Payment Settled' },
+];
+
+const DISCIPLINARY_ACTION_TYPES = [
+    { value: 'Warning', label: 'Warning (সতর্কীকরণ)' },
+    { value: 'Show Cause Letter', label: 'Show Cause Letter (কারণ দর্শানোর চিঠি)' },
+    { value: 'Explanation Requested', label: 'Explanation Requested (ব্যাখ্যা প্রদান)' },
+    { value: 'Salary Suspension', label: 'Salary Suspension (বেতন স্থগিত)' },
+    { value: 'Salary Deduction', label: 'Salary Deduction (বেতন কর্তন)' },
+    { value: 'Fine', label: 'Fine (জরিমানা)' },
+    { value: 'Embezzlement', label: 'Embezzlement (অর্থ আত্মসাৎ)' },
+    { value: 'Financial Irregularity', label: 'Financial Irregularity (আর্থিক অনিয়ম)' },
+];
+
+function emptyJobHistoryFormRow(): JobHistoryFormRow {
+    return {
+        event_type: 'transfer',
+        event_date: '',
+        from_designation_id: '',
+        to_designation_id: '',
+        from_branch_id: '',
+        to_branch_id: '',
+        remarks: '',
+    };
+}
+
+function emptyDisciplinaryActionFormRow(): DisciplinaryActionFormRow {
+    return {
+        action_type: 'Warning',
+        action_date: '',
+        details: '',
+    };
+}
+
 interface EmployeeEditFormData {
     _method: string;
     current_branch_id: string;
@@ -220,6 +280,8 @@ interface EmployeeEditFormData {
     experiences: Experience[];
     trainings: Training[];
     documents: EmployeeDocumentFormRow[];
+    job_histories: JobHistoryFormRow[];
+    disciplinary_actions: DisciplinaryActionFormRow[];
 }
 
 function emptyFormAddress(type: 'present' | 'permanent'): Address {
@@ -411,6 +473,22 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         experiences: (employee.experiences as any[]) ?? [],
         trainings: (employee.trainings as any[]) ?? [],
         documents: hydrateEmployeeDocumentRowsForForm(employee.documents ?? []),
+        job_histories: ((employee.job_histories as any[]) ?? []).map((h) => ({
+            id: h.id ? Number(h.id) : undefined,
+            event_type: String(h.event_type ?? 'transfer'),
+            event_date: String(h.event_date ?? '').slice(0, 10),
+            from_designation_id: h.from_designation_id != null ? String(h.from_designation_id) : '',
+            to_designation_id: h.to_designation_id != null ? String(h.to_designation_id) : '',
+            from_branch_id: h.from_branch_id != null ? String(h.from_branch_id) : '',
+            to_branch_id: h.to_branch_id != null ? String(h.to_branch_id) : '',
+            remarks: String(h.remarks ?? ''),
+        })),
+        disciplinary_actions: ((employee.disciplinary_actions as any[]) ?? []).map((d) => ({
+            id: d.id ? Number(d.id) : undefined,
+            action_type: String(d.action_type ?? 'Warning'),
+            action_date: String(d.action_date ?? '').slice(0, 10),
+            details: String(d.details ?? ''),
+        })),
     };
 }
 
@@ -425,6 +503,7 @@ function flattenEmployeeFormErrors(err: Record<string, string | undefined>): str
 
 const EMPLOYEE_EDIT_TAB_ORDER = [
     'general',
+    'job_history',
     'education',
     'salary',
     'bank',
@@ -528,6 +607,7 @@ function validateEmployeeEditTab(tab: EmployeeEditTabId, data: EmployeeEditFormD
 
 function errorFieldKeyToEmployeeEditTab(key: string): EmployeeEditTabId {
     if (['payscale_id', 'salary_grade_id', 'salary_step_id', 'basic_salary'].includes(key)) return 'salary';
+    if (key.startsWith('job_histories') || key.startsWith('disciplinary_actions')) return 'job_history';
     if (key.startsWith('educations')) return 'education';
     if (key.startsWith('bank')) return 'bank';
     if (key.startsWith('nominees')) return 'nominee';
@@ -1047,7 +1127,11 @@ export default function EmployeeEdit({
         }
     };
 
-    const saveUnionModal = async () => {
+    const saveUnionModal = async (e?: React.SyntheticEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!addUnionModal.name.trim() || addUnionModal.saving) return;
         setAddUnionModal((s) => ({ ...s, saving: true, error: '' }));
         const res = await persistUnion(addUnionModal.target, addUnionModal.name);
@@ -1058,7 +1142,11 @@ export default function EmployeeEdit({
         setAddUnionModal((s) => ({ ...s, saving: false, error: res.error || 'Failed to save union.' }));
     };
 
-    const saveVillageModal = async () => {
+    const saveVillageModal = async (e?: React.SyntheticEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!addVillageModal.name.trim() || addVillageModal.saving) return;
         setAddVillageModal((s) => ({ ...s, saving: true, error: '' }));
         const res = await persistVillage(addVillageModal.target, addVillageModal.name);
@@ -1103,9 +1191,14 @@ export default function EmployeeEdit({
             setTabStepBlockMessages([nidErr]);
             return;
         }
+        const hasFileUpload =
+            data.photo instanceof File ||
+            data.signature instanceof File ||
+            (Array.isArray(data.documents) && data.documents.some((d: any) => d?.file instanceof File));
+
         post(route('employees.update', employee.id), {
             preserveScroll: true,
-            forceFormData: true,
+            forceFormData: hasFileUpload,
             transform: (formData) => ({
                 ...formData,
                 _method: 'PUT',
@@ -1142,6 +1235,7 @@ export default function EmployeeEdit({
 
     const tabLabels: Record<EmployeeEditTabId, { title: string; desc: string; icon: any }> = {
         general: { title: 'General Info', desc: 'Identity & contact', icon: User },
+        job_history: { title: 'Job History & Disciplinary', desc: 'Legacy timeline & actions', icon: Clock },
         education: { title: 'Education', desc: 'Degrees & boards', icon: GraduationCap },
         salary: { title: 'Salary Details', desc: 'Payscale & grade', icon: DollarSign },
         bank: { title: 'Bank Account', desc: 'Payment routing', icon: Building2 },
@@ -1176,78 +1270,6 @@ export default function EmployeeEdit({
             <Head title={`Edit Employee: ${employee.name_en || employee.pin || employee.id}`} />
 
             <div className="mx-auto max-w-[1300px] px-4 py-8 sm:px-6 lg:px-8">
-                {/* Minimal Header */}
-                <div className="mb-8 flex flex-col gap-4 border-b border-zinc-100 pb-6 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1.5">
-                        <Link
-                            href={route('employees.index')}
-                            className="mb-1 inline-flex items-center gap-1.5 text-xs font-bold tracking-wider text-zinc-400 uppercase transition-colors hover:text-emerald-600"
-                        >
-                            <ArrowLeft className="h-3.5 w-3.5" />
-                            <span>Back to Directory</span>
-                        </Link>
-                        <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900 sm:text-3xl">Edit Employee Profile</h1>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-600/10 ring-inset">
-                                <Sparkles className="h-3.5 w-3.5 animate-pulse" /> PIN: {employee.pin || 'N/A'}
-                            </span>
-                        </div>
-                        <p className="max-w-2xl text-xs text-zinc-500 sm:text-sm">
-                            Updating record for <strong className="text-zinc-800">{employee.name_en}</strong>. Form progress will auto-draft.
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-                        <div className="flex items-center gap-1.5 rounded-xl border border-zinc-200/60 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-500 shadow-sm">
-                            <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                            <span>Draft Saved</span>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={handleClearDraft}
-                            className="flex h-8 items-center gap-1.5 rounded-xl border border-transparent px-2.5 text-xs font-bold text-red-600 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-700"
-                            title="Discard draft and reset form"
-                        >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            <span>Reset Form</span>
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Validation Banner */}
-                {tabStepBlockMessages?.length || serverFieldErrors.length > 0 || submitError ? (
-                    <Alert variant="destructive" className="mb-6 rounded-2xl border-red-200 bg-red-50/50 shadow-sm">
-                        <AlertTitle className="flex items-center gap-2 font-bold text-red-800">
-                            <AlertCircle className="h-4.5 w-4.5 shrink-0" />
-                            {serverFieldErrors.length > 0 || submitError ? 'Submission Failed' : 'Action Required'}
-                        </AlertTitle>
-                        <AlertDescription className="mt-2 space-y-2 text-xs text-red-700">
-                            {tabStepBlockMessages && tabStepBlockMessages.length > 0 && (
-                                <div>
-                                    <p className="font-bold">Please complete or correct the following fields in this section:</p>
-                                    <ul className="mt-1 list-disc space-y-0.5 pl-5 font-medium">
-                                        {tabStepBlockMessages.map((m, i) => (
-                                            <li key={i}>{m}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                            {serverFieldErrors.length > 0 && (
-                                <div>
-                                    <p className="font-bold">Errors returned from server:</p>
-                                    <ul className="mt-1 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 font-medium">
-                                        {serverFieldErrors.map((m, i) => (
-                                            <li key={i}>{m}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                            {submitError && <p className="font-semibold">{submitError}</p>}
-                        </AlertDescription>
-                    </Alert>
-                ) : null}
-
-                {/* Main Setup Layout */}
                 <form
                     onSubmit={submit}
                     onSubmitCapture={(e) => {
@@ -1263,6 +1285,86 @@ export default function EmployeeEdit({
                         }
                     }}
                 >
+                    {/* Minimal Header */}
+                    <div className="mb-8 flex flex-col gap-4 border-b border-zinc-100 pb-6 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-1.5">
+                            <Link
+                                href={route('employees.index')}
+                                className="mb-1 inline-flex items-center gap-1.5 text-xs font-bold tracking-wider text-zinc-400 uppercase transition-colors hover:text-emerald-600"
+                            >
+                                <ArrowLeft className="h-3.5 w-3.5" />
+                                <span>Back to Directory</span>
+                            </Link>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900 sm:text-3xl">Edit Employee Profile</h1>
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-600/10 ring-inset">
+                                    <Sparkles className="h-3.5 w-3.5 animate-pulse" /> PIN: {employee.pin || 'N/A'}
+                                </span>
+                            </div>
+                            <p className="max-w-2xl text-xs text-zinc-500 sm:text-sm">
+                                Updating record for <strong className="text-zinc-800">{employee.name_en}</strong>. Form progress will auto-draft.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                            <div className="flex items-center gap-1.5 rounded-xl border border-zinc-200/60 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-500 shadow-sm">
+                                <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                                <span>Draft Saved</span>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={handleClearDraft}
+                                className="flex h-8 items-center gap-1.5 rounded-xl border border-transparent px-2.5 text-xs font-bold text-red-600 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-700"
+                                title="Discard draft and reset form"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                <span>Reset Form</span>
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={processing}
+                                className="flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-5 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700 disabled:opacity-50"
+                            >
+                                <Check className="h-4 w-4" />
+                                <span>{processing ? 'Saving...' : 'Update Employee'}</span>
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Validation Banner */}
+                    {tabStepBlockMessages?.length || serverFieldErrors.length > 0 || submitError ? (
+                        <Alert variant="destructive" className="mb-6 rounded-2xl border-red-200 bg-red-50/50 shadow-sm">
+                            <AlertTitle className="flex items-center gap-2 font-bold text-red-800">
+                                <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+                                {serverFieldErrors.length > 0 || submitError ? 'Submission Failed' : 'Action Required'}
+                            </AlertTitle>
+                            <AlertDescription className="mt-2 space-y-2 text-xs text-red-700">
+                                {tabStepBlockMessages && tabStepBlockMessages.length > 0 && (
+                                    <div>
+                                        <p className="font-bold">Please complete or correct the following fields in this section:</p>
+                                        <ul className="mt-1 list-disc space-y-0.5 pl-5 font-medium">
+                                            {tabStepBlockMessages.map((m, i) => (
+                                                <li key={i}>{m}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                {serverFieldErrors.length > 0 && (
+                                    <div>
+                                        <p className="font-bold">Errors returned from server:</p>
+                                        <ul className="mt-1 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5 font-medium">
+                                            {serverFieldErrors.map((m, i) => (
+                                                <li key={i}>{m}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                {submitError && <p className="font-semibold">{submitError}</p>}
+                            </AlertDescription>
+                        </Alert>
+                    ) : null}
+
+                    {/* Main Setup Layout */}
                     <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
                         {/* Sidebar Stepper */}
                         <div className="lg:col-span-3">
@@ -1328,6 +1430,16 @@ export default function EmployeeEdit({
                                             );
                                         })}
                                     </nav>
+                                    <div className="mt-6 border-t border-zinc-100 pt-4">
+                                        <Button
+                                            type="submit"
+                                            disabled={processing}
+                                            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700 disabled:opacity-50"
+                                        >
+                                            <Check className="h-4 w-4" />
+                                            <span>{processing ? 'Saving Changes...' : 'Update Employee'}</span>
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 {/* Mobile horizontal stepper */}
@@ -2044,14 +2156,306 @@ export default function EmployeeEdit({
                                         </div>
 
                                         <div className="flex items-center justify-between rounded-b-2xl border-t border-zinc-100 bg-zinc-50/50 p-6">
-                                            <span className="text-xs font-semibold text-zinc-400">Step 1 of 11: General Setup</span>
+                                            <span className="text-xs font-semibold text-zinc-400">Step 1 of 12: General Setup</span>
                                             <Button
                                                 type="button"
                                                 className="h-10 rounded-lg bg-emerald-600 px-5 font-semibold text-white shadow-sm hover:bg-emerald-700"
-                                                onClick={() => requestTabChange('education')}
+                                                onClick={() => requestTabChange('job_history')}
                                             >
-                                                Next: Educational History
+                                                Next: Job History & Disciplinary
                                             </Button>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* JOB HISTORY & DISCIPLINARY TAB */}
+                                    <TabsContent value="job_history" className="mt-0 focus-visible:outline-none">
+                                        <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/50 p-6 md:p-8">
+                                            <div>
+                                                <h2 className="text-lg font-bold text-zinc-900">Job History & Disciplinary Actions</h2>
+                                                <p className="mt-1 text-xs text-zinc-500">
+                                                    Manage historical career events (joining, confirmation, transfer, promotion, demotion, left, final payment) and disciplinary records for legacy or current employees.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-8 p-6 md:p-8">
+                                            {/* Section 1: Legacy Job History Events */}
+                                            <div className="space-y-4">
+                                                <div className="border-b border-zinc-100 pb-3">
+                                                    <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
+                                                        <Clock className="w-4 h-4 text-emerald-600" /> Legacy Job History Timeline
+                                                    </h3>
+                                                    <p className="mt-0.5 text-xs text-zinc-400">
+                                                        Entries added here affect only this employee's profile history (does not bloat main transfer/promotion order lists).
+                                                    </p>
+                                                </div>
+
+                                                {data.job_histories.length === 0 ? (
+                                                    <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-6 text-center text-xs text-zinc-500">
+                                                        No manual job history records added yet. Click "Add History Event" to add past transfers, promotions, confirmations, etc.
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-4">
+                                                        {data.job_histories.map((row, idx) => (
+                                                            <div key={idx} className="relative rounded-xl border border-zinc-200/80 bg-zinc-50/30 p-4 space-y-4">
+                                                                <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                                                                    <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                                                                        Event #{idx + 1}
+                                                                    </span>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                                                                        onClick={() => {
+                                                                            const updated = data.job_histories.filter((_, i) => i !== idx);
+                                                                            setData('job_histories', updated);
+                                                                        }}
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <FormField label="Event Type" required>
+                                                                        <select
+                                                                            className="w-full h-9 rounded-lg border border-zinc-200 bg-white px-3 text-xs text-zinc-900 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+                                                                            value={row.event_type}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...data.job_histories];
+                                                                                updated[idx] = { ...updated[idx], event_type: e.target.value };
+                                                                                setData('job_histories', updated);
+                                                                            }}
+                                                                        >
+                                                                            {JOB_HISTORY_EVENT_TYPES.map((t) => (
+                                                                                <option key={t.value} value={t.value}>{t.label}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </FormField>
+
+                                                                    <FormField label="Event Date" required>
+                                                                        <Input
+                                                                            type="date"
+                                                                            className="h-9 text-xs"
+                                                                            value={row.event_date}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...data.job_histories];
+                                                                                updated[idx] = { ...updated[idx], event_date: e.target.value };
+                                                                                setData('job_histories', updated);
+                                                                            }}
+                                                                        />
+                                                                    </FormField>
+                                                                </div>
+
+                                                                {/* Conditional designation / branch inputs based on event type */}
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    {['transfer', 'left'].includes(row.event_type) && (
+                                                                        <FormField label="From Branch">
+                                                                            <ComboSelect
+                                                                                items={branchItems}
+                                                                                value={row.from_branch_id ? String(row.from_branch_id) : null}
+                                                                                onChange={(val) => {
+                                                                                    const updated = [...data.job_histories];
+                                                                                    updated[idx] = { ...updated[idx], from_branch_id: val ? String(val) : '' };
+                                                                                    setData('job_histories', updated);
+                                                                                }}
+                                                                                placeholder="Select From Branch..."
+                                                                            />
+                                                                        </FormField>
+                                                                    )}
+
+                                                                    {['joining', 'transfer'].includes(row.event_type) && (
+                                                                        <FormField label="To / Joining Branch">
+                                                                            <ComboSelect
+                                                                                items={branchItems}
+                                                                                value={row.to_branch_id ? String(row.to_branch_id) : null}
+                                                                                onChange={(val) => {
+                                                                                    const updated = [...data.job_histories];
+                                                                                    updated[idx] = { ...updated[idx], to_branch_id: val ? String(val) : '' };
+                                                                                    setData('job_histories', updated);
+                                                                                }}
+                                                                                placeholder="Select To Branch..."
+                                                                            />
+                                                                        </FormField>
+                                                                    )}
+
+                                                                    {['promotion', 'demotion'].includes(row.event_type) && (
+                                                                        <FormField label="From Designation">
+                                                                            <ComboSelect
+                                                                                items={desigItems}
+                                                                                value={row.from_designation_id ? String(row.from_designation_id) : null}
+                                                                                onChange={(val) => {
+                                                                                    const updated = [...data.job_histories];
+                                                                                    updated[idx] = { ...updated[idx], from_designation_id: val ? String(val) : '' };
+                                                                                    setData('job_histories', updated);
+                                                                                }}
+                                                                                placeholder="Select From Designation..."
+                                                                            />
+                                                                        </FormField>
+                                                                    )}
+
+                                                                    {['joining', 'confirmation', 'promotion', 'demotion'].includes(row.event_type) && (
+                                                                        <FormField label="To / Confirmed / Promoted Designation">
+                                                                            <ComboSelect
+                                                                                items={desigItems}
+                                                                                value={row.to_designation_id ? String(row.to_designation_id) : null}
+                                                                                onChange={(val) => {
+                                                                                    const updated = [...data.job_histories];
+                                                                                    updated[idx] = { ...updated[idx], to_designation_id: val ? String(val) : '' };
+                                                                                    setData('job_histories', updated);
+                                                                                }}
+                                                                                placeholder="Select Designation..."
+                                                                            />
+                                                                        </FormField>
+                                                                    )}
+                                                                </div>
+
+                                                                <FormField label="Remarks / Details">
+                                                                    <Input
+                                                                        className="h-9 text-xs"
+                                                                        placeholder="Optional remarks or notes about this event..."
+                                                                        value={row.remarks}
+                                                                        onChange={(e) => {
+                                                                            const updated = [...data.job_histories];
+                                                                            updated[idx] = { ...updated[idx], remarks: e.target.value };
+                                                                            setData('job_histories', updated);
+                                                                        }}
+                                                                    />
+                                                                </FormField>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                <div className="flex justify-end pt-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-9 gap-1.5 border-emerald-600 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 shadow-sm"
+                                                        onClick={() => setData('job_histories', [...data.job_histories, emptyJobHistoryFormRow()])}
+                                                    >
+                                                        <Plus className="h-4 w-4" /> Add History Event
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* Section 2: Disciplinary Actions */}
+                                            <div className="space-y-4 pt-4 border-t border-zinc-100">
+                                                <div className="border-b border-zinc-100 pb-3">
+                                                    <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
+                                                        <Shield className="w-4 h-4 text-rose-600" /> Disciplinary Actions
+                                                    </h3>
+                                                    <p className="mt-0.5 text-xs text-zinc-400">
+                                                        Record disciplinary notices, letters, fines, salary deductions, or suspensions.
+                                                    </p>
+                                                </div>
+
+                                                {data.disciplinary_actions.length === 0 ? (
+                                                    <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-6 text-center text-xs text-zinc-500">
+                                                        No disciplinary actions recorded. Click "Add Disciplinary Action" if any action was issued.
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-4">
+                                                        {data.disciplinary_actions.map((row, idx) => (
+                                                            <div key={idx} className="relative rounded-xl border border-rose-100 bg-rose-50/20 p-4 space-y-4">
+                                                                <div className="flex items-center justify-between border-b border-rose-100 pb-2">
+                                                                    <span className="text-xs font-bold text-rose-700 uppercase tracking-wider">
+                                                                        Action #{idx + 1}
+                                                                    </span>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                                                                        onClick={() => {
+                                                                            const updated = data.disciplinary_actions.filter((_, i) => i !== idx);
+                                                                            setData('disciplinary_actions', updated);
+                                                                        }}
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <FormField label="Action Type (ইংরেজি তে সিলেক্ট করুন)" required>
+                                                                        <select
+                                                                            className="w-full h-9 rounded-lg border border-zinc-200 bg-white px-3 text-xs text-zinc-900 focus:border-rose-600 focus:ring-1 focus:ring-rose-600"
+                                                                            value={row.action_type}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...data.disciplinary_actions];
+                                                                                updated[idx] = { ...updated[idx], action_type: e.target.value };
+                                                                                setData('disciplinary_actions', updated);
+                                                                            }}
+                                                                        >
+                                                                            {DISCIPLINARY_ACTION_TYPES.map((t) => (
+                                                                                <option key={t.value} value={t.value}>{t.label}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </FormField>
+
+                                                                    <FormField label="Action Date" required>
+                                                                        <Input
+                                                                            type="date"
+                                                                            className="h-9 text-xs"
+                                                                            value={row.action_date}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...data.disciplinary_actions];
+                                                                                updated[idx] = { ...updated[idx], action_date: e.target.value };
+                                                                                setData('disciplinary_actions', updated);
+                                                                            }}
+                                                                        />
+                                                                    </FormField>
+                                                                </div>
+
+                                                                <FormField label="Details / Reason (টাইপ অনুযায়ী বিস্তারিত ডিটেলস)">
+                                                                    <Textarea
+                                                                        className="text-xs min-h-[60px]"
+                                                                        placeholder="Write detailed explanation or notes regarding this disciplinary action..."
+                                                                        value={row.details}
+                                                                        onChange={(e) => {
+                                                                            const updated = [...data.disciplinary_actions];
+                                                                            updated[idx] = { ...updated[idx], details: e.target.value };
+                                                                            setData('disciplinary_actions', updated);
+                                                                        }}
+                                                                    />
+                                                                </FormField>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                <div className="flex justify-end pt-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-9 gap-1.5 border-rose-600 text-xs font-semibold text-rose-700 hover:bg-rose-50 shadow-sm"
+                                                        onClick={() => setData('disciplinary_actions', [...data.disciplinary_actions, emptyDisciplinaryActionFormRow()])}
+                                                    >
+                                                        <Plus className="h-4 w-4" /> Add Disciplinary Action
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* Action Bar */}
+                                            <div className="flex items-center justify-between border-t border-zinc-100 pt-6">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    className="h-10 rounded-lg border-zinc-200 px-5 text-xs font-semibold text-zinc-700"
+                                                    onClick={() => requestTabChange('general')}
+                                                >
+                                                    Back: General Setup
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    className="h-10 rounded-lg bg-emerald-600 px-5 font-semibold text-white shadow-sm hover:bg-emerald-700"
+                                                    onClick={() => requestTabChange('education')}
+                                                >
+                                                    Next: Educational History
+                                                </Button>
+                                            </div>
                                         </div>
                                     </TabsContent>
 
@@ -3721,45 +4125,47 @@ export default function EmployeeEdit({
                 onOpenChange={(op) => !op && setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false })}
             >
                 <DialogContent className="rounded-2xl p-6 sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
-                    <DialogHeader>
-                        <DialogTitle className="text-sm font-bold text-zinc-900">Add New Union</DialogTitle>
-                    </DialogHeader>
-                    <div className="my-2 space-y-4">
-                        <FormField label="Union Name" error={addUnionModal.error}>
-                            <Input
-                                value={addUnionModal.name}
-                                onChange={(e) => setAddUnionModal((s) => ({ ...s, name: e.target.value, error: '' }))}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        void saveUnionModal();
-                                    }
-                                }}
-                                placeholder="Type union name"
-                                autoFocus
-                            />
-                        </FormField>
-                    </div>
-                    <DialogFooter className="mt-4 gap-2 border-t border-zinc-50 pt-4 sm:gap-0">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-9 rounded-lg text-xs"
-                            onClick={() => setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false })}
-                            disabled={addUnionModal.saving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            className="h-9 rounded-lg bg-emerald-600 text-xs text-white hover:bg-emerald-700"
-                            disabled={!addUnionModal.name.trim() || addUnionModal.saving}
-                            onClick={() => void saveUnionModal()}
-                        >
-                            {addUnionModal.saving ? 'Saving…' : 'Save Union'}
-                        </Button>
-                    </DialogFooter>
+                    <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); void saveUnionModal(e); }}>
+                        <DialogHeader>
+                            <DialogTitle className="text-sm font-bold text-zinc-900">Add New Union</DialogTitle>
+                        </DialogHeader>
+                        <div className="my-2 space-y-4">
+                            <FormField label="Union Name" error={addUnionModal.error}>
+                                <Input
+                                    value={addUnionModal.name}
+                                    onChange={(e) => setAddUnionModal((s) => ({ ...s, name: e.target.value, error: '' }))}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            void saveUnionModal(e);
+                                        }
+                                    }}
+                                    placeholder="Type union name"
+                                    autoFocus
+                                />
+                            </FormField>
+                        </div>
+                        <DialogFooter className="mt-4 gap-2 border-t border-zinc-50 pt-4 sm:gap-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-9 rounded-lg text-xs"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false }); }}
+                                disabled={addUnionModal.saving}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                className="h-9 rounded-lg bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+                                disabled={!addUnionModal.name.trim() || addUnionModal.saving}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void saveUnionModal(e); }}
+                            >
+                                {addUnionModal.saving ? 'Saving…' : 'Save Union'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
 
@@ -3769,45 +4175,47 @@ export default function EmployeeEdit({
                 onOpenChange={(op) => !op && setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })}
             >
                 <DialogContent className="rounded-2xl p-6 sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
-                    <DialogHeader>
-                        <DialogTitle className="text-sm font-bold text-zinc-900">Add New Village</DialogTitle>
-                    </DialogHeader>
-                    <div className="my-2 space-y-4">
-                        <FormField label="Village Name" error={addVillageModal.error}>
-                            <Input
-                                value={addVillageModal.name}
-                                onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value, error: '' }))}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        void saveVillageModal();
-                                    }
-                                }}
-                                placeholder="Type village name"
-                                autoFocus
-                            />
-                        </FormField>
-                    </div>
-                    <DialogFooter className="mt-4 gap-2 border-t border-zinc-50 pt-4 sm:gap-0">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-9 rounded-lg text-xs"
-                            onClick={() => setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })}
-                            disabled={addVillageModal.saving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            className="h-9 rounded-lg bg-emerald-600 text-xs text-white hover:bg-emerald-700"
-                            disabled={!addVillageModal.name.trim() || addVillageModal.saving}
-                            onClick={() => void saveVillageModal()}
-                        >
-                            {addVillageModal.saving ? 'Saving…' : 'Save Village'}
-                        </Button>
-                    </DialogFooter>
+                    <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); void saveVillageModal(e); }}>
+                        <DialogHeader>
+                            <DialogTitle className="text-sm font-bold text-zinc-900">Add New Village</DialogTitle>
+                        </DialogHeader>
+                        <div className="my-2 space-y-4">
+                            <FormField label="Village Name" error={addVillageModal.error}>
+                                <Input
+                                    value={addVillageModal.name}
+                                    onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value, error: '' }))}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            void saveVillageModal(e);
+                                        }
+                                    }}
+                                    placeholder="Type village name"
+                                    autoFocus
+                                />
+                            </FormField>
+                        </div>
+                        <DialogFooter className="mt-4 gap-2 border-t border-zinc-50 pt-4 sm:gap-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-9 rounded-lg text-xs"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false }); }}
+                                disabled={addVillageModal.saving}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                className="h-9 rounded-lg bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+                                disabled={!addVillageModal.name.trim() || addVillageModal.saving}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void saveVillageModal(e); }}
+                            >
+                                {addVillageModal.saving ? 'Saving…' : 'Save Village'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
         </Layout>

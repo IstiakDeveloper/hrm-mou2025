@@ -16,6 +16,7 @@ use App\Http\Controllers\Confirmation\ConfirmationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Department\DepartmentController;
 use App\Http\Controllers\Designation\DesignationController;
+use App\Http\Controllers\Employee\DisciplinaryActionController;
 use App\Http\Controllers\Employee\EmployeeAssetController;
 use App\Http\Controllers\Employee\EmployeeController;
 use App\Http\Controllers\Employee\EmployeeDashboardController;
@@ -579,6 +580,11 @@ Route::middleware(['auth'])->group(function () {
         // Organization Chart
         Route::get('organization-chart', [EmployeeController::class, 'organizationChart'])
             ->name('organization.chart');
+
+        // Disciplinary Actions Management
+        Route::resource('disciplinary-actions', DisciplinaryActionController::class)
+            ->only(['index', 'create', 'store', 'destroy'])
+            ->middleware('permission:employees.edit');
 
         // Blank Employee Form (Printable)
         Route::get('employees-blank-form', [EmployeeController::class, 'blankForm'])

@@ -5,11 +5,21 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+    server: {
+        watch: {
+            ignored: ['**/data/**', '**/storage/**', '**/database/**', '**/.git/**'],
+        },
+    },
     plugins: [
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
             ssr: 'resources/js/ssr.jsx',
-            refresh: true,
+            refresh: [
+                'resources/css/**',
+                'resources/js/**',
+                'routes/**',
+                'app/Http/**',
+            ],
         }),
         react(),
         tailwindcss(),

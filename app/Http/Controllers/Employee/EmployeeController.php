@@ -10,7 +10,9 @@ use App\Models\DemotionHistory;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\EmployeeDisciplinaryAction;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeJobHistory;
 use App\Models\EmployeeType;
 use App\Models\LocationUnion;
 use App\Models\LocationVillage;
@@ -3104,6 +3106,128 @@ class EmployeeController extends Controller
             ])
             ->all();
 
+        $existingManualHistories = EmployeeJobHistory::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('event_date', 'asc')
+            ->get();
+
+        if ($existingManualHistories->isNotEmpty()) {
+            $employeePayload['job_histories'] = $existingManualHistories->map(fn ($h) => [
+                'id' => $h->id,
+                'event_type' => $h->event_type,
+                'event_date' => $h->event_date?->format('Y-m-d') ?? '',
+                'from_designation_id' => $h->from_designation_id ? (string) $h->from_designation_id : '',
+                'to_designation_id' => $h->to_designation_id ? (string) $h->to_designation_id : '',
+                'from_branch_id' => $h->from_branch_id ? (string) $h->from_branch_id : '',
+                'to_branch_id' => $h->to_branch_id ? (string) $h->to_branch_id : '',
+                'remarks' => $h->remarks ?? '',
+            ])->all();
+        } else {
+            $initialRows = [];
+
+            if ($employee->joining_date) {
+                $initialRows[] = [
+                    'event_type' => 'joining',
+                    'event_date' => $employee->joining_date->format('Y-m-d'),
+                    'from_designation_id' => '',
+                    'to_designation_id' => $employee->joining_designation_id ? (string) $employee->joining_designation_id : ($employee->designation_id ? (string) $employee->designation_id : ''),
+                    'from_branch_id' => '',
+                    'to_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
+                    'remarks' => 'Initial Joining',
+                ];
+            }
+
+            if ($employee->confirmation_date && $employee->confirmation_date->format('Y-m-d') <= date('Y-m-d')) {
+                $initialRows[] = [
+                    'event_type' => 'confirmation',
+                    'event_date' => $employee->confirmation_date->format('Y-m-d'),
+                    'from_designation_id' => '',
+                    'to_designation_id' => $employee->designation_id ? (string) $employee->designation_id : '',
+                    'from_branch_id' => '',
+                    'to_branch_id' => '',
+                    'remarks' => 'Service Confirmation',
+                ];
+            }
+
+            $sysTransfers = TransferHistory::where('employee_id', $employee->id)->orderBy('transfer_date', 'asc')->get();
+            foreach ($sysTransfers as $th) {
+                $initialRows[] = [
+                    'event_type' => 'transfer',
+                    'event_date' => $th->transfer_date?->format('Y-m-d') ?? '',
+                    'from_designation_id' => '',
+                    'to_designation_id' => '',
+                    'from_branch_id' => $th->from_branch_id ? (string) $th->from_branch_id : '',
+                    'to_branch_id' => $th->to_branch_id ? (string) $th->to_branch_id : '',
+                    'remarks' => 'System Transfer',
+                ];
+            }
+
+            $sysPromotions = PromotionHistory::where('employee_id', $employee->id)->orderBy('promotion_date', 'asc')->get();
+            foreach ($sysPromotions as $ph) {
+                $initialRows[] = [
+                    'event_type' => 'promotion',
+                    'event_date' => $ph->promotion_date?->format('Y-m-d') ?? '',
+                    'from_designation_id' => $ph->from_designation_id ? (string) $ph->from_designation_id : '',
+                    'to_designation_id' => $ph->to_designation_id ? (string) $ph->to_designation_id : '',
+                    'from_branch_id' => '',
+                    'to_branch_id' => '',
+                    'remarks' => 'System Promotion',
+                ];
+            }
+
+            $sysDemotions = DemotionHistory::where('employee_id', $employee->id)->orderBy('demotion_date', 'asc')->get();
+            foreach ($sysDemotions as $dh) {
+                $initialRows[] = [
+                    'event_type' => 'demotion',
+                    'event_date' => $dh->demotion_date?->format('Y-m-d') ?? '',
+                    'from_designation_id' => $dh->from_designation_id ? (string) $dh->from_designation_id : '',
+                    'to_designation_id' => $dh->to_designation_id ? (string) $dh->to_designation_id : '',
+                    'from_branch_id' => '',
+                    'to_branch_id' => '',
+                    'remarks' => 'System Demotion',
+                ];
+            }
+
+            if ($employee->resignation_date || $employee->dropout_date) {
+                $initialRows[] = [
+                    'event_type' => 'left',
+                    'event_date' => ($employee->resignation_date ?? $employee->dropout_date)?->format('Y-m-d'),
+                    'from_designation_id' => '',
+                    'to_designation_id' => '',
+                    'from_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
+                    'to_branch_id' => '',
+                    'remarks' => $employee->dropout_reason ?? 'Left Service',
+                ];
+            }
+
+            if ($employee->final_payment_date) {
+                $initialRows[] = [
+                    'event_type' => 'final_payment',
+                    'event_date' => $employee->final_payment_date->format('Y-m-d'),
+                    'from_designation_id' => '',
+                    'to_designation_id' => '',
+                    'from_branch_id' => '',
+                    'to_branch_id' => '',
+                    'remarks' => 'Final Payment Settled',
+                ];
+            }
+
+            usort($initialRows, fn ($a, $b) => strcmp((string) ($a['event_date'] ?? ''), (string) ($b['event_date'] ?? '')));
+            $employeePayload['job_histories'] = $initialRows;
+        }
+
+        $employeePayload['disciplinary_actions'] = EmployeeDisciplinaryAction::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('action_date', 'asc')
+            ->get()
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'action_type' => $d->action_type,
+                'action_date' => $d->action_date?->format('Y-m-d') ?? '',
+                'details' => $d->details ?? '',
+            ])
+            ->all();
+
         return Inertia::render('employee/edit', [
             'oldInput' => old(),
             'employee' => $employeePayload,
@@ -3322,6 +3446,20 @@ class EmployeeController extends Controller
                 'documents.*.description' => 'nullable|string',
                 'documents.*.expiry_date' => 'nullable|date',
 
+                'job_histories' => 'nullable|array',
+                'job_histories.*.event_type' => 'required_with:job_histories|string|max:50',
+                'job_histories.*.event_date' => 'required_with:job_histories|date',
+                'job_histories.*.from_designation_id' => 'nullable|exists:designations,id',
+                'job_histories.*.to_designation_id' => 'nullable|exists:designations,id',
+                'job_histories.*.from_branch_id' => 'nullable|exists:branches,id',
+                'job_histories.*.to_branch_id' => 'nullable|exists:branches,id',
+                'job_histories.*.remarks' => 'nullable|string',
+
+                'disciplinary_actions' => 'nullable|array',
+                'disciplinary_actions.*.action_type' => 'required_with:disciplinary_actions|string|max:100',
+                'disciplinary_actions.*.action_date' => 'required_with:disciplinary_actions|date',
+                'disciplinary_actions.*.details' => 'nullable|string',
+
                 'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:4096',
                 'signature' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:4096',
             ]);
@@ -3346,6 +3484,8 @@ class EmployeeController extends Controller
                 'experiences',
                 'trainings',
                 'documents',
+                'job_histories',
+                'disciplinary_actions',
                 'photo',
                 'signature',
                 'salary_lines',
@@ -3410,9 +3550,12 @@ class EmployeeController extends Controller
                 DB::table('employee_experiences')->where('employee_id', $eid)->delete();
                 DB::table('employee_trainings')->where('employee_id', $eid)->delete();
 
+                $now = now();
+
                 $addresses = is_array($validated['addresses'] ?? null) ? $validated['addresses'] : [];
+                $addressRows = [];
                 foreach ($addresses as $a) {
-                    DB::table('employee_addresses')->insert([
+                    $addressRows[] = [
                         'employee_id' => $eid,
                         'type' => $a['type'],
                         'division' => $a['division'] ?? null,
@@ -3421,14 +3564,18 @@ class EmployeeController extends Controller
                         'union' => $a['union'] ?? null,
                         'village' => $a['village'] ?? null,
                         'address_details' => $a['address_details'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                if (! empty($addressRows)) {
+                    DB::table('employee_addresses')->insert($addressRows);
                 }
 
                 $educations = is_array($validated['educations'] ?? null) ? $validated['educations'] : [];
+                $eduRows = [];
                 foreach ($educations as $e) {
-                    DB::table('employee_educations')->insert([
+                    $eduRows[] = [
                         'employee_id' => $eid,
                         'degree' => (string) ($e['degree'] ?? ''),
                         'institute' => $e['institute'] ?? null,
@@ -3439,9 +3586,12 @@ class EmployeeController extends Controller
                         'result_value' => $e['result_value'] ?? null,
                         'passing_year' => $e['passing_year'] ?? null,
                         'remarks' => $e['remarks'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                if (! empty($eduRows)) {
+                    DB::table('employee_educations')->insert($eduRows);
                 }
 
                 $bank = is_array($validated['bank'] ?? null) ? $validated['bank'] : null;
@@ -3452,31 +3602,39 @@ class EmployeeController extends Controller
                 }
 
                 $nominees = is_array($validated['nominees'] ?? null) ? $validated['nominees'] : [];
+                $nomineeRows = [];
                 foreach ($nominees as $n) {
-                    DB::table('employee_nominees')->insert(
-                        $this->employeeNomineeInsertRow($eid, $n)
-                    );
+                    $nomineeRows[] = $this->employeeNomineeInsertRow($eid, $n);
+                }
+                if (! empty($nomineeRows)) {
+                    DB::table('employee_nominees')->insert($nomineeRows);
                 }
 
                 $guarantors = is_array($validated['guarantors'] ?? null) ? $validated['guarantors'] : [];
+                $guarantorRows = [];
                 foreach ($guarantors as $g) {
-                    DB::table('employee_guarantors')->insert(
-                        $this->employeeGuarantorInsertRow($eid, $g)
-                    );
+                    $guarantorRows[] = $this->employeeGuarantorInsertRow($eid, $g);
+                }
+                if (! empty($guarantorRows)) {
+                    DB::table('employee_guarantors')->insert($guarantorRows);
                 }
 
                 $guarantorCheques = is_array($validated['guarantor_cheques'] ?? null) ? $validated['guarantor_cheques'] : [];
+                $gChequeRows = [];
                 foreach ($guarantorCheques as $c) {
-                    DB::table('employee_guarantor_cheques')->insert([
+                    $gChequeRows[] = [
                         'employee_id' => $eid,
                         'employee_guarantor_id' => null,
                         'bank_name' => $c['bank_name'] ?? null,
                         'branch_name' => $c['branch_name'] ?? null,
                         'cheque_no' => $c['cheque_no'] ?? null,
                         'amount' => $c['amount'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                if (! empty($gChequeRows)) {
+                    DB::table('employee_guarantor_cheques')->insert($gChequeRows);
                 }
 
                 $collateral = is_array($validated['collateral'] ?? null) ? $validated['collateral'] : null;
@@ -3490,14 +3648,15 @@ class EmployeeController extends Controller
                         'collateral_interest' => $collateral['collateral_interest'] ?? null,
                         'collateral_date' => $collateral['collateral_date'] ?? null,
                         'notes' => $collateral['notes'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
+                        'created_at' => $now,
+                        'updated_at' => $now,
                     ]);
                 }
 
                 $receiveCheques = is_array($validated['collateral_receive_cheques'] ?? null) ? $validated['collateral_receive_cheques'] : [];
+                $rcRows = [];
                 foreach ($receiveCheques as $rc) {
-                    DB::table('employee_collateral_receive_cheques')->insert([
+                    $rcRows[] = [
                         'employee_id' => $eid,
                         'employee_collateral_id' => $collateralId,
                         'bank_name' => $rc['bank_name'] ?? null,
@@ -3505,14 +3664,18 @@ class EmployeeController extends Controller
                         'cheque_no' => $rc['cheque_no'] ?? null,
                         'amount' => $rc['amount'] ?? null,
                         'notes' => $rc['notes'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                if (! empty($rcRows)) {
+                    DB::table('employee_collateral_receive_cheques')->insert($rcRows);
                 }
 
                 $assets = is_array($validated['assets'] ?? null) ? $validated['assets'] : [];
+                $assetRows = [];
                 foreach ($assets as $as) {
-                    DB::table('employee_assets')->insert([
+                    $assetRows[] = [
                         'employee_id' => $eid,
                         'serial' => $as['serial'] ?? null,
                         'asset_no' => $as['asset_no'] ?? null,
@@ -3520,14 +3683,18 @@ class EmployeeController extends Controller
                         'details' => $as['details'] ?? null,
                         'provided_quality' => $as['provided_quality'] ?? null,
                         'asset_price' => $as['asset_price'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                if (! empty($assetRows)) {
+                    DB::table('employee_assets')->insert($assetRows);
                 }
 
                 $experiences = is_array($validated['experiences'] ?? null) ? $validated['experiences'] : [];
+                $expRows = [];
                 foreach ($experiences as $ex) {
-                    DB::table('employee_experiences')->insert([
+                    $expRows[] = [
                         'employee_id' => $eid,
                         'organization' => (string) ($ex['organization'] ?? ''),
                         'from_date' => $ex['from_date'] ?? null,
@@ -3535,26 +3702,83 @@ class EmployeeController extends Controller
                         'designation' => $ex['designation'] ?? null,
                         'department' => $ex['department'] ?? null,
                         'address' => $ex['address'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                if (! empty($expRows)) {
+                    DB::table('employee_experiences')->insert($expRows);
                 }
 
                 $trainings = is_array($validated['trainings'] ?? null) ? $validated['trainings'] : [];
+                $trRows = [];
                 foreach ($trainings as $tr) {
-                    DB::table('employee_trainings')->insert([
+                    $trRows[] = [
                         'employee_id' => $eid,
                         'training_title' => (string) ($tr['training_title'] ?? ''),
                         'institute' => $tr['institute'] ?? null,
                         'address' => $tr['address'] ?? null,
                         'duration' => $tr['duration'] ?? null,
                         'remarks' => $tr['remarks'] ?? null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                if (! empty($trRows)) {
+                    DB::table('employee_trainings')->insert($trRows);
                 }
 
                 $this->syncEmployeeDocumentsFromTabbedForm($request, $employee, false);
+
+                // Sync manual Job Histories
+                EmployeeJobHistory::where('employee_id', $eid)->delete();
+                $jobHistories = is_array($validated['job_histories'] ?? null) ? $validated['job_histories'] : [];
+                $jhRows = [];
+                $authId = \Illuminate\Support\Facades\Auth::id();
+                $now = now();
+                foreach ($jobHistories as $jh) {
+                    if (! empty($jh['event_type']) && ! empty($jh['event_date'])) {
+                        $jhRows[] = [
+                            'employee_id' => $eid,
+                            'event_type' => $jh['event_type'],
+                            'event_date' => $jh['event_date'],
+                            'from_designation_id' => ! empty($jh['from_designation_id']) ? $jh['from_designation_id'] : null,
+                            'to_designation_id' => ! empty($jh['to_designation_id']) ? $jh['to_designation_id'] : null,
+                            'from_branch_id' => ! empty($jh['from_branch_id']) ? $jh['from_branch_id'] : null,
+                            'to_branch_id' => ! empty($jh['to_branch_id']) ? $jh['to_branch_id'] : null,
+                            'remarks' => $jh['remarks'] ?? null,
+                            'is_manual' => true,
+                            'created_by' => $authId,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ];
+                    }
+                }
+                if (! empty($jhRows)) {
+                    EmployeeJobHistory::insert($jhRows);
+                }
+
+                // Sync Disciplinary Actions
+                EmployeeDisciplinaryAction::where('employee_id', $eid)->delete();
+                $disciplinaryActions = is_array($validated['disciplinary_actions'] ?? null) ? $validated['disciplinary_actions'] : [];
+                $daRows = [];
+                foreach ($disciplinaryActions as $da) {
+                    if (! empty($da['action_type']) && ! empty($da['action_date'])) {
+                        $daRows[] = [
+                            'employee_id' => $eid,
+                            'action_type' => $da['action_type'],
+                            'action_date' => $da['action_date'],
+                            'details' => $da['details'] ?? null,
+                            'created_by' => $authId,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ];
+                    }
+                }
+                if (! empty($daRows)) {
+                    EmployeeDisciplinaryAction::insert($daRows);
+                }
+
                 $employee->refresh();
                 if ($request->boolean('sync_salary_components')) {
                     $this->syncEmployeeSalaryComponents($employee, $validated);
@@ -3562,7 +3786,7 @@ class EmployeeController extends Controller
             });
 
             return redirect()
-                ->route('employees.edit', $employee)
+                ->route('employees.show', $employee)
                 ->with('success', 'Employee updated successfully.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             throw $e;
@@ -3682,6 +3906,130 @@ class EmployeeController extends Controller
             ->limit(50)
             ->get();
 
+        $manualJobHistories = EmployeeJobHistory::query()
+            ->with(['fromDesignation:id,name', 'toDesignation:id,name', 'fromBranch:id,name', 'toBranch:id,name'])
+            ->where('employee_id', $employee->id)
+            ->get();
+
+        $disciplinaryActions = EmployeeDisciplinaryAction::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('action_date', 'asc')
+            ->get();
+
+        // Build unified chronological Job History timeline
+        $jobHistoryTimeline = [];
+
+        if ($employee->joining_date) {
+            $jobHistoryTimeline[] = [
+                'id' => 'auto-joining',
+                'event_type' => 'joining',
+                'event_date' => $employee->joining_date->format('Y-m-d'),
+                'to_designation_name' => $employee->joiningDesignation?->name ?? $employee->designation?->name,
+                'to_branch_name' => $employee->branch?->name,
+                'remarks' => 'Initial Joining',
+                'is_manual' => false,
+            ];
+        }
+
+        if ($employee->confirmation_date) {
+            $jobHistoryTimeline[] = [
+                'id' => 'auto-confirmation',
+                'event_type' => 'confirmation',
+                'event_date' => $employee->confirmation_date->format('Y-m-d'),
+                'to_designation_name' => $employee->designation?->name,
+                'remarks' => 'Confirmed Service',
+                'is_manual' => false,
+            ];
+        }
+
+        if ($employee->resignation_date || $employee->dropout_date) {
+            $jobHistoryTimeline[] = [
+                'id' => 'auto-left',
+                'event_type' => 'left',
+                'event_date' => ($employee->resignation_date ?? $employee->dropout_date)?->format('Y-m-d'),
+                'from_branch_name' => $employee->branch?->name,
+                'remarks' => $employee->dropout_reason ?? 'Left Organization',
+                'is_manual' => false,
+            ];
+        }
+
+        if ($employee->final_payment_date) {
+            $jobHistoryTimeline[] = [
+                'id' => 'auto-final_payment',
+                'event_type' => 'final_payment',
+                'event_date' => $employee->final_payment_date->format('Y-m-d'),
+                'remarks' => 'Final Payment Settled',
+                'is_manual' => false,
+            ];
+        }
+
+        foreach ($transferHistories as $th) {
+            $jobHistoryTimeline[] = [
+                'id' => 'sys-transfer-'.$th->id,
+                'event_type' => 'transfer',
+                'event_date' => $th->transfer_date?->format('Y-m-d'),
+                'from_branch_name' => $th->fromBranch?->name,
+                'to_branch_name' => $th->toBranch?->name,
+                'order_no' => $th->transfer?->transfer_order_no,
+                'transfer_id' => $th->transfer_id,
+                'is_manual' => false,
+            ];
+        }
+
+        foreach ($promotionHistories as $ph) {
+            $jobHistoryTimeline[] = [
+                'id' => 'sys-promotion-'.$ph->id,
+                'event_type' => 'promotion',
+                'event_date' => $ph->promotion_date?->format('Y-m-d'),
+                'from_designation_name' => $ph->fromDesignation?->name,
+                'to_designation_name' => $ph->toDesignation?->name,
+                'order_no' => $ph->promotion?->promotion_order_no,
+                'promotion_id' => $ph->promotion_id,
+                'is_manual' => false,
+            ];
+        }
+
+        foreach ($demotionHistories as $dh) {
+            $jobHistoryTimeline[] = [
+                'id' => 'sys-demotion-'.$dh->id,
+                'event_type' => 'demotion',
+                'event_date' => $dh->demotion_date?->format('Y-m-d'),
+                'from_designation_name' => $dh->fromDesignation?->name,
+                'to_designation_name' => $dh->toDesignation?->name,
+                'order_no' => $dh->demotion?->demotion_order_no,
+                'demotion_id' => $dh->demotion_id,
+                'is_manual' => false,
+            ];
+        }
+
+        foreach ($manualJobHistories as $mh) {
+            $jobHistoryTimeline[] = [
+                'id' => 'manual-'.$mh->id,
+                'event_type' => $mh->event_type,
+                'event_date' => $mh->event_date?->format('Y-m-d'),
+                'from_designation_name' => $mh->fromDesignation?->name,
+                'to_designation_name' => $mh->toDesignation?->name,
+                'from_branch_name' => $mh->fromBranch?->name,
+                'to_branch_name' => $mh->toBranch?->name,
+                'remarks' => $mh->remarks,
+                'is_manual' => true,
+            ];
+        }
+
+        usort($jobHistoryTimeline, fn ($a, $b) => strcmp((string) ($a['event_date'] ?? ''), (string) ($b['event_date'] ?? '')));
+
+        $today = date('Y-m-d');
+        $pastTimeline = [];
+        $upcomingEvents = [];
+
+        foreach ($jobHistoryTimeline as $item) {
+            if (! empty($item['event_date']) && $item['event_date'] > $today) {
+                $upcomingEvents[] = $item;
+            } else {
+                $pastTimeline[] = $item;
+            }
+        }
+
         return Inertia::render('employee/show', [
             'employee' => $employee->toInertiaArray(),
             'currentYearLeaveBalances' => $currentYearLeaveBalances,
@@ -3690,6 +4038,9 @@ class EmployeeController extends Controller
             'transferHistories' => $transferHistories,
             'promotionHistories' => $promotionHistories,
             'demotionHistories' => $demotionHistories,
+            'jobHistoryTimeline' => $pastTimeline,
+            'upcomingEvents' => $upcomingEvents,
+            'disciplinaryActions' => $disciplinaryActions,
         ]);
     }
 

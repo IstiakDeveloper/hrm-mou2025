@@ -470,6 +470,16 @@ class Employee extends Model
         return $this->hasMany(EmployeeGratuityPayment::class);
     }
 
+    public function jobHistories()
+    {
+        return $this->hasMany(EmployeeJobHistory::class);
+    }
+
+    public function disciplinaryActions()
+    {
+        return $this->hasMany(EmployeeDisciplinaryAction::class);
+    }
+
     public function currentBranch()
     {
         return $this->belongsTo(Branch::class, 'current_branch_id');

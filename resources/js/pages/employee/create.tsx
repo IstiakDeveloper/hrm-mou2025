@@ -918,7 +918,11 @@ export default function EmployeeCreate({
         }
     };
 
-    const saveUnionModal = async () => {
+    const saveUnionModal = async (e?: React.SyntheticEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!addUnionModal.name.trim() || addUnionModal.saving) return;
         setAddUnionModal((s) => ({ ...s, saving: true, error: '' }));
         const res = await persistUnion(addUnionModal.target, addUnionModal.name);
@@ -929,7 +933,11 @@ export default function EmployeeCreate({
         setAddUnionModal((s) => ({ ...s, saving: false, error: res.error || 'Failed to save union.' }));
     };
 
-    const saveVillageModal = async () => {
+    const saveVillageModal = async (e?: React.SyntheticEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!addVillageModal.name.trim() || addVillageModal.saving) return;
         setAddVillageModal((s) => ({ ...s, saving: true, error: '' }));
         const res = await persistVillage(addVillageModal.target, addVillageModal.name);
@@ -3567,45 +3575,47 @@ export default function EmployeeCreate({
                 onOpenChange={(op) => !op && setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false })}
             >
                 <DialogContent className="rounded-2xl p-6 sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
-                    <DialogHeader>
-                        <DialogTitle className="text-sm font-bold text-zinc-900">Add New Union</DialogTitle>
-                    </DialogHeader>
-                    <div className="my-2 space-y-4">
-                        <FormField label="Union Name" error={addUnionModal.error}>
-                            <Input
-                                value={addUnionModal.name}
-                                onChange={(e) => setAddUnionModal((s) => ({ ...s, name: e.target.value, error: '' }))}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        void saveUnionModal();
-                                    }
-                                }}
-                                placeholder="Type union name"
-                                autoFocus
-                            />
-                        </FormField>
-                    </div>
-                    <DialogFooter className="mt-4 gap-2 border-t border-zinc-50 pt-4 sm:gap-0">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-9 rounded-lg text-xs"
-                            onClick={() => setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false })}
-                            disabled={addUnionModal.saving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            className="h-9 rounded-lg bg-emerald-600 text-xs text-white hover:bg-emerald-700"
-                            disabled={!addUnionModal.name.trim() || addUnionModal.saving}
-                            onClick={() => void saveUnionModal()}
-                        >
-                            {addUnionModal.saving ? 'Saving…' : 'Save Union'}
-                        </Button>
-                    </DialogFooter>
+                    <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); void saveUnionModal(e); }}>
+                        <DialogHeader>
+                            <DialogTitle className="text-sm font-bold text-zinc-900">Add New Union</DialogTitle>
+                        </DialogHeader>
+                        <div className="my-2 space-y-4">
+                            <FormField label="Union Name" error={addUnionModal.error}>
+                                <Input
+                                    value={addUnionModal.name}
+                                    onChange={(e) => setAddUnionModal((s) => ({ ...s, name: e.target.value, error: '' }))}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            void saveUnionModal(e);
+                                        }
+                                    }}
+                                    placeholder="Type union name"
+                                    autoFocus
+                                />
+                            </FormField>
+                        </div>
+                        <DialogFooter className="mt-4 gap-2 border-t border-zinc-50 pt-4 sm:gap-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-9 rounded-lg text-xs"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAddUnionModal({ open: false, target: 'present', name: '', error: '', saving: false }); }}
+                                disabled={addUnionModal.saving}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                className="h-9 rounded-lg bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+                                disabled={!addUnionModal.name.trim() || addUnionModal.saving}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void saveUnionModal(e); }}
+                            >
+                                {addUnionModal.saving ? 'Saving…' : 'Save Union'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
 
@@ -3615,45 +3625,47 @@ export default function EmployeeCreate({
                 onOpenChange={(op) => !op && setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })}
             >
                 <DialogContent className="rounded-2xl p-6 sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
-                    <DialogHeader>
-                        <DialogTitle className="text-sm font-bold text-zinc-900">Add New Village</DialogTitle>
-                    </DialogHeader>
-                    <div className="my-2 space-y-4">
-                        <FormField label="Village Name" error={addVillageModal.error}>
-                            <Input
-                                value={addVillageModal.name}
-                                onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value, error: '' }))}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        void saveVillageModal();
-                                    }
-                                }}
-                                placeholder="Type village name"
-                                autoFocus
-                            />
-                        </FormField>
-                    </div>
-                    <DialogFooter className="mt-4 gap-2 border-t border-zinc-50 pt-4 sm:gap-0">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-9 rounded-lg text-xs"
-                            onClick={() => setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false })}
-                            disabled={addVillageModal.saving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            className="h-9 rounded-lg bg-emerald-600 text-xs text-white hover:bg-emerald-700"
-                            disabled={!addVillageModal.name.trim() || addVillageModal.saving}
-                            onClick={() => void saveVillageModal()}
-                        >
-                            {addVillageModal.saving ? 'Saving…' : 'Save Village'}
-                        </Button>
-                    </DialogFooter>
+                    <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); void saveVillageModal(e); }}>
+                        <DialogHeader>
+                            <DialogTitle className="text-sm font-bold text-zinc-900">Add New Village</DialogTitle>
+                        </DialogHeader>
+                        <div className="my-2 space-y-4">
+                            <FormField label="Village Name" error={addVillageModal.error}>
+                                <Input
+                                    value={addVillageModal.name}
+                                    onChange={(e) => setAddVillageModal((s) => ({ ...s, name: e.target.value, error: '' }))}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            void saveVillageModal(e);
+                                        }
+                                    }}
+                                    placeholder="Type village name"
+                                    autoFocus
+                                />
+                            </FormField>
+                        </div>
+                        <DialogFooter className="mt-4 gap-2 border-t border-zinc-50 pt-4 sm:gap-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-9 rounded-lg text-xs"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAddVillageModal({ open: false, target: 'present', name: '', error: '', saving: false }); }}
+                                disabled={addVillageModal.saving}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                className="h-9 rounded-lg bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+                                disabled={!addVillageModal.name.trim() || addVillageModal.saving}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void saveVillageModal(e); }}
+                            >
+                                {addVillageModal.saving ? 'Saving…' : 'Save Village'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
         </Layout>

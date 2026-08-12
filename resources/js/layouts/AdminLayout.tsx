@@ -431,6 +431,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     { title: 'Organization Chart', path: '/organization-chart', permission: 'employees.view', hrOnly: true },
                     { title: 'Confirmations', path: '/confirmations', permission: 'confirmations.view', hrOnly: true },
                     { title: 'Separations', path: '/separations', permission: 'separations.view', hrOnly: true },
+                    { title: 'Disciplinary Actions', path: '/disciplinary-actions', permission: 'employees.edit', hrOnly: true },
                 ],
             },
             {

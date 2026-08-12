@@ -164,6 +164,15 @@ export function mergeSerializableIntoForm<T extends Record<string, any>>(base: T
     for (const key of Object.keys(patch)) {
         if (key === 'photo' || key === 'signature' || key === '_method') continue;
         const pv = (patch as Record<string, unknown>)[key];
+        if (
+            (key === 'job_histories' || key === 'disciplinary_actions') &&
+            Array.isArray(pv) &&
+            pv.length === 0 &&
+            Array.isArray((base as any)[key]) &&
+            (base as any)[key].length > 0
+        ) {
+            continue;
+        }
         if (MERGE_DEEP_OBJECT_KEYS.has(key) && isPlainRecord(pv)) {
             const baseNested = (base as Record<string, unknown>)[key];
             (next as Record<string, unknown>)[key] = isPlainRecord(baseNested) ? { ...baseNested, ...pv } : { ...pv };
