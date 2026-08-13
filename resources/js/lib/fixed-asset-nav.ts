@@ -134,6 +134,64 @@ export const FIXED_ASSET_NAV_GROUPS: FixedAssetNavGroup[] = [
     },
 ];
 
+export const BRANCH_FIXED_ASSET_NAV_GROUP_IDS = ['purchase', 'stock', 'depreciation', 'reports'] as const;
+
+const BRANCH_STOCK_PATHS = new Set(['/fixed-asset/stock/category-wise']);
+const BRANCH_DEPRECIATION_PATHS = new Set([
+    '/fixed-asset/depreciation',
+    '/fixed-asset/depreciation/calculation',
+]);
+
+function itemPathBase(path: string): string {
+    return path.split('?')[0];
+}
+
+export function filterFixedAssetNavGroupForBranch(group: FixedAssetNavGroup): FixedAssetNavGroup | null {
+    if (!BRANCH_FIXED_ASSET_NAV_GROUP_IDS.includes(group.id as (typeof BRANCH_FIXED_ASSET_NAV_GROUP_IDS)[number])) {
+        return null;
+    }
+
+    const items = group.items.filter((item) => {
+        const base = itemPathBase(item.path);
+        if (group.id === 'stock') {
+            return BRANCH_STOCK_PATHS.has(base);
+        }
+        if (group.id === 'depreciation') {
+            return BRANCH_DEPRECIATION_PATHS.has(base);
+        }
+        if (group.id === 'reports') {
+            return !base.includes('branch-wise');
+        }
+        return true;
+    });
+
+    if (items.length === 0) {
+        return null;
+    }
+
+    return { ...group, items, defaultPath: items[0].path };
+}
+
+export function branchFixedAssetNavGroups(): FixedAssetNavGroup[] {
+    return FIXED_ASSET_NAV_GROUPS.map(filterFixedAssetNavGroupForBranch).filter(
+        (group): group is FixedAssetNavGroup => group !== null,
+    );
+}
+
+export function isBranchFixedAssetMenuPath(path: string, menuKey: string): boolean {
+    const base = itemPathBase(path);
+    if (menuKey === 'fa-stock') {
+        return BRANCH_STOCK_PATHS.has(base);
+    }
+    if (menuKey === 'fa-depreciation') {
+        return BRANCH_DEPRECIATION_PATHS.has(base);
+    }
+    if (menuKey === 'fa-reports') {
+        return !base.includes('branch-wise');
+    }
+    return true;
+}
+
 export function fixedAssetPath(path: string): string {
     return withSectionParam(path, FIXED_ASSET_SECTION_ID);
 }

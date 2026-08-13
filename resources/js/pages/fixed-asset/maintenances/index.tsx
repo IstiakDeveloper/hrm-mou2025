@@ -10,6 +10,8 @@ import { ComboSelect } from '@/components/ComboSelect';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
+import { hasAppPermission } from '@/lib/permissions';
+import { type SharedData } from '@/types';
 import { Edit, Plus, Search, Wrench } from 'lucide-react';
 
 type Row = {
@@ -43,7 +45,8 @@ export default function AssetMaintenanceIndex({
     statusOptions: { value: string; label: string }[];
     branchScoped?: boolean;
 }) {
-    const { flash } = usePage<{ flash?: { success?: string; error?: string } }>().props;
+    const { flash, auth } = usePage<SharedData & { flash?: { success?: string; error?: string } }>().props;
+    const canEdit = hasAppPermission(auth, 'fixed-assets.edit');
     const [search, setSearch] = useState(filters.search || '');
     const [branchId, setBranchId] = useState(filters.branch_id ? Number(filters.branch_id) : null);
     const [status, setStatus] = useState(filters.status || '');
@@ -61,9 +64,11 @@ export default function AssetMaintenanceIndex({
             <Head title="Asset maintenance" />
             <PayrollPage>
                 <PayrollPageHeader icon={Wrench} title="Maintenance log" description="Service, repair, and inspection records. In-progress work marks the asset under maintenance.">
-                    <Link href={route('asset-maintenances.create')}>
-                        <Button size="sm"><Plus className="mr-2 h-4 w-4" />Log maintenance</Button>
-                    </Link>
+                    {canEdit && (
+                        <Link href={route('asset-maintenances.create')}>
+                            <Button size="sm"><Plus className="mr-2 h-4 w-4" />Log maintenance</Button>
+                        </Link>
+                    )}
                 </PayrollPageHeader>
 
                 <BranchScopeAlert branchScoped={branchScoped} />
@@ -78,7 +83,9 @@ export default function AssetMaintenanceIndex({
                 <PayrollSectionCard title="Filters" className="mb-4">
                     <div className="flex flex-wrap gap-2">
                         <Input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyFilters()} placeholder="Search…" className="max-w-xs" />
-                        <ComboSelect value={branchId} onChange={(v) => setBranchId(v)} items={branchComboSelectItems(branches, { numericValue: true })} placeholder="All branches" className="min-w-[160px]" />
+                        {!branchScoped && (
+                            <ComboSelect value={branchId} onChange={(v) => setBranchId(v)} items={branchComboSelectItems(branches, { numericValue: true })} placeholder="All branches" className="min-w-[160px]" />
+                        )}
                         <ComboSelect value={status || null} onChange={(v) => setStatus(v ? String(v) : '')} items={statusOptions.map((s) => ({ value: s.value, label: s.label }))} placeholder="All statuses" className="min-w-[140px]" />
                         <Button variant="outline" onClick={applyFilters}><Search className="h-4 w-4" /></Button>
                     </div>
@@ -112,7 +119,9 @@ export default function AssetMaintenanceIndex({
                                         <TableCell>{row.cost ?? '—'}</TableCell>
                                         <TableCell className="max-w-[200px] truncate">{row.description}</TableCell>
                                         <TableCell className="text-right">
-                                            <Link href={route('asset-maintenances.edit', row.id)}><Button variant="outline" size="sm"><Edit className="h-4 w-4" /></Button></Link>
+                                            {canEdit && (
+                                                <Link href={route('asset-maintenances.edit', row.id)}><Button variant="outline" size="sm"><Edit className="h-4 w-4" /></Button></Link>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ))

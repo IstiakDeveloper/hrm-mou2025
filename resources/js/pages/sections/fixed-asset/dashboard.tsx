@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import Layout from '@/layouts/AdminLayout';
 import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed-asset/AssetPageShell';
-import { hasAppPermission } from '@/lib/permissions';
-import { FIXED_ASSET_NAV_GROUPS } from '@/lib/fixed-asset-nav';
+import { hasAppPermission, isBranchAccount } from '@/lib/permissions';
+import { branchFixedAssetNavGroups, FIXED_ASSET_NAV_GROUPS } from '@/lib/fixed-asset-nav';
 import { formatTakaWhole } from '@/lib/taka-format';
 import { type SharedData } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -90,6 +90,8 @@ function KpiCard({
 export default function FixedAssetDashboard({ stats, branchScoped }: Props) {
     const { auth } = usePage<SharedData>().props;
     const can = (p: string) => hasAppPermission(auth, p);
+    const branchAccount = isBranchAccount(auth);
+    const navGroups = branchAccount ? branchFixedAssetNavGroups() : FIXED_ASSET_NAV_GROUPS;
 
     const maxVal = Math.max(...stats.topBranches.map((b) => b.asset_count), 1);
 
@@ -100,7 +102,11 @@ export default function FixedAssetDashboard({ stats, branchScoped }: Props) {
                 <AssetPageHeader
                     icon={Boxes}
                     title="Fixed Assets"
-                    description="General overview, metrics, and shortcuts across all branches."
+                    description={
+                        branchAccount
+                            ? 'Purchase, stock, depreciation and reports for your branch.'
+                            : 'General overview, metrics, and shortcuts across all branches.'
+                    }
                 >
                     <Link href="/sections">
                         <Button size="sm" variant="outline" className="border-zinc-200 text-zinc-700 hover:bg-zinc-50 h-8.5 rounded-lg cursor-pointer">
@@ -116,7 +122,7 @@ export default function FixedAssetDashboard({ stats, branchScoped }: Props) {
                     </Alert>
                 )}
 
-                {stats.pendingDisposals > 0 && (
+                {stats.pendingDisposals > 0 && can('fixed-assets.delete') && (
                     <Alert className="border-amber-100 bg-amber-50/40 text-amber-950 rounded-xl shadow-2xs">
                         <AlertTitle className="text-xs font-semibold uppercase tracking-wider text-amber-800 flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 text-amber-600" /> Pending approvals
@@ -135,14 +141,30 @@ export default function FixedAssetDashboard({ stats, branchScoped }: Props) {
                 <section>
                     <h2 className="mb-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Key Performance Metrics</h2>
                     <div className={kpiGrid}>
-                        <KpiCard label="Total assets" value={stats.totalAssets} href={`/fixed-asset/assets/tracking${section}`} icon={Boxes} />
-                        <KpiCard label="Purchase value" value={formatTakaWhole(stats.purchaseValue)} sub="৳ total" icon={Layers} />
+                        <KpiCard
+                            label="Total assets"
+                            value={stats.totalAssets}
+                            href={branchAccount ? `/fixed-asset/stock/category-wise${section}` : `/fixed-asset/assets/tracking${section}`}
+                            icon={Boxes}
+                        />
+                        <KpiCard label="Purchase value" value={formatTakaWhole(stats.purchaseValue)} sub="৳ total" href={`/fixed-asset/purchases${section}`} icon={Layers} />
                         <KpiCard label="Book value" value={formatTakaWhole(stats.bookValue)} sub="৳ total" icon={TrendingDown} />
-                        <KpiCard label="Active" value={stats.active} href={`/fixed-asset/assets/tracking${section}&status=active`} icon={Boxes} />
-                        <KpiCard label="Pending disposal" value={stats.pendingDisposals} href={`/fixed-asset/disposal/requests${section}&status=pending`} icon={Trash2} />
+                        <KpiCard
+                            label="Active"
+                            value={stats.active}
+                            href={branchAccount ? `/fixed-asset/stock/category-wise${section}` : `/fixed-asset/assets/tracking${section}&status=active`}
+                            icon={Boxes}
+                        />
+                        {!branchAccount && (
+                            <KpiCard label="Pending disposal" value={stats.pendingDisposals} href={`/fixed-asset/disposal/requests${section}&status=pending`} icon={Trash2} />
+                        )}
                         <KpiCard label="Depreciable" value={stats.depreciableAssets} href={`/fixed-asset/depreciation/calculation${section}`} icon={TrendingDown} />
-                        <KpiCard label="Categories" value={stats.categories} href={`/fixed-asset/settings/categories${section}`} icon={Layers} />
-                        <KpiCard label="New purchase" value="+" href={`/fixed-asset/purchases/create${section}`} icon={ShoppingCart} />
+                        {!branchAccount && (
+                            <KpiCard label="Categories" value={stats.categories} href={`/fixed-asset/settings/categories${section}`} icon={Layers} />
+                        )}
+                        {can('fixed-assets.create') ? (
+                            <KpiCard label="New purchase" value="+" href={`/fixed-asset/purchases/create${section}`} icon={ShoppingCart} />
+                        ) : null}
                     </div>
                 </section>
 
@@ -151,7 +173,7 @@ export default function FixedAssetDashboard({ stats, branchScoped }: Props) {
                         <section className="h-full">
                             <h2 className="mb-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Module Shortcuts</h2>
                             <div className="grid gap-4 sm:grid-cols-2">
-                                {FIXED_ASSET_NAV_GROUPS.map((group) => {
+                                {navGroups.map((group) => {
                                     const items = group.items.filter((item) => can(item.permission ?? 'fixed-assets.view'));
                                     if (items.length === 0) return null;
                                     const Icon = group.icon;

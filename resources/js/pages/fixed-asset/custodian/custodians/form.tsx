@@ -9,6 +9,7 @@ import { ComboSelect } from '@/components/ComboSelect';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
 import { ArrowLeft, UserCheck } from 'lucide-react';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 
 type MasterOpt = { id: number; name: string; code: string };
 type BranchOpt = { id: number; name: string };
@@ -37,11 +38,15 @@ export default function CustodianForm({
     departments,
     designations,
     branches,
+    branchScoped = false,
+    scopedBranchId = null,
 }: {
     custodian: CustodianData | null;
     departments: MasterOpt[];
     designations: MasterOpt[];
     branches: BranchOpt[];
+    branchScoped?: boolean;
+    scopedBranchId?: number | null;
 }) {
     const isEdit = Boolean(custodian?.id);
     const { data, setData, post, put, processing, errors } = useForm({
@@ -49,7 +54,7 @@ export default function CustodianForm({
         name: custodian?.name ?? '',
         asset_custodian_department_id: custodian?.asset_custodian_department_id ? String(custodian.asset_custodian_department_id) : '',
         asset_custodian_designation_id: custodian?.asset_custodian_designation_id ? String(custodian.asset_custodian_designation_id) : '',
-        branch_id: custodian?.branch_id ? String(custodian.branch_id) : '',
+        branch_id: custodian?.branch_id ? String(custodian.branch_id) : (scopedBranchId ? String(scopedBranchId) : ''),
         phone: custodian?.phone ?? '',
         email: custodian?.email ?? '',
         is_active: custodian?.is_active ?? true,
@@ -84,7 +89,7 @@ export default function CustodianForm({
             ...data,
             employee_id: String(employeeId),
             name: employeeDisplayName(emp),
-            branch_id: emp.current_branch_id ? String(emp.current_branch_id) : data.branch_id,
+            branch_id: branchScoped ? data.branch_id : (emp.current_branch_id ? String(emp.current_branch_id) : data.branch_id),
             phone: emp.phone || data.phone,
             email: emp.email || data.email,
         });
@@ -102,6 +107,7 @@ export default function CustodianForm({
             <PayrollPage>
                 <Link href={route('fixed-asset.custodian.custodians.index')} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="mr-1 h-4 w-4" /> Back</Link>
                 <PayrollPageHeader icon={UserCheck} title={isEdit ? 'Edit custodian' : 'Add custodian'} description="Link an employee or register an external custodian." />
+                <BranchScopeAlert branchScoped={branchScoped} />
                 <form onSubmit={submit}>
                     <PayrollSectionCard title="Details" className="max-w-2xl">
                         <div className="space-y-4">
@@ -112,6 +118,7 @@ export default function CustodianForm({
                                     onChange={(v) => setData('branch_id', v ? String(v) : '')}
                                     items={branches.map((b) => ({ value: b.id, label: b.name }))}
                                     placeholder="Select branch"
+                                    disabled={branchScoped}
                                 />
                             </div>
                             <div>

@@ -137,8 +137,9 @@ class AssetPurchaseController extends Controller
             ->with('success', 'Purchase recorded and assets created.');
     }
 
-    public function show(AssetPurchase $purchase)
+    public function show(Request $request, AssetPurchase $purchase)
     {
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $purchase->branch_id);
         $purchase->load([
             'branch:id,name,branch_code',
             'project:id,name,code',
@@ -218,6 +219,8 @@ class AssetPurchaseController extends Controller
             'quantity' => 'required|integer|min:1|max:100',
         ]);
 
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $validated['branch_id']);
+
         $branch = Branch::query()->findOrFail($validated['branch_id']);
         $category = AssetCategory::query()->findOrFail($validated['asset_category_id']);
 
@@ -250,6 +253,7 @@ class AssetPurchaseController extends Controller
                 ->get(['id', 'asset_category_id', 'name', 'code', 'depreciation_rate']),
             'custodians' => AssetCustodian::query()
                 ->where('is_active', true)
+                ->when($branchProps['scopedBranchId'], fn ($q) => $q->where('branch_id', $branchProps['scopedBranchId']))
                 ->with('employee:id,employee_id,name_en')
                 ->orderBy('name')
                 ->limit(500)

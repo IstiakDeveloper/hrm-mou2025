@@ -26,10 +26,13 @@ import {
     normalizeEmployeeBankFormFields,
 } from '@/lib/employee-bank-defaults';
 import {
+    emptyChequeFormRow,
     emptyGuarantorFormRow,
     emptyNomineeFormRow,
+    hydrateChequeFormRows,
     hydrateGuarantorFormRows,
     hydrateNomineeFormRows,
+    type ChequeFormRow,
     type GuarantorFormRow,
     type NomineeFormRow,
 } from '@/lib/employee-nominee-guarantor-form';
@@ -118,12 +121,7 @@ interface Education {
 
 type Nominee = NomineeFormRow;
 type Guarantor = GuarantorFormRow;
-
-interface Cheque {
-    bank_name: string;
-    cheque_no: string;
-    amount: string | number;
-}
+type Cheque = ChequeFormRow;
 
 interface Asset {
     serial_no: string;
@@ -169,15 +167,45 @@ export interface DisciplinaryActionFormRow {
     details: string;
 }
 
-const JOB_HISTORY_EVENT_TYPES = [
-    { value: 'joining', label: '1. Joining as Designation' },
-    { value: 'confirmation', label: '2. Confirmed as Designation' },
-    { value: 'transfer', label: '3. Transferred from Branch to Branch' },
-    { value: 'promotion', label: '4. Promoted as Designation' },
-    { value: 'demotion', label: '5. Demoted as Designation' },
-    { value: 'left', label: '6. Left from Branch' },
-    { value: 'final_payment', label: '7. Final Payment Settled' },
+const JOB_HISTORY_SECTIONS = [
+    { value: 'joining', label: 'Joining', multiple: false },
+    { value: 'confirmation', label: 'Confirmation', multiple: false },
+    { value: 'transfer', label: 'Transfer', multiple: true },
+    { value: 'promotion', label: 'Promotion', multiple: true },
+    { value: 'demotion', label: 'Demotion', multiple: true },
+    { value: 'left', label: 'Left / Separation', multiple: false },
+    { value: 'final_payment', label: 'Final Payment', multiple: false },
+] as const;
+
+const DEFAULT_DROPOUT_LEFT_REASON = 'Voluntary';
+
+const DROPOUT_LEFT_REASONS = [
+    'Voluntary',
+    'Resignation',
+    'Termination',
+    'Dismissal',
+    'Death',
+    'Retirement',
+    'Absconding',
+    'End of Contract',
+    'Medical Grounds',
 ];
+
+const GENERIC_LEFT_REMARKS = new Set(['', 'Left Service', 'Left Organization']);
+
+function resolveLeftReason(remarks: string, dropoutReason?: string | null): string {
+    const current = remarks.trim();
+    if (current && !GENERIC_LEFT_REMARKS.has(current)) {
+        return current;
+    }
+
+    const existing = String(dropoutReason ?? '').trim();
+    if (existing && !GENERIC_LEFT_REMARKS.has(existing)) {
+        return existing;
+    }
+
+    return DEFAULT_DROPOUT_LEFT_REASON;
+}
 
 const DISCIPLINARY_ACTION_TYPES = [
     { value: 'Warning', label: 'Warning (সতর্কীকরণ)' },
@@ -190,16 +218,45 @@ const DISCIPLINARY_ACTION_TYPES = [
     { value: 'Financial Irregularity', label: 'Financial Irregularity (আর্থিক অনিয়ম)' },
 ];
 
-function emptyJobHistoryFormRow(): JobHistoryFormRow {
+function emptyJobHistoryFormRow(eventType: string, dropoutReason?: string | null): JobHistoryFormRow {
     return {
-        event_type: 'transfer',
+        event_type: eventType,
         event_date: '',
         from_designation_id: '',
         to_designation_id: '',
         from_branch_id: '',
         to_branch_id: '',
-        remarks: '',
+        remarks: eventType === 'left' ? resolveLeftReason('', dropoutReason) : '',
     };
+}
+
+function ensureFlatJobHistories(rows: JobHistoryFormRow[], dropoutReason?: string | null): JobHistoryFormRow[] {
+    const known = new Set<string>(JOB_HISTORY_SECTIONS.map((section) => section.value));
+    const grouped = new Map<string, JobHistoryFormRow[]>();
+    for (const section of JOB_HISTORY_SECTIONS) {
+        grouped.set(section.value, []);
+    }
+
+    const unknown: JobHistoryFormRow[] = [];
+    for (const row of rows) {
+        if (known.has(row.event_type)) {
+            grouped.get(row.event_type)?.push(row);
+        } else {
+            unknown.push(row);
+        }
+    }
+
+    const out: JobHistoryFormRow[] = [];
+    for (const section of JOB_HISTORY_SECTIONS) {
+        const list = grouped.get(section.value) ?? [];
+        if (list.length === 0) {
+            out.push(emptyJobHistoryFormRow(section.value, dropoutReason));
+        } else {
+            out.push(...list);
+        }
+    }
+
+    return [...out, ...unknown];
 }
 
 function emptyDisciplinaryActionFormRow(): DisciplinaryActionFormRow {
@@ -393,6 +450,9 @@ interface Employee {
     experiences?: any[];
     trainings?: any[];
     documents?: any[];
+    dropout_reason?: string | null;
+    dropout_date?: string | null;
+    resignation_date?: string | null;
 }
 
 function withHydratedEditDocuments(form: EmployeeEditFormData): EmployeeEditFormData {
@@ -472,7 +532,7 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         bank: normalizeEmployeeBankFormFields(employee.bank ?? emptyEmployeeBankFormFields()),
         nominees: hydrateNomineeFormRows(employee.nominees),
         guarantors: hydrateGuarantorFormRows(employee.guarantors),
-        guarantor_cheques: (employee.guarantor_cheques as any[]) ?? [],
+        guarantor_cheques: hydrateChequeFormRows(employee.guarantor_cheques),
         collateral: {
             has_certificate: !!(employee.collateral?.has_certificate),
             certificate_levels: safeParseCertificateLevels(employee.collateral?.certificate_levels),
@@ -481,21 +541,29 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
             collateral_date: employee.collateral?.collateral_date ?? '',
             notes: employee.collateral?.notes ?? '',
         },
-        collateral_receive_cheques: (employee.collateral_receive_cheques as any[]) ?? [],
+        collateral_receive_cheques: hydrateChequeFormRows(employee.collateral_receive_cheques),
         assets: (employee.assets as any[]) ?? [],
         experiences: (employee.experiences as any[]) ?? [],
         trainings: (employee.trainings as any[]) ?? [],
         documents: hydrateEmployeeDocumentRowsForForm(employee.documents ?? []),
-        job_histories: ((employee.job_histories as any[]) ?? []).map((h) => ({
-            id: h.id ? Number(h.id) : undefined,
-            event_type: String(h.event_type ?? 'transfer'),
-            event_date: String(h.event_date ?? '').slice(0, 10),
-            from_designation_id: h.from_designation_id != null ? String(h.from_designation_id) : '',
-            to_designation_id: h.to_designation_id != null ? String(h.to_designation_id) : '',
-            from_branch_id: h.from_branch_id != null ? String(h.from_branch_id) : '',
-            to_branch_id: h.to_branch_id != null ? String(h.to_branch_id) : '',
-            remarks: String(h.remarks ?? ''),
-        })),
+        job_histories: ensureFlatJobHistories(
+            ((employee.job_histories as any[]) ?? []).map((h) => {
+                const eventType = String(h.event_type ?? 'transfer');
+                const remarks = String(h.remarks ?? '');
+
+                return {
+                    id: h.id ? Number(h.id) : undefined,
+                    event_type: eventType,
+                    event_date: String(h.event_date ?? '').slice(0, 10),
+                    from_designation_id: h.from_designation_id != null ? String(h.from_designation_id) : '',
+                    to_designation_id: h.to_designation_id != null ? String(h.to_designation_id) : '',
+                    from_branch_id: h.from_branch_id != null ? String(h.from_branch_id) : '',
+                    to_branch_id: h.to_branch_id != null ? String(h.to_branch_id) : '',
+                    remarks: eventType === 'left' ? resolveLeftReason(remarks, employee.dropout_reason) : remarks,
+                };
+            }),
+            employee.dropout_reason,
+        ),
         disciplinary_actions: ((employee.disciplinary_actions as any[]) ?? []).map((d) => ({
             id: d.id ? Number(d.id) : undefined,
             action_type: String(d.action_type ?? 'Warning'),
@@ -567,6 +635,14 @@ function validateEmployeeEditTab(tab: EmployeeEditTabId, data: EmployeeEditFormD
                 if (!String(data.spouse_name ?? '').trim()) msg.push('Spouse name is required.');
                 if (!String(data.spouse_mobile ?? '').trim()) msg.push('Spouse contact is required.');
             }
+            break;
+        }
+        case 'job_history': {
+            (data.job_histories ?? []).forEach((row, i) => {
+                if (row.event_type === 'left' && !String(row.remarks ?? '').trim()) {
+                    msg.push(`Job history ${i + 1}: Dropout / left reason is required.`);
+                }
+            });
             break;
         }
         case 'education': {
@@ -678,6 +754,136 @@ const FormField = ({
     </div>
 );
 
+function JobHistoryTypeFields({
+    row,
+    onPatch,
+    branchItems,
+    desigItems,
+}: {
+    row: JobHistoryFormRow;
+    onPatch: (patch: Partial<JobHistoryFormRow>) => void;
+    branchItems: ComboSelectItem<string>[];
+    desigItems: ComboSelectItem<string>[];
+}) {
+    const type = row.event_type;
+
+    return (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FormField label="Date">
+                <Input
+                    type="date"
+                    className="h-9 text-xs"
+                    value={row.event_date}
+                    onChange={(e) => onPatch({ event_date: e.target.value })}
+                />
+            </FormField>
+
+            {type === 'joining' && (
+                <>
+                    <FormField label="Designation">
+                        <ComboSelect
+                            items={desigItems}
+                            value={row.to_designation_id || null}
+                            onChange={(val) => onPatch({ to_designation_id: val ? String(val) : '' })}
+                            placeholder="Select Designation"
+                        />
+                    </FormField>
+                    <FormField label="Branch">
+                        <ComboSelect
+                            items={branchItems}
+                            value={row.to_branch_id || null}
+                            onChange={(val) => onPatch({ to_branch_id: val ? String(val) : '' })}
+                            placeholder="Select Branch"
+                        />
+                    </FormField>
+                </>
+            )}
+
+            {type === 'confirmation' && (
+                <FormField label="Designation">
+                    <ComboSelect
+                        items={desigItems}
+                        value={row.to_designation_id || null}
+                        onChange={(val) => onPatch({ to_designation_id: val ? String(val) : '' })}
+                        placeholder="Select Designation"
+                    />
+                </FormField>
+            )}
+
+            {type === 'transfer' && (
+                <>
+                    <FormField label="From Branch">
+                        <ComboSelect
+                            items={branchItems}
+                            value={row.from_branch_id || null}
+                            onChange={(val) => onPatch({ from_branch_id: val ? String(val) : '' })}
+                            placeholder="From Branch"
+                        />
+                    </FormField>
+                    <FormField label="To Branch">
+                        <ComboSelect
+                            items={branchItems}
+                            value={row.to_branch_id || null}
+                            onChange={(val) => onPatch({ to_branch_id: val ? String(val) : '' })}
+                            placeholder="To Branch"
+                        />
+                    </FormField>
+                </>
+            )}
+
+            {(type === 'promotion' || type === 'demotion') && (
+                <>
+                    <FormField label="From Designation">
+                        <ComboSelect
+                            items={desigItems}
+                            value={row.from_designation_id || null}
+                            onChange={(val) => onPatch({ from_designation_id: val ? String(val) : '' })}
+                            placeholder="From Designation"
+                        />
+                    </FormField>
+                    <FormField label="To Designation">
+                        <ComboSelect
+                            items={desigItems}
+                            value={row.to_designation_id || null}
+                            onChange={(val) => onPatch({ to_designation_id: val ? String(val) : '' })}
+                            placeholder="To Designation"
+                        />
+                    </FormField>
+                </>
+            )}
+
+            {type === 'left' && (
+                <>
+                    <FormField label="From Branch">
+                        <ComboSelect
+                            items={branchItems}
+                            value={row.from_branch_id || null}
+                            onChange={(val) => onPatch({ from_branch_id: val ? String(val) : '' })}
+                            placeholder="From Branch"
+                        />
+                    </FormField>
+                    <FormField label="Dropout / Left Reason" required>
+                        <ComboSelect
+                            value={row.remarks || DEFAULT_DROPOUT_LEFT_REASON}
+                            onChange={(v) => onPatch({ remarks: v || DEFAULT_DROPOUT_LEFT_REASON })}
+                            items={[
+                                ...DROPOUT_LEFT_REASONS.map((reason) => ({ value: reason, label: reason })),
+                                ...(row.remarks && !DROPOUT_LEFT_REASONS.includes(row.remarks)
+                                    ? [{ value: row.remarks, label: row.remarks }]
+                                    : []),
+                            ]}
+                            placeholder="Select Reason"
+                            clearable={false}
+                            creatable
+                            onCreate={(label) => onPatch({ remarks: label })}
+                        />
+                    </FormField>
+                </>
+            )}
+        </div>
+    );
+}
+
 const SectionHeading = ({ children, desc }: { children: string; desc?: string }) => (
     <div className="mb-5 border-b border-zinc-100 pb-3">
         <h3 className="text-sm font-bold tracking-tight text-zinc-900">{children}</h3>
@@ -718,6 +924,8 @@ interface EmployeeEditProps {
     banks: string[];
     relations: string[];
     educationBoards: string[];
+    educationDegrees: string[];
+    educationGroups: string[];
     locations: any;
     defaultBankName: string;
     documentTypes: string[];
@@ -741,6 +949,8 @@ export default function EmployeeEdit({
     banks,
     relations,
     educationBoards,
+    educationDegrees = [],
+    educationGroups = [],
     locations,
     defaultBankName,
     documentTypes = [],
@@ -2186,170 +2396,94 @@ export default function EmployeeEdit({
                                             <div>
                                                 <h2 className="text-lg font-bold text-zinc-900">Job History & Disciplinary Actions</h2>
                                                 <p className="mt-1 text-xs text-zinc-500">
-                                                    Manage historical career events (joining, confirmation, transfer, promotion, demotion, left, final payment) and disciplinary records for legacy or current employees.
+                                                    Fill the 7 history types below. Transfer, promotion and demotion can have extra rows with +.
                                                 </p>
                                             </div>
                                         </div>
 
                                         <div className="space-y-8 p-6 md:p-8">
-                                            {/* Section 1: Legacy Job History Events */}
-                                            <div className="space-y-4">
+                                            {/* Section 1: Job History */}
+                                            <div className="space-y-5">
                                                 <div className="border-b border-zinc-100 pb-3">
-                                                    <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
-                                                        <Clock className="w-4 h-4 text-emerald-600" /> Legacy Job History Timeline
+                                                    <h3 className="flex items-center gap-2 text-sm font-bold text-zinc-900">
+                                                        <Clock className="h-4 w-4 text-emerald-600" /> Job History
                                                     </h3>
                                                     <p className="mt-0.5 text-xs text-zinc-400">
-                                                        Entries added here affect only this employee's profile history (does not bloat main transfer/promotion order lists).
+                                                        One row per type. Use + only for extra transfer, promotion or demotion.
                                                     </p>
                                                 </div>
 
-                                                {data.job_histories.length === 0 ? (
-                                                    <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-6 text-center text-xs text-zinc-500">
-                                                        No manual job history records added yet. Click "Add History Event" to add past transfers, promotions, confirmations, etc.
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-4">
-                                                        {data.job_histories.map((row, idx) => (
-                                                            <div key={idx} className="relative rounded-xl border border-zinc-200/80 bg-zinc-50/30 p-4 space-y-4">
-                                                                <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
-                                                                    <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
-                                                                        Event #{idx + 1}
-                                                                    </span>
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
-                                                                        onClick={() => {
-                                                                            const updated = data.job_histories.filter((_, i) => i !== idx);
-                                                                            setData('job_histories', updated);
-                                                                        }}
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4" />
-                                                                    </Button>
+                                                <div className="space-y-4">
+                                                    {JOB_HISTORY_SECTIONS.map((section) => {
+                                                        const indexed = data.job_histories
+                                                            .map((row, idx) => ({ row, idx }))
+                                                            .filter(({ row }) => row.event_type === section.value);
+
+                                                        return (
+                                                            <div key={section.value} className="space-y-3 rounded-xl border border-zinc-200/80 bg-zinc-50/30 p-4">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <h4 className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
+                                                                        {section.label}
+                                                                    </h4>
+                                                                    {section.multiple && (
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            className="h-8 gap-1 border-emerald-600/40 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                                                            onClick={() =>
+                                                                                setData('job_histories', [
+                                                                                    ...data.job_histories,
+                                                                                    emptyJobHistoryFormRow(section.value, employee.dropout_reason),
+                                                                                ])
+                                                                            }
+                                                                        >
+                                                                            <Plus className="h-3.5 w-3.5" /> Add {section.label}
+                                                                        </Button>
+                                                                    )}
                                                                 </div>
 
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                    <FormField label="Event Type" required>
-                                                                        <select
-                                                                            className="w-full h-9 rounded-lg border border-zinc-200 bg-white px-3 text-xs text-zinc-900 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-                                                                            value={row.event_type}
-                                                                            onChange={(e) => {
+                                                                {indexed.map(({ row, idx }, n) => (
+                                                                    <div
+                                                                        key={`${section.value}-${idx}`}
+                                                                        className={indexed.length > 1 ? 'rounded-lg border border-zinc-200 bg-white p-3' : ''}
+                                                                    >
+                                                                        {section.multiple && indexed.length > 1 && (
+                                                                            <div className="mb-2 flex items-center justify-between">
+                                                                                <span className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase">
+                                                                                    {section.label} #{n + 1}
+                                                                                </span>
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                                                                                    onClick={() =>
+                                                                                        setData(
+                                                                                            'job_histories',
+                                                                                            data.job_histories.filter((_, i) => i !== idx),
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <Trash2 className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </div>
+                                                                        )}
+                                                                        <JobHistoryTypeFields
+                                                                            row={row}
+                                                                            branchItems={branchItems}
+                                                                            desigItems={desigItems}
+                                                                            onPatch={(patch) => {
                                                                                 const updated = [...data.job_histories];
-                                                                                updated[idx] = { ...updated[idx], event_type: e.target.value };
-                                                                                setData('job_histories', updated);
-                                                                            }}
-                                                                        >
-                                                                            {JOB_HISTORY_EVENT_TYPES.map((t) => (
-                                                                                <option key={t.value} value={t.value}>{t.label}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </FormField>
-
-                                                                    <FormField label="Event Date" required>
-                                                                        <Input
-                                                                            type="date"
-                                                                            className="h-9 text-xs"
-                                                                            value={row.event_date}
-                                                                            onChange={(e) => {
-                                                                                const updated = [...data.job_histories];
-                                                                                updated[idx] = { ...updated[idx], event_date: e.target.value };
+                                                                                updated[idx] = { ...updated[idx], ...patch };
                                                                                 setData('job_histories', updated);
                                                                             }}
                                                                         />
-                                                                    </FormField>
-                                                                </div>
-
-                                                                {/* Conditional designation / branch inputs based on event type */}
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                    {['transfer', 'left'].includes(row.event_type) && (
-                                                                        <FormField label="From Branch">
-                                                                            <ComboSelect
-                                                                                items={branchItems}
-                                                                                value={row.from_branch_id ? String(row.from_branch_id) : null}
-                                                                                onChange={(val) => {
-                                                                                    const updated = [...data.job_histories];
-                                                                                    updated[idx] = { ...updated[idx], from_branch_id: val ? String(val) : '' };
-                                                                                    setData('job_histories', updated);
-                                                                                }}
-                                                                                placeholder="Select From Branch..."
-                                                                            />
-                                                                        </FormField>
-                                                                    )}
-
-                                                                    {['joining', 'transfer'].includes(row.event_type) && (
-                                                                        <FormField label="To / Joining Branch">
-                                                                            <ComboSelect
-                                                                                items={branchItems}
-                                                                                value={row.to_branch_id ? String(row.to_branch_id) : null}
-                                                                                onChange={(val) => {
-                                                                                    const updated = [...data.job_histories];
-                                                                                    updated[idx] = { ...updated[idx], to_branch_id: val ? String(val) : '' };
-                                                                                    setData('job_histories', updated);
-                                                                                }}
-                                                                                placeholder="Select To Branch..."
-                                                                            />
-                                                                        </FormField>
-                                                                    )}
-
-                                                                    {['promotion', 'demotion'].includes(row.event_type) && (
-                                                                        <FormField label="From Designation">
-                                                                            <ComboSelect
-                                                                                items={desigItems}
-                                                                                value={row.from_designation_id ? String(row.from_designation_id) : null}
-                                                                                onChange={(val) => {
-                                                                                    const updated = [...data.job_histories];
-                                                                                    updated[idx] = { ...updated[idx], from_designation_id: val ? String(val) : '' };
-                                                                                    setData('job_histories', updated);
-                                                                                }}
-                                                                                placeholder="Select From Designation..."
-                                                                            />
-                                                                        </FormField>
-                                                                    )}
-
-                                                                    {['joining', 'confirmation', 'promotion', 'demotion'].includes(row.event_type) && (
-                                                                        <FormField label="To / Confirmed / Promoted Designation">
-                                                                            <ComboSelect
-                                                                                items={desigItems}
-                                                                                value={row.to_designation_id ? String(row.to_designation_id) : null}
-                                                                                onChange={(val) => {
-                                                                                    const updated = [...data.job_histories];
-                                                                                    updated[idx] = { ...updated[idx], to_designation_id: val ? String(val) : '' };
-                                                                                    setData('job_histories', updated);
-                                                                                }}
-                                                                                placeholder="Select Designation..."
-                                                                            />
-                                                                        </FormField>
-                                                                    )}
-                                                                </div>
-
-                                                                <FormField label="Remarks / Details">
-                                                                    <Input
-                                                                        className="h-9 text-xs"
-                                                                        placeholder="Optional remarks or notes about this event..."
-                                                                        value={row.remarks}
-                                                                        onChange={(e) => {
-                                                                            const updated = [...data.job_histories];
-                                                                            updated[idx] = { ...updated[idx], remarks: e.target.value };
-                                                                            setData('job_histories', updated);
-                                                                        }}
-                                                                    />
-                                                                </FormField>
+                                                                    </div>
+                                                                ))}
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                <div className="flex justify-end pt-2">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-9 gap-1.5 border-emerald-600 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 shadow-sm"
-                                                        onClick={() => setData('job_histories', [...data.job_histories, emptyJobHistoryFormRow()])}
-                                                    >
-                                                        <Plus className="h-4 w-4" /> Add History Event
-                                                    </Button>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
 
@@ -2566,14 +2700,26 @@ export default function EmployeeEdit({
                                                             </div>
                                                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                                                 <FormField label="Degree Title" required>
-                                                                    <Input
-                                                                        value={ed.degree}
-                                                                        onChange={(e) => {
+                                                                    <ComboSelect
+                                                                        value={ed.degree || null}
+                                                                        onChange={(v) => {
                                                                             const next = [...data.educations];
-                                                                            next[idx] = { ...next[idx], degree: e.target.value };
+                                                                            next[idx] = { ...next[idx], degree: v ?? '' };
                                                                             setData('educations', next);
                                                                         }}
-                                                                        placeholder="e.g. SSC, B.Sc"
+                                                                        items={[
+                                                                            ...educationDegrees.map((d) => ({ value: d, label: d })),
+                                                                            ...(ed.degree && !educationDegrees.includes(ed.degree)
+                                                                                ? [{ value: ed.degree, label: ed.degree }]
+                                                                                : []),
+                                                                        ]}
+                                                                        placeholder="Select Degree"
+                                                                        creatable
+                                                                        onCreate={(label) => {
+                                                                            const next = [...data.educations];
+                                                                            next[idx] = { ...next[idx], degree: label };
+                                                                            setData('educations', next);
+                                                                        }}
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="Institute Name">
@@ -2600,14 +2746,26 @@ export default function EmployeeEdit({
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="Group / Discipline">
-                                                                    <Input
-                                                                        value={ed.group_name}
-                                                                        onChange={(e) => {
+                                                                    <ComboSelect
+                                                                        value={ed.group_name || null}
+                                                                        onChange={(v) => {
                                                                             const next = [...data.educations];
-                                                                            next[idx] = { ...next[idx], group_name: e.target.value };
+                                                                            next[idx] = { ...next[idx], group_name: v ?? '' };
                                                                             setData('educations', next);
                                                                         }}
-                                                                        placeholder="e.g. Science"
+                                                                        items={[
+                                                                            ...educationGroups.map((g) => ({ value: g, label: g })),
+                                                                            ...(ed.group_name && !educationGroups.includes(ed.group_name)
+                                                                                ? [{ value: ed.group_name, label: ed.group_name }]
+                                                                                : []),
+                                                                        ]}
+                                                                        placeholder="Select Group / Discipline"
+                                                                        creatable
+                                                                        onCreate={(label) => {
+                                                                            const next = [...data.educations];
+                                                                            next[idx] = { ...next[idx], group_name: label };
+                                                                            setData('educations', next);
+                                                                        }}
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="Subject">
@@ -3027,17 +3185,6 @@ export default function EmployeeEdit({
                                                                             placeholder="Full Name"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="Father's Name">
-                                                                        <Input
-                                                                            value={g.father_name}
-                                                                            onChange={(e) => {
-                                                                                const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], father_name: e.target.value };
-                                                                                setData('guarantors', next);
-                                                                            }}
-                                                                            placeholder="Father's Name"
-                                                                        />
-                                                                    </FormField>
                                                                     <FormField label="Mobile Number">
                                                                         <Input
                                                                             value={g.mobile}
@@ -3049,51 +3196,19 @@ export default function EmployeeEdit({
                                                                             placeholder="Mobile No"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="NID Card Number">
-                                                                        <Input
-                                                                            value={g.nid}
-                                                                            onChange={(e) => {
+                                                                    <FormField label="Relation">
+                                                                        <ComboSelect
+                                                                            value={g.relation || null}
+                                                                            onChange={(v) => {
                                                                                 const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], nid: e.target.value };
+                                                                                next[idx] = { ...next[idx], relation: v ?? '' };
                                                                                 setData('guarantors', next);
                                                                             }}
-                                                                            placeholder="NID Number"
+                                                                            items={relations.map((r) => ({ value: r, label: r }))}
+                                                                            placeholder="Select Relation"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="Profession">
-                                                                        <Input
-                                                                            value={g.profession}
-                                                                            onChange={(e) => {
-                                                                                const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], profession: e.target.value };
-                                                                                setData('guarantors', next);
-                                                                            }}
-                                                                            placeholder="Profession"
-                                                                        />
-                                                                    </FormField>
-                                                                    <FormField label="Organization">
-                                                                        <Input
-                                                                            value={g.organization}
-                                                                            onChange={(e) => {
-                                                                                const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], organization: e.target.value };
-                                                                                setData('guarantors', next);
-                                                                            }}
-                                                                            placeholder="Company"
-                                                                        />
-                                                                    </FormField>
-                                                                    <FormField label="Designation">
-                                                                        <Input
-                                                                            value={g.designation}
-                                                                            onChange={(e) => {
-                                                                                const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], designation: e.target.value };
-                                                                                setData('guarantors', next);
-                                                                            }}
-                                                                            placeholder="Designation"
-                                                                        />
-                                                                    </FormField>
-                                                                    <FormField label="Address Details">
+                                                                    <FormField label="Full Address">
                                                                         <Input
                                                                             value={g.address}
                                                                             onChange={(e) => {
@@ -3123,7 +3238,7 @@ export default function EmployeeEdit({
                                                         onClick={() =>
                                                             setData('guarantor_cheques', [
                                                                 ...data.guarantor_cheques,
-                                                                { bank_name: '', cheque_no: '', amount: '' },
+                                                                emptyChequeFormRow(),
                                                             ])
                                                         }
                                                     >
@@ -3184,17 +3299,18 @@ export default function EmployeeEdit({
                                                                             placeholder="Cheque No"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="Amount">
+                                                                    <FormField label="Qty">
                                                                         <Input
                                                                             type="number"
                                                                             min={0}
-                                                                            value={ch.amount}
+                                                                            step={1}
+                                                                            value={ch.qty}
                                                                             onChange={(e) => {
                                                                                 const next = [...data.guarantor_cheques];
-                                                                                next[idx] = { ...next[idx], amount: e.target.value };
+                                                                                next[idx] = { ...next[idx], qty: e.target.value };
                                                                                 setData('guarantor_cheques', next);
                                                                             }}
-                                                                            placeholder="Amount"
+                                                                            placeholder="Qty"
                                                                         />
                                                                     </FormField>
                                                                 </div>
@@ -3333,7 +3449,7 @@ export default function EmployeeEdit({
                                             {/* Collateral Cheques */}
                                             <div className="space-y-4 border-t border-zinc-100 pt-4">
                                                 <div className="flex items-center justify-between">
-                                                    <h3 className="text-sm font-bold text-zinc-800">Collateral Receive Cheques</h3>
+                                                    <h3 className="text-sm font-bold text-zinc-800">Staff's Cheque Information</h3>
                                                     <Button
                                                         type="button"
                                                         variant="outline"
@@ -3342,7 +3458,7 @@ export default function EmployeeEdit({
                                                         onClick={() =>
                                                             setData('collateral_receive_cheques', [
                                                                 ...data.collateral_receive_cheques,
-                                                                { bank_name: '', cheque_no: '', amount: '' },
+                                                                emptyChequeFormRow(),
                                                             ])
                                                         }
                                                     >
@@ -3352,7 +3468,7 @@ export default function EmployeeEdit({
 
                                                 {data.collateral_receive_cheques.length === 0 ? (
                                                     <p className="rounded-xl border border-zinc-100 bg-zinc-50/30 p-4 text-xs text-zinc-400 italic">
-                                                        No collateral receive cheques added.
+                                                        No staff cheque information added.
                                                     </p>
                                                 ) : (
                                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -3403,17 +3519,18 @@ export default function EmployeeEdit({
                                                                             placeholder="Cheque No"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="Amount">
+                                                                    <FormField label="Qty">
                                                                         <Input
                                                                             type="number"
                                                                             min={0}
-                                                                            value={ch.amount}
+                                                                            step={1}
+                                                                            value={ch.qty}
                                                                             onChange={(e) => {
                                                                                 const next = [...data.collateral_receive_cheques];
-                                                                                next[idx] = { ...next[idx], amount: e.target.value };
+                                                                                next[idx] = { ...next[idx], qty: e.target.value };
                                                                                 setData('collateral_receive_cheques', next);
                                                                             }}
-                                                                            placeholder="Amount"
+                                                                            placeholder="Qty"
                                                                         />
                                                                     </FormField>
                                                                 </div>

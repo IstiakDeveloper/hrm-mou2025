@@ -8,13 +8,15 @@ export type NomineeFormRow = {
 
 export type GuarantorFormRow = {
     name: string;
-    father_name: string;
     mobile: string;
+    relation: string;
     address: string;
-    profession: string;
-    organization: string;
-    designation: string;
-    nid: string;
+};
+
+export type ChequeFormRow = {
+    bank_name: string;
+    cheque_no: string;
+    qty: string | number;
 };
 
 export function emptyNomineeFormRow(): NomineeFormRow {
@@ -30,13 +32,17 @@ export function emptyNomineeFormRow(): NomineeFormRow {
 export function emptyGuarantorFormRow(): GuarantorFormRow {
     return {
         name: '',
-        father_name: '',
         mobile: '',
+        relation: '',
         address: '',
-        profession: '',
-        organization: '',
-        designation: '',
-        nid: '',
+    };
+}
+
+export function emptyChequeFormRow(): ChequeFormRow {
+    return {
+        bank_name: '',
+        cheque_no: '',
+        qty: '',
     };
 }
 
@@ -57,13 +63,19 @@ export function hydrateGuarantorFormRow(row: Record<string, unknown> | null | un
 
     return {
         name: String(base.name ?? ''),
-        father_name: String(base.father_name ?? ''),
         mobile: String(base.mobile ?? base.phone ?? ''),
+        relation: String(base.relation ?? ''),
         address: String(base.address ?? ''),
-        profession: String(base.profession ?? base.occupation ?? ''),
-        organization: String(base.organization ?? ''),
-        designation: String(base.designation ?? ''),
-        nid: String(base.nid ?? ''),
+    };
+}
+
+export function hydrateChequeFormRow(row: Record<string, unknown> | null | undefined): ChequeFormRow {
+    const base = row ?? {};
+
+    return {
+        bank_name: String(base.bank_name ?? ''),
+        cheque_no: String(base.cheque_no ?? ''),
+        qty: base.qty ?? '',
     };
 }
 
@@ -81,4 +93,12 @@ export function hydrateGuarantorFormRows(rows: unknown): GuarantorFormRow[] {
     }
 
     return rows.map((row) => hydrateGuarantorFormRow(row as Record<string, unknown>));
+}
+
+export function hydrateChequeFormRows(rows: unknown): ChequeFormRow[] {
+    if (!Array.isArray(rows)) {
+        return [];
+    }
+
+    return rows.map((row) => hydrateChequeFormRow(row as Record<string, unknown>));
 }

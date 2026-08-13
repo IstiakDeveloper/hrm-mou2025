@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\FixedAsset\Concerns;
 
 use App\Models\Branch;
+use App\Models\FixedAsset;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -20,13 +21,20 @@ trait ResolvesFixedAssetBranchScope
             return false;
         }
 
-        return $user->hasPermission('branch_manager');
+        return $user->isBranchAccount() || $user->hasPermission('branch_manager');
     }
 
     protected function scopedBranchIdForUser(?User $user): ?int
     {
         if (! $user || ! $this->isFixedAssetBranchScoped($user)) {
             return null;
+        }
+
+        if ($user->isBranchAccount()) {
+            $bid = (int) ($user->branch_id ?: 0);
+
+            // -1 matches no rows: branch PIN accounts must never see other branches.
+            return $bid > 0 ? $bid : -1;
         }
 
         $user->loadMissing('employee');
@@ -40,6 +48,28 @@ trait ResolvesFixedAssetBranchScope
         }
 
         return null;
+    }
+
+    protected function assertFixedAssetBranchAllowed(?User $user, int $branchId): void
+    {
+        $locked = $this->scopedBranchIdForUser($user);
+        if ($locked !== null && $locked !== $branchId) {
+            abort(403, 'You can only access fixed assets for your branch.');
+        }
+    }
+
+    protected function assertFixedAssetIdInScope(?User $user, int $fixedAssetId): void
+    {
+        $branchId = (int) FixedAsset::query()->whereKey($fixedAssetId)->value('branch_id');
+        $this->assertFixedAssetBranchAllowed($user, $branchId);
+    }
+
+    protected function forceScopedBranchOnRequest(Request $request): void
+    {
+        $scoped = $this->scopedBranchIdForUser($request->user());
+        if ($scoped !== null && $scoped > 0) {
+            $request->merge(['branch_id' => $scoped]);
+        }
     }
 
     protected function resolveFixedAssetBranchFilter(Request $request): ?int
@@ -118,11 +148,12 @@ trait ResolvesFixedAssetBranchScope
     protected function fixedAssetBranchFilterProps(Request $request): array
     {
         $scopedBranchId = $this->scopedBranchIdForUser($request->user());
+        $lockedBranchId = $scopedBranchId !== null && $scopedBranchId > 0 ? $scopedBranchId : null;
 
         return [
             'branches' => $this->branchesForFixedAssetFilters($request),
             'branchScoped' => $scopedBranchId !== null,
-            'scopedBranchId' => $scopedBranchId,
+            'scopedBranchId' => $lockedBranchId,
         ];
     }
 }

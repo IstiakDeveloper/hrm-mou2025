@@ -2478,16 +2478,12 @@ class EmployeeController extends Controller
             'nominee_date_of_birth' => $relatedValues($nominees, 'date_of_birth'),
             'nominee_share' => $relatedValues($nominees, 'share'),
             'guarantor_name' => $relatedValues($guarantors, 'name'),
-            'guarantor_father_name' => $relatedValues($guarantors, 'father_name'),
+            'guarantor_relation' => $relatedValues($guarantors, 'relation'),
             'guarantor_mobile' => $relatedValues($guarantors, 'phone'),
             'guarantor_address' => $relatedValues($guarantors, 'address'),
-            'guarantor_profession' => $relatedValues($guarantors, 'occupation'),
-            'guarantor_organization' => $relatedValues($guarantors, 'organization'),
-            'guarantor_designation' => $relatedValues($guarantors, 'designation'),
-            'guarantor_nid' => $relatedValues($guarantors, 'nid'),
             'guarantor_cheque_bank' => $relatedValues($guarantorCheques, 'bank_name'),
             'guarantor_cheque_number' => $relatedValues($guarantorCheques, 'cheque_no'),
-            'guarantor_cheque_amount' => $relatedValues($guarantorCheques, 'amount'),
+            'guarantor_cheque_qty' => $relatedValues($guarantorCheques, 'qty'),
             'collateral_has_certificate' => $collateral?->has_certificate ? 'Yes' : 'No',
             'collateral_certificate_levels' => $certificateLevels,
             'collateral_security_amount' => (string) ($collateral->security_amount ?? ''),
@@ -2496,7 +2492,7 @@ class EmployeeController extends Controller
             'collateral_notes' => (string) ($collateral->notes ?? ''),
             'collateral_cheque_bank' => $relatedValues($collateralCheques, 'bank_name'),
             'collateral_cheque_number' => $relatedValues($collateralCheques, 'cheque_no'),
-            'collateral_cheque_amount' => $relatedValues($collateralCheques, 'amount'),
+            'collateral_cheque_qty' => $relatedValues($collateralCheques, 'qty'),
             'asset_serial' => $relatedValues($assets, 'serial'),
             'asset_number' => $relatedValues($assets, 'asset_no'),
             'asset_name' => $relatedValues($assets, 'name'),
@@ -2571,6 +2567,8 @@ class EmployeeController extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
+        $educationDegrees = $this->readJsonArrayFile(base_path('data/educationdegrees.json'));
+        $educationGroups = $this->readJsonArrayFile(base_path('data/educationgroups.json'));
         $locations = $this->buildLocationsBasePayload();
 
         return Inertia::render('employee/create', [
@@ -2604,6 +2602,8 @@ class EmployeeController extends Controller
             'banks' => $banks,
             'relations' => $relations,
             'educationBoards' => $educationBoards,
+            'educationDegrees' => $educationDegrees,
+            'educationGroups' => $educationGroups,
             'locations' => $locations,
             'defaultBankName' => 'Prime Bank PLC',
             'documentTypes' => $this->employeeTabDocumentTypes(),
@@ -2744,7 +2744,7 @@ class EmployeeController extends Controller
                 'guarantor_cheques.*.bank_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.branch_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.cheque_no' => 'nullable|string|max:80',
-                'guarantor_cheques.*.amount' => 'nullable|numeric|min:0',
+                'guarantor_cheques.*.qty' => 'nullable|integer|min:0',
 
                 'collateral' => 'nullable|array',
                 'collateral.has_certificate' => 'nullable|boolean',
@@ -2759,7 +2759,7 @@ class EmployeeController extends Controller
                 'collateral_receive_cheques.*.bank_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.branch_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.cheque_no' => 'nullable|string|max:80',
-                'collateral_receive_cheques.*.amount' => 'nullable|numeric|min:0',
+                'collateral_receive_cheques.*.qty' => 'nullable|integer|min:0',
                 'collateral_receive_cheques.*.notes' => 'nullable|string',
 
                 'assets' => 'nullable|array',
@@ -2948,7 +2948,7 @@ class EmployeeController extends Controller
                         'bank_name' => $c['bank_name'] ?? null,
                         'branch_name' => $c['branch_name'] ?? null,
                         'cheque_no' => $c['cheque_no'] ?? null,
-                        'amount' => $c['amount'] ?? null,
+                        'qty' => $c['qty'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -2978,7 +2978,7 @@ class EmployeeController extends Controller
                         'bank_name' => $rc['bank_name'] ?? null,
                         'branch_name' => $rc['branch_name'] ?? null,
                         'cheque_no' => $rc['cheque_no'] ?? null,
-                        'amount' => $rc['amount'] ?? null,
+                        'qty' => $rc['qty'] ?? null,
                         'notes' => $rc['notes'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -3072,6 +3072,8 @@ class EmployeeController extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
+        $educationDegrees = $this->readJsonArrayFile(base_path('data/educationdegrees.json'));
+        $educationGroups = $this->readJsonArrayFile(base_path('data/educationgroups.json'));
         try {
             $locations = $this->buildLocationsBasePayload();
         } catch (\Throwable $e) {
@@ -3168,7 +3170,7 @@ class EmployeeController extends Controller
                 'to_designation_id' => '',
                 'from_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
                 'to_branch_id' => '',
-                'remarks' => $employee->dropout_reason ?? 'Left Service',
+                'remarks' => $employee->dropout_reason ?: 'Voluntary',
             ];
         }
 
@@ -3300,6 +3302,8 @@ class EmployeeController extends Controller
             'banks' => $banks,
             'relations' => $relations,
             'educationBoards' => $educationBoards,
+            'educationDegrees' => $educationDegrees,
+            'educationGroups' => $educationGroups,
             'locations' => $locations,
             'defaultBankName' => 'Prime Bank PLC',
             'documentTypes' => $this->employeeTabDocumentTypes(),
@@ -3434,7 +3438,7 @@ class EmployeeController extends Controller
                 'guarantor_cheques.*.bank_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.branch_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.cheque_no' => 'nullable|string|max:80',
-                'guarantor_cheques.*.amount' => 'nullable|numeric|min:0',
+                'guarantor_cheques.*.qty' => 'nullable|integer|min:0',
 
                 'collateral' => 'nullable|array',
                 'collateral.has_certificate' => 'nullable|boolean',
@@ -3449,7 +3453,7 @@ class EmployeeController extends Controller
                 'collateral_receive_cheques.*.bank_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.branch_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.cheque_no' => 'nullable|string|max:80',
-                'collateral_receive_cheques.*.amount' => 'nullable|numeric|min:0',
+                'collateral_receive_cheques.*.qty' => 'nullable|integer|min:0',
                 'collateral_receive_cheques.*.notes' => 'nullable|string',
 
                 'assets' => 'nullable|array',
@@ -3668,7 +3672,7 @@ class EmployeeController extends Controller
                         'bank_name' => $c['bank_name'] ?? null,
                         'branch_name' => $c['branch_name'] ?? null,
                         'cheque_no' => $c['cheque_no'] ?? null,
-                        'amount' => $c['amount'] ?? null,
+                        'qty' => $c['qty'] ?? null,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];
@@ -3702,7 +3706,7 @@ class EmployeeController extends Controller
                         'bank_name' => $rc['bank_name'] ?? null,
                         'branch_name' => $rc['branch_name'] ?? null,
                         'cheque_no' => $rc['cheque_no'] ?? null,
-                        'amount' => $rc['amount'] ?? null,
+                        'qty' => $rc['qty'] ?? null,
                         'notes' => $rc['notes'] ?? null,
                         'created_at' => $now,
                         'updated_at' => $now,
@@ -3798,9 +3802,8 @@ class EmployeeController extends Controller
                     } elseif ($type === 'left') {
                         $coreUpdates['dropout_date'] = $date;
                         $coreUpdates['resignation_date'] = $date;
-                        if (! empty($jh['remarks'])) {
-                            $coreUpdates['dropout_reason'] = $jh['remarks'];
-                        }
+                        $reason = trim((string) ($jh['remarks'] ?? ''));
+                        $coreUpdates['dropout_reason'] = $reason !== '' ? $reason : 'Voluntary';
                     } elseif ($type === 'final_payment') {
                         $coreUpdates['final_payment_date'] = $date;
                     }
@@ -3813,7 +3816,9 @@ class EmployeeController extends Controller
                         'to_designation_id' => ! empty($jh['to_designation_id']) ? $jh['to_designation_id'] : null,
                         'from_branch_id' => ! empty($jh['from_branch_id']) ? $jh['from_branch_id'] : null,
                         'to_branch_id' => ! empty($jh['to_branch_id']) ? $jh['to_branch_id'] : null,
-                        'remarks' => $jh['remarks'] ?? null,
+                        'remarks' => $type === 'left'
+                            ? (trim((string) ($jh['remarks'] ?? '')) !== '' ? trim((string) $jh['remarks']) : 'Voluntary')
+                            : ($jh['remarks'] ?? null),
                         'is_manual' => true,
                         'created_by' => $authId,
                         'created_at' => $now,
@@ -4036,7 +4041,7 @@ class EmployeeController extends Controller
                 'event_type' => 'left',
                 'event_date' => ($employee->resignation_date ?? $employee->dropout_date)?->format('Y-m-d'),
                 'from_branch_name' => $employee->branch?->name,
-                'remarks' => $employee->dropout_reason ?? 'Left Organization',
+                'remarks' => $employee->dropout_reason ?: 'Voluntary',
                 'is_manual' => false,
             ];
         }

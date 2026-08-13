@@ -54,19 +54,26 @@ class AssetCustodianController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         return Inertia::render('fixed-asset/custodian/custodians/form', [
             'custodian' => null,
             'departments' => $this->activeDepartments(),
             'designations' => $this->activeDesignations(),
-            'branches' => Branch::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'branches' => $this->branchesForFixedAssetFilters($request),
+            ...$this->fixedAssetBranchFilterProps($request),
         ]);
     }
 
     public function store(Request $request)
     {
+        $this->forceScopedBranchOnRequest($request);
         $validated = $this->validateCustodian($request);
+        if (isset($validated['branch_id']) && $validated['branch_id']) {
+            $this->assertFixedAssetBranchAllowed($request->user(), (int) $validated['branch_id']);
+        } elseif ($this->isFixedAssetBranchScoped($request->user())) {
+            abort(403, 'You can only access fixed assets for your branch.');
+        }
 
         AssetCustodian::query()->create([
             'employee_id' => $validated['employee_id'] ?? null,
@@ -137,7 +144,11 @@ class AssetCustodianController extends Controller
 
     public function employees(Request $request)
     {
+        $this->forceScopedBranchOnRequest($request);
         $request->validate(['branch_id' => 'nullable|exists:branches,id']);
+        if ($request->filled('branch_id')) {
+            $this->assertFixedAssetBranchAllowed($request->user(), $request->integer('branch_id'));
+        }
 
         $query = Employee::query()
             ->where('status', 'active')

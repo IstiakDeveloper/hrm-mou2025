@@ -113,7 +113,7 @@ import { getActiveSectionId, getMenuKeysForSection, getSectionById, withSectionP
 import { EMPLOYEE_LOAN_NAV_GROUPS, employeeLoanPath } from '@/lib/employee-loan-nav';
 import { employeeLoanEmployeePath } from '@/lib/employee-loan-employee-nav';
 import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee-loan-reports';
-import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath } from '@/lib/fixed-asset-nav';
+import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath, isBranchFixedAssetMenuPath } from '@/lib/fixed-asset-nav';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
 import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead } from '@/lib/permissions';
@@ -742,6 +742,25 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             if (activeSectionId === 'inventory') {
                 const allowedKeys = new Set(['inv-products', 'inv-operations', 'inv-reports']);
                 return menuItemsForLayout.filter((m) => m.menuKey != null && allowedKeys.has(m.menuKey));
+            }
+            if (activeSectionId === 'fixed-asset') {
+                const allowedKeys = new Set(['fa-purchase', 'fa-stock', 'fa-depreciation', 'fa-reports']);
+                return menuItemsForLayout
+                    .filter((m) => m.menuKey != null && allowedKeys.has(m.menuKey))
+                    .map((item) => {
+                        if (!item.hasSubmenu || !item.submenu) {
+                            return item;
+                        }
+                        const submenu = item.submenu.filter((sub) =>
+                            isBranchFixedAssetMenuPath(sub.path ?? '', item.menuKey ?? ''),
+                        );
+                        return {
+                            ...item,
+                            submenu,
+                            path: submenu[0]?.path ?? item.path,
+                            hasSubmenu: submenu.length > 1,
+                        };
+                    });
             }
             return [];
         }

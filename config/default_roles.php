@@ -169,6 +169,8 @@ return [
                 'attendance.view',
                 'inventory.view',
                 'inventory.create',
+                'fixed-assets.view',
+                'fixed-assets.create',
             ],
         ],
         'Department Head' => [

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ComboSelect } from '@/components/ComboSelect';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed-asset/AssetPageShell';
+import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
 import { ArrowLeft, Boxes } from 'lucide-react';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 
@@ -50,6 +51,8 @@ export default function FixedAssetForm({
     statusOptions,
     depreciationMethodOptions,
     employees,
+    branchScoped = false,
+    scopedBranchId = null,
 }: {
     asset: AssetData | null;
     branches: BranchOpt[];
@@ -57,13 +60,15 @@ export default function FixedAssetForm({
     statusOptions: StatusOpt[];
     depreciationMethodOptions: StatusOpt[];
     employees: EmployeeOpt[];
+    branchScoped?: boolean;
+    scopedBranchId?: number | null;
 }) {
     const isEdit = Boolean(asset?.id);
 
     const { data, setData, post, put, processing, errors } = useForm({
         name: asset?.name ?? '',
         asset_category_id: asset?.asset_category_id ?? (categories[0]?.id ?? ''),
-        branch_id: asset?.branch_id ?? (branches.find((b) => b.is_head_office)?.id ?? branches[0]?.id ?? ''),
+        branch_id: asset?.branch_id ?? scopedBranchId ?? (branches.find((b) => b.is_head_office)?.id ?? branches[0]?.id ?? ''),
         status: asset?.status ?? 'active',
         description: asset?.description ?? '',
         serial_number: asset?.serial_number ?? '',
@@ -116,6 +121,9 @@ export default function FixedAssetForm({
                     description={isEdit ? undefined : 'Asset tag is generated automatically from branch and year.'}
                 />
                 <form onSubmit={submit} className="grid gap-6 lg:grid-cols-2">
+                    <div className="lg:col-span-2">
+                        <BranchScopeAlert branchScoped={branchScoped} />
+                    </div>
                     <AssetSectionCard title="Identification">
                         <div className="space-y-4.5">
                             {isEdit && (
@@ -144,6 +152,7 @@ export default function FixedAssetForm({
                                     value={Number(data.branch_id) || null}
                                     onChange={(v) => v && setData('branch_id', v)}
                                     items={branchComboSelectItems(branches, { numericValue: true })}
+                                    disabled={branchScoped}
                                     className="h-9 border-zinc-200"
                                 />
                             </div>

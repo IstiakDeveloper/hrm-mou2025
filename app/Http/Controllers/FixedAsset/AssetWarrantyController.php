@@ -65,6 +65,7 @@ class AssetWarrantyController extends Controller
     public function store(Request $request)
     {
         $validated = $this->validateRecord($request);
+        $this->assertFixedAssetIdInScope($request->user(), (int) $validated['fixed_asset_id']);
 
         AssetWarranty::query()->create([
             ...$validated,

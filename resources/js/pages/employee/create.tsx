@@ -23,7 +23,14 @@ import {
     EMPLOYEE_BANK_ACCOUNT_TYPE_LABEL,
     emptyEmployeeBankFormFields,
 } from '@/lib/employee-bank-defaults';
-import { emptyGuarantorFormRow, emptyNomineeFormRow, type GuarantorFormRow, type NomineeFormRow } from '@/lib/employee-nominee-guarantor-form';
+import {
+    emptyChequeFormRow,
+    emptyGuarantorFormRow,
+    emptyNomineeFormRow,
+    type ChequeFormRow,
+    type GuarantorFormRow,
+    type NomineeFormRow,
+} from '@/lib/employee-nominee-guarantor-form';
 import {
     EMPLOYEE_V2_CREATE_DRAFT_KEY,
     applyUnifiedNidSmartFields,
@@ -107,12 +114,7 @@ interface Education {
 
 type Nominee = NomineeFormRow;
 type Guarantor = GuarantorFormRow;
-
-interface Cheque {
-    bank_name: string;
-    cheque_no: string;
-    amount: string | number;
-}
+type Cheque = ChequeFormRow;
 
 interface Asset {
     serial_no: string;
@@ -562,6 +564,8 @@ interface EmployeeCreateProps {
     banks: string[];
     relations: string[];
     educationBoards: string[];
+    educationDegrees: string[];
+    educationGroups: string[];
     locations: any;
     defaultBankName: string;
     documentTypes: string[];
@@ -583,6 +587,8 @@ export default function EmployeeCreate({
     banks,
     relations,
     educationBoards,
+    educationDegrees = [],
+    educationGroups = [],
     locations,
     defaultBankName,
     documentTypes = [],
@@ -2038,14 +2044,26 @@ export default function EmployeeCreate({
                                                             </div>
                                                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                                                 <FormField label="Degree Title" required>
-                                                                    <Input
-                                                                        value={ed.degree}
-                                                                        onChange={(e) => {
+                                                                    <ComboSelect
+                                                                        value={ed.degree || null}
+                                                                        onChange={(v) => {
                                                                             const next = [...data.educations];
-                                                                            next[idx] = { ...next[idx], degree: e.target.value };
+                                                                            next[idx] = { ...next[idx], degree: v ?? '' };
                                                                             setData('educations', next);
                                                                         }}
-                                                                        placeholder="e.g. SSC, B.Sc"
+                                                                        items={[
+                                                                            ...educationDegrees.map((d) => ({ value: d, label: d })),
+                                                                            ...(ed.degree && !educationDegrees.includes(ed.degree)
+                                                                                ? [{ value: ed.degree, label: ed.degree }]
+                                                                                : []),
+                                                                        ]}
+                                                                        placeholder="Select Degree"
+                                                                        creatable
+                                                                        onCreate={(label) => {
+                                                                            const next = [...data.educations];
+                                                                            next[idx] = { ...next[idx], degree: label };
+                                                                            setData('educations', next);
+                                                                        }}
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="Institute Name">
@@ -2072,14 +2090,26 @@ export default function EmployeeCreate({
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="Group / Discipline">
-                                                                    <Input
-                                                                        value={ed.group_name}
-                                                                        onChange={(e) => {
+                                                                    <ComboSelect
+                                                                        value={ed.group_name || null}
+                                                                        onChange={(v) => {
                                                                             const next = [...data.educations];
-                                                                            next[idx] = { ...next[idx], group_name: e.target.value };
+                                                                            next[idx] = { ...next[idx], group_name: v ?? '' };
                                                                             setData('educations', next);
                                                                         }}
-                                                                        placeholder="e.g. Science"
+                                                                        items={[
+                                                                            ...educationGroups.map((g) => ({ value: g, label: g })),
+                                                                            ...(ed.group_name && !educationGroups.includes(ed.group_name)
+                                                                                ? [{ value: ed.group_name, label: ed.group_name }]
+                                                                                : []),
+                                                                        ]}
+                                                                        placeholder="Select Group / Discipline"
+                                                                        creatable
+                                                                        onCreate={(label) => {
+                                                                            const next = [...data.educations];
+                                                                            next[idx] = { ...next[idx], group_name: label };
+                                                                            setData('educations', next);
+                                                                        }}
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="Subject">
@@ -2482,17 +2512,6 @@ export default function EmployeeCreate({
                                                                             placeholder="Full Name"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="Father's Name">
-                                                                        <Input
-                                                                            value={g.father_name}
-                                                                            onChange={(e) => {
-                                                                                const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], father_name: e.target.value };
-                                                                                setData('guarantors', next);
-                                                                            }}
-                                                                            placeholder="Father's Name"
-                                                                        />
-                                                                    </FormField>
                                                                     <FormField label="Mobile Number">
                                                                         <Input
                                                                             value={g.mobile}
@@ -2504,51 +2523,19 @@ export default function EmployeeCreate({
                                                                             placeholder="Mobile No"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="NID Card Number">
-                                                                        <Input
-                                                                            value={g.nid}
-                                                                            onChange={(e) => {
+                                                                    <FormField label="Relation">
+                                                                        <ComboSelect
+                                                                            value={g.relation || null}
+                                                                            onChange={(v) => {
                                                                                 const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], nid: e.target.value };
+                                                                                next[idx] = { ...next[idx], relation: v ?? '' };
                                                                                 setData('guarantors', next);
                                                                             }}
-                                                                            placeholder="NID Number"
+                                                                            items={relations.map((r) => ({ value: r, label: r }))}
+                                                                            placeholder="Select Relation"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="Profession">
-                                                                        <Input
-                                                                            value={g.profession}
-                                                                            onChange={(e) => {
-                                                                                const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], profession: e.target.value };
-                                                                                setData('guarantors', next);
-                                                                            }}
-                                                                            placeholder="Profession"
-                                                                        />
-                                                                    </FormField>
-                                                                    <FormField label="Organization">
-                                                                        <Input
-                                                                            value={g.organization}
-                                                                            onChange={(e) => {
-                                                                                const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], organization: e.target.value };
-                                                                                setData('guarantors', next);
-                                                                            }}
-                                                                            placeholder="Company"
-                                                                        />
-                                                                    </FormField>
-                                                                    <FormField label="Designation">
-                                                                        <Input
-                                                                            value={g.designation}
-                                                                            onChange={(e) => {
-                                                                                const next = [...data.guarantors];
-                                                                                next[idx] = { ...next[idx], designation: e.target.value };
-                                                                                setData('guarantors', next);
-                                                                            }}
-                                                                            placeholder="Designation"
-                                                                        />
-                                                                    </FormField>
-                                                                    <FormField label="Address Details">
+                                                                    <FormField label="Full Address">
                                                                         <Input
                                                                             value={g.address}
                                                                             onChange={(e) => {
@@ -2578,7 +2565,7 @@ export default function EmployeeCreate({
                                                         onClick={() =>
                                                             setData('guarantor_cheques', [
                                                                 ...data.guarantor_cheques,
-                                                                { bank_name: '', cheque_no: '', amount: '' },
+                                                                emptyChequeFormRow(),
                                                             ])
                                                         }
                                                     >
@@ -2639,17 +2626,18 @@ export default function EmployeeCreate({
                                                                             placeholder="Cheque No"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="Amount">
+                                                                    <FormField label="Qty">
                                                                         <Input
                                                                             type="number"
                                                                             min={0}
-                                                                            value={ch.amount}
+                                                                            step={1}
+                                                                            value={ch.qty}
                                                                             onChange={(e) => {
                                                                                 const next = [...data.guarantor_cheques];
-                                                                                next[idx] = { ...next[idx], amount: e.target.value };
+                                                                                next[idx] = { ...next[idx], qty: e.target.value };
                                                                                 setData('guarantor_cheques', next);
                                                                             }}
-                                                                            placeholder="Amount"
+                                                                            placeholder="Qty"
                                                                         />
                                                                     </FormField>
                                                                 </div>
@@ -2788,7 +2776,7 @@ export default function EmployeeCreate({
                                             {/* Collateral Cheques */}
                                             <div className="space-y-4 border-t border-zinc-100 pt-4">
                                                 <div className="flex items-center justify-between">
-                                                    <h3 className="text-sm font-bold text-zinc-800">Collateral Receive Cheques</h3>
+                                                    <h3 className="text-sm font-bold text-zinc-800">Staff's Cheque Information</h3>
                                                     <Button
                                                         type="button"
                                                         variant="outline"
@@ -2797,7 +2785,7 @@ export default function EmployeeCreate({
                                                         onClick={() =>
                                                             setData('collateral_receive_cheques', [
                                                                 ...data.collateral_receive_cheques,
-                                                                { bank_name: '', cheque_no: '', amount: '' },
+                                                                emptyChequeFormRow(),
                                                             ])
                                                         }
                                                     >
@@ -2807,7 +2795,7 @@ export default function EmployeeCreate({
 
                                                 {data.collateral_receive_cheques.length === 0 ? (
                                                     <p className="rounded-xl border border-zinc-100 bg-zinc-50/30 p-4 text-xs text-zinc-400 italic">
-                                                        No collateral receive cheques added.
+                                                        No staff cheque information added.
                                                     </p>
                                                 ) : (
                                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -2858,17 +2846,18 @@ export default function EmployeeCreate({
                                                                             placeholder="Cheque No"
                                                                         />
                                                                     </FormField>
-                                                                    <FormField label="Amount">
+                                                                    <FormField label="Qty">
                                                                         <Input
                                                                             type="number"
                                                                             min={0}
-                                                                            value={ch.amount}
+                                                                            step={1}
+                                                                            value={ch.qty}
                                                                             onChange={(e) => {
                                                                                 const next = [...data.collateral_receive_cheques];
-                                                                                next[idx] = { ...next[idx], amount: e.target.value };
+                                                                                next[idx] = { ...next[idx], qty: e.target.value };
                                                                                 setData('collateral_receive_cheques', next);
                                                                             }}
-                                                                            placeholder="Amount"
+                                                                            placeholder="Qty"
                                                                         />
                                                                     </FormField>
                                                                 </div>

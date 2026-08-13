@@ -287,6 +287,12 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'inventory.create')
                                     );
                                 }
+                                if (section.id === 'fixed-asset') {
+                                    return (
+                                        hasAppPermission(auth, 'fixed-assets.view') ||
+                                        hasAppPermission(auth, 'fixed-assets.create')
+                                    );
+                                }
                                 return false;
                             }
 

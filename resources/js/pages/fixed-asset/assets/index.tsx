@@ -71,6 +71,7 @@ export default function FixedAssetIndex({
 }) {
     const { auth, flash } = usePage<SharedData & { flash?: { success?: string; error?: string } }>().props;
     const canCreate = hasAppPermission(auth, 'fixed-assets.create');
+    const canEdit = hasAppPermission(auth, 'fixed-assets.edit');
     const [search, setSearch] = useState(filters.search || '');
     const [branchId, setBranchId] = useState(filters.branch_id ? Number(filters.branch_id) : null);
     const [categoryId, setCategoryId] = useState(filters.asset_category_id ? Number(filters.asset_category_id) : null);
@@ -92,7 +93,7 @@ export default function FixedAssetIndex({
                 <AssetPageHeader
                     icon={Boxes}
                     title="Asset register"
-                    description="All fixed assets across head office and 42+ branches."
+                    description={branchScoped ? 'Fixed assets for your branch.' : 'All fixed assets across head office and 42+ branches.'}
                 >
                     <div className="flex items-center gap-2">
                         {canCreate && (
@@ -135,6 +136,7 @@ export default function FixedAssetIndex({
                                 className="h-9 border-zinc-200"
                             />
                         </div>
+                        {!branchScoped && (
                         <div className="space-y-1">
                             <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Branch</label>
                             <ComboSelect
@@ -145,6 +147,7 @@ export default function FixedAssetIndex({
                                 className="h-9 border-zinc-200"
                             />
                         </div>
+                        )}
                         <div className="space-y-1">
                             <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Category</label>
                             <ComboSelect
@@ -222,11 +225,13 @@ export default function FixedAssetIndex({
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
                                             </Link>
-                                            <Link href={route('fixed-assets.edit', row.id)}>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-700 rounded-lg transition-colors cursor-pointer">
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                            </Link>
+                                            {canEdit && (
+                                                <Link href={route('fixed-assets.edit', row.id)}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-700 rounded-lg transition-colors cursor-pointer">
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                </Link>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ))

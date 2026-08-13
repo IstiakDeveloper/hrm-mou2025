@@ -55,17 +55,19 @@ class FixedAssetController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         return Inertia::render('fixed-asset/assets/form', [
             'asset' => null,
-            ...$this->formOptions(),
+            ...$this->formOptions($request),
         ]);
     }
 
     public function store(Request $request)
     {
+        $this->forceScopedBranchOnRequest($request);
         $validated = $this->validateAsset($request);
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $validated['branch_id']);
         $branch = Branch::query()->findOrFail($validated['branch_id']);
 
         $purchaseCost = $validated['purchase_cost'] ?? null;
@@ -99,8 +101,9 @@ class FixedAssetController extends Controller
         return redirect()->route('fixed-assets.index')->with('success', 'Fixed asset registered.');
     }
 
-    public function show(FixedAsset $fixed_asset)
+    public function show(Request $request, FixedAsset $fixed_asset)
     {
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $fixed_asset->branch_id);
         $fixed_asset->load([
             'category',
             'branch',
@@ -134,17 +137,22 @@ class FixedAssetController extends Controller
         ]);
     }
 
-    public function edit(FixedAsset $fixed_asset)
+    public function edit(Request $request, FixedAsset $fixed_asset)
     {
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $fixed_asset->branch_id);
+
         return Inertia::render('fixed-asset/assets/form', [
             'asset' => $this->serializeAsset($fixed_asset),
-            ...$this->formOptions($fixed_asset),
+            ...$this->formOptions($request, $fixed_asset),
         ]);
     }
 
     public function update(Request $request, FixedAsset $fixed_asset)
     {
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $fixed_asset->branch_id);
+        $this->forceScopedBranchOnRequest($request);
         $validated = $this->validateAsset($request, $fixed_asset);
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $validated['branch_id']);
 
         $purchaseCost = array_key_exists('purchase_cost', $validated)
             ? ($validated['purchase_cost'] !== null ? (float) $validated['purchase_cost'] : null)
@@ -201,8 +209,9 @@ class FixedAssetController extends Controller
         return redirect()->route('fixed-assets.show', $fixed_asset)->with('success', 'Fixed asset updated.');
     }
 
-    public function destroy(FixedAsset $fixed_asset)
+    public function destroy(Request $request, FixedAsset $fixed_asset)
     {
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $fixed_asset->branch_id);
         if ($fixed_asset->transfers()->exists()) {
             return redirect()->route('fixed-assets.index')
                 ->with('error', 'Cannot delete asset with transfer history. Dispose it instead.');
@@ -258,12 +267,14 @@ class FixedAssetController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function formOptions(?FixedAsset $asset = null): array
+    private function formOptions(Request $request, ?FixedAsset $asset = null): array
     {
-        $branchId = $asset?->branch_id;
+        $branchProps = $this->fixedAssetBranchFilterProps($request);
+        $branchId = $branchProps['scopedBranchId'] ?: $asset?->branch_id;
 
         return [
-            'branches' => Branch::query()->where('is_active', true)->orderBy('is_head_office', 'desc')->orderBy('name')->get(['id', 'name', 'branch_code', 'is_head_office']),
+            ...$branchProps,
+            'branches' => $this->branchesForFixedAssetFilters($request),
             'categories' => AssetCategory::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name')->get(['id', 'code', 'name', 'default_useful_life_years']),
             'statusOptions' => collect(FixedAsset::STATUSES)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'depreciationMethodOptions' => collect(FixedAsset::DEPRECIATION_METHODS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),

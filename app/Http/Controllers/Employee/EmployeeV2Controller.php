@@ -109,6 +109,8 @@ class EmployeeV2Controller extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
+        $educationDegrees = $this->readJsonArrayFile(base_path('data/educationdegrees.json'));
+        $educationGroups = $this->readJsonArrayFile(base_path('data/educationgroups.json'));
         $locations = $this->readJsonArrayFile(base_path('data/locations.json'));
 
         return Inertia::render('employee-v2/create', [
@@ -123,6 +125,8 @@ class EmployeeV2Controller extends Controller
             'banks' => $banks,
             'relations' => $relations,
             'educationBoards' => $educationBoards,
+            'educationDegrees' => $educationDegrees,
+            'educationGroups' => $educationGroups,
             'locations' => $locations,
             'defaultBankName' => 'Prime Bank PLC',
         ]);
@@ -146,6 +150,8 @@ class EmployeeV2Controller extends Controller
         $banks = $this->readJsonArrayFile(base_path('data/bank.json'));
         $relations = $this->readJsonArrayFile(base_path('data/relation.json'));
         $educationBoards = $this->readJsonArrayFile(base_path('data/educationboard.json'));
+        $educationDegrees = $this->readJsonArrayFile(base_path('data/educationdegrees.json'));
+        $educationGroups = $this->readJsonArrayFile(base_path('data/educationgroups.json'));
         $locations = $this->readJsonArrayFile(base_path('data/locations.json'));
 
         $employee->loadMissing(['department', 'designation', 'branch']);
@@ -178,6 +184,8 @@ class EmployeeV2Controller extends Controller
             'banks' => $banks,
             'relations' => $relations,
             'educationBoards' => $educationBoards,
+            'educationDegrees' => $educationDegrees,
+            'educationGroups' => $educationGroups,
             'locations' => $locations,
             'defaultBankName' => 'Prime Bank PLC',
         ]);
@@ -445,11 +453,13 @@ class EmployeeV2Controller extends Controller
                 'guarantors.*.relation' => 'nullable|string|max:80',
                 'guarantors.*.phone' => 'nullable|string|max:30',
                 'guarantors.*.email' => 'nullable|email',
+                'guarantors.*.address' => 'nullable|string',
 
                 'guarantor_cheques' => 'nullable|array',
                 'guarantor_cheques.*.bank_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.branch_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.cheque_no' => 'nullable|string|max:80',
+                'guarantor_cheques.*.qty' => 'nullable|integer|min:0',
 
                 'collateral' => 'nullable|array',
                 'collateral.has_certificate' => 'nullable|boolean',
@@ -464,6 +474,7 @@ class EmployeeV2Controller extends Controller
                 'collateral_receive_cheques.*.bank_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.branch_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.cheque_no' => 'nullable|string|max:80',
+                'collateral_receive_cheques.*.qty' => 'nullable|integer|min:0',
                 'collateral_receive_cheques.*.notes' => 'nullable|string',
 
                 'assets' => 'nullable|array',
@@ -674,6 +685,7 @@ class EmployeeV2Controller extends Controller
                         'relation' => $g['relation'] ?? null,
                         'phone' => $g['phone'] ?? null,
                         'email' => $g['email'] ?? null,
+                        'address' => $g['address'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -687,6 +699,7 @@ class EmployeeV2Controller extends Controller
                         'bank_name' => $c['bank_name'] ?? null,
                         'branch_name' => $c['branch_name'] ?? null,
                         'cheque_no' => $c['cheque_no'] ?? null,
+                        'qty' => $c['qty'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -716,6 +729,7 @@ class EmployeeV2Controller extends Controller
                         'bank_name' => $rc['bank_name'] ?? null,
                         'branch_name' => $rc['branch_name'] ?? null,
                         'cheque_no' => $rc['cheque_no'] ?? null,
+                        'qty' => $rc['qty'] ?? null,
                         'notes' => $rc['notes'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -869,11 +883,13 @@ class EmployeeV2Controller extends Controller
                 'guarantors.*.relation' => 'nullable|string|max:80',
                 'guarantors.*.phone' => 'nullable|string|max:30',
                 'guarantors.*.email' => 'nullable|email',
+                'guarantors.*.address' => 'nullable|string',
 
                 'guarantor_cheques' => 'nullable|array',
                 'guarantor_cheques.*.bank_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.branch_name' => 'nullable|string|max:200',
                 'guarantor_cheques.*.cheque_no' => 'nullable|string|max:80',
+                'guarantor_cheques.*.qty' => 'nullable|integer|min:0',
 
                 'collateral' => 'nullable|array',
                 'collateral.has_certificate' => 'nullable|boolean',
@@ -888,6 +904,7 @@ class EmployeeV2Controller extends Controller
                 'collateral_receive_cheques.*.bank_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.branch_name' => 'nullable|string|max:200',
                 'collateral_receive_cheques.*.cheque_no' => 'nullable|string|max:80',
+                'collateral_receive_cheques.*.qty' => 'nullable|integer|min:0',
                 'collateral_receive_cheques.*.notes' => 'nullable|string',
 
                 'assets' => 'nullable|array',
@@ -1074,6 +1091,7 @@ class EmployeeV2Controller extends Controller
                         'relation' => $g['relation'] ?? null,
                         'phone' => $g['phone'] ?? null,
                         'email' => $g['email'] ?? null,
+                        'address' => $g['address'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -1087,6 +1105,7 @@ class EmployeeV2Controller extends Controller
                         'bank_name' => $c['bank_name'] ?? null,
                         'branch_name' => $c['branch_name'] ?? null,
                         'cheque_no' => $c['cheque_no'] ?? null,
+                        'qty' => $c['qty'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -1116,6 +1135,7 @@ class EmployeeV2Controller extends Controller
                         'bank_name' => $rc['bank_name'] ?? null,
                         'branch_name' => $rc['branch_name'] ?? null,
                         'cheque_no' => $rc['cheque_no'] ?? null,
+                        'qty' => $rc['qty'] ?? null,
                         'notes' => $rc['notes'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
