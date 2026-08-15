@@ -10,6 +10,7 @@ import {
 } from '@/components/employee/EmployeeSalaryAssignment';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +18,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import Layout from '@/layouts/AdminLayout';
 import { csrfJsonPost, csrfJsonPostErrorMessage } from '@/lib/csrf';
-import { SERVER_DATE_FMT, toServerYmdDate } from '@/lib/display-date';
+import { parseFormDateValue, SERVER_DATE_FMT, toServerYmdDate } from '@/lib/display-date';
 import {
     DEFAULT_EMPLOYEE_BANK_ACCOUNT_TYPE,
     DEFAULT_EMPLOYEE_BANK_BRANCH_NAME,
@@ -158,6 +159,8 @@ export interface JobHistoryFormRow {
     from_branch_id: string;
     to_branch_id: string;
     remarks: string;
+    cause_of_separation: string;
+    amount_received: string;
 }
 
 export interface DisciplinaryActionFormRow {
@@ -177,34 +180,64 @@ const JOB_HISTORY_SECTIONS = [
     { value: 'final_payment', label: 'Final Payment', multiple: false },
 ] as const;
 
-const DEFAULT_DROPOUT_LEFT_REASON = 'Voluntary';
-
-const DROPOUT_LEFT_REASONS = [
-    'Voluntary',
-    'Resignation',
-    'Termination',
-    'Dismissal',
+const SEPARATION_TYPES = [
     'Death',
-    'Retirement',
-    'Absconding',
+    'Dismissal',
     'End of Contract',
-    'Medical Grounds',
+    'Honorary',
+    'Medical Grounds/Unfit for work',
+    'Not Joined',
+    'Project Closing',
+    'Released',
+    'Resigned',
+    'Retirement',
+    'Termination',
 ];
 
-const GENERIC_LEFT_REMARKS = new Set(['', 'Left Service', 'Left Organization']);
+const SEPARATION_CAUSES = [
+    'Anti-Social Activities',
+    'Better Opportunity',
+    'Corruption',
+    'Corruption & Unauthorized Leave',
+    'Death',
+    'End of Contract',
+    'Fake Documents/Certificates',
+    'Family Problem',
+    'Indiscipline/Anti-Organizational Activities',
+    'Not joined after posting',
+    'Performance Issue',
+    'Personal Problem',
+    'Project Closing',
+    'Retirement',
+    'Unauthorized Leave',
+];
 
-function resolveLeftReason(remarks: string, dropoutReason?: string | null): string {
-    const current = remarks.trim();
+const GENERIC_LEFT_REMARKS = new Set(['', 'Left Service', 'Left Organization', 'Voluntary']);
+
+function mapLegacySeparationType(value: string): string {
+    const current = value.trim();
+    if (current === 'Resignation' || current === 'Voluntary') {
+        return 'Resigned';
+    }
+    if (current === 'Medical Grounds') {
+        return 'Medical Grounds/Unfit for work';
+    }
+
+    return current;
+}
+
+function resolveSeparationType(remarks: string, dropoutReason?: string | null): string {
+    const current = mapLegacySeparationType(remarks);
     if (current && !GENERIC_LEFT_REMARKS.has(current)) {
         return current;
     }
 
-    const existing = String(dropoutReason ?? '').trim();
+    const existing = mapLegacySeparationType(String(dropoutReason ?? ''));
     if (existing && !GENERIC_LEFT_REMARKS.has(existing)) {
         return existing;
     }
 
-    return DEFAULT_DROPOUT_LEFT_REASON;
+    return '';
 }
 
 const DISCIPLINARY_ACTION_TYPES = [
@@ -218,19 +251,255 @@ const DISCIPLINARY_ACTION_TYPES = [
     { value: 'Financial Irregularity', label: 'Financial Irregularity (আর্থিক অনিয়ম)' },
 ];
 
-function emptyJobHistoryFormRow(eventType: string, dropoutReason?: string | null): JobHistoryFormRow {
+function jobHistoryRowHasContent(row: JobHistoryFormRow): boolean {
+    if (String(row.event_date ?? '').trim() !== '') {
+        return true;
+    }
+
+    if (row.event_type === 'left') {
+        return String(row.remarks ?? '').trim() !== '' || String(row.cause_of_separation ?? '').trim() !== '';
+    }
+
+    if (row.event_type === 'final_payment') {
+        return String(row.amount_received ?? '').trim() !== '';
+    }
+
+    return ['from_designation_id', 'to_designation_id', 'from_branch_id', 'to_branch_id', 'remarks'].some(
+        (key) => String((row as Record<string, unknown>)[key] ?? '').trim() !== '',
+    );
+}
+
+type JobHistorySeed = {
+    cause?: string | null;
+    amount?: string | number | null;
+    joiningDate?: string | null;
+    joiningDesignationId?: string | null;
+    joiningBranchId?: string | null;
+    confirmationDate?: string | null;
+    confirmationDesignationId?: string | null;
+    leftDate?: string | null;
+    leftBranchId?: string | null;
+    finalPaymentDate?: string | null;
+};
+
+function jobHistorySeedFromEmployee(employee: Employee): JobHistorySeed {
+    const joiningDesig =
+        employee.joining_designation_id != null
+            ? String(employee.joining_designation_id)
+            : employee.last_designation_id != null
+              ? String(employee.last_designation_id)
+              : employee.designation_id != null
+                ? String(employee.designation_id)
+                : '';
+
     return {
-        event_type: eventType,
-        event_date: '',
-        from_designation_id: '',
-        to_designation_id: '',
-        from_branch_id: '',
-        to_branch_id: '',
-        remarks: eventType === 'left' ? resolveLeftReason('', dropoutReason) : '',
+        cause: employee.cause_of_separation,
+        amount: employee.final_payment_amount,
+        joiningDate: toServerYmdDate(employee.joining_date),
+        joiningDesignationId: joiningDesig,
+        joiningBranchId: '',
+        confirmationDate: toServerYmdDate(employee.confirmation_date),
+        confirmationDesignationId:
+            employee.last_designation_id != null
+                ? String(employee.last_designation_id)
+                : employee.designation_id != null
+                  ? String(employee.designation_id)
+                  : '',
+        leftDate: toServerYmdDate(employee.resignation_date || employee.dropout_date),
+        finalPaymentDate: toServerYmdDate(employee.final_payment_date),
     };
 }
 
-function ensureFlatJobHistories(rows: JobHistoryFormRow[], dropoutReason?: string | null): JobHistoryFormRow[] {
+function emptyJobHistoryFormRow(
+    eventType: string,
+    dropoutReason?: string | null,
+    extras?: JobHistorySeed,
+): JobHistoryFormRow {
+    const joiningDate = eventType === 'joining' ? String(extras?.joiningDate ?? '') : '';
+    const confirmationDate = eventType === 'confirmation' ? String(extras?.confirmationDate ?? '') : '';
+    const leftDate = eventType === 'left' ? String(extras?.leftDate ?? '') : '';
+    const finalPaymentDate = eventType === 'final_payment' ? String(extras?.finalPaymentDate ?? '') : '';
+
+    return {
+        event_type: eventType,
+        event_date: joiningDate || confirmationDate || leftDate || finalPaymentDate,
+        from_designation_id: '',
+        to_designation_id:
+            eventType === 'joining'
+                ? String(extras?.joiningDesignationId ?? '')
+                : eventType === 'confirmation'
+                  ? String(extras?.confirmationDesignationId ?? '')
+                  : '',
+        from_branch_id: '',
+        to_branch_id: eventType === 'joining' ? String(extras?.joiningBranchId ?? '') : '',
+        remarks: eventType === 'left' ? resolveSeparationType('', dropoutReason) : '',
+        cause_of_separation: eventType === 'left' ? String(extras?.cause ?? '') : '',
+        amount_received: eventType === 'final_payment' ? String(extras?.amount ?? '') : '',
+    };
+}
+
+function hydrateJobHistoryRowFromSeed(row: JobHistoryFormRow, dropoutReason?: string | null, extras?: JobHistorySeed): JobHistoryFormRow {
+    if (String(row.event_date ?? '').trim() !== '') {
+        if (row.event_type === 'left') {
+            return {
+                ...row,
+                remarks: resolveSeparationType(row.remarks, dropoutReason),
+                cause_of_separation: row.cause_of_separation || String(extras?.cause ?? ''),
+            };
+        }
+        if (row.event_type === 'final_payment' && String(row.amount_received ?? '').trim() === '') {
+            return { ...row, amount_received: String(extras?.amount ?? '') };
+        }
+
+        return row;
+    }
+
+    const seeded = emptyJobHistoryFormRow(row.event_type, dropoutReason, extras);
+    if (!String(seeded.event_date ?? '').trim() && !jobHistoryRowHasContent(seeded)) {
+        return row;
+    }
+
+    return {
+        ...row,
+        event_date: String(row.event_date ?? '').trim() || seeded.event_date,
+        to_designation_id: String(row.to_designation_id ?? '').trim() || seeded.to_designation_id,
+        to_branch_id: String(row.to_branch_id ?? '').trim() || seeded.to_branch_id,
+        from_branch_id: String(row.from_branch_id ?? '').trim() || seeded.from_branch_id,
+        remarks: String(row.remarks ?? '').trim() || seeded.remarks,
+        cause_of_separation: String(row.cause_of_separation ?? '').trim() || seeded.cause_of_separation,
+        amount_received: String(row.amount_received ?? '').trim() || seeded.amount_received,
+    };
+}
+
+function clearedJobHistoryFormRow(eventType: string): JobHistoryFormRow {
+    return emptyJobHistoryFormRow(eventType);
+}
+
+function lastPostingBranchId(rows: JobHistoryFormRow[]): string {
+    let branch = '';
+    const dated = [...rows]
+        .filter((row) => String(row.event_date ?? '').trim() !== '')
+        .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)));
+
+    for (const row of dated) {
+        if (row.event_type === 'joining' && String(row.to_branch_id ?? '').trim()) {
+            branch = String(row.to_branch_id);
+        }
+        if (row.event_type === 'transfer' && String(row.to_branch_id ?? '').trim()) {
+            branch = String(row.to_branch_id);
+        }
+    }
+
+    return branch;
+}
+
+function joiningBranchIdFromRows(rows: JobHistoryFormRow[]): string {
+    const joining = rows.find((row) => row.event_type === 'joining' && String(row.event_date ?? '').trim() && String(row.to_branch_id ?? '').trim());
+
+    return joining ? String(joining.to_branch_id) : '';
+}
+
+function normalizeJobHistoryBranches(rows: JobHistoryFormRow[]): JobHistoryFormRow[] {
+    const datedTransfers = [...rows]
+        .filter((row) => row.event_type === 'transfer' && String(row.event_date ?? '').trim() !== '')
+        .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)));
+    const firstTransferFrom = String(datedTransfers[0]?.from_branch_id ?? '').trim();
+
+    const withJoining = rows.map((row) => {
+        if (row.event_type !== 'joining' || String(row.to_branch_id ?? '').trim()) {
+            return row;
+        }
+        if (firstTransferFrom) {
+            return { ...row, to_branch_id: firstTransferFrom };
+        }
+
+        return row;
+    });
+
+    return withSeparationLastBranch(withJoining);
+}
+
+function withSeparationLastBranch(rows: JobHistoryFormRow[]): JobHistoryFormRow[] {
+    const lastBranch = lastPostingBranchId(rows);
+    const joiningBranch = joiningBranchIdFromRows(rows);
+
+    return rows.map((row) => {
+        if (row.event_type !== 'left') {
+            return row;
+        }
+
+        const hasDate = String(row.event_date ?? '').trim() !== '';
+        if (!hasDate) {
+            return { ...row, from_branch_id: '' };
+        }
+
+        const from = String(row.from_branch_id ?? '').trim();
+        const shouldReplaceJoining =
+            from === '' || (joiningBranch !== '' && from === joiningBranch && lastBranch !== '' && lastBranch !== joiningBranch);
+
+        return shouldReplaceJoining ? { ...row, from_branch_id: lastBranch } : row;
+    });
+}
+
+function generalFieldsFromJobHistories(rows: JobHistoryFormRow[]): Partial<EmployeeEditFormData> {
+    const extra: Partial<EmployeeEditFormData> = {};
+    const joining = rows.find((row) => row.event_type === 'joining' && String(row.event_date ?? '').trim());
+    if (joining) {
+        extra.joining_date = joining.event_date;
+        if (joining.to_designation_id) extra.joining_designation_id = joining.to_designation_id;
+        if (joining.to_branch_id) extra.current_branch_id = joining.to_branch_id;
+    }
+
+    const confirmation = rows.find((row) => row.event_type === 'confirmation' && String(row.event_date ?? '').trim());
+    if (confirmation) extra.confirmation_date = confirmation.event_date;
+
+    const dated = [...rows]
+        .filter((row) => String(row.event_date ?? '').trim())
+        .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)));
+
+    for (const row of dated) {
+        if ((row.event_type === 'joining' || row.event_type === 'transfer') && row.to_branch_id) {
+            extra.current_branch_id = row.to_branch_id;
+        }
+        if (
+            (row.event_type === 'joining' ||
+                row.event_type === 'confirmation' ||
+                row.event_type === 'promotion' ||
+                row.event_type === 'demotion') &&
+            row.to_designation_id
+        ) {
+            extra.last_designation_id = row.to_designation_id;
+        }
+    }
+
+    return extra;
+}
+
+function resetJobHistorySection(rows: JobHistoryFormRow[], eventType: string): JobHistoryFormRow[] {
+    const next: JobHistoryFormRow[] = [];
+    let inserted = false;
+    for (const row of rows) {
+        if (row.event_type !== eventType) {
+            next.push(row);
+            continue;
+        }
+        if (!inserted) {
+            next.push(clearedJobHistoryFormRow(eventType));
+            inserted = true;
+        }
+    }
+    if (!inserted) {
+        next.push(clearedJobHistoryFormRow(eventType));
+    }
+
+    return next;
+}
+
+function ensureFlatJobHistories(
+    rows: JobHistoryFormRow[],
+    dropoutReason?: string | null,
+    extras?: JobHistorySeed,
+): JobHistoryFormRow[] {
     const known = new Set<string>(JOB_HISTORY_SECTIONS.map((section) => section.value));
     const grouped = new Map<string, JobHistoryFormRow[]>();
     for (const section of JOB_HISTORY_SECTIONS) {
@@ -250,9 +519,9 @@ function ensureFlatJobHistories(rows: JobHistoryFormRow[], dropoutReason?: strin
     for (const section of JOB_HISTORY_SECTIONS) {
         const list = grouped.get(section.value) ?? [];
         if (list.length === 0) {
-            out.push(emptyJobHistoryFormRow(section.value, dropoutReason));
+            out.push(emptyJobHistoryFormRow(section.value, dropoutReason, extras));
         } else {
-            out.push(...list);
+            out.push(...list.map((row) => hydrateJobHistoryRowFromSeed(row, dropoutReason, extras)));
         }
     }
 
@@ -451,8 +720,12 @@ interface Employee {
     trainings?: any[];
     documents?: any[];
     dropout_reason?: string | null;
+    cause_of_separation?: string | null;
     dropout_date?: string | null;
     resignation_date?: string | null;
+    final_payment_date?: string | null;
+    final_payment_amount?: string | number | null;
+    designation_id?: number | null;
 }
 
 function withHydratedEditDocuments(form: EmployeeEditFormData): EmployeeEditFormData {
@@ -481,6 +754,32 @@ function finalizeEmployeeEditForm(form: EmployeeEditFormData): EmployeeEditFormD
 }
 
 function employeeToFormBase(employee: Employee): EmployeeEditFormData {
+    const job_histories = normalizeJobHistoryBranches(
+        ensureFlatJobHistories(
+            ((employee.job_histories as any[]) ?? []).map((h) => {
+                const eventType = String(h.event_type ?? 'transfer');
+                const remarks = String(h.remarks ?? '');
+                const cause = String(h.cause_of_separation ?? employee.cause_of_separation ?? '');
+                const amount = String(h.amount_received ?? (eventType === 'final_payment' ? employee.final_payment_amount ?? '' : ''));
+
+                return {
+                    id: h.id ? Number(h.id) : undefined,
+                    event_type: eventType,
+                    event_date: String(h.event_date ?? '').slice(0, 10),
+                    from_designation_id: h.from_designation_id != null ? String(h.from_designation_id) : '',
+                    to_designation_id: h.to_designation_id != null ? String(h.to_designation_id) : '',
+                    from_branch_id: h.from_branch_id != null ? String(h.from_branch_id) : '',
+                    to_branch_id: h.to_branch_id != null ? String(h.to_branch_id) : '',
+                    remarks: eventType === 'left' ? resolveSeparationType(remarks, employee.dropout_reason) : remarks,
+                    cause_of_separation: eventType === 'left' ? cause : '',
+                    amount_received: eventType === 'final_payment' ? amount : '',
+                };
+            }),
+            employee.dropout_reason,
+            jobHistorySeedFromEmployee(employee),
+        ),
+    );
+
     return {
         _method: 'PUT',
         current_branch_id: employee.current_branch_id ? String(employee.current_branch_id) : '',
@@ -546,30 +845,14 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         experiences: (employee.experiences as any[]) ?? [],
         trainings: (employee.trainings as any[]) ?? [],
         documents: hydrateEmployeeDocumentRowsForForm(employee.documents ?? []),
-        job_histories: ensureFlatJobHistories(
-            ((employee.job_histories as any[]) ?? []).map((h) => {
-                const eventType = String(h.event_type ?? 'transfer');
-                const remarks = String(h.remarks ?? '');
-
-                return {
-                    id: h.id ? Number(h.id) : undefined,
-                    event_type: eventType,
-                    event_date: String(h.event_date ?? '').slice(0, 10),
-                    from_designation_id: h.from_designation_id != null ? String(h.from_designation_id) : '',
-                    to_designation_id: h.to_designation_id != null ? String(h.to_designation_id) : '',
-                    from_branch_id: h.from_branch_id != null ? String(h.from_branch_id) : '',
-                    to_branch_id: h.to_branch_id != null ? String(h.to_branch_id) : '',
-                    remarks: eventType === 'left' ? resolveLeftReason(remarks, employee.dropout_reason) : remarks,
-                };
-            }),
-            employee.dropout_reason,
-        ),
+        job_histories,
         disciplinary_actions: ((employee.disciplinary_actions as any[]) ?? []).map((d) => ({
             id: d.id ? Number(d.id) : undefined,
             action_type: String(d.action_type ?? 'Warning'),
             action_date: String(d.action_date ?? '').slice(0, 10),
             details: String(d.details ?? ''),
         })),
+        ...generalFieldsFromJobHistories(job_histories),
     };
 }
 
@@ -639,8 +922,8 @@ function validateEmployeeEditTab(tab: EmployeeEditTabId, data: EmployeeEditFormD
         }
         case 'job_history': {
             (data.job_histories ?? []).forEach((row, i) => {
-                if (row.event_type === 'left' && !String(row.remarks ?? '').trim()) {
-                    msg.push(`Job history ${i + 1}: Dropout / left reason is required.`);
+                if (row.event_type === 'left' && String(row.event_date ?? '').trim() && !String(row.remarks ?? '').trim()) {
+                    msg.push(`Left / Separation: Type of Separation is required.`);
                 }
             });
             break;
@@ -754,6 +1037,51 @@ const FormField = ({
     </div>
 );
 
+function EmployeeDateInput({
+    value,
+    onChange,
+    className,
+    disabled,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    className?: string;
+    disabled?: boolean;
+}) {
+    return (
+        <DatePicker
+            selected={parseFormDateValue(value)}
+            onSelect={(d) => onChange(d ? format(d, SERVER_DATE_FMT) : '')}
+            placeholderText="DD/MM/YYYY"
+            className={cn('h-9', className)}
+            disabled={disabled}
+        />
+    );
+}
+
+function JobHistoryLockedField({
+    children,
+    onClick,
+}: {
+    children: React.ReactNode;
+    onClick: () => void;
+}) {
+    return (
+        <div className="space-y-1">
+            <div className="relative">
+                {children}
+                <button
+                    type="button"
+                    className="absolute inset-0 z-10 cursor-not-allowed rounded-md"
+                    aria-label="Edit from Job History"
+                    onClick={onClick}
+                />
+            </div>
+            <p className="text-[10px] font-semibold text-amber-700">Edit from Job History</p>
+        </div>
+    );
+}
+
 function JobHistoryTypeFields({
     row,
     onPatch,
@@ -768,15 +1096,24 @@ function JobHistoryTypeFields({
     const type = row.event_type;
 
     return (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2', type === 'left' ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
             <FormField label="Date">
-                <Input
-                    type="date"
-                    className="h-9 text-xs"
-                    value={row.event_date}
-                    onChange={(e) => onPatch({ event_date: e.target.value })}
-                />
+                <EmployeeDateInput value={row.event_date} onChange={(v) => onPatch({ event_date: v })} />
             </FormField>
+
+            {type === 'final_payment' && (
+                <FormField label="Amount Received">
+                    <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="h-9 text-xs"
+                        placeholder="0.00"
+                        value={row.amount_received ?? ''}
+                        onChange={(e) => onPatch({ amount_received: e.target.value })}
+                    />
+                </FormField>
+            )}
 
             {type === 'joining' && (
                 <>
@@ -854,28 +1191,38 @@ function JobHistoryTypeFields({
 
             {type === 'left' && (
                 <>
-                    <FormField label="From Branch">
+                    <FormField label="Last Branch">
                         <ComboSelect
                             items={branchItems}
                             value={row.from_branch_id || null}
                             onChange={(val) => onPatch({ from_branch_id: val ? String(val) : '' })}
-                            placeholder="From Branch"
+                            placeholder="Last Branch"
                         />
                     </FormField>
-                    <FormField label="Dropout / Left Reason" required>
+                    <FormField label="Type of Separation">
                         <ComboSelect
-                            value={row.remarks || DEFAULT_DROPOUT_LEFT_REASON}
-                            onChange={(v) => onPatch({ remarks: v || DEFAULT_DROPOUT_LEFT_REASON })}
+                            value={row.remarks || null}
+                            onChange={(v) => onPatch({ remarks: v ?? '' })}
                             items={[
-                                ...DROPOUT_LEFT_REASONS.map((reason) => ({ value: reason, label: reason })),
-                                ...(row.remarks && !DROPOUT_LEFT_REASONS.includes(row.remarks)
+                                ...SEPARATION_TYPES.map((reason) => ({ value: reason, label: reason })),
+                                ...(row.remarks && !SEPARATION_TYPES.includes(row.remarks)
                                     ? [{ value: row.remarks, label: row.remarks }]
                                     : []),
                             ]}
-                            placeholder="Select Reason"
-                            clearable={false}
-                            creatable
-                            onCreate={(label) => onPatch({ remarks: label })}
+                            placeholder="Select Type"
+                        />
+                    </FormField>
+                    <FormField label="Cause of Separation">
+                        <ComboSelect
+                            value={row.cause_of_separation || null}
+                            onChange={(v) => onPatch({ cause_of_separation: v ?? '' })}
+                            items={[
+                                ...SEPARATION_CAUSES.map((cause) => ({ value: cause, label: cause })),
+                                ...(row.cause_of_separation && !SEPARATION_CAUSES.includes(row.cause_of_separation)
+                                    ? [{ value: row.cause_of_separation, label: row.cause_of_separation }]
+                                    : []),
+                            ]}
+                            placeholder="Select Cause"
                         />
                     </FormField>
                 </>
@@ -891,22 +1238,40 @@ const SectionHeading = ({ children, desc }: { children: string; desc?: string })
     </div>
 );
 
+function applyEmployeeJobHistoryDefaults(form: EmployeeEditFormData, employee: Employee): EmployeeEditFormData {
+    const job_histories = normalizeJobHistoryBranches(
+        ensureFlatJobHistories(form.job_histories ?? [], employee.dropout_reason, jobHistorySeedFromEmployee(employee)),
+    );
+
+    return {
+        ...form,
+        job_histories,
+        ...generalFieldsFromJobHistories(job_histories),
+    };
+}
+
 function buildInitialEditForm(employee: Employee, oldInput: unknown, allowDraft: boolean): EmployeeEditFormData {
     const base = employeeToFormBase(employee);
     const fromServer = asInputPatch(oldInput);
     const editDraftKey = `${EMPLOYEE_V2_EDIT_DRAFT_PREFIX}${employee.id}`;
     if (hasPatchKeys(fromServer)) {
         return finalizeEmployeeEditForm(
-            applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromServer) as unknown as Record<string, unknown>) as EmployeeEditFormData,
+            applyEmployeeJobHistoryDefaults(
+                applyUnifiedNidSmartFields(mergeSerializableIntoForm(base, fromServer) as unknown as Record<string, unknown>) as EmployeeEditFormData,
+                employee,
+            ),
         );
     }
     if (allowDraft) {
         const fromDraft = loadEmployeeDraft(editDraftKey);
         if (fromDraft) {
             return finalizeEmployeeEditForm(
-                applyUnifiedNidSmartFields(
-                    mergeSerializableIntoForm(base, fromDraft as Record<string, unknown>) as unknown as Record<string, unknown>,
-                ) as EmployeeEditFormData,
+                applyEmployeeJobHistoryDefaults(
+                    applyUnifiedNidSmartFields(
+                        mergeSerializableIntoForm(base, fromDraft as Record<string, unknown>) as unknown as Record<string, unknown>,
+                    ) as EmployeeEditFormData,
+                    employee,
+                ),
             );
         }
     }
@@ -1007,6 +1372,7 @@ export default function EmployeeEdit({
 
     const [activeTab, setActiveTab] = useState<string>('general');
     const [tabStepBlockMessages, setTabStepBlockMessages] = useState<string[] | null>(null);
+    const [showJobHistoryLockNotice, setShowJobHistoryLockNotice] = useState(false);
     const [photoPreview, setPhotoPreview] = useState<string | null>(existingPhotoUrl);
     const [signaturePreview, setSignaturePreview] = useState<string | null>(existingSignatureUrl);
     const photoFileInputRef = useRef<HTMLInputElement>(null);
@@ -1273,10 +1639,8 @@ export default function EmployeeEdit({
     }, [data.joining_date, data.confirmation_date, selectedEmployeeType]);
 
     const derivedAge = useMemo(() => {
-        const raw = data.date_of_birth;
-        if (!raw) return '';
-        const d = new Date(raw);
-        if (Number.isNaN(d.getTime())) return '';
+        const d = parseFormDateValue(data.date_of_birth);
+        if (!d) return '';
         const today = new Date();
         let years = today.getFullYear() - d.getFullYear();
         const m = today.getMonth() - d.getMonth();
@@ -1425,6 +1789,10 @@ export default function EmployeeEdit({
             transform: (formData) => ({
                 ...formData,
                 _method: 'PUT',
+                job_histories: (formData.job_histories ?? []).filter(jobHistoryRowHasContent),
+                disciplinary_actions: (formData.disciplinary_actions ?? []).filter(
+                    (row) => String(row.action_date ?? '').trim() !== '',
+                ),
                 sync_salary_components: salaryComponentsEditing ? 1 : 0,
                 salary_lines_json: salaryComponentsEditing
                     ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
@@ -1830,14 +2198,36 @@ export default function EmployeeEdit({
                                             {/* Organization Group */}
                                             <div>
                                                 <SectionHeading>Employment Information</SectionHeading>
+                                                {showJobHistoryLockNotice && (
+                                                    <Alert className="mb-4 border-amber-200 bg-amber-50 text-amber-950">
+                                                        <AlertTitle className="text-amber-900">Edit from Job History</AlertTitle>
+                                                        <AlertDescription className="flex flex-wrap items-center justify-between gap-2 text-amber-800">
+                                                            <span>
+                                                                Branch, joining designation, last designation, joining date and confirmation date are updated from Job History.
+                                                            </span>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 border-amber-300 bg-white text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                                                                onClick={() => requestTabChange('job_history')}
+                                                            >
+                                                                Open Job History
+                                                            </Button>
+                                                        </AlertDescription>
+                                                    </Alert>
+                                                )}
                                                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                                                     <FormField label="Branch Name" required error={errors.current_branch_id}>
-                                                        <ComboSelect
-                                                            value={data.current_branch_id || null}
-                                                            onChange={(v) => setData('current_branch_id', v ?? '')}
-                                                            items={branchItems}
-                                                            placeholder="Select Branch"
-                                                        />
+                                                        <JobHistoryLockedField onClick={() => setShowJobHistoryLockNotice(true)}>
+                                                            <ComboSelect
+                                                                value={data.current_branch_id || null}
+                                                                onChange={(v) => setData('current_branch_id', v ?? '')}
+                                                                items={branchItems}
+                                                                placeholder="Select Branch"
+                                                                disabled
+                                                            />
+                                                        </JobHistoryLockedField>
                                                     </FormField>
                                                     <FormField label="Employment Type" required error={errors.employee_type_id}>
                                                         <ComboSelect
@@ -1855,21 +2245,27 @@ export default function EmployeeEdit({
                                                             placeholder="Select Department"
                                                         />
                                                     </FormField>
-                                                    <FormField label="Opening Designation" required error={errors.joining_designation_id}>
-                                                        <ComboSelect
-                                                            value={data.joining_designation_id || null}
-                                                            onChange={(v) => setOpeningDesignation(v ?? '')}
-                                                            items={desigItems}
-                                                            placeholder="Select Designation"
-                                                        />
+                                                    <FormField label="Joining Designation" required error={errors.joining_designation_id}>
+                                                        <JobHistoryLockedField onClick={() => setShowJobHistoryLockNotice(true)}>
+                                                            <ComboSelect
+                                                                value={data.joining_designation_id || null}
+                                                                onChange={(v) => setOpeningDesignation(v ?? '')}
+                                                                items={desigItems}
+                                                                placeholder="Select Designation"
+                                                                disabled
+                                                            />
+                                                        </JobHistoryLockedField>
                                                     </FormField>
                                                     <FormField label="Last Designation" error={errors.last_designation_id}>
-                                                        <ComboSelect
-                                                            value={data.last_designation_id || null}
-                                                            onChange={(v) => setLastDesignation(v ?? '')}
-                                                            items={desigItems}
-                                                            placeholder="Select Designation"
-                                                        />
+                                                        <JobHistoryLockedField onClick={() => setShowJobHistoryLockNotice(true)}>
+                                                            <ComboSelect
+                                                                value={data.last_designation_id || null}
+                                                                onChange={(v) => setLastDesignation(v ?? '')}
+                                                                items={desigItems}
+                                                                placeholder="Select Designation"
+                                                                disabled
+                                                            />
+                                                        </JobHistoryLockedField>
                                                     </FormField>
                                                     <FormField label="Program">
                                                         <ComboSelect
@@ -1895,18 +2291,22 @@ export default function EmployeeEdit({
                                                         />
                                                     </FormField>
                                                     <FormField label="Joining Date" required error={errors.joining_date}>
-                                                        <Input
-                                                            type="date"
-                                                            value={data.joining_date}
-                                                            onChange={(e) => setData('joining_date', e.target.value)}
-                                                        />
+                                                        <JobHistoryLockedField onClick={() => setShowJobHistoryLockNotice(true)}>
+                                                            <EmployeeDateInput
+                                                                value={data.joining_date}
+                                                                onChange={(v) => setData('joining_date', v)}
+                                                                disabled
+                                                            />
+                                                        </JobHistoryLockedField>
                                                     </FormField>
                                                     <FormField label="Confirmation Date">
-                                                        <Input
-                                                            type="date"
-                                                            value={data.confirmation_date}
-                                                            onChange={(e) => setData('confirmation_date', e.target.value)}
-                                                        />
+                                                        <JobHistoryLockedField onClick={() => setShowJobHistoryLockNotice(true)}>
+                                                            <EmployeeDateInput
+                                                                value={data.confirmation_date}
+                                                                onChange={(v) => setData('confirmation_date', v)}
+                                                                disabled
+                                                            />
+                                                        </JobHistoryLockedField>
                                                     </FormField>
                                                     <FormField label="Probation Period">
                                                         <Input
@@ -1972,10 +2372,9 @@ export default function EmployeeEdit({
                                                         />
                                                     </FormField>
                                                     <FormField label="Date of Birth">
-                                                        <Input
-                                                            type="date"
+                                                        <EmployeeDateInput
                                                             value={data.date_of_birth}
-                                                            onChange={(e) => setData('date_of_birth', e.target.value)}
+                                                            onChange={(v) => setData('date_of_birth', v)}
                                                         />
                                                     </FormField>
                                                     <FormField label="Age">
@@ -2396,6 +2795,9 @@ export default function EmployeeEdit({
                                             <div>
                                                 <h2 className="text-lg font-bold text-zinc-900">Job History & Disciplinary Actions</h2>
                                                 <p className="mt-1 text-xs text-zinc-500">
+                                                    Branch, joining designation, last designation, joining date and confirmation date are updated from this tab.
+                                                </p>
+                                                <p className="mt-1 text-xs text-zinc-500">
                                                     Fill the 7 history types below. Transfer, promotion and demotion can have extra rows with +.
                                                 </p>
                                             </div>
@@ -2409,7 +2811,7 @@ export default function EmployeeEdit({
                                                         <Clock className="h-4 w-4 text-emerald-600" /> Job History
                                                     </h3>
                                                     <p className="mt-0.5 text-xs text-zinc-400">
-                                                        One row per type. Use + only for extra transfer, promotion or demotion.
+                                                        One row per type. Delete clears the fields but keeps them visible; empty sections are not saved. Use + only for extra transfer, promotion or demotion.
                                                     </p>
                                                 </div>
 
@@ -2425,22 +2827,38 @@ export default function EmployeeEdit({
                                                                     <h4 className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
                                                                         {section.label}
                                                                     </h4>
-                                                                    {section.multiple && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        {section.multiple && (
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                className="h-8 gap-1 border-emerald-600/40 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                                                                onClick={() =>
+                                                                                    setData('job_histories', [
+                                                                                        ...data.job_histories,
+                                                                                        emptyJobHistoryFormRow(section.value),
+                                                                                    ])
+                                                                                }
+                                                                            >
+                                                                                <Plus className="h-3.5 w-3.5" /> Add {section.label}
+                                                                            </Button>
+                                                                        )}
                                                                         <Button
                                                                             type="button"
                                                                             variant="outline"
                                                                             size="sm"
-                                                                            className="h-8 gap-1 border-emerald-600/40 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                                                            className="h-8 gap-1 border-red-200 text-xs font-semibold text-red-600 hover:bg-red-50 hover:text-red-700"
                                                                             onClick={() =>
-                                                                                setData('job_histories', [
-                                                                                    ...data.job_histories,
-                                                                                    emptyJobHistoryFormRow(section.value, employee.dropout_reason),
-                                                                                ])
+                                                                                setData(
+                                                                                    'job_histories',
+                                                                                    resetJobHistorySection(data.job_histories, section.value),
+                                                                                )
                                                                             }
                                                                         >
-                                                                            <Plus className="h-3.5 w-3.5" /> Add {section.label}
+                                                                            <Trash2 className="h-3.5 w-3.5" /> Delete
                                                                         </Button>
-                                                                    )}
+                                                                    </div>
                                                                 </div>
 
                                                                 {indexed.map(({ row, idx }, n) => (
@@ -2474,9 +2892,17 @@ export default function EmployeeEdit({
                                                                             branchItems={branchItems}
                                                                             desigItems={desigItems}
                                                                             onPatch={(patch) => {
-                                                                                const updated = [...data.job_histories];
-                                                                                updated[idx] = { ...updated[idx], ...patch };
-                                                                                setData('job_histories', updated);
+                                                                                setData((prev) => {
+                                                                                    const updated = [...prev.job_histories];
+                                                                                    updated[idx] = { ...updated[idx], ...patch };
+                                                                                    const synced = normalizeJobHistoryBranches(updated);
+
+                                                                                    return {
+                                                                                        ...prev,
+                                                                                        ...generalFieldsFromJobHistories(synced),
+                                                                                        job_histories: synced,
+                                                                                    };
+                                                                                });
                                                                             }}
                                                                         />
                                                                     </div>
@@ -2542,13 +2968,11 @@ export default function EmployeeEdit({
                                                                     </FormField>
 
                                                                     <FormField label="Action Date" required>
-                                                                        <Input
-                                                                            type="date"
-                                                                            className="h-9 text-xs"
+                                                                        <EmployeeDateInput
                                                                             value={row.action_date}
-                                                                            onChange={(e) => {
+                                                                            onChange={(v) => {
                                                                                 const updated = [...data.disciplinary_actions];
-                                                                                updated[idx] = { ...updated[idx], action_date: e.target.value };
+                                                                                updated[idx] = { ...updated[idx], action_date: v };
                                                                                 setData('disciplinary_actions', updated);
                                                                             }}
                                                                         />
@@ -3069,12 +3493,11 @@ export default function EmployeeEdit({
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="Date of Birth">
-                                                                    <Input
-                                                                        type="date"
+                                                                    <EmployeeDateInput
                                                                         value={nom.date_of_birth}
-                                                                        onChange={(e) => {
+                                                                        onChange={(v) => {
                                                                             const next = [...data.nominees];
-                                                                            next[idx] = { ...next[idx], date_of_birth: e.target.value };
+                                                                            next[idx] = { ...next[idx], date_of_birth: v };
                                                                             setData('nominees', next);
                                                                         }}
                                                                     />
@@ -3429,11 +3852,10 @@ export default function EmployeeEdit({
                                                     />
                                                 </FormField>
                                                 <FormField label="Collateral Date">
-                                                    <Input
-                                                        type="date"
+                                                    <EmployeeDateInput
                                                         value={data.collateral.collateral_date}
-                                                        onChange={(e) =>
-                                                            setData('collateral', { ...data.collateral, collateral_date: e.target.value })
+                                                        onChange={(v) =>
+                                                            setData('collateral', { ...data.collateral, collateral_date: v })
                                                         }
                                                     />
                                                 </FormField>
@@ -3870,23 +4292,21 @@ export default function EmployeeEdit({
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="From Date">
-                                                                    <Input
-                                                                        type="date"
+                                                                    <EmployeeDateInput
                                                                         value={exp.from_date}
-                                                                        onChange={(e) => {
+                                                                        onChange={(v) => {
                                                                             const next = [...data.experiences];
-                                                                            next[idx] = { ...next[idx], from_date: e.target.value };
+                                                                            next[idx] = { ...next[idx], from_date: v };
                                                                             setData('experiences', next);
                                                                         }}
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="To Date">
-                                                                    <Input
-                                                                        type="date"
+                                                                    <EmployeeDateInput
                                                                         value={exp.to_date}
-                                                                        onChange={(e) => {
+                                                                        onChange={(v) => {
                                                                             const next = [...data.experiences];
-                                                                            next[idx] = { ...next[idx], to_date: e.target.value };
+                                                                            next[idx] = { ...next[idx], to_date: v };
                                                                             setData('experiences', next);
                                                                         }}
                                                                     />
@@ -4168,12 +4588,11 @@ export default function EmployeeEdit({
                                                                     />
                                                                 </FormField>
                                                                 <FormField label="Expiry Date">
-                                                                    <Input
-                                                                        type="date"
+                                                                    <EmployeeDateInput
                                                                         value={doc.expiry_date}
-                                                                        onChange={(e) => {
+                                                                        onChange={(v) => {
                                                                             const next = [...data.documents];
-                                                                            next[idx] = { ...next[idx], expiry_date: e.target.value };
+                                                                            next[idx] = { ...next[idx], expiry_date: v };
                                                                             setData('documents', next);
                                                                         }}
                                                                     />

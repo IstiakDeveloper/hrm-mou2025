@@ -53,37 +53,44 @@ export default function NotificationDropdown() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(true);
 
-    const fetchNotifications = async () => {
+    const fetchBellState = async () => {
         try {
             const { data } = await axios.get('/notifications/latest');
-            setNotifications(data.notifications);
-            setLoading(false);
+            setNotifications(data.notifications ?? []);
+            if (typeof data.count === 'number') {
+                setUnreadCount(data.count);
+            }
         } catch (error) {
             console.error('Failed to fetch notifications', error);
+        } finally {
             setLoading(false);
-        }
-    };
-
-    const fetchUnreadCount = async () => {
-        try {
-            const { data } = await axios.get('/notifications/unread-count');
-            setUnreadCount(data.count);
-        } catch (error) {
-            console.error('Failed to fetch unread count', error);
         }
     };
 
     useEffect(() => {
-        fetchNotifications();
-        fetchUnreadCount();
+        let cancelled = false;
 
-        // Poll for new notifications and count every 30 seconds
-        const interval = setInterval(() => {
-            fetchNotifications(); // Also fetch the notifications, not just the count
-            fetchUnreadCount();
-        }, 12000); // Poll every 12s so admin notices show without a long wait
+        const tick = () => {
+            if (cancelled || document.visibilityState === 'hidden') {
+                return;
+            }
+            void fetchBellState();
+        };
 
-        return () => clearInterval(interval);
+        tick();
+        const interval = window.setInterval(tick, 60_000);
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                tick();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
     }, []);
 
     const handleNotificationClick = async (notification) => {

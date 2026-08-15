@@ -1048,6 +1048,131 @@ class EmployeeController extends Controller
         $this->normalizeEmployeeRepeatedTabPayload($request);
     }
 
+    /**
+     * Keep job-history rows that have a date or separation/final-payment values.
+     * Empty placeholder rows (no date and no extra fields) are dropped so they
+     * are not required on save, but Type of Separation / Amount Received still persist.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function employeeJobHistoryRowHasContent(array $row): bool
+    {
+        if (trim((string) ($row['event_date'] ?? '')) !== '') {
+            return true;
+        }
+
+        $type = (string) ($row['event_type'] ?? '');
+        if ($type === 'left') {
+            return trim((string) ($row['remarks'] ?? '')) !== ''
+                || trim((string) ($row['cause_of_separation'] ?? '')) !== '';
+        }
+        if ($type === 'final_payment') {
+            $amount = $row['amount_received'] ?? null;
+
+            return $amount !== null && $amount !== '';
+        }
+
+        foreach (['from_designation_id', 'to_designation_id', 'from_branch_id', 'to_branch_id', 'remarks'] as $key) {
+            if (trim((string) ($row[$key] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Last posting branch from dated joining + transfer rows only.
+     * Left / separation without a date must not count.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function lastPostingBranchIdFromJobHistoryRows(array $rows): string
+    {
+        $dated = $rows;
+        usort($dated, fn ($a, $b) => strcmp((string) ($a['event_date'] ?? ''), (string) ($b['event_date'] ?? '')));
+        $branch = '';
+        foreach ($dated as $row) {
+            if (! is_array($row) || trim((string) ($row['event_date'] ?? '')) === '') {
+                continue;
+            }
+            $type = (string) ($row['event_type'] ?? '');
+            if ($type === 'joining' && ! empty($row['to_branch_id'])) {
+                $branch = (string) $row['to_branch_id'];
+            }
+            if ($type === 'transfer' && ! empty($row['to_branch_id'])) {
+                $branch = (string) $row['to_branch_id'];
+            }
+        }
+
+        return $branch;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeJobHistoryBranchFields(array $rows, Employee $employee): array
+    {
+        $firstTransferFrom = '';
+        foreach ($rows as $row) {
+            if (($row['event_type'] ?? '') === 'transfer' && trim((string) ($row['event_date'] ?? '')) !== '' && ! empty($row['from_branch_id'])) {
+                $firstTransferFrom = (string) $row['from_branch_id'];
+                break;
+            }
+        }
+
+        $hasDatedTransfer = $firstTransferFrom !== '' || collect($rows)->contains(
+            fn ($row) => is_array($row)
+                && ($row['event_type'] ?? '') === 'transfer'
+                && trim((string) ($row['event_date'] ?? '')) !== ''
+                && ! empty($row['to_branch_id'])
+        );
+
+        foreach ($rows as &$row) {
+            if (($row['event_type'] ?? '') !== 'joining') {
+                continue;
+            }
+            if (! empty($row['id']) && ! empty($row['to_branch_id'])) {
+                continue;
+            }
+            if (trim((string) ($row['to_branch_id'] ?? '')) !== '') {
+                continue;
+            }
+            $row['to_branch_id'] = $hasDatedTransfer
+                ? $firstTransferFrom
+                : ($employee->current_branch_id ? (string) $employee->current_branch_id : '');
+        }
+        unset($row);
+
+        $joiningBranch = '';
+        foreach ($rows as $row) {
+            if (($row['event_type'] ?? '') === 'joining' && trim((string) ($row['event_date'] ?? '')) !== '' && ! empty($row['to_branch_id'])) {
+                $joiningBranch = (string) $row['to_branch_id'];
+                break;
+            }
+        }
+        $lastPosting = $this->lastPostingBranchIdFromJobHistoryRows($rows);
+
+        foreach ($rows as &$row) {
+            if (($row['event_type'] ?? '') !== 'left') {
+                continue;
+            }
+            $hasDate = trim((string) ($row['event_date'] ?? '')) !== '';
+            if (! $hasDate) {
+                $row['from_branch_id'] = '';
+                continue;
+            }
+            $from = trim((string) ($row['from_branch_id'] ?? ''));
+            if ($from === '' || ($joiningBranch !== '' && $from === $joiningBranch && $lastPosting !== '' && $from !== $lastPosting)) {
+                $row['from_branch_id'] = $lastPosting;
+            }
+        }
+        unset($row);
+
+        return $rows;
+    }
+
     private function normalizeEmployeeRepeatedTabPayload(Request $request): void
     {
         $assets = $request->input('assets');
@@ -1113,6 +1238,28 @@ class EmployeeController extends Controller
             }
             $collateral['certificate_levels'] = array_values(array_unique($normalizedLevels));
             $request->merge(['collateral' => $collateral]);
+        }
+
+        $jobHistories = $request->input('job_histories');
+        if (is_array($jobHistories)) {
+            $request->merge([
+                'job_histories' => array_values(array_filter($jobHistories, function ($row) {
+                    return is_array($row) && $this->employeeJobHistoryRowHasContent($row);
+                })),
+            ]);
+        }
+
+        $disciplinaryActions = $request->input('disciplinary_actions');
+        if (is_array($disciplinaryActions)) {
+            $request->merge([
+                'disciplinary_actions' => array_values(array_filter($disciplinaryActions, function ($row) {
+                    if (! is_array($row)) {
+                        return false;
+                    }
+
+                    return trim((string) ($row['action_date'] ?? '')) !== '';
+                })),
+            ]);
         }
     }
 
@@ -3134,6 +3281,8 @@ class EmployeeController extends Controller
                 'from_branch_id' => $h->from_branch_id ? (string) $h->from_branch_id : '',
                 'to_branch_id' => $h->to_branch_id ? (string) $h->to_branch_id : '',
                 'remarks' => $h->remarks ?? '',
+                'cause_of_separation' => $h->cause_of_separation ?? '',
+                'amount_received' => $h->amount_received !== null ? (string) $h->amount_received : '',
             ];
             $existingTypes[$h->event_type] = true;
         }
@@ -3145,7 +3294,7 @@ class EmployeeController extends Controller
                 'from_designation_id' => '',
                 'to_designation_id' => $employee->joining_designation_id ? (string) $employee->joining_designation_id : ($employee->designation_id ? (string) $employee->designation_id : ''),
                 'from_branch_id' => '',
-                'to_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
+                'to_branch_id' => '',
                 'remarks' => 'Initial Joining',
             ];
         }
@@ -3159,30 +3308,6 @@ class EmployeeController extends Controller
                 'from_branch_id' => '',
                 'to_branch_id' => '',
                 'remarks' => 'Service Confirmation',
-            ];
-        }
-
-        if (! isset($existingTypes['left']) && ($employee->resignation_date || $employee->dropout_date)) {
-            $jobHistoryRows[] = [
-                'event_type' => 'left',
-                'event_date' => ($employee->resignation_date ?? $employee->dropout_date)?->format('Y-m-d'),
-                'from_designation_id' => '',
-                'to_designation_id' => '',
-                'from_branch_id' => $employee->current_branch_id ? (string) $employee->current_branch_id : '',
-                'to_branch_id' => '',
-                'remarks' => $employee->dropout_reason ?: 'Voluntary',
-            ];
-        }
-
-        if (! isset($existingTypes['final_payment']) && $employee->final_payment_date) {
-            $jobHistoryRows[] = [
-                'event_type' => 'final_payment',
-                'event_date' => $employee->final_payment_date->format('Y-m-d'),
-                'from_designation_id' => '',
-                'to_designation_id' => '',
-                'from_branch_id' => '',
-                'to_branch_id' => '',
-                'remarks' => 'Final Payment Settled',
             ];
         }
 
@@ -3254,6 +3379,35 @@ class EmployeeController extends Controller
                 ];
             }
         }
+
+        if (! isset($existingTypes['left']) && ($employee->resignation_date || $employee->dropout_date || $employee->dropout_reason || $employee->cause_of_separation)) {
+            $leftDate = ($employee->resignation_date ?? $employee->dropout_date)?->format('Y-m-d') ?? '';
+            $jobHistoryRows[] = [
+                'event_type' => 'left',
+                'event_date' => $leftDate,
+                'from_designation_id' => '',
+                'to_designation_id' => '',
+                'from_branch_id' => '',
+                'to_branch_id' => '',
+                'remarks' => $employee->dropout_reason ?? '',
+                'cause_of_separation' => $employee->cause_of_separation ?? '',
+            ];
+        }
+
+        if (! isset($existingTypes['final_payment']) && ($employee->final_payment_date || $employee->final_payment_amount !== null)) {
+            $jobHistoryRows[] = [
+                'event_type' => 'final_payment',
+                'event_date' => $employee->final_payment_date?->format('Y-m-d') ?? '',
+                'from_designation_id' => '',
+                'to_designation_id' => '',
+                'from_branch_id' => '',
+                'to_branch_id' => '',
+                'remarks' => 'Final Payment Settled',
+                'amount_received' => $employee->final_payment_amount !== null ? (string) $employee->final_payment_amount : '',
+            ];
+        }
+
+        $jobHistoryRows = $this->normalizeJobHistoryBranchFields($jobHistoryRows, $employee);
 
         usort($jobHistoryRows, fn ($a, $b) => strcmp((string) ($a['event_date'] ?? ''), (string) ($b['event_date'] ?? '')));
         $employeePayload['job_histories'] = $jobHistoryRows;
@@ -3491,17 +3645,19 @@ class EmployeeController extends Controller
                 'documents.*.expiry_date' => 'nullable|date',
 
                 'job_histories' => 'nullable|array',
-                'job_histories.*.event_type' => 'required_with:job_histories|string|max:50',
-                'job_histories.*.event_date' => 'required_with:job_histories|date',
+                'job_histories.*.event_type' => 'required|string|max:50',
+                'job_histories.*.event_date' => 'nullable|date',
                 'job_histories.*.from_designation_id' => 'nullable|exists:designations,id',
                 'job_histories.*.to_designation_id' => 'nullable|exists:designations,id',
                 'job_histories.*.from_branch_id' => 'nullable|exists:branches,id',
                 'job_histories.*.to_branch_id' => 'nullable|exists:branches,id',
                 'job_histories.*.remarks' => 'nullable|string',
+                'job_histories.*.cause_of_separation' => 'nullable|string|max:200',
+                'job_histories.*.amount_received' => 'nullable|numeric|min:0',
 
                 'disciplinary_actions' => 'nullable|array',
-                'disciplinary_actions.*.action_type' => 'required_with:disciplinary_actions|string|max:100',
-                'disciplinary_actions.*.action_date' => 'required_with:disciplinary_actions|date',
+                'disciplinary_actions.*.action_type' => 'required|string|max:100',
+                'disciplinary_actions.*.action_date' => 'required|date',
                 'disciplinary_actions.*.details' => 'nullable|string',
 
                 'photo' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp|max:4096',
@@ -3779,18 +3935,23 @@ class EmployeeController extends Controller
                 $jobHistories = is_array($validated['job_histories'] ?? null) ? $validated['job_histories'] : [];
                 $jhRows = [];
                 $coreUpdates = [];
+                $presentJobHistoryTypes = [];
                 $authId = \Illuminate\Support\Facades\Auth::id();
                 $now = now();
 
                 foreach ($jobHistories as $jh) {
-                    if (empty($jh['event_type']) || empty($jh['event_date'])) {
+                    if (! is_array($jh) || empty($jh['event_type']) || ! $this->employeeJobHistoryRowHasContent($jh)) {
                         continue;
                     }
                     $type = $jh['event_type'];
-                    $date = $jh['event_date'];
+                    $presentJobHistoryTypes[$type] = true;
+                    $date = trim((string) ($jh['event_date'] ?? ''));
+                    $date = $date !== '' ? $date : null;
 
                     if ($type === 'joining') {
-                        $coreUpdates['joining_date'] = $date;
+                        if ($date) {
+                            $coreUpdates['joining_date'] = $date;
+                        }
                         if (! empty($jh['to_designation_id'])) {
                             $coreUpdates['joining_designation_id'] = $jh['to_designation_id'];
                         }
@@ -3798,14 +3959,28 @@ class EmployeeController extends Controller
                             $coreUpdates['current_branch_id'] = $jh['to_branch_id'];
                         }
                     } elseif ($type === 'confirmation') {
-                        $coreUpdates['confirmation_date'] = $date;
+                        if ($date) {
+                            $coreUpdates['confirmation_date'] = $date;
+                        }
                     } elseif ($type === 'left') {
-                        $coreUpdates['dropout_date'] = $date;
-                        $coreUpdates['resignation_date'] = $date;
+                        if ($date) {
+                            $coreUpdates['dropout_date'] = $date;
+                            $coreUpdates['resignation_date'] = $date;
+                        }
                         $reason = trim((string) ($jh['remarks'] ?? ''));
-                        $coreUpdates['dropout_reason'] = $reason !== '' ? $reason : 'Voluntary';
+                        $coreUpdates['dropout_reason'] = $reason !== '' ? $reason : null;
+                        $cause = trim((string) ($jh['cause_of_separation'] ?? ''));
+                        $coreUpdates['cause_of_separation'] = $cause !== '' ? $cause : null;
                     } elseif ($type === 'final_payment') {
-                        $coreUpdates['final_payment_date'] = $date;
+                        if ($date) {
+                            $coreUpdates['final_payment_date'] = $date;
+                        }
+                        $amount = $jh['amount_received'] ?? null;
+                        $coreUpdates['final_payment_amount'] = $amount === '' || $amount === null ? null : $amount;
+                    }
+
+                    if ($date === null) {
+                        continue;
                     }
 
                     $jhRows[] = [
@@ -3817,13 +3992,60 @@ class EmployeeController extends Controller
                         'from_branch_id' => ! empty($jh['from_branch_id']) ? $jh['from_branch_id'] : null,
                         'to_branch_id' => ! empty($jh['to_branch_id']) ? $jh['to_branch_id'] : null,
                         'remarks' => $type === 'left'
-                            ? (trim((string) ($jh['remarks'] ?? '')) !== '' ? trim((string) $jh['remarks']) : 'Voluntary')
+                            ? (trim((string) ($jh['remarks'] ?? '')) !== '' ? trim((string) $jh['remarks']) : null)
                             : ($jh['remarks'] ?? null),
+                        'cause_of_separation' => $type === 'left'
+                            ? (trim((string) ($jh['cause_of_separation'] ?? '')) !== '' ? trim((string) $jh['cause_of_separation']) : null)
+                            : null,
+                        'amount_received' => $type === 'final_payment' && ($jh['amount_received'] ?? '') !== '' && $jh['amount_received'] !== null
+                            ? $jh['amount_received']
+                            : null,
                         'is_manual' => true,
                         'created_by' => $authId,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];
+                }
+
+                $datedHistories = array_values(array_filter(
+                    is_array($jobHistories) ? $jobHistories : [],
+                    fn ($jh) => is_array($jh)
+                        && $this->employeeJobHistoryRowHasContent($jh)
+                        && trim((string) ($jh['event_date'] ?? '')) !== ''
+                ));
+                usort($datedHistories, fn ($a, $b) => strcmp((string) ($a['event_date'] ?? ''), (string) ($b['event_date'] ?? '')));
+                foreach ($datedHistories as $jh) {
+                    $type = (string) ($jh['event_type'] ?? '');
+                    if ($type === 'left' || $type === 'final_payment') {
+                        continue;
+                    }
+                    if ($type === 'joining' && ! empty($jh['to_branch_id'])) {
+                        $coreUpdates['current_branch_id'] = $jh['to_branch_id'];
+                    }
+                    if ($type === 'transfer' && ! empty($jh['to_branch_id'])) {
+                        if (! empty($coreUpdates['current_branch_id'])) {
+                            $coreUpdates['last_branch_id'] = $coreUpdates['current_branch_id'];
+                        } elseif (! empty($jh['from_branch_id'])) {
+                            $coreUpdates['last_branch_id'] = $jh['from_branch_id'];
+                        }
+                        $coreUpdates['current_branch_id'] = $jh['to_branch_id'];
+                    }
+                    if (in_array($type, ['joining', 'confirmation', 'promotion', 'demotion'], true) && ! empty($jh['to_designation_id'])) {
+                        $coreUpdates['last_designation_id'] = $jh['to_designation_id'];
+                        $coreUpdates['designation_id'] = $jh['to_designation_id'];
+                    }
+                }
+
+                if (! isset($presentJobHistoryTypes['left'])) {
+                    $coreUpdates['dropout_date'] = null;
+                    $coreUpdates['resignation_date'] = null;
+                    $coreUpdates['dropout_reason'] = null;
+                    $coreUpdates['cause_of_separation'] = null;
+                }
+
+                if (! isset($presentJobHistoryTypes['final_payment'])) {
+                    $coreUpdates['final_payment_date'] = null;
+                    $coreUpdates['final_payment_amount'] = null;
                 }
 
                 if (! empty($coreUpdates)) {
@@ -4007,6 +4229,8 @@ class EmployeeController extends Controller
                 'from_branch_name' => $mh->fromBranch?->name,
                 'to_branch_name' => $mh->toBranch?->name,
                 'remarks' => $mh->remarks,
+                'cause_of_separation' => $mh->cause_of_separation,
+                'amount_received' => $mh->amount_received,
                 'is_manual' => true,
             ];
             $manualTypes[$mh->event_type] = true;
@@ -4035,23 +4259,25 @@ class EmployeeController extends Controller
             ];
         }
 
-        if (! isset($manualTypes['left']) && ($employee->resignation_date || $employee->dropout_date)) {
+        if (! isset($manualTypes['left']) && ($employee->resignation_date || $employee->dropout_date || $employee->dropout_reason || $employee->cause_of_separation)) {
             $jobHistoryTimeline[] = [
                 'id' => 'auto-left',
                 'event_type' => 'left',
                 'event_date' => ($employee->resignation_date ?? $employee->dropout_date)?->format('Y-m-d'),
                 'from_branch_name' => $employee->branch?->name,
-                'remarks' => $employee->dropout_reason ?: 'Voluntary',
+                'remarks' => $employee->dropout_reason,
+                'cause_of_separation' => $employee->cause_of_separation,
                 'is_manual' => false,
             ];
         }
 
-        if (! isset($manualTypes['final_payment']) && $employee->final_payment_date) {
+        if (! isset($manualTypes['final_payment']) && ($employee->final_payment_date || $employee->final_payment_amount !== null)) {
             $jobHistoryTimeline[] = [
                 'id' => 'auto-final_payment',
                 'event_type' => 'final_payment',
-                'event_date' => $employee->final_payment_date->format('Y-m-d'),
+                'event_date' => $employee->final_payment_date?->format('Y-m-d'),
                 'remarks' => 'Final Payment Settled',
+                'amount_received' => $employee->final_payment_amount,
                 'is_manual' => false,
             ];
         }

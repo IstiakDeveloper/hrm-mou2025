@@ -22,13 +22,34 @@ import { DISPLAY_DATE_FMT } from "@/lib/display-date";
 
 const PARSE_FORMATS = [DISPLAY_DATE_FMT, "dd-MM-yyyy", "yyyy-MM-dd"] as const;
 
+/** 05081999 → 05/08/1999 while typing. */
+function maskDdMmYyyy(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function compactDigitsToDisplayDate(digits: string): string | null {
+  if (!/^\d{8}$/.test(digits)) return null;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
 function tryParseDateString(value: string): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  for (const fmt of PARSE_FORMATS) {
-    if (!isMatch(trimmed, fmt)) continue;
-    const parsed = parse(trimmed, fmt, new Date());
-    if (isValid(parsed)) return parsed;
+
+  const compact = compactDigitsToDisplayDate(trimmed.replace(/\D/g, ""));
+  const candidates = compact && compact !== trimmed ? [trimmed, compact] : [trimmed];
+
+  for (const candidate of candidates) {
+    for (const fmt of PARSE_FORMATS) {
+      if (!isMatch(candidate, fmt)) continue;
+      const parsed = parse(candidate, fmt, new Date());
+      if (!isValid(parsed)) continue;
+      if (format(parsed, fmt) !== candidate) continue;
+      return parsed;
+    }
   }
   return null;
 }
@@ -123,14 +144,29 @@ export function DatePicker({
       <div className="relative w-full">
         <Input
           id={id}
+          lang="en-GB"
+          autoComplete="off"
+          inputMode="numeric"
+          maxLength={10}
           value={inputValue}
           placeholder={placeholderText}
           aria-invalid={invalid}
           disabled={disabled}
           className={cn("pr-10 h-8.5 text-xs bg-white", invalid && "border-destructive", className)}
           onChange={(e) => {
-            setInputValue(e.target.value);
+            const masked = maskDdMmYyyy(e.target.value);
+            setInputValue(masked);
             setInvalid(false);
+            if (!masked) {
+              if (selected) onSelect(null);
+              return;
+            }
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(masked)) {
+              const parsed = tryParseDateString(masked);
+              if (parsed && isInRange(parsed)) {
+                onSelect(parsed);
+              }
+            }
           }}
           onBlur={commitInput}
           onKeyDown={(e) => {

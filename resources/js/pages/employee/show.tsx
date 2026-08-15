@@ -116,7 +116,7 @@ interface Employee extends EmployeeNameFields {
     id: number; employee_id: string; email: string; phone: string; gender: string; blood_group: string; date_of_birth: string; joining_date: string; confirmation_date?: string; address: string; photo: string | null; nid: string; nid_number?: string; smart_card_number?: string; birth_registration_number?: string; emergency_contact: string;
     employee_type?: EmployeeType | null;
     employeeType?: EmployeeType | null;
-    department: Department; designation: Designation; branch: Branch; manager: Manager | null; status: string; resignation_date?: string; dropout_date?: string; dropout_reason?: string; final_payment_date?: string; last_promotion_date?: string; probation_period_days?: number | null; total_service_length_days?: number | null; service_length_from_confirmation_days?: number | null; staff_age_years?: number | null; length_of_service_on_last_promotion_days?: number | null; joining_designation_name?: string; last_designation_name?: string; last_branch_name?: string; pin?: string; name_en?: string; full_name_en?: string | null; name_bn?: string; email_id?: string;
+    department: Department; designation: Designation; branch: Branch; manager: Manager | null; status: string; resignation_date?: string; dropout_date?: string; dropout_reason?: string; cause_of_separation?: string; final_payment_date?: string; final_payment_amount?: string | number | null; last_promotion_date?: string; probation_period_days?: number | null; total_service_length_days?: number | null; service_length_from_confirmation_days?: number | null; staff_age_years?: number | null; length_of_service_on_last_promotion_days?: number | null; joining_designation_name?: string; last_designation_name?: string; last_branch_name?: string; pin?: string; name_en?: string; full_name_en?: string | null; name_bn?: string; email_id?: string;
 
     religion?: string; marital_status?: string; spouse_name?: string; spouse_mobile?: string; birth_date_certificate?: string; birth_date_original?: string;
     fathers_name?: string; fathers_mobile?: string; mothers_name?: string; mothers_mobile?: string;
@@ -147,6 +147,8 @@ export type JobHistoryTimelineItem = {
     from_branch_name?: string | null;
     to_branch_name?: string | null;
     remarks?: string | null;
+    cause_of_separation?: string | null;
+    amount_received?: string | number | null;
     order_no?: string | null;
     transfer_id?: number | null;
     promotion_id?: number | null;
@@ -319,7 +321,13 @@ export default function EmployeeShow({
     upcomingEvents = [],
     disciplinaryActions = [],
 }: EmployeeShowProps) {
-    const isDropout = !!employee.dropout_date;
+    const isDropout = !!(
+        employee.dropout_date
+        || employee.dropout_reason
+        || employee.cause_of_separation
+        || employee.final_payment_date
+        || (employee.final_payment_amount != null && employee.final_payment_amount !== '')
+    );
 
     const displayName = employeeDisplayName(employee, String(employee.pin || employee.employee_id || 'Employee'));
 
@@ -619,7 +627,9 @@ export default function EmployeeShow({
                                             <DataItem label="Status" value={<span className="text-rose-700 font-black">Dropout / Terminated</span>} />
                                             <DataItem label="Dropout Date" value={employee.dropout_date ? format(new Date(employee.dropout_date), 'PP') : ''} />
                                             <DataItem label="Final Payment Date" value={employee.final_payment_date ? format(new Date(employee.final_payment_date), 'PP') : ''} />
-                                            <DataItem label="Dropout Reason" value={employee.dropout_reason} />
+                                            <DataItem label="Amount Received" value={employee.final_payment_amount != null && employee.final_payment_amount !== '' ? formatTakaWithSymbol(employee.final_payment_amount) : ''} />
+                                            <DataItem label="Type of Separation" value={employee.dropout_reason} />
+                                            <DataItem label="Cause of Separation" value={employee.cause_of_separation} />
                                         </div>
                                     </Section>
                                 )}
@@ -749,7 +759,19 @@ export default function EmployeeShow({
                                                             {item.remarks && (
                                                                 <>
                                                                     <span className="text-slate-400">|</span>
-                                                                    <span className="italic text-slate-800">{item.remarks}</span>
+                                                                    <span className="italic text-slate-800">{item.event_type === 'left' ? `Type: ${item.remarks}` : item.remarks}</span>
+                                                                </>
+                                                            )}
+                                                            {item.event_type === 'left' && item.cause_of_separation && (
+                                                                <>
+                                                                    <span className="text-slate-400">|</span>
+                                                                    <span className="italic text-slate-800">Cause: {item.cause_of_separation}</span>
+                                                                </>
+                                                            )}
+                                                            {item.event_type === 'final_payment' && item.amount_received != null && item.amount_received !== '' && (
+                                                                <>
+                                                                    <span className="text-slate-400">|</span>
+                                                                    <span className="italic text-slate-800">Amount: {formatTakaWithSymbol(item.amount_received)}</span>
                                                                 </>
                                                             )}
                                                         </div>

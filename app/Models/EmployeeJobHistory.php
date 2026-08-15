@@ -18,12 +18,15 @@ class EmployeeJobHistory extends Model
         'from_branch_id',
         'to_branch_id',
         'remarks',
+        'cause_of_separation',
+        'amount_received',
         'is_manual',
         'created_by',
     ];
 
     protected $casts = [
         'event_date' => 'date',
+        'amount_received' => 'decimal:2',
         'is_manual' => 'boolean',
     ];
 

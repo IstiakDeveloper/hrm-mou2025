@@ -10,21 +10,8 @@ class NotificationController extends Controller
     {
         $user = auth()->user();
 
-        // Debug user ID to verify
-        info('Current user ID: '.$user->id);
-
-        // Get all notifications without pagination first to check if they exist
-        $allNotifications = $user->notifications()->get();
-        info('Total notifications found: '.$allNotifications->count());
-
-        // Then get the paginated version
-        $notifications = $user->notifications()->paginate(15);
-
-        // Debug pagination info
-        info('Paginated notifications count: '.$notifications->count());
-
         return Inertia::render('notifications/index', [
-            'notifications' => $notifications,
+            'notifications' => $user->notifications()->paginate(15),
         ]);
     }
 
@@ -37,7 +24,9 @@ class NotificationController extends Controller
 
     public function getLatestNotifications()
     {
-        $notifications = auth()->user()->notifications()
+        $user = auth()->user();
+
+        $notifications = $user->notifications()
             ->latest()
             ->limit(10)
             ->get()
@@ -59,6 +48,7 @@ class NotificationController extends Controller
 
         return response()->json([
             'notifications' => $notifications,
+            'count' => $user->unreadNotifications()->count(),
         ]);
     }
 

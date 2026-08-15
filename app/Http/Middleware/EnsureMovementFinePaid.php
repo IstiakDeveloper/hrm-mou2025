@@ -28,6 +28,11 @@ class EnsureMovementFinePaid
             return $next($request);
         }
 
+        // JSON bell polling must stay cheap; overdue fines are calculated by the daily scheduler.
+        if ($request->is('notifications', 'notifications/*')) {
+            return $next($request);
+        }
+
         // Allowed routes when locked for fine payment
         $allowedRouteNames = [
             'movement.penalty.payment',
@@ -37,13 +42,6 @@ class EnsureMovementFinePaid
 
         if (in_array($request->route()?->getName(), $allowedRouteNames, true)) {
             return $next($request);
-        }
-
-        // Auto sync overdue movements if needed
-        try {
-            \Illuminate\Support\Facades\Artisan::call('movements:check-overdue');
-        } catch (\Throwable $e) {
-            // Ignore error if command fails
         }
 
         // Check if this user or employee has an active unpaid/pending/rejected movement penalty

@@ -43,6 +43,13 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        if ($this->isLightweightJsonRequest($request)) {
+            return [
+                ...parent::share($request),
+                'csrf_token' => csrf_token(),
+            ];
+        }
+
         /** @var User|null $user */
         $user = Auth::user();
         $roleColumns = Schema::hasTable('roles') && Schema::hasColumn('roles', 'blocked_sections')
@@ -162,5 +169,13 @@ class HandleInertiaRequests extends Middleware
             ],
             'assetFinancialYear' => $assetFinancialYear,
         ];
+    }
+
+    /**
+     * Bell polling hits web middleware on every tick. Skip shared Inertia queries there.
+     */
+    private function isLightweightJsonRequest(Request $request): bool
+    {
+        return $request->is('notifications', 'notifications/*');
     }
 }
