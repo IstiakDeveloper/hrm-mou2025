@@ -9,7 +9,7 @@ use App\Models\AttendanceSetting;
 use App\Models\Movement;
 use App\Models\MovementLogBook;
 use App\Models\MovementPenalty;
-use App\Models\User;
+use App\Services\MovementPenaltySyncService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -331,61 +331,11 @@ class MovementPenaltyController extends Controller
     /**
      * Admin sync method to calculate and generate penalties for all unclosed past movements.
      */
-    public function syncPenalties(Request $request)
+    public function syncPenalties(Request $request, MovementPenaltySyncService $syncService)
     {
         $this->authorizeAdmin($request);
 
-        $today = Carbon::today();
-        
-        // Find all active movements created before today (i.e. start date < today)
-        $overdueMovements = Movement::where('status', 'active')
-            ->where('from_datetime', '<', $today)
-            ->get();
-
-        $count = 0;
-
-        foreach ($overdueMovements as $movement) {
-            $startDate = Carbon::parse($movement->from_datetime)->startOfDay();
-            $totalOverdueDays = max(1, (int) $startDate->diffInDays($today));
-            $finePerDay = 20.00;
-
-            $approvedOverdueDays = (int) MovementPenalty::where('movement_id', $movement->id)
-                ->where('status', 'approved')
-                ->sum('overdue_days');
-
-            $unpaidOverdueDays = max(0, $totalOverdueDays - $approvedOverdueDays);
-
-            if ($unpaidOverdueDays <= 0) {
-                continue;
-            }
-
-            $totalFine = $unpaidOverdueDays * $finePerDay;
-            $user = User::where('employee_id', $movement->employee_id)->first();
-
-            $activePenalty = MovementPenalty::where('movement_id', $movement->id)
-                ->whereIn('status', ['unpaid', 'pending_verification', 'rejected'])
-                ->first();
-
-            if ($activePenalty) {
-                $activePenalty->update([
-                    'overdue_days' => $unpaidOverdueDays,
-                    'fine_per_day' => $finePerDay,
-                    'total_fine' => $totalFine,
-                ]);
-            } else {
-                MovementPenalty::create([
-                    'movement_id' => $movement->id,
-                    'employee_id' => $movement->employee_id,
-                    'user_id' => $user?->id,
-                    'overdue_days' => $unpaidOverdueDays,
-                    'fine_per_day' => $finePerDay,
-                    'total_fine' => $totalFine,
-                    'status' => 'unpaid',
-                ]);
-            }
-
-            $count++;
-        }
+        $count = $syncService->sync();
 
         return redirect()->back()->with('success', "Overdue penalties synced successfully! {$count} overdue movement(s) processed.");
     }
