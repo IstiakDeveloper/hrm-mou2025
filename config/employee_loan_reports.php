@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'company_name' => env('EMPLOYEE_LOAN_REPORT_COMPANY', env('PAYROLL_REPORT_COMPANY', env('APP_NAME', 'Organization'))),
+    'company_name' => env('EMPLOYEE_LOAN_REPORT_COMPANY') ?: config('payroll_reports.company_name', env('APP_NAME', 'Mousumi')),
 
     'reports' => [
         'loan-ledger' => [

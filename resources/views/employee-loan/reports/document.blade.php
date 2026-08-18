@@ -5,6 +5,14 @@
     <meta charset="UTF-8">
     <title>{{ $title }}</title>
     @include('payroll.reports.partials.styles')
+    @if (($orientation ?? 'portrait') !== 'landscape')
+        <style>
+            @page {
+                size: A4 portrait;
+                margin: 8mm 7mm;
+            }
+        </style>
+    @endif
     @if (!empty($printMode))
         <script>
             window.addEventListener('load', () => window.print());
@@ -12,7 +20,7 @@
     @endif
 </head>
 
-<body>
+<body class="{{ ($orientation ?? 'portrait') === 'landscape' ? 'report-landscape' : 'report-portrait' }}">
     <div class="report-wrap">
         @if (!empty($printMode))
             <p class="no-print no-print-hint">Use your browser print dialog. For PDF download, use the PDF button on the report page.</p>

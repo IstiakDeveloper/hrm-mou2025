@@ -220,7 +220,7 @@ class AttendanceExportController extends Controller
                 'employees' => $employeesWithSummary,
                 'month' => $monthLabel,
                 'daysInMonth' => $daysInMonth,
-                'companyName' => "HRM Mousumi",
+                'companyName' => 'Mousumi',
                 'generatedAt' => now()->format('d-m-Y H:i'),
                 'generatedBy' => $user->name,
                 'branchName' => $branchName,

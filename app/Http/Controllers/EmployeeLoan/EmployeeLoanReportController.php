@@ -142,10 +142,6 @@ class EmployeeLoanReportController extends Controller
         $template = $payload['template'] ?? 'loan-table';
         $colCount = count($payload['columns'] ?? $payload['group_columns'] ?? []);
 
-        if ($template === 'loan-installment-ledger') {
-            $colCount = 14;
-        }
-
         if ($template === 'loan-statement-employee') {
             $colCount = 19;
         }
@@ -156,7 +152,9 @@ class EmployeeLoanReportController extends Controller
             'periodLabel' => $this->reports->periodLabel($filters, $config),
             'generatedAt' => now()->format('d M Y H:i'),
             'payload' => $payload,
-            'orientation' => $colCount > 8 ? 'landscape' : 'portrait',
+            'orientation' => $template === 'loan-installment-ledger'
+                ? 'portrait'
+                : ($colCount > 8 ? 'landscape' : 'portrait'),
         ];
     }
 

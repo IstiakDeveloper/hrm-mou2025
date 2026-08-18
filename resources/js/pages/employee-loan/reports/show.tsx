@@ -17,6 +17,10 @@ import {
     LoanInstallmentLedgerTable,
     type LoanInstallmentLedgerRow,
 } from '@/components/employee-loan/LoanInstallmentLedgerTable';
+import {
+    LoanLedgerInfoHeader,
+    type LoanLedgerInfoHeaderData,
+} from '@/components/employee-loan/LoanLedgerInfoHeader';
 import { employeeLoanReportPath } from '@/lib/employee-loan-reports';
 import { Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 import type { SharedData } from '@/types';
@@ -33,6 +37,7 @@ type LoanLedgerSection = {
     loan_number: string;
     loan_type?: string;
     status?: string;
+    header?: LoanLedgerInfoHeaderData;
     rows: LoanInstallmentLedgerRow[];
 };
 
@@ -245,13 +250,7 @@ export default function EmployeeLoanReportShow({
                                 {((payload.sections as LoanLedgerSection[] | undefined) ?? []).length > 0 ? (
                                     (payload.sections as LoanLedgerSection[]).map((section) => (
                                         <div key={section.loan_number} className="space-y-2">
-                                            <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2">
-                                                <p className="text-sm font-semibold text-zinc-900">{section.title}</p>
-                                                <p className="text-xs text-zinc-500">
-                                                    {section.loan_type}
-                                                    {section.status ? ` · ${section.status}` : ''}
-                                                </p>
-                                            </div>
+                                            <LoanLedgerInfoHeader header={section.header} />
                                             <LoanInstallmentLedgerTable
                                                 embedded
                                                 rows={section.rows}

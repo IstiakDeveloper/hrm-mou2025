@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title inertia>{{ config('app.name', 'HRM Mousumi') }}</title>
+    <title inertia>{{ config('app.name', 'Mousumi') }}</title>
 
     <link rel="icon" href="{{ asset('fav.png') }}" type="image/png">
     <link rel="manifest" href="{{ asset('manifest.json') }}">

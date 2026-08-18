@@ -78,6 +78,12 @@ interface Designation {
     name: string;
 }
 
+interface Project {
+    id: number;
+    name: string;
+    code?: string | null;
+}
+
 interface Branch {
     id: number;
     name: string;
@@ -115,6 +121,7 @@ interface EmployeeIndexProps {
     branches: Branch[];
     employee_types: EmployeeTypeOption[];
     designations: Designation[];
+    projects?: Project[];
     export_columns: EmployeeExportColumn[];
     filters: {
         search?: string;
@@ -128,6 +135,8 @@ interface EmployeeIndexProps {
         employee_type_ids?: number[] | string[];
         designation_id?: string;
         designation_ids?: number[] | string[];
+        project_id?: string;
+        project_ids?: number[] | string[];
         gender?: string;
         genders?: string[];
         per_page?: string;
@@ -193,6 +202,7 @@ export default function EmployeeIndex({
     branches,
     employee_types,
     designations,
+    projects = [],
     export_columns,
     filters,
     success,
@@ -204,6 +214,7 @@ export default function EmployeeIndex({
         statuses: normalizeStringFilter(filters.statuses, filters.status),
         employee_type_ids: normalizeIdFilter(filters.employee_type_ids, filters.employee_type_id),
         designation_ids: normalizeIdFilter(filters.designation_ids, filters.designation_id),
+        project_ids: normalizeIdFilter(filters.project_ids, filters.project_id),
         genders: normalizeStringFilter(filters.genders, filters.gender),
         per_page: filters.per_page || '100',
         sort_by: filters.sort_by || 'organogram',
@@ -236,6 +247,7 @@ export default function EmployeeIndex({
         data.statuses.length > 0 ||
         data.employee_type_ids.length > 0 ||
         data.designation_ids.length > 0 ||
+        data.project_ids.length > 0 ||
         data.genders.length > 0
     );
 
@@ -246,6 +258,7 @@ export default function EmployeeIndex({
             normalizeStringFilter(filters.statuses, filters.status).length > 0 ||
             normalizeIdFilter(filters.employee_type_ids, filters.employee_type_id).length > 0 ||
             normalizeIdFilter(filters.designation_ids, filters.designation_id).length > 0 ||
+            normalizeIdFilter(filters.project_ids, filters.project_id).length > 0 ||
             normalizeStringFilter(filters.genders, filters.gender).length > 0
         ),
     );
@@ -258,6 +271,7 @@ export default function EmployeeIndex({
         if (merged.statuses.length > 0) params.statuses = merged.statuses;
         if (merged.employee_type_ids.length > 0) params.employee_type_ids = merged.employee_type_ids;
         if (merged.designation_ids.length > 0) params.designation_ids = merged.designation_ids;
+        if (merged.project_ids.length > 0) params.project_ids = merged.project_ids;
         if (merged.genders.length > 0) params.genders = merged.genders;
         if (merged.per_page && merged.per_page !== '100') params.per_page = merged.per_page;
         if (merged.sort_by && merged.sort_by !== 'organogram') params.sort_by = merged.sort_by;
@@ -353,6 +367,7 @@ export default function EmployeeIndex({
             statuses: [],
             employee_type_ids: [],
             designation_ids: [],
+            project_ids: [],
             genders: [],
         });
     };
@@ -751,7 +766,7 @@ export default function EmployeeIndex({
                         </div>
 
                         {showFilters && (
-                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
                                 <div>
                                     <MultiSelectFilter
                                         values={data.department_ids}
@@ -799,6 +814,23 @@ export default function EmployeeIndex({
                                         ]}
                                         placeholder="Designation"
                                         allLabel="All Designations"
+                                        disabled={processing}
+                                    />
+                                </div>
+
+                                <div>
+                                    <MultiSelectFilter
+                                        values={data.project_ids}
+                                        onChange={(values) => applyFilters({ project_ids: values })}
+                                        items={[
+                                            NOT_ASSIGNED_ITEM,
+                                            ...(projects ?? []).map((project) => ({
+                                                value: String(project.id),
+                                                label: project.code ? `${project.code} — ${project.name}` : project.name,
+                                            })),
+                                        ]}
+                                        placeholder="Project"
+                                        allLabel="All Projects"
                                         disabled={processing}
                                     />
                                 </div>

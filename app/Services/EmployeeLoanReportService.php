@@ -95,7 +95,17 @@ class EmployeeLoanReportService
     protected function buildLoanLedger(array $filters): array
     {
         $loans = $this->loanQuery($filters)
-            ->with(['installments', 'transactions', 'employee.branch'])
+            ->with([
+                'installments',
+                'transactions',
+                'policy',
+                'application',
+                'employee.branch',
+                'employee.department',
+                'employee.designation',
+                'employee.program',
+                'employee.project',
+            ])
             ->orderBy('employee_id')
             ->orderBy('loan_number')
             ->get();
@@ -104,9 +114,10 @@ class EmployeeLoanReportService
         $rowCount = 0;
 
         foreach ($loans as $loan) {
-            $schedule = $this->loanService->breakdownForLoan($loan, true)['schedule'];
-            $rows = array_map(fn (array $installment) => $this->mapInstallmentLedgerRow($installment), $schedule);
+            $breakdown = $this->loanService->breakdownForLoan($loan, true);
+            $rows = array_map(fn (array $installment) => $this->mapInstallmentLedgerRow($installment), $breakdown['schedule']);
             $rowCount += count($rows);
+            $summary = $this->loanLedgerParticulars($loan, $breakdown);
 
             $sections[] = [
                 'title' => trim(sprintf(
@@ -121,6 +132,8 @@ class EmployeeLoanReportService
                 'employee_name' => $loan->employee?->name_en,
                 'branch' => $loan->employee?->branch?->name,
                 'status' => ucfirst($loan->status),
+                'header' => $this->loanLedgerInfoHeader($summary),
+                'summary' => $summary,
                 'rows' => $rows,
                 'totals' => $this->installmentLedgerTotals($rows),
             ];
@@ -134,6 +147,130 @@ class EmployeeLoanReportService
                 'loan_count' => count($sections),
             ],
         ];
+    }
+
+    /**
+     * Compact display values for the loan ledger particulars card.
+     *
+     * @param  array<string, mixed>  $breakdown
+     * @return array<string, string>
+     */
+    protected function loanLedgerParticulars(EmployeeLoan $loan, array $breakdown): array
+    {
+        $employee = $loan->employee;
+        $lastInstallment = $loan->installments->sortBy('installment_no')->last();
+        $closeDate = null;
+
+        if ($loan->status === 'completed') {
+            $lastPayment = $loan->transactions
+                ->filter(fn ($tx) => (float) $tx->credit_amount > 0)
+                ->sortByDesc(fn ($tx) => sprintf(
+                    '%s-%010d',
+                    $tx->transaction_date?->format('Y-m-d') ?? '',
+                    $tx->id
+                ))
+                ->first();
+            $closeDate = $lastPayment?->transaction_date ?? $loan->updated_at;
+        }
+
+        $policyLabel = $loan->policy
+            ? trim($loan->policy->code.' '.$loan->policy->name)
+            : null;
+
+        return [
+            'pin' => $this->ledgerHeaderValue($employee?->pin),
+            'name' => $this->ledgerHeaderValue($employee?->name_en),
+            'department' => $this->ledgerHeaderValue($employee?->department?->name),
+            'designation' => $this->ledgerHeaderValue($employee?->designation?->name),
+            'program' => $this->ledgerHeaderValue($employee?->program?->name),
+            'unit' => 'N/A',
+            'project' => $this->ledgerHeaderValue($employee?->project?->name),
+            'policy' => $this->ledgerHeaderValue($policyLabel),
+            'loan_cycle' => $this->ledgerHeaderValue($loan->application?->loan_cycle ?? 1),
+            'application_number' => $this->ledgerHeaderValue($loan->application?->application_number ?? $loan->reference_no),
+            'rate' => $this->ledgerHeaderValue($loan->interest_rate),
+            'installment_count' => $this->ledgerHeaderValue($loan->installment_count),
+            'install_start' => $this->ledgerHeaderValue($this->formatLedgerDate($loan->first_installment_date)),
+            'install_end' => $this->ledgerHeaderValue($this->formatLedgerDate($lastInstallment?->due_date)),
+            'disburse_date' => $this->ledgerHeaderValue($this->formatLedgerDate($loan->disbursement_date)),
+            'branch' => $this->ledgerHeaderValue($employee?->branch?->name),
+            'principal' => taka_fmt($loan->principal_amount),
+            'service_charge' => taka_fmt($breakdown['service_charge_amount'] ?? 0),
+            'total_payable' => taka_fmt($loan->total_payable),
+            'outstanding_principal' => taka_fmt($breakdown['outstanding_principal'] ?? 0),
+            'outstanding_service_charge' => taka_fmt($breakdown['outstanding_service_charge'] ?? 0),
+            'recovered_principal' => taka_fmt($breakdown['recovered_principal'] ?? 0),
+            'recovered_service_charge' => taka_fmt($breakdown['recovered_service_charge'] ?? 0),
+            'loan_close_date' => $this->ledgerHeaderValue($this->formatLedgerDate($closeDate)),
+            'loan_number' => $this->ledgerHeaderValue($loan->loan_number),
+            'loan_type' => $this->ledgerHeaderValue($loan->typeLabel()),
+            'status' => $this->ledgerHeaderValue(ucfirst($loan->status)),
+        ];
+    }
+
+    /**
+     * Same 3-column particulars used on Loan Register → Ledger.
+     *
+     * @param  array<string, string>  $p
+     * @return array{employee: list<array{label: string, value: string}>, policy: list<array{label: string, value: string}>, financial: list<array{label: string, value: string}>}
+     */
+    protected function loanLedgerInfoHeader(array $p): array
+    {
+        $row = fn (string $label, string $value) => [
+            'label' => $label,
+            'value' => $value,
+        ];
+
+        return [
+            'employee' => [
+                $row('Employee Id', $p['pin']),
+                $row('Employee Name', $p['name']),
+                $row('Department', $p['department']),
+                $row('Designation', $p['designation']),
+                $row('Program', $p['program']),
+                $row('Unit', $p['unit'] ?? 'N/A'),
+                $row('Project', $p['project']),
+            ],
+            'policy' => [
+                $row('Policy', $p['policy']),
+                $row('Loan Cycle', $p['loan_cycle']),
+                $row('Application No', $p['application_number']),
+                $row('Rate', $p['rate']),
+                $row('Total Install', $p['installment_count']),
+                $row('Install Start Date', $p['install_start']),
+                $row('Install End Date', $p['install_end']),
+            ],
+            'financial' => [
+                $row('Disburse Date', $p['disburse_date']),
+                $row('Disburse Branch', $p['branch']),
+                $row('Loan Amount (PR)', $p['principal']),
+                $row('Loan Amount (SC)', $p['service_charge']),
+                $row('Outstanding PR', $p['outstanding_principal']),
+                $row('Outstanding SC', $p['outstanding_service_charge']),
+                $row('Loan Amount (Total)', $p['total_payable']),
+                $row('Recovered PR', $p['recovered_principal']),
+                $row('Recovered SC', $p['recovered_service_charge']),
+                $row('Loan Close Date', $p['loan_close_date']),
+            ],
+        ];
+    }
+
+    protected function formatLedgerDate(mixed $date): ?string
+    {
+        if (! $date) {
+            return null;
+        }
+
+        return strtoupper(Carbon::parse($date)->format('d-M-Y'));
+    }
+
+    protected function ledgerHeaderValue(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        return (string) $value;
     }
 
     /**
@@ -169,6 +306,18 @@ class EmployeeLoanReportService
      */
     protected function installmentLedgerTotals(array $rows): array
     {
+        $balancePrincipal = 0.0;
+        $balanceService = 0.0;
+        $balanceTotal = 0.0;
+
+        foreach ($rows as $row) {
+            if (($row['status_label'] ?? '') === 'PAID') {
+                $balancePrincipal = (float) ($row['balance_principal'] ?? 0);
+                $balanceService = (float) ($row['balance_service_charge'] ?? 0);
+                $balanceTotal = (float) ($row['balance_total'] ?? 0);
+            }
+        }
+
         return [
             'principal_amount' => array_sum(array_map(fn (array $row) => (float) ($row['principal_amount'] ?? 0), $rows)),
             'service_charge_amount' => array_sum(array_map(fn (array $row) => (float) ($row['service_charge_amount'] ?? 0), $rows)),
@@ -176,9 +325,9 @@ class EmployeeLoanReportService
             'paid_principal_amount' => array_sum(array_map(fn (array $row) => (float) ($row['paid_principal_amount'] ?? 0), $rows)),
             'paid_service_charge_amount' => array_sum(array_map(fn (array $row) => (float) ($row['paid_service_charge_amount'] ?? 0), $rows)),
             'paid_amount' => array_sum(array_map(fn (array $row) => (float) ($row['paid_amount'] ?? 0), $rows)),
-            'balance_principal' => array_sum(array_map(fn (array $row) => (float) ($row['balance_principal'] ?? 0), $rows)),
-            'balance_service_charge' => array_sum(array_map(fn (array $row) => (float) ($row['balance_service_charge'] ?? 0), $rows)),
-            'balance_total' => array_sum(array_map(fn (array $row) => (float) ($row['balance_total'] ?? 0), $rows)),
+            'balance_principal' => $balancePrincipal,
+            'balance_service_charge' => $balanceService,
+            'balance_total' => $balanceTotal,
         ];
     }
 

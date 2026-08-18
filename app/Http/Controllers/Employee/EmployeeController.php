@@ -2127,6 +2127,7 @@ class EmployeeController extends Controller
         $employeeTypes = EmployeeType::query()->where('is_active', true)->orderBy('name')->get();
 
         $designations = Designation::query()->orderBy('name')->get(['id', 'name']);
+        $projects = Project::query()->orderBy('name')->get(['id', 'name', 'code']);
 
         return Inertia::render('employee/index', [
             'employees' => $employees,
@@ -2134,6 +2135,7 @@ class EmployeeController extends Controller
             'branches' => $branches,
             'employee_types' => $employeeTypes,
             'designations' => $designations,
+            'projects' => $projects,
             'export_columns' => array_map(
                 fn (array $column) => [
                     'key' => $column['key'],
@@ -2151,6 +2153,7 @@ class EmployeeController extends Controller
                     'statuses' => $this->resolveStringFilterValues($request, 'statuses', 'status'),
                     'employee_type_ids' => $this->resolveFilterValues($request, 'employee_type_ids', 'employee_type_id'),
                     'designation_ids' => $this->resolveFilterValues($request, 'designation_ids', 'designation_id'),
+                    'project_ids' => $this->resolveFilterValues($request, 'project_ids', 'project_id'),
                     'genders' => $this->resolveStringFilterValues($request, 'genders', 'gender'),
                 ]
             ),
@@ -2319,6 +2322,7 @@ class EmployeeController extends Controller
         $this->applyNullableIdFilter($query, $request, 'employees.current_branch_id', 'branch_ids', 'branch_id');
         $this->applyNullableIdFilter($query, $request, 'employees.employee_type_id', 'employee_type_ids', 'employee_type_id');
         $this->applyNullableIdFilter($query, $request, 'employees.designation_id', 'designation_ids', 'designation_id');
+        $this->applyNullableIdFilter($query, $request, 'employees.project_id', 'project_ids', 'project_id');
 
         $statuses = $this->resolveStringFilterValues($request, 'statuses', 'status');
         if ($statuses !== []) {
