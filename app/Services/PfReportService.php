@@ -73,14 +73,14 @@ class PfReportService
             return 'Interest year '.($filters['year'] ?: date('Y'));
         }
 
-        if (in_array($report, ['pf_transaction_register', 'pf_refund_register', 'pf_withdrawal_register', 'pf_ledger'], true)) {
+        if (in_array($report, ['pf_transaction_register', 'pf_refund_register', 'pf_withdrawal_register'], true)) {
             $from = $filters['date_from'] ?: '—';
             $to = $filters['date_to'] ?: '—';
 
             return "From {$from} to {$to}";
         }
 
-        if (in_array($report, ['pf_balance_by_branch', 'pf_balance_register', 'pf_balance_register_details'], true)) {
+        if (in_array($report, ['pf_ledger', 'pf_balance_by_branch', 'pf_balance_register', 'pf_balance_register_details'], true)) {
             $end = $filters['date_to'] ?: now()->toDateString();
 
             return 'As of '.Carbon::parse($end)->format('d M Y');
@@ -214,10 +214,9 @@ class PfReportService
     protected function buildPfLedger(array $filters): array
     {
         $employeeId = (int) $filters['employee_id'];
-        $from = $filters['date_from'] ? Carbon::parse($filters['date_from']) : null;
-        $to = $filters['date_to'] ? Carbon::parse($filters['date_to']) : null;
+        $to = $filters['date_to'] ? Carbon::parse($filters['date_to']) : Carbon::today();
 
-        $ledger = $this->employeeLedger($employeeId, $from, $to);
+        $ledger = $this->employeeLedger($employeeId, null, $to);
         $employee = $ledger['employee'];
         $employee->loadSum(['pfTransactions as own_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employee_contribution')
             ->loadSum(['pfTransactions as org_contribution' => fn ($q) => $q->where('transaction_type', '!=', EmployeeProvidentFundService::TYPE_WITHDRAWAL)], 'employer_contribution');

@@ -68,7 +68,9 @@ class GratuityReportService
         }
 
         if ($report === 'gratuity_ledger') {
-            return 'All time · As of '.Carbon::today()->format('d M Y');
+            $end = $filters['date_to'] ?: Carbon::today()->toDateString();
+
+            return 'As of '.Carbon::parse($end)->format('d M Y');
         }
 
         $asOf = $filters['as_of'] ?: date('Y-m-d');
@@ -82,7 +84,7 @@ class GratuityReportService
      */
     protected function buildGratuityLedger(array $filters): array
     {
-        $asOf = Carbon::today();
+        $asOf = $filters['date_to'] ? Carbon::parse($filters['date_to']) : Carbon::today();
 
         $employees = Employee::query()
             ->with(['branch:id,name', 'department:id,name', 'designation:id,name', 'salaryStep:id,basic_salary'])
@@ -100,6 +102,12 @@ class GratuityReportService
             ? collect()
             : EmployeeGratuityPayment::query()
                 ->whereIn('employee_id', $employeeIds)
+                ->where(function ($q) use ($asOf) {
+                    $q->whereDate('payment_date', '<=', $asOf)
+                        ->orWhere(function ($q2) use ($asOf) {
+                            $q2->whereNull('payment_date')->whereDate('created_at', '<=', $asOf);
+                        });
+                })
                 ->orderBy('payment_date')
                 ->orderBy('id')
                 ->get()

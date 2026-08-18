@@ -15,7 +15,6 @@ import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader'
 import { WordTableReport } from '@/components/reports/WordTableReport';
 import { gratuityReportPath } from '@/lib/gratuity-reports';
 import { formatTakaWhole } from '@/lib/taka-format';
-import { staffFundPath } from '@/lib/staff-fund-nav';
 import { Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 
 type ReportMeta = {
@@ -76,6 +75,7 @@ export default function GratuityReportShow({
         return {
             asOf: f.includes('as_of'),
             dateRange: f.includes('date_from'),
+            endDate: f.includes('date_to') && !f.includes('date_from'),
             employee: f.includes('employee_id'),
             eligibility: f.includes('eligibility'),
             paymentStatus: f.includes('payment_status'),
@@ -112,15 +112,18 @@ export default function GratuityReportShow({
 
     const query = useMemo(() => {
         const p = new URLSearchParams();
-        Object.entries(filters).forEach(([k, v]) => {
-            if (v) p.set(k, v);
+        report.filters.forEach((key) => {
+            const value = filters[key];
+            if (value) {
+                p.set(key, value);
+            }
         });
         return p.toString();
-    }, [filters]);
+    }, [filters, report.filters]);
 
-    const printUrl = `${staffFundPath(`/gratuity/reports/${report.slug}/print`)}?${query}`;
-    const pdfUrl = `${staffFundPath(`/gratuity/reports/${report.slug}/pdf`)}?${query}`;
-    const excelUrl = `${staffFundPath(`/gratuity/reports/${report.slug}/excel`)}?${query}`;
+    const printUrl = `${route('gratuity.reports.print', report.slug)}?${query}`;
+    const pdfUrl = `${route('gratuity.reports.pdf', report.slug)}?${query}`;
+    const excelUrl = `${route('gratuity.reports.excel', report.slug)}?${query}`;
 
     return (
         <Layout>
@@ -163,6 +166,16 @@ export default function GratuityReportShow({
                                             className="h-10 border-emerald-200 bg-white"
                                             value={filters.as_of}
                                             onChange={(e) => setFilter('as_of', e.target.value)}
+                                        />
+                                    </PayrollField>
+                                )}
+                                {show.endDate && (
+                                    <PayrollField label="End date" required>
+                                        <Input
+                                            type="date"
+                                            className="h-10 border-emerald-200 bg-white"
+                                            value={filters.date_to}
+                                            onChange={(e) => setFilter('date_to', e.target.value)}
                                         />
                                     </PayrollField>
                                 )}

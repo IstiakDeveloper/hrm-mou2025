@@ -18,7 +18,6 @@ import { ReportDocumentHeader } from '@/components/reports/ReportDocumentHeader'
 import { WordTableReport } from '@/components/reports/WordTableReport';
 import { formatPfAmount } from '@/lib/pf-format';
 import { pfReportPath } from '@/lib/pf-reports';
-import { staffFundPath } from '@/lib/staff-fund-nav';
 import { Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
 import type { SharedData } from '@/types';
 
@@ -96,9 +95,9 @@ export default function PfReportShow({
         return p.toString();
     }, [filters]);
 
-    const printUrl = `${staffFundPath(`/provident-fund/reports/${report.slug}/print`)}?${query}`;
-    const pdfUrl = `${staffFundPath(`/provident-fund/reports/${report.slug}/pdf`)}?${query}`;
-    const excelUrl = `${staffFundPath(`/provident-fund/reports/${report.slug}/excel`)}?${query}`;
+    const printUrl = `${route('provident-fund.reports.print', report.slug)}?${query}`;
+    const pdfUrl = `${route('provident-fund.reports.pdf', report.slug)}?${query}`;
+    const excelUrl = `${route('provident-fund.reports.excel', report.slug)}?${query}`;
 
     const txTypeItems = [...TX_TYPE_ITEMS, ...transactionTypeOptions.map((o) => ({ value: o.value, label: o.label }))];
 

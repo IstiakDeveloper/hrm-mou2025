@@ -37,11 +37,16 @@ class GratuityReportController extends Controller
             $needsAsOf = in_array('as_of', $config['filters'] ?? [], true);
             $needsRange = in_array('date_from', $config['filters'] ?? [], true)
                 && ! in_array('as_of', $config['filters'] ?? [], true);
+            $needsEndDate = in_array('date_to', $config['filters'] ?? [], true)
+                && ! in_array('date_from', $config['filters'] ?? [], true)
+                && ! $needsAsOf;
 
             if ($needsEmployee && ! $filters['employee_id']) {
                 $error = 'Please select an employee.';
             } elseif ($needsAsOf && ! $filters['as_of']) {
                 $error = 'Please select an as-of date.';
+            } elseif ($needsEndDate && ! $filters['date_to']) {
+                $error = 'Please select an end date.';
             } elseif ($needsRange && ! $filters['date_from'] && ! $filters['date_to']) {
                 $error = 'Please select a date range (from and/or to).';
             } else {
@@ -62,7 +67,7 @@ class GratuityReportController extends Controller
             'filters' => array_merge($this->payrollFilterValues($request), [
                 'as_of' => $request->input('as_of', date('Y-m-d')),
                 'date_from' => $request->input('date_from', ''),
-                'date_to' => $request->input('date_to', ''),
+                'date_to' => $request->input('date_to', $report === 'gratuity-ledger' ? date('Y-m-d') : ''),
                 'eligibility' => $request->input('eligibility', 'all'),
                 'payment_status' => $request->input('payment_status', 'all'),
             ]),
@@ -123,6 +128,11 @@ class GratuityReportController extends Controller
     {
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+
+        if (! empty($config['require_employee']) && empty($filters['employee_id'])) {
+            abort(422, 'Please select an employee.');
+        }
+
         $payload = $this->reports->build($report, $config, $filters);
 
         $template = $payload['template'] ?? 'gratuity-table';

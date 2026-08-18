@@ -6,8 +6,8 @@ return [
     'reports' => [
         'gratuity-ledger' => [
             'title' => 'Gratuity Ledger',
-            'description' => 'All-time gratuity ledger for active employees — all or one selected employee.',
-            'filters' => ['branch_id', 'department_id', 'employee_id'],
+            'description' => 'Gratuity ledger for active employees as of the selected end date — all or one selected employee.',
+            'filters' => ['branch_id', 'department_id', 'employee_id', 'date_to'],
             'template' => 'gratuity-ledger',
             'report' => 'gratuity_ledger',
         ],

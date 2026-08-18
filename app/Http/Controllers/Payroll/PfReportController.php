@@ -77,7 +77,7 @@ class PfReportController extends Controller
             ])->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values()->all(),
             'filters' => array_merge($this->payrollFilterValues($request), [
                 'date_from' => $request->input('date_from', ''),
-                'date_to' => $request->input('date_to', ''),
+                'date_to' => $request->input('date_to', $report === 'pf-ledger' ? date('Y-m-d') : ''),
                 'transaction_type' => $request->input('transaction_type', ''),
             ]),
             'generated' => $generated,
@@ -159,6 +159,11 @@ class PfReportController extends Controller
     {
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+
+        if (! empty($config['require_employee']) && empty($filters['employee_id'])) {
+            abort(422, 'Please select an employee.');
+        }
+
         $payload = $this->reports->build($report, $config, $filters);
 
         return [

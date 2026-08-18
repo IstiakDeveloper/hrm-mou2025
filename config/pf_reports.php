@@ -7,8 +7,8 @@ return [
     'reports' => [
         'pf-ledger' => [
             'title' => 'PF Ledger',
-            'description' => 'Full PF transaction ledger for one employee with running balance.',
-            'filters' => ['employee_id', 'date_from', 'date_to'],
+            'description' => 'Full PF transaction ledger for one employee with running balance as of the selected end date.',
+            'filters' => ['employee_id', 'date_to'],
             'require_employee' => true,
             'template' => 'pf-ledger',
             'report' => 'pf_ledger',
