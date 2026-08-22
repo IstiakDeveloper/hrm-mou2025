@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Edit, Plus, RotateCcw, Search, Trash2, UserRound, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatTakaWithSymbol } from '@/lib/taka-format';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 
 type Head = {
     id: number;

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { PageSurface } from '@/components/page-surface';
 import { Card, CardContent } from '@/components/ui/card';
 import { Edit, Plus, Settings2, Trash2 } from 'lucide-react';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 
 type ConfigRow = {
     id: number;

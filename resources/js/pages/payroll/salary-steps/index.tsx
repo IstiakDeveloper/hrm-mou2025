@@ -8,7 +8,7 @@ import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Edit, Layers, Plus, Trash2, Search, X } from 'lucide-react';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 import { formatTakaWhole } from '@/lib/taka-format';
 
 type PayscaleOption = { id: number; name: string; code: string | null };

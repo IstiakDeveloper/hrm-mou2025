@@ -4,7 +4,7 @@ import EmployeeLoanLayout from '@/layouts/EmployeeLoanLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { hasAppPermission } from '@/lib/permissions';
 import type { SharedData } from '@/types';

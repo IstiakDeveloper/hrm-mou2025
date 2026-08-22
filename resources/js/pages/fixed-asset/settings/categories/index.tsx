@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed-asset/AssetPageShell';
 import { Boxes, Edit, Plus, Search, Trash2 } from 'lucide-react';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 import { hasAppPermission } from '@/lib/permissions';
 import type { SharedData } from '@/types';
 

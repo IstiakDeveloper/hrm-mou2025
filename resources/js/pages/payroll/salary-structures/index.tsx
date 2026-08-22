@@ -9,7 +9,7 @@ import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Edit, FileText, Plus, Search, Trash2, X } from 'lucide-react';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 
 type PayscaleOption = { id: number; name: string; code: string | null };
 type Structure = {

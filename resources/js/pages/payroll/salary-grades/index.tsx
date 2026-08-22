@@ -9,7 +9,7 @@ import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { PayrollPayscaleFilter } from '@/components/payroll/PayrollFilterGrid';
 import { Edit, Layers, Plus, Search, Trash2, X } from 'lucide-react';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 
 type PayscaleOption = { id: number; name: string };
 type Grade = {

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageSurface } from '@/components/page-surface';
 import { Badge } from '@/components/ui/badge';
 import { Building2, Edit, Plus, Search, Trash2, X } from 'lucide-react';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 
 type BranchRef = { id: number; name: string; branch_code: string | null };
 type BranchPayrollBankRow = {

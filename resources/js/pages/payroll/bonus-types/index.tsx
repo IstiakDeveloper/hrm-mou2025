@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { PageSurface } from '@/components/page-surface';
 import { Card, CardContent } from '@/components/ui/card';
 import { Award, Edit, Plus, Search, Trash2, X } from 'lucide-react';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 
 type BonusTypeRow = {
     id: number;

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ComboSelect } from '@/components/ComboSelect';
 import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed-asset/AssetPageShell';
 import { Edit, Layers, Plus, Search, Trash2 } from 'lucide-react';
-import { DataTablePagination, PaginationMeta } from '@/Components/DataTablePagination';
+import { DataTablePagination, PaginationMeta } from '@/components/DataTablePagination';
 import { hasAppPermission } from '@/lib/permissions';
 import type { SharedData } from '@/types';
 
