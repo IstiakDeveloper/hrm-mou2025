@@ -1,7 +1,7 @@
 import React from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ADMIN_SECTIONS, type AdminSectionId, storeSection } from '@/lib/admin-sections';
-import { CheckCircle2, Lock, XCircle, Sparkles, LayoutGrid } from 'lucide-react';
+import { CheckCircle2, KeyRound, Lock, LogOut, XCircle, Sparkles, LayoutGrid } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
@@ -199,28 +199,28 @@ export default function SectionsIndex() {
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
 
             {/* Top Bar Header with Glassmorphism */}
-            <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-md border-b border-slate-200/80 shadow-xs shrink-0">
-                <div className="w-full px-4 sm:px-6">
-                    <div className="h-12 sm:h-14 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <img src="/logo.png" alt="Logo" className="h-7 w-7 sm:h-8 sm:w-8 rounded-xl shrink-0 shadow-sm border border-slate-100" />
+            <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200/80 bg-white/70 shadow-xs backdrop-blur-md">
+                <div className="w-full px-3 sm:px-6">
+                    <div className="flex h-12 items-center justify-between gap-2 sm:h-14 sm:gap-4">
+                        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                            <img src="/logo.png" alt="Logo" className="h-7 w-7 shrink-0 rounded-xl border border-slate-100 shadow-sm sm:h-8 sm:w-8" />
                             <div className="min-w-0">
-                                <p className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight leading-tight">Mousumi ERP</p>
-                                <p className="hidden min-[360px]:block text-[9px] sm:text-[10px] text-slate-500 font-medium leading-tight mt-0.5">Control Center</p>
+                                <p className="truncate text-xs font-bold tracking-tight leading-tight text-slate-800 sm:text-sm">Mousumi ERP</p>
+                                <p className="mt-0.5 hidden text-[10px] font-medium leading-tight text-slate-500 sm:block">Control Center</p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                             <a
                                 href="https://app.mousumibd.org"
                                 target="_self"
-                                className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-500 font-bold text-xs shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 mr-1"
+                                className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 p-2 text-white shadow-md transition-colors hover:bg-sky-600 sm:px-3 sm:py-1.5 dark:bg-sky-600 dark:hover:bg-sky-500"
                                 title="Return to Mousumi Apps"
                             >
-                                <div className="flex items-center justify-center w-5 h-5 rounded-lg bg-sky-500 dark:bg-white/20 text-white p-0.5 shadow-sm group-hover:rotate-12 transition-transform duration-300">
-                                    <LayoutGrid className="w-3.5 h-3.5" />
+                                <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-sky-500 p-0.5 text-white shadow-sm transition-transform duration-300 group-hover:rotate-12 dark:bg-white/20">
+                                    <LayoutGrid className="h-3.5 w-3.5" />
                                 </div>
-                                <span className="tracking-wide">Mousumi Apps</span>
+                                <span className="hidden text-xs font-bold tracking-wide sm:inline">Mousumi Apps</span>
                             </a>
                             <NotificationDropdown />
                             <TooltipProvider delayDuration={150}>
@@ -240,13 +240,26 @@ export default function SectionsIndex() {
                                 </Tooltip>
                             </TooltipProvider>
 
+                            {!isBranchAccount(auth) && (
+                                <Link
+                                    href="/settings/password"
+                                    title="Change Password"
+                                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 shadow-sm transition-all hover:bg-emerald-100 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 active:translate-y-px sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-2"
+                                >
+                                    <KeyRound className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="hidden text-xs font-semibold sm:inline">Change Password</span>
+                                </Link>
+                            )}
+
                             <Link
                                 href="/logout"
                                 method="post"
                                 as="button"
-                                className="cursor-pointer inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 active:translate-y-[1px] transition-all"
+                                title="Logout"
+                                className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 active:translate-y-px sm:h-auto sm:w-auto sm:px-3 sm:py-2"
                             >
-                                Logout
+                                <LogOut className="h-3.5 w-3.5 sm:hidden" />
+                                <span className="hidden text-xs font-semibold sm:inline">Logout</span>
                             </Link>
                         </div>
                     </div>

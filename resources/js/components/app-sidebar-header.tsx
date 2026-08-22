@@ -13,13 +13,13 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
             <a
                 href="https://app.mousumibd.org"
                 target="_self"
-                className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-500 font-bold text-xs shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                className="group inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 p-2 text-xs font-bold text-white shadow-md transition-colors hover:bg-sky-600 sm:px-3 sm:py-1.5 dark:bg-sky-600 dark:hover:bg-sky-500"
                 title="Return to Mousumi Apps Launcher"
             >
-                <div className="flex items-center justify-center w-5 h-5 rounded-lg bg-sky-500 dark:bg-white/20 text-white p-0.5 shadow-sm group-hover:rotate-12 transition-transform duration-300">
-                    <LayoutGrid className="w-3.5 h-3.5" />
+                <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-sky-500 p-0.5 text-white shadow-sm transition-transform duration-300 group-hover:rotate-12 dark:bg-white/20">
+                    <LayoutGrid className="h-3.5 w-3.5" />
                 </div>
-                <span className="tracking-wide">Mousumi Apps</span>
+                <span className="hidden tracking-wide sm:inline">Mousumi Apps</span>
             </a>
         </header>
     );

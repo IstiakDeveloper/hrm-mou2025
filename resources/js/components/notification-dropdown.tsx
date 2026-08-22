@@ -132,7 +132,7 @@ export default function NotificationDropdown() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative text-gray-700 hover:bg-gray-100 h-10 w-10 rounded-full p-0">
+                <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full p-0 text-gray-700 hover:bg-gray-100 sm:h-10 sm:w-10">
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
                         <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white text-xs font-medium rounded-full">

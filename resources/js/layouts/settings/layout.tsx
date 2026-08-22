@@ -13,7 +13,7 @@ const sidebarNavItems: NavItem[] = [
         icon: null,
     },
     {
-        title: 'Password',
+        title: 'Change Password',
         url: '/settings/password',
         icon: null,
     },

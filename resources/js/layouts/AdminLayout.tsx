@@ -19,6 +19,7 @@ import {
     FileSpreadsheet,
     HandCoins,
     Home,
+    KeyRound,
     LayoutDashboard,
     LayoutGrid,
     LogOut,
@@ -79,6 +80,9 @@ function getSubNavIcon(title: string, path: string): React.ReactNode {
     }
     if (t.includes('inventory') || t.includes('product') || t.includes('stock')) {
         return <Package className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('password')) {
+        return <KeyRound className="h-3.5 w-3.5 shrink-0" />;
     }
     if (t.includes('admin') || t.includes('role') || t.includes('setting')) {
         return <Settings className="h-3.5 w-3.5 shrink-0" />;
@@ -376,6 +380,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 menuKey: 'my-notices',
                 icon: <Bell className="h-5 w-5" />,
                 path: '/my-notices',
+                hasSubmenu: false,
+            },
+            {
+                title: 'Change Password',
+                menuKey: 'change-password',
+                icon: <KeyRound className="h-5 w-5" />,
+                path: '/settings/password',
                 hasSubmenu: false,
             },
             {
@@ -770,6 +781,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             return menuItemsForLayout;
         }
 
+        const changePasswordItem = menuItemsForLayout.find((m) => m.menuKey === 'change-password');
+        const withChangePassword = (items: MenuItemType[]): MenuItemType[] => {
+            if (!changePasswordItem || items.some((m) => m.menuKey === 'change-password')) {
+                return items;
+            }
+            return [...items, changePasswordItem];
+        };
+
         if (
             activeSectionId === 'staff-fund' &&
             employee?.id &&
@@ -778,9 +797,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             !hasPermission('admin.access')
         ) {
             const employeeStaffFundKeys = ['sf-my-dashboard'];
-            return employeeStaffFundKeys
-                .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
-                .filter((x): x is MenuItemType => Boolean(x));
+            return withChangePassword(
+                employeeStaffFundKeys
+                    .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
+                    .filter((x): x is MenuItemType => Boolean(x)),
+            );
         }
 
         if (
@@ -790,9 +811,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             !hasPermission('admin.access')
         ) {
             const employeePayrollKeys = ['payroll-my-dashboard'];
-            return employeePayrollKeys
-                .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
-                .filter((x): x is MenuItemType => Boolean(x));
+            return withChangePassword(
+                employeePayrollKeys
+                    .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
+                    .filter((x): x is MenuItemType => Boolean(x)),
+            );
         }
 
         if (
@@ -803,13 +826,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             !hasPermission('admin.access')
         ) {
             const employeeLoanKeys = ['loan-my-dashboard'];
-            return employeeLoanKeys
-                .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
-                .filter((x): x is MenuItemType => Boolean(x));
+            return withChangePassword(
+                employeeLoanKeys
+                    .map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key))
+                    .filter((x): x is MenuItemType => Boolean(x)),
+            );
         }
 
-        const globalKeys: string[] = [];
-        const mergedKeys = [...globalKeys, ...keys.filter((k) => !globalKeys.includes(k))];
+        const globalKeys: string[] = ['change-password'];
+        const mergedKeys = [...keys.filter((k) => !globalKeys.includes(k)), ...globalKeys];
         return mergedKeys.map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key)).filter((x): x is MenuItemType => Boolean(x));
     }, [activeSectionId, menuItemsForLayout, employee?.id, branchAccount]);
 
@@ -1396,16 +1421,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 {/* Main Content Area */}
                 <div className="flex flex-1 flex-col overflow-hidden">
                     {/* Top Header */}
-                    <header className="sticky top-0 z-10 h-16 border-b border-emerald-900/15 bg-white/90 px-4 shadow-sm backdrop-blur-md lg:px-6">
-                        <div className="flex h-full items-center justify-between gap-4">
+                    <header className="sticky top-0 z-10 h-14 border-b border-emerald-900/15 bg-white/90 px-2 shadow-sm backdrop-blur-md sm:h-16 sm:px-4 lg:px-6">
+                        <div className="flex h-full items-center justify-between gap-2 sm:gap-4">
                             {/* Left: Mobile Menu Button & Home Icon */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-0.5 sm:gap-2">
                                 <div className="md:hidden">
                                     <Button
                                         variant="ghost"
                                         size="icon"
                                         onClick={toggleMobileSidebar}
-                                        className="text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
+                                        className="h-9 w-9 text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
                                     >
                                         <Menu className="h-5 w-5" />
                                     </Button>
@@ -1414,27 +1439,27 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     asChild
                                     variant="ghost"
                                     size="icon"
-                                    className="text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
+                                    className="h-9 w-9 text-slate-600 hover:bg-emerald-50/80 hover:text-emerald-800"
                                     title="Go to Home (Sections)"
                                 >
                                     <Link href="/sections">
-                                        <Home className="h-5.5 w-5.5" />
+                                        <Home className="h-5 w-5" />
                                     </Link>
                                 </Button>
                             </div>
 
                             {/* Right: User Menu & Notifications */}
-                            <div className="ml-auto flex items-center gap-3 sm:gap-4">
+                            <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
                                 <a
                                     href="https://app.mousumibd.org"
                                     target="_self"
-                                    className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-500 font-bold text-xs shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                                    className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 p-2 text-white shadow-md transition-colors hover:bg-sky-600 sm:px-3 sm:py-1.5 dark:bg-sky-600 dark:hover:bg-sky-500"
                                     title="Return to Mousumi Apps"
                                 >
-                                    <div className="flex items-center justify-center w-5 h-5 rounded-lg bg-sky-500 dark:bg-white/20 text-white p-0.5 shadow-sm group-hover:rotate-12 transition-transform duration-300">
-                                        <LayoutGrid className="w-3.5 h-3.5" />
+                                    <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-sky-500 p-0.5 text-white shadow-sm transition-transform duration-300 group-hover:rotate-12 dark:bg-white/20">
+                                        <LayoutGrid className="h-3.5 w-3.5" />
                                     </div>
-                                    <span className="tracking-wide">Mousumi Apps</span>
+                                    <span className="hidden tracking-wide text-xs font-bold sm:inline">Mousumi Apps</span>
                                 </a>
                                 <NotificationDropdown />
 
@@ -1445,9 +1470,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="flex h-auto items-center gap-2.5 rounded-full px-2 py-1 transition-colors hover:bg-slate-100/80"
+                                            className="flex h-auto items-center gap-2 rounded-full px-1 py-0.5 transition-colors hover:bg-slate-100/80 sm:gap-2.5 sm:px-2 sm:py-1"
                                         >
-                                            <Avatar className="h-8 w-8 border-2 border-white shadow-sm ring-1 ring-slate-200">
+                                            <Avatar className="h-7 w-7 border-2 border-white shadow-sm ring-1 ring-slate-200 sm:h-8 sm:w-8">
                                                 <AvatarImage src={photoUrl || ''} alt={auth.user.name} />
                                                 <AvatarFallback className="bg-emerald-600 text-[11px] font-bold tracking-wider text-white">
                                                     {getInitials(auth.user.name)}
@@ -1463,6 +1488,17 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-xl shadow-slate-200/50">
                                         <DropdownMenuLabel className="text-[13px] font-bold text-slate-700">My Account</DropdownMenuLabel>
                                         <DropdownMenuSeparator className="bg-slate-100" />
+                                        {!branchAccount && (
+                                            <DropdownMenuItem
+                                                asChild
+                                                className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"
+                                            >
+                                                <Link href="/settings/password" className="flex items-center text-[13px] font-medium text-slate-600">
+                                                    <KeyRound className="mr-2.5 h-4 w-4 text-slate-400" />
+                                                    Change Password
+                                                </Link>
+                                            </DropdownMenuItem>
+                                        )}
                                         <DropdownMenuItem
                                             asChild
                                             className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"
@@ -1504,7 +1540,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                     {/* Global Mobile Section Sub-Navigation Bar (Active for all sections on mobile viewports) */}
                     {mobileSubNavItems.length > 0 && (
-                        <div className="sticky top-16 z-20 flex w-full items-center border-b border-slate-200/80 bg-white/95 px-2 py-1.5 shadow-xs backdrop-blur-md md:hidden">
+                        <div className="sticky top-14 z-20 flex w-full items-center border-b border-slate-200/80 bg-white/95 px-2 py-1.5 shadow-xs backdrop-blur-md sm:top-16 md:hidden">
                             <style>{`
                                 .mobile-subnav-scroll {
                                     -ms-overflow-style: none;
