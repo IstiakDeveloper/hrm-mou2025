@@ -3949,9 +3949,16 @@ class EmployeeController extends Controller
                         continue;
                     }
                     $type = $jh['event_type'];
-                    $presentJobHistoryTypes[$type] = true;
                     $date = trim((string) ($jh['event_date'] ?? ''));
                     $date = $date !== '' ? $date : null;
+
+                    // Confirmation is date-driven. A leftover designation/remarks row
+                    // without a date must not keep employees.confirmation_date.
+                    if ($type === 'confirmation' && $date === null) {
+                        continue;
+                    }
+
+                    $presentJobHistoryTypes[$type] = true;
 
                     if ($type === 'joining') {
                         if ($date) {
@@ -4039,6 +4046,10 @@ class EmployeeController extends Controller
                         $coreUpdates['last_designation_id'] = $jh['to_designation_id'];
                         $coreUpdates['designation_id'] = $jh['to_designation_id'];
                     }
+                }
+
+                if (! isset($presentJobHistoryTypes['confirmation'])) {
+                    $coreUpdates['confirmation_date'] = null;
                 }
 
                 if (! isset($presentJobHistoryTypes['left'])) {

@@ -451,7 +451,7 @@ function generalFieldsFromJobHistories(rows: JobHistoryFormRow[]): Partial<Emplo
     }
 
     const confirmation = rows.find((row) => row.event_type === 'confirmation' && String(row.event_date ?? '').trim());
-    if (confirmation) extra.confirmation_date = confirmation.event_date;
+    extra.confirmation_date = confirmation ? confirmation.event_date : '';
 
     const dated = [...rows]
         .filter((row) => String(row.event_date ?? '').trim())
@@ -473,6 +473,15 @@ function generalFieldsFromJobHistories(rows: JobHistoryFormRow[]): Partial<Emplo
     }
 
     return extra;
+}
+
+function applyJobHistoryFormRows(rows: JobHistoryFormRow[]): Partial<EmployeeEditFormData> {
+    const synced = normalizeJobHistoryBranches(rows);
+
+    return {
+        ...generalFieldsFromJobHistories(synced),
+        job_histories: synced,
+    };
 }
 
 function resetJobHistorySection(rows: JobHistoryFormRow[], eventType: string): JobHistoryFormRow[] {
@@ -1786,18 +1795,23 @@ export default function EmployeeEdit({
         post(route('employees.update', employee.id), {
             preserveScroll: true,
             forceFormData: hasFileUpload,
-            transform: (formData) => ({
-                ...formData,
-                _method: 'PUT',
-                job_histories: (formData.job_histories ?? []).filter(jobHistoryRowHasContent),
-                disciplinary_actions: (formData.disciplinary_actions ?? []).filter(
-                    (row) => String(row.action_date ?? '').trim() !== '',
-                ),
-                sync_salary_components: salaryComponentsEditing ? 1 : 0,
-                salary_lines_json: salaryComponentsEditing
-                    ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
-                    : '',
-            }),
+            transform: (formData) => {
+                const job_histories = (formData.job_histories ?? []).filter(jobHistoryRowHasContent);
+
+                return {
+                    ...formData,
+                    ...generalFieldsFromJobHistories(job_histories),
+                    _method: 'PUT',
+                    job_histories,
+                    disciplinary_actions: (formData.disciplinary_actions ?? []).filter(
+                        (row) => String(row.action_date ?? '').trim() !== '',
+                    ),
+                    sync_salary_components: salaryComponentsEditing ? 1 : 0,
+                    salary_lines_json: salaryComponentsEditing
+                        ? buildSalaryLinesJson(salaryAdditionRows, salaryDeductionRows)
+                        : '',
+                };
+            },
             onSuccess: () => {
                 clearEmployeeDraft(editDraftKey);
                 setTabStepBlockMessages(null);
@@ -2835,10 +2849,13 @@ export default function EmployeeEdit({
                                                                                 size="sm"
                                                                                 className="h-8 gap-1 border-emerald-600/40 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
                                                                                 onClick={() =>
-                                                                                    setData('job_histories', [
-                                                                                        ...data.job_histories,
-                                                                                        emptyJobHistoryFormRow(section.value),
-                                                                                    ])
+                                                                                    setData((prev) => ({
+                                                                                        ...prev,
+                                                                                        ...applyJobHistoryFormRows([
+                                                                                            ...prev.job_histories,
+                                                                                            emptyJobHistoryFormRow(section.value),
+                                                                                        ]),
+                                                                                    }))
                                                                                 }
                                                                             >
                                                                                 <Plus className="h-3.5 w-3.5" /> Add {section.label}
@@ -2850,10 +2867,12 @@ export default function EmployeeEdit({
                                                                             size="sm"
                                                                             className="h-8 gap-1 border-red-200 text-xs font-semibold text-red-600 hover:bg-red-50 hover:text-red-700"
                                                                             onClick={() =>
-                                                                                setData(
-                                                                                    'job_histories',
-                                                                                    resetJobHistorySection(data.job_histories, section.value),
-                                                                                )
+                                                                                setData((prev) => ({
+                                                                                    ...prev,
+                                                                                    ...applyJobHistoryFormRows(
+                                                                                        resetJobHistorySection(prev.job_histories, section.value),
+                                                                                    ),
+                                                                                }))
                                                                             }
                                                                         >
                                                                             <Trash2 className="h-3.5 w-3.5" /> Delete
@@ -2877,10 +2896,12 @@ export default function EmployeeEdit({
                                                                                     size="sm"
                                                                                     className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
                                                                                     onClick={() =>
-                                                                                        setData(
-                                                                                            'job_histories',
-                                                                                            data.job_histories.filter((_, i) => i !== idx),
-                                                                                        )
+                                                                                        setData((prev) => ({
+                                                                                            ...prev,
+                                                                                            ...applyJobHistoryFormRows(
+                                                                                                prev.job_histories.filter((_, i) => i !== idx),
+                                                                                            ),
+                                                                                        }))
                                                                                     }
                                                                                 >
                                                                                     <Trash2 className="h-4 w-4" />
@@ -2895,12 +2916,10 @@ export default function EmployeeEdit({
                                                                                 setData((prev) => {
                                                                                     const updated = [...prev.job_histories];
                                                                                     updated[idx] = { ...updated[idx], ...patch };
-                                                                                    const synced = normalizeJobHistoryBranches(updated);
 
                                                                                     return {
                                                                                         ...prev,
-                                                                                        ...generalFieldsFromJobHistories(synced),
-                                                                                        job_histories: synced,
+                                                                                        ...applyJobHistoryFormRows(updated),
                                                                                     };
                                                                                 });
                                                                             }}
