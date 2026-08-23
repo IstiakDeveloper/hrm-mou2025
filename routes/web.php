@@ -1837,7 +1837,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ====================
-    // HOLIDAY MANAGEMENT
+    // HOLIDAY
     // ====================
     Route::middleware(['permission:holidays.view'])->prefix('holidays')->name('holidays.')->group(function () {
         Route::get('/', [HolidayController::class, 'index'])->name('index');
