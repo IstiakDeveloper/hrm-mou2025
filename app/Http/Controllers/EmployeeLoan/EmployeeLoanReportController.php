@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Services\EmployeeLoanReportService;
 use App\Support\EmployeeLoanReportCsvExporter;
+use App\Support\PayrollReportPrintPdf;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -40,24 +42,10 @@ class EmployeeLoanReportController extends Controller
         $filters = $this->reports->filtersFromRequest($request);
         $generated = $request->boolean('generate');
         $payload = null;
-        $error = null;
+        [$filters, $error] = $this->applyReportFilterRules($config, $filters, $generated);
 
-        if ($generated) {
-            $needsAsOf = in_array('as_of', $config['filters'] ?? [], true);
-            $needsRange = in_array('date_from', $config['filters'] ?? [], true);
-
-            if ($needsAsOf && ! $filters['as_of']) {
-                $error = 'Please select an as-of date.';
-            } elseif (
-                $needsRange
-                && ($config['report'] ?? '') !== 'loan_ledger'
-                && ! $filters['date_from']
-                && ! $filters['date_to']
-            ) {
-                $error = 'Please select a date range (from and/or to).';
-            } else {
-                $payload = $this->reports->build($report, $config, $filters);
-            }
+        if ($generated && ! $error) {
+            $payload = $this->reports->build($report, $config, $filters);
         }
 
         return Inertia::render('employee-loan/reports/show', [
@@ -67,6 +55,7 @@ class EmployeeLoanReportController extends Controller
                 'title' => $config['title'],
                 'description' => $config['description'] ?? '',
                 'filters' => $config['filters'] ?? [],
+                'requireEmployee' => (bool) ($config['require_employee'] ?? false),
             ],
             'filterOptions' => $this->reportFilterOptions(),
             'loanTypeOptions' => collect(config('employee_loans.loan_types', []))
@@ -77,9 +66,9 @@ class EmployeeLoanReportController extends Controller
                 'as_of' => $request->input('as_of', date('Y-m-d')),
                 'date_from' => $request->input('date_from', ''),
                 'date_to' => $request->input('date_to', ''),
-                'loan_type' => $request->input('loan_type', ''),
-                'loan_cycle' => $request->input('loan_cycle', ''),
-                'loan_id' => $request->input('loan_id', ''),
+                'loan_type' => $filters['loan_type'] ?? '',
+                'loan_cycle' => $filters['loan_cycle'] ?? '',
+                'loan_id' => $filters['loan_id'] ?? '',
             ]),
             'generated' => $generated,
             'payload' => $payload,
@@ -101,13 +90,28 @@ class EmployeeLoanReportController extends Controller
     public function pdf(Request $request, string $report)
     {
         $data = $this->documentData($request, $report);
-
-        $pdf = Pdf::loadView('employee-loan.reports.document', $data)
-            ->setPaper('a4', $data['orientation'] ?? 'portrait');
-
+        $html = view('employee-loan.reports.document', $data)->render();
         $filename = str($data['title'])->slug().'-'.now()->format('Y-m-d').'.pdf';
 
-        return $pdf->download($filename);
+        try {
+            if (! PayrollReportPrintPdf::canGenerate()) {
+                throw new \RuntimeException('Chrome is not available for PDF export.');
+            }
+
+            $pdf = PayrollReportPrintPdf::generate($html);
+        } catch (\Throwable $e) {
+            report($e);
+
+            $pdf = Pdf::loadHTML($html)
+                ->setPaper('a4', $data['orientation'] ?? 'portrait')
+                ->output();
+        }
+
+        return response()->make($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Cache-Control' => 'public, must-revalidate, max-age=0',
+        ]);
     }
 
     public function excel(Request $request, string $report): StreamedResponse
@@ -138,6 +142,12 @@ class EmployeeLoanReportController extends Controller
     {
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+        [$filters, $error] = $this->applyReportFilterRules($config, $filters, true);
+
+        if ($error) {
+            abort(422, $error);
+        }
+
         $payload = $this->reports->build($report, $config, $filters);
 
         $template = $payload['template'] ?? 'loan-table';
@@ -157,6 +167,45 @@ class EmployeeLoanReportController extends Controller
                 ? 'portrait'
                 : ($colCount > 8 ? 'landscape' : 'portrait'),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, string>  $filters
+     * @return array{0: array<string, string>, 1: string|null}
+     */
+    protected function applyReportFilterRules(array $config, array $filters, bool $generated): array
+    {
+        if (! $generated) {
+            return [$filters, null];
+        }
+
+        $isLedger = ($config['report'] ?? '') === 'loan_ledger';
+        $needsAsOf = in_array('as_of', $config['filters'] ?? [], true);
+        $needsRange = in_array('date_from', $config['filters'] ?? [], true);
+
+        if ($isLedger && ! $filters['employee_id']) {
+            return [$filters, 'Please select an employee.'];
+        }
+
+        if ($isLedger && ! $filters['loan_type']) {
+            return [$filters, 'Please select a loan type.'];
+        }
+
+        if ($needsAsOf && ! $filters['as_of']) {
+            return [$filters, 'Please select an as-of date.'];
+        }
+
+        if ($needsRange && ! $isLedger && ! $filters['date_from'] && ! $filters['date_to']) {
+            return [$filters, 'Please select a date range (from and/or to).'];
+        }
+
+        if ($isLedger) {
+            $cycle = $this->reports->resolveLedgerCycle($filters);
+            $filters['loan_cycle'] = $cycle ? (string) $cycle : '';
+        }
+
+        return [$filters, null];
     }
 
     /**

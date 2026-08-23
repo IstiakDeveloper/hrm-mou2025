@@ -7,6 +7,7 @@ use App\Models\EmployeeLoan;
 use App\Models\EmployeeLoanTransaction;
 use App\Models\LoanCollectionBatch;
 use App\Models\LoanTransfer;
+use App\Support\LoanCycle;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -61,6 +62,47 @@ class EmployeeLoanReportService
     }
 
     /**
+     * Running cycle for the selected employee + loan type, or the requested cycle if it exists.
+     *
+     * @param  array<string, string>  $filters
+     */
+    public function resolveLedgerCycle(array $filters): ?int
+    {
+        $employeeId = (int) ($filters['employee_id'] ?? 0);
+        $loanType = (string) ($filters['loan_type'] ?? '');
+        $requested = (int) ($filters['loan_cycle'] ?? 0);
+
+        if ($employeeId < 1 || $loanType === '') {
+            return $requested > 0 ? $requested : null;
+        }
+
+        $loans = EmployeeLoan::query()
+            ->where('employee_id', $employeeId)
+            ->where('loan_type', $loanType)
+            ->get(['id', 'loan_cycle', 'status']);
+
+        if ($loans->isEmpty()) {
+            return null;
+        }
+
+        $cycles = $loans
+            ->map(fn (EmployeeLoan $loan) => max(1, (int) $loan->loan_cycle))
+            ->unique()
+            ->values();
+
+        if ($requested > 0 && $cycles->contains($requested)) {
+            return $requested;
+        }
+
+        $active = $loans->where('status', 'active');
+        if ($active->isNotEmpty()) {
+            return (int) $active->max(fn (EmployeeLoan $loan) => max(1, (int) $loan->loan_cycle));
+        }
+
+        return (int) $loans->max(fn (EmployeeLoan $loan) => max(1, (int) $loan->loan_cycle));
+    }
+
+    /**
      * @param  array<string, string>  $filters
      * @param  array<string, mixed>  $config
      */
@@ -69,7 +111,17 @@ class EmployeeLoanReportService
         $report = $config['report'] ?? '';
 
         if ($report === 'loan_ledger') {
-            return 'Full installment schedule (all matching loans)';
+            $cycle = (int) ($filters['loan_cycle'] ?? 0);
+            $type = (string) ($filters['loan_type'] ?? '');
+            $typeLabel = $type !== ''
+                ? (string) config("employee_loans.loan_types.{$type}.label", $type)
+                : '';
+            $parts = array_filter([
+                $typeLabel !== '' ? $typeLabel : null,
+                $cycle > 0 ? LoanCycle::label($cycle) : null,
+            ]);
+
+            return $parts !== [] ? implode(' — ', $parts) : 'Installment ledger';
         }
 
         if (in_array($report, ['loan_disburse_register', 'loan_collection_register', 'full_paid_register', 'rebate_register'], true)) {

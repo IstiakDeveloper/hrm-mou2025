@@ -32,6 +32,7 @@ type ReportMeta = {
     title: string;
     description: string;
     filters: string[];
+    requireEmployee?: boolean;
 };
 
 type LoanLedgerSection = {
@@ -59,6 +60,37 @@ type Props = {
     error: string | null;
 };
 
+type LedgerLookupLoan = {
+    id: number;
+    loan_type?: string;
+    loan_cycle: number;
+    loan_cycle_label?: string;
+    loan_number: string;
+    loan_type_label: string;
+    status: string;
+};
+
+function loansOfType(loans: LedgerLookupLoan[], loanType: string): LedgerLookupLoan[] {
+    if (!loanType) {
+        return [];
+    }
+
+    return loans.filter((loan) => loan.loan_type === loanType);
+}
+
+function runningCycleValue(loans: LedgerLookupLoan[], loanType: string): string {
+    const ofType = loansOfType(loans, loanType);
+    if (ofType.length === 0) {
+        return '';
+    }
+
+    const active = ofType.filter((loan) => loan.status === 'active');
+    const pool = active.length > 0 ? active : ofType;
+    const max = Math.max(...pool.map((loan) => Number(loan.loan_cycle) || 1));
+
+    return String(max);
+}
+
 const LOAN_TYPE_ITEMS = [{ value: '', label: 'All loan types' }];
 
 export default function EmployeeLoanReportShow({
@@ -76,12 +108,20 @@ export default function EmployeeLoanReportShow({
     const canExport = auth?.permissions?.includes('reports.export') ?? true;
 
     const [filters, setFilters] = useState(initFilters);
-    const [employeeLoans, setEmployeeLoans] = useState<{ id: number; loan_cycle: number; loan_cycle_label?: string; loan_number: string; loan_type_label: string; status: string }[]>([]);
+    const [employeeLoans, setEmployeeLoans] = useState<LedgerLookupLoan[]>([]);
+    const isLedger = report.slug === 'loan-ledger';
     const setFilter = (key: string, value: string) =>
         setFilters((f) => {
             const next = { ...f, [key]: value };
             if (key === 'employee_id') {
                 next.loan_id = '';
+                if (isLedger) {
+                    next.loan_cycle = '';
+                }
+            }
+            if (key === 'loan_type' && isLedger) {
+                next.loan_id = '';
+                next.loan_cycle = '';
             }
             return next;
         });
@@ -101,7 +141,12 @@ export default function EmployeeLoanReportShow({
 
     const basePath = employeeLoanReportPath(report.slug);
 
+    const canGenerate = !isLedger || (!!filters.employee_id && !!filters.loan_type);
+
     const generate = () => {
+        if (!canGenerate) {
+            return;
+        }
         router.get(basePath, { ...filters, generate: '1' }, { preserveState: true });
     };
 
@@ -117,10 +162,19 @@ export default function EmployeeLoanReportShow({
     const pdfUrl = `${route('employee-loan.reports.pdf', report.slug)}?${query}`;
     const excelUrl = `${route('employee-loan.reports.excel', report.slug)}?${query}`;
 
-    const loanTypeItems = [...LOAN_TYPE_ITEMS, ...loanTypeOptions.map((o) => ({ value: o.value, label: o.label }))];
+    const loanTypeItems = isLedger
+        ? loanTypeOptions.map((o) => ({ value: o.value, label: o.label }))
+        : [...LOAN_TYPE_ITEMS, ...loanTypeOptions.map((o) => ({ value: o.value, label: o.label }))];
 
     useEffect(() => {
-        if (!filters.employee_id || !show.loanId) {
+        if (!generated) {
+            return;
+        }
+        setFilters(initFilters);
+    }, [generated, initFilters.employee_id, initFilters.loan_type, initFilters.loan_cycle, initFilters.loan_id]);
+
+    useEffect(() => {
+        if (!filters.employee_id || (!isLedger && !show.loanId)) {
             setEmployeeLoans([]);
             return;
         }
@@ -142,17 +196,72 @@ export default function EmployeeLoanReportShow({
         return () => {
             cancelled = true;
         };
-    }, [filters.employee_id, show.loanId]);
+    }, [filters.employee_id, isLedger, show.loanId]);
+
+    const typedLoans = useMemo(
+        () => (isLedger ? loansOfType(employeeLoans, filters.loan_type) : employeeLoans),
+        [employeeLoans, filters.loan_type, isLedger],
+    );
+
+    useEffect(() => {
+        if (!isLedger) {
+            return;
+        }
+
+        const nextCycle = runningCycleValue(employeeLoans, filters.loan_type);
+        const validCycles = new Set(typedLoans.map((loan) => String(loan.loan_cycle)));
+
+        setFilters((f) => {
+            if (!f.loan_type) {
+                return f.loan_cycle ? { ...f, loan_cycle: '' } : f;
+            }
+            if (f.loan_cycle && validCycles.has(f.loan_cycle)) {
+                return f;
+            }
+            if (f.loan_cycle === nextCycle) {
+                return f;
+            }
+            return { ...f, loan_cycle: nextCycle };
+        });
+    }, [employeeLoans, filters.loan_type, isLedger, typedLoans]);
 
     const cycleItems = useMemo(() => {
+        if (isLedger) {
+            const cycles = [...new Set(typedLoans.map((loan) => Number(loan.loan_cycle) || 1))]
+                .filter((n) => n > 0)
+                .sort((a, b) => a - b);
+
+            if (cycles.length === 0) {
+                return [
+                    {
+                        value: '',
+                        label: filters.employee_id && filters.loan_type
+                            ? 'No loans of this type'
+                            : 'Select employee and loan type',
+                        disabled: true,
+                    },
+                ];
+            }
+
+            return cycles.map((cycle) => {
+                const running = runningCycleValue(employeeLoans, filters.loan_type);
+                const label = loanCycleFilterLabel(cycle);
+
+                return {
+                    value: String(cycle),
+                    label: String(cycle) === running ? `${label} (running)` : label,
+                };
+            });
+        }
+
         const fromLoans = employeeLoans.map((l) => l.loan_cycle).filter((n) => Number(n) > 0);
-        const maxCycle = Math.max(10, ...fromLoans, Number(filters.loan_cycle) || 0);
+        const maxCycle = Math.max(0, ...fromLoans, Number(filters.loan_cycle) || 0);
         const items = [{ value: '', label: 'All cycles' }];
         for (let i = 1; i <= maxCycle; i += 1) {
             items.push({ value: String(i), label: loanCycleFilterLabel(i) });
         }
         return items;
-    }, [employeeLoans, filters.loan_cycle]);
+    }, [employeeLoans, filters.employee_id, filters.loan_cycle, filters.loan_type, isLedger, typedLoans]);
 
     const loanItems = useMemo(
         () => [
@@ -172,7 +281,14 @@ export default function EmployeeLoanReportShow({
                 <PayrollPageHeader title={report.title} description={report.description} />
 
                 {report.filters.length > 0 && (
-                    <PayrollSectionCard title="Filters" description="Set criteria and click Generate report.">
+                    <PayrollSectionCard
+                        title="Filters"
+                        description={
+                            isLedger
+                                ? 'Select one employee and loan type. Cycle defaults to the running loan.'
+                                : 'Set criteria and click Generate report.'
+                        }
+                    >
                         <div className="space-y-4">
                             {show.grid && (
                                 <PayrollFilterGrid
@@ -194,6 +310,15 @@ export default function EmployeeLoanReportShow({
                             )}
 
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                {isLedger && (
+                                    <PayrollEmployeeSelect
+                                        employees={filterOptions.employees}
+                                        value={filters.employee_id}
+                                        onChange={(v) => setFilter('employee_id', v)}
+                                        required
+                                        allowAll={false}
+                                    />
+                                )}
                                 {show.asOf && (
                                     <PayrollField label="As of date" required>
                                         <Input
@@ -230,7 +355,8 @@ export default function EmployeeLoanReportShow({
                                         value={filters.loan_type}
                                         onChange={(v) => setFilter('loan_type', v)}
                                         items={loanTypeItems}
-                                        placeholder="All types"
+                                        required={isLedger}
+                                        placeholder={isLedger ? 'Select loan type' : 'All types'}
                                     />
                                 )}
                                 {show.loanCycle && (
@@ -239,7 +365,9 @@ export default function EmployeeLoanReportShow({
                                         value={filters.loan_cycle ?? ''}
                                         onChange={(v) => setFilter('loan_cycle', v)}
                                         items={cycleItems}
-                                        placeholder="All cycles"
+                                        required={isLedger}
+                                        disabled={isLedger && typedLoans.length === 0}
+                                        placeholder={isLedger ? 'Running cycle' : 'All cycles'}
                                     />
                                 )}
                                 {show.loanId && filters.employee_id && (
@@ -251,16 +379,18 @@ export default function EmployeeLoanReportShow({
                                         placeholder="All loans"
                                     />
                                 )}
-                                {show.employee && !show.grid && (
+                                {show.employee && !show.grid && !isLedger && (
                                     <PayrollEmployeeSelect
                                         employees={filterOptions.employees}
                                         value={filters.employee_id}
                                         onChange={(v) => setFilter('employee_id', v)}
+                                        required={report.requireEmployee}
+                                        allowAll={!report.requireEmployee}
                                     />
                                 )}
                             </div>
 
-                            <Button type="button" onClick={generate}>
+                            <Button type="button" onClick={generate} disabled={!canGenerate}>
                                 <Search className="mr-2 h-4 w-4" />
                                 Generate report
                             </Button>

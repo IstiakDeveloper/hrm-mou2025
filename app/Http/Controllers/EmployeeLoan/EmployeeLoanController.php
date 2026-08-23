@@ -576,6 +576,7 @@ class EmployeeLoanController extends Controller
         return [
             'id' => $loan->id,
             'loan_number' => $loan->loan_number,
+            'loan_type' => $loan->loan_type,
             'loan_cycle' => $loan->cycleNumber(),
             'loan_cycle_label' => $loan->cycleLabel(),
             'status' => $loan->status,
