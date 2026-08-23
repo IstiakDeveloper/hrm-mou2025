@@ -7,7 +7,6 @@ use App\Models\EmployeeLoan;
 use App\Models\EmployeeLoanTransaction;
 use App\Models\LoanCollectionBatch;
 use App\Models\LoanTransfer;
-use App\Services\SalaryStructureCalculator;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -18,6 +17,7 @@ class EmployeeLoanReportService
     public function __construct(
         protected EmployeeLoanService $loanService,
     ) {}
+
     /**
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
@@ -55,6 +55,8 @@ class EmployeeLoanReportService
             'employee_id' => $request->input('employee_id', ''),
             'loan_type' => $request->input('loan_type', ''),
             'loan_policy_id' => $request->input('loan_policy_id', ''),
+            'loan_cycle' => $request->input('loan_cycle', ''),
+            'loan_id' => $request->input('loan_id', ''),
         ];
     }
 
@@ -107,7 +109,9 @@ class EmployeeLoanReportService
                 'employee.project',
             ])
             ->orderBy('employee_id')
-            ->orderBy('loan_number')
+            ->orderBy('loan_type')
+            ->orderBy('loan_cycle')
+            ->orderBy('id')
             ->get();
 
         $sections = [];
@@ -121,13 +125,17 @@ class EmployeeLoanReportService
 
             $sections[] = [
                 'title' => trim(sprintf(
-                    '%s — %s — %s',
+                    '%s — %s — %s — %s — %s',
                     $loan->employee?->pin ?? '—',
                     $loan->employee?->name_en ?? 'Employee',
+                    $loan->typeLabel(),
+                    $loan->cycleLabel(),
                     $loan->loan_number
                 )),
                 'loan_number' => $loan->loan_number,
                 'loan_type' => $loan->typeLabel(),
+                'loan_cycle' => $loan->cycleNumber(),
+                'loan_cycle_label' => $loan->cycleLabel(),
                 'employee_pin' => $loan->employee?->pin,
                 'employee_name' => $loan->employee?->name_en,
                 'branch' => $loan->employee?->branch?->name,
@@ -186,7 +194,7 @@ class EmployeeLoanReportService
             'unit' => 'N/A',
             'project' => $this->ledgerHeaderValue($employee?->project?->name),
             'policy' => $this->ledgerHeaderValue($policyLabel),
-            'loan_cycle' => $this->ledgerHeaderValue($loan->application?->loan_cycle ?? 1),
+            'loan_cycle' => $this->ledgerHeaderValue($loan->cycleDisplay()),
             'application_number' => $this->ledgerHeaderValue($loan->application?->application_number ?? $loan->reference_no),
             'rate' => $this->ledgerHeaderValue($loan->interest_rate),
             'installment_count' => $this->ledgerHeaderValue($loan->installment_count),
@@ -484,6 +492,7 @@ class EmployeeLoanReportService
         if ($loanIds->isEmpty()) {
             $payload = $this->tablePayload($columns, [], ['row_count' => 0]);
             $payload['template'] = 'loan-collection-register';
+
             return $payload;
         }
 
@@ -1024,7 +1033,9 @@ class EmployeeLoanReportService
             ->when($filters['department_id'], fn (Builder $q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $filters['department_id'])))
             ->when($filters['employee_id'], fn (Builder $q) => $q->where('employee_id', $filters['employee_id']))
             ->when($filters['loan_type'], fn (Builder $q) => $q->where('loan_type', $filters['loan_type']))
-            ->when($filters['loan_policy_id'] ?? '', fn (Builder $q) => $q->where('loan_policy_id', $filters['loan_policy_id']));
+            ->when($filters['loan_policy_id'] ?? '', fn (Builder $q) => $q->where('loan_policy_id', $filters['loan_policy_id']))
+            ->when($filters['loan_cycle'] ?? '', fn (Builder $q) => $q->where('loan_cycle', (int) $filters['loan_cycle']))
+            ->when($filters['loan_id'] ?? '', fn (Builder $q) => $q->where('id', (int) $filters['loan_id']));
     }
 
     /**

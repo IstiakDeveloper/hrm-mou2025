@@ -102,7 +102,21 @@ class LoanApplicationController extends Controller
 
         $validated = $this->validateApplication($request, $loan_application->id);
         $policy = LoanPolicy::query()->findOrFail($validated['loan_policy_id']);
-        $calc = $this->calculator->calculate($policy, (float) $validated['applied_amount'], (int) ($validated['loan_cycle'] ?? 1));
+
+        try {
+            $this->applicationService->assertEmployeeCanTakeLoan(
+                (int) $validated['employee_id'],
+                $policy,
+                $loan_application->id
+            );
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['application' => $e->getMessage()]);
+        }
+
+        $requestedCycle = (int) ($validated['loan_cycle'] ?? 0);
+        $nextCycle = \App\Models\EmployeeLoan::nextCycleFor((int) $validated['employee_id'], (string) $policy->loan_type);
+        $loanCycle = max($nextCycle, $requestedCycle > 0 ? $requestedCycle : $nextCycle);
+        $calc = $this->calculator->calculate($policy, (float) $validated['applied_amount'], $loanCycle);
 
         $loan_application->update([
             'application_number' => $validated['application_number'],
@@ -110,7 +124,7 @@ class LoanApplicationController extends Controller
             'employee_id' => $validated['employee_id'],
             'loan_policy_id' => $policy->id,
             'loan_committee_id' => $validated['loan_committee_id'] ?? null,
-            'loan_cycle' => (int) ($validated['loan_cycle'] ?? 1),
+            'loan_cycle' => $loanCycle,
             'applied_amount' => $calc['principal_amount'],
             'rate_yearly' => $calc['rate_yearly'],
             'installment_amount_monthly' => $calc['installment_amount_monthly'],
@@ -162,6 +176,7 @@ class LoanApplicationController extends Controller
                 'id' => $p->id,
                 'code' => $p->code,
                 'name' => $p->name,
+                'loan_type' => $p->loan_type,
                 'loan_type_label' => $p->typeLabel(),
                 'min_amount' => (float) $p->min_amount,
                 'max_amount' => (float) $p->max_amount,
@@ -263,6 +278,7 @@ class LoanApplicationController extends Controller
             'application_date' => $a->application_date?->format('d-M-Y'),
             'status' => $a->status,
             'loan_cycle' => $a->loan_cycle,
+            'loan_cycle_label' => \App\Support\LoanCycle::label((int) ($a->loan_cycle ?? 1)),
             'applied_amount' => (float) $a->applied_amount,
             'rate_yearly' => (float) $a->rate_yearly,
             'installment_amount_monthly' => (float) $a->installment_amount_monthly,

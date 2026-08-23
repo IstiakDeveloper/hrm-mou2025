@@ -13,6 +13,7 @@ use App\Models\LoanPolicy;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
+use App\Support\LoanCycle;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -197,7 +198,12 @@ class EmployeeLoanService
         $interestRate = $policyValues['interest_rate'];
         $loanType = $policyValues['loan_type'];
 
-        $calc = $this->loanCalculator->calculate($policy, $principal, (int) ($data['loan_cycle'] ?? 1));
+        $requestedCycle = (int) ($data['loan_cycle'] ?? 0);
+        $calcCycle = max(
+            EmployeeLoan::nextCycleFor((int) $data['employee_id'], $loanType),
+            $requestedCycle > 0 ? $requestedCycle : 1
+        );
+        $calc = $this->loanCalculator->calculate($policy, $principal, $calcCycle);
         $installmentAmount = isset($data['installment_amount']) && $data['installment_amount'] !== null
             ? SalaryStructureCalculator::roundTaka((float) $data['installment_amount'])
             : (float) $calc['installment_amount_monthly'];
@@ -218,11 +224,20 @@ class EmployeeLoanService
         }
 
         return DB::transaction(function () use ($data, $createdBy, $principal, $count, $installmentAmount, $interestRate, $totalPayable, $head, $policy, $loanType, $isLegacy) {
+            if (! $isLegacy) {
+                $this->assertNoActiveLoanOfType((int) $data['employee_id'], $loanType, true);
+            }
+
+            $requestedCycle = (int) ($data['loan_cycle'] ?? 0);
+            $nextCycle = EmployeeLoan::nextCycleFor((int) $data['employee_id'], $loanType, true);
+            $loanCycle = max($nextCycle, $requestedCycle > 0 ? $requestedCycle : $nextCycle);
+
             $loan = EmployeeLoan::query()->create([
                 'employee_id' => $data['employee_id'],
                 'loan_policy_id' => $policy->id,
                 'loan_number' => $this->nextLoanNumber(),
                 'loan_type' => $loanType,
+                'loan_cycle' => $loanCycle,
                 'salary_head_id' => $head->id,
                 'principal_amount' => $principal,
                 'interest_rate' => $interestRate,
@@ -419,6 +434,7 @@ class EmployeeLoanService
                 'loan_migration_id' => $migration->id,
                 'loan_number' => $this->nextLoanNumber(),
                 'loan_type' => $policy->loan_type,
+                'loan_cycle' => EmployeeLoan::nextCycleFor((int) $row['employee_id'], (string) $policy->loan_type, true),
                 'salary_head_id' => $head->id,
                 'principal_amount' => $disburseAmount,
                 'interest_rate' => (float) $policy->default_interest_rate,
@@ -488,9 +504,14 @@ class EmployeeLoanService
             'reference_no' => $application->application_number,
             'notes' => $application->notes,
             'is_legacy_import' => false,
+            'loan_cycle' => (int) ($application->loan_cycle ?? 0),
         ], $createdBy);
 
         $loan->update(['loan_application_id' => $application->id]);
+
+        if ((int) $application->loan_cycle !== (int) $loan->loan_cycle) {
+            $application->update(['loan_cycle' => $loan->loan_cycle]);
+        }
 
         return $loan;
     }
@@ -2349,7 +2370,7 @@ class EmployeeLoanService
             return $result;
         }
 
-        $cycle = (int) ($loan->application?->loan_cycle ?? 1);
+        $cycle = $loan->cycleNumber();
         $calc = $this->loanCalculator->calculate($loan->policy, $principal, $cycle);
         $newTotal = SalaryStructureCalculator::roundTaka((float) $calc['total_payable']);
         $newEmi = SalaryStructureCalculator::roundTaka((float) $calc['installment_amount_monthly']);
@@ -2935,6 +2956,22 @@ class EmployeeLoanService
                 'created_by' => $data['created_by'] ?? auth()->id(),
             ]);
         });
+    }
+
+    public function assertNoActiveLoanOfType(int $employeeId, string $loanType, bool $lock = false): void
+    {
+        $existing = EmployeeLoan::activeOfType($employeeId, $loanType, $lock);
+
+        if (! $existing) {
+            return;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'This employee already has an active %s (%s, %s). Fully pay or close it before taking the next cycle.',
+            $existing->typeLabel(),
+            $existing->loan_number,
+            LoanCycle::label($existing->cycleNumber()),
+        ));
     }
 
     protected function nextLoanNumber(): string

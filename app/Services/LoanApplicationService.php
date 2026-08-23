@@ -3,12 +3,12 @@
 namespace App\Services;
 
 use App\Models\Employee;
+use App\Models\EmployeeLoan;
 use App\Models\EmployeePfTransaction;
 use App\Models\LoanApplication;
 use App\Models\LoanPolicy;
-use App\Services\EmployeeProvidentFundService;
+use App\Support\LoanCycle;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class LoanApplicationService
@@ -53,6 +53,18 @@ class LoanApplicationService
             $months = (int) Carbon::parse($employee->joining_date)->diffInMonths(Carbon::today());
         }
 
+        $loans = EmployeeLoan::query()
+            ->where('employee_id', $employee->id)
+            ->orderBy('loan_type')
+            ->orderBy('loan_cycle')
+            ->orderBy('id')
+            ->get(['id', 'loan_number', 'loan_type', 'loan_cycle', 'status']);
+
+        $nextCycleByLoanType = [];
+        foreach ($loans->groupBy('loan_type') as $type => $typeLoans) {
+            $nextCycleByLoanType[$type] = ((int) $typeLoans->max('loan_cycle')) + 1;
+        }
+
         return [
             'id' => $employee->id,
             'label' => trim(($employee->pin ?? '').' — '.($employee->name_en ?? '')),
@@ -64,6 +76,15 @@ class LoanApplicationService
             'pf_own_balance' => SalaryStructureCalculator::roundTaka($own),
             'pf_org_balance' => SalaryStructureCalculator::roundTaka($org),
             'pf_total_balance' => SalaryStructureCalculator::roundTaka((float) $employee->pf_balance),
+            'active_loans' => $loans->where('status', 'active')->values()->map(fn (EmployeeLoan $loan) => [
+                'id' => $loan->id,
+                'loan_number' => $loan->loan_number,
+                'loan_type' => $loan->loan_type,
+                'loan_type_label' => $loan->typeLabel(),
+                'loan_cycle' => $loan->cycleNumber(),
+                'loan_cycle_label' => $loan->cycleLabel(),
+            ])->all(),
+            'next_cycle_by_loan_type' => $nextCycleByLoanType,
         ];
     }
 
@@ -78,7 +99,12 @@ class LoanApplicationService
             'installment_count' => $policy->total_installments ?? $policy->max_tenure_months,
         ]);
 
-        $calc = $this->calculator->calculate($policy, (float) $data['applied_amount'], (int) ($data['loan_cycle'] ?? 1));
+        $this->assertEmployeeCanTakeLoan((int) $data['employee_id'], $policy);
+        $requestedCycle = (int) ($data['loan_cycle'] ?? 0);
+        $nextCycle = EmployeeLoan::nextCycleFor((int) $data['employee_id'], (string) $policy->loan_type);
+        $loanCycle = max($nextCycle, $requestedCycle > 0 ? $requestedCycle : $nextCycle);
+
+        $calc = $this->calculator->calculate($policy, (float) $data['applied_amount'], $loanCycle);
 
         return LoanApplication::query()->create([
             'application_number' => $data['application_number'],
@@ -86,7 +112,7 @@ class LoanApplicationService
             'employee_id' => $data['employee_id'],
             'loan_policy_id' => $policy->id,
             'loan_committee_id' => $data['loan_committee_id'] ?? null,
-            'loan_cycle' => (int) ($data['loan_cycle'] ?? 1),
+            'loan_cycle' => $loanCycle,
             'applied_amount' => $calc['principal_amount'],
             'rate_yearly' => $calc['rate_yearly'],
             'installment_amount_monthly' => $calc['installment_amount_monthly'],
@@ -145,5 +171,35 @@ class LoanApplicationService
         ]);
 
         return $application->fresh();
+    }
+
+    public function assertEmployeeCanTakeLoan(int $employeeId, LoanPolicy $policy, ?int $ignoreApplicationId = null): void
+    {
+        $active = EmployeeLoan::activeOfType($employeeId, (string) $policy->loan_type);
+
+        if ($active) {
+            throw new InvalidArgumentException(sprintf(
+                'This employee already has an active %s (%s, %s). Fully pay or close it before applying for the next cycle.',
+                $active->typeLabel(),
+                $active->loan_number,
+                LoanCycle::label($active->cycleNumber()),
+            ));
+        }
+
+        $openApplication = LoanApplication::query()
+            ->where('employee_id', $employeeId)
+            ->whereIn('status', ['pending', 'approved'])
+            ->when($ignoreApplicationId, fn ($q) => $q->where('id', '!=', $ignoreApplicationId))
+            ->whereHas('policy', fn ($q) => $q->where('loan_type', $policy->loan_type))
+            ->first();
+
+        if ($openApplication) {
+            throw new InvalidArgumentException(sprintf(
+                'This employee already has a %s application (%s, %s) for this loan type. Complete or reject it before starting another cycle.',
+                $openApplication->status,
+                $openApplication->application_number,
+                LoanCycle::label((int) ($openApplication->loan_cycle ?? 1)),
+            ));
+        }
     }
 }

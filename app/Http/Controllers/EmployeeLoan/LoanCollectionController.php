@@ -330,6 +330,8 @@ class LoanCollectionController extends Controller
                     'employee_id' => $loan->employee_id,
                     'employee_label' => trim(($loan->employee?->pin ?? '').' — '.($loan->employee?->name_en ?? '')),
                     'loan_type_label' => $loan->typeLabel(),
+                    'loan_cycle' => $loan->cycleNumber(),
+                    'loan_cycle_label' => $loan->cycleLabel(),
                     'policy_name' => $loan->policy?->name,
                     'policy_code' => $loan->policy?->code,
                     'outstanding_balance' => (float) $loan->outstanding_balance,

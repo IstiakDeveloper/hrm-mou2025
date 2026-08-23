@@ -16,6 +16,7 @@ class EmployeeLoan extends Model
         'loan_migration_id',
         'loan_number',
         'loan_type',
+        'loan_cycle',
         'salary_head_id',
         'principal_amount',
         'interest_rate',
@@ -41,6 +42,7 @@ class EmployeeLoan extends Model
         'total_payable' => 'decimal:2',
         'installment_amount' => 'decimal:2',
         'outstanding_balance' => 'decimal:2',
+        'loan_cycle' => 'integer',
         'disbursement_date' => 'date',
         'first_installment_date' => 'date',
         'is_legacy_import' => 'boolean',
@@ -104,5 +106,48 @@ class EmployeeLoan extends Model
     public function typeLabel(): string
     {
         return config("employee_loans.loan_types.{$this->loan_type}.label", ucfirst(str_replace('_', ' ', $this->loan_type)));
+    }
+
+    public function cycleNumber(): int
+    {
+        return max(1, (int) ($this->loan_cycle ?? 1));
+    }
+
+    public function cycleLabel(): string
+    {
+        return \App\Support\LoanCycle::label($this->cycleNumber());
+    }
+
+    public function cycleDisplay(): string
+    {
+        return \App\Support\LoanCycle::display($this->cycleNumber());
+    }
+
+    public static function nextCycleFor(int $employeeId, string $loanType, bool $lock = false): int
+    {
+        $query = static::query()
+            ->where('employee_id', $employeeId)
+            ->where('loan_type', $loanType);
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return ((int) $query->max('loan_cycle')) + 1;
+    }
+
+    public static function activeOfType(int $employeeId, string $loanType, bool $lock = false): ?self
+    {
+        $query = static::query()
+            ->where('employee_id', $employeeId)
+            ->where('loan_type', $loanType)
+            ->where('status', 'active')
+            ->orderByDesc('id');
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first();
     }
 }

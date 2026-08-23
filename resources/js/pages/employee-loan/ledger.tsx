@@ -70,6 +70,7 @@ type Props = {
         rebate_amount: number;
         policy: { code: string; name: string; label: string } | null;
         loan_cycle: number;
+        loan_cycle_label?: string;
         application_number: string | null;
         employee: {
             id: number;
@@ -198,7 +199,7 @@ export default function EmployeeLoanLedger({ loan, schedule, editTerms, policies
 
     const policyRows: HeaderRow[] = [
         { label: 'Policy', value: loan.policy?.label },
-        { label: 'Loan Cycle', value: loan.loan_cycle },
+        { label: 'Loan Cycle', value: loan.loan_cycle_label ?? loan.loan_cycle },
         { label: 'Application No', value: loan.application_number },
         { label: 'Rate', value: loan.interest_rate },
         { label: 'Total Install', value: loan.installment_count },

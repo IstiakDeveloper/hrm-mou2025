@@ -8,7 +8,6 @@ use App\Services\EmployeeLoanReportService;
 use App\Support\EmployeeLoanReportCsvExporter;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use App\Support\ProjectPdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeLoanReportController extends Controller
@@ -79,6 +78,8 @@ class EmployeeLoanReportController extends Controller
                 'date_from' => $request->input('date_from', ''),
                 'date_to' => $request->input('date_to', ''),
                 'loan_type' => $request->input('loan_type', ''),
+                'loan_cycle' => $request->input('loan_cycle', ''),
+                'loan_id' => $request->input('loan_id', ''),
             ]),
             'generated' => $generated,
             'payload' => $payload,

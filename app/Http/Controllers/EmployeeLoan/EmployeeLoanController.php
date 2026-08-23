@@ -15,7 +15,6 @@ use App\Services\LoanRebateService;
 use App\Services\SalaryStructureCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -161,7 +160,7 @@ class EmployeeLoanController extends Controller
                 $exactCalc = $this->calculator->calculate(
                     $policy,
                     (float) $employee_loan->principal_amount,
-                    (int) ($employee_loan->application?->loan_cycle ?? 1),
+                    (int) $employee_loan->cycleNumber(),
                 );
             }
         }
@@ -310,7 +309,8 @@ class EmployeeLoanController extends Controller
                     'name' => $employee_loan->policy->name,
                     'label' => trim($employee_loan->policy->code.' '.$employee_loan->policy->name),
                 ] : null,
-                'loan_cycle' => $employee_loan->application?->loan_cycle ?? 1,
+                'loan_cycle' => $employee_loan->cycleNumber(),
+                'loan_cycle_label' => $employee_loan->cycleLabel(),
                 'application_number' => $employee_loan->application?->application_number
                     ?? $employee_loan->reference_no,
                 'employee' => [
@@ -576,6 +576,8 @@ class EmployeeLoanController extends Controller
         return [
             'id' => $loan->id,
             'loan_number' => $loan->loan_number,
+            'loan_cycle' => $loan->cycleNumber(),
+            'loan_cycle_label' => $loan->cycleLabel(),
             'status' => $loan->status,
             'loan_type_label' => $loan->typeLabel(),
             'policy_name' => $loan->policy?->name,
@@ -595,8 +597,9 @@ class EmployeeLoanController extends Controller
         return [
             'id' => $loan->id,
             'loan_number' => $loan->loan_number,
-            'loan_type' => $loan->loan_type,
             'loan_type_label' => $loan->typeLabel(),
+            'loan_cycle' => $loan->cycleNumber(),
+            'loan_cycle_label' => $loan->cycleLabel(),
             'policy_name' => $loan->policy?->name,
             'is_legacy_import' => (bool) $loan->is_legacy_import,
             'status' => $loan->status,

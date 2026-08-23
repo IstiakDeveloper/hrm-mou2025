@@ -18,6 +18,7 @@ type Application = {
     application_date: string | null;
     status: string;
     loan_cycle: number;
+    loan_cycle_label?: string;
     applied_amount: number;
     rate_yearly: number;
     installment_amount_monthly: number;
@@ -160,7 +161,7 @@ export default function LoanApplicationShow({ application }: { application: Appl
                     <CardContent className="space-y-2 px-4 pb-4 text-xs">
                         <div className="flex justify-between">
                             <span className="text-zinc-500">Loan cycle</span>
-                            <span className="font-medium">{application.loan_cycle}</span>
+                            <span className="font-medium">{application.loan_cycle_label ?? application.loan_cycle}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-zinc-500">Grace months</span>

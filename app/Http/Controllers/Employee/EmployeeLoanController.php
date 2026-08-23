@@ -5,11 +5,9 @@ namespace App\Http\Controllers\Employee;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\EmployeeLoan;
-use App\Models\EmployeeLoanInstallment;
 use App\Models\EmployeeLoanTransaction;
 use App\Models\User;
 use App\Services\EmployeeLoanService;
-use App\Services\SalaryStructureCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -196,7 +194,8 @@ class EmployeeLoanController extends Controller
                     'name' => $employee_loan->policy->name,
                     'label' => trim($employee_loan->policy->code.' '.$employee_loan->policy->name),
                 ] : null,
-                'loan_cycle' => $employee_loan->application?->loan_cycle ?? 1,
+                'loan_cycle' => $employee_loan->cycleNumber(),
+                'loan_cycle_label' => $employee_loan->cycleLabel(),
                 'application_number' => $employee_loan->application?->application_number
                     ?? $employee_loan->reference_no,
                 'employee' => [

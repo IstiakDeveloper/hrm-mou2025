@@ -7,7 +7,7 @@ return [
         'loan-ledger' => [
             'title' => 'Loan Ledger',
             'description' => 'Full installment ledger per loan (PAID and NON-PAID) with PR/SC breakdown — same layout as single loan ledger.',
-            'filters' => ['branch_id', 'department_id', 'employee_id', 'loan_type'],
+            'filters' => ['branch_id', 'department_id', 'employee_id', 'loan_type', 'loan_cycle', 'loan_id'],
             'template' => 'loan-installment-ledger',
             'report' => 'loan_ledger',
         ],

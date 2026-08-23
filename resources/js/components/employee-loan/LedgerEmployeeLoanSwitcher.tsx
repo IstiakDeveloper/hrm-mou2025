@@ -15,6 +15,8 @@ export type LedgerNavLoan = {
     policy_code?: string | null;
     outstanding_balance: number;
     pending_installments: number;
+    loan_cycle?: number;
+    loan_cycle_label?: string;
 };
 
 type Props = {

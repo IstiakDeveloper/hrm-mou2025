@@ -23,6 +23,8 @@ type LoanRow = {
     id: number;
     loan_number: string;
     loan_type_label: string;
+    loan_cycle?: number;
+    loan_cycle_label?: string;
     status: string;
     principal_amount: number;
     service_charge_amount: number;
@@ -184,6 +186,7 @@ export default function EmployeeLoanIndex({
                             <TableHead className="text-xs">Loan No</TableHead>
                             <TableHead className="text-xs">Employee</TableHead>
                             <TableHead className="text-xs">Type</TableHead>
+                            <TableHead className="text-xs">Cycle</TableHead>
                             <TableHead className="text-xs text-right">PR</TableHead>
                             <TableHead className="text-xs text-right">SC</TableHead>
                             <TableHead className="text-xs text-right">Out. PR</TableHead>
@@ -197,7 +200,7 @@ export default function EmployeeLoanIndex({
                     <TableBody>
                         {loans.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={11} className="py-8 text-center text-sm text-zinc-500">
+                                <TableCell colSpan={12} className="py-8 text-center text-sm text-zinc-500">
                                     <HandCoins className="mx-auto mb-2 h-8 w-8 text-zinc-300" />
                                     No employee loans found.
                                 </TableCell>
@@ -213,6 +216,7 @@ export default function EmployeeLoanIndex({
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-xs">{loan.loan_type_label}</TableCell>
+                                    <TableCell className="text-xs">{loan.loan_cycle_label ?? (loan.loan_cycle ? `Cycle ${loan.loan_cycle}` : '—')}</TableCell>
                                     <TableCell className="text-xs text-right tabular-nums">{fmt(loan.principal_amount)}</TableCell>
                                     <TableCell className="text-xs text-right tabular-nums">{fmt(loan.service_charge_amount)}</TableCell>
                                     <TableCell className="text-xs text-right tabular-nums">{fmt(loan.outstanding_principal)}</TableCell>

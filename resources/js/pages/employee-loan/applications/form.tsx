@@ -35,11 +35,20 @@ type EmployeePreview = {
     pf_own_balance: number;
     pf_org_balance: number;
     pf_total_balance: number;
+    active_loans?: {
+        id: number;
+        loan_number: string;
+        loan_type: string;
+        loan_type_label: string;
+        loan_cycle: number;
+        loan_cycle_label: string;
+    }[];
+    next_cycle_by_loan_type?: Record<string, number>;
 };
 
 type Props = {
     employees: { id: number; pin?: string; name_en?: string; employee_id?: string }[];
-    policies: { id: number; name: string; code: string; min_amount: number; max_amount: number }[];
+    policies: { id: number; name: string; code: string; min_amount: number; max_amount: number; loan_type?: string }[];
     committees: { id: number; committee_name: string }[];
     nextApplicationNumber: string;
     application: {
@@ -149,6 +158,26 @@ export default function LoanApplicationForm({ employees, policies, committees, n
         const t = setTimeout(loadCalc, 300);
         return () => clearTimeout(t);
     }, [loadCalc]);
+
+    const selectedPolicy = policies.find((p) => String(p.id) === form.data.loan_policy_id);
+    const activeLoanForType = employeeInfo?.active_loans?.find((l) => l.loan_type === selectedPolicy?.loan_type);
+
+    useEffect(() => {
+        if (!employeeInfo || !selectedPolicy?.loan_type) {
+            return;
+        }
+        if (
+            isEdit &&
+            form.data.employee_id === application?.employee_id &&
+            form.data.loan_policy_id === application?.loan_policy_id
+        ) {
+            return;
+        }
+        const next = employeeInfo.next_cycle_by_loan_type?.[selectedPolicy.loan_type] ?? 1;
+        if (String(next) !== form.data.loan_cycle) {
+            form.setData('loan_cycle', String(next));
+        }
+    }, [employeeInfo, selectedPolicy?.loan_type, form.data.employee_id, form.data.loan_policy_id]);
 
     const submit = (forApproval: boolean) => {
         form.transform((d) => ({ ...d, submit_for_approval: forApproval }));
@@ -277,6 +306,16 @@ export default function LoanApplicationForm({ employees, policies, committees, n
                                     value={form.data.loan_cycle}
                                     onChange={(e) => form.setData('loan_cycle', e.target.value)}
                                 />
+                                <p className="text-[11px] text-zinc-500">
+                                    Auto-filled as 1st, 2nd, 3rd… for this employee and loan type.
+                                </p>
+                                {activeLoanForType && (
+                                    <p className="text-[11px] text-amber-700">
+                                        An active {activeLoanForType.loan_type_label} already exists (
+                                        {activeLoanForType.loan_number}, {activeLoanForType.loan_cycle_label}). Fully
+                                        pay or close it before taking the next cycle.
+                                    </p>
+                                )}
                             </div>
                             <div className="space-y-1.5 sm:col-span-2">
                                 <Label className="text-xs">Notes (optional)</Label>

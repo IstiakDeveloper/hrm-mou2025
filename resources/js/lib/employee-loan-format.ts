@@ -21,7 +21,28 @@ export type LoanSelectIdentity = {
     loan_type_label?: string | null;
     policy_name?: string | null;
     policy_code?: string | null;
+    loan_cycle?: number | null;
+    loan_cycle_label?: string | null;
 };
+
+export function loanCycleOrdinal(cycle: number): string {
+    const n = Math.max(1, Math.floor(Number(cycle) || 1));
+    const mod100 = n % 100;
+    const mod10 = n % 10;
+    if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+    if (mod10 === 1) return `${n}st`;
+    if (mod10 === 2) return `${n}nd`;
+    if (mod10 === 3) return `${n}rd`;
+    return `${n}th`;
+}
+
+export function loanCycleLabel(cycle: number): string {
+    return `Cycle ${cycle} (${loanCycleOrdinal(cycle)})`;
+}
+
+export function loanCycleFilterLabel(cycle: number): string {
+    return `${loanCycleOrdinal(cycle)} Cycle`;
+}
 
 /**
  * Human-readable loan identity: type + policy code/name (not just LN-…).
@@ -87,6 +108,12 @@ export function formatLoanSelectLabel(loan: LoanSelectLabelLoan, options: LoanSe
     const name = loanSelectName(loan);
     parts.push(name);
 
+    if (loan.loan_cycle_label) {
+        parts.push(loan.loan_cycle_label);
+    } else if (loan.loan_cycle) {
+        parts.push(loanCycleLabel(loan.loan_cycle));
+    }
+
     if (name !== loan.loan_number && loan.loan_number) {
         parts.push(loan.loan_number);
     }
@@ -114,6 +141,8 @@ export function loanSelectKeywords(loan: LoanSelectIdentity & { employee_label?:
         loan.loan_type_label,
         loan.policy_name,
         loan.policy_code,
+        loan.loan_cycle_label,
+        loan.loan_cycle != null ? String(loan.loan_cycle) : null,
         loan.employee_label,
         loan.status,
     ]
