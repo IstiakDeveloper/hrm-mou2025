@@ -1872,7 +1872,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ====================
-    // REPORTS MANAGEMENT
+    // REPORTS
     // ====================
     Route::middleware(['permission:reports.view'])->prefix('reports')->name('reports.')->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
