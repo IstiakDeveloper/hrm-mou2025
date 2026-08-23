@@ -1861,7 +1861,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ====================
-    // ZKTECO INTEGRATION
+    // ZKTECO
     // ====================
     Route::middleware(['permission:attendance.admin'])->prefix('zkteco')->name('zkteco.')->group(function () {
         Route::get('/', [ZKDeviceController::class, 'index'])->name('dashboard');
