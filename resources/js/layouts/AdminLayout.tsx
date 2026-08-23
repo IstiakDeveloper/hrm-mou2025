@@ -1487,18 +1487,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 shadow-xl shadow-slate-200/50">
                                         <DropdownMenuLabel className="text-[13px] font-bold text-slate-700">My Account</DropdownMenuLabel>
-                                        <DropdownMenuSeparator className="bg-slate-100" />
-                                        {!branchAccount && (
-                                            <DropdownMenuItem
-                                                asChild
-                                                className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"
-                                            >
-                                                <Link href="/settings/password" className="flex items-center text-[13px] font-medium text-slate-600">
-                                                    <KeyRound className="mr-2.5 h-4 w-4 text-slate-400" />
-                                                    Change Password
-                                                </Link>
-                                            </DropdownMenuItem>
-                                        )}
+                                        <DropdownMenuItem
+                                            asChild
+                                            className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"
+                                        >
+                                            <Link href="/settings/password" className="flex items-center text-[13px] font-medium text-slate-600">
+                                                <KeyRound className="mr-2.5 h-4 w-4 text-slate-400" />
+                                                {branchAccount ? 'Change Branch PIN' : 'Change Password'}
+                                            </Link>
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem
                                             asChild
                                             className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"

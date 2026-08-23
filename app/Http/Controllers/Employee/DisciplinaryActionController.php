@@ -20,6 +20,7 @@ class DisciplinaryActionController extends Controller
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
 
+        
         $query = EmployeeDisciplinaryAction::query()
             ->with([
                 'employee:id,pin,employee_id,name_en,name_bn,photo,designation_id,current_branch_id',
