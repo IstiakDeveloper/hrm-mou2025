@@ -2,6 +2,8 @@ import { Head } from '@inertiajs/react';
 
 import AppearanceLightOnly from '@/components/appearance-light-only';
 import HeadingSmall from '@/components/heading-small';
+import NavLayoutSettings from '@/components/nav-layout-settings';
+import { Separator } from '@/components/ui/separator';
 
 import AdminLayout from '@/layouts/AdminLayout';
 import SettingsLayout from '@/layouts/settings/layout';
@@ -14,9 +16,14 @@ export default function Appearance() {
             <SettingsLayout>
                 <div className="space-y-6">
                     <HeadingSmall
-                        title="Appearance settings"
-                        description="The interface uses a single light theme for everyone."
+                        title="Appearance & Layout"
+                        description="Customize your navigation layout and theme preferences."
                     />
+
+                    <NavLayoutSettings />
+
+                    <Separator className="my-6" />
+
                     <AppearanceLightOnly />
                 </div>
             </SettingsLayout>

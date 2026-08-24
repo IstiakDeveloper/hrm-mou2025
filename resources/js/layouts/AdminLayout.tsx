@@ -27,7 +27,9 @@ import {
     Menu,
     MonitorSmartphone,
     Package,
+    PanelLeft,
     Settings,
+    SlidersHorizontal,
     User,
     Users,
     Wallet,
@@ -123,6 +125,7 @@ import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
 import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead } from '@/lib/permissions';
 import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
+import { useNavLayout } from '@/lib/nav-layout';
 import { cn } from '@/lib/utils';
 import { CloseMovementModal } from '@/components/close-movement-modal';
 import { format } from 'date-fns';
@@ -254,6 +257,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const page = usePage();
     const { auth, notifications, activeMovement } = page.props as any;
     const inertiaUrl = page.url;
+    const { navLayout, setNavLayout, toggleNavLayout, isTopNav, isSidebarNav } = useNavLayout();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -1149,6 +1153,115 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         );
     };
 
+    const DesktopTopMenuItem = ({ item }: { item: MenuItemType }) => {
+        if (item.hrOnly && !canSeeHrOnlyMenu) return null;
+        if (item.employeeOnly && !employee?.id) return null;
+        if (item.anyPermissions?.length) {
+            if (!item.anyPermissions.some((p) => hasPermission(p))) return null;
+        } else if (item.permission && !hasPermission(item.permission)) {
+            return null;
+        }
+
+        const permittedSubmenu = item.submenu
+            ?.filter(
+                (subItem) =>
+                    subItem.isGroupLabel ||
+                    ((!subItem.hrOnly || canSeeHrOnlyMenu) &&
+                        (!subItem.permission || hasPermission(subItem.permission)) &&
+                        (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
+                        (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p)))),
+            )
+            ?.filter((subItem, index, items) => {
+                if (!subItem.isGroupLabel) {
+                    return true;
+                }
+                return items.slice(index + 1).some((next) => !next.isGroupLabel);
+            });
+
+        if (item.hasSubmenu && (!permittedSubmenu || permittedSubmenu.length === 0)) return null;
+
+        const submenuSectionActive = permittedSubmenu?.some((s) => !s.isGroupLabel && isActive(s.path)) ?? false;
+        const isItemActive = submenuSectionActive || isActive(item.path);
+
+        if (item.hasSubmenu && permittedSubmenu && permittedSubmenu.length > 0) {
+            return (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <button
+                            type="button"
+                            className={cn(
+                                'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold tracking-wide transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+                                isItemActive
+                                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/25'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            )}
+                        >
+                            <div className={cn(isItemActive ? 'text-emerald-600' : 'text-slate-500')}>
+                                {React.cloneElement(item.icon as React.ReactElement, { className: 'w-3.5 h-3.5' })}
+                            </div>
+                            <span className="whitespace-nowrap">{item.title}</span>
+                            <ChevronDown className="h-3 w-3 text-slate-400 opacity-80" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                        align="start"
+                        sideOffset={6}
+                        className="min-w-[210px] max-h-[min(480px,75vh)] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-200/50"
+                    >
+                        {permittedSubmenu.map((subItem, idx) =>
+                            subItem.isGroupLabel ? (
+                                <DropdownMenuLabel
+                                    key={idx}
+                                    className="px-2.5 pt-2 pb-1 text-[10px] font-bold tracking-widest text-slate-400 uppercase first:pt-1"
+                                >
+                                    {subItem.title}
+                                </DropdownMenuLabel>
+                            ) : (
+                                <DropdownMenuItem
+                                    key={idx}
+                                    asChild
+                                    className="cursor-pointer rounded-lg text-xs font-medium transition-colors hover:bg-slate-50 focus:bg-slate-50"
+                                >
+                                    <Link
+                                        href={subItem.path}
+                                        className={cn(
+                                            'flex w-full items-center justify-between px-2.5 py-1.5 tracking-wide',
+                                            isActive(subItem.path)
+                                                ? 'bg-emerald-50 font-semibold text-emerald-700'
+                                                : 'text-slate-600 hover:text-slate-900',
+                                        )}
+                                    >
+                                        <span>{subItem.title}</span>
+                                        {isActive(subItem.path) && (
+                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                                        )}
+                                    </Link>
+                                </DropdownMenuItem>
+                            ),
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            );
+        }
+
+        return (
+            <Link
+                href={item.path}
+                className={cn(
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold tracking-wide transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+                    isActive(item.path)
+                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/25'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                )}
+            >
+                <div className={cn(isActive(item.path) ? 'text-emerald-600' : 'text-slate-500')}>
+                    {React.cloneElement(item.icon as React.ReactElement, { className: 'w-3.5 h-3.5' })}
+                </div>
+                <span className="whitespace-nowrap">{item.title}</span>
+            </Link>
+        );
+    };
+
     // Flash message handling
     const { flash, errors } = usePage().props as any;
     const { toast } = useToast();
@@ -1252,9 +1365,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <div className="relative z-10 flex flex-1 overflow-hidden">
                 {/* Sidebar */}
                 <aside
-                    className={`relative z-20 hidden h-full min-h-0 shrink-0 flex-col border-r border-emerald-900/15 bg-white/95 shadow-sm backdrop-blur transition-all duration-300 md:flex ${
-                        isSidebarOpen ? 'w-[260px]' : 'w-[84px]'
-                    }`}
+                    className={cn(
+                        'relative z-20 h-full min-h-0 shrink-0 flex-col border-r border-emerald-900/15 bg-white/95 shadow-sm backdrop-blur transition-all duration-300',
+                        isTopNav ? 'hidden' : 'hidden md:flex',
+                        isSidebarOpen ? 'w-[260px]' : 'w-[84px]',
+                    )}
                 >
                     {/* Toggle Button */}
                     <button
@@ -1423,8 +1538,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     {/* Top Header */}
                     <header className="sticky top-0 z-10 h-14 border-b border-emerald-900/15 bg-white/90 px-2 shadow-sm backdrop-blur-md sm:h-16 sm:px-4 lg:px-6">
                         <div className="flex h-full items-center justify-between gap-2 sm:gap-4">
-                            {/* Left: Mobile Menu Button & Home Icon */}
-                            <div className="flex items-center gap-0.5 sm:gap-2">
+                            {/* Left: Mobile Menu Button, Brand Logo (in Top Nav Mode), & Home Icon */}
+                            <div className="flex items-center gap-1 sm:gap-2.5">
                                 <div className="md:hidden">
                                     <Button
                                         variant="ghost"
@@ -1435,6 +1550,27 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                         <Menu className="h-5 w-5" />
                                     </Button>
                                 </div>
+
+                                {isTopNav && (
+                                    <Link
+                                        href="/sections"
+                                        className="group hidden min-w-0 items-center gap-2.5 pr-1 md:flex"
+                                        title="Mousumi ERP - Home"
+                                    >
+                                        <div className="flex shrink-0 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 p-1.5 transition-transform group-hover:scale-105">
+                                            <img src="/logo.png" className="h-6 w-6 rounded-md object-contain" alt="Logo" />
+                                        </div>
+                                        <div className="flex min-w-0 flex-col">
+                                            <p className="truncate text-[13px] font-bold tracking-wide text-slate-800 leading-tight">
+                                                Mousumi ERP
+                                            </p>
+                                            <p className="truncate text-[9.5px] font-semibold tracking-widest text-emerald-600 uppercase leading-none">
+                                                {activeSection?.title || 'System'}
+                                            </p>
+                                        </div>
+                                    </Link>
+                                )}
+
                                 <Button
                                     asChild
                                     variant="ghost"
@@ -1448,8 +1584,29 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 </Button>
                             </div>
 
-                            {/* Right: User Menu & Notifications */}
+                            {/* Right: User Menu, Navigation Switcher & Notifications */}
                             <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
+                                {/* Desktop Layout Mode Switcher */}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={toggleNavLayout}
+                                    className="hidden items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/90 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-xs hover:border-emerald-300/80 hover:bg-emerald-50/80 hover:text-emerald-800 transition-all md:inline-flex"
+                                    title={isTopNav ? 'Switch to Left Sidebar Navigation' : 'Switch to Top Bar Horizontal Navigation'}
+                                >
+                                    {isTopNav ? (
+                                        <>
+                                            <PanelLeft className="h-3.5 w-3.5 text-emerald-600" />
+                                            <span className="text-[11.5px] tracking-wide">Sidebar</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <SlidersHorizontal className="h-3.5 w-3.5 text-slate-500" />
+                                            <span className="text-[11.5px] tracking-wide">Top Nav</span>
+                                        </>
+                                    )}
+                                </Button>
+
                                 <a
                                     href="https://app.mousumibd.org"
                                     target="_self"
@@ -1514,6 +1671,24 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                                 Notifications
                                             </Link>
                                         </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            onClick={toggleNavLayout}
+                                            className="cursor-pointer rounded-lg transition-colors hover:bg-slate-50 focus:bg-slate-50"
+                                        >
+                                            <div className="flex w-full items-center justify-between text-[13px] font-medium text-slate-600">
+                                                <span className="flex items-center">
+                                                    {isTopNav ? (
+                                                        <PanelLeft className="mr-2.5 h-4 w-4 text-slate-400" />
+                                                    ) : (
+                                                        <SlidersHorizontal className="mr-2.5 h-4 w-4 text-slate-400" />
+                                                    )}
+                                                    Nav Layout
+                                                </span>
+                                                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-500/20">
+                                                    {isTopNav ? 'Top Bar' : 'Sidebar'}
+                                                </span>
+                                            </div>
+                                        </DropdownMenuItem>
                                         <DropdownMenuSeparator className="bg-slate-100" />
                                         <DropdownMenuItem
                                             asChild
@@ -1534,6 +1709,39 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </div>
                         </div>
                     </header>
+
+                    {/* Desktop Top Bar Horizontal Navigation (When Top Nav layout mode is active) */}
+                    {isTopNav && (
+                        <div className="sticky top-14 z-20 hidden w-full border-b border-emerald-900/10 bg-white/95 px-3 py-1.5 shadow-xs backdrop-blur-md sm:top-16 md:block">
+                            <div className="sidebar-nav-scroll flex w-full items-center gap-1.5 overflow-x-auto py-0.5">
+                                {sectionDashboardEntries.map((d) => (
+                                    <Link
+                                        key={d.path}
+                                        href={d.path}
+                                        className={cn(
+                                            'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold tracking-wide transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+                                            isActive(d.path)
+                                                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/25'
+                                                : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50',
+                                        )}
+                                    >
+                                        <LayoutDashboard className="h-3.5 w-3.5 text-emerald-600" />
+                                        <span>{d.title}</span>
+                                    </Link>
+                                ))}
+
+                                {sectionDashboardEntries.length > 0 && visibleMenuItems.length > 0 && (
+                                    <div className="mx-1 h-5 w-px shrink-0 bg-slate-200" />
+                                )}
+
+                                <nav className="flex items-center gap-1">
+                                    {visibleMenuItems.map((item, idx) => (
+                                        <DesktopTopMenuItem key={idx} item={item} />
+                                    ))}
+                                </nav>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Global Mobile Section Sub-Navigation Bar (Active for all sections on mobile viewports) */}
                     {mobileSubNavItems.length > 0 && (

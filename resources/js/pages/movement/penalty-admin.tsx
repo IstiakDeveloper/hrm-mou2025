@@ -451,6 +451,19 @@ export default function PenaltyAdmin({
                         padding: 4px 5px !important;
                         line-height: 1.2 !important;
                     }
+                    #printable-paid-report tfoot tr {
+                        background-color: #f3f4f6 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    #printable-paid-report tfoot td {
+                        padding: 6px 6px !important;
+                        font-size: 11.5px !important;
+                        font-weight: 800 !important;
+                        line-height: 1.3 !important;
+                        text-overflow: clip !important;
+                        white-space: nowrap !important;
+                    }
                 }
             `}</style>
 
@@ -1704,7 +1717,7 @@ export default function PenaltyAdmin({
                     </div>
                     <div>
                         <span className="text-gray-500 block text-[10px]">TOTAL COLLECTION AMOUNT</span>
-                        <span className="text-base font-bold text-black">৳ {Number(paidStats?.total_amount || 0).toLocaleString()}</span>
+                        <span className="text-base font-bold text-black">{Math.round(Number(paidStats?.total_amount || 0)).toLocaleString()}</span>
                     </div>
                     <div>
                         <span className="text-gray-500 block text-[10px]">TOTAL OVERDUE DAYS</span>
@@ -1716,23 +1729,23 @@ export default function PenaltyAdmin({
                 <table className="w-full text-[10px] border-collapse border border-gray-400 table-fixed">
                     <colgroup>
                         <col style={{ width: '4%' }} />
-                        <col style={{ width: '22%' }} />
-                        <col style={{ width: '13%' }} />
-                        <col style={{ width: '22%' }} />
-                        <col style={{ width: '9%' }} />
+                        <col style={{ width: '26%' }} />
                         <col style={{ width: '15%' }} />
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '9%' }} />
+                        <col style={{ width: '18%' }} />
                         <col style={{ width: '8%' }} />
-                        <col style={{ width: '7%' }} />
+                        <col style={{ width: '10%' }} />
                     </colgroup>
                     <thead>
                         <tr className="bg-gray-200 border-b border-gray-400 font-bold text-left">
                             <th className="p-1 border border-gray-400 text-center">#</th>
                             <th className="p-1 border border-gray-400">Employee Name (ID)</th>
                             <th className="p-1 border border-gray-400">Branch</th>
-                            <th className="p-1 border border-gray-400">Movement</th>
+                            <th className="p-1 border border-gray-400 text-center">Movement ID</th>
                             <th className="p-1 border border-gray-400">Overdue</th>
                             <th className="p-1 border border-gray-400">Sender Mobile</th>
-                            <th className="p-1 border border-gray-400 text-right">Fine (৳)</th>
+                            <th className="p-1 border border-gray-400 text-right">Fine</th>
                             <th className="p-1 border border-gray-400">Approved</th>
                         </tr>
                     </thead>
@@ -1756,15 +1769,15 @@ export default function PenaltyAdmin({
                                     <td className="p-1 border border-gray-300 truncate" title={item.employee?.branch?.name || 'Main Office'}>
                                         {item.employee?.branch?.name || 'Main Office'}
                                     </td>
-                                    <td className="p-1 border border-gray-300 truncate" title={`#${item.movement?.id} - ${item.movement?.purpose || ''}`}>
-                                        #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
+                                    <td className="p-1 border border-gray-300 text-center font-mono font-medium">
+                                        #{item.movement?.id || item.movement_id || 'N/A'}
                                     </td>
                                     <td className="p-1 border border-gray-300 whitespace-nowrap">{item.overdue_days} Day(s)</td>
                                     <td className="p-1 border border-gray-300 font-mono font-bold whitespace-nowrap">
                                         {item.sender_number || item.transaction_id || 'N/A'} ({item.payment_method?.toUpperCase() || '-'})
                                     </td>
                                     <td className="p-1 border border-gray-300 text-right font-bold whitespace-nowrap">
-                                        ৳ {Number(item.total_fine).toFixed(2)}
+                                        {Math.round(Number(item.total_fine || 0)).toLocaleString()}
                                     </td>
                                     <td className="p-1 border border-gray-300 truncate" title={item.approver?.name || 'Admin'}>
                                         {item.approver?.name || 'Admin'}
@@ -1774,14 +1787,14 @@ export default function PenaltyAdmin({
                         )}
                     </tbody>
                     <tfoot>
-                        <tr className="bg-gray-100 font-extrabold text-[10px]">
-                            <td colSpan={6} className="p-1 border border-gray-400 text-right">
+                        <tr className="bg-gray-100 font-extrabold text-xs">
+                            <td colSpan={6} className="p-2 border border-gray-400 text-right font-bold text-xs uppercase tracking-wider text-black">
                                 Total Collection:
                             </td>
-                            <td className="p-1 border border-gray-400 text-right text-black">
-                                ৳ {Number(paidStats?.total_amount || 0).toFixed(2)}
+                            <td className="p-2 border border-gray-400 text-right font-black text-xs text-black whitespace-nowrap">
+                                {Math.round(Number(paidStats?.total_amount || 0)).toLocaleString()}
                             </td>
-                            <td className="p-1 border border-gray-400"></td>
+                            <td className="p-2 border border-gray-400"></td>
                         </tr>
                     </tfoot>
                 </table>
