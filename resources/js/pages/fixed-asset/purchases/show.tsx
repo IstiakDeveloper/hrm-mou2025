@@ -1,14 +1,26 @@
-import React from 'react';
-import { Head, Link } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
-import { ArrowLeft, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Edit2, ShoppingCart, Trash2 } from 'lucide-react';
+import { isAccountant, isSuperAdmin, hasAppPermission } from '@/lib/permissions';
 import { employeeDisplayName } from '@/lib/employee-name';
 import { formatDisplayDate } from '@/lib/display-date';
 import { formatTakaWhole } from '@/lib/taka-format';
+import type { SharedData } from '@/types';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type AssetRef = { id: number; asset_tag: string; manual_asset_code: string | null; name: string; purchase_cost: string; status: string };
 type ItemRow = {
@@ -31,6 +43,12 @@ type ItemRow = {
 };
 
 export default function AssetPurchaseShow({ purchase }: { purchase: Record<string, unknown> }) {
+    const { auth } = usePage<SharedData>().props;
+    const [confirmDelete, setConfirmDelete] = useState(false);
+
+    const canEdit = hasAppPermission(auth, 'fixed-assets.edit') || isAccountant(auth) || isSuperAdmin(auth);
+    const canDelete = hasAppPermission(auth, 'fixed-assets.delete') || isAccountant(auth) || isSuperAdmin(auth);
+
     const p = purchase as {
         id: number;
         purchase_no: string;
@@ -48,6 +66,10 @@ export default function AssetPurchaseShow({ purchase }: { purchase: Record<strin
         items: ItemRow[];
     };
 
+    const handleDelete = () => {
+        router.delete(route('fixed-asset.purchases.destroy', p.id));
+    };
+
     return (
         <Layout>
             <Head title={`Purchase ${p.purchase_no}`} />
@@ -55,7 +77,26 @@ export default function AssetPurchaseShow({ purchase }: { purchase: Record<strin
                 <Link href={route('fixed-asset.purchases.index')} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
                     <ArrowLeft className="mr-1 h-4 w-4" /> Back to purchases
                 </Link>
-                <PayrollPageHeader icon={ShoppingCart} title={p.purchase_no} description={`Purchased on ${formatDisplayDate(p.purchase_date)}`} />
+                <PayrollPageHeader
+                    icon={ShoppingCart}
+                    title={p.purchase_no}
+                    description={`Purchased on ${formatDisplayDate(p.purchase_date)}`}
+                >
+                    <div className="flex items-center gap-2">
+                        {canEdit && (
+                            <Link href={route('fixed-asset.purchases.edit', p.id)}>
+                                <Button variant="outline" size="sm">
+                                    <Edit2 className="mr-2 h-4 w-4" /> Edit
+                                </Button>
+                            </Link>
+                        )}
+                        {canDelete && (
+                            <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)} className="text-red-600 border-red-200 hover:bg-red-50">
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </Button>
+                        )}
+                    </div>
+                </PayrollPageHeader>
                 <div className="mb-4 grid gap-4 lg:grid-cols-2">
                     <PayrollSectionCard title="Purchase details">
                         <dl className="space-y-2 text-sm">
@@ -104,6 +145,23 @@ export default function AssetPurchaseShow({ purchase }: { purchase: Record<strin
                     </PayrollSectionCard>
                 ))}
             </PayrollPage>
+
+            <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Purchase Record?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this purchase record? All fixed assets created under this purchase voucher will also be removed. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white">
+                            Delete Purchase
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Layout>
     );
 }

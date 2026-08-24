@@ -171,7 +171,7 @@ class PermissionRegistry
 
             foreach (self::keys() as $key) {
                 foreach ($prefixes as $prefix) {
-                    if (str_starts_with($key, $prefix) && ! str_ends_with($key, '.delete')) {
+                    if (str_starts_with($key, $prefix) && (! str_ends_with($key, '.delete') || $prefix === 'fixed-assets.')) {
                         $resolved[] = $key;
                         break;
                     }

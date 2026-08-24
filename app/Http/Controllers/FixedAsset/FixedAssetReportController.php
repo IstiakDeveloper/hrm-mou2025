@@ -12,8 +12,8 @@ use App\Services\AssetFinancialYearService;
 use App\Services\FixedAssetReportService;
 use App\Support\FixedAssetReportCsvExporter;
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Inertia\Inertia;
-use App\Support\ProjectPdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FixedAssetReportController extends Controller
@@ -124,6 +124,12 @@ class FixedAssetReportController extends Controller
             $config,
         );
         $payload = $this->reports->build($report, $config, $filters);
+        
+        $payload['expanded'] = $request->input('expanded', 'none');
+        $payload['expanded_sections'] = $request->filled('expanded_sections')
+            ? explode(',', (string) $request->input('expanded_sections'))
+            : [];
+
         $wideSchedule = ($config['template'] ?? '') === 'depreciation-schedule'
             && in_array($config['schedule_variant'] ?? '', ['audit', 'summary'], true);
 

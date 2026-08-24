@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
 import { AssetPage, AssetPageHeader, AssetSectionCard } from '@/components/fixed-asset/AssetPageShell';
 import { BranchScopeAlert } from '@/components/fixed-asset/BranchScopeAlert';
-import { DISPLAY_DATE_FMT, displayDateToServer, parseFormDateValue, todayDisplayDate } from '@/lib/display-date';
+import { DISPLAY_DATE_FMT, displayDateToServer, parseFormDateValue, todayDisplayDate, toFormDisplayDate } from '@/lib/display-date';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { formatTakaWithSymbol } from '@/lib/taka-format';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ type SubCategoryOpt = { id: number; asset_category_id: number; code: string; nam
 type CustodianOpt = { id: number; name: string; employee_id: number | null; branch_id: number | null; employee?: EmployeeNameFields & { employee_id: string } | null };
 
 type ItemForm = {
+    id?: number;
     asset_category_id: string;
     asset_sub_category_id: string;
     quantity: string;
@@ -37,6 +38,7 @@ type ItemForm = {
     room_no: string;
     asset_custodian_id: string;
     photo: File | null;
+    photo_url?: string | null;
 };
 
 const emptyItem = (): ItemForm => ({
@@ -81,6 +83,7 @@ function Field({
 }
 
 export default function AssetPurchaseForm({
+    purchase,
     branches,
     projects,
     vendors,
@@ -91,7 +94,20 @@ export default function AssetPurchaseForm({
     branchScoped,
     scopedBranchId,
 }: {
-    purchase: null;
+    purchase: {
+        id: number;
+        purchase_no: string;
+        branch_id: string;
+        project_id: string;
+        vendor_id: string;
+        purchase_date: string;
+        purchase_type: string;
+        voucher_no: string;
+        ledger_no: string;
+        account_head: string;
+        description: string;
+        items: ItemForm[];
+    } | null;
     branches: { id: number; name: string; branch_code: string | null; is_head_office?: boolean }[];
     projects: { id: number; name: string; code: string }[];
     vendors: { id: number; name: string; code: string }[];
@@ -102,17 +118,19 @@ export default function AssetPurchaseForm({
     branchScoped: boolean;
     scopedBranchId: number | null;
 }) {
+    const isEdit = Boolean(purchase?.id);
+
     const { data, setData, post, processing, errors, transform } = useForm({
-        branch_id: scopedBranchId ? String(scopedBranchId) : '',
-        project_id: '',
-        vendor_id: '',
-        purchase_date: todayDisplayDate(),
-        purchase_type: 'new',
-        voucher_no: '',
-        ledger_no: '',
-        account_head: '',
-        description: '',
-        items: [emptyItem()] as ItemForm[],
+        branch_id: purchase?.branch_id ?? (scopedBranchId ? String(scopedBranchId) : ''),
+        project_id: purchase?.project_id ?? '',
+        vendor_id: purchase?.vendor_id ?? '',
+        purchase_date: purchase?.purchase_date ? toFormDisplayDate(purchase.purchase_date) : todayDisplayDate(),
+        purchase_type: purchase?.purchase_type ?? 'new',
+        voucher_no: purchase?.voucher_no ?? '',
+        ledger_no: purchase?.ledger_no ?? '',
+        account_head: purchase?.account_head ?? '',
+        description: purchase?.description ?? '',
+        items: purchase?.items?.length ? purchase.items : [emptyItem()] as ItemForm[],
     });
 
     const updateItem = (index: number, patch: Partial<ItemForm>) => {
@@ -135,7 +153,7 @@ export default function AssetPurchaseForm({
             if (!acc[key]) acc[key] = [];
             acc[key].push(subCategory);
             return acc;
-        }, {});
+            }, {});
     }, [subCategories]);
 
     const accountHeadOptions = useMemo(() => {
@@ -256,8 +274,13 @@ export default function AssetPurchaseForm({
         transform((payload) => ({
             ...payload,
             purchase_date: displayDateToServer(payload.purchase_date),
+            _method: isEdit ? 'put' : undefined,
         }));
-        post(route('fixed-asset.purchases.store'), { forceFormData: true });
+        if (isEdit && purchase?.id) {
+            post(route('fixed-asset.purchases.update', purchase.id), { forceFormData: true });
+        } else {
+            post(route('fixed-asset.purchases.store'), { forceFormData: true });
+        }
     };
 
     const filteredCustodians = (branchId: string) =>
@@ -267,7 +290,7 @@ export default function AssetPurchaseForm({
 
     return (
         <Layout>
-            <Head title="New asset purchase" />
+            <Head title={isEdit ? `Edit Purchase ${purchase?.purchase_no}` : 'New asset purchase'} />
             <AssetPage className="max-w-[1400px] space-y-4 py-3">
                 <Link
                     href={route('fixed-asset.purchases.index')}
@@ -278,8 +301,8 @@ export default function AssetPurchaseForm({
 
                 <AssetPageHeader
                     icon={ShoppingCart}
-                    title="New purchase"
-                    description="Left: purchase voucher details. Right: asset line items. Save creates purchase record + assets."
+                    title={isEdit ? `Edit Purchase: ${purchase?.purchase_no}` : 'New purchase'}
+                    description={isEdit ? 'Update purchase voucher details and line items.' : 'Left: purchase voucher details. Right: asset line items. Save creates purchase record + assets.'}
                 >
                     <Button
                         type="submit"
@@ -287,7 +310,7 @@ export default function AssetPurchaseForm({
                         disabled={processing || !data.branch_id}
                         className="h-8.5 rounded-lg bg-emerald-600 text-white shadow-2xs hover:bg-emerald-700"
                     >
-                        {processing ? 'Saving…' : 'Save & create assets'}
+                        {processing ? 'Saving…' : (isEdit ? 'Update purchase' : 'Save & create assets')}
                     </Button>
                 </AssetPageHeader>
 
@@ -525,7 +548,7 @@ export default function AssetPurchaseForm({
                                 <Plus className="mr-1.5 h-3.5 w-3.5" /> Add item
                             </Button>
                             <Button type="submit" disabled={processing || !data.branch_id} className="h-8.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
-                                {processing ? 'Saving…' : 'Save & create assets'}
+                                {processing ? 'Saving…' : (isEdit ? 'Update purchase' : 'Save & create assets')}
                             </Button>
                         </div>
                     </div>

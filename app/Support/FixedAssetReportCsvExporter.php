@@ -34,12 +34,52 @@ class FixedAssetReportCsvExporter
         $headers = $payload['headers'] ?? [];
         $rows = $payload['rows'] ?? [];
         $sections = $payload['sections'] ?? [];
-
-        if ($rows === [] && $sections !== []) {
-            $rows = collect($sections)->flatMap(fn ($section) => $section['rows'] ?? [])->all();
-        }
+        $expanded = $payload['expanded'] ?? 'none';
+        $expandedSections = $payload['expanded_sections'] ?? [];
 
         $template = $payload['template'] ?? '';
+
+        if ($rows === [] && $sections !== []) {
+            $exportRows = [];
+            $sampleRow = $sections[0]['rows'][0] ?? [];
+            $keys = self::keysForPayload($template, $sampleRow, $payload);
+
+            $titleKey = $keys[0] ?? 'category';
+            $countKey = in_array('location', $keys, true) ? 'location' : 'asset_count';
+            $purchaseKey = in_array('purchase_amount', $keys, true) ? 'purchase_amount' : (in_array('purchase_cost', $keys, true) ? 'purchase_cost' : null);
+            $closingKey = in_array('closing_value', $keys, true) ? 'closing_value' : (in_array('book_value', $keys, true) ? 'book_value' : null);
+
+            foreach ($sections as $section) {
+                $secTitle = $section['title'] ?? '';
+                $isExpanded = $expanded === 'all' || in_array($secTitle, $expandedSections, true);
+
+                $parentRow = [];
+                foreach ($keys as $k) {
+                    if ($k === $titleKey) {
+                        $parentRow[$k] = $secTitle;
+                    } elseif ($k === $countKey) {
+                        $parentRow[$k] = $section['subtotal']['asset_count'] ?? count($section['rows'] ?? []);
+                    } elseif ($purchaseKey && $k === $purchaseKey) {
+                        $parentRow[$k] = $section['subtotal']['purchase_amount'] ?? $section['subtotal']['purchase_cost'] ?? '';
+                    } elseif ($closingKey && $k === $closingKey) {
+                        $parentRow[$k] = $section['subtotal']['closing_value'] ?? $section['subtotal']['book_value'] ?? '';
+                    } else {
+                        $parentRow[$k] = '';
+                    }
+                }
+
+                $exportRows[] = $parentRow;
+
+                if ($isExpanded && ! empty($section['rows'])) {
+                    foreach ($section['rows'] as $childRow) {
+                        $exportRows[] = $childRow;
+                    }
+                }
+            }
+
+            $rows = $exportRows;
+        }
+
         $firstRow = $rows[0] ?? [];
         $keys = self::keysForPayload($template, $firstRow, $payload);
 

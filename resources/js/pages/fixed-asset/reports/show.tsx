@@ -15,12 +15,10 @@ import { displayDateToServer, toFormDisplayDate } from '@/lib/display-date';
 import { formatTakaWhole } from '@/lib/taka-format';
 import {
     ArrowLeft,
-    Building2,
     ChevronsDownUp,
     ChevronsUpDown,
     Download,
     FileSpreadsheet,
-    Layers,
     Minus,
     Plus,
     Printer,
@@ -108,7 +106,8 @@ function isNumericCol(key: string): boolean {
         lower.includes('rate') ||
         lower.includes('count') ||
         lower.includes('day') ||
-        lower.includes('sl')
+        lower.includes('sl') ||
+        lower === 'location'
     );
 }
 
@@ -125,7 +124,7 @@ function isNumericCell(value: unknown): boolean {
 
 function cellDisplay(value: unknown, key?: string): string {
     if (value == null || value === '') {
-        return '—';
+        return '';
     }
     if (key === 'sl' || key === 'passed_day' || key === 'depreciation_rate' || key === 'asset_count' || key === 'floor' || key === 'room') {
         return String(value);
@@ -134,7 +133,7 @@ function cellDisplay(value: unknown, key?: string): string {
 }
 
 function StatusBadge({ status }: { status: unknown }) {
-    if (!status || status === '—') return <span className="text-zinc-400">—</span>;
+    if (!status || status === '—' || status === '') return null;
     const str = String(status).toLowerCase();
     let variantClasses = 'bg-zinc-100 text-zinc-700 border-zinc-200';
     if (str.includes('active') || str.includes('in use') || str.includes('good')) {
@@ -189,21 +188,21 @@ function columnKeys(template: string, firstRow: Record<string, unknown>, payload
     }
 }
 
-function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
+function ReportPreview({
+    payload,
+    expanded,
+    setExpanded,
+}: {
+    payload: Record<string, unknown>;
+    expanded: Record<string, boolean>;
+    setExpanded: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+}) {
     const headers = (payload.headers as string[]) ?? [];
     const rows = (payload.rows as Record<string, unknown>[]) ?? [];
     const sections = (payload.sections as Section[]) ?? [];
     const totals = payload.totals as Record<string, unknown> | undefined;
     const template = String(payload.template ?? '');
     const meta = payload.meta as { row_count?: number } | undefined;
-
-    const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-        const init: Record<string, boolean> = {};
-        sections.forEach((s, idx) => {
-            init[s.title || String(idx)] = sections.length <= 5 || idx < 3;
-        });
-        return init;
-    });
 
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -220,11 +219,7 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
     };
 
     const collapseAll = () => {
-        const next: Record<string, boolean> = {};
-        sections.forEach((s, idx) => {
-            next[s.title || String(idx)] = false;
-        });
-        setExpanded(next);
+        setExpanded({});
     };
 
     const sampleRow = rows[0] ?? sections[0]?.rows?.[0] ?? {};
@@ -267,12 +262,11 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
     }
 
     const isGrouped = sections.length > 0;
-    const isCategoryReport = template.includes('category') || (payload.purchase_group === 'category');
 
     return (
         <div className="space-y-4">
             {/* Action Bar / Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-50/80 p-2.5 rounded-lg border border-zinc-200">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-50/80 p-2.5 rounded-lg border border-zinc-200 print:hidden">
                 <div className="flex items-center gap-2">
                     <div className="relative w-64 sm:w-80">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
@@ -315,15 +309,15 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                 )}
             </div>
 
-            {/* Tree Table with Group Accordion */}
-            <div className="overflow-x-auto rounded-lg border border-zinc-200 shadow-2xs bg-white">
+            {/* Tree Table with Group Accordion matching the clean enterprise style */}
+            <div className="overflow-x-auto rounded border border-slate-400 shadow-xs bg-white">
                 <table className="w-full border-collapse text-xs">
                     <thead>
-                        <tr className="bg-slate-800 text-white font-medium">
+                        <tr className="bg-[#374151] text-amber-400 font-semibold border-b border-slate-600">
                             {headers.map((h, i) => (
                                 <th
                                     key={h + i}
-                                    className={`px-3 py-2.5 border-r border-slate-700 last:border-r-0 whitespace-nowrap text-[11px] tracking-wide ${
+                                    className={`px-2.5 py-2.5 border-r border-slate-600 last:border-r-0 whitespace-nowrap text-xs font-semibold tracking-wide ${
                                         isNumericCol(h) ? 'text-right' : 'text-left'
                                     }`}
                                 >
@@ -344,82 +338,89 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                                 filteredSections.map((section, idx) => {
                                     const secKey = section.title || String(idx);
                                     const isExpanded = Boolean(expanded[secKey] || searchQuery.trim());
-                                    const count = section.rows.length;
+                                    const count = section.subtotal?.asset_count ?? section.rows.length;
                                     const purchaseAmt = section.subtotal?.purchase_amount ?? section.subtotal?.purchase_cost;
                                     const closingVal = section.subtotal?.closing_value ?? section.subtotal?.book_value;
+                                    const openingVal = section.subtotal?.opening_value;
 
                                     return (
                                         <React.Fragment key={secKey}>
-                                            {/* Top-Level Group Header Row */}
+                                            {/* Parent Group Header Row: Data in exact columns, no inline labels */}
                                             <tr
                                                 onClick={() => toggleSection(secKey)}
-                                                className="bg-blue-50/90 hover:bg-blue-100/80 cursor-pointer border-t-2 border-b border-blue-200 transition-colors select-none group"
+                                                className="bg-[#dbeafe] hover:bg-[#bfdbfe] cursor-pointer border-b border-slate-300 font-semibold text-slate-900 transition-colors select-none group"
                                             >
-                                                <td
-                                                    colSpan={headers.length}
-                                                    className="px-3 py-2 text-zinc-900 font-semibold"
-                                                >
-                                                    <div className="flex items-center justify-between gap-4">
-                                                        <div className="flex items-center gap-2.5">
-                                                            {/* Expand/Collapse Toggle Button */}
-                                                            <button
-                                                                type="button"
-                                                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-blue-600 text-white shadow-xs group-hover:bg-blue-700 transition-colors"
-                                                                title={isExpanded ? 'Collapse' : 'Expand'}
+                                                {colKeys.map((k, colIdx) => {
+                                                    if (colIdx === 0) {
+                                                        return (
+                                                            <td
+                                                                key={k}
+                                                                className="px-2.5 py-2 border-r border-slate-300 whitespace-nowrap"
                                                             >
-                                                                {isExpanded ? (
-                                                                    <Minus className="h-3 w-3 stroke-[3]" />
-                                                                ) : (
-                                                                    <Plus className="h-3 w-3 stroke-[3]" />
-                                                                )}
-                                                            </button>
+                                                                <div className="flex items-center gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#2563eb] text-white shadow-xs font-bold text-xs"
+                                                                        title={isExpanded ? 'Collapse' : 'Expand'}
+                                                                    >
+                                                                        {isExpanded ? (
+                                                                            <Minus className="h-3 w-3 stroke-[3]" />
+                                                                        ) : (
+                                                                            <Plus className="h-3 w-3 stroke-[3]" />
+                                                                        )}
+                                                                    </button>
+                                                                    <span className="font-semibold text-slate-900">{section.title}</span>
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    }
 
-                                                            {/* Group Icon & Title */}
-                                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 tracking-tight">
-                                                                {isCategoryReport ? (
-                                                                    <Layers className="h-3.5 w-3.5 text-blue-600" />
-                                                                ) : (
-                                                                    <Building2 className="h-3.5 w-3.5 text-blue-600" />
-                                                                )}
-                                                                <span>{section.title || 'Untitled Group'}</span>
-                                                            </div>
+                                                    if (k === 'location' || k === 'asset_count' || k === 'quantity' || k === 'asset') {
+                                                        return (
+                                                            <td key={k} className="px-2.5 py-2 text-right font-mono border-r border-slate-300 whitespace-nowrap text-slate-900">
+                                                                {count != null ? count : ''}
+                                                            </td>
+                                                        );
+                                                    }
 
-                                                            <Badge className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-300 text-[10px] font-semibold py-0 px-1.5">
-                                                                {count} {count === 1 ? 'asset' : 'assets'}
-                                                            </Badge>
-                                                        </div>
+                                                    if (k === 'purchase_amount' || k === 'purchase_cost' || k === 'cost_closing') {
+                                                        return (
+                                                            <td key={k} className="px-2.5 py-2 text-right font-mono border-r border-slate-300 whitespace-nowrap text-slate-900">
+                                                                {purchaseAmt != null ? fmt(purchaseAmt) : ''}
+                                                            </td>
+                                                        );
+                                                    }
 
-                                                        {/* Group Summary Metrics in Header Bar */}
-                                                        <div className="flex items-center gap-6 text-[11px] font-mono pr-2">
-                                                            {purchaseAmt != null && (
-                                                                <span className="text-zinc-700 font-semibold">
-                                                                    Purchase:{' '}
-                                                                    <strong className="text-zinc-950 font-bold">
-                                                                        ৳{fmt(purchaseAmt)}
-                                                                    </strong>
-                                                                </span>
-                                                            )}
-                                                            {closingVal != null && (
-                                                                <span className="text-zinc-700 font-semibold">
-                                                                    Closing:{' '}
-                                                                    <strong className="text-emerald-700 font-bold">
-                                                                        ৳{fmt(closingVal)}
-                                                                    </strong>
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
+                                                    if (k === 'closing_value' || k === 'book_value' || k === 'written_down_value') {
+                                                        return (
+                                                            <td key={k} className="px-2.5 py-2 text-right font-mono border-r border-slate-300 whitespace-nowrap text-slate-900">
+                                                                {closingVal != null ? fmt(closingVal) : ''}
+                                                            </td>
+                                                        );
+                                                    }
+
+                                                    if (k === 'opening_value' || k === 'cost_opening') {
+                                                        return (
+                                                            <td key={k} className="px-2.5 py-2 text-right font-mono border-r border-slate-300 whitespace-nowrap text-slate-900">
+                                                                {openingVal != null ? fmt(openingVal) : ''}
+                                                            </td>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <td key={k} className="px-2.5 py-2 border-r border-slate-300 last:border-r-0 whitespace-nowrap">
+                                                            {/* empty cell for remaining columns */}
+                                                        </td>
+                                                    );
+                                                })}
                                             </tr>
 
-                                            {/* Child Single Asset Records */}
+                                            {/* Child Single Asset Records directly underneath */}
                                             {isExpanded &&
                                                 section.rows.map((row, rIdx) => (
                                                     <tr
                                                         key={rIdx}
-                                                        className={`border-b border-zinc-100 hover:bg-zinc-50/80 transition-colors ${
-                                                            rIdx % 2 === 1 ? 'bg-zinc-50/30' : 'bg-white'
-                                                        }`}
+                                                        className="border-b border-slate-200 bg-white hover:bg-slate-50 transition-colors"
                                                     >
                                                         {colKeys.map((k, colIdx) => {
                                                             const isNum = isNumericCol(k);
@@ -428,8 +429,8 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                                                             return (
                                                                 <td
                                                                     key={k + colIdx}
-                                                                    className={`px-3 py-1.5 text-zinc-700 border-r border-zinc-100 last:border-r-0 whitespace-nowrap ${
-                                                                        isNum ? 'text-right font-mono text-[11px]' : 'text-left'
+                                                                    className={`px-2.5 py-1.5 text-slate-800 border-r border-slate-200 last:border-r-0 whitespace-nowrap ${
+                                                                        isNum ? 'text-right font-mono' : 'text-left'
                                                                     }`}
                                                                 >
                                                                     {k === 'status' ? (
@@ -442,21 +443,6 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                                                         })}
                                                     </tr>
                                                 ))}
-
-                                            {/* Subtotal row for expanded section */}
-                                            {isExpanded && (
-                                                <tr className="bg-blue-50/40 border-b-2 border-blue-200/80 font-semibold text-zinc-800 text-[11px]">
-                                                    <td colSpan={Math.max(1, colKeys.length - 2)} className="px-3 py-1.5 text-right font-bold text-slate-700">
-                                                        Subtotal ({section.title}):
-                                                    </td>
-                                                    <td className="px-3 py-1.5 text-right font-mono font-bold text-zinc-900">
-                                                        {purchaseAmt != null ? `৳${fmt(purchaseAmt)}` : ''}
-                                                    </td>
-                                                    <td className="px-3 py-1.5 text-right font-mono font-bold text-emerald-800">
-                                                        {closingVal != null ? `৳${fmt(closingVal)}` : ''}
-                                                    </td>
-                                                </tr>
-                                            )}
                                         </React.Fragment>
                                     );
                                 })
@@ -471,9 +457,7 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                             filteredRows.map((row, i) => (
                                 <tr
                                     key={i}
-                                    className={`border-b border-zinc-100 hover:bg-zinc-50/80 transition-colors ${
-                                        i % 2 === 1 ? 'bg-zinc-50/30' : 'bg-white'
-                                    }`}
+                                    className="border-b border-slate-200 bg-white hover:bg-slate-50 transition-colors"
                                 >
                                     {colKeys.map((k, colIdx) => {
                                         const isNum = isNumericCol(k);
@@ -481,8 +465,8 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                                         return (
                                             <td
                                                 key={k + colIdx}
-                                                className={`px-3 py-1.5 text-zinc-700 border-r border-zinc-100 last:border-r-0 whitespace-nowrap ${
-                                                    isNum ? 'text-right font-mono text-[11px]' : 'text-left'
+                                                className={`px-2.5 py-1.5 text-slate-800 border-r border-slate-200 last:border-r-0 whitespace-nowrap ${
+                                                    isNum ? 'text-right font-mono' : 'text-left'
                                                 }`}
                                             >
                                                 {k === 'status' ? (
@@ -499,19 +483,54 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
 
                         {/* Grand Totals */}
                         {totals && (
-                            <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700 text-xs">
-                                <td className="px-3 py-2.5 text-white">Grand Total</td>
-                                {colKeys.slice(1).map((k) => {
-                                    const isNum = isNumericCol(k);
-                                    const val = totals[k];
+                            <tr className="bg-slate-100 font-bold border-t-2 border-slate-400 text-xs text-slate-950">
+                                {colKeys.map((k, colIdx) => {
+                                    if (colIdx === 0) {
+                                        return (
+                                            <td key={k} className="px-2.5 py-2.5 border-r border-slate-300 font-bold">
+                                                Total
+                                            </td>
+                                        );
+                                    }
+
+                                    if (k === 'location' || k === 'asset_count' || k === 'quantity' || k === 'asset') {
+                                        return (
+                                            <td key={k} className="px-2.5 py-2.5 text-right font-mono border-r border-slate-300 font-bold">
+                                                {totals.asset_count != null ? totals.asset_count : ''}
+                                            </td>
+                                        );
+                                    }
+
+                                    if (k === 'purchase_amount' || k === 'purchase_cost' || k === 'cost_closing') {
+                                        const amt = totals.purchase_amount ?? totals.purchase_cost;
+                                        return (
+                                            <td key={k} className="px-2.5 py-2.5 text-right font-mono border-r border-slate-300 font-bold">
+                                                {amt != null ? fmt(amt) : ''}
+                                            </td>
+                                        );
+                                    }
+
+                                    if (k === 'closing_value' || k === 'book_value' || k === 'written_down_value') {
+                                        const val = totals.closing_value ?? totals.book_value;
+                                        return (
+                                            <td key={k} className="px-2.5 py-2.5 text-right font-mono border-r border-slate-300 font-bold">
+                                                {val != null ? fmt(val) : ''}
+                                            </td>
+                                        );
+                                    }
+
+                                    if (k === 'opening_value' || k === 'cost_opening') {
+                                        const val = totals.opening_value ?? totals.cost_opening;
+                                        return (
+                                            <td key={k} className="px-2.5 py-2.5 text-right font-mono border-r border-slate-300 font-bold">
+                                                {val != null ? fmt(val) : ''}
+                                            </td>
+                                        );
+                                    }
+
                                     return (
-                                        <td
-                                            key={k}
-                                            className={`px-3 py-2.5 border-r border-slate-800 last:border-r-0 whitespace-nowrap ${
-                                                isNum ? 'text-right font-mono text-[11px]' : 'text-left'
-                                            }`}
-                                        >
-                                            {val != null ? (isNum ? `৳${fmt(val)}` : String(val)) : ''}
+                                        <td key={k} className="px-2.5 py-2.5 border-r border-slate-300 last:border-r-0">
+                                            {totals[k] != null ? cellDisplay(totals[k], k) : ''}
                                         </td>
                                     );
                                 })}
@@ -520,27 +539,6 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
                     </tbody>
                 </table>
             </div>
-
-            {/* Grand Total Summary Box */}
-            {totals && (
-                <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-zinc-900 text-white rounded-lg shadow-xs text-xs">
-                    <div className="font-semibold text-zinc-200">
-                        Summary Totals ({meta?.row_count ?? totals.asset_count ?? 0} Assets)
-                    </div>
-                    <div className="flex items-center gap-6 font-mono">
-                        {totals.purchase_amount != null && (
-                            <span>
-                                Total Purchase: <strong className="text-emerald-400 font-bold text-sm">৳{fmt(totals.purchase_amount)}</strong>
-                            </span>
-                        )}
-                        {totals.closing_value != null && (
-                            <span>
-                                Total Closing Book Value: <strong className="text-sky-400 font-bold text-sm">৳{fmt(totals.closing_value)}</strong>
-                            </span>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
@@ -567,6 +565,9 @@ export default function FixedAssetReportShow({
         date_to: toFormDisplayDate(initFilters.date_to),
     });
     const setFilter = (key: string, value: string) => setFilters((f) => ({ ...f, [key]: value }));
+
+    // Default collapsed all (empty state)
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
     const showFinancialYear = report.usesFinancialYear || allowed.includes('financial_year_id');
     const showBranch = allowed.includes('branch_id') && !branchScoped;
@@ -596,6 +597,12 @@ export default function FixedAssetReportShow({
         }, { preserveState: true });
     };
 
+    const expandedKeys = useMemo(() => {
+        return Object.entries(expanded)
+            .filter(([, v]) => v)
+            .map(([k]) => k);
+    }, [expanded]);
+
     const exportQuery = useMemo(() => {
         const p = new URLSearchParams();
         Object.entries(filters).forEach(([k, v]) => {
@@ -607,8 +614,16 @@ export default function FixedAssetReportShow({
             }
         });
         p.set('generate', '1');
+
+        if (expandedKeys.length > 0) {
+            p.set('expanded', 'custom');
+            p.set('expanded_sections', expandedKeys.join(','));
+        } else {
+            p.set('expanded', 'none');
+        }
+
         return p.toString();
-    }, [filters]);
+    }, [filters, expandedKeys]);
 
     const urls = useMemo(() => {
         if (!exportUrls) return null;
@@ -773,7 +788,11 @@ export default function FixedAssetReportShow({
                                 )}
                             </span>
                         </div>
-                        <ReportPreview payload={payload} />
+                        <ReportPreview
+                            payload={payload}
+                            expanded={expanded}
+                            setExpanded={setExpanded}
+                        />
                     </PayrollSectionCard>
                 )}
             </PayrollPage>

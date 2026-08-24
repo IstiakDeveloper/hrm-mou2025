@@ -227,6 +227,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($this->isAccountant() && str_starts_with($permission, 'fixed-assets.')) {
+            return true;
+        }
+
         // Check payroll guard first — short-circuit before calling isDepartmentHead / hasOrganogramLineRole.
         if (self::isPayrollModulePermission($permission)) {
             if ($this->isDepartmentHead()) {

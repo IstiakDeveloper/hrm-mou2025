@@ -191,6 +191,127 @@ class AssetPurchaseController extends Controller
         ]);
     }
 
+    public function edit(Request $request, AssetPurchase $purchase)
+    {
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $purchase->branch_id);
+        $purchase->load([
+            'branch:id,name,branch_code',
+            'project:id,name,code',
+            'vendor:id,name,code',
+            'items.category:id,code,name,depreciation_rate',
+            'items.subCategory:id,code,name,depreciation_rate',
+            'items.custodian:id,name,employee_id',
+            'fixedAssets:id,asset_purchase_id,asset_purchase_item_id,asset_tag,manual_asset_code,name,purchase_cost,status',
+        ]);
+
+        return Inertia::render('fixed-asset/purchases/form', [
+            'purchase' => [
+                'id' => $purchase->id,
+                'purchase_no' => $purchase->purchase_no,
+                'branch_id' => (string) $purchase->branch_id,
+                'project_id' => $purchase->project_id ? (string) $purchase->project_id : '',
+                'vendor_id' => $purchase->vendor_id ? (string) $purchase->vendor_id : '',
+                'purchase_date' => optional($purchase->purchase_date)->format('Y-m-d'),
+                'purchase_type' => $purchase->purchase_type,
+                'voucher_no' => $purchase->voucher_no ?? '',
+                'ledger_no' => $purchase->ledger_no ?? '',
+                'account_head' => $purchase->account_head ?? '',
+                'description' => $purchase->description ?? '',
+                'items' => $purchase->items->map(function ($item) use ($purchase) {
+                    $assets = $purchase->fixedAssets->where('asset_purchase_item_id', $item->id)->values();
+                    return [
+                        'id' => $item->id,
+                        'asset_category_id' => (string) $item->asset_category_id,
+                        'asset_sub_category_id' => $item->asset_sub_category_id ? (string) $item->asset_sub_category_id : '',
+                        'quantity' => (string) $item->quantity,
+                        'model_no' => $item->model_no ?? '',
+                        'unit_purchase_amount' => (string) $item->unit_purchase_amount,
+                        'manual_asset_codes' => $assets->pluck('manual_asset_code')->map(fn ($c) => $c ?? '')->all(),
+                        'depreciation_rate' => $item->depreciation_rate != null ? (string) $item->depreciation_rate : '',
+                        'is_insurance' => (bool) $item->is_insurance,
+                        'is_warranty' => (bool) $item->is_warranty,
+                        'is_guarantee' => (bool) $item->is_guarantee,
+                        'floor_no' => $item->floor_no ?? '',
+                        'room_no' => $item->room_no ?? '',
+                        'asset_custodian_id' => $item->asset_custodian_id ? (string) $item->asset_custodian_id : '',
+                        'photo' => null,
+                        'photo_url' => $item->photo_path ? asset('storage/'.$item->photo_path) : null,
+                    ];
+                })->all(),
+            ],
+            ...$this->formOptions($request),
+        ]);
+    }
+
+    public function update(Request $request, AssetPurchase $purchase)
+    {
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $purchase->branch_id);
+        $scopedBranchId = $this->scopedBranchIdForUser($request->user());
+
+        $validated = $request->validate([
+            'branch_id' => 'required|exists:branches,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'vendor_id' => 'nullable|exists:asset_vendors,id',
+            'purchase_date' => 'required|date',
+            'purchase_type' => 'required|in:'.implode(',', array_keys(AssetPurchase::PURCHASE_TYPES)),
+            'voucher_no' => 'nullable|string|max:100',
+            'ledger_no' => 'nullable|string|max:100',
+            'account_head' => 'nullable|string|max:200',
+            'description' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.id' => 'nullable|integer',
+            'items.*.asset_category_id' => 'required|exists:asset_categories,id',
+            'items.*.asset_sub_category_id' => 'nullable|exists:asset_sub_categories,id',
+            'items.*.quantity' => 'required|integer|min:1|max:100',
+            'items.*.model_no' => 'nullable|string|max:120',
+            'items.*.unit_purchase_amount' => 'required|numeric|min:0',
+            'items.*.manual_asset_codes' => 'nullable|array',
+            'items.*.manual_asset_codes.*' => 'nullable|string|max:80',
+            'items.*.is_insurance' => 'boolean',
+            'items.*.is_warranty' => 'boolean',
+            'items.*.is_guarantee' => 'boolean',
+            'items.*.floor_no' => 'nullable|string|max:40',
+            'items.*.room_no' => 'nullable|string|max:40',
+            'items.*.asset_custodian_id' => 'nullable|exists:asset_custodians,id',
+            'items.*.photo' => 'nullable|image|max:5120',
+        ]);
+
+        if ($scopedBranchId && (int) $validated['branch_id'] !== $scopedBranchId) {
+            return back()->with('error', 'You can only record purchases for your branch.');
+        }
+
+        $photos = [];
+        foreach ($validated['items'] as $index => $item) {
+            $photos[$index] = $request->file("items.{$index}.photo");
+        }
+
+        $header = collect($validated)->except('items')->all();
+        $items = $validated['items'];
+
+        foreach ($items as &$item) {
+            $item['manual_asset_codes'] = array_values(array_filter(
+                $item['manual_asset_codes'] ?? [],
+                fn ($code) => filled($code),
+            ));
+        }
+        unset($item);
+
+        $this->purchases->updatePurchase($purchase, $header, $items, $photos, $request->user()?->id);
+
+        return redirect()->route('fixed-asset.purchases.show', $purchase)
+            ->with('success', 'Purchase updated successfully.');
+    }
+
+    public function destroy(Request $request, AssetPurchase $purchase)
+    {
+        $this->assertFixedAssetBranchAllowed($request->user(), (int) $purchase->branch_id);
+
+        $this->purchases->deletePurchase($purchase);
+
+        return redirect()->route('fixed-asset.purchases.index')
+            ->with('success', 'Purchase and associated assets removed.');
+    }
+
     public function subCategories(Request $request)
     {
         $request->validate(['category_id' => 'required|exists:asset_categories,id']);

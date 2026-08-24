@@ -1198,6 +1198,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/sub-categories', [AssetPurchaseController::class, 'subCategories'])->name('sub-categories');
             Route::get('/preview-codes', [AssetPurchaseController::class, 'previewCodes'])->name('preview-codes');
             Route::get('/{purchase}', [AssetPurchaseController::class, 'show'])->name('show');
+            Route::get('/{purchase}/edit', [AssetPurchaseController::class, 'edit'])->name('edit')->middleware('permission:fixed-assets.edit');
+            Route::match(['put', 'post'], '/{purchase}', [AssetPurchaseController::class, 'update'])->name('update')->middleware('permission:fixed-assets.edit');
+            Route::match(['put', 'post'], '/{purchase}/update', [AssetPurchaseController::class, 'update'])->name('post-update')->middleware('permission:fixed-assets.edit');
+            Route::delete('/{purchase}', [AssetPurchaseController::class, 'destroy'])->name('destroy')->middleware('permission:fixed-assets.delete');
         });
 
         Route::prefix('fixed-asset/assets')->name('fixed-asset.assets.')->group(function () {

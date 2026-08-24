@@ -2,13 +2,14 @@
 
 use App\Support\FixedAssetReportCsvExporter;
 
-it('correctly extracts headers and rows from payload with sections', function () {
+it('correctly extracts collapsed summary rows and expanded child rows from payload with sections', function () {
     $payload = [
         'template' => 'purchase-list',
         'headers' => [
             'Category', 'Sub Category', 'Asset No', 'Model No', 'Location', 'Purchase Date', 'Purchase Amount',
             'Closing Value', 'Vendor', 'Voucher No', 'Ledger No', 'Status',
         ],
+        'expanded' => 'none',
         'sections' => [
             [
                 'title' => '209000 - Head Office',
@@ -66,14 +67,20 @@ it('correctly extracts headers and rows from payload with sections', function ()
         ],
     ];
 
-    [$headers, $rows] = FixedAssetReportCsvExporter::rowsFromPayload($payload);
-
+    // 1. When collapsed (default): exports summary rows
+    [$headers, $summaryRows] = FixedAssetReportCsvExporter::rowsFromPayload($payload);
     expect($headers)->toBe($payload['headers'])
-        ->and($rows)->toHaveCount(2)
-        ->and($rows[0][0])->toBe('Furniture & Setting')
-        ->and($rows[0][2])->toBe('MOU-HO-CHR-1')
-        ->and($rows[0][6])->toBe(15000)
-        ->and($rows[1][0])->toBe('Electric Equipment')
-        ->and($rows[1][2])->toBe('MOU-NS-FAN-1')
-        ->and($rows[1][6])->toBe(6000);
+        ->and($summaryRows)->toHaveCount(2)
+        ->and($summaryRows[0][0])->toBe('209000 - Head Office')
+        ->and($summaryRows[0][4])->toBe(1)
+        ->and($summaryRows[0][6])->toBe(15000)
+        ->and($summaryRows[0][7])->toBe(13500);
+
+    // 2. When expanded: exports parent and child rows
+    $payload['expanded'] = 'all';
+    [$headers, $expandedRows] = FixedAssetReportCsvExporter::rowsFromPayload($payload);
+    expect($expandedRows)->toHaveCount(4) // 2 parent summary + 2 child rows
+        ->and($expandedRows[1][0])->toBe('Furniture & Setting')
+        ->and($expandedRows[1][2])->toBe('MOU-HO-CHR-1')
+        ->and($expandedRows[1][6])->toBe(15000);
 });
