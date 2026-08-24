@@ -116,6 +116,7 @@ interface PaginatedPenalties {
 interface Props {
     pendingPenalties: PaginatedPenalties;
     paidPenalties: PaginatedPenalties;
+    allPaidPenalties?: PenaltyRecord[];
     waivedPenalties?: PaginatedPenalties;
     rejectedPenalties?: PaginatedPenalties;
     unpaidPenalties?: PaginatedPenalties;
@@ -156,6 +157,7 @@ interface Props {
 export default function PenaltyAdmin({
     pendingPenalties,
     paidPenalties,
+    allPaidPenalties,
     waivedPenalties,
     rejectedPenalties,
     unpaidPenalties,
@@ -175,6 +177,8 @@ export default function PenaltyAdmin({
     const [endDate, setEndDate] = useState(filters.end_date || '');
     const [perPage, setPerPage] = useState(String(filters.per_page || 15));
     const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+    const printablePaidList = allPaidPenalties && allPaidPenalties.length > 0 ? allPaidPenalties : (paidPenalties?.data || []);
 
     const [rejectingPenalty, setRejectingPenalty] = useState<PenaltyRecord | null>(null);
     const [approvingPenalty, setApprovingPenalty] = useState<PenaltyRecord | null>(null);
@@ -418,31 +422,48 @@ export default function PenaltyAdmin({
             <style>{`
                 @page {
                     size: A4 portrait;
-                    margin: 0 8mm 8mm 8mm;
+                    margin: 8mm 8mm 8mm 8mm;
                 }
                 @media print {
-                    body * {
-                        visibility: hidden !important;
+                    html, body, #app, main, .flex, div {
+                        height: auto !important;
+                        min-height: auto !important;
+                        max-height: none !important;
+                        overflow: visible !important;
                     }
-                    #printable-paid-report, #printable-paid-report * {
-                        visibility: visible !important;
+                    body {
+                        background: #ffffff !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    header, nav, aside, [role="navigation"], .print\\:hidden, #app > div > aside, #app > div > div > header {
+                        display: none !important;
                     }
                     #printable-paid-report {
-                        position: absolute !important;
-                        left: 0 !important;
-                        top: 0 !important;
+                        display: block !important;
+                        position: static !important;
                         width: 100% !important;
                         margin: 0 !important;
                         padding: 0 !important;
                         background: #ffffff !important;
                         color: #000000 !important;
-                        display: block !important;
                         font-size: 10px !important;
                     }
                     #printable-paid-report table {
                         width: 100% !important;
                         table-layout: fixed !important;
                         border-collapse: collapse !important;
+                        page-break-inside: auto !important;
+                    }
+                    #printable-paid-report thead {
+                        display: table-header-group !important;
+                    }
+                    #printable-paid-report tfoot {
+                        display: table-footer-group !important;
+                    }
+                    #printable-paid-report tr {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }
                     #printable-paid-report th, #printable-paid-report td {
                         white-space: nowrap !important;
@@ -463,6 +484,10 @@ export default function PenaltyAdmin({
                         line-height: 1.3 !important;
                         text-overflow: clip !important;
                         white-space: nowrap !important;
+                    }
+                    .print-avoid-break {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }
                 }
             `}</style>
@@ -1750,14 +1775,14 @@ export default function PenaltyAdmin({
                         </tr>
                     </thead>
                     <tbody>
-                        {!paidPenalties?.data || paidPenalties.data.length === 0 ? (
+                        {!printablePaidList || printablePaidList.length === 0 ? (
                             <tr>
                                 <td colSpan={8} className="p-3 text-center text-gray-500">
                                     No paid penalty records found for this filter.
                                 </td>
                             </tr>
                         ) : (
-                            paidPenalties.data.map((item, idx) => (
+                            printablePaidList.map((item, idx) => (
                                 <tr key={item.id} className="border-b border-gray-300">
                                     <td className="p-1 border border-gray-300 text-center">{idx + 1}</td>
                                     <td
@@ -1800,7 +1825,7 @@ export default function PenaltyAdmin({
                 </table>
 
                 {/* Signatures */}
-                <div className="flex justify-between items-end pt-16 text-xs text-gray-800 font-semibold">
+                <div className="flex justify-between items-end pt-16 text-xs text-gray-800 font-semibold print-avoid-break">
                     <div className="text-center border-t border-gray-500 pt-1 w-36">Prepared By</div>
                     <div className="text-center border-t border-gray-500 pt-1 w-36">Accounts / Audit</div>
                     <div className="text-center border-t border-gray-500 pt-1 w-36">Authorized Signature</div>

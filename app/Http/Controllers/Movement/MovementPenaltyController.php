@@ -161,6 +161,7 @@ class MovementPenaltyController extends Controller
             'total_amount' => (float) (clone $paidQuery)->sum('total_fine'),
             'total_overdue_days' => (int) (clone $paidQuery)->sum('overdue_days'),
         ];
+        $allPaidPenalties = (clone $paidQuery)->orderByDesc('id')->get();
         $paidPaginator = $paidQuery->orderByDesc('id')->paginate($perPage, ['*'], 'paid_page')->withQueryString();
         $paidPenalties = $this->inertiaPagination($paidPaginator);
 
@@ -228,6 +229,7 @@ class MovementPenaltyController extends Controller
         return Inertia::render('movement/penalty-admin', [
             'pendingPenalties' => $pendingPenalties,
             'paidPenalties' => $paidPenalties,
+            'allPaidPenalties' => $allPaidPenalties,
             'waivedPenalties' => $waivedPenalties,
             'rejectedPenalties' => $rejectedPenalties,
             'unpaidPenalties' => $unpaidPenalties,
