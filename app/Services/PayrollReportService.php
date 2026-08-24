@@ -348,6 +348,13 @@ class PayrollReportService
         $sections = [];
         foreach ($groups as $group) {
             $sheet = $this->mapSalarySheet($group['payslips'], $config);
+            $branchDeductionHeads = $this->filterActiveDeductionHeads($sheet['rows'], $sheet['deduction_heads'] ?? []);
+            $branchEarningHeads = $sheet['earning_heads'] ?? [];
+            $branchHeads = array_merge($branchEarningHeads, $branchDeductionHeads);
+            $sheet['deduction_heads'] = $branchDeductionHeads;
+            $sheet['heads'] = $branchHeads;
+            $sheet['totals'] = $this->sumSheetRows($sheet['rows'], $branchHeads);
+
             $sections[] = array_merge([
                 'label' => $group['label'],
             ], $sheet);
@@ -471,19 +478,51 @@ class PayrollReportService
 
         $sections = [];
         foreach ($groups as $group) {
+            $branchDeductionHeads = $this->filterActiveDeductionHeads($group['rows'], $sheet['deduction_heads'] ?? []);
+            $branchEarningHeads = $sheet['earning_heads'] ?? [];
+            $branchHeads = array_merge($branchEarningHeads, $branchDeductionHeads);
+
             $sections[] = [
                 'label' => $group['label'],
                 'rows' => $group['rows'],
-                'totals' => $this->sumSheetRows($group['rows'], $sheet['heads']),
+                'totals' => $this->sumSheetRows($group['rows'], $branchHeads),
+                'heads' => $branchHeads,
+                'earning_heads' => $branchEarningHeads,
+                'deduction_heads' => $branchDeductionHeads,
+                'head_labels' => $sheet['head_labels'] ?? [],
             ];
         }
+
+        $firstSection = $sections[0] ?? null;
 
         return array_merge($sheet, [
             'template' => 'salary-sheet-grouped',
             'sections' => $sections,
+            'heads' => $firstSection['heads'] ?? $sheet['heads'] ?? [],
+            'earning_heads' => $firstSection['earning_heads'] ?? $sheet['earning_heads'] ?? [],
+            'deduction_heads' => $firstSection['deduction_heads'] ?? $sheet['deduction_heads'] ?? [],
+            'head_labels' => $sheet['head_labels'] ?? [],
             'rows' => [],
             'totals' => null,
         ]);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<string>  $deductionHeads
+     * @return list<string>
+     */
+    protected function filterActiveDeductionHeads(array $rows, array $deductionHeads): array
+    {
+        return array_values(array_filter($deductionHeads, function (string $head) use ($rows): bool {
+            foreach ($rows as $row) {
+                if ((float) ($row['components'][$head] ?? 0) != 0.0) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
     }
 
     /**
@@ -607,14 +646,17 @@ class PayrollReportService
             ];
         }
 
+        $activeDeductionHeads = $this->filterActiveDeductionHeads($rows, $deductionHeads);
+        $activeHeads = array_merge($earningHeads, $activeDeductionHeads);
+
         return [
             'template' => 'salary-sheet',
-            'heads' => $heads,
+            'heads' => $activeHeads,
             'earning_heads' => $earningHeads,
-            'deduction_heads' => $deductionHeads,
+            'deduction_heads' => $activeDeductionHeads,
             'head_labels' => $headLabels,
             'rows' => $rows,
-            'totals' => $this->sumSheetRows($rows, $heads),
+            'totals' => $this->sumSheetRows($rows, $activeHeads),
             'meta' => [
                 'row_count' => count($rows),
                 'status' => $config['status'] ?? null,

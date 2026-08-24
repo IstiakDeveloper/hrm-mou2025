@@ -321,18 +321,11 @@ export function PayrollFiscalYearSelect({
     );
 }
 
-function monthsWithCurrentFirst(months: { value: number; label: string }[]): { value: number; label: string }[] {
-    const current = new Date().getMonth() + 1;
-    const idx = months.findIndex((m) => m.value === current);
-    if (idx <= 0) return months;
-    return [...months.slice(idx), ...months.slice(0, idx)];
-}
-
 export function PayrollMonthSelect({
     value,
     onChange,
     months,
-    required = false,
+    required = true,
     allowAll = false,
     allLabel = 'All months',
     disabled,
@@ -347,20 +340,18 @@ export function PayrollMonthSelect({
     disabled?: boolean;
     label?: string;
 }) {
-    const orderedMonths = useMemo(() => monthsWithCurrentFirst(months), [months]);
-
     const items = useMemo(() => {
         const list: ComboSelectItem<string>[] = [];
         if (allowAll) {
             list.push({ value: ALL_VALUE, label: allLabel });
-        } else if (required) {
+        } else if (required && !value) {
             list.push({ value: ALL_VALUE, label: 'Select month', disabled: true });
         }
-        for (const m of orderedMonths) {
+        for (const m of months) {
             list.push({ value: String(m.value), label: m.label });
         }
         return list;
-    }, [allLabel, allowAll, orderedMonths, required]);
+    }, [allLabel, allowAll, months, required, value]);
 
     return (
         <PayrollField label={label} required={required}>

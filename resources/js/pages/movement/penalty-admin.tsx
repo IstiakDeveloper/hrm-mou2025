@@ -422,26 +422,11 @@ export default function PenaltyAdmin({
             <style>{`
                 @page {
                     size: A4 portrait;
-                    margin: 8mm 8mm 8mm 8mm;
+                    margin: 8mm;
                 }
                 @media print {
-                    html, body, #app, main, .flex, div {
-                        height: auto !important;
-                        min-height: auto !important;
-                        max-height: none !important;
-                        overflow: visible !important;
-                    }
-                    body {
-                        background: #ffffff !important;
-                        -webkit-print-color-adjust: exact !important;
-                        print-color-adjust: exact !important;
-                    }
-                    header, nav, aside, [role="navigation"], .print\\:hidden, #app > div > aside, #app > div > div > header {
-                        display: none !important;
-                    }
                     #printable-paid-report {
                         display: block !important;
-                        position: static !important;
                         width: 100% !important;
                         margin: 0 !important;
                         padding: 0 !important;
@@ -459,7 +444,7 @@ export default function PenaltyAdmin({
                         display: table-header-group !important;
                     }
                     #printable-paid-report tfoot {
-                        display: table-footer-group !important;
+                        display: table-row-group !important;
                     }
                     #printable-paid-report tr {
                         page-break-inside: avoid !important;
@@ -1717,8 +1702,8 @@ export default function PenaltyAdmin({
             </PageSurface>
 
             {/* PRINTABLE PAID REPORT SECTION (A4 PORTRAIT MODE) */}
-            <div id="printable-paid-report" className="hidden print:block p-6 bg-white text-black space-y-4">
-                <div className="text-center border-b pb-4 mb-4">
+            <div id="printable-paid-report" className="hidden print:block p-0 bg-white text-black space-y-4">
+                <div className="text-center border-b pb-4 mb-4 print-avoid-break">
                     <h1 className="text-xl font-bold uppercase tracking-wider">Overdue Movement Penalty Paid Statement</h1>
                     <p className="text-xs text-gray-600 mt-1">HR & Movement Attendance Management System</p>
                     <div className="flex justify-between items-center text-[11px] text-gray-600 mt-3 pt-2 border-t">
@@ -1735,7 +1720,7 @@ export default function PenaltyAdmin({
                 </div>
 
                 {/* Summary Box */}
-                <div className="grid grid-cols-3 gap-4 border border-gray-300 p-3 rounded text-center text-xs font-semibold bg-gray-50 mb-4">
+                <div className="grid grid-cols-3 gap-4 border border-gray-300 p-3 rounded text-center text-xs font-semibold bg-gray-50 mb-4 print-avoid-break">
                     <div>
                         <span className="text-gray-500 block text-[10px]">TOTAL PAID RECORDS</span>
                         <span className="text-base font-bold text-black">{paidStats?.count || 0}</span>

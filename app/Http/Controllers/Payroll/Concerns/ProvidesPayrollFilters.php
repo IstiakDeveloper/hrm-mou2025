@@ -15,10 +15,64 @@ use Illuminate\Http\Request;
 
 trait ProvidesPayrollFilters
 {
+    public static function defaultPayrollPeriod(?string $status = null): array
+    {
+        try {
+            $query = \App\Models\PayrollRun::query()->where('salary_type', 'salary');
+            if ($status === 'processed') {
+                $query->whereIn('status', ['processed', 'posted']);
+            } elseif ($status === 'posted') {
+                $query->where('status', 'posted');
+            } else {
+                $query->whereIn('status', ['posted', 'processed']);
+            }
+
+            $latest = (clone $query)->orderByDesc('year')->orderByDesc('month')->first(['year', 'month']);
+
+            if (! $latest && $status === 'posted') {
+                $latest = \App\Models\PayrollRun::query()
+                    ->where('salary_type', 'salary')
+                    ->orderByDesc('year')
+                    ->orderByDesc('month')
+                    ->first(['year', 'month']);
+            }
+
+            if ($latest) {
+                return [
+                    'year' => (int) $latest->year,
+                    'month' => (int) $latest->month,
+                ];
+            }
+        } catch (\Throwable) {
+            // Database not ready or in-memory unit tests
+        }
+
+        return [
+            'year' => (int) date('Y'),
+            'month' => 7,
+        ];
+    }
+
+    public static function payrollFilterMonths(?int $startMonth = null): array
+    {
+        $defaultPeriod = self::defaultPayrollPeriod();
+        $start = $startMonth ?? $defaultPeriod['month'];
+        $monthRange = [];
+        for ($i = 0; $i < 12; $i++) {
+            $m = (($start - 1 + $i) % 12) + 1;
+            $monthRange[] = [
+                'value' => $m,
+                'label' => date('F', mktime(0, 0, 0, $m, 1)),
+            ];
+        }
+
+        return $monthRange;
+    }
+
     /**
      * @return array<string, mixed>
      */
-    protected function payrollFilterOptions(bool $payrollReadyEmployeesOnly = false): array
+    protected function payrollFilterOptions(bool $payrollReadyEmployeesOnly = false, ?int $startMonth = null): array
     {
         return [
             'branches' => Branch::query()
@@ -42,10 +96,7 @@ trait ProvidesPayrollFilters
                 ['value' => 'bonus', 'label' => 'BONUS'],
                 ['value' => 'arrear', 'label' => 'ARREAR'],
             ],
-            'months' => collect(range(1, 12))->map(fn ($m) => [
-                'value' => $m,
-                'label' => date('F', mktime(0, 0, 0, $m, 1)),
-            ])->values()->all(),
+            'months' => self::payrollFilterMonths($startMonth),
             'years' => collect(range((int) date('Y') - 2, (int) date('Y') + 1))->values()->all(),
         ];
     }
@@ -53,8 +104,10 @@ trait ProvidesPayrollFilters
     /**
      * @return array<string, mixed>
      */
-    protected function payrollFilterValues(Request $request): array
+    protected function payrollFilterValues(Request $request, ?string $status = null): array
     {
+        $defaultPeriod = self::defaultPayrollPeriod($status);
+
         return [
             'branch_id' => $request->input('branch_id', ''),
             'department_id' => $request->input('department_id', ''),
@@ -65,8 +118,8 @@ trait ProvidesPayrollFilters
             'employee_type_id' => $request->input('employee_type_id', ''),
             'salary_head_id' => $request->input('salary_head_id', ''),
             'salary_type' => $request->input('salary_type', 'salary'),
-            'year' => $request->input('year', (string) date('Y')),
-            'month' => $request->input('month', ''),
+            'year' => $request->has('year') ? $request->input('year', '') : (string) $defaultPeriod['year'],
+            'month' => $request->has('month') ? $request->input('month', '') : (string) $defaultPeriod['month'],
             'effective_from' => $request->input('effective_from', ''),
             'reason' => $request->input('reason', ''),
         ];

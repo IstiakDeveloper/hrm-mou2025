@@ -43,6 +43,17 @@ class PayrollReportController extends Controller
     {
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+        $hasMonthFilter = in_array('month', $config['filters'] ?? [], true);
+        $isDateRange = ! empty($config['date_range']);
+        $defaultPeriod = self::defaultPayrollPeriod($config['status'] ?? null);
+
+        if (! $request->has('month') && $hasMonthFilter && ! $isDateRange) {
+            $filters['month'] = $defaultPeriod['month'];
+        }
+        if (! $request->has('year') && ! $isDateRange) {
+            $filters['year'] = $defaultPeriod['year'];
+        }
+
         $generated = $request->boolean('generate');
         $payload = null;
         $error = null;
@@ -61,6 +72,11 @@ class PayrollReportController extends Controller
             }
         }
 
+        $defaultFilterValues = $this->payrollFilterValues($request, $config['status'] ?? null);
+        if ($isDateRange && ! $request->has('month')) {
+            $defaultFilterValues['month'] = '';
+        }
+
         return Inertia::render('payroll/reports/show', [
             'companyName' => config('payroll_reports.company_name'),
             'companyAddress' => config('payroll_reports.company_address'),
@@ -73,7 +89,7 @@ class PayrollReportController extends Controller
                 'requireEmployee' => (bool) ($config['require_employee'] ?? false),
             ],
             'filterOptions' => $this->reportFilterOptions($config),
-            'filters' => array_merge($this->payrollFilterValues($request), [
+            'filters' => array_merge($defaultFilterValues, [
                 'payscale_id' => $request->input('payscale_id', ''),
                 'date_from' => $request->input('date_from', ''),
                 'date_to' => $request->input('date_to', ''),
@@ -187,6 +203,17 @@ class PayrollReportController extends Controller
     {
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+        $hasMonthFilter = in_array('month', $config['filters'] ?? [], true);
+        $isDateRange = ! empty($config['date_range']);
+        $defaultPeriod = self::defaultPayrollPeriod($config['status'] ?? null);
+
+        if (! $request->has('month') && $hasMonthFilter && ! $isDateRange) {
+            $filters['month'] = $defaultPeriod['month'];
+        }
+        if (! $request->has('year') && ! $isDateRange) {
+            $filters['year'] = $defaultPeriod['year'];
+        }
+
         $payload = $this->reports->build($report, $config, $filters);
 
         return [
@@ -219,7 +246,8 @@ class PayrollReportController extends Controller
      */
     protected function reportFilterOptions(array $config): array
     {
-        $base = $this->payrollFilterOptions(true);
+        $defaultPeriod = self::defaultPayrollPeriod($config['status'] ?? null);
+        $base = $this->payrollFilterOptions(true, $defaultPeriod['month']);
         $base['payscales'] = Payscale::query()->orderBy('name')->get(['id', 'name', 'code']);
 
         return $base;

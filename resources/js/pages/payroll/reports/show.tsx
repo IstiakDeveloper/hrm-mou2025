@@ -788,8 +788,8 @@ export default function PayrollReportShow({
                                     value={filters.month}
                                     onChange={(v) => setFilter('month', v)}
                                     months={filterOptions.months}
-                                    required={!show.dateRange || !!report.requireEmployee}
-                                    allowAll={!report.requireEmployee && !show.dateRange}
+                                    required
+                                    allowAll={false}
                                 />
                             )}
                             {show.dateRange && (

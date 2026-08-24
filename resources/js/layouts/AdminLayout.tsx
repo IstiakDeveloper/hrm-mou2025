@@ -1347,8 +1347,41 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 .sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
                     background: rgba(16, 185, 129, 0.55);
                 }
+                @media print {
+                    html, body, #app {
+                        height: auto !important;
+                        min-height: 0 !important;
+                        overflow: visible !important;
+                        background: #ffffff !important;
+                    }
+                    .h-screen, .overflow-hidden, .overflow-auto, .overflow-y-auto {
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    aside, header, [role="navigation"], .no-print, .print\\:hidden {
+                        display: none !important;
+                    }
+                    main {
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        background: transparent !important;
+                        display: block !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    main > div {
+                        border: none !important;
+                        box-shadow: none !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        background: transparent !important;
+                        border-radius: 0 !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                }
             `}</style>
-            <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+            <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden print:hidden">
                 <div
                     className="absolute inset-0"
                     style={{
@@ -1366,7 +1399,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 {/* Sidebar */}
                 <aside
                     className={cn(
-                        'relative z-20 h-full min-h-0 shrink-0 flex-col border-r border-emerald-900/15 bg-white/95 shadow-sm backdrop-blur transition-all duration-300',
+                        'relative z-20 h-full min-h-0 shrink-0 flex-col border-r border-emerald-900/15 bg-white/95 shadow-sm backdrop-blur transition-all duration-300 print:hidden',
                         isTopNav ? 'hidden' : 'hidden md:flex',
                         isSidebarOpen ? 'w-[260px]' : 'w-[84px]',
                     )}
@@ -1712,7 +1745,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                     {/* Desktop Top Bar Horizontal Navigation (When Top Nav layout mode is active) */}
                     {isTopNav && (
-                        <div className="sticky top-14 z-20 hidden w-full border-b border-emerald-900/10 bg-white/95 px-3 py-1.5 shadow-xs backdrop-blur-md sm:top-16 md:block">
+                        <div className="sticky top-14 z-20 hidden w-full border-b border-emerald-900/10 bg-white/95 px-3 py-1.5 shadow-xs backdrop-blur-md sm:top-16 md:block print:hidden">
                             <div className="sidebar-nav-scroll flex w-full items-center gap-1.5 overflow-x-auto py-0.5">
                                 {sectionDashboardEntries.map((d) => (
                                     <Link
@@ -1745,7 +1778,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
                     {/* Global Mobile Section Sub-Navigation Bar (Active for all sections on mobile viewports) */}
                     {mobileSubNavItems.length > 0 && (
-                        <div className="sticky top-14 z-20 flex w-full items-center border-b border-slate-200/80 bg-white/95 px-2 py-1.5 shadow-xs backdrop-blur-md sm:top-16 md:hidden">
+                        <div className="sticky top-14 z-20 flex w-full items-center border-b border-slate-200/80 bg-white/95 px-2 py-1.5 shadow-xs backdrop-blur-md sm:top-16 md:hidden print:hidden">
                             <style>{`
                                 .mobile-subnav-scroll {
                                     -ms-overflow-style: none;
@@ -1785,7 +1818,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     )}
 
                     {hasOwnActiveMovement && activeMovement && (
-                        <div className="flex justify-center border-b border-slate-200/70 bg-white/60 px-4 py-2.5 backdrop-blur-sm">
+                        <div className="flex justify-center border-b border-slate-200/70 bg-white/60 px-4 py-2.5 backdrop-blur-sm print:hidden">
                             <ActiveMovementBanner
                                 movement={activeMovement}
                                 canClose={canCloseOwnMovement}
@@ -1804,7 +1837,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             </div>
 
             {/* Flash Messages */}
-            <div className="pointer-events-none fixed top-4 right-4 z-50 flex w-80 flex-col gap-2">
+            <div className="pointer-events-none fixed top-4 right-4 z-50 flex w-80 flex-col gap-2 print:hidden">
                 {showSuccess && (
                     <Alert
                         variant="default"
