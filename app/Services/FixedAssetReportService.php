@@ -272,12 +272,17 @@ class FixedAssetReportService
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
     private function assetTracking(array $filters): array
     {
         $query = FixedAsset::query()
             ->with([
                 'category:id,code,name',
-                'branch:id,name',
+                'subCategory:id,code,name',
+                'branch:id,name,branch_code',
                 'purchase:id,voucher_no,ledger_no,description',
             ]);
 
@@ -299,31 +304,57 @@ class FixedAssetReportService
 
         $assets = $query->orderBy('branch_id')->orderBy('asset_tag')->limit(5000)->get();
 
-        $sl = 0;
+        $headers = [
+            'Category', 'Sub Category', 'Asset No', 'Model No', 'Location', 'Purchase Date', 'Purchase Amount',
+            'Current Book Value', 'Floor', 'Room', 'Voucher', 'Ledger', 'Description',
+        ];
+
+        $mapRow = function (FixedAsset $a) {
+            return [
+                'category' => $a->category?->name,
+                'sub_category' => $a->subCategory?->name,
+                'asset_no' => $this->assetNo($a),
+                'model_no' => $a->model,
+                'location' => $this->assetLocation($a),
+                'purchase_date' => $this->formatDate($a->purchase_date),
+                'purchase_amount' => $a->purchase_cost,
+                'book_value' => $a->book_value,
+                'floor' => $a->floor_no,
+                'room' => $a->room_no,
+                'voucher' => $a->voucher_no ?: $a->purchase?->voucher_no,
+                'ledger' => $a->ledger_no ?: $a->purchase?->ledger_no,
+                'description' => $a->description ?: $a->purchase?->description,
+            ];
+        };
+
+        $totals = [
+            'purchase_amount' => (float) $assets->sum('purchase_cost'),
+            'book_value' => (float) $assets->sum('book_value'),
+            'closing_value' => (float) $assets->sum('book_value'),
+            'asset_count' => $assets->count(),
+        ];
+
+        $groupKey = fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—');
+
+        $sections = $assets->groupBy($groupKey)->map(function ($items, $title) use ($mapRow) {
+            return [
+                'title' => $title,
+                'rows' => $items->map($mapRow)->values()->all(),
+                'subtotal' => [
+                    'asset_count' => $items->count(),
+                    'purchase_amount' => (float) $items->sum('purchase_cost'),
+                    'book_value' => (float) $items->sum('book_value'),
+                    'closing_value' => (float) $items->sum('book_value'),
+                ],
+            ];
+        })->values()->all();
 
         return [
             'template' => 'asset-tracking',
-            'headers' => [
-                'SL', 'Asset No', 'Model No', 'Purchase Date', 'Purchase Amount',
-                'Current Book Value', 'Floor', 'Room', 'Voucher', 'Ledger', 'Description',
-            ],
-            'rows' => $assets->map(function ($a) use (&$sl) {
-                $sl++;
-
-                return [
-                    'sl' => $sl,
-                    'asset_no' => $this->assetNo($a),
-                    'model_no' => $a->model,
-                    'purchase_date' => $this->formatDate($a->purchase_date),
-                    'purchase_amount' => $a->purchase_cost,
-                    'book_value' => $a->book_value,
-                    'floor' => $a->floor_no,
-                    'room' => $a->room_no,
-                    'voucher' => $a->voucher_no ?: $a->purchase?->voucher_no,
-                    'ledger' => $a->ledger_no ?: $a->purchase?->ledger_no,
-                    'description' => $a->description ?: $a->purchase?->description,
-                ];
-            })->all(),
+            'headers' => $headers,
+            'sections' => $sections,
+            'rows' => [],
+            'totals' => $totals,
         ];
     }
 
@@ -337,51 +368,67 @@ class FixedAssetReportService
         $to = $filters['date_to'] ?? now()->endOfYear()->toDateString();
 
         $assets = FixedAsset::query()
-            ->with(['branch:id,name', 'category:id,name', 'subCategory:id,name'])
+            ->with(['branch:id,name,branch_code', 'category:id,code,name', 'subCategory:id,code,name'])
             ->where('status', FixedAsset::STATUS_DISPOSED)
             ->whereBetween('disposal_date', [$from, $to])
             ->when($filters['branch_id'] ?? null, fn ($q) => $q->where('branch_id', $filters['branch_id']))
             ->when($filters['asset_category_id'] ?? null, fn ($q) => $q->where('asset_category_id', $filters['asset_category_id']))
+            ->orderBy('branch_id')
             ->orderBy('disposal_date')
             ->limit(5000)
             ->get();
 
-        $sl = 0;
+        $headers = [
+            'Category', 'Sub Category', 'Asset No', 'Branch',
+            'Purchase Date', 'Purchase Amt', 'Opening Value', 'Depreciation',
+            'Disposal/Write-Off', 'Closing Value',
+        ];
+
+        $totals = [
+            'purchase_amount' => (float) $assets->sum('purchase_cost'),
+            'opening_value' => (float) $assets->sum('purchase_cost'),
+            'depreciation' => (float) $assets->sum('accumulated_depreciation'),
+            'disposal_amount' => (float) $assets->sum('disposal_amount'),
+            'closing_value' => (float) $assets->sum('book_value'),
+            'asset_count' => $assets->count(),
+        ];
+
+        $groupKey = fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—');
+
+        $sections = $assets->groupBy($groupKey)->map(function ($items, $title) {
+            return [
+                'title' => $title,
+                'rows' => $items->map(function (FixedAsset $a) {
+                    return [
+                        'category' => $a->category?->name,
+                        'sub_category' => $a->subCategory?->name,
+                        'asset_no' => $this->assetNo($a),
+                        'branch' => $a->branch?->name,
+                        'purchase_date' => $this->formatDate($a->purchase_date),
+                        'purchase_amount' => $a->purchase_cost,
+                        'opening_value' => (float) ($a->purchase_cost ?? 0),
+                        'depreciation' => (float) ($a->accumulated_depreciation ?? 0),
+                        'disposal_amount' => (float) ($a->disposal_amount ?? 0),
+                        'closing_value' => $a->book_value,
+                    ];
+                })->values()->all(),
+                'subtotal' => [
+                    'asset_count' => $items->count(),
+                    'purchase_amount' => (float) $items->sum('purchase_cost'),
+                    'opening_value' => (float) $items->sum('purchase_cost'),
+                    'depreciation' => (float) $items->sum('accumulated_depreciation'),
+                    'disposal_amount' => (float) $items->sum('disposal_amount'),
+                    'closing_value' => (float) $items->sum('book_value'),
+                ],
+            ];
+        })->values()->all();
 
         return [
             'template' => 'disposal-list',
-            'headers' => [
-                'Sl', 'Category', 'Sub Category', 'Asset No', 'Branch',
-                'Purchase Date', 'Purchase Amt', 'Opening Value', 'Depreciation',
-                'Disposal/Write-Off', 'Closing Value',
-            ],
-            'rows' => $assets->map(function (FixedAsset $a) use (&$sl) {
-                $sl++;
-                $opening = (float) ($a->purchase_cost ?? 0);
-                $accumulated = (float) ($a->accumulated_depreciation ?? 0);
-                $disposalAmt = (float) ($a->disposal_amount ?? 0);
-
-                return [
-                    'sl' => $sl,
-                    'category' => $a->category?->name,
-                    'sub_category' => $a->subCategory?->name,
-                    'asset_no' => $this->assetNo($a),
-                    'branch' => $a->branch?->name,
-                    'purchase_date' => $this->formatDate($a->purchase_date),
-                    'purchase_amount' => $a->purchase_cost,
-                    'opening_value' => $opening,
-                    'depreciation' => $accumulated,
-                    'disposal_amount' => $disposalAmt,
-                    'closing_value' => $a->book_value,
-                ];
-            })->all(),
-            'totals' => [
-                'purchase_amount' => (float) $assets->sum('purchase_cost'),
-                'opening_value' => (float) $assets->sum('purchase_cost'),
-                'depreciation' => (float) $assets->sum('accumulated_depreciation'),
-                'disposal_amount' => (float) $assets->sum('disposal_amount'),
-                'closing_value' => (float) $assets->sum('book_value'),
-            ],
+            'headers' => $headers,
+            'sections' => $sections,
+            'rows' => [],
+            'totals' => $totals,
         ];
     }
 
@@ -394,8 +441,8 @@ class FixedAssetReportService
         $query = FixedAsset::query()
             ->with([
                 'category:id,code,name',
-                'subCategory:id,name',
-                'branch:id,name',
+                'subCategory:id,code,name',
+                'branch:id,name,branch_code',
                 'purchase:id,voucher_no,ledger_no',
                 'assetVendor:id,name',
             ])
@@ -419,14 +466,15 @@ class FixedAssetReportService
 
         $assets = $query->orderBy($order[0])->orderBy($order[1])->orderBy($order[2])->limit(5000)->get();
 
-        $branchHeaders = [
-            'Asset No', 'Model No', 'Location', 'Purchase Date', 'Purchase Amount',
+        $headers = [
+            'Category', 'Sub Category', 'Asset No', 'Model No', 'Location', 'Purchase Date', 'Purchase Amount',
             'Closing Value', 'Vendor', 'Voucher No', 'Ledger No', 'Status',
         ];
-        $categoryHeaders = array_merge(['Category', 'Sub Category'], $branchHeaders);
 
-        $mapRow = function (FixedAsset $a) use ($groupBy) {
-            $row = [
+        $mapRow = function (FixedAsset $a) {
+            return [
+                'category' => $a->category?->name,
+                'sub_category' => $a->subCategory?->name,
                 'asset_no' => $this->assetNo($a),
                 'model_no' => $a->model,
                 'location' => $this->assetLocation($a),
@@ -438,15 +486,6 @@ class FixedAssetReportService
                 'ledger_no' => $a->ledger_no ?: $a->purchase?->ledger_no,
                 'status' => FixedAsset::STATUSES[$a->status] ?? $a->status,
             ];
-
-            if ($groupBy === 'category') {
-                return array_merge([
-                    'category' => $a->category?->name,
-                    'sub_category' => $a->subCategory?->name,
-                ], $row);
-            }
-
-            return $row;
         };
 
         $totals = [
@@ -455,12 +494,15 @@ class FixedAssetReportService
             'asset_count' => $assets->count(),
         ];
 
-        if (in_array($groupBy, ['branch', 'category'], true)) {
-            $groupKey = $groupBy === 'branch'
-                ? fn (FixedAsset $a) => $a->branch?->name ?? '—'
-                : fn (FixedAsset $a) => $a->category?->name ?? '—';
+        if (in_array($groupBy, ['branch', 'category', 'month'], true)) {
+            $groupKey = match ($groupBy) {
+                'branch' => fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—'),
+                'category' => fn (FixedAsset $a) => ($a->category?->code ? "{$a->category->code} - " : '').($a->category?->name ?? '—'),
+                'month' => fn (FixedAsset $a) => $a->purchase_date ? $a->purchase_date->format('F Y') : 'Unknown Date',
+                default => fn (FixedAsset $a) => $a->branch?->name ?? '—',
+            };
 
-            $sections = $assets->groupBy($groupKey)->sortKeys()->map(fn ($items, $title) => [
+            $sections = $assets->groupBy($groupKey)->map(fn ($items, $title) => [
                 'title' => $title,
                 'rows' => $items->map($mapRow)->values()->all(),
                 'subtotal' => [
@@ -473,7 +515,7 @@ class FixedAssetReportService
             return [
                 'template' => 'purchase-list',
                 'purchase_group' => $groupBy,
-                'headers' => $groupBy === 'category' ? $categoryHeaders : $branchHeaders,
+                'headers' => $headers,
                 'sections' => $sections,
                 'rows' => [],
                 'totals' => $totals,
@@ -483,7 +525,7 @@ class FixedAssetReportService
         return [
             'template' => 'purchase-list',
             'purchase_group' => $groupBy,
-            'headers' => $branchHeaders,
+            'headers' => $headers,
             'rows' => $assets->map($mapRow)->all(),
             'totals' => $totals,
         ];
@@ -520,7 +562,7 @@ class FixedAssetReportService
     {
         $halves = $this->period->fyHalves($fy);
         $query = FixedAsset::query()
-            ->with(['category:id,name', 'subCategory:id,name', 'branch:id,name'])
+            ->with(['category:id,code,name', 'subCategory:id,code,name', 'branch:id,name,branch_code'])
             ->where('purchase_cost', '>', 0);
 
         $this->applyAssetFilters($query, $filters);
@@ -531,11 +573,12 @@ class FixedAssetReportService
             ->limit(5000)
             ->get();
 
-        $headers = $groupBy === 'branch'
-            ? ['Sub Category', 'Asset No', 'Purchase Date', 'Purchase Amount', 'Opening Value', 'Addition Jul-Dec', 'Addition Jan-Jun', 'Depreciation Jul-Dec', 'Depreciation Jan-Jun', 'Closing Value']
-            : ['Asset No', 'Location', 'Purchase Date', 'Purchase Amount', 'Opening Value', 'Addition Jul-Dec', 'Addition Jan-Jun', 'Depreciation Jul-Dec', 'Depreciation Jan-Jun', 'Closing Value'];
+        $headers = [
+            'Category', 'Sub Category', 'Asset No', 'Location', 'Purchase Date', 'Purchase Amount', 'Opening Value',
+            'Addition Jul-Dec', 'Addition Jan-Jun', 'Depreciation Jul-Dec', 'Depreciation Jan-Jun', 'Closing Value',
+        ];
 
-        $rows = $assets->map(function (FixedAsset $a) use ($groupBy, $halves, $fy) {
+        $mapRow = function (FixedAsset $a) use ($halves, $fy) {
             $opening = $this->openingValueAt($a, $fy->start_date);
             $addH1 = $this->purchaseAdditionBetween($a, $halves['h1'][0], $halves['h1'][1]);
             $addH2 = $this->purchaseAdditionBetween($a, $halves['h2'][0], $halves['h2'][1]);
@@ -543,8 +586,11 @@ class FixedAssetReportService
             $depH2 = $this->depreciationBetween($a->id, $halves['h2'][0], $halves['h2'][1]);
             $closing = max(0, $opening + $addH1 + $addH2 - $depH1 - $depH2);
 
-            $base = [
+            return [
+                'category' => $a->category?->name,
+                'sub_category' => $a->subCategory?->name,
                 'asset_no' => $this->assetNo($a),
+                'location' => $this->assetLocation($a),
                 'purchase_date' => $this->formatDate($a->purchase_date),
                 'purchase_amount' => $a->purchase_cost,
                 'opening_value' => $opening,
@@ -554,21 +600,40 @@ class FixedAssetReportService
                 'depreciation_h2' => $depH2,
                 'closing_value' => $closing,
             ];
+        };
 
-            if ($groupBy === 'branch') {
-                return array_merge(['sub_category' => $a->subCategory?->name], $base);
-            }
+        $groupKey = $groupBy === 'branch'
+            ? fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—')
+            : fn (FixedAsset $a) => ($a->category?->code ? "{$a->category->code} - " : '').($a->category?->name ?? '—');
 
-            return array_merge(['location' => $this->assetLocation($a)], $base);
-        })->all();
+        $sections = $assets->groupBy($groupKey)->map(function ($items, $title) use ($mapRow) {
+            $rows = $items->map($mapRow)->values()->all();
+            return [
+                'title' => $title,
+                'rows' => $rows,
+                'subtotal' => [
+                    'asset_count' => count($rows),
+                    'purchase_amount' => (float) collect($rows)->sum('purchase_amount'),
+                    'opening_value' => (float) collect($rows)->sum('opening_value'),
+                    'addition_h1' => (float) collect($rows)->sum('addition_h1'),
+                    'addition_h2' => (float) collect($rows)->sum('addition_h2'),
+                    'depreciation_h1' => (float) collect($rows)->sum('depreciation_h1'),
+                    'depreciation_h2' => (float) collect($rows)->sum('depreciation_h2'),
+                    'closing_value' => (float) collect($rows)->sum('closing_value'),
+                ],
+            ];
+        })->values()->all();
+
+        $allRows = $assets->map($mapRow)->all();
 
         return [
             'template' => 'depreciation-schedule',
             'schedule_variant' => 'detail',
             'schedule_group' => $groupBy,
             'headers' => $headers,
-            'rows' => $rows,
-            'totals' => $this->sumScheduleTotals($rows),
+            'sections' => $sections,
+            'rows' => [],
+            'totals' => $this->sumScheduleTotals($allRows),
         ];
     }
 
@@ -582,7 +647,7 @@ class FixedAssetReportService
         $to = $fy->end_date;
 
         $query = FixedAsset::query()
-            ->with(['branch:id,name', 'category:id,name'])
+            ->with(['branch:id,name,branch_code', 'category:id,code,name', 'subCategory:id,code,name'])
             ->where(function ($q) use ($from, $to) {
                 $q->whereBetween('purchase_date', [$from, $to])
                     ->orWhere('status', '!=', FixedAsset::STATUS_DISPOSED)
@@ -593,13 +658,13 @@ class FixedAssetReportService
 
         $assets = $query->orderBy($groupBy === 'branch' ? 'branch_id' : 'asset_category_id')->orderBy('asset_tag')->limit(5000)->get();
 
-        $headers = $groupBy === 'branch'
-            ? ['Asset No', 'Purchase Date', 'Purchase Amount', 'Opening Value', 'New Purchase', 'Transfer In', 'Addition Total', 'Depreciation', 'Disposal', 'Transfer Out', 'Deduction Total', 'Cumulative Deduction', 'Closing Value', 'Passed Day']
-            : ['#', 'Branch', 'Asset No', 'Purchase Date', 'Purchase Amount', 'Opening Value', 'New Purchase', 'Transfer In', 'Addition Total', 'Depreciation', 'Dispose', 'Transfer Out', 'Deduction Total', 'Cumulative Deduction', 'Closing Value', 'Passed Day'];
+        $headers = [
+            'Category', 'Sub Category', 'Branch', 'Asset No', 'Purchase Date', 'Purchase Amount', 'Opening Value',
+            'New Purchase', 'Transfer In', 'Addition Total', 'Depreciation', 'Disposal', 'Transfer Out',
+            'Deduction Total', 'Cumulative Deduction', 'Closing Value', 'Passed Day',
+        ];
 
-        $sl = 0;
-        $rows = $assets->map(function (FixedAsset $a) use ($groupBy, $fy, $from, $to, &$sl) {
-            $sl++;
+        $mapRow = function (FixedAsset $a) use ($from, $to) {
             $opening = $this->openingValueAt($a, $from);
             $newPurchase = $this->purchaseAdditionBetween($a, $from, $to);
             $transferIn = $this->transferValue($a->id, $from, $to, 'in');
@@ -611,7 +676,10 @@ class FixedAssetReportService
             $closing = max(0, $opening + $additionTotal - $deductionTotal);
             $passedDays = $a->purchase_date ? $a->purchase_date->diffInDays(min($to, now())) : 0;
 
-            $base = [
+            return [
+                'category' => $a->category?->name,
+                'sub_category' => $a->subCategory?->name,
+                'branch' => $a->branch?->name,
                 'asset_no' => $this->assetNo($a),
                 'purchase_date' => $this->formatDate($a->purchase_date),
                 'purchase_amount' => $a->purchase_cost,
@@ -627,21 +695,45 @@ class FixedAssetReportService
                 'closing_value' => $closing,
                 'passed_day' => $passedDays,
             ];
+        };
 
-            if ($groupBy === 'category') {
-                return array_merge(['sl' => $sl, 'branch' => $a->branch?->name], $base);
-            }
+        $groupKey = $groupBy === 'branch'
+            ? fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—')
+            : fn (FixedAsset $a) => ($a->category?->code ? "{$a->category->code} - " : '').($a->category?->name ?? '—');
 
-            return $base;
-        })->all();
+        $sections = $assets->groupBy($groupKey)->map(function ($items, $title) use ($mapRow) {
+            $rows = $items->map($mapRow)->values()->all();
+
+            return [
+                'title' => $title,
+                'rows' => $rows,
+                'subtotal' => [
+                    'asset_count' => count($rows),
+                    'purchase_amount' => (float) collect($rows)->sum('purchase_amount'),
+                    'opening_value' => (float) collect($rows)->sum('opening_value'),
+                    'new_purchase' => (float) collect($rows)->sum('new_purchase'),
+                    'transfer_in' => (float) collect($rows)->sum('transfer_in'),
+                    'addition_total' => (float) collect($rows)->sum('addition_total'),
+                    'depreciation' => (float) collect($rows)->sum('depreciation'),
+                    'disposal' => (float) collect($rows)->sum('disposal'),
+                    'transfer_out' => (float) collect($rows)->sum('transfer_out'),
+                    'deduction_total' => (float) collect($rows)->sum('deduction_total'),
+                    'cumulative_deduction' => (float) collect($rows)->sum('cumulative_deduction'),
+                    'closing_value' => (float) collect($rows)->sum('closing_value'),
+                ],
+            ];
+        })->values()->all();
+
+        $allRows = $assets->map($mapRow)->all();
 
         return [
             'template' => 'depreciation-schedule',
             'schedule_variant' => 'summary',
             'schedule_group' => $groupBy,
             'headers' => $headers,
-            'rows' => $rows,
-            'totals' => $this->sumScheduleTotals($rows),
+            'sections' => $sections,
+            'rows' => [],
+            'totals' => $this->sumScheduleTotals($allRows),
         ];
     }
 

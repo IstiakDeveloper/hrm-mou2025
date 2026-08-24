@@ -3,6 +3,8 @@ import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { ComboSelect } from '@/components/ComboSelect';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
 import { PayrollPage, PayrollPageHeader, PayrollSectionCard } from '@/components/payroll/PayrollPageShell';
@@ -11,7 +13,19 @@ import { PayrollField, PayrollMonthSelect, PayrollYearSelect } from '@/component
 import { FormDateField } from '@/components/fixed-asset/FormDateField';
 import { displayDateToServer, toFormDisplayDate } from '@/lib/display-date';
 import { formatTakaWhole } from '@/lib/taka-format';
-import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
+import {
+    ArrowLeft,
+    Building2,
+    ChevronsDownUp,
+    ChevronsUpDown,
+    Download,
+    FileSpreadsheet,
+    Layers,
+    Minus,
+    Plus,
+    Printer,
+    Search,
+} from 'lucide-react';
 
 type ReportMeta = {
     slug: string;
@@ -26,7 +40,26 @@ type ReportMeta = {
 type Section = {
     title: string;
     rows: Record<string, unknown>[];
-    subtotal?: { asset_count?: number; purchase_cost?: number; purchase_amount?: number; closing_value?: number };
+    subtotal?: {
+        asset_count?: number;
+        purchase_cost?: number;
+        purchase_amount?: number;
+        closing_value?: number;
+        book_value?: number;
+        opening_value?: number;
+        addition_h1?: number;
+        addition_h2?: number;
+        depreciation_h1?: number;
+        depreciation_h2?: number;
+        new_purchase?: number;
+        transfer_in?: number;
+        addition_total?: number;
+        depreciation?: number;
+        disposal?: number;
+        transfer_out?: number;
+        deduction_total?: number;
+        cumulative_deduction?: number;
+    };
 };
 
 type Props = {
@@ -57,6 +90,28 @@ function fmt(n: unknown) {
     return Number.isFinite(v) ? formatTakaWhole(v) : '—';
 }
 
+function isNumericCol(key: string): boolean {
+    const lower = key.toLowerCase();
+    return (
+        lower.includes('amount') ||
+        lower.includes('value') ||
+        lower.includes('cost') ||
+        lower.includes('depreciation') ||
+        lower.includes('addition') ||
+        lower.includes('deduction') ||
+        lower.includes('disposal') ||
+        lower.includes('purchase') ||
+        lower.includes('opening') ||
+        lower.includes('closing') ||
+        lower.includes('wdv') ||
+        lower.includes('written_down') ||
+        lower.includes('rate') ||
+        lower.includes('count') ||
+        lower.includes('day') ||
+        lower.includes('sl')
+    );
+}
+
 function isNumericCell(value: unknown): boolean {
     if (typeof value === 'number') {
         return Number.isFinite(value);
@@ -68,17 +123,45 @@ function isNumericCell(value: unknown): boolean {
     return false;
 }
 
-function cellDisplay(value: unknown): string {
+function cellDisplay(value: unknown, key?: string): string {
     if (value == null || value === '') {
-        return '';
+        return '—';
+    }
+    if (key === 'sl' || key === 'passed_day' || key === 'depreciation_rate' || key === 'asset_count' || key === 'floor' || key === 'room') {
+        return String(value);
     }
     return isNumericCell(value) ? fmt(value) : String(value);
 }
 
+function StatusBadge({ status }: { status: unknown }) {
+    if (!status || status === '—') return <span className="text-zinc-400">—</span>;
+    const str = String(status).toLowerCase();
+    let variantClasses = 'bg-zinc-100 text-zinc-700 border-zinc-200';
+    if (str.includes('active') || str.includes('in use') || str.includes('good')) {
+        variantClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    } else if (str.includes('maintenance') || str.includes('repair')) {
+        variantClasses = 'bg-amber-50 text-amber-700 border-amber-200';
+    } else if (str.includes('disposed') || str.includes('written off') || str.includes('damaged')) {
+        variantClasses = 'bg-rose-50 text-rose-700 border-rose-200';
+    } else if (str.includes('transfer')) {
+        variantClasses = 'bg-blue-50 text-blue-700 border-blue-200';
+    }
+
+    return (
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${variantClasses}`}>
+            {String(status)}
+        </span>
+    );
+}
+
 function columnKeys(template: string, firstRow: Record<string, unknown>, payload?: Record<string, unknown>): string[] {
+    if (firstRow && Object.keys(firstRow).length > 0) {
+        return Object.keys(firstRow);
+    }
+
     if (payload?.headers && Array.isArray(payload.headers)) {
         const headerCount = (payload.headers as string[]).length;
-        const rowKeys = Object.keys(firstRow);
+        const rowKeys = Object.keys(firstRow || {});
         if (rowKeys.length >= headerCount) {
             return rowKeys;
         }
@@ -86,86 +169,24 @@ function columnKeys(template: string, firstRow: Record<string, unknown>, payload
 
     switch (template) {
         case 'asset-tracking':
-            return ['sl', 'asset_no', 'model_no', 'purchase_date', 'purchase_amount', 'book_value', 'floor', 'room', 'voucher', 'ledger', 'description'];
+            return ['category', 'sub_category', 'asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'book_value', 'floor', 'room', 'voucher', 'ledger', 'description'];
         case 'purchase-list':
-            return firstRow.category != null
-                ? ['category', 'sub_category', 'asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'closing_value', 'vendor', 'voucher_no', 'ledger_no', 'status']
-                : ['asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'closing_value', 'vendor', 'voucher_no', 'ledger_no', 'status'];
+            return ['category', 'sub_category', 'asset_no', 'model_no', 'location', 'purchase_date', 'purchase_amount', 'closing_value', 'vendor', 'voucher_no', 'ledger_no', 'status'];
         case 'disposal-list':
-            return ['sl', 'category', 'sub_category', 'asset_no', 'branch', 'purchase_date', 'purchase_amount', 'opening_value', 'depreciation', 'disposal_amount', 'closing_value'];
+            return ['category', 'sub_category', 'asset_no', 'branch', 'purchase_date', 'purchase_amount', 'opening_value', 'depreciation', 'disposal_amount', 'closing_value'];
         case 'depreciation-schedule': {
             const variant = payload?.schedule_variant as string;
-            const group = payload?.schedule_group as string;
             if (variant === 'audit') {
                 return ['sl', 'group_label', 'asset_count', 'cost_opening', 'cost_addition', 'cost_sales_adj', 'cost_closing', 'depreciation_rate', 'dep_opening', 'dep_charged', 'dep_sales_adj', 'dep_closing', 'written_down_value'];
             }
             if (variant === 'summary') {
-                return group === 'category'
-                    ? ['sl', 'branch', 'asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'new_purchase', 'transfer_in', 'addition_total', 'depreciation', 'disposal', 'transfer_out', 'deduction_total', 'cumulative_deduction', 'closing_value', 'passed_day']
-                    : ['asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'new_purchase', 'transfer_in', 'addition_total', 'depreciation', 'disposal', 'transfer_out', 'deduction_total', 'cumulative_deduction', 'closing_value', 'passed_day'];
+                return ['category', 'sub_category', 'branch', 'asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'new_purchase', 'transfer_in', 'addition_total', 'depreciation', 'disposal', 'transfer_out', 'deduction_total', 'cumulative_deduction', 'closing_value', 'passed_day'];
             }
-            return group === 'branch'
-                ? ['sub_category', 'asset_no', 'purchase_date', 'purchase_amount', 'opening_value', 'addition_h1', 'addition_h2', 'depreciation_h1', 'depreciation_h2', 'closing_value']
-                : ['asset_no', 'location', 'purchase_date', 'purchase_amount', 'opening_value', 'addition_h1', 'addition_h2', 'depreciation_h1', 'depreciation_h2', 'closing_value'];
+            return ['category', 'sub_category', 'asset_no', 'location', 'purchase_date', 'purchase_amount', 'opening_value', 'addition_h1', 'addition_h2', 'depreciation_h1', 'depreciation_h2', 'closing_value'];
         }
         default:
-            return Object.keys(firstRow);
+            return Object.keys(firstRow || {});
     }
-}
-
-function DataTable({
-    headers,
-    rows,
-    colKeys,
-    totals,
-    template,
-}: {
-    headers: string[];
-    rows: Record<string, unknown>[];
-    colKeys: string[];
-    totals?: Record<string, unknown>;
-    template: string;
-}) {
-    if (rows.length === 0) {
-        return <p className="text-sm text-muted-foreground">No rows.</p>;
-    }
-
-    return (
-        <div className="overflow-x-auto border border-slate-300">
-            <table className="w-full border-collapse text-sm">
-                <thead>
-                    <tr className="border-b border-slate-300 bg-slate-50">
-                        {headers.map((h) => (
-                            <th key={h} className="border-r border-slate-200 px-2 py-1.5 text-left font-semibold last:border-r-0">
-                                {h}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row, i) => (
-                        <tr key={i} className="border-b border-slate-200">
-                            {colKeys.map((k) => (
-                                <td key={k} className="border-r border-slate-100 px-2 py-1 last:border-r-0">
-                                    {cellDisplay(row[k])}
-                                </td>
-                            ))}
-                        </tr>
-                    ))}
-                    {totals && (
-                        <tr className="bg-slate-50 font-semibold">
-                            <td className="px-2 py-1">Total</td>
-                            {colKeys.slice(1).map((k) => (
-                                <td key={k} className="px-2 py-1">
-                                    {totals[k] != null ? cellDisplay(totals[k]) : ''}
-                                </td>
-                            ))}
-                        </tr>
-                    )}
-                </tbody>
-            </table>
-        </div>
-    );
 }
 
 function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
@@ -176,51 +197,350 @@ function ReportPreview({ payload }: { payload: Record<string, unknown> }) {
     const template = String(payload.template ?? '');
     const meta = payload.meta as { row_count?: number } | undefined;
 
+    const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+        const init: Record<string, boolean> = {};
+        sections.forEach((s, idx) => {
+            init[s.title || String(idx)] = sections.length <= 5 || idx < 3;
+        });
+        return init;
+    });
+
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const toggleSection = (title: string) => {
+        setExpanded((prev) => ({ ...prev, [title]: !prev[title] }));
+    };
+
+    const expandAll = () => {
+        const next: Record<string, boolean> = {};
+        sections.forEach((s, idx) => {
+            next[s.title || String(idx)] = true;
+        });
+        setExpanded(next);
+    };
+
+    const collapseAll = () => {
+        const next: Record<string, boolean> = {};
+        sections.forEach((s, idx) => {
+            next[s.title || String(idx)] = false;
+        });
+        setExpanded(next);
+    };
+
+    const sampleRow = rows[0] ?? sections[0]?.rows?.[0] ?? {};
+    const colKeys = columnKeys(template, sampleRow, payload);
+
+    const filteredSections = useMemo(() => {
+        if (!searchQuery.trim()) return sections;
+        const q = searchQuery.toLowerCase().trim();
+
+        return sections
+            .map((sec) => {
+                const matchTitle = (sec.title || '').toLowerCase().includes(q);
+                const matchingRows = sec.rows.filter((r) =>
+                    Object.values(r).some((v) => String(v ?? '').toLowerCase().includes(q))
+                );
+
+                if (matchTitle || matchingRows.length > 0) {
+                    return {
+                        ...sec,
+                        rows: matchTitle ? sec.rows : matchingRows,
+                    };
+                }
+                return null;
+            })
+            .filter((sec): sec is Section => sec !== null);
+    }, [sections, searchQuery]);
+
+    const filteredRows = useMemo(() => {
+        if (!searchQuery.trim()) return rows;
+        const q = searchQuery.toLowerCase().trim();
+        return rows.filter((r) => Object.values(r).some((v) => String(v ?? '').toLowerCase().includes(q)));
+    }, [rows, searchQuery]);
+
     if (rows.length === 0 && sections.length === 0) {
-        return <p className="text-sm text-muted-foreground">No rows in this report.</p>;
-    }
-
-    const colKeys = columnKeys(template, rows[0] ?? sections[0]?.rows?.[0] ?? {}, payload);
-
-    if (sections.length > 0) {
         return (
-            <div className="space-y-6">
-                {meta?.row_count != null && (
-                    <p className="text-xs text-muted-foreground">{meta.row_count} record(s)</p>
-                )}
-                {sections.map((section, idx) => (
-                    <div key={idx}>
-                        <h3 className="mb-2 text-sm font-semibold text-slate-800">
-                            {section.title}
-                            <span className="ml-2 font-normal text-muted-foreground">
-                                ({section.rows.length} assets
-                                {section.subtotal?.purchase_amount != null
-                                    ? ` · ৳${fmt(section.subtotal.purchase_amount)}`
-                                    : section.subtotal?.purchase_cost != null
-                                      ? ` · ৳${fmt(section.subtotal.purchase_cost)}`
-                                      : ''}
-                                )
-                            </span>
-                        </h3>
-                        <DataTable headers={headers} rows={section.rows} colKeys={colKeys} />
-                    </div>
-                ))}
-                {totals && (
-                    <p className="text-sm font-semibold">
-                        Grand total: {totals.asset_count != null ? `${totals.asset_count} assets · ` : ''}
-                        Purchase ৳{fmt(totals.purchase_amount ?? totals.purchase_cost)}
-                    </p>
-                )}
+            <div className="py-12 text-center text-sm text-zinc-500">
+                No asset records found for the selected period and filters.
             </div>
         );
     }
 
+    const isGrouped = sections.length > 0;
+    const isCategoryReport = template.includes('category') || (payload.purchase_group === 'category');
+
     return (
-        <div>
-            {meta?.row_count != null && (
-                <p className="mb-2 text-xs text-muted-foreground">{meta.row_count} record(s)</p>
+        <div className="space-y-4">
+            {/* Action Bar / Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-50/80 p-2.5 rounded-lg border border-zinc-200">
+                <div className="flex items-center gap-2">
+                    <div className="relative w-64 sm:w-80">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                        <Input
+                            type="text"
+                            placeholder="Search in table (asset code, name, branch...)"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="h-8 pl-8 text-xs bg-white border-zinc-200 focus-visible:ring-1"
+                        />
+                    </div>
+                    {meta?.row_count != null && (
+                        <Badge variant="secondary" className="text-[11px] font-normal py-0.5 px-2 bg-zinc-200/70 text-zinc-800">
+                            {meta.row_count} total assets
+                        </Badge>
+                    )}
+                </div>
+
+                {isGrouped && (
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={expandAll}
+                            className="h-7 text-xs px-2.5 text-zinc-700 hover:text-zinc-900 bg-white"
+                        >
+                            <ChevronsUpDown className="mr-1.5 h-3.5 w-3.5" /> Expand All
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={collapseAll}
+                            className="h-7 text-xs px-2.5 text-zinc-700 hover:text-zinc-900 bg-white"
+                        >
+                            <ChevronsDownUp className="mr-1.5 h-3.5 w-3.5" /> Collapse All
+                        </Button>
+                    </div>
+                )}
+            </div>
+
+            {/* Tree Table with Group Accordion */}
+            <div className="overflow-x-auto rounded-lg border border-zinc-200 shadow-2xs bg-white">
+                <table className="w-full border-collapse text-xs">
+                    <thead>
+                        <tr className="bg-slate-800 text-white font-medium">
+                            {headers.map((h, i) => (
+                                <th
+                                    key={h + i}
+                                    className={`px-3 py-2.5 border-r border-slate-700 last:border-r-0 whitespace-nowrap text-[11px] tracking-wide ${
+                                        isNumericCol(h) ? 'text-right' : 'text-left'
+                                    }`}
+                                >
+                                    {h}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {isGrouped ? (
+                            filteredSections.length === 0 ? (
+                                <tr>
+                                    <td colSpan={headers.length} className="py-8 text-center text-zinc-400 font-medium">
+                                        No matching records.
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredSections.map((section, idx) => {
+                                    const secKey = section.title || String(idx);
+                                    const isExpanded = Boolean(expanded[secKey] || searchQuery.trim());
+                                    const count = section.rows.length;
+                                    const purchaseAmt = section.subtotal?.purchase_amount ?? section.subtotal?.purchase_cost;
+                                    const closingVal = section.subtotal?.closing_value ?? section.subtotal?.book_value;
+
+                                    return (
+                                        <React.Fragment key={secKey}>
+                                            {/* Top-Level Group Header Row */}
+                                            <tr
+                                                onClick={() => toggleSection(secKey)}
+                                                className="bg-blue-50/90 hover:bg-blue-100/80 cursor-pointer border-t-2 border-b border-blue-200 transition-colors select-none group"
+                                            >
+                                                <td
+                                                    colSpan={headers.length}
+                                                    className="px-3 py-2 text-zinc-900 font-semibold"
+                                                >
+                                                    <div className="flex items-center justify-between gap-4">
+                                                        <div className="flex items-center gap-2.5">
+                                                            {/* Expand/Collapse Toggle Button */}
+                                                            <button
+                                                                type="button"
+                                                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-blue-600 text-white shadow-xs group-hover:bg-blue-700 transition-colors"
+                                                                title={isExpanded ? 'Collapse' : 'Expand'}
+                                                            >
+                                                                {isExpanded ? (
+                                                                    <Minus className="h-3 w-3 stroke-[3]" />
+                                                                ) : (
+                                                                    <Plus className="h-3 w-3 stroke-[3]" />
+                                                                )}
+                                                            </button>
+
+                                                            {/* Group Icon & Title */}
+                                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 tracking-tight">
+                                                                {isCategoryReport ? (
+                                                                    <Layers className="h-3.5 w-3.5 text-blue-600" />
+                                                                ) : (
+                                                                    <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                                                                )}
+                                                                <span>{section.title || 'Untitled Group'}</span>
+                                                            </div>
+
+                                                            <Badge className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-300 text-[10px] font-semibold py-0 px-1.5">
+                                                                {count} {count === 1 ? 'asset' : 'assets'}
+                                                            </Badge>
+                                                        </div>
+
+                                                        {/* Group Summary Metrics in Header Bar */}
+                                                        <div className="flex items-center gap-6 text-[11px] font-mono pr-2">
+                                                            {purchaseAmt != null && (
+                                                                <span className="text-zinc-700 font-semibold">
+                                                                    Purchase:{' '}
+                                                                    <strong className="text-zinc-950 font-bold">
+                                                                        ৳{fmt(purchaseAmt)}
+                                                                    </strong>
+                                                                </span>
+                                                            )}
+                                                            {closingVal != null && (
+                                                                <span className="text-zinc-700 font-semibold">
+                                                                    Closing:{' '}
+                                                                    <strong className="text-emerald-700 font-bold">
+                                                                        ৳{fmt(closingVal)}
+                                                                    </strong>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+
+                                            {/* Child Single Asset Records */}
+                                            {isExpanded &&
+                                                section.rows.map((row, rIdx) => (
+                                                    <tr
+                                                        key={rIdx}
+                                                        className={`border-b border-zinc-100 hover:bg-zinc-50/80 transition-colors ${
+                                                            rIdx % 2 === 1 ? 'bg-zinc-50/30' : 'bg-white'
+                                                        }`}
+                                                    >
+                                                        {colKeys.map((k, colIdx) => {
+                                                            const isNum = isNumericCol(k);
+                                                            const val = row[k];
+
+                                                            return (
+                                                                <td
+                                                                    key={k + colIdx}
+                                                                    className={`px-3 py-1.5 text-zinc-700 border-r border-zinc-100 last:border-r-0 whitespace-nowrap ${
+                                                                        isNum ? 'text-right font-mono text-[11px]' : 'text-left'
+                                                                    }`}
+                                                                >
+                                                                    {k === 'status' ? (
+                                                                        <StatusBadge status={val} />
+                                                                    ) : (
+                                                                        cellDisplay(val, k)
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+
+                                            {/* Subtotal row for expanded section */}
+                                            {isExpanded && (
+                                                <tr className="bg-blue-50/40 border-b-2 border-blue-200/80 font-semibold text-zinc-800 text-[11px]">
+                                                    <td colSpan={Math.max(1, colKeys.length - 2)} className="px-3 py-1.5 text-right font-bold text-slate-700">
+                                                        Subtotal ({section.title}):
+                                                    </td>
+                                                    <td className="px-3 py-1.5 text-right font-mono font-bold text-zinc-900">
+                                                        {purchaseAmt != null ? `৳${fmt(purchaseAmt)}` : ''}
+                                                    </td>
+                                                    <td className="px-3 py-1.5 text-right font-mono font-bold text-emerald-800">
+                                                        {closingVal != null ? `৳${fmt(closingVal)}` : ''}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })
+                            )
+                        ) : filteredRows.length === 0 ? (
+                            <tr>
+                                <td colSpan={headers.length} className="py-8 text-center text-zinc-400 font-medium">
+                                    No matching records.
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredRows.map((row, i) => (
+                                <tr
+                                    key={i}
+                                    className={`border-b border-zinc-100 hover:bg-zinc-50/80 transition-colors ${
+                                        i % 2 === 1 ? 'bg-zinc-50/30' : 'bg-white'
+                                    }`}
+                                >
+                                    {colKeys.map((k, colIdx) => {
+                                        const isNum = isNumericCol(k);
+                                        const val = row[k];
+                                        return (
+                                            <td
+                                                key={k + colIdx}
+                                                className={`px-3 py-1.5 text-zinc-700 border-r border-zinc-100 last:border-r-0 whitespace-nowrap ${
+                                                    isNum ? 'text-right font-mono text-[11px]' : 'text-left'
+                                                }`}
+                                            >
+                                                {k === 'status' ? (
+                                                    <StatusBadge status={val} />
+                                                ) : (
+                                                    cellDisplay(val, k)
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))
+                        )}
+
+                        {/* Grand Totals */}
+                        {totals && (
+                            <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700 text-xs">
+                                <td className="px-3 py-2.5 text-white">Grand Total</td>
+                                {colKeys.slice(1).map((k) => {
+                                    const isNum = isNumericCol(k);
+                                    const val = totals[k];
+                                    return (
+                                        <td
+                                            key={k}
+                                            className={`px-3 py-2.5 border-r border-slate-800 last:border-r-0 whitespace-nowrap ${
+                                                isNum ? 'text-right font-mono text-[11px]' : 'text-left'
+                                            }`}
+                                        >
+                                            {val != null ? (isNum ? `৳${fmt(val)}` : String(val)) : ''}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Grand Total Summary Box */}
+            {totals && (
+                <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-zinc-900 text-white rounded-lg shadow-xs text-xs">
+                    <div className="font-semibold text-zinc-200">
+                        Summary Totals ({meta?.row_count ?? totals.asset_count ?? 0} Assets)
+                    </div>
+                    <div className="flex items-center gap-6 font-mono">
+                        {totals.purchase_amount != null && (
+                            <span>
+                                Total Purchase: <strong className="text-emerald-400 font-bold text-sm">৳{fmt(totals.purchase_amount)}</strong>
+                            </span>
+                        )}
+                        {totals.closing_value != null && (
+                            <span>
+                                Total Closing Book Value: <strong className="text-sky-400 font-bold text-sm">৳{fmt(totals.closing_value)}</strong>
+                            </span>
+                        )}
+                    </div>
+                </div>
             )}
-            <DataTable headers={headers} rows={rows} colKeys={colKeys} totals={totals} template={template} />
         </div>
     );
 }
