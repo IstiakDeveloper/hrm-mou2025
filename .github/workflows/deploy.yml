@@ -56,23 +56,39 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             chown -R www-data:www-data /var/www/HRM
-            - name: Telegram success
+
+      - name: Telegram success
         if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ 8847362086:AAFFVTbIA4GXwNgYXEpok9HGY27CaFDIhHs }}/sendMessage" \
-            --data-urlencode "chat_id=${{ 1879914930 }}" \
-            --data-urlencode "text=✅ HRM deploy SUCCESS
-Branch: ${{ github.ref_name }}
-Commit: ${{ github.sha }}
-By: ${{ github.actor }}
-${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TEXT=$(cat <<EOF
+          ✅ HRM deploy SUCCESS
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          By: ${{ github.actor }}
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}"
+
       - name: Telegram failure
         if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ 8847362086:AAFFVTbIA4GXwNgYXEpok9HGY27CaFDIhHs }}/sendMessage" \
-            --data-urlencode "chat_id=${{ 1879914930 }}" \
-            --data-urlencode "text=❌ HRM deploy FAILED
-Branch: ${{ github.ref_name }}
-Commit: ${{ github.sha }}
-By: ${{ github.actor }}
-${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TEXT=$(cat <<EOF
+          ❌ HRM deploy FAILED
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          By: ${{ github.actor }}
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}"
