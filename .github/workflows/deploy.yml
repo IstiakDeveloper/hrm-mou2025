@@ -56,3 +56,23 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             chown -R www-data:www-data /var/www/HRM
+            - name: Telegram success
+        if: success()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ 8847362086:AAFFVTbIA4GXwNgYXEpok9HGY27CaFDIhHs }}/sendMessage" \
+            --data-urlencode "chat_id=${{ 1879914930 }}" \
+            --data-urlencode "text=✅ HRM deploy SUCCESS
+Branch: ${{ github.ref_name }}
+Commit: ${{ github.sha }}
+By: ${{ github.actor }}
+${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - name: Telegram failure
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ 8847362086:AAFFVTbIA4GXwNgYXEpok9HGY27CaFDIhHs }}/sendMessage" \
+            --data-urlencode "chat_id=${{ 1879914930 }}" \
+            --data-urlencode "text=❌ HRM deploy FAILED
+Branch: ${{ github.ref_name }}
+Commit: ${{ github.sha }}
+By: ${{ github.actor }}
+${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
