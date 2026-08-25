@@ -114,6 +114,8 @@ class ConfirmationCompletionService
 
         $confirmation->status = 'completed';
         $confirmation->save();
+
+        app(EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($employee);
     }
 
     public function syncEmployeeFromConfirmation(Confirmation $confirmation, ?int $toPayscaleId = null): void

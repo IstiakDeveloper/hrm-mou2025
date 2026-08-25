@@ -443,6 +443,7 @@ class ConfirmationController extends Controller
                 $confirmation->employee->save();
                 $this->syncConfirmationHistory($confirmation, $user->id);
                 $this->syncLinkedPromotion($confirmation, $user->id);
+                app(\App\Services\EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($confirmation->employee);
             }
         });
 

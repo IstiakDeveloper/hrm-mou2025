@@ -173,6 +173,7 @@ class MovementPenaltyController extends Controller
                 $sq->whereNull('transaction_id')->orWhere('transaction_id', '');
             });
         });
+        
         $waivedStats = [
             'count' => (clone $waivedQuery)->count(),
             'total_amount' => (float) (clone $waivedQuery)->sum('total_fine'),

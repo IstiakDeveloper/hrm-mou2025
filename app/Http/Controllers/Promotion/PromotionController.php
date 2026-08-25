@@ -389,6 +389,7 @@ class PromotionController extends Controller
                 $this->promotionCompletionService->syncEmployeeFromPromotion($promotion, $payroll['to_payscale_id']);
                 $promotion->employee->save();
                 $this->syncPromotionHistory($promotion, $user->id);
+                app(\App\Services\EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($promotion->employee);
             }
         });
 

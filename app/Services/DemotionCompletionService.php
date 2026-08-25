@@ -63,6 +63,8 @@ class DemotionCompletionService
 
         $demotion->status = 'completed';
         $demotion->save();
+
+        app(EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($employee);
     }
 
     public function syncEmployeeFromDemotion(Demotion $demotion, ?int $toPayscaleId): void

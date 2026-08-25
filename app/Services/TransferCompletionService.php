@@ -80,6 +80,8 @@ class TransferCompletionService
         $transfer->status = 'completed';
         $transfer->save();
 
+        app(EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($employee);
+
         $employeeUser = $employee->user;
         if ($employeeUser) {
             $fromName = $transfer->fromBranch?->name ?? '—';

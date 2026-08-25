@@ -684,9 +684,59 @@ class EmployeeAssignmentHistoryService
             }
         }
 
+        $firstConfirmation = Confirmation::query()
+            ->where('employee_id', $employee->id)
+            ->where('status', 'completed')
+            ->orderBy('confirmation_date')
+            ->orderBy('id')
+            ->first();
+
+        if ($firstConfirmation) {
+            if ($firstConfirmation->from_designation_id) {
+                $state['designation_id'] = $firstConfirmation->from_designation_id;
+            }
+            if ($firstConfirmation->from_employee_type_id) {
+                $state['employee_type_id'] = $firstConfirmation->from_employee_type_id;
+            }
+            if ($firstConfirmation->from_salary_grade_id) {
+                $state['salary_grade_id'] = $firstConfirmation->from_salary_grade_id;
+                $payscaleId = DB::table('salary_grades')->where('id', $firstConfirmation->from_salary_grade_id)->value('payscale_id');
+                if ($payscaleId) {
+                    $state['payscale_id'] = (int) $payscaleId;
+                }
+            } else {
+                $state['salary_grade_id'] = null;
+                $state['salary_step_id'] = null;
+                $state['payscale_id'] = null;
+            }
+            if ($firstConfirmation->from_salary_step_id) {
+                $state['salary_step_id'] = $firstConfirmation->from_salary_step_id;
+            }
+            if ($firstConfirmation->from_basic_salary !== null) {
+                $state['basic_salary'] = $firstConfirmation->from_basic_salary;
+            }
+        }
+
         $state['status'] = 'active';
 
         return $state;
+    }
+
+    public function rebuildEmployeeHistory(Employee|int $employee): int
+    {
+        $employeeModel = $employee instanceof Employee
+            ? $employee
+            : Employee::query()->find($employee);
+
+        if (! $employeeModel) {
+            return 0;
+        }
+
+        return $this->withoutRecording(function () use ($employeeModel) {
+            EmployeeAssignmentHistory::query()->where('employee_id', $employeeModel->id)->delete();
+
+            return $this->backfillEmployee($employeeModel);
+        });
     }
 
     /**

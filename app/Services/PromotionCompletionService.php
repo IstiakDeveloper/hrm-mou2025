@@ -67,6 +67,8 @@ class PromotionCompletionService
 
         $promotion->status = 'completed';
         $promotion->save();
+
+        app(EmployeeAssignmentHistoryService::class)->rebuildEmployeeHistory($employee);
     }
 
     public function syncEmployeeFromPromotion(Promotion $promotion, ?int $toPayscaleId): void
