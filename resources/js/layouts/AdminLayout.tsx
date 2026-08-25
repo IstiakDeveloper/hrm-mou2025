@@ -1169,6 +1169,39 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     };
 
     const DesktopTopMenuItem = ({ item }: { item: MenuItemType }) => {
+        const [open, setOpen] = useState(false);
+        const openTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+        const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+        const handleMouseEnter = () => {
+            if (closeTimerRef.current) {
+                clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+            }
+            if (!open) {
+                openTimerRef.current = setTimeout(() => {
+                    setOpen(true);
+                }, 50);
+            }
+        };
+
+        const handleMouseLeave = () => {
+            if (openTimerRef.current) {
+                clearTimeout(openTimerRef.current);
+                openTimerRef.current = null;
+            }
+            closeTimerRef.current = setTimeout(() => {
+                setOpen(false);
+            }, 180);
+        };
+
+        useEffect(() => {
+            return () => {
+                if (openTimerRef.current) clearTimeout(openTimerRef.current);
+                if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+            };
+        }, []);
+
         if (item.hrOnly && !canSeeHrOnlyMenu) return null;
         if (item.employeeOnly && !employee?.id) return null;
         if (item.anyPermissions?.length) {
@@ -1200,62 +1233,78 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
         if (item.hasSubmenu && permittedSubmenu && permittedSubmenu.length > 0) {
             return (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <button
-                            type="button"
-                            className={cn(
-                                'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold tracking-wide transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
-                                isItemActive
-                                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/25'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                            )}
+                <div
+                    onMouseEnter={handleMouseEnter}
+                    onMouseLeave={handleMouseLeave}
+                    className="relative inline-flex items-center"
+                >
+                    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className={cn(
+                                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold tracking-wide transition-colors duration-150 select-none focus:outline-none',
+                                    isItemActive
+                                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/25'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                                )}
+                            >
+                                <div className={cn(isItemActive ? 'text-emerald-600' : 'text-slate-500')}>
+                                    {React.cloneElement(item.icon as React.ReactElement, { className: 'w-3.5 h-3.5' })}
+                                </div>
+                                <span className="whitespace-nowrap">{item.title}</span>
+                                <ChevronDown
+                                    className={cn(
+                                        'h-3 w-3 text-slate-400 opacity-80 transition-transform duration-200',
+                                        open && 'rotate-180',
+                                    )}
+                                />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="start"
+                            sideOffset={4}
+                            onOpenAutoFocus={(e) => e.preventDefault()}
+                            onCloseAutoFocus={(e) => e.preventDefault()}
+                            onMouseEnter={handleMouseEnter}
+                            onMouseLeave={handleMouseLeave}
+                            className="min-w-[215px] max-h-[min(480px,75vh)] overflow-y-auto overscroll-contain rounded-xl border border-slate-200/90 bg-white/98 p-1.5 shadow-xl shadow-slate-300/30 backdrop-blur-sm"
                         >
-                            <div className={cn(isItemActive ? 'text-emerald-600' : 'text-slate-500')}>
-                                {React.cloneElement(item.icon as React.ReactElement, { className: 'w-3.5 h-3.5' })}
-                            </div>
-                            <span className="whitespace-nowrap">{item.title}</span>
-                            <ChevronDown className="h-3 w-3 text-slate-400 opacity-80" />
-                        </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        align="start"
-                        sideOffset={6}
-                        className="min-w-[210px] max-h-[min(480px,75vh)] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-200/50"
-                    >
-                        {permittedSubmenu.map((subItem, idx) =>
-                            subItem.isGroupLabel ? (
-                                <DropdownMenuLabel
-                                    key={idx}
-                                    className="px-2.5 pt-2 pb-1 text-[10px] font-bold tracking-widest text-slate-400 uppercase first:pt-1"
-                                >
-                                    {subItem.title}
-                                </DropdownMenuLabel>
-                            ) : (
-                                <DropdownMenuItem
-                                    key={idx}
-                                    asChild
-                                    className="cursor-pointer rounded-lg text-xs font-medium transition-colors hover:bg-slate-50 focus:bg-slate-50"
-                                >
-                                    <Link
-                                        href={subItem.path}
-                                        className={cn(
-                                            'flex w-full items-center justify-between px-2.5 py-1.5 tracking-wide',
-                                            isActive(subItem.path)
-                                                ? 'bg-emerald-50 font-semibold text-emerald-700'
-                                                : 'text-slate-600 hover:text-slate-900',
-                                        )}
+                            {permittedSubmenu.map((subItem, idx) =>
+                                subItem.isGroupLabel ? (
+                                    <DropdownMenuLabel
+                                        key={idx}
+                                        className="px-2.5 pt-2 pb-1 text-[10px] font-bold tracking-widest text-slate-400 uppercase first:pt-1"
                                     >
-                                        <span>{subItem.title}</span>
-                                        {isActive(subItem.path) && (
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                                        )}
-                                    </Link>
-                                </DropdownMenuItem>
-                            ),
-                        )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                                        {subItem.title}
+                                    </DropdownMenuLabel>
+                                ) : (
+                                    <DropdownMenuItem
+                                        key={idx}
+                                        asChild
+                                        className="cursor-pointer rounded-lg text-xs font-medium transition-colors duration-150 hover:bg-slate-50 focus:bg-slate-50"
+                                        onClick={() => setOpen(false)}
+                                    >
+                                        <Link
+                                            href={subItem.path}
+                                            className={cn(
+                                                'flex w-full items-center justify-between px-2.5 py-1.5 tracking-wide',
+                                                isActive(subItem.path)
+                                                    ? 'bg-emerald-50 font-semibold text-emerald-700'
+                                                    : 'text-slate-600 hover:text-slate-900',
+                                            )}
+                                        >
+                                            <span>{subItem.title}</span>
+                                            {isActive(subItem.path) && (
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                                            )}
+                                        </Link>
+                                    </DropdownMenuItem>
+                                ),
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             );
         }
 
@@ -1263,7 +1312,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <Link
                 href={item.path}
                 className={cn(
-                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold tracking-wide transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold tracking-wide transition-colors duration-150 select-none focus:outline-none',
                     isActive(item.path)
                         ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/25'
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
