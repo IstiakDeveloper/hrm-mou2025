@@ -140,3 +140,16 @@ test('july after august transfer scenario: as-of is july month end not today', f
 
     expect($asOfExplicit->toDateString())->toBe('2026-07-26');
 });
+
+test('payroll assignment as-of ignores early process date so mid-month transfer uses new branch', function () {
+    Carbon::setTestNow(Carbon::create(2026, 8, 25));
+    $service = app(EmployeeAssignmentHistoryService::class);
+
+    try {
+        expect($service->asOfForPayrollAssignment(2026, 8)->toDateString())->toBe('2026-08-25')
+            ->and($service->asOfForPayrollAssignment(2026, 7)->toDateString())->toBe('2026-07-31')
+            ->and($service->asOfForPayrollAssignment(2026, 9)->toDateString())->toBe('2026-09-01');
+    } finally {
+        Carbon::setTestNow();
+    }
+});

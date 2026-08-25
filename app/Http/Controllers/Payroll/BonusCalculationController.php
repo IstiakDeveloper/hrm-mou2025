@@ -137,10 +137,9 @@ class BonusCalculationController extends Controller
             $processDate = PayrollFormHelper::parseDisplayDate($validated['process_date'])
                 ?? throw ValidationException::withMessages(['process_date' => 'Invalid process date. Use dd-mm-yyyy.']);
 
-            $asOfDate = $this->assignmentHistory->asOfForPayrollPeriod(
+            $asOfDate = $this->assignmentHistory->asOfForPayrollAssignment(
                 (int) $validated['year'],
                 (int) $validated['month'],
-                $processDate,
             );
 
             $processAllBranches = empty($validated['branch_id']);

@@ -57,15 +57,15 @@ class Payslip extends Model
     {
         $employee->loadMissing(['designation:id,name', 'branch:id,name,branch_code']);
 
-        $branch = $employee->branch ?? $fallbackBranch;
+        $branch = $fallbackBranch ?? $employee->branch;
 
         return [
             'employee_name' => $employee->name_en,
             'designation_id' => $employee->designation_id,
             'designation_name' => $employee->designation?->name,
             'branch_id' => $branch?->id ?? $employee->current_branch_id,
-            'branch_name' => $branch?->name,
-            'branch_code' => $branch?->branch_code,
+            'branch_name' => $branch?->name ?? $employee->branch?->name,
+            'branch_code' => $branch?->branch_code ?? $employee->branch?->branch_code,
         ];
     }
 

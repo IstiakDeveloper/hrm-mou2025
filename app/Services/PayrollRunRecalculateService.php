@@ -7,7 +7,6 @@ use App\Models\EmployeePfTransaction;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -50,10 +49,9 @@ class PayrollRunRecalculateService
             ]);
         }
 
-        $asOfDate = $this->assignmentHistory->asOfForPayrollPeriod(
+        $asOfDate = $this->assignmentHistory->asOfForPayrollAssignment(
             (int) $run->year,
             (int) $run->month,
-            Carbon::parse($run->process_date),
         );
 
         $employees = $run->payslips

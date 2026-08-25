@@ -105,6 +105,30 @@ class EmployeeAssignmentHistoryService
         return $process;
     }
 
+    /**
+     * Which branch an employee belongs to for a salary month.
+     *
+     * Process date is ignored: a 01 Aug process date must not keep someone who
+     * transferred on 15 Aug on the old branch. Past months use month-end;
+     * the current month uses today so later transfers in this month still apply.
+     */
+    public function asOfForPayrollAssignment(int $year, int $month): Carbon
+    {
+        $start = $this->periodStartDate($year, $month);
+        $end = $this->periodEndDate($year, $month);
+        $today = Carbon::today()->startOfDay();
+
+        if ($today->lt($start)) {
+            return $start;
+        }
+
+        if ($today->gt($end)) {
+            return $end;
+        }
+
+        return $today;
+    }
+
     public function employeeHasTrackedChanges(Employee $employee): bool
     {
         if ($employee->wasRecentlyCreated) {
