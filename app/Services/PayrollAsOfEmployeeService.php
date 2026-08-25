@@ -47,18 +47,19 @@ class PayrollAsOfEmployeeService
         );
 
         $activePayscaleId = Payscale::activeId();
+        $useLiveBranch = $this->assignmentHistory->usesLiveBranchForMonth($payrollYear, $payrollMonth);
 
         return $candidates
-            ->map(function (Employee $employee) use ($histories) {
+            ->map(function (Employee $employee) use ($histories, $useLiveBranch) {
                 $history = $histories->get($employee->id);
-                $this->assignmentHistory->applyToEmployee($employee, $history);
+                $this->assignmentHistory->applyToEmployee($employee, $history, $useLiveBranch);
 
                 return $employee;
             })
-            ->filter(function (Employee $employee) use ($histories, $orgFilters, $requirePayrollReady, $activePayscaleId, $payrollYear, $payrollMonth) {
+            ->filter(function (Employee $employee) use ($histories, $orgFilters, $requirePayrollReady, $activePayscaleId, $payrollYear, $payrollMonth, $useLiveBranch) {
                 $history = $histories->get($employee->id);
 
-                if (! $this->assignmentHistory->matchesOrgFilters($history, $employee, $orgFilters)) {
+                if (! $this->assignmentHistory->matchesOrgFilters($history, $employee, $orgFilters, $useLiveBranch)) {
                     return false;
                 }
 

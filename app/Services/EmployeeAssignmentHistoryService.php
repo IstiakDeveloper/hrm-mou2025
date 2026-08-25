@@ -129,6 +129,36 @@ class EmployeeAssignmentHistoryService
         return $today;
     }
 
+    public function usesLiveBranchForMonth(int $year, int $month): bool
+    {
+        $today = Carbon::today()->startOfDay();
+
+        return $today->year === $year && $today->month === $month;
+    }
+
+    /**
+     * Employees who belong on this branch's salary run for the given month.
+     * Current month: live current_branch_id (today's posting).
+     * Past months: assignment history as of month-end.
+     *
+     * @return list<int>
+     */
+    public function employeeIdsForPayrollBranch(int $branchId, int $year, int $month): array
+    {
+        if ($this->usesLiveBranchForMonth($year, $month)) {
+            return Employee::query()
+                ->where('current_branch_id', $branchId)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return $this->employeeIdsForBranchAsOf(
+            $branchId,
+            $this->asOfForPayrollAssignment($year, $month),
+        );
+    }
+
     public function employeeHasTrackedChanges(Employee $employee): bool
     {
         if ($employee->wasRecentlyCreated) {
@@ -307,8 +337,10 @@ class EmployeeAssignmentHistoryService
         return $latest;
     }
 
-    public function applyToEmployee(Employee $employee, ?EmployeeAssignmentHistory $history): Employee
+    public function applyToEmployee(Employee $employee, ?EmployeeAssignmentHistory $history, bool $keepLiveBranch = false): Employee
     {
+        $liveBranchId = $employee->current_branch_id;
+
         if (! $history) {
             return $employee;
         }
@@ -338,6 +370,11 @@ class EmployeeAssignmentHistoryService
         $employee->unsetRelation('salaryStep');
         $employee->unsetRelation('payscale');
         $employee->unsetRelation('employeeType');
+
+        if ($keepLiveBranch && $liveBranchId) {
+            $employee->current_branch_id = $liveBranchId;
+            $employee->unsetRelation('branch');
+        }
 
         return $employee;
     }
@@ -420,9 +457,15 @@ class EmployeeAssignmentHistoryService
      *   project_id?: int|null
      * }  $filters
      */
-    public function matchesOrgFilters(?EmployeeAssignmentHistory $history, Employee $employee, array $filters): bool
-    {
-        $branchId = $history?->branch_id ?? $employee->current_branch_id;
+    public function matchesOrgFilters(
+        ?EmployeeAssignmentHistory $history,
+        Employee $employee,
+        array $filters,
+        bool $useLiveBranch = false,
+    ): bool {
+        $branchId = $useLiveBranch
+            ? $employee->current_branch_id
+            : ($history?->branch_id ?? $employee->current_branch_id);
         $departmentId = $history?->department_id ?? $employee->department_id;
         $designationId = $history?->designation_id ?? $employee->designation_id;
         $programId = $history?->program_id ?? $employee->program_id;

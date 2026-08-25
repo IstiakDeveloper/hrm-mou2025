@@ -141,6 +141,33 @@ test('july after august transfer scenario: as-of is july month end not today', f
     expect($asOfExplicit->toDateString())->toBe('2026-07-26');
 });
 
+test('current month payroll uses live branch not history branch', function () {
+    Carbon::setTestNow(Carbon::create(2026, 8, 25));
+    $service = app(EmployeeAssignmentHistoryService::class);
+
+    try {
+        expect($service->usesLiveBranchForMonth(2026, 8))->toBeTrue()
+            ->and($service->usesLiveBranchForMonth(2026, 7))->toBeFalse();
+
+        $employee = new Employee([
+            'current_branch_id' => 33,
+            'status' => 'active',
+        ]);
+        $history = new EmployeeAssignmentHistory([
+            'branch_id' => 30,
+            'status' => 'active',
+        ]);
+
+        $service->applyToEmployee($employee, $history, keepLiveBranch: true);
+
+        expect((int) $employee->current_branch_id)->toBe(33)
+            ->and($service->matchesOrgFilters($history, $employee, ['branch_id' => 33], true))->toBeTrue()
+            ->and($service->matchesOrgFilters($history, $employee, ['branch_id' => 30], true))->toBeFalse();
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
 test('payroll assignment as-of ignores early process date so mid-month transfer uses new branch', function () {
     Carbon::setTestNow(Carbon::create(2026, 8, 25));
     $service = app(EmployeeAssignmentHistoryService::class);

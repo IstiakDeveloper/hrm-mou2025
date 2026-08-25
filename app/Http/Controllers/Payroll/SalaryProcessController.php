@@ -303,6 +303,12 @@ class SalaryProcessController extends Controller
                 return [];
             }
 
+            if ($this->assignmentHistory->usesLiveBranchForMonth((int) $validated['year'], (int) $validated['month'])) {
+                $branchId = $employee->current_branch_id;
+
+                return $branchId ? [(int) $branchId] : [];
+            }
+
             $history = $this->assignmentHistory->resolveAsOf($employee->id, $asOfDate);
             $this->assignmentHistory->applyToEmployee($employee, $history);
             $branchId = $employee->current_branch_id;
@@ -435,7 +441,7 @@ class SalaryProcessController extends Controller
             payrollMonth: $payrollMonth,
             applyLiveOrgFilters: false,
         )
-            ->whereIn('employees.id', $this->assignmentHistory->employeeIdsForBranchAsOf($branchId, $asOfDate) ?: [0])
+            ->whereIn('employees.id', $this->assignmentHistory->employeeIdsForPayrollBranch($branchId, $payrollYear, $payrollMonth) ?: [0])
             ->with(['salaryGrade', 'salaryStep', 'payscale', 'employeeType', 'designation:id,name', 'branch:id,name,branch_code']);
 
         HeadOfficeOrganogram::applyToEmployeeQuery($candidatesQuery, 'organogram', 'asc');
