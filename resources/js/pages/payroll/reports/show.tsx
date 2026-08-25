@@ -148,9 +148,9 @@ function SalarySheetTable({
     const nameLabel = topsheet ? 'Branch' : 'Name';
     const designationLabel = topsheet ? 'Employees' : 'Designation';
     const thClass = 'border-r border-black px-0.5 py-0.5 text-center align-middle whitespace-normal break-normal leading-[1.05]';
-    const tdClass = 'border-r border-black px-0.5 py-0.5 align-middle overflow-visible';
-    const textClass = `${tdClass} whitespace-nowrap text-left`;
-    const nowrapClass = textClass;
+    const tdClass = 'border-r border-black px-0.5 py-0.5 align-middle';
+    const nameClass = `${tdClass} max-w-0 overflow-hidden whitespace-normal break-words text-left`;
+    const nowrapClass = `${tdClass} overflow-hidden whitespace-nowrap text-left`;
     const amountClass = `${tdClass} whitespace-nowrap text-center tabular-nums text-[9px] print:text-[8px]`;
     const amountHeadClass = `${thClass} text-[8px] print:text-[7px]`;
 
@@ -254,8 +254,8 @@ function SalarySheetTable({
     return (
         <div className="overflow-x-auto border-y border-black print:overflow-visible print:border-y-0">
             <table
-                className={`border-collapse text-[10px] text-black print:text-[8px] ${
-                    fillPage ? 'w-full min-w-full' : 'w-max min-w-max'
+                className={`table-fixed border-collapse text-[10px] text-black print:text-[8px] ${
+                    fillPage ? 'w-full min-w-full' : 'w-full max-w-full'
                 }`}
             >
                 <colgroup>
@@ -317,7 +317,7 @@ function SalarySheetTable({
                     {rows.map((row, i) => (
                         <tr key={i} className="border-b border-black">
                             <td className={`${tdClass} text-center`}>{i + 1}</td>
-                            <td className={nowrapClass}>{String(row.name ?? '')}</td>
+                            <td className={nameClass}>{String(row.name ?? '')}</td>
                             {!topsheet && <td className={`${tdClass} whitespace-nowrap text-center`}>{String(row.pin ?? '')}</td>}
                             <td className={nowrapClass}>{String(row.designation ?? '')}</td>
                             {earningHeads.map((h) => (
@@ -376,13 +376,13 @@ function SalarySheetFooter({
     const inWords = Number.isFinite(netNum) && netNum > 0 ? takaInWords(netNum) : '';
 
     return (
-        <div className="mt-2 space-y-2">
+        <div className="mt-0.5">
             {showInWords && inWords ? (
-                <div className="text-[10px] text-black">
+                <div className="text-[10px] leading-tight text-black">
                     <span className="font-semibold">In Words:</span> {inWords}
                 </div>
             ) : null}
-            <PayrollReportSignatureSection blocks={signatureBlocks} />
+            <PayrollReportSignatureSection blocks={signatureBlocks} className="mt-1" />
         </div>
     );
 }

@@ -10,12 +10,14 @@ return [
     ],
     'print' => [
         'rows_per_page' => 30,
+        // First printed page also has the company header, so fewer employee rows fit with the signature.
+        'first_page_rows' => 25,
         'pdf_rows_per_page' => 30,
         'margin_top_mm' => 4,
         'margin_bottom_mm' => 4,
         'margin_side_mm' => 3,
         'margin_side_extra_px' => 10,
-        // Signature block offset from the bottom of each branch's last printed page.
+        // Signature block offset from the bottom of each printed page.
         'signature_bottom_offset_px' => 45,
         // Blank space above each signature line for signing.
         'signature_gap_px' => 72,

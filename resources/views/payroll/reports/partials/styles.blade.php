@@ -198,7 +198,7 @@
     }
 
     .salary-sheet-page {
-        page-break-inside: avoid;
+        page-break-inside: auto;
     }
 
     .salary-sheet-page .payroll-report-header {
@@ -213,8 +213,10 @@
 
     table.salary-sheet-table {
         table-layout: fixed;
-        width: auto;
+        width: 100%;
         max-width: 100%;
+        margin-top: 0;
+        margin-bottom: 0;
         page-break-inside: avoid;
         font-size: 8pt;
     }
@@ -292,11 +294,21 @@
         letter-spacing: 0;
     }
 
-    table.salary-sheet-table td.cell-name,
+    table.salary-sheet-table td.cell-name {
+        white-space: normal;
+        text-align: left;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        max-width: 0;
+        font-size: 7.5pt;
+        line-height: 1.15;
+    }
+
     table.salary-sheet-table td.cell-text {
         white-space: nowrap;
         text-align: left;
-        overflow: visible;
+        overflow: hidden;
         font-size: 7.5pt;
     }
 
@@ -350,18 +362,21 @@
         text-align: right;
     }
 
-    .salary-sheet-footer {
-        margin-top: 4px;
-        page-break-inside: avoid;
-    }
-
     .salary-sheet-in-words {
         font-size: 7.5pt;
         font-weight: bold;
         line-height: 1.2;
-        padding: 0 4px 2px;
+        margin: 2px 0 0;
+        padding: 0 4px;
         page-break-inside: avoid;
         page-break-after: avoid;
+        page-break-before: avoid;
+    }
+
+    .salary-sheet-footer {
+        margin-top: 0;
+        page-break-inside: avoid;
+        page-break-before: avoid;
     }
 
     .text-center {
@@ -391,7 +406,7 @@
     }
 
     .salary-sheet-page-final {
-        page-break-inside: avoid;
+        page-break-inside: auto;
         page-break-after: auto;
     }
 
@@ -400,6 +415,11 @@
         margin-bottom: {{ $signatureBottomPx }}px;
         padding-top: 0;
         page-break-inside: avoid;
+    }
+
+    .salary-sheet-page .payroll-signature-section {
+        margin-top: 4px;
+        margin-bottom: 0;
     }
 
     .payroll-signature-table {
@@ -442,12 +462,12 @@
     }
 
     body.pdf-export .salary-sheet-page-final {
-        page-break-inside: avoid;
+        page-break-inside: auto;
     }
 
-    body.pdf-export .payroll-signature-section {
-        margin-top: 16px;
-        margin-bottom: {{ $signatureBottomPx }}px;
+    body.pdf-export .salary-sheet-page .payroll-signature-section {
+        margin-top: 4px;
+        margin-bottom: 0;
     }
 
     .no-print-hint {
@@ -534,6 +554,14 @@
     body.pdf-export table.salary-sheet-table th,
     body.pdf-export table.salary-sheet-table td {
         overflow: visible;
+    }
+
+    body.pdf-export table.salary-sheet-table td.cell-name {
+        white-space: normal;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        max-width: 0;
     }
 
     body.pdf-export .salary-sheet-page,

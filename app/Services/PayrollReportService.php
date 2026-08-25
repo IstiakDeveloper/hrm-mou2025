@@ -953,7 +953,7 @@ class PayrollReportService
     }
 
     /**
-     * Employee data rows per printed page (Sub Total / Total, In Words, and signature footer reserved separately).
+     * Employee data rows per continuation page (Sub Total / Total reserved; signature footer is on every page).
      */
     protected function salarySheetDataRowsForPage(): int
     {
@@ -963,7 +963,17 @@ class PayrollReportService
     }
 
     /**
-     * Paginate branch rows for print/PDF. Fixed rows per page; Sub Total on each non-final page.
+     * First printed page also includes the company header, so it holds fewer employee rows.
+     */
+    protected function salarySheetDataRowsForFirstPage(): int
+    {
+        $rows = (int) (config('payroll_reports.print.first_page_rows') ?? 25);
+
+        return max(1, min($rows, $this->salarySheetDataRowsForPage()));
+    }
+
+    /**
+     * Paginate branch rows for print/PDF. First page uses a smaller row budget so the signature stays on that page.
      *
      * @param  list<array<string, mixed>>  $rows
      * @param  list<string>  $heads
@@ -980,21 +990,14 @@ class PayrollReportService
         $serialStart = 0;
         $total = count($rows);
         $regularBudget = max(1, $rowsPerPage ?? $this->salarySheetDataRowsForPage());
-        $lastPageBudget = max(1, $regularBudget - 1);
+        $firstPageBudget = max(1, min($this->salarySheetDataRowsForFirstPage(), $regularBudget));
+        $isFirstPage = true;
 
         while ($offset < $total) {
+            $budget = $isFirstPage ? $firstPageBudget : $regularBudget;
             $remaining = $total - $offset;
-
-            if ($remaining <= $lastPageBudget) {
-                $take = $remaining;
-                $isLastPage = true;
-            } elseif ($remaining <= $regularBudget) {
-                $take = $remaining;
-                $isLastPage = true;
-            } else {
-                $take = $regularBudget;
-                $isLastPage = false;
-            }
+            $isLastPage = $remaining <= $budget;
+            $take = $isLastPage ? $remaining : $budget;
 
             $chunk = array_slice($rows, $offset, $take);
 
@@ -1007,6 +1010,7 @@ class PayrollReportService
 
             $serialStart += $take;
             $offset += $take;
+            $isFirstPage = false;
         }
 
         return $pages;

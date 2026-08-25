@@ -70,14 +70,11 @@
                     ]),
                     'tableLayout' => $sectionTableLayout,
                     'pdfMode' => $pdfMode ?? false,
-                    'pageBreakAfter' => ! $loop->last,
                 ])
-                @if ($loop->last)
-                    @include('payroll.reports.partials.salary-sheet-footer', [
-                        'showInWords' => ($page['totals_label'] ?? '') === 'Total',
-                        'net' => $page['totals']['net'] ?? 0,
-                    ])
-                @endif
+                @include('payroll.reports.partials.salary-sheet-footer', [
+                    'showInWords' => ($page['totals_label'] ?? '') === 'Total',
+                    'net' => $page['totals']['net'] ?? 0,
+                ])
             </div>
         @endforeach
     </div>
