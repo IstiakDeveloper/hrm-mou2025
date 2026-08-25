@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'company_name' => 'Mousumi',
+    'company_name' => 'MOUSUMI',
     'company_address' => 'Ukilpara, Naogaon',
     'signature_blocks' => [
         ['label' => 'Prepared By', 'department' => 'HR department'],

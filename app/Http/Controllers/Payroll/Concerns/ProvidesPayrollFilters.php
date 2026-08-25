@@ -74,11 +74,18 @@ trait ProvidesPayrollFilters
      */
     protected function payrollFilterOptions(bool $payrollReadyEmployeesOnly = false, ?int $startMonth = null): array
     {
+        $user = request()?->user();
+        $isBranch = $user?->isBranchAccount() && $user->branch_id;
+
+        $branchesQuery = Branch::query()->active();
+        if ($isBranch) {
+            $branchesQuery->where('id', $user->branch_id);
+        } else {
+            $branchesQuery->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q));
+        }
+
         return [
-            'branches' => Branch::query()
-                ->active()
-                ->tap(fn ($q) => BranchOrganogram::applyToBranchQuery($q))
-                ->get(['id', 'name', 'branch_code']),
+            'branches' => $branchesQuery->get(['id', 'name', 'branch_code']),
             'departments' => Department::query()->orderBy('name')->get(['id', 'name']),
             'designations' => Designation::query()->orderBy('name')->get(['id', 'name']),
             'programs' => Program::query()->orderBy('name')->get(['id', 'name']),
@@ -107,9 +114,13 @@ trait ProvidesPayrollFilters
     protected function payrollFilterValues(Request $request, ?string $status = null): array
     {
         $defaultPeriod = self::defaultPayrollPeriod($status);
+        $user = $request->user();
+        $branchId = $user?->isBranchAccount() && $user->branch_id
+            ? (string) $user->branch_id
+            : $request->input('branch_id', '');
 
         return [
-            'branch_id' => $request->input('branch_id', ''),
+            'branch_id' => $branchId,
             'department_id' => $request->input('department_id', ''),
             'designation_id' => $request->input('designation_id', ''),
             'program_id' => $request->input('program_id', ''),

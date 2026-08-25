@@ -141,11 +141,17 @@ class EmployeeAssignmentHistoryService
         $createdBy = array_key_exists('created_by', $context) ? $context['created_by'] : $createdBy;
         $notes = array_key_exists('notes', $context) ? $context['notes'] : $notes;
 
+        // Initial snapshots start at joining. Later employee edits must NOT reuse
+        // joining_date — that would overlay today's branch onto the whole past and
+        // hide completed transfers for payroll as-of.
+        $fallbackDate = $sourceType === EmployeeAssignmentHistory::SOURCE_INITIAL
+            ? ($employee->joining_date ?? now())
+            : now();
+
         $effective = $this->normalizeDate(
             $context['effective_from']
                 ?? $effectiveFrom
-                ?? $employee->joining_date
-                ?? now()
+                ?? $fallbackDate
         );
 
         $payload = $this->snapshotPayloadFromEmployee($employee, $effective, $sourceType, $sourceId, $createdBy, $notes);
@@ -293,8 +299,11 @@ class EmployeeAssignmentHistoryService
         $employee->salary_grade_id = $history->salary_grade_id;
         $employee->salary_step_id = $history->salary_step_id;
         $employee->basic_salary = $history->basic_salary;
-        $employee->fixed_salary = $history->fixed_salary;
-        $employee->probation_salary = $history->probation_salary;
+        // History null means "never recorded", not "clear the live override".
+        // Payroll → Probation/Fixed Salary used to update employees via query builder
+        // (no observer), so live 25,000 could sit next to an initial history row of null.
+        $employee->fixed_salary = $history->fixed_salary ?? $employee->fixed_salary;
+        $employee->probation_salary = $history->probation_salary ?? $employee->probation_salary;
         $employee->custom_salary_assigned_at = $history->custom_salary_assigned_at;
         $employee->status = $history->status ?: $employee->status;
 
@@ -307,6 +316,50 @@ class EmployeeAssignmentHistoryService
         $employee->unsetRelation('employeeType');
 
         return $employee;
+    }
+
+    /**
+     * Copy live probation/fixed overrides onto history rows that never recorded them.
+     * Skips separation snapshots. Returns the number of history rows updated.
+     */
+    public function syncMissingSalaryOverridesFromLive(): int
+    {
+        $updated = 0;
+
+        $employees = Employee::query()
+            ->where('status', 'active')
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('probation_salary')->where('probation_salary', '>', 0);
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('fixed_salary')->where('fixed_salary', '>', 0);
+                });
+            })
+            ->get(['id', 'probation_salary', 'fixed_salary']);
+
+        foreach ($employees as $employee) {
+            $query = EmployeeAssignmentHistory::query()
+                ->where('employee_id', $employee->id)
+                ->where('source_type', '!=', EmployeeAssignmentHistory::SOURCE_SEPARATION);
+
+            if ((float) $employee->probation_salary > 0) {
+                $updated += (clone $query)
+                    ->where(function ($q) {
+                        $q->whereNull('probation_salary')->orWhere('probation_salary', '<=', 0);
+                    })
+                    ->update(['probation_salary' => $employee->probation_salary]);
+            }
+
+            if ((float) $employee->fixed_salary > 0) {
+                $updated += (clone $query)
+                    ->where(function ($q) {
+                        $q->whereNull('fixed_salary')->orWhere('fixed_salary', '<=', 0);
+                    })
+                    ->update(['fixed_salary' => $employee->fixed_salary]);
+            }
+        }
+
+        return $updated;
     }
 
     public function isPayrollReadyHistory(EmployeeAssignmentHistory $history, ?Employee $employee = null): bool

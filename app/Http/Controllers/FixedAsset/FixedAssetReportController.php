@@ -191,6 +191,7 @@ class FixedAssetReportController extends Controller
             ->where('is_active', true)
             ->when($scopedBranch, fn ($q) => $q->where('id', $scopedBranch))
             ->orderBy('is_head_office', 'desc')
+            ->orderBy('branch_code')
             ->orderBy('name')
             ->get(['id', 'name', 'branch_code', 'is_head_office']);
 

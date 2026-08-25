@@ -294,6 +294,12 @@ export default function SectionsIndex() {
                                 if (section.id === 'attendance-movement') {
                                     return true;
                                 }
+                                if (section.id === 'payroll') {
+                                    return (
+                                        hasAppPermission(auth, 'payroll.view') ||
+                                        hasAppPermission(auth, 'admin.access')
+                                    );
+                                }
                                 if (section.id === 'inventory') {
                                     return (
                                         hasAppPermission(auth, 'inventory.view') ||

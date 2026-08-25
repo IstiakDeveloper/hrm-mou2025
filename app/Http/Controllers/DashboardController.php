@@ -256,6 +256,15 @@ class DashboardController extends Controller
             abort(403);
         }
 
+        if ($user->isBranchAccount()) {
+            $branchDashboard = $this->buildBranchPayrollDashboardProps($user);
+            if ($branchDashboard === null) {
+                return redirect()->route('sections.index');
+            }
+
+            return Inertia::render('sections/payroll/branch-dashboard', $branchDashboard);
+        }
+
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
 
         $seesOperationalPayrollDashboard = $hasPermission($user, 'admin.access')
@@ -948,6 +957,125 @@ class DashboardController extends Controller
             'todayAttendance' => $todayAttendance ?: null,
             'recentAttendance' => $recentAttendance->values()->all(),
             'recentMovements' => $recentMovements,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildBranchPayrollDashboardProps(User $user): ?array
+    {
+        $branchId = (int) ($user->branch_id ?: ($user->employee?->current_branch_id ?: 0));
+        if ($branchId <= 0) {
+            return null;
+        }
+
+        $branch = Branch::query()->find($branchId);
+        if (! $branch) {
+            return null;
+        }
+
+        $activeStaff = Employee::query()
+            ->where('current_branch_id', $branchId)
+            ->whereIn('status', ['active', 'on_leave'])
+            ->count();
+
+        $totalStaff = Employee::query()
+            ->where('current_branch_id', $branchId)
+            ->count();
+
+        $latestPostedRun = PayrollRun::query()
+            ->where('branch_id', $branchId)
+            ->where('salary_type', 'salary')
+            ->where('status', 'posted')
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->first();
+
+        $latestProcessedRun = PayrollRun::query()
+            ->where('branch_id', $branchId)
+            ->where('salary_type', 'salary')
+            ->where('status', 'processed')
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->first();
+
+        $yearlyPostedTotal = (float) (PayrollRun::query()
+            ->where('branch_id', $branchId)
+            ->where('salary_type', 'salary')
+            ->where('status', 'posted')
+            ->where('year', (int) Carbon::now()->year)
+            ->sum('total_net') ?? 0);
+
+        $postedRunsCount = PayrollRun::query()
+            ->where('branch_id', $branchId)
+            ->where('salary_type', 'salary')
+            ->where('status', 'posted')
+            ->count();
+
+        $unpostedRunsCount = PayrollRun::query()
+            ->where('branch_id', $branchId)
+            ->where('salary_type', 'salary')
+            ->where('status', 'processed')
+            ->count();
+
+        $recentRuns = PayrollRun::query()
+            ->where('branch_id', $branchId)
+            ->where('salary_type', 'salary')
+            ->whereIn('status', ['posted', 'processed'])
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->take(12)
+            ->get()
+            ->map(function (PayrollRun $run) use ($branchId) {
+                $monthName = Carbon::createFromDate($run->year, $run->month, 1)->format('F');
+
+                return [
+                    'id' => $run->id,
+                    'year' => (int) $run->year,
+                    'month' => (int) $run->month,
+                    'period_label' => "{$monthName} {$run->year}",
+                    'status' => $run->status,
+                    'employee_count' => (int) ($run->employee_count ?? 0),
+                    'total_gross' => (float) ($run->total_gross ?? 0),
+                    'total_deduction' => (float) ($run->total_deduction ?? 0),
+                    'total_net' => (float) ($run->total_net ?? 0),
+                    'process_date' => $run->process_date?->format('Y-m-d'),
+                    'posted_at' => $run->posted_at?->format('Y-m-d H:i'),
+                    'report_url' => route('payroll.reports.show', $run->status === 'posted' ? 'salary-sheet-posted' : 'salary-sheet-unposted').'?year='.$run->year.'&month='.$run->month.'&branch_id='.$branchId.'&generate=1',
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'branch' => [
+                'id' => $branch->id,
+                'name' => $branch->name,
+                'branch_code' => $branch->branch_code,
+            ],
+            'stats' => [
+                'activeStaff' => $activeStaff,
+                'totalStaff' => $totalStaff,
+                'latestPostedMonth' => $latestPostedRun ? Carbon::createFromDate($latestPostedRun->year, $latestPostedRun->month, 1)->format('F Y') : null,
+                'latestPostedYear' => $latestPostedRun ? (int) $latestPostedRun->year : null,
+                'latestPostedMonthNum' => $latestPostedRun ? (int) $latestPostedRun->month : null,
+                'latestPostedNet' => $latestPostedRun ? (float) $latestPostedRun->total_net : 0,
+                'latestPostedEmployees' => $latestPostedRun ? (int) $latestPostedRun->employee_count : 0,
+                'latestProcessedMonth' => $latestProcessedRun ? Carbon::createFromDate($latestProcessedRun->year, $latestProcessedRun->month, 1)->format('F Y') : null,
+                'latestProcessedYear' => $latestProcessedRun ? (int) $latestProcessedRun->year : null,
+                'latestProcessedMonthNum' => $latestProcessedRun ? (int) $latestProcessedRun->month : null,
+                'latestProcessedNet' => $latestProcessedRun ? (float) $latestProcessedRun->total_net : 0,
+                'latestProcessedEmployees' => $latestProcessedRun ? (int) $latestProcessedRun->employee_count : 0,
+                'yearlyPostedTotal' => round($yearlyPostedTotal, 2),
+                'postedRunsCount' => $postedRunsCount,
+                'unpostedRunsCount' => $unpostedRunsCount,
+            ],
+            'recentRuns' => $recentRuns,
+            'quickLinks' => [
+                'postedSheet' => route('payroll.reports.show', 'salary-sheet-posted').'?branch_id='.$branchId,
+                'unpostedSheet' => route('payroll.reports.show', 'salary-sheet-unposted').'?branch_id='.$branchId,
+            ],
         ];
     }
 

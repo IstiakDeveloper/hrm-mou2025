@@ -65,6 +65,8 @@ class BackfillEmployeeAssignmentHistoriesCommand extends Command
 
             $this->newLine();
             $this->info("Done! Assignment history successfully synchronized.");
+            $this->reportSalaryOverrideSync($service);
+
             return self::SUCCESS;
         }
 
@@ -93,7 +95,16 @@ class BackfillEmployeeAssignmentHistoriesCommand extends Command
         $this->info("Employees scanned: {$stats['employees']}");
         $this->info("History rows created: {$stats['rows']}");
         $this->info("Employees skipped (already had history): {$stats['skipped']}");
+        $this->reportSalaryOverrideSync($service);
 
         return self::SUCCESS;
+    }
+
+    private function reportSalaryOverrideSync(EmployeeAssignmentHistoryService $service): void
+    {
+        $synced = $service->syncMissingSalaryOverridesFromLive();
+        if ($synced > 0) {
+            $this->info("Synced live probation/fixed salary onto {$synced} history row(s) that were missing it.");
+        }
     }
 }

@@ -60,7 +60,14 @@ class PayrollRunRollbackService
             ]);
         }
 
-        $payslips->loadMissing('payrollRun');
+        if (! $payslips instanceof \Illuminate\Database\Eloquent\Collection) {
+            $payslips = Payslip::query()
+                ->with('payrollRun')
+                ->whereIn('id', $payslips->pluck('id')->all())
+                ->get();
+        } else {
+            $payslips->loadMissing('payrollRun');
+        }
 
         $invalid = $payslips->first(
             fn (Payslip $payslip) => ! in_array($payslip->payrollRun?->status, ['processed', 'posted'], true)

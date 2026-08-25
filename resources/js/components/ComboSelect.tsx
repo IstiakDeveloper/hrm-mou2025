@@ -59,11 +59,8 @@ export function ComboSelect<TValue extends string | number = string>({
                 return tokens.every((t) => hay.includes(t));
             });
         }
-        if (selectedItem && list.some((i) => i.value === selectedItem.value)) {
-            return [selectedItem, ...list.filter((i) => i.value !== selectedItem.value)];
-        }
         return list;
-    }, [items, query, selectedItem]);
+    }, [items, query]);
 
     const trimmedQuery = query.trim();
     const canCreate = creatable

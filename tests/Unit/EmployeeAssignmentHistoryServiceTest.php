@@ -86,6 +86,47 @@ test('matches org filters use as-of history not live employee', function () {
         ->and($service->matchesOrgFilters($history, $employee, ['department_id' => 2]))->toBeFalse();
 });
 
+test('applyToEmployee keeps live probation salary when history never recorded one', function () {
+    $service = app(EmployeeAssignmentHistoryService::class);
+
+    $employee = new Employee([
+        'probation_salary' => 25000,
+        'fixed_salary' => 35000,
+        'status' => 'active',
+    ]);
+
+    $history = new EmployeeAssignmentHistory([
+        'branch_id' => 10,
+        'probation_salary' => null,
+        'fixed_salary' => null,
+        'status' => 'active',
+    ]);
+
+    $service->applyToEmployee($employee, $history);
+
+    expect((float) $employee->probation_salary)->toBe(25000.0)
+        ->and((float) $employee->fixed_salary)->toBe(35000.0)
+        ->and((int) $employee->current_branch_id)->toBe(10);
+});
+
+test('applyToEmployee uses recorded history probation salary over live override', function () {
+    $service = app(EmployeeAssignmentHistoryService::class);
+
+    $employee = new Employee([
+        'probation_salary' => 25000,
+        'status' => 'active',
+    ]);
+
+    $history = new EmployeeAssignmentHistory([
+        'probation_salary' => 20000,
+        'status' => 'active',
+    ]);
+
+    $service->applyToEmployee($employee, $history);
+
+    expect((float) $employee->probation_salary)->toBe(20000.0);
+});
+
 test('july after august transfer scenario: as-of is july month end not today', function () {
     $service = app(EmployeeAssignmentHistoryService::class);
 

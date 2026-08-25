@@ -171,6 +171,7 @@ return [
                 'inventory.create',
                 'fixed-assets.view',
                 'fixed-assets.create',
+                'payroll.view',
             ],
         ],
         'Department Head' => [

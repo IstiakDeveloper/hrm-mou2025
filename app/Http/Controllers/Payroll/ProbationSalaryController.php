@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Payroll;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\Employee;
+use App\Models\EmployeeAssignmentHistory;
 use App\Models\ProbationSalaryRule;
 use App\Services\ProbationSalaryService;
 use Carbon\Carbon;
@@ -105,9 +106,13 @@ class ProbationSalaryController extends Controller
         $amount = $validated['probation_salary'] ?? null;
         $amount = ($amount === '' || $amount === null) ? null : (float) $amount;
 
-        Employee::query()
-            ->where('id', $validated['employee_id'])
-            ->update(['probation_salary' => $amount]);
+        $employee = Employee::query()->findOrFail($validated['employee_id']);
+        $employee->assignmentHistoryContext = [
+            'effective_from' => $employee->joining_date,
+            'source_type' => EmployeeAssignmentHistory::SOURCE_EMPLOYEE_UPDATE,
+            'notes' => 'Probation salary override',
+        ];
+        $employee->update(['probation_salary' => $amount]);
 
         return back()->with('success', 'Employee probation salary updated.');
     }

@@ -23,11 +23,20 @@ class PayrollReportController extends Controller
         protected PayrollReportService $reports
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
+        $user = $request->user();
+        $isBranch = $user?->isBranchAccount() ?? false;
+
         $definitions = config('payroll_reports.reports', []);
         $list = collect($definitions)
-            ->filter(fn ($def) => ($def['section'] ?? 'payroll') === 'payroll')
+            ->filter(function ($def, $slug) use ($isBranch) {
+                if ($isBranch) {
+                    return in_array($slug, ['salary-sheet-posted', 'salary-sheet-unposted'], true);
+                }
+
+                return ($def['section'] ?? 'payroll') === 'payroll';
+            })
             ->map(fn ($def, $slug) => [
                 'slug' => $slug,
                 'title' => $def['title'],
@@ -39,10 +48,28 @@ class PayrollReportController extends Controller
         ]);
     }
 
+    protected function assertBranchReportAllowed(Request $request, string $report): void
+    {
+        $user = $request->user();
+        if ($user && $user->isBranchAccount()) {
+            if (! in_array($report, ['salary-sheet-posted', 'salary-sheet-unposted'], true)) {
+                abort(403, 'Branch users can only view branch salary sheet reports.');
+            }
+        }
+    }
+
     public function show(Request $request, string $report)
     {
+        $this->assertBranchReportAllowed($request, $report);
+
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+
+        $user = $request->user();
+        if ($user && $user->isBranchAccount() && $user->branch_id) {
+            $filters['branch_id'] = (int) $user->branch_id;
+        }
+
         $hasMonthFilter = in_array('month', $config['filters'] ?? [], true);
         $isDateRange = ! empty($config['date_range']);
         $defaultPeriod = self::defaultPayrollPeriod($config['status'] ?? null);
@@ -201,8 +228,16 @@ class PayrollReportController extends Controller
      */
     protected function documentData(Request $request, string $report): array
     {
+        $this->assertBranchReportAllowed($request, $report);
+
         $config = $this->reportConfig($report);
         $filters = $this->reports->filtersFromRequest($request);
+
+        $user = $request->user();
+        if ($user && $user->isBranchAccount() && $user->branch_id) {
+            $filters['branch_id'] = (int) $user->branch_id;
+        }
+
         $hasMonthFilter = in_array('month', $config['filters'] ?? [], true);
         $isDateRange = ! empty($config['date_range']);
         $defaultPeriod = self::defaultPayrollPeriod($config['status'] ?? null);

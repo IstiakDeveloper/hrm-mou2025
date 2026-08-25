@@ -334,10 +334,13 @@ class FixedAssetReportService
             'asset_count' => $assets->count(),
         ];
 
-        $groupKey = fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—');
-
-        $sections = $assets->groupBy($groupKey)->map(function ($items, $title) use ($mapRow) {
+        $sections = $assets->groupBy(function (FixedAsset $a) {
+            return $a->branch_id ?: 0;
+        })->map(function ($items) use ($mapRow) {
+            $branch = $items->first()?->branch;
+            $title = ($branch?->branch_code ? "{$branch->branch_code} - " : '').($branch?->name ?? '—');
             return [
+                '_branch_code' => (string) ($branch?->branch_code ?? '999999'),
                 'title' => $title,
                 'rows' => $items->map($mapRow)->values()->all(),
                 'subtotal' => [
@@ -347,7 +350,8 @@ class FixedAssetReportService
                     'closing_value' => (float) $items->sum('book_value'),
                 ],
             ];
-        })->values()->all();
+        });
+        $sections = $this->sortBranchSections($sections, true);
 
         return [
             'template' => 'asset-tracking',
@@ -393,10 +397,13 @@ class FixedAssetReportService
             'asset_count' => $assets->count(),
         ];
 
-        $groupKey = fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—');
-
-        $sections = $assets->groupBy($groupKey)->map(function ($items, $title) {
+        $sections = $assets->groupBy(function (FixedAsset $a) {
+            return $a->branch_id ?: 0;
+        })->map(function ($items) {
+            $branch = $items->first()?->branch;
+            $title = ($branch?->branch_code ? "{$branch->branch_code} - " : '').($branch?->name ?? '—');
             return [
+                '_branch_code' => (string) ($branch?->branch_code ?? '999999'),
                 'title' => $title,
                 'rows' => $items->map(function (FixedAsset $a) {
                     return [
@@ -421,7 +428,8 @@ class FixedAssetReportService
                     'closing_value' => (float) $items->sum('book_value'),
                 ],
             ];
-        })->values()->all();
+        });
+        $sections = $this->sortBranchSections($sections, true);
 
         return [
             'template' => 'disposal-list',
@@ -495,22 +503,35 @@ class FixedAssetReportService
         ];
 
         if (in_array($groupBy, ['branch', 'category', 'month'], true)) {
-            $groupKey = match ($groupBy) {
-                'branch' => fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—'),
-                'category' => fn (FixedAsset $a) => ($a->category?->code ? "{$a->category->code} - " : '').($a->category?->name ?? '—'),
-                'month' => fn (FixedAsset $a) => $a->purchase_date ? $a->purchase_date->format('F Y') : 'Unknown Date',
-                default => fn (FixedAsset $a) => $a->branch?->name ?? '—',
-            };
+            $sections = $assets->groupBy(function (FixedAsset $a) use ($groupBy) {
+                if ($groupBy === 'branch') {
+                    return $a->branch_id ?: 0;
+                }
+                if ($groupBy === 'category') {
+                    return $a->asset_category_id ?: 0;
+                }
+                return $a->purchase_date ? $a->purchase_date->format('Y-m') : 'unknown';
+            })->map(function ($items) use ($groupBy, $mapRow) {
+                $first = $items->first();
+                $title = match ($groupBy) {
+                    'branch' => ($first?->branch?->branch_code ? "{$first->branch->branch_code} - " : '').($first?->branch?->name ?? '—'),
+                    'category' => ($first?->category?->code ? "{$first->category->code} - " : '').($first?->category?->name ?? '—'),
+                    'month' => $first?->purchase_date ? $first->purchase_date->format('F Y') : 'Unknown Date',
+                    default => '—',
+                };
+                return [
+                    '_branch_code' => (string) ($first?->branch?->branch_code ?? '999999'),
+                    'title' => $title,
+                    'rows' => $items->map($mapRow)->values()->all(),
+                    'subtotal' => [
+                        'asset_count' => $items->count(),
+                        'purchase_amount' => (float) $items->sum('purchase_cost'),
+                        'closing_value' => (float) $items->sum('book_value'),
+                    ],
+                ];
+            });
 
-            $sections = $assets->groupBy($groupKey)->map(fn ($items, $title) => [
-                'title' => $title,
-                'rows' => $items->map($mapRow)->values()->all(),
-                'subtotal' => [
-                    'asset_count' => $items->count(),
-                    'purchase_amount' => (float) $items->sum('purchase_cost'),
-                    'closing_value' => (float) $items->sum('book_value'),
-                ],
-            ])->values()->all();
+            $sections = $this->sortBranchSections($sections, $groupBy === 'branch');
 
             return [
                 'template' => 'purchase-list',
@@ -602,13 +623,16 @@ class FixedAssetReportService
             ];
         };
 
-        $groupKey = $groupBy === 'branch'
-            ? fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—')
-            : fn (FixedAsset $a) => ($a->category?->code ? "{$a->category->code} - " : '').($a->category?->name ?? '—');
-
-        $sections = $assets->groupBy($groupKey)->map(function ($items, $title) use ($mapRow) {
+        $sections = $assets->groupBy(function (FixedAsset $a) use ($groupBy) {
+            return $groupBy === 'branch' ? ($a->branch_id ?: 0) : ($a->asset_category_id ?: 0);
+        })->map(function ($items) use ($groupBy, $mapRow) {
+            $first = $items->first();
+            $title = $groupBy === 'branch'
+                ? (($first?->branch?->branch_code ? "{$first->branch->branch_code} - " : '').($first?->branch?->name ?? '—'))
+                : (($first?->category?->code ? "{$first->category->code} - " : '').($first?->category?->name ?? '—'));
             $rows = $items->map($mapRow)->values()->all();
             return [
+                '_branch_code' => (string) ($first?->branch?->branch_code ?? '999999'),
                 'title' => $title,
                 'rows' => $rows,
                 'subtotal' => [
@@ -622,7 +646,8 @@ class FixedAssetReportService
                     'closing_value' => (float) collect($rows)->sum('closing_value'),
                 ],
             ];
-        })->values()->all();
+        });
+        $sections = $this->sortBranchSections($sections, $groupBy === 'branch');
 
         $allRows = $assets->map($mapRow)->all();
 
@@ -643,8 +668,8 @@ class FixedAssetReportService
      */
     private function depreciationScheduleMovement(array $filters, string $groupBy, AssetFinancialYear $fy): array
     {
-        $from = $fy->start_date;
-        $to = $fy->end_date;
+        $from = Carbon::parse($filters['date_from'] ?? $fy->start_date);
+        $to = Carbon::parse($filters['date_to'] ?? $fy->end_date);
 
         $query = FixedAsset::query()
             ->with(['branch:id,name,branch_code', 'category:id,code,name', 'subCategory:id,code,name'])
@@ -697,14 +722,17 @@ class FixedAssetReportService
             ];
         };
 
-        $groupKey = $groupBy === 'branch'
-            ? fn (FixedAsset $a) => ($a->branch?->branch_code ? "{$a->branch->branch_code} - " : '').($a->branch?->name ?? '—')
-            : fn (FixedAsset $a) => ($a->category?->code ? "{$a->category->code} - " : '').($a->category?->name ?? '—');
-
-        $sections = $assets->groupBy($groupKey)->map(function ($items, $title) use ($mapRow) {
+        $sections = $assets->groupBy(function (FixedAsset $a) use ($groupBy) {
+            return $groupBy === 'branch' ? ($a->branch_id ?: 0) : ($a->asset_category_id ?: 0);
+        })->map(function ($items) use ($groupBy, $mapRow) {
+            $first = $items->first();
+            $title = $groupBy === 'branch'
+                ? (($first?->branch?->branch_code ? "{$first->branch->branch_code} - " : '').($first?->branch?->name ?? '—'))
+                : (($first?->category?->code ? "{$first->category->code} - " : '').($first?->category?->name ?? '—'));
             $rows = $items->map($mapRow)->values()->all();
 
             return [
+                '_branch_code' => (string) ($first?->branch?->branch_code ?? '999999'),
                 'title' => $title,
                 'rows' => $rows,
                 'subtotal' => [
@@ -722,7 +750,8 @@ class FixedAssetReportService
                     'closing_value' => (float) collect($rows)->sum('closing_value'),
                 ],
             ];
-        })->values()->all();
+        });
+        $sections = $this->sortBranchSections($sections, $groupBy === 'branch');
 
         $allRows = $assets->map($mapRow)->all();
 
@@ -743,8 +772,8 @@ class FixedAssetReportService
      */
     private function depreciationScheduleAudit(array $filters, string $groupBy, AssetFinancialYear $fy): array
     {
-        $from = $fy->start_date;
-        $to = $fy->end_date;
+        $from = Carbon::parse($filters['date_from'] ?? $fy->start_date);
+        $to = Carbon::parse($filters['date_to'] ?? $fy->end_date);
         $groupCol = $groupBy === 'branch' ? 'branch_id' : 'asset_category_id';
 
         $query = FixedAsset::query()->where('purchase_cost', '>', 0);
@@ -755,9 +784,15 @@ class FixedAssetReportService
             ->get();
 
         if ($groupBy === 'branch') {
-            $labels = Branch::query()->whereIn('id', $groups->pluck('branch_id'))->pluck('name', 'id');
+            $branches = Branch::query()->whereIn('id', $groups->pluck('branch_id'))->orderBy('branch_code')->get();
+            $labels = $branches->mapWithKeys(fn ($b) => [$b->id => ($b->branch_code ? "{$b->branch_code} - " : '').$b->name]);
+            $branchIdOrder = $branches->pluck('id')->all();
+            $groups = $groups->sortBy(fn ($g) => array_search($g->branch_id, $branchIdOrder, true))->values();
         } else {
-            $labels = AssetCategory::query()->whereIn('id', $groups->pluck('asset_category_id'))->pluck('name', 'id');
+            $categories = AssetCategory::query()->whereIn('id', $groups->pluck('asset_category_id'))->orderBy('code')->get();
+            $labels = $categories->mapWithKeys(fn ($c) => [$c->id => ($c->code ? "{$c->code} - " : '').$c->name]);
+            $catIdOrder = $categories->pluck('id')->all();
+            $groups = $groups->sortBy(fn ($g) => array_search($g->asset_category_id, $catIdOrder, true))->values();
         }
 
         $sl = 0;
@@ -793,7 +828,7 @@ class FixedAssetReportService
 
             return [
                 'sl' => $sl,
-                'group_label' => $groupBy === 'branch' ? ($labels[$id] ?? '—') : ($labels[$id] ?? '—'),
+                'group_label' => $labels[$id] ?? '—',
                 'asset_count' => (int) $g->asset_count,
                 'cost_opening' => $openingCost,
                 'cost_addition' => $addition,
@@ -979,5 +1014,25 @@ class FixedAssetReportService
         }
 
         return $totals;
+    }
+
+    /**
+     * Helper to sort grouped sections by branch code naturally if grouped by branch.
+     *
+     * @param  \Illuminate\Support\Collection  $sections
+     * @return array
+     */
+    private function sortBranchSections(\Illuminate\Support\Collection $sections, bool $isBranchGroup): array
+    {
+        if (! $isBranchGroup) {
+            return $sections->values()->all();
+        }
+
+        return $sections->sortBy(function ($sec) {
+            return (string) ($sec['_branch_code'] ?? $sec['title'] ?? '');
+        }, SORT_NATURAL)->values()->map(function ($sec) {
+            unset($sec['_branch_code']);
+            return $sec;
+        })->all();
     }
 }

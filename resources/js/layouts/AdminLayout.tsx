@@ -726,7 +726,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const menuItemsForLayout = useMemo(() => {
         const sub = buildReportsSubmenu(activeSectionId);
-        const reportsSub = branchAccount ? sub.filter((item) => item.path === '/attendance/daily-branch-summary') : sub;
+        const reportsSub = branchAccount
+            ? activeSectionId === 'payroll'
+                ? sub.filter(
+                      (item) =>
+                          item.path === '/payroll/reports/salary-sheet-posted' ||
+                          item.path === '/payroll/reports/salary-sheet-unposted',
+                  )
+                : sub.filter((item) => item.path === '/attendance/daily-branch-summary')
+            : sub;
 
         if (reportsSub.length === 0) {
             return baseMenuItems;
@@ -751,7 +759,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const visibleMenuItems = useMemo(() => {
         if (branchAccount) {
             if (activeSectionId === 'attendance-movement') {
-                const reports = menuItemsForLayout.find((m) => m.title === 'Reports');
+                const reports = menuItemsForLayout.find((m) => m.menuKey === 'section-reports');
                 return reports ? [reports] : [];
             }
             if (activeSectionId === 'inventory') {
@@ -776,6 +784,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             hasSubmenu: submenu.length > 1,
                         };
                     });
+            }
+            if (activeSectionId === 'payroll') {
+                const reports = menuItemsForLayout.find((m) => m.menuKey === 'section-reports');
+                return reports ? [reports] : [];
             }
             return [];
         }
@@ -953,6 +965,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             case 'administration':
                 return hasAnyDashboardPerm(administrationSectionDashboardAny) ? [{ title: 'Administration', path: '/sections/administration' }] : [];
             case 'payroll':
+                if (branchAccount) {
+                    return [{ title: 'Payroll Dashboard', path: '/sections/payroll' }];
+                }
                 if (!departmentHead && showsAdminPayrollDashboard) {
                     return [{ title: 'Payroll', path: '/sections/payroll' }];
                 }
