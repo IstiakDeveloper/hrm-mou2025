@@ -741,7 +741,7 @@ export default function PayrollReportShow({
         const template = String(payload.template ?? '');
 
         let totalEmployees = 0;
-        const uniqueBranches = new Set<string>();
+        let totalBranches = 1;
         const headTotals: Record<string, number> = {};
         let grossTotal = 0;
         let deductionTotal = 0;
@@ -759,16 +759,11 @@ export default function PayrollReportShow({
                 deduction_heads?: string[];
             }[]) ?? [];
 
+            totalBranches = sections.length;
+
             sections.forEach((sec) => {
-                if (sec.label) {
-                    uniqueBranches.add(sec.label.replace(/^Branch:\s*/i, '').trim());
-                }
                 const secRows = (sec.rows as Record<string, unknown>[]) ?? [];
                 totalEmployees += secRows.length;
-                secRows.forEach((r) => {
-                    if (r.branch) uniqueBranches.add(String(r.branch));
-                    else if (r.branch_code) uniqueBranches.add(String(r.branch_code));
-                });
                 if (sec.totals) {
                     grossTotal += Number(sec.totals.gross || 0);
                     deductionTotal += Number(sec.totals.deduction || 0);
@@ -790,20 +785,19 @@ export default function PayrollReportShow({
             const rows = (payload.rows as Record<string, unknown>[]) ?? [];
             const isTopsheet = Boolean(payload.topsheet);
             if (isTopsheet) {
-                rows.forEach((r) => {
-                    const b = String(r.name || r.branch || '').trim();
-                    if (b) uniqueBranches.add(b);
-                });
+                totalBranches = rows.length;
                 totalEmployees = Number(
                     (payload.meta as Record<string, unknown>)?.employee_count ||
                     rows.reduce((acc, r) => acc + Number(r.employee_count || 1), 0)
                 );
             } else {
                 totalEmployees = rows.length;
+                const branchSet = new Set<string>();
                 rows.forEach((r) => {
-                    if (r.branch) uniqueBranches.add(String(r.branch));
-                    else if (r.branch_code) uniqueBranches.add(String(r.branch_code));
+                    const b = r.branch_id ? String(r.branch_id) : String(r.branch || r.branch_name || '').trim();
+                    if (b) branchSet.add(b);
                 });
+                totalBranches = branchSet.size || 1;
             }
             if (payload.totals) {
                 const tot = payload.totals as Record<string, unknown>;
@@ -820,7 +814,7 @@ export default function PayrollReportShow({
         }
 
         return {
-            totalBranches: uniqueBranches.size || (template === 'salary-sheet-grouped' ? (payload.sections as unknown[])?.length || 1 : 1),
+            totalBranches,
             totalEmployees,
             grossTotal,
             deductionTotal,
