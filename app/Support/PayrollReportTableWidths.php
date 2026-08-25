@@ -127,7 +127,7 @@ class PayrollReportTableWidths
             'pin' => $topsheet ? 0 : self::textColumnWidth($data['pin'], 'PIN'),
             'designation' => self::textColumnWidth($data['designation'], $designationHeader),
             'earning' => $earning,
-            'gross' => self::amountColumnWidth($data['gross'], 'Gross'),
+            'gross' => self::amountColumnWidth($data['gross'], 'Gross Salary'),
             'deduction' => $deduction,
             'ded' => self::amountColumnWidth($data['ded'], 'Total Deduction'),
             'net' => self::amountColumnWidth($data['net'], 'Net Payable'),

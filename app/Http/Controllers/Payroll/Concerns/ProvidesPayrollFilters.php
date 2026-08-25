@@ -119,12 +119,17 @@ trait ProvidesPayrollFilters
             ? (string) $user->branch_id
             : $request->input('branch_id', '');
 
+        $defaultProjectId = Project::query()->whereRaw("LOWER(name) LIKE '%microfinance%'")->value('id');
+        $projectId = $request->has('project_id')
+            ? $request->input('project_id', '')
+            : ($defaultProjectId ? (string) $defaultProjectId : '');
+
         return [
             'branch_id' => $branchId,
             'department_id' => $request->input('department_id', ''),
             'designation_id' => $request->input('designation_id', ''),
             'program_id' => $request->input('program_id', ''),
-            'project_id' => $request->input('project_id', ''),
+            'project_id' => $projectId,
             'employee_id' => $request->input('employee_id', ''),
             'employee_type_id' => $request->input('employee_type_id', ''),
             'salary_head_id' => $request->input('salary_head_id', ''),

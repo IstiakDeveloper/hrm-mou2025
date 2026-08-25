@@ -29,7 +29,9 @@ class PayrollReportService
             'department_id' => $request->filled('department_id') ? (int) $request->input('department_id') : null,
             'designation_id' => $request->filled('designation_id') ? (int) $request->input('designation_id') : null,
             'program_id' => $request->filled('program_id') ? (int) $request->input('program_id') : null,
-            'project_id' => $request->filled('project_id') ? (int) $request->input('project_id') : null,
+            'project_id' => $request->has('project_id')
+                ? ($request->filled('project_id') ? (int) $request->input('project_id') : null)
+                : (\App\Models\Project::query()->whereRaw("LOWER(name) LIKE '%microfinance%'")->value('id') ? (int) \App\Models\Project::query()->whereRaw("LOWER(name) LIKE '%microfinance%'")->value('id') : null),
             'employee_id' => $request->filled('employee_id') ? (int) $request->input('employee_id') : null,
             'salary_head_id' => $request->filled('salary_head_id') ? (int) $request->input('salary_head_id') : null,
             'payscale_id' => $request->filled('payscale_id') ? (int) $request->input('payscale_id') : null,
@@ -792,6 +794,12 @@ class PayrollReportService
 
         $label = (string) ($line->head?->name ?? $line->head_name);
 
+        if (strcasecmp(trim($label), 'Conveyance') === 0) {
+            $label = 'Conveyance Allowance';
+        } elseif (strcasecmp(trim($label), 'Entertainment') === 0) {
+            $label = 'Entertainment Allowance';
+        }
+
         return $this->appendSalarySheetPercentageLabel($label, $line);
     }
 
@@ -840,13 +848,13 @@ class PayrollReportService
             : [
                 fn (string $key, string $label) => ! str_starts_with($key, 'loan:')
                     && (in_array($label, ['pf', 'provident fund'], true) || str_contains($label, 'provident fund')),
-                fn (string $key, string $label) => ! str_starts_with($key, 'loan:') && str_contains($label, 'welfare'),
-                fn (string $key, string $label) => ! str_starts_with($key, 'loan:')
-                    && (in_array($label, ['income tax', 'tax'], true) || str_contains($label, 'income tax')),
-                fn (string $key, string $label) => $key === 'loan:pf_loan',
-                fn (string $key, string $label) => $key === 'loan:motorcycle_loan',
-                fn (string $key, string $label) => $key === 'loan:laptop_loan',
+                fn (string $key, string $label) => $key === 'loan:pf_loan' || str_contains($label, 'pf loan'),
+                fn (string $key, string $label) => $key === 'loan:motorcycle_loan' || str_contains($label, 'm/c loan') || str_contains($label, 'motorcycle loan'),
+                fn (string $key, string $label) => $key === 'loan:laptop_loan' || str_contains($label, 'laptop loan'),
                 fn (string $key, string $label) => $key === 'loan:other',
+                fn (string $key, string $label) => ! str_starts_with($key, 'loan:') && (str_contains($label, 'welfare') || str_contains($label, 'staff welfare')),
+                fn (string $key, string $label) => ! str_starts_with($key, 'loan:')
+                    && (in_array($label, ['income tax', 'tax'], true) || str_contains($label, 'income tax') || str_contains($label, 'tax')),
             ];
 
         $ordered = [];
@@ -904,22 +912,24 @@ class PayrollReportService
             $type = substr($key, 5);
 
             return match ($type) {
-                'pf_loan' => 410,
-                'motorcycle_loan' => 420,
-                'laptop_loan' => 430,
-                'other' => 440,
-                default => 450,
+                'pf_loan' => 200,
+                'motorcycle_loan' => 300,
+                'laptop_loan' => 400,
+                'other' => 450,
+                default => 460,
             };
         }
 
         $normalized = strtolower(trim($label));
 
         return match (true) {
-            in_array($normalized, ['pf', 'provident fund'], true) => 100,
-            str_contains($normalized, 'welfare') => 200,
-            in_array($normalized, ['income tax', 'tax'], true) => 300,
-            str_contains($normalized, 'income tax') => 300,
-            default => 350,
+            in_array($normalized, ['pf', 'provident fund'], true) || str_contains($normalized, 'provident fund') => 100,
+            str_contains($normalized, 'pf loan') => 200,
+            str_contains($normalized, 'm/c loan') || str_contains($normalized, 'motorcycle loan') => 300,
+            str_contains($normalized, 'laptop loan') => 400,
+            str_contains($normalized, 'welfare') || str_contains($normalized, 'staff welfare') => 500,
+            in_array($normalized, ['income tax', 'tax'], true) || str_contains($normalized, 'income tax') || str_contains($normalized, 'tax') => 600,
+            default => 700 + (abs(crc32($key)) % 200),
         };
     }
 

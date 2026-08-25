@@ -62,7 +62,7 @@
     <thead>
         <tr class="category-head-row">
             <th colspan="{{ $employeeCols }}">{{ $infoLabel }}</th>
-            <th colspan="{{ $earningCols }}">Salary &amp; Allowance</th>
+            <th colspan="{{ $earningCols }}">Salary &amp; Allowances</th>
             <th colspan="{{ $deductionCols }}">Deduction</th>
             <th rowspan="2" class="num col-amount">Net Payable</th>
             @unless ($topsheet)
@@ -79,7 +79,7 @@
             @foreach ($earningHeads as $head)
                 <th class="num component-head col-amount">{{ $headLabels[$head] ?? $head }}</th>
             @endforeach
-            <th class="num col-amount">Gross</th>
+            <th class="num col-amount">Gross Salary</th>
             @foreach ($deductionHeads as $head)
                 <th class="num component-head col-amount">{{ $headLabels[$head] ?? $head }}</th>
             @endforeach

@@ -39,13 +39,13 @@ class SalaryStructureFromCsvService
         ],
         'Con' => [
             'code' => 'CON',
-            'name' => 'Conveyance',
+            'name' => 'Conveyance Allowance',
             'default_amount_type' => 'percentage',
             'default_amount' => 35,
         ],
         'Entertainment' => [
             'code' => 'ENT',
-            'name' => 'Entertainment',
+            'name' => 'Entertainment Allowance',
             'default_amount_type' => 'fixed',
             'default_amount' => 4000,
         ],

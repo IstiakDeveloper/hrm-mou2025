@@ -1,4 +1,5 @@
 import {
+    PayrollBranchSelect,
     PayrollComboField,
     PayrollEmployeeSelect,
     PayrollField,
@@ -17,7 +18,7 @@ import { staffFundPath } from '@/lib/staff-fund-nav';
 import { formatTakaAmount, formatTakaSheetCell } from '@/lib/taka-format';
 import { takaInWords } from '@/lib/taka-in-words';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, Download, FileSpreadsheet, Printer, Search } from 'lucide-react';
+import { ArrowLeft, BarChart3, Building2, Download, FileSpreadsheet, Layers, Printer, Search, Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 type ReportMeta = {
@@ -198,7 +199,7 @@ function SalarySheetTable({
             pin: topsheet ? 0 : textColumnWidth(dataWidths.pin, 'PIN'),
             designation: textColumnWidth(dataWidths.designation, designationLabel),
             earning: Object.fromEntries(earningHeads.map((head) => [head, amountColumnWidth(dataWidths.earning[head], labelFor(head))])),
-            gross: amountColumnWidth(dataWidths.gross, 'Gross'),
+            gross: amountColumnWidth(dataWidths.gross, 'Gross Salary'),
             deduction: Object.fromEntries(deductionHeads.map((head) => [head, amountColumnWidth(dataWidths.deduction[head], labelFor(head))])),
             ded: amountColumnWidth(dataWidths.ded, 'Total Deduction'),
             net: amountColumnWidth(dataWidths.net, 'Net Payable'),
@@ -220,11 +221,7 @@ function SalarySheetTable({
             dataWidths.net,
             ...(topsheet ? [] : [dataWidths.bank]),
         ];
-
-        return Math.max(
-            1,
-            all.reduce((sum, value) => sum + value, 0),
-        );
+        return all.reduce((sum, n) => sum + n, 0);
     }, [dataWidths, earningHeads, deductionHeads, topsheet]);
 
     const layoutTotalChars = useMemo(() => {
@@ -240,19 +237,27 @@ function SalarySheetTable({
             colWidths.net,
             ...(topsheet ? [] : [colWidths.bank]),
         ];
-
-        return Math.max(
-            1,
-            all.reduce((sum, value) => sum + value, 0),
-        );
+        return all.reduce((sum, n) => sum + n, 0);
     }, [colWidths, earningHeads, deductionHeads, topsheet]);
 
     const fillPage = dataTotalChars < 195;
-    const colCss = (chars: number) => (fillPage ? `${((chars / layoutTotalChars) * 100).toFixed(4)}%` : `${chars}ch`);
+    const colCss = useCallback(
+        (chars: number) => {
+            if (fillPage) {
+                return `${Math.max(1, Math.round((chars / layoutTotalChars) * 10000) / 100)}%`;
+            }
+            return `${chars}ch`;
+        },
+        [fillPage, layoutTotalChars],
+    );
 
     return (
-        <div className="overflow-x-auto border border-black print:overflow-visible">
-            <table className={`${fillPage ? 'w-full' : 'w-auto max-w-full'} table-fixed border-collapse text-[9px] text-black print:text-[8px]`}>
+        <div className="overflow-x-auto border-y border-black print:overflow-visible print:border-y-0">
+            <table
+                className={`border-collapse text-[10px] text-black print:text-[8px] ${
+                    fillPage ? 'w-full min-w-full' : 'w-max min-w-max'
+                }`}
+            >
                 <colgroup>
                     <col style={{ width: colCss(colWidths.serial) }} />
                     <col style={{ width: colCss(colWidths.name) }} />
@@ -275,7 +280,7 @@ function SalarySheetTable({
                             {infoLabel}
                         </th>
                         <th colSpan={earningCols} className={`${thClass} text-center font-bold`}>
-                            Salary &amp; Allowance
+                            Salary & Allowances
                         </th>
                         <th colSpan={deductionCols} className={`${thClass} text-center font-bold`}>
                             Deduction
@@ -299,7 +304,7 @@ function SalarySheetTable({
                                 {labelFor(h)}
                             </th>
                         ))}
-                        <th className={amountHeadClass}>Gross</th>
+                        <th className={amountHeadClass}>Gross Salary</th>
                         {deductionHeads.map((h) => (
                             <th key={h} className={amountHeadClass}>
                                 {labelFor(h)}
@@ -332,8 +337,8 @@ function SalarySheetTable({
                         </tr>
                     ))}
                     {totals && (
-                        <tr className="font-bold">
-                            <td colSpan={employeeCols} className={`${tdClass} text-right`}>
+                        <tr className="border-t border-black font-bold">
+                            <td colSpan={employeeCols} className={`${thClass} text-center`}>
                                 {totalsLabel}
                             </td>
                             {earningHeads.map((h) => (
@@ -349,7 +354,7 @@ function SalarySheetTable({
                             ))}
                             <td className={amountClass}>{fmtSheet(totals.deduction)}</td>
                             <td className={amountClass}>{fmtSheet(totals.net)}</td>
-                            {!topsheet && <td className="p-1" />}
+                            {!topsheet && <td className={nowrapClass} />}
                         </tr>
                     )}
                 </tbody>
@@ -358,18 +363,37 @@ function SalarySheetTable({
     );
 }
 
-function SalarySheetFooter({ net, showInWords, signatureBlocks }: { net?: unknown; showInWords?: boolean; signatureBlocks: SignatureBlock[] }) {
+function SalarySheetFooter({
+    net,
+    showInWords = true,
+    signatureBlocks = [],
+}: {
+    net: unknown;
+    showInWords?: boolean;
+    signatureBlocks?: SignatureBlock[];
+}) {
+    const netNum = Number(net);
+    const inWords = Number.isFinite(netNum) && netNum > 0 ? takaInWords(netNum) : '';
+
     return (
-        <div className="mt-1 print:break-inside-avoid">
-            {showInWords && net !== undefined && (
-                <p className="px-1 py-0.5 text-left text-[9px] leading-snug font-bold text-black print:text-[8px]">In Words: {takaInWords(net)}</p>
-            )}
-            <PayrollReportSignatureSection blocks={signatureBlocks} className="mt-4 print:mb-11" />
+        <div className="mt-2 space-y-2">
+            {showInWords && inWords ? (
+                <div className="text-[10px] text-black">
+                    <span className="font-semibold">In Words:</span> {inWords}
+                </div>
+            ) : null}
+            <PayrollReportSignatureSection blocks={signatureBlocks} />
         </div>
     );
 }
 
-function ReportPreview({ payload, signatureBlocks = [] }: { payload: Record<string, unknown>; signatureBlocks?: SignatureBlock[] }) {
+function ReportPreview({
+    payload,
+    signatureBlocks = [],
+}: {
+    payload: Record<string, unknown>;
+    signatureBlocks?: SignatureBlock[];
+}) {
     const template = String(payload.template ?? '');
 
     if (payload.meta && typeof payload.meta === 'object' && (payload.meta as { message?: string }).message) {
@@ -493,10 +517,11 @@ function ReportPreview({ payload, signatureBlocks = [] }: { payload: Record<stri
 
     if (template === 'grade-step') {
         const heads = (payload.heads as string[]) ?? [];
-        const headLabels = (payload.head_labels as Record<string, string>) ?? {};
         const rows = (payload.rows as Record<string, unknown>[]) ?? [];
         const totals = payload.totals as Record<string, unknown> | undefined;
-        const labelFor = (key: string) => headLabels[key] ?? key;
+        const headLabels = (payload.head_labels as Record<string, string>) ?? {};
+        const labelFor = (k: string) => headLabels[k] ?? k;
+
         return (
             <div className="overflow-x-auto border border-black print:overflow-visible">
                 <table className="w-full min-w-max border-collapse text-[10px] text-black print:text-[9px]">
@@ -513,7 +538,7 @@ function ReportPreview({ payload, signatureBlocks = [] }: { payload: Record<stri
                                     {labelFor(h)}
                                 </th>
                             ))}
-                            <th className="border-r border-black p-1 text-right">Gross</th>
+                            <th className="border-r border-black p-1 text-right">Gross Salary</th>
                             <th className="border-r border-black p-1 text-right">Deduction Total</th>
                             <th className="p-1 text-right">Net</th>
                         </tr>
@@ -680,7 +705,11 @@ export default function PayrollReportShow({
             salaryHead: f.includes('salary_head_id'),
             payscale: f.includes('payscale_id'),
             paymentStatus: f.includes('payment_status'),
-            grid: f.some((x) => ['branch_id', 'department_id', 'designation_id', 'program_id', 'project_id'].includes(x)),
+            branch: f.includes('branch_id'),
+            program: f.includes('program_id'),
+            project: f.includes('project_id'),
+            department: f.includes('department_id'),
+            designation: f.includes('designation_id'),
         };
     }, [report.filters]);
 
@@ -706,6 +735,103 @@ export default function PayrollReportShow({
     const pdfUrl = `/payroll/reports/${report.slug}/pdf?${query}`;
     const excelUrl = `/payroll/reports/${report.slug}/excel?${query}`;
 
+    // Calculate detailed summary overview across all rows/sections
+    const summaryData = useMemo(() => {
+        if (!payload) return null;
+        const template = String(payload.template ?? '');
+
+        let totalEmployees = 0;
+        const uniqueBranches = new Set<string>();
+        const headTotals: Record<string, number> = {};
+        let grossTotal = 0;
+        let deductionTotal = 0;
+        let netTotal = 0;
+        let earningHeads: string[] = (payload.earning_heads as string[]) ?? [];
+        let deductionHeads: string[] = (payload.deduction_heads as string[]) ?? [];
+        const headLabels: Record<string, string> = (payload.head_labels as Record<string, string>) ?? {};
+
+        if (template === 'salary-sheet-grouped') {
+            const sections = (payload.sections as {
+                label?: string;
+                rows?: Record<string, unknown>[];
+                totals?: Record<string, unknown>;
+                earning_heads?: string[];
+                deduction_heads?: string[];
+            }[]) ?? [];
+
+            sections.forEach((sec) => {
+                if (sec.label) {
+                    uniqueBranches.add(sec.label.replace(/^Branch:\s*/i, '').trim());
+                }
+                const secRows = (sec.rows as Record<string, unknown>[]) ?? [];
+                totalEmployees += secRows.length;
+                secRows.forEach((r) => {
+                    if (r.branch) uniqueBranches.add(String(r.branch));
+                    else if (r.branch_code) uniqueBranches.add(String(r.branch_code));
+                });
+                if (sec.totals) {
+                    grossTotal += Number(sec.totals.gross || 0);
+                    deductionTotal += Number(sec.totals.deduction || 0);
+                    netTotal += Number(sec.totals.net || 0);
+                    const comps = (sec.totals.components as Record<string, number>) || {};
+                    Object.entries(comps).forEach(([k, v]) => {
+                        headTotals[k] = (headTotals[k] || 0) + Number(v || 0);
+                    });
+                }
+            });
+
+            if (earningHeads.length === 0 && sections[0]?.earning_heads) {
+                earningHeads = sections[0].earning_heads;
+            }
+            if (deductionHeads.length === 0 && sections[0]?.deduction_heads) {
+                deductionHeads = sections[0].deduction_heads;
+            }
+        } else if (template === 'salary-sheet') {
+            const rows = (payload.rows as Record<string, unknown>[]) ?? [];
+            const isTopsheet = Boolean(payload.topsheet);
+            if (isTopsheet) {
+                rows.forEach((r) => {
+                    const b = String(r.name || r.branch || '').trim();
+                    if (b) uniqueBranches.add(b);
+                });
+                totalEmployees = Number(
+                    (payload.meta as Record<string, unknown>)?.employee_count ||
+                    rows.reduce((acc, r) => acc + Number(r.employee_count || 1), 0)
+                );
+            } else {
+                totalEmployees = rows.length;
+                rows.forEach((r) => {
+                    if (r.branch) uniqueBranches.add(String(r.branch));
+                    else if (r.branch_code) uniqueBranches.add(String(r.branch_code));
+                });
+            }
+            if (payload.totals) {
+                const tot = payload.totals as Record<string, unknown>;
+                grossTotal = Number(tot.gross || 0);
+                deductionTotal = Number(tot.deduction || 0);
+                netTotal = Number(tot.net || 0);
+                const comps = (tot.components as Record<string, number>) || {};
+                Object.entries(comps).forEach(([k, v]) => {
+                    headTotals[k] = (headTotals[k] || 0) + Number(v || 0);
+                });
+            }
+        } else {
+            return null;
+        }
+
+        return {
+            totalBranches: uniqueBranches.size || (template === 'salary-sheet-grouped' ? (payload.sections as unknown[])?.length || 1 : 1),
+            totalEmployees,
+            grossTotal,
+            deductionTotal,
+            netTotal,
+            earningHeads,
+            deductionHeads,
+            headLabels,
+            headTotals,
+        };
+    }, [payload]);
+
     return (
         <Layout>
             <Head title={report.title} />
@@ -719,7 +845,7 @@ export default function PayrollReportShow({
                 </PayrollPageHeader>
 
                 <PayrollSectionCard title="Filters" description="Set criteria and click Generate report.">
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 items-end">
                         {show.payscale && (
                             <PayrollComboField
                                 label="Payscale"
@@ -737,105 +863,225 @@ export default function PayrollReportShow({
                             />
                         )}
 
-                        {show.employee && !show.grid && (
+                        {show.branch && (
+                            <PayrollBranchSelect
+                                value={filters.branch_id}
+                                onChange={(v) => setFilter('branch_id', v)}
+                                branches={filterOptions.branches}
+                                allowAll
+                                allLabel="All branches"
+                            />
+                        )}
+
+                        {show.program && (
+                            <PayrollComboField
+                                label="Program"
+                                value={filters.program_id}
+                                onChange={(v) => setFilter('program_id', v)}
+                                items={[
+                                    { value: '', label: 'All programs' },
+                                    ...filterOptions.programs.map((p) => ({ value: String(p.id), label: p.name ?? '—' })),
+                                ]}
+                                placeholder="All programs"
+                            />
+                        )}
+
+                        {show.project && (
+                            <PayrollComboField
+                                label="Project"
+                                value={filters.project_id}
+                                onChange={(v) => setFilter('project_id', v)}
+                                items={[
+                                    { value: '', label: 'All projects' },
+                                    ...filterOptions.projects.map((p) => ({ value: String(p.id), label: p.name ?? '—' })),
+                                ]}
+                                placeholder="All projects"
+                            />
+                        )}
+
+                        {show.department && (
+                            <PayrollComboField
+                                label="Department"
+                                value={filters.department_id}
+                                onChange={(v) => setFilter('department_id', v)}
+                                items={[
+                                    { value: '', label: 'All departments' },
+                                    ...filterOptions.departments.map((d) => ({ value: String(d.id), label: d.name ?? '—' })),
+                                ]}
+                                placeholder="All departments"
+                            />
+                        )}
+
+                        {show.designation && (
+                            <PayrollComboField
+                                label="Designation"
+                                value={filters.designation_id}
+                                onChange={(v) => setFilter('designation_id', v)}
+                                items={[
+                                    { value: '', label: 'All designations' },
+                                    ...filterOptions.designations.map((d) => ({ value: String(d.id), label: d.name ?? '—' })),
+                                ]}
+                                placeholder="All designations"
+                            />
+                        )}
+
+                        {show.employee && (
                             <PayrollEmployeeSelect
                                 value={filters.employee_id}
                                 onChange={(v) => setFilter('employee_id', v)}
                                 employees={filterOptions.employees}
+                                branchId={filters.branch_id || undefined}
                                 required={report.requireEmployee}
                                 allowAll={!report.requireEmployee}
                             />
                         )}
 
-                        {show.grid && (
-                            <PayrollFilterGrid
-                                filters={filters}
-                                setFilter={setFilter}
-                                branches={filterOptions.branches}
-                                departments={filterOptions.departments}
-                                designations={filterOptions.designations}
-                                programs={filterOptions.programs}
-                                projects={filterOptions.projects}
-                                employees={filterOptions.employees}
-                                showEmployee={show.employee}
-                                showProgram={report.filters.includes('program_id')}
-                                showProject={report.filters.includes('project_id')}
-                                showBranch={report.filters.includes('branch_id')}
+                        {show.year && (
+                            <PayrollYearSelect
+                                value={filters.year}
+                                onChange={(v) => setFilter('year', v)}
+                                years={filterOptions.years}
+                                required={!show.dateRange}
+                                allowAll={show.dateRange}
                             />
                         )}
 
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                            {show.paymentStatus && (
-                                <PayrollComboField
-                                    label="Payment status"
-                                    value={filters.payment_status}
-                                    onChange={(v) => setFilter('payment_status', v)}
-                                    items={FINAL_PAYMENT_STATUS_OPTIONS}
-                                    placeholder="All statuses"
-                                />
-                            )}
-                            {show.year && (
-                                <PayrollYearSelect
-                                    value={filters.year}
-                                    onChange={(v) => setFilter('year', v)}
-                                    years={filterOptions.years}
-                                    required={!show.dateRange}
-                                    allowAll={show.dateRange}
-                                />
-                            )}
-                            {show.month && (
-                                <PayrollMonthSelect
-                                    value={filters.month}
-                                    onChange={(v) => setFilter('month', v)}
-                                    months={filterOptions.months}
-                                    required
-                                    allowAll={false}
-                                />
-                            )}
-                            {show.dateRange && (
-                                <>
-                                    <PayrollField label="Date from">
-                                        <Input
-                                            type="date"
-                                            className="h-10 bg-white"
-                                            value={filters.date_from}
-                                            onChange={(e) => setFilter('date_from', e.target.value)}
-                                        />
-                                    </PayrollField>
-                                    <PayrollField label="Date to">
-                                        <Input
-                                            type="date"
-                                            className="h-10 bg-white"
-                                            value={filters.date_to}
-                                            onChange={(e) => setFilter('date_to', e.target.value)}
-                                        />
-                                    </PayrollField>
-                                </>
-                            )}
-                            {show.salaryHead && (
-                                <PayrollComboField
-                                    label="Salary component"
-                                    value={filters.salary_head_id}
-                                    onChange={(v) => setFilter('salary_head_id', v)}
-                                    items={[
-                                        { value: '', label: 'All components' },
-                                        ...filterOptions.salaryHeads.map((h) => ({
-                                            value: String(h.id),
-                                            label: h.name,
-                                        })),
-                                    ]}
-                                    placeholder="All components"
-                                />
-                            )}
-                        </div>
+                        {show.month && (
+                            <PayrollMonthSelect
+                                value={filters.month}
+                                onChange={(v) => setFilter('month', v)}
+                                months={filterOptions.months}
+                                required
+                                allowAll={false}
+                            />
+                        )}
 
-                        <div className="flex flex-wrap gap-2">
-                            <Button type="button" onClick={generate}>
-                                <Search className="mr-2 h-4 w-4" /> Generate report
+                        {show.dateRange && (
+                            <>
+                                <PayrollField label="Date from">
+                                    <Input
+                                        type="date"
+                                        className="h-8.5 bg-white text-xs"
+                                        value={filters.date_from}
+                                        onChange={(e) => setFilter('date_from', e.target.value)}
+                                    />
+                                </PayrollField>
+                                <PayrollField label="Date to">
+                                    <Input
+                                        type="date"
+                                        className="h-8.5 bg-white text-xs"
+                                        value={filters.date_to}
+                                        onChange={(e) => setFilter('date_to', e.target.value)}
+                                    />
+                                </PayrollField>
+                            </>
+                        )}
+
+                        {show.paymentStatus && (
+                            <PayrollComboField
+                                label="Payment status"
+                                value={filters.payment_status}
+                                onChange={(v) => setFilter('payment_status', v)}
+                                items={FINAL_PAYMENT_STATUS_OPTIONS}
+                                placeholder="All statuses"
+                            />
+                        )}
+
+                        {show.salaryHead && (
+                            <PayrollComboField
+                                label="Salary component"
+                                value={filters.salary_head_id}
+                                onChange={(v) => setFilter('salary_head_id', v)}
+                                items={[
+                                    { value: '', label: 'All components' },
+                                    ...filterOptions.salaryHeads.map((h) => ({
+                                        value: String(h.id),
+                                        label: h.name,
+                                    })),
+                                ]}
+                                placeholder="All components"
+                            />
+                        )}
+
+                        {/* Inline Generate Action Button */}
+                        <div className="flex items-end gap-2">
+                            <Button
+                                type="button"
+                                onClick={generate}
+                                size="sm"
+                                className="h-8.5 w-full bg-emerald-600 font-semibold text-white shadow-xs hover:bg-emerald-700 active:scale-[0.99] transition-all cursor-pointer"
+                            >
+                                <Search className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                                Generate
                             </Button>
                         </div>
                     </div>
                 </PayrollSectionCard>
+
+                {/* 2-Row Summary Card Ribbon under Filters (Screen only · Full width · No scroll) */}
+                {generated && payload && !error && summaryData && (
+                    <div className="mt-3 space-y-1.5 rounded-xl border border-slate-200/90 bg-white p-2 shadow-2xs print:hidden">
+                        {/* Row 1: Branches, Employees, Earning Heads, Gross Salary */}
+                        <div className="flex w-full flex-wrap items-center gap-1.5 lg:flex-nowrap">
+                            <div className="flex-1 min-w-[85px] rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-center">
+                                <p className="truncate text-[9.5px] font-bold text-slate-500 uppercase tracking-tight">Branches</p>
+                                <p className="truncate text-xs font-bold text-slate-900">{summaryData.totalBranches}</p>
+                            </div>
+                            <div className="flex-1 min-w-[85px] rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-center">
+                                <p className="truncate text-[9.5px] font-bold text-slate-500 uppercase tracking-tight">Employees</p>
+                                <p className="truncate text-xs font-bold text-slate-900">{summaryData.totalEmployees}</p>
+                            </div>
+                            {summaryData.earningHeads.map((head) => (
+                                <div
+                                    key={head}
+                                    className="flex-1 min-w-[85px] rounded-lg border border-emerald-100 bg-emerald-50/50 px-2 py-1 text-center"
+                                >
+                                    <p className="truncate text-[9.5px] font-semibold text-emerald-800 uppercase tracking-tight" title={summaryData.headLabels[head] ?? head}>
+                                        {summaryData.headLabels[head] ?? head}
+                                    </p>
+                                    <p className="truncate text-xs font-bold text-emerald-950 tabular-nums">
+                                        {formatTakaAmount(summaryData.headTotals[head] || 0, 2)}
+                                    </p>
+                                </div>
+                            ))}
+                            <div className="flex-1 min-w-[105px] rounded-lg border border-emerald-300 bg-emerald-100/90 px-2 py-1 text-center shadow-2xs">
+                                <p className="truncate text-[9.5px] font-bold text-emerald-900 uppercase tracking-tight">Gross Salary</p>
+                                <p className="truncate text-xs font-extrabold text-emerald-950 tabular-nums">
+                                    {formatTakaAmount(summaryData.grossTotal, 2)}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Row 2: Deduction Heads, Total Deduction, Net Payable */}
+                        <div className="flex w-full flex-wrap items-center gap-1.5 lg:flex-nowrap">
+                            {summaryData.deductionHeads.map((head) => (
+                                <div
+                                    key={head}
+                                    className="flex-1 min-w-[85px] rounded-lg border border-rose-100 bg-rose-50/50 px-2 py-1 text-center"
+                                >
+                                    <p className="truncate text-[9.5px] font-semibold text-rose-800 uppercase tracking-tight" title={summaryData.headLabels[head] ?? head}>
+                                        {summaryData.headLabels[head] ?? head}
+                                    </p>
+                                    <p className="truncate text-xs font-bold text-rose-950 tabular-nums">
+                                        {formatTakaAmount(summaryData.headTotals[head] || 0, 2)}
+                                    </p>
+                                </div>
+                            ))}
+                            <div className="flex-1 min-w-[105px] rounded-lg border border-rose-300 bg-rose-100/90 px-2 py-1 text-center shadow-2xs">
+                                <p className="truncate text-[9.5px] font-bold text-rose-900 uppercase tracking-tight">Total Deduction</p>
+                                <p className="truncate text-xs font-extrabold text-rose-950 tabular-nums">
+                                    {formatTakaAmount(summaryData.deductionTotal, 2)}
+                                </p>
+                            </div>
+                            <div className="flex-1 min-w-[115px] rounded-lg bg-emerald-600 px-2.5 py-1 text-center text-white shadow-2xs">
+                                <p className="truncate text-[9.5px] font-bold text-emerald-100 uppercase tracking-tight">Net Payable</p>
+                                <p className="truncate text-xs font-extrabold text-white tabular-nums">
+                                    {formatTakaAmount(summaryData.netTotal, 2)}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {error && (
                     <Alert variant="destructive" className="mt-4">
@@ -846,7 +1092,7 @@ export default function PayrollReportShow({
 
                 {generated && payload && !error && (
                     <PayrollSectionCard
-                        className="mt-6"
+                        className="mt-4"
                         title="Preview"
                         description={`Period: ${periodLabel} · ${String(payload.template ?? '') === 'salary-sheet' || String(payload.template ?? '') === 'salary-sheet-grouped' ? 'A4 landscape for print/PDF' : 'Black & white layout for A4 laser print'}`}
                     >

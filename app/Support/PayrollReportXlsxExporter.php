@@ -154,7 +154,7 @@ class PayrollReportXlsxExporter
 
                 $category = array_fill(0, $sectionTotalCols, self::styled('', border: false));
                 $category[0] = self::styled($topsheet ? 'Branch Info' : 'Employee Info', bold: true, fontSize: 8);
-                $category[$earningStart] = self::styled('Salary & Allowance', bold: true, fontSize: 8);
+                $category[$earningStart] = self::styled('Salary & Allowances', bold: true, fontSize: 8);
                 $category[$deductionStart] = self::styled('Deduction', bold: true, fontSize: 8);
                 $category[$netCol] = self::styled('Net Payable', bold: true, fontSize: 8);
                 if ($bankCol !== null) {
@@ -176,7 +176,7 @@ class PayrollReportXlsxExporter
                 foreach ($sectionEarningHeads as $head) {
                     $headers[] = self::styled($sectionHeadLabels[$head] ?? $head, bold: true, fontSize: 7);
                 }
-                $headers[] = self::styled('Gross', bold: true, fontSize: 8);
+                $headers[] = self::styled('Gross Salary', bold: true, fontSize: 8);
                 foreach ($sectionDeductionHeads as $head) {
                     $headers[] = self::styled($sectionHeadLabels[$head] ?? $head, bold: true, fontSize: 7);
                 }
