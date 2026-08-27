@@ -506,6 +506,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/sync-defaults', [RoleController::class, 'syncDefaultRoles'])
                 ->name('sync-defaults')
                 ->middleware('permission:roles.edit');
+            Route::post('/sync-line-roles', [RoleController::class, 'syncLineRoles'])
+                ->name('sync-line-roles')
+                ->middleware('permission:roles.edit');
             Route::get('/create', [RoleController::class, 'create'])->name('create')->middleware('permission:roles.create');
             Route::post('/', [RoleController::class, 'store'])->name('store')->middleware('permission:roles.create');
             Route::get('/{role}', [RoleController::class, 'show'])->name('show');
@@ -1628,6 +1631,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/process', [MovementLogBookPaymentController::class, 'process'])->name('process');
         Route::get('/{payment}', [MovementLogBookPaymentController::class, 'show'])->name('show');
         Route::get('/{payment}/voucher', [MovementLogBookPaymentController::class, 'voucher'])->name('voucher');
+        Route::post('/{payment}/recommend', [MovementLogBookPaymentController::class, 'recommend'])->name('recommend');
         Route::post('/{payment}/approve', [MovementLogBookPaymentController::class, 'approve'])->name('approve');
         Route::post('/{payment}/reject', [MovementLogBookPaymentController::class, 'reject'])->name('reject');
     });

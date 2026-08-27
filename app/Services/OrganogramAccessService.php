@@ -167,6 +167,18 @@ class OrganogramAccessService
     }
 
     /**
+     * Assistant Director (Microfinance) via role name and/or organogram permission marker.
+     */
+    public static function isMicrofinanceAssistantDirector(User $user): bool
+    {
+        if (in_array('Assistant Director (Microfinance)', self::mergedRoleNames($user), true)) {
+            return true;
+        }
+
+        return $user->hasDirectPermission('organogram.microfinance_assistant_director');
+    }
+
+    /**
      * HR / leave-desk users who may see all leave applications (not organogram-limited).
      */
     public static function hasUnrestrictedLeaveApplicationAccess(User $user): bool
@@ -307,6 +319,110 @@ class OrganogramAccessService
         return $title === 'branch manager';
     }
 
+    public static function isZonalManager(User $user): bool
+    {
+        if ($user->isSuperAdmin() || self::userBypassesOrganogramEmployeeScope($user)) {
+            return false;
+        }
+
+        if (in_array('Zonal Manager', self::mergedRoleNames($user), true)) {
+            return true;
+        }
+
+        if ($user->hasDirectPermission('organogram.zonal_manager')) {
+            return true;
+        }
+
+        return self::designationTitleIs($user, 'zonal manager');
+    }
+
+    public static function isRegionalManager(User $user): bool
+    {
+        if ($user->isSuperAdmin() || self::userBypassesOrganogramEmployeeScope($user) || self::isZonalManager($user)) {
+            return false;
+        }
+
+        if (in_array('Regional Manager', self::mergedRoleNames($user), true)) {
+            return true;
+        }
+
+        if ($user->hasDirectPermission('organogram.regional_manager')) {
+            return true;
+        }
+
+        return self::designationTitleIs($user, 'regional manager');
+    }
+
+    /** @return list<int> */
+    public static function zonalManagerBranchIds(User $user): array
+    {
+        $eid = (int) ($user->employee_id ?: 0);
+        if ($eid <= 0) {
+            return [];
+        }
+
+        $zoneIds = Zone::query()->where('zone_manager_employee_id', $eid)->pluck('id');
+        if ($zoneIds->isEmpty()) {
+            $user->loadMissing('employee.branch.regionalOffice');
+            $zoneId = (int) ($user->employee?->branch?->regionalOffice?->zone_id ?: 0);
+            $zoneIds = $zoneId > 0 ? collect([$zoneId]) : collect();
+        }
+
+        if ($zoneIds->isEmpty()) {
+            return [];
+        }
+
+        $roIds = RegionalOffice::query()->whereIn('zone_id', $zoneIds)->pluck('id');
+        if ($roIds->isEmpty()) {
+            return [];
+        }
+
+        return Branch::query()
+            ->whereIn('regional_office_id', $roIds)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /** @return list<int> */
+    public static function regionalManagerBranchIds(User $user): array
+    {
+        $eid = (int) ($user->employee_id ?: 0);
+        if ($eid <= 0) {
+            return [];
+        }
+
+        $roIds = RegionalOffice::query()->where('regional_manager_employee_id', $eid)->pluck('id');
+        if ($roIds->isEmpty()) {
+            $user->loadMissing('employee.branch');
+            $roId = (int) ($user->employee?->branch?->regional_office_id ?: 0);
+            $roIds = $roId > 0 ? collect([$roId]) : collect();
+        }
+
+        if ($roIds->isEmpty()) {
+            return [];
+        }
+
+        return Branch::query()
+            ->whereIn('regional_office_id', $roIds)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    private static function designationTitleIs(User $user, string $title): bool
+    {
+        $user->loadMissing('employee.designation');
+        $normalized = mb_strtolower(trim((string) optional($user->employee?->designation)->name));
+        if ($normalized === '' || str_contains($normalized, 'trainee')) {
+            return false;
+        }
+
+        return $normalized === $title || str_contains($normalized, $title);
+    }
+
     /**
      * HR / payroll module permissions must not widen employee directory for organogram line roles
      * (e.g. employees.view aliased to employee-loan.view for Department Head).
@@ -383,26 +499,23 @@ class OrganogramAccessService
             return;
         }
 
-        if (in_array('Zonal Manager', $roleNames, true) && $eid) {
-            $zoneIds = Zone::query()->where('zone_manager_employee_id', $eid)->pluck('id');
-            $roIds = RegionalOffice::query()->whereIn('zone_id', $zoneIds)->pluck('id');
-            $branchIds = Branch::query()->whereIn('regional_office_id', $roIds)->pluck('id');
-            if ($branchIds->isEmpty()) {
+        if (self::isZonalManager($user)) {
+            $branchIds = self::zonalManagerBranchIds($user);
+            if ($branchIds === []) {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->whereIn($col('current_branch_id'), $branchIds->all());
+                $query->whereIn($col('current_branch_id'), $branchIds);
             }
 
             return;
         }
 
-        if (in_array('Regional Manager', $roleNames, true) && $eid) {
-            $roIds = RegionalOffice::query()->where('regional_manager_employee_id', $eid)->pluck('id');
-            $branchIds = Branch::query()->whereIn('regional_office_id', $roIds)->pluck('id');
-            if ($branchIds->isEmpty()) {
+        if (self::isRegionalManager($user)) {
+            $branchIds = self::regionalManagerBranchIds($user);
+            if ($branchIds === []) {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->whereIn($col('current_branch_id'), $branchIds->all());
+                $query->whereIn($col('current_branch_id'), $branchIds);
             }
 
             return;
@@ -498,19 +611,12 @@ class OrganogramAccessService
             return $bid !== null ? [$bid] : [];
         }
 
-        if (in_array('Zonal Manager', $roleNames, true) && $eid) {
-            $zoneIds = Zone::query()->where('zone_manager_employee_id', $eid)->pluck('id');
-            $roIds = RegionalOffice::query()->whereIn('zone_id', $zoneIds)->pluck('id');
-            $ids = Branch::query()->whereIn('regional_office_id', $roIds)->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
-
-            return $ids;
+        if (self::isZonalManager($user)) {
+            return self::zonalManagerBranchIds($user);
         }
 
-        if (in_array('Regional Manager', $roleNames, true) && $eid) {
-            $roIds = RegionalOffice::query()->where('regional_manager_employee_id', $eid)->pluck('id');
-            $ids = Branch::query()->whereIn('regional_office_id', $roIds)->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
-
-            return $ids;
+        if (self::isRegionalManager($user)) {
+            return self::regionalManagerBranchIds($user);
         }
 
         if (self::isHeadOfficeUser($user) && $eid) {
@@ -615,21 +721,11 @@ class OrganogramAccessService
                 ->all();
         }
 
-        if (in_array('Zonal Manager', $roleNames, true) && $eid) {
+        if (self::isZonalManager($user) || self::isRegionalManager($user)) {
             $branchIds = self::accessibleBranchIdList($user) ?? [];
-
-            return Employee::query()
-                ->whereIn('current_branch_id', $branchIds)
-                ->distinct()
-                ->pluck('department_id')
-                ->filter()
-                ->map(fn ($id) => (int) $id)
-                ->values()
-                ->all();
-        }
-
-        if (in_array('Regional Manager', $roleNames, true) && $eid) {
-            $branchIds = self::accessibleBranchIdList($user) ?? [];
+            if ($branchIds === []) {
+                return [];
+            }
 
             return Employee::query()
                 ->whereIn('current_branch_id', $branchIds)

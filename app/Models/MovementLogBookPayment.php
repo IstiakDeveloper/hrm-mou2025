@@ -18,9 +18,14 @@ class MovementLogBookPayment extends Model
         'total_amount',
         'entry_count',
         'approval_scope',
+        'submitter_tier',
+        'needs_recommendation',
         'status',
         'processed_by',
         'processed_at',
+        'recommended_by',
+        'recommended_at',
+        'recommendation_remarks',
         'approved_by',
         'approved_at',
         'approval_remarks',
@@ -30,7 +35,9 @@ class MovementLogBookPayment extends Model
         'total_official_km' => 'decimal:2',
         'rate_per_km' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'needs_recommendation' => 'boolean',
         'processed_at' => 'datetime',
+        'recommended_at' => 'datetime',
         'approved_at' => 'datetime',
     ];
 
@@ -47,6 +54,11 @@ class MovementLogBookPayment extends Model
     public function processor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'processed_by');
+    }
+
+    public function recommender(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recommended_by');
     }
 
     public function approver(): BelongsTo

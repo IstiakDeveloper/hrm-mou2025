@@ -186,7 +186,7 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                 { title: 'Monthly View', path: '/attendance/monthly', permission: 'attendance.view' },
                 { title: 'Daily branch summary', path: '/attendance/daily-branch-summary', permission: 'attendance.view' },
                 { title: 'Attendance Report', path: '/attendance/report', permission: 'attendance.view' },
-                { title: 'Attendance sheet report', path: '/attendance/sheet-report', permission: 'reports.view' },
+                { title: 'Attendance sheet report', path: '/attendance/sheet-report', permission: 'attendance.view' },
             ];
         case 'leave':
             return [

@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Movement;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PaginatesForInertia;
+use App\Http\Controllers\Movement\Concerns\ResolvesLogBookScopeView;
 use App\Models\Employee;
 use App\Models\MovementLogBook;
 use App\Models\MovementLogBookPayment;
 use App\Models\User;
+use App\Services\LogBookPaymentWorkflowService;
 use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -18,6 +20,11 @@ use Inertia\Inertia;
 class MovementLogBookPaymentController extends Controller
 {
     use PaginatesForInertia;
+    use ResolvesLogBookScopeView;
+
+    public function __construct(private LogBookPaymentWorkflowService $workflow)
+    {
+    }
 
     private function ratePerKm(): float
     {
@@ -29,15 +36,21 @@ class MovementLogBookPaymentController extends Controller
         $user = Auth::user();
         abort_unless($user->hasPermission('movements.view'), 403);
 
+        $scope = $this->resolveLogBookScopeView($request, $user);
+
         $query = MovementLogBookPayment::query()
             ->with([
-                'employee:id,employee_id,pin,name_en,current_branch_id',
-                'employee.branch:id,name',
+                'employee:id,employee_id,pin,name_en,current_branch_id,designation_id',
+                'employee.designation:id,name',
+                'employee.branch:id,name,regional_office_id,is_head_office,branch_head_designation_id,head_employee_id',
+                'employee.branch.regionalOffice:id,zone_id,regional_manager_employee_id',
                 'processor:id,name',
+                'recommender:id,name',
                 'approver:id,name',
             ]);
 
         $this->constrainVisiblePayments($query, $user);
+        $this->applyLogBookScopeView($query, $user, $scope['view'], $scope['showTabs']);
 
         if ($request->filled('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
@@ -75,20 +88,29 @@ class MovementLogBookPaymentController extends Controller
         $summary = [
             'total' => (clone $summaryQuery)->count(),
             'pending' => (clone $summaryQuery)->where('status', 'pending')->count(),
+            'recommended' => (clone $summaryQuery)->where('status', 'recommended')->count(),
             'approved' => (clone $summaryQuery)->where('status', 'approved')->count(),
             'rejected' => (clone $summaryQuery)->where('status', 'rejected')->count(),
             'totalAmount' => round((float) (clone $summaryQuery)->where('status', 'approved')->sum('total_amount'), 2),
-            'pendingAmount' => round((float) (clone $summaryQuery)->where('status', 'pending')->sum('total_amount'), 2),
+            'pendingAmount' => round((float) (clone $summaryQuery)->whereIn('status', ['pending', 'recommended'])->sum('total_amount'), 2),
         ];
+
+        foreach ($payments->items() as $payment) {
+            $payment->setAttribute('can_recommend', $this->workflow->userCanRecommend($user, $payment));
+            $payment->setAttribute('can_approve', $this->workflow->userCanApprove($user, $payment));
+            $payment->setAttribute('can_reject', $this->workflow->userCanReject($user, $payment));
+            $payment->setAttribute('next_action_label', $this->workflow->nextActionLabel($payment));
+        }
 
         return Inertia::render('movement/log-book/payment/index', [
             'payments' => $this->inertiaPagination($payments),
             'summary' => $summary,
-            'filters' => $request->only(['status', 'period_year', 'period_month', 'search', 'per_page']),
+            'filters' => $request->only(['status', 'period_year', 'period_month', 'search', 'per_page', 'view']),
             'ratePerKm' => $this->ratePerKm(),
-            'canApproveHeadOffice' => OrganogramAccessService::isExecutiveDirector($user),
-            'canApproveBranch' => OrganogramAccessService::isMicrofinanceDirector($user),
             'canProcess' => $this->userCanProcessPayments($user),
+            'scopeView' => $scope['view'],
+            'showScopeTabs' => $scope['showTabs'],
+            'viewerEmployeeId' => (int) $user->employee_id,
         ]);
     }
 
@@ -101,15 +123,19 @@ class MovementLogBookPaymentController extends Controller
         $payment->load([
             'employee.department',
             'employee.designation',
-            'employee.branch',
+            'employee.branch.regionalOffice',
             'processor:id,name',
+            'recommender:id,name',
             'approver:id,name',
             'logBooks.movement:id,movement_type,status',
         ]);
 
         return Inertia::render('movement/log-book/payment/show', [
             'payment' => $payment,
-            'canApprove' => $this->userCanApprovePayment($user, $payment),
+            'canRecommend' => $this->workflow->userCanRecommend($user, $payment),
+            'canApprove' => $this->workflow->userCanApprove($user, $payment),
+            'canReject' => $this->workflow->userCanReject($user, $payment),
+            'nextActionLabel' => $this->workflow->nextActionLabel($payment),
             'companyName' => config('payroll_reports.company_name', config('app.name')),
             'companyAddress' => config('payroll_reports.company_address', ''),
         ]);
@@ -164,8 +190,9 @@ class MovementLogBookPaymentController extends Controller
             return redirect()->back()->with('error', 'No unpaid log book entries found up to the selected month.');
         }
 
-        $employee = Employee::with('branch')->findOrFail($employeeId);
+        $employee = Employee::with(['branch', 'designation'])->findOrFail($employeeId);
         $isHeadOffice = (bool) ($employee->branch?->is_head_office);
+        $tier = $this->workflow->resolveSubmitterTier($employee);
         $totalOfficialKm = round((float) $entries->sum('official_km'), 2);
         $rate = $this->ratePerKm();
         $totalAmount = round($totalOfficialKm * $rate, 2);
@@ -181,6 +208,8 @@ class MovementLogBookPaymentController extends Controller
                 'total_amount' => $totalAmount,
                 'entry_count' => $entries->count(),
                 'approval_scope' => $isHeadOffice ? 'head_office' : 'branch',
+                'submitter_tier' => $tier,
+                'needs_recommendation' => $this->workflow->needsRecommendation($tier),
                 'status' => 'pending',
                 'processed_by' => $user->id,
                 'processed_at' => now(),
@@ -192,7 +221,7 @@ class MovementLogBookPaymentController extends Controller
             DB::commit();
 
             return redirect()->route('movement-log-book-payments.show', $payment)
-                ->with('success', 'Monthly log book payment submitted for approval.');
+                ->with('success', 'Monthly log book payment submitted.');
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -200,14 +229,27 @@ class MovementLogBookPaymentController extends Controller
         }
     }
 
+    public function recommend(Request $request, MovementLogBookPayment $payment)
+    {
+        $user = Auth::user();
+        abort_unless($this->workflow->userCanRecommend($user, $payment), 403);
+
+        $request->validate(['recommendation_remarks' => 'nullable|string|max:1000']);
+
+        $payment->update([
+            'status' => 'recommended',
+            'recommended_by' => $user->id,
+            'recommended_at' => now(),
+            'recommendation_remarks' => $request->recommendation_remarks,
+        ]);
+
+        return redirect()->back()->with('success', 'Log book payment recommended for approval.');
+    }
+
     public function approve(Request $request, MovementLogBookPayment $payment)
     {
         $user = Auth::user();
-        abort_unless($this->userCanApprovePayment($user, $payment), 403);
-
-        if ($payment->status !== 'pending') {
-            return redirect()->back()->with('error', 'This payment is already processed.');
-        }
+        abort_unless($this->workflow->userCanApprove($user, $payment), 403);
 
         $request->validate(['approval_remarks' => 'nullable|string|max:1000']);
 
@@ -239,9 +281,9 @@ class MovementLogBookPaymentController extends Controller
     public function reject(Request $request, MovementLogBookPayment $payment)
     {
         $user = Auth::user();
-        abort_unless($this->userCanApprovePayment($user, $payment), 403);
+        abort_unless($this->workflow->userCanReject($user, $payment), 403);
 
-        if ($payment->status !== 'pending') {
+        if (! in_array($payment->status, ['pending', 'recommended'], true)) {
             return redirect()->back()->with('error', 'This payment is already processed.');
         }
 
@@ -274,12 +316,13 @@ class MovementLogBookPaymentController extends Controller
         $user = Auth::user();
         abort_unless($user->hasPermission('movements.view'), 403);
         abort_unless($this->userCanViewPayment($user, $payment), 403);
-        abort_unless($payment->status === 'approved' && $payment->voucher_no, 404);
+        abort_unless(in_array($payment->status, ['pending', 'recommended', 'approved'], true), 404);
 
         $payment->load([
             'employee.department',
             'employee.designation',
             'employee.branch',
+            'recommender:id,name',
             'approver:id,name',
             'processor:id,name',
         ]);
@@ -294,6 +337,7 @@ class MovementLogBookPaymentController extends Controller
 
         return Inertia::render('movement/log-book/payment/voucher', [
             'payment' => $payment,
+            'displayVoucherNo' => $payment->voucher_no ?: $this->generateVoucherNo($payment),
             'kmSummary' => [
                 'entry_count' => (int) ($kmSummary->entry_count ?? 0),
                 'total_km' => round((float) ($kmSummary->total_km ?? 0), 2),
@@ -352,22 +396,5 @@ class MovementLogBookPaymentController extends Controller
     private function userCanProcessPayments(User $user): bool
     {
         return $user->hasPermission('movements.view') && ($user->employee_id || $user->hasPermission('movements.edit') || $user->hasPermission('employees.admin'));
-    }
-
-    private function userCanApprovePayment(User $user, MovementLogBookPayment $payment): bool
-    {
-        if ($payment->status !== 'pending') {
-            return false;
-        }
-
-        if ($payment->approval_scope === 'head_office') {
-            return OrganogramAccessService::isExecutiveDirector($user);
-        }
-
-        if ($payment->approval_scope === 'branch') {
-            return OrganogramAccessService::isMicrofinanceDirector($user);
-        }
-
-        return false;
     }
 }

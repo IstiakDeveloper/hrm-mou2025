@@ -29,7 +29,8 @@ import {
   Trash,
   Check,
   Shield,
-  Users
+  Users,
+  UserPlus
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PageSurface } from '@/components/page-surface';
@@ -84,6 +85,7 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
   });
 
   const syncForm = useForm({});
+  const lineRoleForm = useForm({});
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -95,6 +97,12 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
 
   const handleSyncDefaults = () => {
     syncForm.post(route('admin.roles.sync-defaults'), {
+      preserveScroll: true,
+    });
+  };
+
+  const handleSyncLineRoles = () => {
+    lineRoleForm.post(route('admin.roles.sync-line-roles'), {
       preserveScroll: true,
     });
   };
@@ -124,21 +132,33 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Role Management</h1>
             <p className="mt-1 text-gray-500">
-              Sync refreshes default permissions only — Section Access is customized per role
+              Assign Line Roles gives BM / RM / ZM from designation. Sync Default Roles refreshes permissions only.
             </p>
           </div>
           <div className="flex items-center gap-2">
             {can_sync_defaults && (
-              <Button
-                type="button"
-                variant="outline"
-                className="flex items-center gap-1"
-                disabled={syncForm.processing}
-                onClick={handleSyncDefaults}
-              >
-                <Shield className="h-4 w-4" />
-                <span>{syncForm.processing ? 'Syncing…' : 'Sync Default Roles'}</span>
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex items-center gap-1"
+                  disabled={lineRoleForm.processing}
+                  onClick={handleSyncLineRoles}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  <span>{lineRoleForm.processing ? 'Assigning…' : 'Assign Line Roles'}</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex items-center gap-1"
+                  disabled={syncForm.processing}
+                  onClick={handleSyncDefaults}
+                >
+                  <Shield className="h-4 w-4" />
+                  <span>{syncForm.processing ? 'Syncing…' : 'Sync Default Roles'}</span>
+                </Button>
+              </>
             )}
             <Link href={route('admin.roles.create')}>
               <Button className="flex items-center gap-1">

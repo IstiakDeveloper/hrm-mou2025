@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Role;
+use App\Services\OrganogramLineRoleSyncService;
 use App\Support\PermissionRegistry;
 use App\Support\SectionRegistry;
 use Illuminate\Http\Request;
@@ -53,6 +54,22 @@ class RoleController extends Controller
 
         return redirect()->route('admin.roles.index')
             ->with('success', 'Synced '.count($roles).' default role(s) from config/default_roles.php.');
+    }
+
+    /**
+     * Assign missing Branch / Regional / Zonal Manager roles from designation and zone/RO assignment.
+     */
+    public function syncLineRoles(OrganogramLineRoleSyncService $service)
+    {
+        $stats = $service->syncAll();
+
+        return redirect()->route('admin.roles.index')
+            ->with('success', sprintf(
+                'Assigned line roles for %d user(s). Unchanged: %d. Skipped: %d.',
+                $stats['updated'],
+                $stats['unchanged'],
+                $stats['skipped']
+            ));
     }
 
     /**

@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { formatSmartKm, formatSmartNumber } from '@/lib/format-smart-number';
 import { format } from 'date-fns';
-import { ArrowLeft, Check, Eye, FileText, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, Eye, Printer, ThumbsUp, XCircle } from 'lucide-react';
 
 interface Employee extends EmployeeNameFields {
     id: number;
@@ -48,18 +48,26 @@ interface Payment {
     entry_count: number;
     status: string;
     approval_scope?: string;
+    submitter_tier?: string | null;
+    needs_recommendation?: boolean;
     employee: Employee;
     log_books: LogBookEntry[];
     processor?: { name: string } | null;
+    recommender?: { name: string } | null;
     approver?: { name: string } | null;
     processed_at?: string | null;
+    recommended_at?: string | null;
+    recommendation_remarks?: string | null;
     approved_at?: string | null;
     approval_remarks?: string | null;
 }
 
 type Props = {
     payment: Payment;
+    canRecommend?: boolean;
     canApprove: boolean;
+    canReject?: boolean;
+    nextActionLabel?: string | null;
     companyName?: string;
     companyAddress?: string;
 };
@@ -67,6 +75,9 @@ type Props = {
 function statusBadge(status: string) {
     if (status === 'approved') {
         return <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Approved</Badge>;
+    }
+    if (status === 'recommended') {
+        return <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">Recommended</Badge>;
     }
     if (status === 'rejected') {
         return <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">Rejected</Badge>;
@@ -81,7 +92,7 @@ function paymentBadge(status: string) {
     return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">Unpaid</Badge>;
 }
 
-export default function LogBookPaymentShow({ payment, canApprove }: Props) {
+export default function LogBookPaymentShow({ payment, canRecommend = false, canApprove, canReject = false, nextActionLabel }: Props) {
     const monthLabel = format(new Date(payment.period_year, payment.period_month - 1, 1), 'MMMM yyyy');
     const entries = payment.log_books ?? [];
 
@@ -95,6 +106,11 @@ export default function LogBookPaymentShow({ payment, canApprove }: Props) {
             officialKm: Math.round(officialKm * 100) / 100,
         };
     }, [entries]);
+
+    const handleRecommend = () => {
+        if (!confirm('Recommend this log book payment?')) return;
+        router.post(route('movement-log-book-payments.recommend', payment.id));
+    };
 
     const handleApprove = () => {
         if (!confirm('Approve this monthly log book payment?')) return;
@@ -119,25 +135,33 @@ export default function LogBookPaymentShow({ payment, canApprove }: Props) {
                         </Link>
                     </Button>
                     <div className="flex gap-2">
-                        {payment.status === 'approved' && payment.voucher_no && (
-                            <Button asChild variant="outline" size="sm">
-                                <Link href={route('movement-log-book-payments.voucher', payment.id)} target="_blank">
-                                    <FileText className="mr-1.5 h-4 w-4" />
-                                    Voucher
-                                </Link>
+                        {(payment.status === 'pending' || payment.status === 'recommended' || payment.status === 'approved') && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(route('movement-log-book-payments.voucher', payment.id), '_blank')}
+                            >
+                                <Printer className="mr-1.5 h-4 w-4" />
+                                {payment.status === 'approved' ? 'Print Voucher' : payment.status === 'recommended' ? 'Print Recommended Voucher' : 'Print Pending Voucher'}
+                            </Button>
+                        )}
+                        {canRecommend && (
+                            <Button size="sm" className="bg-sky-600 hover:bg-sky-700" onClick={handleRecommend}>
+                                <ThumbsUp className="mr-1.5 h-4 w-4" />
+                                Recommend
                             </Button>
                         )}
                         {canApprove && (
-                            <>
-                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}>
-                                    <Check className="mr-1.5 h-4 w-4" />
-                                    Approve
-                                </Button>
-                                <Button size="sm" variant="destructive" onClick={handleReject}>
-                                    <XCircle className="mr-1.5 h-4 w-4" />
-                                    Reject
-                                </Button>
-                            </>
+                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}>
+                                <Check className="mr-1.5 h-4 w-4" />
+                                Approve
+                            </Button>
+                        )}
+                        {canReject && (
+                            <Button size="sm" variant="destructive" onClick={handleReject}>
+                                <XCircle className="mr-1.5 h-4 w-4" />
+                                Reject
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -171,10 +195,23 @@ export default function LogBookPaymentShow({ payment, canApprove }: Props) {
                             <div>
                                 <p className="text-xs text-slate-500">Status</p>
                                 {statusBadge(payment.status)}
+                                {nextActionLabel && (payment.status === 'pending' || payment.status === 'recommended') && (
+                                    <p className="mt-1 text-xs text-slate-500">{nextActionLabel}</p>
+                                )}
                             </div>
                             <div>
                                 <p className="text-xs text-slate-500">Voucher</p>
-                                <p className="font-mono text-sm">{payment.voucher_no || '—'}</p>
+                                {(payment.status === 'pending' || payment.status === 'recommended' || payment.status === 'approved') ? (
+                                    <button
+                                        type="button"
+                                        className="font-mono text-sm font-semibold text-emerald-700 underline-offset-2 hover:underline"
+                                        onClick={() => window.open(route('movement-log-book-payments.voucher', payment.id), '_blank')}
+                                    >
+                                        {payment.voucher_no || 'Pending'}
+                                    </button>
+                                ) : (
+                                    <p className="font-mono text-sm">{payment.voucher_no || '—'}</p>
+                                )}
                             </div>
                             <div>
                                 <p className="text-xs text-slate-500">Entries</p>
@@ -188,12 +225,25 @@ export default function LogBookPaymentShow({ payment, canApprove }: Props) {
                                 )}
                             </div>
                             <div>
+                                <p className="text-xs text-slate-500">Recommended by</p>
+                                <p>{payment.recommender?.name || '—'}</p>
+                                {payment.recommended_at && (
+                                    <p className="text-xs text-slate-500">{format(new Date(payment.recommended_at), 'dd MMM yyyy, hh:mm a')}</p>
+                                )}
+                            </div>
+                            <div>
                                 <p className="text-xs text-slate-500">Approved by</p>
                                 <p>{payment.approver?.name || '—'}</p>
                                 {payment.approved_at && (
                                     <p className="text-xs text-slate-500">{format(new Date(payment.approved_at), 'dd MMM yyyy, hh:mm a')}</p>
                                 )}
                             </div>
+                            {payment.recommendation_remarks && (
+                                <div className="sm:col-span-2">
+                                    <p className="text-xs text-slate-500">Recommendation remarks</p>
+                                    <p className="text-sm">{payment.recommendation_remarks}</p>
+                                </div>
+                            )}
                             {payment.approval_remarks && (
                                 <div className="sm:col-span-2">
                                     <p className="text-xs text-slate-500">Remarks</p>

@@ -33,6 +33,7 @@ import {
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { formatSmartKm, formatSmartNumber } from '@/lib/format-smart-number';
 import { cn } from '@/lib/utils';
+import { LogBookScopeTabs } from '@/components/log-book-scope-tabs';
 import { format } from 'date-fns';
 import {
     BookOpen,
@@ -148,6 +149,8 @@ interface Props {
     branches: IdName[];
     ratePerKm: number;
     canManageLogBook: boolean;
+    scopeView?: 'mine' | 'team';
+    showScopeTabs?: boolean;
 }
 
 function getPaymentBadge(row: LogBook) {
@@ -259,6 +262,8 @@ export default function MovementLogBookIndex({
     branches,
     ratePerKm,
     canManageLogBook,
+    scopeView = 'team',
+    showScopeTabs = false,
 }: Props) {
     const { flash } = usePage<{ flash?: { success?: string; error?: string } }>().props;
     const showEmployeeColumn = _employees.length > 1 && !singleEmployee;
@@ -304,6 +309,7 @@ export default function MovementLogBookIndex({
         if (branchId && branchId !== 'all') params.branch_id = branchId;
         if (departmentId && departmentId !== 'all') params.department_id = departmentId;
         if (perPage && perPage !== '10') params.per_page = perPage;
+        if (showScopeTabs) params.view = scopeView;
         return params;
     };
 
@@ -320,7 +326,7 @@ export default function MovementLogBookIndex({
         setSearch(''); setPaymentStatus(''); setEmployeeId(''); setFromDate(''); setToDate('');
         setZoneId(''); setRegionalOfficeId(''); setBranchId(''); setDepartmentId('');
         setPerPage('10'); setShowFilters(false); setFilterSheetOpen(false);
-        router.get(route('movement-log-books.index'), {}, { preserveState: true });
+        router.get(route('movement-log-books.index'), showScopeTabs ? { view: scopeView } : {}, { preserveState: true });
     };
 
     const handlePrint = () => {
@@ -487,29 +493,41 @@ export default function MovementLogBookIndex({
                     </Alert>
                 )}
 
-                <div className="mb-3 flex items-center justify-between gap-2 border-b border-slate-200 pb-3 md:mb-4 md:pb-4">
-                    <div className="min-w-0">
-                        <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 md:text-2xl">
-                            Log Book Register
-                        </h1>
-                        <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">
-                            Log book register — unpaid until monthly payment approved (৳{ratePerKm}/km official)
-                        </p>
+                <div className="mb-3 flex flex-col gap-2.5 border-b border-slate-200 pb-3 md:mb-4 md:pb-4">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                            <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 md:text-2xl">
+                                Log Book Register
+                            </h1>
+                            <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">
+                                {showScopeTabs && scopeView === 'mine'
+                                    ? `Your log book — unpaid until monthly payment approved (৳${ratePerKm}/km official)`
+                                    : showScopeTabs
+                                        ? `Team log book register — unpaid until monthly payment approved (৳${ratePerKm}/km official)`
+                                        : `Log book register — unpaid until monthly payment approved (৳${ratePerKm}/km official)`}
+                            </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                            <Button variant="outline" size="sm" className="hidden h-9 gap-1.5 border-slate-200 sm:inline-flex" onClick={handlePrint}>
+                                <Printer className="h-4 w-4" /> Print
+                            </Button>
+                            <Button variant="outline" size="sm" className="hidden h-9 gap-1.5 border-slate-200 sm:inline-flex" onClick={handleDownloadXlsx}>
+                                <Download className="h-4 w-4" /> XLSX
+                            </Button>
+                            <Button variant="outline" size="icon" className="h-9 w-9 border-slate-200 sm:hidden" onClick={handlePrint} title="Print">
+                                <Printer className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="icon" className="h-9 w-9 border-slate-200 sm:hidden" onClick={handleDownloadXlsx} title="Download XLSX">
+                                <Download className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                        <Button variant="outline" size="sm" className="hidden h-9 gap-1.5 border-slate-200 sm:inline-flex" onClick={handlePrint}>
-                            <Printer className="h-4 w-4" /> Print
-                        </Button>
-                        <Button variant="outline" size="sm" className="hidden h-9 gap-1.5 border-slate-200 sm:inline-flex" onClick={handleDownloadXlsx}>
-                            <Download className="h-4 w-4" /> XLSX
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-9 w-9 border-slate-200 sm:hidden" onClick={handlePrint} title="Print">
-                            <Printer className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-9 w-9 border-slate-200 sm:hidden" onClick={handleDownloadXlsx} title="Download XLSX">
-                            <Download className="h-4 w-4" />
-                        </Button>
-                    </div>
+                    <LogBookScopeTabs
+                        view={scopeView}
+                        showTabs={showScopeTabs}
+                        indexRoute={route('movement-log-books.index')}
+                        filterParams={buildFilterParams()}
+                    />
                 </div>
 
                 {/* Summary cards */}
@@ -558,7 +576,7 @@ export default function MovementLogBookIndex({
                                                 {employeeDisplayName(singleEmployee)}
                                             </h2>
                                             <Badge variant="outline" className="border-emerald-200 bg-emerald-100/70 text-emerald-800 text-[11px] font-semibold">
-                                                Single Employee View
+                                                {scopeView === 'mine' ? 'My Log Book' : 'Single Employee View'}
                                             </Badge>
                                         </div>
                                         <p className="mt-0.5 truncate text-xs text-slate-500">

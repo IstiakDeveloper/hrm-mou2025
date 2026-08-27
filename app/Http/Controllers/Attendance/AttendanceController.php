@@ -971,29 +971,17 @@ class AttendanceController extends Controller
         $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(7);
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
 
-        // Get branches and departments that user has access to
         $branches = $this->getAccessibleBranches($user);
         $departments = $this->getAccessibleDepartments($user);
-
-        // Get preview data if requested
-        $previewData = null;
-        if ($request->has('preview')) {
-            $previewData = $this->getAttendancePreviewData($request, $user, $startDate, $endDate);
-        }
 
         return Inertia::render('attendance/sheet-report', [
             'branches' => $branches,
             'departments' => $departments,
-            'filters' => $request->only(['start_date', 'end_date', 'branch_id', 'department_id', 'preview']),
+            'filters' => $request->only(['start_date', 'end_date', 'branch_id', 'department_id']),
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
-            'previewData' => $previewData,
             'userPermissions' => [
-                'canExportPdf' => $user->hasPermission('reports.export'),
-                'canExportExcel' => $user->hasPermission('reports.export'),
-                'isEmployee' => $user->employee_id ? true : false,
-                'isBranchManager' => $user->hasPermission('branch_manager'),
-                'isDepartmentHead' => $user->hasPermission('department_head'),
+                'canExportPdf' => true,
             ],
         ]);
     }
@@ -1640,11 +1628,7 @@ class AttendanceController extends Controller
     public function generatePdf(Request $request)
     {
         $user = Auth::user();
-
-        // Check permission
-        if (! $user->hasPermission('reports.export')) {
-            abort(403, 'You do not have permission to export attendance reports.');
-        }
+        $this->assertAccessibleSheetFilters($request, $user);
 
         $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
@@ -1892,6 +1876,28 @@ class AttendanceController extends Controller
         }
         if ($request->filled('department_id') && $request->department_id !== 'all') {
             $query->where('employees.department_id', $request->department_id);
+        }
+    }
+
+    /**
+     * Reject branch/department filters outside the user's organogram scope.
+     */
+    private function assertAccessibleSheetFilters(Request $request, $user): void
+    {
+        $branchId = $request->input('branch_id');
+        if ($branchId && $branchId !== 'all') {
+            $allowed = OrganogramAccessService::accessibleBranchIdList($user);
+            if ($allowed !== null && ! in_array((int) $branchId, $allowed, true)) {
+                abort(403, 'You do not have access to this branch.');
+            }
+        }
+
+        $departmentId = $request->input('department_id');
+        if ($departmentId && $departmentId !== 'all') {
+            $allowed = OrganogramAccessService::accessibleDepartmentIdList($user);
+            if ($allowed !== null && ! in_array((int) $departmentId, $allowed, true)) {
+                abort(403, 'You do not have access to this department.');
+            }
         }
     }
 

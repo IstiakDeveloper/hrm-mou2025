@@ -31,6 +31,7 @@ use App\Models\Zone;
 use App\Services\EmployeeSalaryAssignmentService;
 use App\Services\MisLoanFieldOfficerSyncService;
 use App\Services\OrganogramAccessService;
+use App\Services\OrganogramLineRoleSyncService;
 use App\Services\PayrollCalculationService;
 use App\Support\BranchOrganogram;
 use App\Support\EmployeeExport;
@@ -1865,10 +1866,9 @@ class EmployeeController extends Controller
                 return;
             }
 
-            // Keep it simple: our manager designations are English strings
-            $designationNameLower = strtolower($designationName);
-            $isZonalManager = $designationNameLower === 'zonal manager';
-            $isRegionalManager = $designationNameLower === 'regional manager';
+            $lineRole = BranchOrganogram::lineManagerRoleName($designationName);
+            $isZonalManager = $lineRole === 'Zonal Manager';
+            $isRegionalManager = $lineRole === 'Regional Manager';
 
             if (! $isZonalManager && ! $isRegionalManager) {
                 return;
@@ -1908,35 +1908,7 @@ class EmployeeController extends Controller
      */
     private function designationNameToAdditionalRoleNames(?string $designationName): array
     {
-        if (! is_string($designationName) || trim($designationName) === '') {
-            return [];
-        }
-
-        $n = mb_strtolower(trim($designationName));
-
-        if (str_contains($n, 'executive') && str_contains($n, 'director')) {
-            return ['Executive Director'];
-        }
-        if (str_contains($n, 'assistant') && str_contains($n, 'director')) {
-            return ['Assistant Director (Microfinance)'];
-        }
-        if ((str_contains($n, 'microfinance') && str_contains($n, 'director')) || $n === 'director (microfinance)' || $n === 'director') {
-            return ['Director (Microfinance)'];
-        }
-        if ($n === 'zonal manager') {
-            return ['Zonal Manager'];
-        }
-        if ($n === 'regional manager') {
-            return ['Regional Manager'];
-        }
-        if ($n === 'branch manager') {
-            return ['Branch Manager'];
-        }
-        if ($n === 'department head') {
-            return ['Department Head'];
-        }
-
-        return [];
+        return app(OrganogramLineRoleSyncService::class)->additionalRoleNamesFromDesignation($designationName);
     }
 
     private function buildUsernameBaseFromPin(string $pin): string

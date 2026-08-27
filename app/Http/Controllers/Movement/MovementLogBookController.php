@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Movement;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\PaginatesForInertia;
+use App\Http\Controllers\Movement\Concerns\ResolvesLogBookScopeView;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Employee;
@@ -24,6 +25,7 @@ use Shuchkin\SimpleXLSXGen;
 class MovementLogBookController extends Controller
 {
     use PaginatesForInertia;
+    use ResolvesLogBookScopeView;
 
     // ─── Filter keys ──────────────────────────────────────────────
     private function logBookFilterKeys(): array
@@ -31,7 +33,7 @@ class MovementLogBookController extends Controller
         return [
             'payment_status', 'department_id', 'employee_id', 'zone_id',
             'regional_office_id', 'branch_id', 'from_date', 'to_date',
-            'search', 'per_page', 'page',
+            'search', 'per_page', 'page', 'view',
         ];
     }
 
@@ -43,7 +45,7 @@ class MovementLogBookController extends Controller
     }
 
     // ─── Build query ──────────────────────────────────────────────
-    private function buildLogBookQuery(Request $request, User $user)
+    private function buildLogBookQuery(Request $request, User $user, array $scope)
     {
         $query = MovementLogBook::query()
             ->with([
@@ -57,41 +59,48 @@ class MovementLogBookController extends Controller
             ]);
 
         $this->constrainVisibleLogBooks($query, $user);
-        $this->applyLogBookFilters($query, $request);
+        $this->applyLogBookScopeView($query, $user, $scope['view'], $scope['showTabs']);
+        $this->applyLogBookFilters($query, $request, $scope['view']);
 
         return $query;
     }
 
-    private function applyLogBookFilters($query, Request $request): void
+    private function applyLogBookFilters($query, Request $request, string $view = 'team'): void
     {
         $query
             ->when($request->filled('payment_status') && $request->payment_status !== 'all', function ($q) use ($request) {
                 $q->where('payment_status', $request->payment_status);
-            })
-            ->when($request->filled('department_id') && $request->department_id !== 'all', function ($q) use ($request) {
-                $q->whereHas('employee', fn ($eq) => $eq->where('department_id', $request->department_id));
-            })
-            ->when($request->filled('employee_id') && $request->employee_id !== 'all', function ($q) use ($request) {
-                $q->where('employee_id', $request->employee_id);
-            })
-            ->when($request->filled('branch_id') && $request->branch_id !== 'all', function ($q) use ($request) {
-                $q->whereHas('employee', fn ($eq) => $eq->where('current_branch_id', $request->branch_id));
-            })
-            ->when(
-                $request->filled('regional_office_id') && $request->regional_office_id !== 'all'
-                    && ! ($request->filled('branch_id') && $request->branch_id !== 'all'),
-                function ($q) use ($request) {
-                    $q->whereHas('employee.branch', fn ($eq) => $eq->where('regional_office_id', $request->regional_office_id));
-                }
-            )
-            ->when(
-                $request->filled('zone_id') && $request->zone_id !== 'all'
-                    && ! ($request->filled('branch_id') && $request->branch_id !== 'all')
-                    && ! ($request->filled('regional_office_id') && $request->regional_office_id !== 'all'),
-                function ($q) use ($request) {
-                    $q->whereHas('employee.branch.regionalOffice', fn ($eq) => $eq->where('zone_id', $request->zone_id));
-                }
-            )
+            });
+
+        if ($view !== 'mine') {
+            $query
+                ->when($request->filled('department_id') && $request->department_id !== 'all', function ($q) use ($request) {
+                    $q->whereHas('employee', fn ($eq) => $eq->where('department_id', $request->department_id));
+                })
+                ->when($request->filled('employee_id') && $request->employee_id !== 'all', function ($q) use ($request) {
+                    $q->where('employee_id', $request->employee_id);
+                })
+                ->when($request->filled('branch_id') && $request->branch_id !== 'all', function ($q) use ($request) {
+                    $q->whereHas('employee', fn ($eq) => $eq->where('current_branch_id', $request->branch_id));
+                })
+                ->when(
+                    $request->filled('regional_office_id') && $request->regional_office_id !== 'all'
+                        && ! ($request->filled('branch_id') && $request->branch_id !== 'all'),
+                    function ($q) use ($request) {
+                        $q->whereHas('employee.branch', fn ($eq) => $eq->where('regional_office_id', $request->regional_office_id));
+                    }
+                )
+                ->when(
+                    $request->filled('zone_id') && $request->zone_id !== 'all'
+                        && ! ($request->filled('branch_id') && $request->branch_id !== 'all')
+                        && ! ($request->filled('regional_office_id') && $request->regional_office_id !== 'all'),
+                    function ($q) use ($request) {
+                        $q->whereHas('employee.branch.regionalOffice', fn ($eq) => $eq->where('zone_id', $request->zone_id));
+                    }
+                );
+        }
+
+        $query
             ->when($this->filledFilter($request, 'from_date'), function ($q) use ($request) {
                 $q->whereDate('date', '>=', $request->input('from_date'));
             })
@@ -113,9 +122,13 @@ class MovementLogBookController extends Controller
     }
 
     // ─── Filter summary for print ─────────────────────────────────
-    private function logBookFilterSummary(Request $request): string
+    private function logBookFilterSummary(Request $request, array $scope): string
     {
         $parts = [];
+
+        if ($scope['showTabs'] || $scope['view'] === 'mine') {
+            $parts[] = $scope['view'] === 'mine' ? 'My log book' : 'Team';
+        }
 
         if ($this->filledFilter($request, 'from_date')) {
             $parts[] = 'From ' . $request->input('from_date');
@@ -250,6 +263,28 @@ class MovementLogBookController extends Controller
 
         $employee = $visibleEmployees->first();
 
+        return $this->formatEmployeeSummary($employee);
+    }
+
+    private function viewerEmployeeSummary(User $user): ?array
+    {
+        if (! $user->employee_id) {
+            return null;
+        }
+
+        $employee = Employee::query()
+            ->with([
+                'department:id,name',
+                'designation:id,name',
+                'branch:id,name,branch_code',
+            ])
+            ->find($user->employee_id);
+
+        return $employee ? $this->formatEmployeeSummary($employee) : null;
+    }
+
+    private function formatEmployeeSummary(Employee $employee): array
+    {
         return [
             'id' => $employee->id,
             'name_en' => $employee->name_en,
@@ -284,7 +319,9 @@ class MovementLogBookController extends Controller
             ]);
         }
 
-        $query = $this->buildLogBookQuery($request, $user);
+        $scope = $this->resolveLogBookScopeView($request, $user);
+        $isMine = $scope['view'] === 'mine';
+        $query = $this->buildLogBookQuery($request, $user, $scope);
 
         $summaryQuery = clone $query;
         $summary = [
@@ -303,20 +340,28 @@ class MovementLogBookController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        $orgFilters = $this->getOrganizationFilters($user);
+        $orgFilters = $isMine
+            ? ['zones' => collect(), 'regionalOffices' => collect(), 'branches' => collect()]
+            : $this->getOrganizationFilters($user);
+
+        $singleEmployee = $isMine
+            ? $this->viewerEmployeeSummary($user)
+            : $this->getSingleAccessibleEmployeeSummary($user, $request);
 
         return Inertia::render('movement/log-book/index', [
             'logBooks' => $this->inertiaPagination($logBooks),
             'summary' => $summary,
-            'departments' => $this->getAccessibleDepartments($user),
-            'employees' => $this->getAccessibleEmployees($user),
-            'singleEmployee' => $this->getSingleAccessibleEmployeeSummary($user, $request),
+            'departments' => $isMine ? collect() : $this->getAccessibleDepartments($user),
+            'employees' => $isMine ? collect() : $this->getAccessibleEmployees($user),
+            'singleEmployee' => $singleEmployee,
             'zones' => $orgFilters['zones'],
             'regionalOffices' => $orgFilters['regionalOffices'],
             'branches' => $orgFilters['branches'],
             'filters' => $request->only($this->logBookFilterKeys()),
             'ratePerKm' => (float) config('movement_log_book.rate_per_km', 5),
             'canManageLogBook' => $user->isSuperAdmin(),
+            'scopeView' => $scope['view'],
+            'showScopeTabs' => $scope['showTabs'],
         ]);
     }
 
@@ -326,18 +371,23 @@ class MovementLogBookController extends Controller
         $user = Auth::user();
         abort_unless($user->hasPermission('movements.view'), 403);
 
-        $logBooks = $this->buildLogBookQuery($request, $user)
+        $scope = $this->resolveLogBookScopeView($request, $user);
+        $logBooks = $this->buildLogBookQuery($request, $user, $scope)
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get();
 
+        $singleEmployee = $scope['view'] === 'mine'
+            ? $this->viewerEmployeeSummary($user)
+            : $this->getSingleAccessibleEmployeeSummary($user, $request);
+
         return Inertia::render('movement/log-book/print', [
             'logBooks' => $logBooks,
-            'filterSummary' => $this->logBookFilterSummary($request),
+            'filterSummary' => $this->logBookFilterSummary($request, $scope),
             'generatedAt' => now()->toIso8601String(),
             'companyName' => config('payroll_reports.company_name', config('app.name')),
             'companyAddress' => config('payroll_reports.company_address', ''),
-            'singleEmployee' => $this->getSingleAccessibleEmployeeSummary($user, $request),
+            'singleEmployee' => $singleEmployee,
         ]);
     }
 
@@ -347,7 +397,8 @@ class MovementLogBookController extends Controller
         $user = Auth::user();
         abort_unless($user->hasPermission('movements.view'), 403);
 
-        $logBooks = $this->buildLogBookQuery($request, $user)
+        $scope = $this->resolveLogBookScopeView($request, $user);
+        $logBooks = $this->buildLogBookQuery($request, $user, $scope)
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get();

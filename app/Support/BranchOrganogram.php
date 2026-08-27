@@ -42,6 +42,18 @@ final class BranchOrganogram
         return self::fallbackTier();
     }
 
+    /**
+     * Map a designation title to the Branch / Regional / Zonal Manager app role, or null.
+     */
+    public static function lineManagerRoleName(?string $designationName): ?string
+    {
+        $label = self::resolveTier($designationName)['label'] ?? '';
+
+        return in_array($label, ['Zonal Manager', 'Regional Manager', 'Branch Manager'], true)
+            ? $label
+            : null;
+    }
+
     public static function designationTierOrderSql(string $designationColumn = 'designations.name'): string
     {
         $normalized = self::sqlNormalizedDesignationExpr($designationColumn);

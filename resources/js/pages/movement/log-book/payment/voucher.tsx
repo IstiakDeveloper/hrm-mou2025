@@ -22,10 +22,14 @@ interface Payment {
     period_month: number;
     rate_per_km: string | number;
     total_amount: string | number;
+    status?: 'pending' | 'recommended' | 'approved' | 'rejected';
+    needs_recommendation?: boolean;
     employee: Employee;
     approver?: { name: string } | null;
+    recommender?: { name: string } | null;
     processor?: { name: string } | null;
     approved_at?: string | null;
+    recommended_at?: string | null;
     processed_at?: string | null;
 }
 
@@ -38,15 +42,24 @@ interface KmSummary {
 
 type Props = {
     payment: Payment;
+    displayVoucherNo?: string;
     kmSummary: KmSummary;
     companyName?: string;
     companyAddress?: string;
     generatedAt: string;
 };
 
-export default function LogBookPaymentVoucher({ payment, kmSummary, companyName, companyAddress, generatedAt }: Props) {
+export default function LogBookPaymentVoucher({ payment, displayVoucherNo, kmSummary, companyName, companyAddress, generatedAt }: Props) {
     const monthLabel = format(new Date(payment.period_year, payment.period_month - 1, 1), 'MMMM yyyy');
-    const approvedDate = payment.approved_at ? format(new Date(payment.approved_at), 'dd MMM yyyy') : '';
+    const isPending = payment.status === 'pending';
+    const isRecommended = payment.status === 'recommended';
+    const stampLabel = isPending ? 'PENDING' : isRecommended ? 'RECOMMENDED' : 'APPROVED';
+    const stampDate = isPending
+        ? (payment.processed_at ? format(new Date(payment.processed_at), 'dd MMM yyyy') : '')
+        : isRecommended
+            ? (payment.recommended_at ? format(new Date(payment.recommended_at), 'dd MMM yyyy') : (payment.processed_at ? format(new Date(payment.processed_at), 'dd MMM yyyy') : ''))
+            : (payment.approved_at ? format(new Date(payment.approved_at), 'dd MMM yyyy') : '');
+    const voucherNo = displayVoucherNo || payment.voucher_no || '—';
 
     useEffect(() => {
         const tryPrint = () => {
@@ -63,7 +76,7 @@ export default function LogBookPaymentVoucher({ payment, kmSummary, companyName,
 
     return (
         <>
-            <Head title={`Voucher ${payment.voucher_no}`} />
+            <Head title={`${isPending ? 'Pending Voucher' : isRecommended ? 'Recommended Voucher' : 'Voucher'} ${voucherNo}`} />
 
             <style>{`
                 @page { size: A4 portrait; margin: 12mm; }
@@ -98,6 +111,8 @@ export default function LogBookPaymentVoucher({ payment, kmSummary, companyName,
                     z-index: 0;
                     white-space: nowrap;
                 }
+                .voucher-page.is-pending .approved-bg-text { color: #d97706; opacity: 0.07; }
+                .voucher-page.is-recommended .approved-bg-text { color: #0284c7; opacity: 0.07; }
 
                 /* Corner stamp — clear of main data */
                 .approved-stamp {
@@ -122,6 +137,16 @@ export default function LogBookPaymentVoucher({ payment, kmSummary, companyName,
                     box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.35);
                     text-align: center;
                     line-height: 1.1;
+                }
+                .voucher-page.is-pending .approved-stamp-inner {
+                    border-color: #d97706;
+                    color: #d97706;
+                    box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.35);
+                }
+                .voucher-page.is-recommended .approved-stamp-inner {
+                    border-color: #0284c7;
+                    color: #0284c7;
+                    box-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.35);
                 }
                 .approved-stamp-inner .mark { font-size: 18px; font-weight: 700; }
                 .approved-stamp-inner .label {
@@ -214,14 +239,14 @@ export default function LogBookPaymentVoucher({ payment, kmSummary, companyName,
             </div>
 
             <div data-print-root className="mx-auto max-w-[210mm] px-4 py-4 print:max-w-none print:px-0">
-                <div className="voucher-page rounded-lg border border-slate-200 p-6 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none">
-                    <div className="approved-bg-text" aria-hidden>APPROVED</div>
+                <div className={`voucher-page rounded-lg border border-slate-200 p-6 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none${isPending ? ' is-pending' : ''}${isRecommended ? ' is-recommended' : ''}`}>
+                    <div className="approved-bg-text" aria-hidden>{stampLabel}</div>
 
                     <div className="approved-stamp" aria-hidden>
                         <div className="approved-stamp-inner">
-                            <span className="mark">✓</span>
-                            <span className="label">APPROVED</span>
-                            {approvedDate && <span className="date">{approvedDate}</span>}
+                            <span className="mark">{isPending ? '…' : isRecommended ? '✓' : '✓'}</span>
+                            <span className="label">{stampLabel}</span>
+                            {stampDate && <span className="date">{stampDate}</span>}
                         </div>
                     </div>
 
@@ -229,13 +254,15 @@ export default function LogBookPaymentVoucher({ payment, kmSummary, companyName,
                         <PayrollReportDocumentHeader
                             companyName={companyName}
                             companyAddress={companyAddress}
-                            title="Log Book Payment Voucher"
+                            title={isPending ? 'Log Book Payment Voucher (Pending)' : isRecommended ? 'Log Book Payment Voucher (Recommended)' : 'Log Book Payment Voucher'}
                         />
 
                         <div className="mb-4 flex items-center justify-between border-b border-slate-300 pb-2">
                             <div>
                                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Voucher No</p>
-                                <p className="font-mono text-sm font-bold text-slate-900">{payment.voucher_no}</p>
+                                <p className="font-mono text-sm font-bold text-slate-900">{voucherNo}</p>
+                                {isPending && <p className="text-[10px] text-amber-700">Draft — assigned on approval</p>}
+                                {isRecommended && <p className="text-[10px] text-sky-700">Recommended — assigned on approval</p>}
                             </div>
                             <div className="text-right">
                                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Payment Month</p>
@@ -306,7 +333,7 @@ export default function LogBookPaymentVoucher({ payment, kmSummary, companyName,
                             </div>
                         </div>
 
-                        <div className="mt-12 grid grid-cols-2 gap-12 text-sm">
+                        <div className="mt-12 grid grid-cols-3 gap-8 text-sm">
                             <div>
                                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Processed by</p>
                                 <div className="mt-12 border-t border-slate-400 pt-1">
@@ -317,9 +344,23 @@ export default function LogBookPaymentVoucher({ payment, kmSummary, companyName,
                                 </div>
                             </div>
                             <div>
+                                <p className="text-[10px] uppercase tracking-wide text-slate-500">Recommended by</p>
+                                <div className="mt-12 border-t border-slate-400 pt-1">
+                                    <p className="font-medium text-slate-900">
+                                        {payment.recommender?.name
+                                            || (payment.needs_recommendation === false ? 'Not required' : (isPending ? 'Awaiting recommendation' : '—'))}
+                                    </p>
+                                    {payment.recommended_at && (
+                                        <p className="text-xs text-slate-500">{format(new Date(payment.recommended_at), 'dd MMM yyyy')}</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div>
                                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Approved by</p>
                                 <div className="mt-12 border-t border-slate-400 pt-1">
-                                    <p className="font-medium text-slate-900">{payment.approver?.name || '—'}</p>
+                                    <p className="font-medium text-slate-900">
+                                        {payment.status === 'approved' ? (payment.approver?.name || '—') : 'Awaiting approval'}
+                                    </p>
                                     {payment.approved_at && (
                                         <p className="text-xs text-slate-500">{format(new Date(payment.approved_at), 'dd MMM yyyy')}</p>
                                     )}
