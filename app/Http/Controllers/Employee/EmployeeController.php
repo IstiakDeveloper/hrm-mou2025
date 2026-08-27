@@ -1902,13 +1902,13 @@ class EmployeeController extends Controller
     }
 
     /**
-     * Map designation title (English, case-insensitive) to optional app role names (see DatabaseSeeder).
+     * Map designation + HO department-head assignment to optional app role names.
      *
      * @return list<string>
      */
-    private function designationNameToAdditionalRoleNames(?string $designationName): array
+    private function additionalRoleNamesForEmployee(Employee $employee): array
     {
-        return app(OrganogramLineRoleSyncService::class)->additionalRoleNamesFromDesignation($designationName);
+        return app(OrganogramLineRoleSyncService::class)->additionalRoleNamesForEmployee($employee);
     }
 
     private function buildUsernameBaseFromPin(string $pin): string
@@ -1978,7 +1978,7 @@ class EmployeeController extends Controller
             return;
         }
 
-        $extraNames = $this->designationNameToAdditionalRoleNames($employee->designation?->name);
+        $extraNames = $this->additionalRoleNamesForEmployee($employee);
         $roleIds = [$employeeRole->id];
         foreach ($extraNames as $roleName) {
             $r = Role::query()->where('name', $roleName)->first();

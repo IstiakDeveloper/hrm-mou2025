@@ -65,7 +65,7 @@ class RoleController extends Controller
 
         return redirect()->route('admin.roles.index')
             ->with('success', sprintf(
-                'Assigned line roles for %d user(s). Unchanged: %d. Skipped: %d.',
+                'Synced line roles for %d user(s). Unchanged: %d. Skipped: %d.',
                 $stats['updated'],
                 $stats['unchanged'],
                 $stats['skipped']

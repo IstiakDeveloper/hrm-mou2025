@@ -61,6 +61,21 @@ class OrganogramAccessService
             ->all();
     }
 
+    /**
+     * Departments this head-office employee is assigned to head.
+     * Used before microfinance line-role scope so Program/other HO heads are not widened to all branches.
+     *
+     * @return list<int>
+     */
+    public static function headOfficeHeadedDepartmentIds(User $user): array
+    {
+        if (! self::isHeadOfficeUser($user)) {
+            return [];
+        }
+
+        return self::headedDepartmentIdsForUser($user);
+    }
+
     /** User has Department Head permission and works at head office. */
     public static function isHeadOfficeDepartmentHead(User $user): bool
     {
@@ -475,6 +490,15 @@ class OrganogramAccessService
             return;
         }
 
+        // HO department-head assignment wins over a wrongly attached MF line role
+        // (e.g. "Deputy Assistant Director (Program)" must not see all branch MF staff).
+        $headDeptIds = self::headOfficeHeadedDepartmentIds($user);
+        if ($headDeptIds !== []) {
+            $query->whereIn($col('department_id'), $headDeptIds);
+
+            return;
+        }
+
         if (in_array('Director (Microfinance)', $roleNames, true) || in_array('Assistant Director (Microfinance)', $roleNames, true)) {
             $ids = self::microfinanceDepartmentIds();
             if ($ids->isEmpty()) {
@@ -519,15 +543,6 @@ class OrganogramAccessService
             }
 
             return;
-        }
-
-        if (self::isHeadOfficeUser($user) && $eid) {
-            $headDeptIds = self::headedDepartmentIdsForUser($user);
-            if ($headDeptIds !== []) {
-                $query->whereIn($col('department_id'), $headDeptIds);
-
-                return;
-            }
         }
 
         if (in_array('Team Leader', $roleNames, true) && $user->employee?->department_id) {
@@ -601,6 +616,18 @@ class OrganogramAccessService
         $roleNames = self::mergedRoleNames($user);
         $eid = $user->employee_id;
 
+        $headDeptIds = self::headOfficeHeadedDepartmentIds($user);
+        if ($headDeptIds !== []) {
+            return Employee::query()
+                ->whereIn('department_id', $headDeptIds)
+                ->distinct()
+                ->pluck('current_branch_id')
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+        }
+
         if (in_array('Director (Microfinance)', $roleNames, true) || in_array('Assistant Director (Microfinance)', $roleNames, true)) {
             return null;
         }
@@ -617,20 +644,6 @@ class OrganogramAccessService
 
         if (self::isRegionalManager($user)) {
             return self::regionalManagerBranchIds($user);
-        }
-
-        if (self::isHeadOfficeUser($user) && $eid) {
-            $headDeptIds = self::headedDepartmentIdsForUser($user);
-            if ($headDeptIds !== []) {
-                return Employee::query()
-                    ->whereIn('department_id', $headDeptIds)
-                    ->distinct()
-                    ->pluck('current_branch_id')
-                    ->filter()
-                    ->map(fn ($id) => (int) $id)
-                    ->values()
-                    ->all();
-            }
         }
 
         $deptHeadScope = self::departmentIdsForDepartmentHeadScope($user);
@@ -701,6 +714,11 @@ class OrganogramAccessService
         $roleNames = self::mergedRoleNames($user);
         $eid = $user->employee_id;
 
+        $headDeptIds = self::headOfficeHeadedDepartmentIds($user);
+        if ($headDeptIds !== []) {
+            return $headDeptIds;
+        }
+
         if (in_array('Director (Microfinance)', $roleNames, true) || in_array('Assistant Director (Microfinance)', $roleNames, true)) {
             return self::microfinanceDepartmentIds()->map(fn ($id) => (int) $id)->values()->all();
         }
@@ -735,13 +753,6 @@ class OrganogramAccessService
                 ->map(fn ($id) => (int) $id)
                 ->values()
                 ->all();
-        }
-
-        if (self::isHeadOfficeUser($user) && $eid) {
-            $headDeptIds = self::headedDepartmentIdsForUser($user);
-            if ($headDeptIds !== []) {
-                return $headDeptIds;
-            }
         }
 
         if (in_array('Team Leader', $roleNames, true) && $user->employee?->department_id) {

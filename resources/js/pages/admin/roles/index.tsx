@@ -132,7 +132,7 @@ export default function RolesIndex({ roles, filters, success, can_sync_defaults 
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Role Management</h1>
             <p className="mt-1 text-gray-500">
-              Assign Line Roles gives BM / RM / ZM from designation. Sync Default Roles refreshes permissions only.
+              Assign Line Roles syncs BM / RM / ZM, Head Office department heads, and removes wrongly mapped Microfinance Director / AD roles. Sync Default Roles refreshes permissions only.
             </p>
           </div>
           <div className="flex items-center gap-2">

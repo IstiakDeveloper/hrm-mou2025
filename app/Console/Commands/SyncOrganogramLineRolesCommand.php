@@ -7,9 +7,9 @@ use Illuminate\Console\Command;
 
 class SyncOrganogramLineRolesCommand extends Command
 {
-    protected $signature = 'organogram:sync-line-roles {--dry-run : Show missing BM/RM/ZM roles without assigning}';
+    protected $signature = 'organogram:sync-line-roles {--dry-run : Show role attach/detach without saving}';
 
-    protected $description = 'Assign Branch Manager, Regional Manager, and Zonal Manager roles from designation (and zone/RO assignment) when missing';
+    protected $description = 'Sync organogram roles: assign BM/RM/ZM and HO Department Head from assignment; remove wrongly mapped Microfinance Director/AD roles';
 
     public function handle(OrganogramLineRoleSyncService $service): int
     {
@@ -40,7 +40,7 @@ class SyncOrganogramLineRolesCommand extends Command
         ));
 
         if ($dryRun && $stats['updated'] > 0) {
-            $this->comment('Run without --dry-run to assign the roles.');
+            $this->comment('Run without --dry-run to apply the role changes.');
         }
 
         return self::SUCCESS;

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\RegionalOffice;
 use App\Models\Role;
@@ -11,18 +12,31 @@ use App\Support\BranchOrganogram;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Attach missing Branch / Regional / Zonal Manager roles from designation
- * and zone/RO manager assignment. Never removes existing roles.
+ * Attach missing organogram roles from designation / assignment.
+ * Branch Manager / Regional Manager / Zonal Manager are attach-only.
+ * Wrongly mapped Microfinance Director / AD roles are removed.
  */
 class OrganogramLineRoleSyncService
 {
     public const EMPLOYEE_ROLE = 'Employee';
+
+    public const DEPARTMENT_HEAD_ROLE = 'Department Head';
 
     /** @var list<string> */
     public const LINE_ROLE_NAMES = [
         'Zonal Manager',
         'Regional Manager',
         'Branch Manager',
+    ];
+
+    /**
+     * Roles this sync may remove when designation no longer matches.
+     *
+     * @var list<string>
+     */
+    public const CORRECTABLE_MICROFINANCE_ROLES = [
+        'Director (Microfinance)',
+        'Assistant Director (Microfinance)',
     ];
 
     /**
@@ -37,14 +51,21 @@ class OrganogramLineRoleSyncService
         }
 
         $n = mb_strtolower(trim($designationName));
+        $isMf = $this->designationIsMicrofinanceLine($n);
+        $isAssistantDirector = str_contains($n, 'assistant director')
+            || (str_contains($n, 'assistant') && str_contains($n, 'director'));
+        $isDeputyAssistant = str_contains($n, 'deputy assistant');
+        $isPlainAssistantDirector = $this->designationIsPlainAssistantDirector($n);
 
-        if (str_contains($n, 'executive') && str_contains($n, 'director')) {
+        if (str_contains($n, 'executive') && str_contains($n, 'director') && ! str_contains($n, 'deputy executive')) {
             return ['Executive Director'];
         }
-        if (str_contains($n, 'assistant') && str_contains($n, 'director')) {
+        // Org title is often just "Assistant Director" (PIN 0098). Do not treat
+        // "Deputy Assistant Director (Program)" as Microfinance AD.
+        if ($isAssistantDirector && ! $isDeputyAssistant && ($isMf || $isPlainAssistantDirector)) {
             return ['Assistant Director (Microfinance)'];
         }
-        if ((str_contains($n, 'microfinance') && str_contains($n, 'director')) || $n === 'director (microfinance)' || $n === 'director') {
+        if (str_contains($n, 'director') && $isMf && ! $isAssistantDirector) {
             return ['Director (Microfinance)'];
         }
 
@@ -58,6 +79,44 @@ class OrganogramLineRoleSyncService
         }
 
         return [];
+    }
+
+    /**
+     * Designation roles plus Department Head when this HO employee is assigned as a department head.
+     *
+     * @return list<string>
+     */
+    public function additionalRoleNamesForEmployee(Employee $employee): array
+    {
+        $employee->loadMissing(['designation', 'department', 'currentBranch', 'branch']);
+
+        $names = $this->additionalRoleNamesFromDesignation($employee->designation?->name);
+        $branch = $employee->currentBranch ?? $employee->branch;
+        if ($branch && $branch->is_head_office && Department::query()->where('head_employee_id', $employee->id)->exists()) {
+            $names[] = 'Department Head';
+        }
+
+        $desig = mb_strtolower(trim((string) $employee->designation?->name));
+        $dept = mb_strtolower(trim((string) $employee->department?->name));
+        $isDeputyAssistant = str_contains($desig, 'deputy assistant');
+        $isAssistantDirector = str_contains($desig, 'assistant director')
+            || (str_contains($desig, 'assistant') && str_contains($desig, 'director'));
+        if (! $isDeputyAssistant && $isAssistantDirector && str_contains($dept, 'microfinance')) {
+            $names[] = 'Assistant Director (Microfinance)';
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    private function designationIsMicrofinanceLine(string $normalized): bool
+    {
+        return str_contains($normalized, 'microfinance')
+            || (bool) preg_match('/(^|[^a-z0-9])mf([^a-z0-9]|$)/u', $normalized);
+    }
+
+    private function designationIsPlainAssistantDirector(string $normalized): bool
+    {
+        return (bool) preg_match('/^assistant director([ -]*\d+)?$/u', $normalized);
     }
 
     /**
@@ -128,44 +187,58 @@ class OrganogramLineRoleSyncService
             return $empty;
         }
 
-        $wanted = $this->roleNamesForEmployee($employee, $zoneManagerEmployeeIds, $regionalManagerEmployeeIds);
-        if ($wanted === []) {
+        $wantedLine = $this->roleNamesForEmployee($employee, $zoneManagerEmployeeIds, $regionalManagerEmployeeIds);
+        $wantedHo = array_values(array_diff(
+            $this->additionalRoleNamesForEmployee($employee),
+            self::LINE_ROLE_NAMES,
+        ));
+        $wanted = array_values(array_unique(array_merge($wantedLine, $wantedHo)));
+
+        $roleIdsByName ??= $this->managedRoleIdsByName();
+
+        $user->loadMissing(['roles', 'role']);
+        $pivotNames = $user->roles->pluck('name')->all();
+        $toAttach = array_values(array_diff($wanted, $pivotNames));
+        $toDetach = $this->microfinanceRolesToDetach($wantedHo, $pivotNames);
+
+        if ($wanted === [] && $toDetach === []) {
             $empty['skipped'] = 'no_line_role';
 
             return $empty;
         }
 
-        $roleIdsByName ??= Role::query()
-            ->whereIn('name', array_merge(self::LINE_ROLE_NAMES, [self::EMPLOYEE_ROLE]))
-            ->pluck('id', 'name')
-            ->all();
-
-        $user->loadMissing(['roles', 'role']);
-        $pivotNames = $user->roles->pluck('name')->all();
-        $lineOnPivot = array_values(array_intersect($pivotNames, self::LINE_ROLE_NAMES));
-
-        $toAttach = array_values(array_diff($wanted, $lineOnPivot));
-
         $primaryName = $user->role?->name;
-        $newPrimary = $wanted[0];
-        $primaryChanges = $this->shouldRetargetPrimaryRole($primaryName) && $primaryName !== $newPrimary;
+        $newPrimary = null;
+        $primaryChanges = false;
+        if ($primaryName && in_array($primaryName, $toDetach, true)) {
+            $newPrimary = $wantedLine[0] ?? self::EMPLOYEE_ROLE;
+            $primaryChanges = $primaryName !== $newPrimary;
+        } elseif ($wantedLine !== [] && $this->shouldRetargetPrimaryRole($primaryName) && $primaryName !== $wantedLine[0]) {
+            $newPrimary = $wantedLine[0];
+            $primaryChanges = true;
+        } elseif ($this->shouldRetargetPrimaryRole($primaryName)) {
+            foreach (self::CORRECTABLE_MICROFINANCE_ROLES as $mfRole) {
+                if (in_array($mfRole, $toAttach, true)) {
+                    $newPrimary = $mfRole;
+                    $primaryChanges = true;
+                    break;
+                }
+            }
+        }
 
-        if ($toAttach === [] && ! $primaryChanges) {
+        if ($toAttach === [] && $toDetach === [] && ! $primaryChanges) {
             return $empty;
         }
 
         if (! $dryRun) {
-            $attachIds = [];
-            foreach ($toAttach as $name) {
-                if (! isset($roleIdsByName[$name])) {
-                    Log::warning('Organogram line role missing in roles table', ['role_name' => $name, 'user_id' => $user->id]);
-
-                    continue;
-                }
-                $attachIds[] = (int) $roleIdsByName[$name];
-            }
+            $attachIds = $this->roleIdsForNames($toAttach, $roleIdsByName, $user->id);
             if ($attachIds !== []) {
                 $user->roles()->syncWithoutDetaching($attachIds);
+            }
+
+            $detachIds = $this->roleIdsForNames($toDetach, $roleIdsByName, $user->id);
+            if ($detachIds !== []) {
+                $user->roles()->detach($detachIds);
             }
 
             if ($primaryChanges && isset($roleIdsByName[$newPrimary])) {
@@ -176,7 +249,7 @@ class OrganogramLineRoleSyncService
 
         return [
             'attached' => $toAttach,
-            'detached' => [],
+            'detached' => $toDetach,
             'primary' => $primaryChanges ? $newPrimary : null,
             'skipped' => null,
         ];
@@ -197,10 +270,7 @@ class OrganogramLineRoleSyncService
             ->pluck('regional_manager_employee_id')
             ->map(fn ($id) => (int) $id)
             ->all();
-        $roleIdsByName = Role::query()
-            ->whereIn('name', array_merge(self::LINE_ROLE_NAMES, [self::EMPLOYEE_ROLE]))
-            ->pluck('id', 'name')
-            ->all();
+        $roleIdsByName = $this->managedRoleIdsByName();
 
         $updated = 0;
         $unchanged = 0;
@@ -212,7 +282,7 @@ class OrganogramLineRoleSyncService
             ->where(function ($query) {
                 $query->whereNull('account_type')->orWhere('account_type', '!=', 'branch');
             })
-            ->with(['employee.designation', 'role', 'roles'])
+            ->with(['employee.designation', 'employee.department', 'employee.currentBranch', 'employee.branch', 'role', 'roles'])
             ->orderBy('id')
             ->chunkById(100, function ($users) use (
                 $dryRun,
@@ -270,6 +340,53 @@ class OrganogramLineRoleSyncService
             'skipped' => $skipped,
             'changes' => $changes,
         ];
+    }
+
+    /**
+     * @param  list<string>  $wantedHoRoles
+     * @param  list<string>  $currentRoleNames
+     * @return list<string>
+     */
+    public function microfinanceRolesToDetach(array $wantedHoRoles, array $currentRoleNames): array
+    {
+        $held = array_values(array_intersect($currentRoleNames, self::CORRECTABLE_MICROFINANCE_ROLES));
+
+        return array_values(array_diff($held, $wantedHoRoles));
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function managedRoleIdsByName(): array
+    {
+        return Role::query()
+            ->whereIn('name', array_merge(
+                self::LINE_ROLE_NAMES,
+                self::CORRECTABLE_MICROFINANCE_ROLES,
+                [self::EMPLOYEE_ROLE, self::DEPARTMENT_HEAD_ROLE, 'Executive Director'],
+            ))
+            ->pluck('id', 'name')
+            ->all();
+    }
+
+    /**
+     * @param  list<string>  $names
+     * @param  array<string, int>  $roleIdsByName
+     * @return list<int>
+     */
+    private function roleIdsForNames(array $names, array $roleIdsByName, int $userId): array
+    {
+        $ids = [];
+        foreach ($names as $name) {
+            if (! isset($roleIdsByName[$name])) {
+                Log::warning('Organogram line role missing in roles table', ['role_name' => $name, 'user_id' => $userId]);
+
+                continue;
+            }
+            $ids[] = (int) $roleIdsByName[$name];
+        }
+
+        return $ids;
     }
 
     private function employeeShouldHoldLineRoles(Employee $employee): bool
