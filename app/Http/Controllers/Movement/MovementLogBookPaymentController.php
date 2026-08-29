@@ -103,12 +103,15 @@ class MovementLogBookPaymentController extends Controller
             $payment->setAttribute('next_action_label', $this->workflow->nextActionLabel($payment));
         }
 
+        $userLimitInfo = $user->employee ? $this->workflow->resolveKmLimit($user->employee) : null;
+
         return Inertia::render('movement/log-book/payment/index', [
             'payments' => $this->inertiaPagination($payments),
             'summary' => $summary,
             'filters' => $request->only(['status', 'period_year', 'period_month', 'search', 'per_page', 'view']),
             'ratePerKm' => $this->ratePerKm(),
             'canProcess' => $this->userCanProcessPayments($user),
+            'userLimitInfo' => $userLimitInfo,
             'canDelete' => $user->isSuperAdmin(),
             'scopeView' => $scope['view'],
             'showScopeTabs' => $scope['showTabs'],
@@ -170,6 +173,12 @@ class MovementLogBookPaymentController extends Controller
             abort_unless(OrganogramAccessService::userCanSeeEmployee($user, $employeeId), 403);
         }
 
+        $employee = Employee::with(['branch.regionalOffice', 'designation'])->findOrFail($employeeId);
+        $limitInfo = $this->workflow->resolveKmLimit($employee);
+        if (! $limitInfo['eligible']) {
+            return redirect()->back()->with('error', $limitInfo['ineligible_reason'] ?? 'This employee is not eligible for monthly log book payment processing.');
+        }
+
         if (MovementLogBookPayment::where('employee_id', $employeeId)
             ->where('period_year', $year)
             ->where('period_month', $month)
@@ -193,12 +202,13 @@ class MovementLogBookPaymentController extends Controller
             return redirect()->back()->with('error', 'No unpaid log book entries found up to the selected month.');
         }
 
-        $employee = Employee::with(['branch', 'designation'])->findOrFail($employeeId);
         $isHeadOffice = (bool) ($employee->branch?->is_head_office);
         $tier = $this->workflow->resolveSubmitterTier($employee);
         $totalOfficialKm = round((float) $entries->sum('official_km'), 2);
+        $kmLimit = $limitInfo['km_limit'];
+        $billedOfficialKm = $this->workflow->calculateBilledKm($totalOfficialKm, $kmLimit);
         $rate = $this->ratePerKm();
-        $totalAmount = round($totalOfficialKm * $rate, 2);
+        $totalAmount = round($billedOfficialKm * $rate, 2);
 
         DB::beginTransaction();
         try {
@@ -207,6 +217,8 @@ class MovementLogBookPaymentController extends Controller
                 'period_year' => $year,
                 'period_month' => $month,
                 'total_official_km' => $totalOfficialKm,
+                'km_limit' => $kmLimit,
+                'billed_official_km' => $billedOfficialKm,
                 'rate_per_km' => $rate,
                 'total_amount' => $totalAmount,
                 'entry_count' => $entries->count(),
@@ -426,6 +438,20 @@ class MovementLogBookPaymentController extends Controller
 
     private function userCanProcessPayments(User $user): bool
     {
-        return $user->hasPermission('movements.view') && ($user->employee_id || $user->hasPermission('movements.edit') || $user->hasPermission('employees.admin'));
+        if (! $user->hasPermission('movements.view')) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin() || $user->hasPermission('movements.edit') || $user->hasPermission('employees.admin')) {
+            return true;
+        }
+
+        if ($user->employee) {
+            $limitInfo = $this->workflow->resolveKmLimit($user->employee);
+
+            return $limitInfo['eligible'];
+        }
+
+        return false;
     }
 }

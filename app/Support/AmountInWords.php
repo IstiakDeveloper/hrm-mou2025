@@ -22,13 +22,15 @@ class AmountInWords
             return 'Zero Taka Only';
         }
 
-        return trim(self::convert($n)).' Taka Only';
+        $prefix = $n < 0 ? 'Minus ' : '';
+
+        return $prefix.trim(self::convert(abs($n))).' Taka Only';
     }
 
     private static function convert(int $n): string
     {
         if ($n < 20) {
-            return self::ONES[$n];
+            return self::ONES[$n] ?? '';
         }
 
         if ($n < 100) {

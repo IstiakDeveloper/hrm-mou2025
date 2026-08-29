@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useEffect, useMemo } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
@@ -64,9 +64,24 @@ interface EditMovementProps {
   isAdmin: boolean;
   movementTypes: string[];
   returnFilters?: Record<string, string>;
+  weekendDays?: number[];
+  weekendDaysByEmployee?: Record<number, number[]>;
 }
 
-export default function EditMovement({ movement, employees, isAdmin, movementTypes, returnFilters = {} }: EditMovementProps) {
+function isWeekendDate(date: Date | undefined, weekendDays: number[]): boolean {
+  if (!date || weekendDays.length === 0) return false;
+  return weekendDays.includes(date.getDay());
+}
+
+export default function EditMovement({
+  movement,
+  employees,
+  isAdmin,
+  movementTypes,
+  returnFilters = {},
+  weekendDays = [5, 6],
+  weekendDaysByEmployee = {},
+}: EditMovementProps) {
   const fromDateTime = new Date(movement.from_datetime);
   const toDateTime = new Date(movement.to_datetime);
 
@@ -96,6 +111,26 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
   const [toDateOpen, setToDateOpen] = useState(false);
   const [actualReturnLocal, setActualReturnLocal] = useState(initialActualReturnLocal);
   const showReturnEditor = movement.status === 'completed' && isAdmin;
+
+  const resolvedWeekendDays = useMemo(() => {
+    const id = Number(employeeId);
+    const byEmployee = id ? weekendDaysByEmployee[id] : undefined;
+    if (byEmployee && byEmployee.length > 0) {
+      return byEmployee;
+    }
+    return weekendDays.length > 0 ? weekendDays : [5, 6];
+  }, [employeeId, weekendDays, weekendDaysByEmployee]);
+
+  const isWeekendMovement = useMemo(
+    () => isWeekendDate(fromDate, resolvedWeekendDays),
+    [fromDate, resolvedWeekendDays],
+  );
+
+  useEffect(() => {
+    if (isWeekendMovement && movementType !== 'personal') {
+      setMovementType('personal');
+    }
+  }, [isWeekendMovement, movementType]);
 
   // Get combined datetime objects
   const getFromDateTime = () => {
@@ -179,7 +214,7 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
 
     const payload: Record<string, string | undefined> = {
       employee_id: isAdmin ? employeeId : undefined,
-      movement_type: movementType,
+      movement_type: isWeekendMovement ? 'personal' : movementType,
       from_datetime: fromDateTime ? formatISO(fromDateTime) : '',
       to_datetime: toDateTime ? formatISO(toDateTime) : '',
       purpose,
@@ -258,6 +293,7 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
                     <Select
                       value={movementType}
                       onValueChange={setMovementType}
+                      disabled={isWeekendMovement}
                     >
                       <SelectTrigger id="movementType">
                         <SelectValue placeholder="Select Movement Type" />
@@ -270,6 +306,11 @@ export default function EditMovement({ movement, employees, isAdmin, movementTyp
                         ))}
                       </SelectContent>
                     </Select>
+                    {isWeekendMovement && (
+                      <p className="text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded-md px-3 py-2">
+                        Weekend day: type is locked to Personal for log book only. Attendance is not affected.
+                      </p>
+                    )}
                     {errors.movement_type && (
                       <p className="text-sm font-medium text-red-500">{errors.movement_type}</p>
                     )}

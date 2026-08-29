@@ -28,6 +28,8 @@ interface Payment {
     period_year: number;
     period_month: number;
     total_official_km: string | number;
+    km_limit?: string | number | null;
+    billed_official_km?: string | number | null;
     rate_per_km: string | number;
     total_amount: string | number;
     entry_count: number;
@@ -47,6 +49,7 @@ interface Props {
     filters: Record<string, string | undefined>;
     ratePerKm: number;
     canProcess: boolean;
+    userLimitInfo?: { eligible: boolean; km_limit: number | null; role_label: string; ineligible_reason: string | null } | null;
     canDelete?: boolean;
     scopeView?: 'mine' | 'team';
     showScopeTabs?: boolean;
@@ -72,7 +75,7 @@ function monthLabel(year: number, month: number) {
     return format(new Date(year, month - 1, 1), 'MMMM yyyy');
 }
 
-export default function LogBookPaymentIndex({ payments, summary, filters, ratePerKm, canProcess, scopeView = 'team', showScopeTabs = false }: Props) {
+export default function LogBookPaymentIndex({ payments, summary, filters, ratePerKm, canProcess, userLimitInfo, scopeView = 'team', showScopeTabs = false }: Props) {
     const { flash } = usePage<{ flash?: { success?: string; error?: string } }>().props;
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || '');
@@ -142,11 +145,16 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                             <h1 className="text-base font-bold text-gray-900 sm:text-xl md:text-2xl">Log Book Payment</h1>
                             <p className="text-xs text-slate-500">
                                 {showScopeTabs && scopeView === 'mine'
-                                    ? `Process your month: unpaid carry-forward × ৳${ratePerKm}/km`
+                                    ? `Process your month: unpaid carry-forward × ৳${ratePerKm}/km${userLimitInfo?.km_limit ? ` (Limit: ${userLimitInfo.km_limit} KM)` : userLimitInfo?.eligible ? ' (No limit)' : ''}`
                                     : showScopeTabs
                                         ? 'Team: Recommend pending payments, then Approve recommended ones'
                                         : `Process a month: all unpaid carry-forward × ৳${ratePerKm}/km`}
                             </p>
+                            {userLimitInfo && !userLimitInfo.eligible && (
+                                <p className="mt-1 text-xs text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block">
+                                    {userLimitInfo.ineligible_reason || 'Officer-level and field staff are not eligible for monthly log book payment.'}
+                                </p>
+                            )}
                         </div>
                         {showProcess && (
                             <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center">
@@ -242,7 +250,10 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                                             </div>
                                             <div>
                                                 <span className="text-[9px] uppercase font-bold text-slate-400 block">Official KM</span>
-                                                <span className="text-slate-800 font-semibold text-[11px]">{formatSmartKm(row.total_official_km)}</span>
+                                                <span className="text-slate-800 font-semibold text-[11px] block">{formatSmartKm(row.total_official_km)}</span>
+                                                {row.billed_official_km != null && Number(row.billed_official_km) < Number(row.total_official_km) && (
+                                                    <span className="text-[9px] font-bold text-amber-600 block">Billed: {formatSmartKm(row.billed_official_km)}</span>
+                                                )}
                                             </div>
                                             <div>
                                                 <span className="text-[9px] uppercase font-bold text-slate-400 block">Amount</span>
@@ -315,7 +326,15 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                                                 <div className="font-medium text-xs text-slate-800">{employeeDisplayName(row.employee)}</div>
                                                 <div className="text-[11px] text-slate-500">{row.employee.branch?.name || '—'} · {row.entry_count} entries</div>
                                             </TableCell>
-                                            <TableCell className="text-right text-xs">{formatSmartKm(row.total_official_km)}</TableCell>
+                                            <TableCell className="text-right text-xs">
+                                                <div>{formatSmartKm(row.total_official_km)}</div>
+                                                {row.billed_official_km != null && Number(row.billed_official_km) < Number(row.total_official_km) && (
+                                                    <div className="text-[10px] font-semibold text-amber-600">Billed: {formatSmartKm(row.billed_official_km)}</div>
+                                                )}
+                                                {row.km_limit != null && (
+                                                    <div className="text-[9px] text-slate-400">Limit: {formatSmartKm(row.km_limit)}</div>
+                                                )}
+                                            </TableCell>
                                             <TableCell className="text-right text-xs">৳{formatSmartNumber(row.rate_per_km)}</TableCell>
                                             <TableCell className="text-right font-bold text-xs text-emerald-700">৳{formatSmartNumber(row.total_amount)}</TableCell>
                                             <TableCell>

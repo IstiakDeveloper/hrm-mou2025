@@ -56,6 +56,129 @@ class LogBookPaymentWorkflowService
         return self::TIER_STAFF;
     }
 
+    /**
+     * Resolves eligibility and monthly official KM limit for an employee.
+     *
+     * @return array{eligible: bool, km_limit: ?float, role_label: string, ineligible_reason: ?string}
+     */
+    public function resolveKmLimit(Employee $employee): array
+    {
+        $employee->loadMissing(['designation', 'branch.regionalOffice']);
+        $title = mb_strtolower(trim((string) ($employee->designation?->name ?? '')));
+        $isHeadOffice = (bool) ($employee->branch?->is_head_office);
+
+        // 1. Executive Director & Directors / Assistant Directors (No Limit)
+        if (
+            str_contains($title, 'executive director')
+            || str_contains($title, 'director')
+            || $title === 'director'
+            || $title === 'assistant director'
+            || str_contains($title, 'director (microfinance)')
+            || str_contains($title, 'assistant director (mf)')
+            || str_contains($title, 'deputy executive director')
+            || str_contains($title, 'deputy assistant director')
+        ) {
+            return [
+                'eligible' => true,
+                'km_limit' => null,
+                'role_label' => 'Director / Executive Director',
+                'ineligible_reason' => null,
+            ];
+        }
+
+        // 2. Zonal Manager (1200 KM)
+        $isZM = str_contains($title, 'zonal manager')
+            || Zone::query()->where('zone_manager_employee_id', $employee->id)->exists();
+        if ($isZM) {
+            return [
+                'eligible' => true,
+                'km_limit' => 1200.0,
+                'role_label' => 'Zonal Manager',
+                'ineligible_reason' => null,
+            ];
+        }
+
+        // 3. Regional Manager (1000 KM)
+        $isRM = str_contains($title, 'regional manager')
+            || (int) ($employee->branch?->regionalOffice?->regional_manager_employee_id ?: 0) === (int) $employee->id
+            || \App\Models\RegionalOffice::query()->where('regional_manager_employee_id', $employee->id)->exists();
+        if ($isRM) {
+            return [
+                'eligible' => true,
+                'km_limit' => 1000.0,
+                'role_label' => 'Regional Manager',
+                'ineligible_reason' => null,
+            ];
+        }
+
+        // 4. Assistant Branch Manager / Assistant Manager (900 KM) - Check BEFORE Branch Manager
+        if (
+            str_contains($title, 'assistant branch manager')
+            || str_contains($title, 'asst. branch manager')
+            || str_contains($title, 'asst branch manager')
+            || (! $isHeadOffice && ($title === 'assistant manager' || str_contains($title, 'assistant manager')))
+        ) {
+            return [
+                'eligible' => true,
+                'km_limit' => 900.0,
+                'role_label' => 'Assistant Branch Manager',
+                'ineligible_reason' => null,
+            ];
+        }
+
+        // 5. Branch Manager (1000 KM)
+        $isBM = str_contains($title, 'branch manager')
+            || ($employee->branch && ! $isHeadOffice && $employee->branch->isEmployeeBranchHead($employee));
+        if ($isBM) {
+            return [
+                'eligible' => true,
+                'km_limit' => 1000.0,
+                'role_label' => 'Branch Manager',
+                'ineligible_reason' => null,
+            ];
+        }
+
+        // 6. Accountant (500 KM)
+        if (
+            str_contains($title, 'accountant')
+            || str_contains($title, 'accounts officer')
+        ) {
+            return [
+                'eligible' => true,
+                'km_limit' => 500.0,
+                'role_label' => 'Accountant',
+                'ineligible_reason' => null,
+            ];
+        }
+
+        // 7. Head Office Staff (800 KM)
+        if ($isHeadOffice) {
+            return [
+                'eligible' => true,
+                'km_limit' => 800.0,
+                'role_label' => 'Head Office Staff',
+                'ineligible_reason' => null,
+            ];
+        }
+
+        // 8. Field Officers & all other branch field staff (Ineligible)
+        return [
+            'eligible' => false,
+            'km_limit' => 0.0,
+            'role_label' => 'Field Officer / Branch Staff',
+            'ineligible_reason' => 'Officer-level and field staff are not eligible for monthly log book payment processing.',
+        ];
+    }
+
+    public function calculateBilledKm(float $totalOfficialKm, ?float $kmLimit): float
+    {
+        if ($kmLimit !== null && $totalOfficialKm > $kmLimit) {
+            return round($kmLimit, 2);
+        }
+
+        return round($totalOfficialKm, 2);
+    }
+
     public function needsRecommendation(string $tier): bool
     {
         return in_array($tier, [

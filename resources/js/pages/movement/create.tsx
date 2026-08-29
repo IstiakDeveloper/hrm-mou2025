@@ -51,6 +51,13 @@ interface CreateMovementProps {
     currentEmployee: Employee | null;
     isAdmin: boolean;
     movementTypes: string[];
+    weekendDays?: number[];
+    weekendDaysByEmployee?: Record<number, number[]>;
+}
+
+function isWeekendDate(date: Date | undefined, weekendDays: number[]): boolean {
+    if (!date || weekendDays.length === 0) return false;
+    return weekendDays.includes(date.getDay());
 }
 
 /** Parse "HH:mm" or "HH:mm:ss" from time picker / clock (24h). */
@@ -251,7 +258,14 @@ const SafeCalendar = ({ disabledDates, ...props }: any) => {
     );
 };
 
-export default function CreateMovement({ employees, currentEmployee, isAdmin, movementTypes }: CreateMovementProps) {
+export default function CreateMovement({
+    employees,
+    currentEmployee,
+    isAdmin,
+    movementTypes,
+    weekendDays = [5, 6],
+    weekendDaysByEmployee = {},
+}: CreateMovementProps) {
     const { flash } = usePage<{ flash?: { success?: string; error?: string; warning?: string } }>().props;
 
     const getCurrentTime = () => {
@@ -260,7 +274,9 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
     };
 
     const [employeeId, setEmployeeId] = useState(currentEmployee ? currentEmployee.id.toString() : '');
-    const [movementType, setMovementType] = useState('official');
+    const [movementType, setMovementType] = useState(() =>
+        isWeekendDate(new Date(), weekendDays.length ? weekendDays : [5, 6]) ? 'personal' : 'official'
+    );
     const [fromDate, setFromDate] = useState<Date | undefined>(new Date());
     const [fromTime, setFromTime] = useState<string>(getCurrentTime());
     const [toDate, setToDate] = useState<Date | undefined>(new Date());
@@ -314,6 +330,26 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
             setFromDate(new Date());
         }
     }, []);
+
+    const resolvedWeekendDays = useMemo(() => {
+        const id = Number(employeeId);
+        const byEmployee = id ? weekendDaysByEmployee[id] : undefined;
+        if (byEmployee && byEmployee.length > 0) {
+            return byEmployee;
+        }
+        return weekendDays.length > 0 ? weekendDays : [5, 6];
+    }, [employeeId, weekendDays, weekendDaysByEmployee]);
+
+    const isWeekendMovement = useMemo(
+        () => isWeekendDate(fromDate, resolvedWeekendDays),
+        [fromDate, resolvedWeekendDays],
+    );
+
+    useEffect(() => {
+        if (isWeekendMovement && movementType !== 'personal') {
+            setMovementType('personal');
+        }
+    }, [isWeekendMovement, movementType]);
 
     // Background calculation for return time (same calendar day only)
     useEffect(() => {
@@ -432,7 +468,7 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
 
         router.post(route('movements.store'), {
             employee_id: isAdmin ? employeeId : undefined,
-            movement_type: movementType,
+            movement_type: isWeekendMovement ? 'personal' : movementType,
             from_datetime: formatISO(fromDateTime),
             to_datetime: formatISO(toDateTime),
             purpose,
@@ -576,12 +612,16 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <button
                                                         type="button"
-                                                        onClick={() => setMovementType('official')}
+                                                        onClick={() => {
+                                                            if (!isWeekendMovement) setMovementType('official');
+                                                        }}
+                                                        disabled={isWeekendMovement}
                                                         className={cn(
                                                             "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border-2 text-center transition-all duration-200 outline-none",
                                                             movementType === 'official'
                                                                 ? "border-blue-600 bg-blue-50/40 text-blue-700 shadow-sm"
-                                                                : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 text-slate-600"
+                                                                : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 text-slate-600",
+                                                            isWeekendMovement && "opacity-50 cursor-not-allowed hover:border-slate-200 hover:bg-transparent"
                                                         )}
                                                     >
                                                         <BriefcaseBusiness className={cn("h-4 w-4", movementType === 'official' ? "text-blue-600" : "text-slate-400")} />
@@ -601,6 +641,11 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                         <span className="font-semibold text-xs">Personal</span>
                                                     </button>
                                                 </div>
+                                                {isWeekendMovement && (
+                                                    <p className="text-[11px] text-purple-700 bg-purple-50 border border-purple-100 rounded-md px-2.5 py-1.5">
+                                                        Weekend day: type is locked to Personal for log book only. Attendance is not affected.
+                                                    </p>
+                                                )}
                                             </div>
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -770,12 +815,16 @@ export default function CreateMovement({ employees, currentEmployee, isAdmin, mo
                                                     {officialTemplates.map((template, index) => (
                                                         <div 
                                                             key={`official-${index}`} 
-                                                            className="group p-2.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/10 shadow-sm transition-all duration-200 cursor-pointer"
                                                             onClick={() => {
+                                                                if (isWeekendMovement) return;
                                                                 setMovementType('official');
                                                                 applyTemplate(template);
                                                                 setActiveTab('details');
                                                             }}
+                                                            className={cn(
+                                                                "group p-2.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/10 shadow-sm transition-all duration-200",
+                                                                isWeekendMovement ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                                                            )}
                                                         >
                                                             <div className="flex justify-between items-start">
                                                                 <div className="flex-1 min-w-0">

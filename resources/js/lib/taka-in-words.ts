@@ -24,7 +24,7 @@ const ONES = [
 const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
 function convert(n: number): string {
-    if (n < 20) return ONES[n];
+    if (n < 20) return ONES[n] ?? '';
     if (n < 100) {
         const tens = TENS[Math.floor(n / 10)];
         const ones = n % 10;
@@ -53,5 +53,6 @@ function convert(n: number): string {
 export function takaInWords(amount: unknown): string {
     const n = Math.round(Number(amount));
     if (!Number.isFinite(n) || n === 0) return 'Zero Taka Only';
-    return `${convert(n).trim()} Taka Only`;
+    const prefix = n < 0 ? 'Minus ' : '';
+    return `${prefix}${convert(Math.abs(n)).trim()} Taka Only`;
 }

@@ -20,6 +20,9 @@ interface Payment {
     voucher_no: string | null;
     period_year: number;
     period_month: number;
+    total_official_km?: string | number;
+    km_limit?: string | number | null;
+    billed_official_km?: string | number | null;
     rate_per_km: string | number;
     total_amount: string | number;
     status?: 'pending' | 'recommended' | 'approved' | 'rejected';
@@ -315,9 +318,17 @@ export default function LogBookPaymentVoucher({ payment, displayVoucherNo, kmSum
                                     <td>Personal KM</td>
                                     <td className="text-right font-mono">{formatSmartKm(kmSummary.personal_km)}</td>
                                 </tr>
+                                <tr>
+                                    <td>Official KM (Recorded)</td>
+                                    <td className="text-right font-mono">{formatSmartKm(payment.total_official_km ?? kmSummary.official_km)}</td>
+                                </tr>
+                                <tr>
+                                    <td>Monthly KM Limit</td>
+                                    <td className="text-right font-mono">{payment.km_limit != null ? `${formatSmartKm(payment.km_limit)}` : 'Unlimited'}</td>
+                                </tr>
                                 <tr className="payable-row">
-                                    <td>Official KM (Payable)</td>
-                                    <td className="text-right font-mono">{formatSmartKm(kmSummary.official_km)}</td>
+                                    <td>Official KM (Payable / Billed)</td>
+                                    <td className="text-right font-mono font-bold text-emerald-800">{formatSmartKm(payment.billed_official_km ?? payment.total_official_km ?? kmSummary.official_km)}</td>
                                 </tr>
                             </tbody>
                         </table>

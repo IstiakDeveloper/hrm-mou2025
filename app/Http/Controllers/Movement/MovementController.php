@@ -41,6 +41,44 @@ class MovementController extends Controller
     }
 
     /**
+     * Weekend movements are personal-only (log book). Attendance is never linked.
+     */
+    private function movementTypeForDate(string $requestedType, Carbon $from, int $employeeId): string
+    {
+        if (AttendanceSetting::isWeekendForEmployee($from, $employeeId)) {
+            return 'personal';
+        }
+
+        return in_array($requestedType, ['official', 'personal'], true) ? $requestedType : 'official';
+    }
+
+    /**
+     * Weekend day numbers (Carbon: 0=Sun … 6=Sat) for the movement create/edit UI.
+     *
+     * @param  iterable<int, Employee>  $employees
+     * @return array{weekendDays: list<int>, weekendDaysByEmployee: array<int, list<int>>}
+     */
+    private function weekendDaysPayload(?Employee $currentEmployee, iterable $employees): array
+    {
+        $weekendDays = AttendanceSetting::weekendDaysForEmployee($currentEmployee?->id);
+        $weekendDaysByEmployee = [];
+        $branchWeekendCache = [];
+
+        foreach ($employees as $emp) {
+            $branchId = $emp->current_branch_id ? (int) $emp->current_branch_id : 0;
+            if (! array_key_exists($branchId, $branchWeekendCache)) {
+                $branchWeekendCache[$branchId] = AttendanceSetting::weekendDaysForBranch($branchId ?: null);
+            }
+            $weekendDaysByEmployee[(int) $emp->id] = $branchWeekendCache[$branchId];
+        }
+
+        return [
+            'weekendDays' => $weekendDays,
+            'weekendDaysByEmployee' => $weekendDaysByEmployee,
+        ];
+    }
+
+    /**
      * Get branch work start/end times for an employee (fallback 09:00-18:00).
      */
     private function getBranchWorkTimesForEmployee(int $employeeId): array
@@ -583,6 +621,7 @@ class MovementController extends Controller
             'currentEmployee' => $employee,
             'isAdmin' => $canSelectEmployee,
             'movementTypes' => ['official', 'personal'],
+            ...$this->weekendDaysPayload($employee, $employees),
         ]);
     }
 
@@ -671,12 +710,7 @@ class MovementController extends Controller
             ? $employee
             : Employee::findOrFail($employeeId);
 
-        // Weekend (from attendance settings, usually Fri+Sat): no movement allowed
-        if (AttendanceSetting::isWeekendForEmployee($from, $employeeId)) {
-            return redirect()->back()
-                ->withErrors(['from_datetime' => 'Weekend-এ movement তৈরি করা যাবে না (Attendance settings অনুযায়ী Friday/Saturday)।'])
-                ->withInput();
-        }
+        $movementType = $this->movementTypeForDate((string) $request->movement_type, $from, $employeeId);
 
         $activeMovement = $this->getActiveMovementForEmployee($employeeId);
         if ($activeMovement) {
@@ -686,7 +720,7 @@ class MovementController extends Controller
         // Create movement
         $movementData = [
             'employee_id' => $employeeId,
-            'movement_type' => $request->movement_type,
+            'movement_type' => $movementType,
             'from_datetime' => $from->format('Y-m-d H:i:s'),
             'to_datetime' => $to->format('Y-m-d H:i:s'),
             'purpose' => $request->purpose,
@@ -1160,12 +1194,15 @@ class MovementController extends Controller
             Employee::where('status', 'active')->get() :
             collect([$employee]);
 
+        $movementEmployee = $employees->firstWhere('id', $movement->employee_id) ?? $movement->employee;
+
         return Inertia::render('movement/edit', [
             'movement' => $movement,
             'employees' => $employees,
             'isAdmin' => $user->hasPermission('movements.edit'),
             'movementTypes' => ['official', 'personal'],
             'returnFilters' => $this->movementIndexFiltersFromRequest($request),
+            ...$this->weekendDaysPayload($movementEmployee, $employees),
         ]);
     }
 
@@ -1229,14 +1266,12 @@ class MovementController extends Controller
             ? (int) $request->employee_id
             : (int) $movement->employee_id;
 
-        if (AttendanceSetting::isWeekendForEmployee($fromParsed, $employeeIdForWeekend)) {
-            return redirect()->back()
-                ->withErrors(['from_datetime' => 'Weekend-এ movement রাখা যাবে না (Attendance settings অনুযায়ী Friday/Saturday)।'])
-                ->withInput();
-        }
-
         // Update fields except for employee_id if not admin
-        $movement->movement_type = $request->movement_type;
+        $movement->movement_type = $this->movementTypeForDate(
+            (string) $request->movement_type,
+            $fromParsed,
+            $employeeIdForWeekend
+        );
         $movement->from_datetime = $fromParsed->format('Y-m-d H:i:s');
         $movement->to_datetime = $toParsed->format('Y-m-d H:i:s');
         $movement->purpose = $request->purpose;

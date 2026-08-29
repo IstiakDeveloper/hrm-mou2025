@@ -43,6 +43,8 @@ interface Payment {
     period_year: number;
     period_month: number;
     total_official_km: string | number;
+    km_limit?: string | number | null;
+    billed_official_km?: string | number | null;
     rate_per_km: string | number;
     total_amount: string | number;
     entry_count: number;
@@ -264,7 +266,7 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
                             )}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
+                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
                             <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
                                 <p className="text-[10px] text-slate-500 uppercase font-medium">Total KM</p>
                                 <p className="font-semibold text-xs sm:text-sm">{formatSmartKm(kmTotals.totalKm)}</p>
@@ -273,13 +275,19 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
                                 <p className="text-[10px] text-slate-500 uppercase font-medium">Personal KM</p>
                                 <p className="font-semibold text-xs sm:text-sm">{formatSmartKm(kmTotals.personalKm)}</p>
                             </div>
-                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
-                                <p className="text-[10px] text-emerald-700 uppercase font-semibold">Official KM</p>
-                                <p className="font-bold text-xs sm:text-sm text-emerald-800">{formatSmartKm(kmTotals.officialKm)}</p>
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                                <p className="text-[10px] text-slate-500 uppercase font-medium">Official Recorded</p>
+                                <p className="font-semibold text-xs sm:text-sm text-slate-800">{formatSmartKm(payment.total_official_km || kmTotals.officialKm)}</p>
                             </div>
                             <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                                <p className="text-[10px] text-slate-500 uppercase font-medium">Rate</p>
-                                <p className="font-semibold text-xs sm:text-sm">৳{formatSmartNumber(payment.rate_per_km)} / km</p>
+                                <p className="text-[10px] text-slate-500 uppercase font-medium">Monthly Limit</p>
+                                <p className="font-semibold text-xs sm:text-sm text-slate-800">
+                                    {payment.km_limit != null ? `${formatSmartKm(payment.km_limit)}` : 'Unlimited'}
+                                </p>
+                            </div>
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
+                                <p className="text-[10px] text-emerald-700 uppercase font-semibold">Billed / Payable KM</p>
+                                <p className="font-bold text-xs sm:text-sm text-emerald-800">{formatSmartKm(payment.billed_official_km ?? payment.total_official_km ?? kmTotals.officialKm)}</p>
                             </div>
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 col-span-2 sm:col-span-1">
                                 <p className="text-[10px] text-emerald-700 uppercase font-semibold">Total Amount</p>

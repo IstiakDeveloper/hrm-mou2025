@@ -14,6 +14,8 @@ class MovementLogBookPayment extends Model
         'period_year',
         'period_month',
         'total_official_km',
+        'km_limit',
+        'billed_official_km',
         'rate_per_km',
         'total_amount',
         'entry_count',
@@ -33,6 +35,8 @@ class MovementLogBookPayment extends Model
 
     protected $casts = [
         'total_official_km' => 'decimal:2',
+        'km_limit' => 'decimal:2',
+        'billed_official_km' => 'decimal:2',
         'rate_per_km' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'needs_recommendation' => 'boolean',

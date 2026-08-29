@@ -648,10 +648,13 @@ class MovementLogBookController extends Controller
 
         $totalOfficialKm = round((float) $entries->sum('official_km'), 2);
         $rate = (float) $payment->rate_per_km;
+        $workflow = app(\App\Services\LogBookPaymentWorkflowService::class);
+        $billedKm = $workflow->calculateBilledKm($totalOfficialKm, $payment->km_limit !== null ? (float) $payment->km_limit : null);
 
         $payment->update([
             'total_official_km' => $totalOfficialKm,
-            'total_amount' => round($totalOfficialKm * $rate, 2),
+            'billed_official_km' => $billedKm,
+            'total_amount' => round($billedKm * $rate, 2),
             'entry_count' => $entries->count(),
         ]);
     }
