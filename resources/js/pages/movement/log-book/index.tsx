@@ -172,7 +172,10 @@ function LogBookActionButtons({ row, canManageLogBook }: { row: LogBook; canMana
 
     const handleDelete = () => {
         if (!confirm('Delete this log book register entry?')) return;
-        router.delete(route('movement-log-books.destroy', row.id));
+        router.delete(route('movement-log-books.destroy', row.id), {
+            preserveScroll: true,
+            preserveState: true,
+        });
     };
 
     return (

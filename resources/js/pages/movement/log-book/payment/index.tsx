@@ -106,23 +106,23 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
 
     const handleRecommend = (row: Payment) => {
         if (!confirm(`Recommend log book payment for ${employeeDisplayName(row.employee)}?`)) return;
-        router.post(route('movement-log-book-payments.recommend', row.id), {}, { preserveScroll: true });
+        router.post(route('movement-log-book-payments.recommend', row.id), {}, { preserveScroll: true, preserveState: true });
     };
 
     const handleApprove = (row: Payment) => {
         if (!confirm(`Approve payment for ${employeeDisplayName(row.employee)}?`)) return;
-        router.post(route('movement-log-book-payments.approve', row.id), {}, { preserveScroll: true });
+        router.post(route('movement-log-book-payments.approve', row.id), {}, { preserveScroll: true, preserveState: true });
     };
 
     const handleReject = (row: Payment) => {
         const reason = prompt('Rejection reason (required):');
         if (!reason?.trim()) return;
-        router.post(route('movement-log-book-payments.reject', row.id), { approval_remarks: reason.trim() }, { preserveScroll: true });
+        router.post(route('movement-log-book-payments.reject', row.id), { approval_remarks: reason.trim() }, { preserveScroll: true, preserveState: true });
     };
 
     const handleDelete = (row: Payment) => {
         if (!confirm(`Are you sure you want to delete the log book payment for ${employeeDisplayName(row.employee)} (${monthLabel(row.period_year, row.period_month)})?\n\nThis will restore all associated entries to unpaid and allow re-processing this month.`)) return;
-        router.delete(route('movement-log-book-payments.destroy', row.id), { preserveScroll: true });
+        router.delete(route('movement-log-book-payments.destroy', row.id), { preserveScroll: true, preserveState: true });
     };
 
     const years = useMemo(() => {

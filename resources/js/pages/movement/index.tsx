@@ -414,6 +414,7 @@ export default function MovementIndex({
         router.delete(route('movements.destroy', movementId), {
             data: buildFilterParams(),
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => setSelectedIds((prev) => prev.filter((id) => id !== movementId)),
         });
     };
@@ -433,6 +434,7 @@ export default function MovementIndex({
             { ids: selectedIds, ...buildFilterParams() },
             {
                 preserveScroll: true,
+                preserveState: true,
                 onSuccess: () => setSelectedIds([]),
             },
         );

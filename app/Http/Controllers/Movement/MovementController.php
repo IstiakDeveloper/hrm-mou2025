@@ -1118,14 +1118,14 @@ class MovementController extends Controller
             if ($returnDateTime->lt($from)) {
                 DB::rollBack();
 
-                return redirect()->route('movements.index')
+                return redirect()->back()
                     ->with('error', 'Return time cannot be before the movement start time.');
             }
 
             if ($returnDateTime->gt(Carbon::now()->addMinutes(2))) {
                 DB::rollBack();
 
-                return redirect()->route('movements.index')
+                return redirect()->back()
                     ->with('error', 'Return time cannot be in the future.');
             }
 
@@ -1146,7 +1146,7 @@ class MovementController extends Controller
 
             DB::commit();
 
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('success', $createLogBook
                     ? 'Movement closed successfully. Log book entry created and pending approval.'
                     : 'Movement closed successfully.');
@@ -1162,7 +1162,7 @@ class MovementController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'An error occurred while closing the movement. Please try again.');
         }
     }
@@ -1428,12 +1428,12 @@ class MovementController extends Controller
         }
 
         if (! $canApprove) {
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'You do not have permission to approve movement requests.');
         }
 
         if ($movement->status !== 'pending') {
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'This movement request is not pending approval.');
         }
 
@@ -1549,7 +1549,7 @@ class MovementController extends Controller
                 // Do not throw - approval should succeed even if notifications fail
             }
 
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('success', 'Movement request approved successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1563,7 +1563,7 @@ class MovementController extends Controller
                 'file' => $e->getFile(),
             ]);
 
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'An error occurred while approving the movement: '.$e->getMessage());
         }
     }
@@ -1605,12 +1605,12 @@ class MovementController extends Controller
         }
 
         if (! $canReject) {
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'You do not have permission to reject movement requests.');
         }
 
         if ($movement->status !== 'pending') {
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'This movement request is not pending approval.');
         }
 
@@ -1638,7 +1638,7 @@ class MovementController extends Controller
 
             DB::commit();
 
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('success', 'Movement request rejected successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1649,7 +1649,7 @@ class MovementController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'An error occurred while rejecting the movement.');
         }
     }
@@ -1667,7 +1667,7 @@ class MovementController extends Controller
             ! $user->hasPermission('movements.edit') &&
             (! $employee || $employee->id !== $movement->employee_id || $movement->status !== 'pending')
         ) {
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'You do not have permission to cancel this movement request.');
         }
 
@@ -1688,7 +1688,7 @@ class MovementController extends Controller
 
             DB::commit();
 
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('success', 'Movement request cancelled successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1699,7 +1699,7 @@ class MovementController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->route('movements.index')
+            return redirect()->back()
                 ->with('error', 'An error occurred while cancelling the movement.');
         }
     }
@@ -2096,7 +2096,15 @@ class MovementController extends Controller
      */
     private function redirectToMovementIndex(Request $request, ?string $flashKey = null, ?string $flashMessage = null)
     {
-        $redirect = redirect()->route('movements.index', $this->movementIndexFiltersFromRequest($request));
+        $prev = url()->previous();
+        $isIndexPage = $prev && (str_contains($prev, '/movements?') || str_ends_with($prev, '/movements'));
+
+        if ($isIndexPage) {
+            $redirect = redirect()->back();
+        } else {
+            $filters = $this->movementIndexFiltersFromRequest($request);
+            $redirect = redirect()->route('movements.index', $filters);
+        }
 
         if ($flashKey && $flashMessage) {
             $redirect->with($flashKey, $flashMessage);

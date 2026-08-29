@@ -585,7 +585,12 @@ class MovementLogBookController extends Controller
 
             DB::commit();
 
-            return redirect()->route('movement-log-books.index')
+            if (url()->previous() && str_contains(url()->previous(), "/movement-log-books/{$logBook->id}")) {
+                return redirect()->route('movement-log-books.index')
+                    ->with('success', 'Log book register entry deleted.');
+            }
+
+            return redirect()->back()
                 ->with('success', 'Log book register entry deleted.');
         } catch (\Throwable $e) {
             DB::rollBack();

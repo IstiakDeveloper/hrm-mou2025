@@ -344,7 +344,12 @@ class MovementLogBookPaymentController extends Controller
 
             DB::commit();
 
-            return redirect()->route('movement-log-book-payments.index')
+            if (url()->previous() && str_contains(url()->previous(), "/movement-log-book-payments/{$payment->id}")) {
+                return redirect()->route('movement-log-book-payments.index')
+                    ->with('success', 'Log book payment deleted successfully. Unpaid entries are restored and can be processed again.');
+            }
+
+            return redirect()->back()
                 ->with('success', 'Log book payment deleted successfully. Unpaid entries are restored and can be processed again.');
         } catch (\Throwable $e) {
             DB::rollBack();
