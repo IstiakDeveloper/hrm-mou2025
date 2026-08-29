@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { formatSmartKm, formatSmartNumber } from '@/lib/format-smart-number';
 import { format } from 'date-fns';
-import { ArrowLeft, Check, Eye, Printer, ThumbsUp, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, Eye, Printer, ThumbsUp, Trash2, XCircle } from 'lucide-react';
 
 interface Employee extends EmployeeNameFields {
     id: number;
@@ -67,6 +67,7 @@ type Props = {
     canRecommend?: boolean;
     canApprove: boolean;
     canReject?: boolean;
+    canDelete?: boolean;
     nextActionLabel?: string | null;
     companyName?: string;
     companyAddress?: string;
@@ -92,7 +93,7 @@ function paymentBadge(status: string) {
     return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">Unpaid</Badge>;
 }
 
-export default function LogBookPaymentShow({ payment, canRecommend = false, canApprove, canReject = false, nextActionLabel }: Props) {
+export default function LogBookPaymentShow({ payment, canRecommend = false, canApprove, canReject = false, canDelete = false, nextActionLabel }: Props) {
     const monthLabel = format(new Date(payment.period_year, payment.period_month - 1, 1), 'MMMM yyyy');
     const entries = payment.log_books ?? [];
 
@@ -121,6 +122,11 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
         const reason = prompt('Rejection reason (required):');
         if (!reason?.trim()) return;
         router.post(route('movement-log-book-payments.reject', payment.id), { approval_remarks: reason.trim() });
+    };
+
+    const handleDelete = () => {
+        if (!confirm(`Are you sure you want to delete this log book payment for ${monthLabel}?\n\nAll associated entries will be restored to unpaid and the month can be processed again.`)) return;
+        router.delete(route('movement-log-book-payments.destroy', payment.id));
     };
 
     return (
@@ -161,6 +167,12 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
                             <Button size="sm" variant="destructive" onClick={handleReject}>
                                 <XCircle className="mr-1.5 h-4 w-4" />
                                 Reject
+                            </Button>
+                        )}
+                        {canDelete && (
+                            <Button size="sm" variant="destructive" className="bg-red-600 hover:bg-red-700" onClick={handleDelete}>
+                                <Trash2 className="mr-1.5 h-4 w-4" />
+                                Delete
                             </Button>
                         )}
                     </div>

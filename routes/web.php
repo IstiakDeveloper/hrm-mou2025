@@ -1634,6 +1634,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{payment}/recommend', [MovementLogBookPaymentController::class, 'recommend'])->name('recommend');
         Route::post('/{payment}/approve', [MovementLogBookPaymentController::class, 'approve'])->name('approve');
         Route::post('/{payment}/reject', [MovementLogBookPaymentController::class, 'reject'])->name('reject');
+        Route::delete('/{payment}', [MovementLogBookPaymentController::class, 'destroy'])->name('destroy');
     });
 
     Route::prefix('movements')->name('movements.')->group(function () {

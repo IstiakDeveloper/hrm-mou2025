@@ -13,7 +13,7 @@ import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-nam
 import { formatSmartKm, formatSmartNumber } from '@/lib/format-smart-number';
 import { LogBookScopeTabs } from '@/components/log-book-scope-tabs';
 import { format } from 'date-fns';
-import { Check, ChevronLeft, ChevronRight, Eye, PlayCircle, Printer, Search, ThumbsUp, XCircle } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eye, PlayCircle, Printer, Search, ThumbsUp, Trash2, XCircle } from 'lucide-react';
 
 interface Employee extends EmployeeNameFields {
     id: number;
@@ -37,6 +37,7 @@ interface Payment {
     can_recommend?: boolean;
     can_approve?: boolean;
     can_reject?: boolean;
+    can_delete?: boolean;
     next_action_label?: string | null;
 }
 
@@ -46,6 +47,7 @@ interface Props {
     filters: Record<string, string | undefined>;
     ratePerKm: number;
     canProcess: boolean;
+    canDelete?: boolean;
     scopeView?: 'mine' | 'team';
     showScopeTabs?: boolean;
     viewerEmployeeId?: number;
@@ -113,6 +115,11 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
         const reason = prompt('Rejection reason (required):');
         if (!reason?.trim()) return;
         router.post(route('movement-log-book-payments.reject', row.id), { approval_remarks: reason.trim() }, { preserveScroll: true });
+    };
+
+    const handleDelete = (row: Payment) => {
+        if (!confirm(`Are you sure you want to delete the log book payment for ${employeeDisplayName(row.employee)} (${monthLabel(row.period_year, row.period_month)})?\n\nThis will restore all associated entries to unpaid and allow re-processing this month.`)) return;
+        router.delete(route('movement-log-book-payments.destroy', row.id), { preserveScroll: true });
     };
 
     const years = useMemo(() => {
@@ -269,6 +276,11 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                                                         <XCircle className="h-3.5 w-3.5" />
                                                     </Button>
                                                 )}
+                                                {row.can_delete && (
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 bg-red-50 hover:bg-red-100" title="Delete payment" onClick={() => handleDelete(row)}>
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -341,6 +353,9 @@ export default function LogBookPaymentIndex({ payments, summary, filters, ratePe
                                                     )}
                                                     {row.can_reject && (
                                                         <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 bg-red-50 hover:bg-red-100" title="Reject" onClick={() => handleReject(row)}><XCircle className="h-3.5 w-3.5" /></Button>
+                                                    )}
+                                                    {row.can_delete && (
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 bg-red-50 hover:bg-red-100" title="Delete payment" onClick={() => handleDelete(row)}><Trash2 className="h-3.5 w-3.5" /></Button>
                                                     )}
                                                 </div>
                                             </TableCell>

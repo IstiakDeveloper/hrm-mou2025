@@ -99,6 +99,7 @@ class MovementLogBookPaymentController extends Controller
             $payment->setAttribute('can_recommend', $this->workflow->userCanRecommend($user, $payment));
             $payment->setAttribute('can_approve', $this->workflow->userCanApprove($user, $payment));
             $payment->setAttribute('can_reject', $this->workflow->userCanReject($user, $payment));
+            $payment->setAttribute('can_delete', $user->isSuperAdmin());
             $payment->setAttribute('next_action_label', $this->workflow->nextActionLabel($payment));
         }
 
@@ -108,6 +109,7 @@ class MovementLogBookPaymentController extends Controller
             'filters' => $request->only(['status', 'period_year', 'period_month', 'search', 'per_page', 'view']),
             'ratePerKm' => $this->ratePerKm(),
             'canProcess' => $this->userCanProcessPayments($user),
+            'canDelete' => $user->isSuperAdmin(),
             'scopeView' => $scope['view'],
             'showScopeTabs' => $scope['showTabs'],
             'viewerEmployeeId' => (int) $user->employee_id,
@@ -135,6 +137,7 @@ class MovementLogBookPaymentController extends Controller
             'canRecommend' => $this->workflow->userCanRecommend($user, $payment),
             'canApprove' => $this->workflow->userCanApprove($user, $payment),
             'canReject' => $this->workflow->userCanReject($user, $payment),
+            'canDelete' => $user->isSuperAdmin(),
             'nextActionLabel' => $this->workflow->nextActionLabel($payment),
             'companyName' => config('payroll_reports.company_name', config('app.name')),
             'companyAddress' => config('payroll_reports.company_address', ''),
@@ -308,6 +311,34 @@ class MovementLogBookPaymentController extends Controller
             DB::rollBack();
 
             return redirect()->back()->with('error', 'Could not reject payment.');
+        }
+    }
+
+    public function destroy(MovementLogBookPayment $payment)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        abort_unless($user && $user->isSuperAdmin(), 403, 'Only Super Admin can delete log book payments.');
+
+        DB::beginTransaction();
+        try {
+            MovementLogBook::where('log_book_payment_id', $payment->id)
+                ->update([
+                    'log_book_payment_id' => null,
+                    'payment_status' => 'unpaid',
+                ]);
+
+            $payment->delete();
+
+            DB::commit();
+
+            return redirect()->route('movement-log-book-payments.index')
+                ->with('success', 'Log book payment deleted successfully. Unpaid entries are restored and can be processed again.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return redirect()->back()
+                ->with('error', 'Could not delete log book payment: '.$e->getMessage());
         }
     }
 
