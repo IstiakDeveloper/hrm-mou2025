@@ -451,9 +451,17 @@ export default function ApplicationsIndex({
                                         </div>
                                         
                                         <div className="flex items-center justify-between text-[11px] text-slate-700 font-medium">
-                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] py-0 px-1.5">
-                                                {application.leaveType?.name ?? application.leave_type?.name ?? '—'}
-                                            </Badge>
+                                            <div className="flex items-center space-x-1">
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] py-0 px-1.5">
+                                                    {application.leaveType?.name ?? application.leave_type?.name ?? '—'}
+                                                </Badge>
+                                                {application.documents && application.documents.length > 0 && (
+                                                    <span className="inline-flex items-center text-[10px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded" title={`${application.documents.length} document(s) attached`}>
+                                                        <Paperclip className="h-2.5 w-2.5 mr-0.5" />
+                                                        {application.documents.length}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span>
                                                 {application.days} day{application.days > 1 ? 's' : ''}
                                             </span>
@@ -574,9 +582,17 @@ export default function ApplicationsIndex({
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="py-2">
-                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
-                                                        {application.leaveType?.name ?? application.leave_type?.name ?? '—'}
-                                                    </Badge>
+                                                    <div className="flex items-center space-x-1.5">
+                                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                                                            {application.leaveType?.name ?? application.leave_type?.name ?? '—'}
+                                                        </Badge>
+                                                        {application.documents && application.documents.length > 0 && (
+                                                            <span className="inline-flex items-center text-[10px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded border border-blue-100" title={`${application.documents.length} document(s) attached`}>
+                                                                <Paperclip className="h-2.5 w-2.5 mr-0.5" />
+                                                                {application.documents.length}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="py-2">
                                                     <div className="text-xs">

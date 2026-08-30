@@ -33,6 +33,9 @@ class LeaveApplicationController extends Controller
      * Staff with no branch are treated as head office (common for HO desk employees).
      * Branches not linked to a regional office are treated as central (head office) for tier routing
      * when `is_head_office` was not set in data.
+     *
+     * Non-Microfinance projects or departments (e.g. Program/Project, Health, Audit, HR, IT, Finance, etc.)
+     * follow Head Office tiers (routing to their Department Head / ED) even when stationed at a branch office.
      */
     private function leaveTierContext(Employee $employee): string
     {
@@ -47,6 +50,19 @@ class LeaveApplicationController extends Controller
         }
 
         if ($branch && $branch->regional_office_id === null) {
+            return 'head_office';
+        }
+
+        // Non-Microfinance departments or projects follow Head Office tiers
+        $employee->loadMissing(['department', 'project']);
+        $deptName = strtolower(trim((string) ($employee->department?->name ?? '')));
+        $projName = strtolower(trim((string) ($employee->project?->name ?? '')));
+
+        if ($deptName !== '' && ! str_contains($deptName, 'microfinance')) {
+            return 'head_office';
+        }
+
+        if ($projName !== '' && ! str_contains($projName, 'microfinance')) {
             return 'head_office';
         }
 
@@ -108,6 +124,97 @@ class LeaveApplicationController extends Controller
     }
 
     /**
+     * Determine an applicant's hierarchy rank level for leave routing.
+     * Higher rank levels can only be approved by strictly higher tiers.
+     * 0 = Regular Staff, 1 = Branch Manager / Head, 2 = Regional Manager,
+     * 3 = Zonal Manager, 4 = Director / HO Dept Head, 5 = Executive Director.
+     */
+    private function getEmployeeApprovalRankLevel(Employee $applicant): int
+    {
+        $applicant->loadMissing(['designation', 'currentBranch.regionalOffice.zone', 'branch']);
+        $designationName = strtolower(trim((string) ($applicant->designation?->name ?? '')));
+
+        if (str_contains($designationName, 'executive director')) {
+            return 5;
+        }
+
+        if (str_contains($designationName, 'deputy executive director') || (str_contains($designationName, 'director') && ! str_contains($designationName, 'assistant director') && ! str_contains($designationName, 'deputy assistant director'))) {
+            return 4;
+        }
+
+        // Check if applicant is a Head Office Department Head
+        if ($this->leaveTierContext($applicant) === 'head_office') {
+            if ($applicant->department_id) {
+                $dept = Department::find($applicant->department_id);
+                if ($dept && (int) $dept->head_employee_id === (int) $applicant->id) {
+                    return 4;
+                }
+            }
+            $user = User::where('employee_id', $applicant->id)->first();
+            if ($user && OrganogramAccessService::isHeadOfficeDepartmentHead($user)) {
+                return 4;
+            }
+        }
+
+        // Check if Zonal Manager
+        if (str_contains($designationName, 'zonal manager') || str_contains($designationName, 'zone manager') || preg_match('/\bzm\b/', $designationName)) {
+            return 3;
+        }
+        if (Zone::query()->where('zone_manager_employee_id', $applicant->id)->exists()) {
+            return 3;
+        }
+
+        // Check if Regional Manager
+        if (str_contains($designationName, 'regional manager') || preg_match('/\brm\b/', $designationName)) {
+            return 2;
+        }
+        if (RegionalOffice::query()->where('regional_manager_employee_id', $applicant->id)->exists()) {
+            return 2;
+        }
+
+        // Check if Branch Manager / Branch Head
+        if (str_contains($designationName, 'branch manager') || preg_match('/\bbm\b/', $designationName)) {
+            return 1;
+        }
+        $branch = $applicant->currentBranch ?: $applicant->branch;
+        if ($branch && $branch->isEmployeeBranchHead($applicant)) {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Determine a leave approval tier's rank level.
+     */
+    private function getTierRankLevel(LeaveApprovalTier $tier): int
+    {
+        $type = (string) $tier->approver_type;
+        $desigName = strtolower(trim((string) ($tier->designation?->name ?? '')));
+
+        if ($type === 'executive_director' || str_contains($desigName, 'executive director')) {
+            return 5;
+        }
+        if (str_contains($desigName, 'director')) {
+            return 4;
+        }
+        if ($type === 'department_head') {
+            return 4;
+        }
+        if (str_contains($desigName, 'zonal') || str_contains($desigName, 'zone')) {
+            return 3;
+        }
+        if (str_contains($desigName, 'regional')) {
+            return 2;
+        }
+        if ($type === 'branch_manager' || $type === 'branch_head' || str_contains($desigName, 'branch')) {
+            return 1;
+        }
+
+        return 1;
+    }
+
+    /**
      * Resolve active employees who should approve under a designation-based leave tier.
      * Uses graded designation families and geography: branch / regional office / zone / none.
      *
@@ -119,14 +226,17 @@ class LeaveApplicationController extends Controller
         ?string $designationName,
         string $routingScope
     ): Collection {
-        $applicant->loadMissing(['currentBranch.regionalOffice']);
+        $applicant->loadMissing(['currentBranch.regionalOffice.zone']);
         $branch = $applicant->currentBranch;
         $familyIds = $this->designationFamilyIds($designationId, $designationName);
 
         if ($routingScope === 'regional_office') {
-            $ro = $branch?->regional_office_id
-                ? RegionalOffice::query()->find($branch->regional_office_id)
-                : null;
+            $roId = $branch?->regional_office_id;
+            if (! $roId) {
+                $ro = RegionalOffice::query()->where('regional_manager_employee_id', $applicant->id)->first();
+                $roId = $ro?->id;
+            }
+            $ro = $roId ? RegionalOffice::query()->find($roId) : null;
             if ($ro?->regional_manager_employee_id) {
                 $official = Employee::query()
                     ->with('designation')
@@ -141,6 +251,18 @@ class LeaveApplicationController extends Controller
 
         if ($routingScope === 'zone') {
             $zoneId = $branch?->regionalOffice?->zone_id;
+            if (! $zoneId && $branch?->regional_office_id) {
+                $ro = RegionalOffice::query()->find($branch->regional_office_id);
+                $zoneId = $ro?->zone_id;
+            }
+            if (! $zoneId) {
+                $ro = RegionalOffice::query()->where('regional_manager_employee_id', $applicant->id)->first();
+                $zoneId = $ro?->zone_id;
+            }
+            if (! $zoneId) {
+                $z = Zone::query()->where('zone_manager_employee_id', $applicant->id)->first();
+                $zoneId = $z?->id;
+            }
             $zone = $zoneId ? Zone::query()->find($zoneId) : null;
             if ($zone?->zone_manager_employee_id) {
                 $official = Employee::query()
@@ -223,8 +345,12 @@ class LeaveApplicationController extends Controller
     /**
      * Resolve approver users from leave_approval_tiers (Head office vs Branch only).
      *
-     * Picks the active tier with the smallest max_leave_days that is still >= requested days.
-     * If the request exceeds every tier's max for that context, approvers default to Executive Director users.
+     * Always routes strictly upwards:
+     * - Disqualifies any tiers lower than or equal to the applicant's hierarchy level.
+     * - If applicant is Head Office Department Head -> routes to Executive Director.
+     * - If applicant is Regional Manager -> routes to Zonal Manager (or Director/ED for longer leaves).
+     * - If applicant is Branch Manager -> routes to Regional Manager (or higher).
+     * - Excludes the applicant themselves from receiving or approving their own request.
      *
      * @return array{recipients: \Illuminate\Support\Collection, tier: ?LeaveApprovalTier, addressee: array{type: ?string, title: ?string, name: ?string, routing_scope?: string}}
      */
@@ -232,15 +358,33 @@ class LeaveApplicationController extends Controller
     {
         $branch = $employee->currentBranch ?: $employee->branch;
         $context = $this->leaveTierContext($employee);
+        $applicantLevel = $this->getEmployeeApprovalRankLevel($employee);
 
-        /** @var ?LeaveApprovalTier $tier */
-        $tier = LeaveApprovalTier::query()
+        // Fetch all active tiers for applicant's context
+        $allTiers = LeaveApprovalTier::query()
             ->with('designation')
             ->where('context', $context)
             ->where('is_active', true)
-            ->where('max_leave_days', '>=', $leaveDays)
             ->orderBy('max_leave_days', 'asc')
-            ->first();
+            ->get();
+
+        // Filter out tiers that are at or below the applicant's rank level
+        $eligibleTiers = $allTiers->filter(function ($t) use ($applicantLevel) {
+            return $this->getTierRankLevel($t) > $applicantLevel;
+        })->values();
+
+        /** @var ?LeaveApprovalTier $tier */
+        $tier = null;
+        if ($eligibleTiers->isNotEmpty()) {
+            // Find lowest tier that can approve this many days
+            $tier = $eligibleTiers->first(function ($t) use ($leaveDays) {
+                return $t->max_leave_days >= $leaveDays;
+            });
+            // If the days requested is smaller than the minimum eligible tier, pick the lowest eligible tier (immediate superior)
+            if (! $tier && $leaveDays <= $eligibleTiers->min('max_leave_days')) {
+                $tier = $eligibleTiers->first();
+            }
+        }
 
         $recipients = collect([]);
         $addressee = [
@@ -251,12 +395,9 @@ class LeaveApplicationController extends Controller
         ];
 
         if (! $tier) {
-            $hasAnyTierForContext = LeaveApprovalTier::query()
-                ->where('context', $context)
-                ->where('is_active', true)
-                ->exists();
+            $hasAnyTierForContext = $allTiers->isNotEmpty();
 
-            if ($hasAnyTierForContext) {
+            if ($hasAnyTierForContext || $applicantLevel >= 4) {
                 $recipients = $this->getExecutiveDirectors();
                 $ed = $recipients->first();
                 $edEmployee = $ed?->employee_id ? Employee::with('designation')->find($ed->employee_id) : null;
@@ -377,6 +518,11 @@ class LeaveApplicationController extends Controller
      */
     private function userMayAutoApproveLeaveForApplicant(User $user, Employee $applicant, int $days): bool
     {
+        // No self-auto-approval is ever allowed
+        if ($user->employee_id && (int) $user->employee_id === (int) $applicant->id) {
+            return false;
+        }
+
         if (! $user->hasPermission('leave-applications.approve')) {
             return false;
         }
@@ -394,17 +540,19 @@ class LeaveApplicationController extends Controller
         }
 
         $context = $this->leaveTierContext($applicant);
+        $applicantLevel = $this->getEmployeeApprovalRankLevel($applicant);
 
-        // Important: auto-approve should be monotonic.
-        // If a user can approve up to N days, they can also approve any shorter request,
-        // even if there are smaller tiers configured for those shorter durations.
-        $tiers = LeaveApprovalTier::query()
+        // Fetch active tiers above the applicant's level
+        $allTiers = LeaveApprovalTier::query()
             ->with('designation')
             ->where('context', $context)
             ->where('is_active', true)
-            ->where('max_leave_days', '>=', $days)
             ->orderBy('max_leave_days', 'asc')
             ->get();
+
+        $tiers = $allTiers->filter(function ($t) use ($applicantLevel, $days) {
+            return $this->getTierRankLevel($t) > $applicantLevel && $t->max_leave_days >= $days;
+        })->values();
 
         foreach ($tiers as $tier) {
             $type = (string) $tier->approver_type;
@@ -457,7 +605,7 @@ class LeaveApplicationController extends Controller
             ->where('is_active', true)
             ->exists();
 
-        if ($hasAnyTierForContext && $tiers->isEmpty()) {
+        if (($hasAnyTierForContext || $applicantLevel >= 4) && $tiers->isEmpty()) {
             return OrganogramAccessService::isExecutiveDirector($user);
         }
 
@@ -469,24 +617,8 @@ class LeaveApplicationController extends Controller
      */
     public function autoApproveEligibility(Request $request)
     {
-        $user = Auth::user();
-        if (! $user->hasPermission('leave-applications.approve')) {
-            return response()->json(['eligible' => false]);
-        }
-
-        $employee = $user->employee;
-        if (! $employee) {
-            return response()->json(['eligible' => false]);
-        }
-
-        $days = max(0, (int) $request->query('days', 0));
-        if ($days < 1) {
-            return response()->json(['eligible' => false]);
-        }
-
-        return response()->json([
-            'eligible' => $this->userMayAutoApproveLeaveForApplicant($user, $employee, $days),
-        ]);
+        // Auto-approve is disabled for one's own leave application
+        return response()->json(['eligible' => false]);
     }
 
     /**
@@ -1052,8 +1184,20 @@ class LeaveApplicationController extends Controller
             ])->withInput();
         }
 
-        // Check leave balance for regular employees (not for admins creating on behalf)
-        if (! $user->hasPermission('leave-applications.edit')) {
+        $leaveType = LeaveType::findOrFail($request->leave_type_id);
+        $isUnpaid = ! $leaveType->is_paid;
+        $isMedical = str_contains(strtolower($leaveType->name), 'medical')
+            || str_contains(strtolower($leaveType->name), 'sick')
+            || str_contains(strtolower($leaveType->name), 'চিকিৎসা');
+
+        if ($isMedical && (! $request->hasFile('documents') || empty($request->file('documents')))) {
+            return redirect()->back()->withErrors([
+                'documents' => 'Medical certificate or supporting document is mandatory for Medical Leave application.',
+            ])->withInput();
+        }
+
+        // Check leave balance for regular employees on paid leaves (not for admins creating on behalf)
+        if (! $isUnpaid && ! $user->hasPermission('leave-applications.edit')) {
             $currentYear = Carbon::now()->year;
             $balance = LeaveBalance::where('employee_id', $employee->id)
                 ->where('leave_type_id', $request->leave_type_id)
@@ -1086,12 +1230,13 @@ class LeaveApplicationController extends Controller
             }
         }
 
-        // Auto-approve if user has approval permission
+        // Auto-approve if user has approval permission and is creating on behalf of someone else
         $status = 'pending';
         $approvedBy = null;
+        $isSelfApplication = $user->employee_id && (int) $user->employee_id === (int) $employee->id;
 
-        // Auto-approve only when tier rules allow this user to be the approver for this duration
-        if ($user->hasPermission('leave-applications.approve') && $request->boolean('auto_approve')) {
+        // Auto-approve only when tier rules allow this user to be the approver for this duration and not self-application
+        if (! $isSelfApplication && $user->hasPermission('leave-applications.approve') && $request->boolean('auto_approve')) {
             if (! $this->userMayAutoApproveLeaveForApplicant($user, $employee, $days)) {
                 return redirect()->back()
                     ->withErrors([
@@ -1795,6 +1940,7 @@ class LeaveApplicationController extends Controller
      */
     private function updateLeaveBalance($employeeId, $leaveTypeId, $days)
     {
+        $leaveType = LeaveType::find($leaveTypeId);
         $currentYear = Carbon::now()->year;
         $balance = LeaveBalance::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
@@ -1803,8 +1949,21 @@ class LeaveApplicationController extends Controller
 
         if ($balance) {
             $balance->used_days += $days;
-            $balance->remaining_days = $balance->allocated_days - $balance->used_days;
+            if ($leaveType && ! $leaveType->is_paid) {
+                $balance->remaining_days = max(0, $balance->allocated_days - $balance->used_days);
+            } else {
+                $balance->remaining_days = $balance->allocated_days - $balance->used_days;
+            }
             $balance->save();
+        } elseif ($leaveType && ! $leaveType->is_paid) {
+            LeaveBalance::create([
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'year' => $currentYear,
+                'allocated_days' => 0,
+                'used_days' => $days,
+                'remaining_days' => 0,
+            ]);
         }
     }
 

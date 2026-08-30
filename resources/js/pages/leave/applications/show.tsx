@@ -198,22 +198,48 @@ export default function Show({ application, canApprove }: ShowProps) {
                                             Approve
                                         </Button>
                                     </DialogTrigger>
-                                    <DialogContent>
+                                    <DialogContent className="max-w-md">
                                         <DialogHeader>
                                             <DialogTitle>Approve Leave Application</DialogTitle>
                                             <DialogDescription>
-                                                You are about to approve this leave application. Please add any comments if necessary.
+                                                You are approving this leave request. Please verify attached documents (if any) and enter comments.
                                             </DialogDescription>
                                         </DialogHeader>
-                                        <div className="grid gap-4 py-4">
+
+                                        {application.documents && application.documents.length > 0 && (
+                                            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-md text-xs space-y-1.5">
+                                                <div className="font-semibold text-blue-900 flex items-center">
+                                                    <Paperclip className="mr-1.5 h-3.5 w-3.5 text-blue-600" />
+                                                    Attached Supporting Documents ({application.documents.length}):
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {application.documents.map((doc, idx) => (
+                                                        <div key={idx} className="flex items-center justify-between bg-white p-1.5 rounded border border-blue-100">
+                                                            <span className="truncate max-w-[240px] text-slate-700">{doc.name}</span>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 px-2 text-blue-600 hover:text-blue-800"
+                                                                onClick={() => downloadDocument(idx)}
+                                                            >
+                                                                <Download className="h-3 w-3 mr-1" /> View/Download
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="grid gap-4 py-2">
                                             <div className="space-y-2">
                                                 <Label htmlFor="comments">Comments (Optional)</Label>
                                                 <Textarea
                                                     id="comments"
                                                     value={comments}
                                                     onChange={(e) => setComments(e.target.value)}
-                                                    placeholder="Add any additional comments..."
-                                                    rows={4}
+                                                    placeholder="Add any additional comments or instructions..."
+                                                    rows={3}
                                                 />
                                             </div>
                                         </div>
@@ -221,7 +247,7 @@ export default function Show({ application, canApprove }: ShowProps) {
                                             <Button variant="outline" onClick={() => setApproveOpen(false)}>
                                                 Cancel
                                             </Button>
-                                            <Button onClick={handleApprove} disabled={submitting}>
+                                            <Button onClick={handleApprove} disabled={submitting} className="bg-emerald-600 hover:bg-emerald-700">
                                                 {submitting ? 'Processing...' : 'Approve Leave'}
                                             </Button>
                                         </DialogFooter>
@@ -297,11 +323,16 @@ export default function Show({ application, canApprove }: ShowProps) {
                             <CardContent className="space-y-6">
                                 <div>
                                     <h3 className="text-sm font-medium text-gray-500">Leave Type</h3>
-                                    <p className="mt-1">
+                                    <div className="mt-1 flex items-center space-x-2">
                                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                                             {application.leave_type?.name}
                                         </Badge>
-                                    </p>
+                                        {(application.leave_type as any)?.is_paid === false && (
+                                            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300">
+                                                Unpaid Leave (বিনা বেতন)
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -327,22 +358,26 @@ export default function Show({ application, canApprove }: ShowProps) {
                                 </div>
 
                                 {application.documents && application.documents.length > 0 && (
-                                    <div>
-                                        <h3 className="text-sm font-medium text-gray-500">Supporting Documents</h3>
-                                        <div className="mt-1 space-y-2">
+                                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                                        <h3 className="text-sm font-semibold text-slate-800 flex items-center mb-2">
+                                            <Paperclip className="mr-1.5 h-4 w-4 text-blue-600" />
+                                            Attached Supporting Documents ({application.documents.length})
+                                        </h3>
+                                        <div className="space-y-2">
                                             {application.documents.map((doc, index) => (
-                                                <div key={index} className="flex items-center justify-between p-2 border rounded-md">
-                                                    <div className="flex items-center">
-                                                        <Paperclip className="mr-2 h-4 w-4 text-gray-400" />
-                                                        <span className="truncate max-w-xs">{doc.name}</span>
+                                                <div key={index} className="flex items-center justify-between p-2.5 bg-white border rounded-md shadow-xs">
+                                                    <div className="flex items-center space-x-2 truncate">
+                                                        <FileText className="h-4 w-4 text-slate-500 shrink-0" />
+                                                        <span className="truncate max-w-xs text-xs font-medium text-slate-800">{doc.name}</span>
                                                     </div>
                                                     <Button
                                                         type="button"
-                                                        variant="ghost"
+                                                        variant="outline"
                                                         size="sm"
+                                                        className="text-xs h-7 text-blue-600 border-blue-200 hover:bg-blue-50"
                                                         onClick={() => downloadDocument(index)}
                                                     >
-                                                        <Download className="h-4 w-4 text-blue-500" />
+                                                        <Download className="h-3.5 w-3.5 mr-1" /> Download
                                                     </Button>
                                                 </div>
                                             ))}
