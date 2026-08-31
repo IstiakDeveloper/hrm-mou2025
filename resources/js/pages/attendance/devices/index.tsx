@@ -72,6 +72,7 @@ interface AttendanceDevice {
   last_sync_at: string | null;
   last_sync_status: string | null;
   last_adms_at: string | null;
+  adms_link?: 'connected' | 'stale' | 'waiting';
 }
 
 interface PaginationLinks {
@@ -193,6 +194,32 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
     );
   };
 
+  const getAdmsLinkBadge = (device: AttendanceDevice) => {
+    const link = device.adms_link ?? (device.last_adms_at ? 'stale' : 'waiting');
+
+    if (link === 'connected') {
+      return (
+        <Badge variant="outline" className="border-0 bg-emerald-100 text-emerald-800">
+          ADMS connected
+        </Badge>
+      );
+    }
+
+    if (link === 'stale') {
+      return (
+        <Badge variant="outline" className="border-0 bg-amber-100 text-amber-800">
+          ADMS idle
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant="outline" className="border-0 bg-slate-100 text-slate-600">
+        Waiting for machine
+      </Badge>
+    );
+  };
+
   const getSyncStatusBadge = (status: string | null) => {
     if (!status) return null;
 
@@ -252,8 +279,9 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Attendance data source</CardTitle>
             <CardDescription>
-              Keep the local PC agent, switch a device to live ADMS (machine pushes to the VPS), or use both. App punch is unchanged.
-              Machine ADMS: Server Address = VPS IP, port <span className="font-mono">80</span>, path <span className="font-mono">/iclock</span>. Serial for the current unit is <span className="font-mono">QWC5244200223</span> (auto-bound on first handshake if empty).
+              Keep the local PC agent, switch a device to live ADMS, or use both. App punch is unchanged.
+              ADMS check = machine → this VPS (<span className="font-mono">/iclock</span>), not VPS → 192.168.x.
+              Port <span className="font-mono">80</span>. SN <span className="font-mono">QWC5244200223</span> auto-binds if empty.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 pt-0">
@@ -340,7 +368,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Device ID</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">IP Address</TableHead>
-                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Serial</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">ADMS</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Live ADMS</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Agent</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
@@ -372,14 +400,17 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-mono text-[11px] text-slate-600">
-                            {device.serial_number || '—'}
-                          </div>
-                          {device.last_adms_at && (
-                            <div className="text-[10px] text-slate-400 mt-0.5">
-                              Live {formatDateTime(device.last_adms_at)}
+                          <div className="space-y-1">
+                            {getAdmsLinkBadge(device)}
+                            <div className="font-mono text-[11px] text-slate-600">
+                              {device.serial_number || 'SN pending'}
                             </div>
-                          )}
+                            {device.last_adms_at && (
+                              <div className="text-[10px] text-slate-400">
+                                {formatDateTime(device.last_adms_at)}
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Switch
@@ -419,7 +450,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
                               size="icon"
                               onClick={() => testConnection(device.id)}
                               className="h-8 w-8 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-colors"
-                              title="Test Connection"
+                              title="Check ADMS (machine → VPS)"
                             >
                               <Activity className="h-4 w-4" />
                             </Button>

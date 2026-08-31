@@ -33,9 +33,31 @@ class AttendanceDevice extends Model
         'agent_sync_enabled' => 'boolean',
     ];
 
+    protected $appends = [
+        'adms_link',
+    ];
+
     public function branch()
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    /**
+     * connected = machine called /iclock within 3 minutes
+     * stale = called before, but not recently
+     * waiting = never reached this VPS
+     */
+    public function getAdmsLinkAttribute(): string
+    {
+        if (! $this->last_adms_at) {
+            return 'waiting';
+        }
+
+        if ($this->last_adms_at->gte(now()->subMinutes(3))) {
+            return 'connected';
+        }
+
+        return 'stale';
     }
 
     public function attendances()

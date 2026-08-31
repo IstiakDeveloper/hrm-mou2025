@@ -9,7 +9,6 @@ use App\Models\Employee;
 use App\Models\ZktecoSyncSetting;
 use App\Support\HeadOfficeOrganogram;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -215,26 +214,24 @@ class AttendanceDeviceController extends Controller
     }
 
     /**
-     * Test connection to the specified device.
+     * Check ADMS: did this machine reach the VPS? (never curl the office LAN IP)
      */
     public function testConnection(AttendanceDevice $device)
     {
-        try {
-            // Simple ping test to the device IP
-            $ping = Http::timeout(5)->get("http://{$device->ip_address}:{$device->port}");
+        $sn = $device->serial_number ?: 'not bound yet';
 
-            // Just checking if connection is established, don't care about the response
-            if ($ping->failed()) {
-                return redirect()->route('attendance.devices.index')
-                    ->with('error', "Failed to connect to device at {$device->ip_address}:{$device->port}");
-            }
-
+        if ($device->adms_link === 'connected') {
             return redirect()->route('attendance.devices.index')
-                ->with('success', 'Connection to device successful.');
-        } catch (\Exception $e) {
-            return redirect()->route('attendance.devices.index')
-                ->with('error', "Connection error: {$e->getMessage()}");
+                ->with('success', "ADMS connected. {$device->name} reached this VPS {$device->last_adms_at->diffForHumans()} (SN {$sn}).");
         }
+
+        if ($device->adms_link === 'stale') {
+            return redirect()->route('attendance.devices.index')
+                ->with('error', "ADMS was connected, but last handshake was {$device->last_adms_at->diffForHumans()}. Machine may be offline or ADMS port is not 80. SN {$sn}.");
+        }
+
+        return redirect()->route('attendance.devices.index')
+            ->with('error', "ADMS not connected yet — this VPS has not received /iclock from {$device->name}. After deploy+migrate, nginx log should show GET /iclock/cdata 200. Do not test 192.168.x from the VPS.");
     }
 
     /**
