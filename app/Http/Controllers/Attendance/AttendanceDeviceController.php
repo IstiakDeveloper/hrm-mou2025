@@ -218,6 +218,11 @@ class AttendanceDeviceController extends Controller
      */
     public function testConnection(AttendanceDevice $device)
     {
+        if (! Schema::hasColumn('attendance_devices', 'last_adms_at')) {
+            return redirect()->route('attendance.devices.index')
+                ->with('error', 'Run php artisan migrate on the VPS. ADMS columns are not in the database yet, so handshake cannot be saved.');
+        }
+
         $sn = $device->serial_number ?: 'not bound yet';
 
         if ($device->adms_link === 'connected') {
@@ -231,7 +236,7 @@ class AttendanceDeviceController extends Controller
         }
 
         return redirect()->route('attendance.devices.index')
-            ->with('error', "ADMS not connected yet — this VPS has not received /iclock from {$device->name}. After deploy+migrate, nginx log should show GET /iclock/cdata 200. Do not test 192.168.x from the VPS.");
+            ->with('error', "Waiting: {$device->name} has not called /iclock on this VPS yet. On the VPS run: grep iclock /var/log/nginx/access.log | tail. Need 200, not 404. Then php artisan migrate if not done. Machine port must be 80.");
     }
 
     /**
