@@ -5,11 +5,22 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 use Carbon\Carbon;
 use App\Models\Attendance;
+use App\Models\AttendanceDevice;
 use App\Models\AttendanceSetting;
 use App\Models\Employee;
 use App\Models\Movement;
+use App\Services\ZktecoAttendanceIngestService;
 
 Schedule::command('movements:check-overdue')->dailyAt('00:00');
+
+Schedule::call(function () {
+    $ingest = app(ZktecoAttendanceIngestService::class);
+
+    AttendanceDevice::query()
+        ->where('status', 'active')
+        ->where('adms_enabled', true)
+        ->each(fn (AttendanceDevice $device) => $ingest->processAbsentEmployees($device));
+})->dailyAt('23:30')->name('zkteco-adms-mark-absents');
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

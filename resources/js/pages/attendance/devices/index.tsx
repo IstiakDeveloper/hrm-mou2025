@@ -20,12 +20,6 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -44,7 +38,6 @@ import {
 import {
   Edit,
   Trash2,
-  MoreHorizontal,
   Plus,
   Search,
   Activity,
@@ -55,6 +48,8 @@ import {
   UserCheck
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { PageSurface } from '@/components/page-surface';
 
 interface Branch {
@@ -68,11 +63,15 @@ interface AttendanceDevice {
   name: string;
   ip_address: string;
   port: number;
+  serial_number: string | null;
   branch_id: number;
   status: string;
+  adms_enabled: boolean;
+  agent_sync_enabled: boolean;
   branch: Branch;
   last_sync_at: string | null;
   last_sync_status: string | null;
+  last_adms_at: string | null;
 }
 
 interface PaginationLinks {
@@ -112,9 +111,12 @@ interface DevicesIndexProps {
     status: string;
   };
   statuses: string[];
+  syncSettings: {
+    agent_sync_enabled: boolean;
+  };
 }
 
-export default function DevicesIndex({ devices, branches, filters, statuses }: DevicesIndexProps) {
+export default function DevicesIndex({ devices, branches, filters, statuses, syncSettings }: DevicesIndexProps) {
   const [search, setSearch] = useState(filters.search || '');
   const [branchId, setBranchId] = useState(filters.branch_id || 'all');
   const [status, setStatus] = useState(filters.status || 'all');
@@ -148,6 +150,18 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
 
   const testConnection = (id: number) => {
     router.post(route('attendance.devices.test-connection', id));
+  };
+
+  const toggleGlobalAgent = (enabled: boolean) => {
+    router.put(route('attendance.devices.sync-settings'), {
+      agent_sync_enabled: enabled,
+    }, { preserveScroll: true });
+  };
+
+  const toggleDeviceFlag = (id: number, field: 'adms_enabled' | 'agent_sync_enabled', enabled: boolean) => {
+    router.patch(route('attendance.devices.sync-flags', id), {
+      [field]: enabled,
+    }, { preserveScroll: true });
   };
 
   const formatDateTime = (dateTime: string | null) => {
@@ -231,10 +245,35 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                   Add Device
                 </Button>
               </Link>
-            </div>
           </div>
+        </div>
 
-          {/* Compact Filter Bar */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Attendance data source</CardTitle>
+            <CardDescription>
+              Keep the local PC agent, switch a device to live ADMS (machine pushes to the VPS), or use both. App punch is unchanged.
+              Machine ADMS: Server Address = VPS IP, port <span className="font-mono">80</span>, path <span className="font-mono">/iclock</span>. Serial for the current unit is <span className="font-mono">QWC5244200223</span> (auto-bound on first handshake if empty).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 pt-0">
+            <div className="flex items-center gap-3">
+              <Switch
+                id="global-agent"
+                checked={syncSettings?.agent_sync_enabled ?? true}
+                onCheckedChange={toggleGlobalAgent}
+              />
+              <Label htmlFor="global-agent" className="text-sm font-medium text-slate-700">
+                Local PC agent API (global)
+              </Label>
+            </div>
+            <p className="text-xs text-slate-500">
+              Off = office PC <span className="font-mono">/api/zkteco/sync</span> is rejected. Turn it back on anytime.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Compact Filter Bar */}
           <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 w-full bg-slate-50/50 p-3 rounded-xl border border-slate-200">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -301,6 +340,9 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Device ID</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Branch</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">IP Address</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Serial</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Live ADMS</TableHead>
+                    <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Agent</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Status</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Last Sync</TableHead>
                     <TableHead className="font-semibold text-slate-700 h-11 uppercase text-[11px] tracking-wider">Sync Status</TableHead>
@@ -328,6 +370,31 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                             <Network className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
                             <span className="font-mono">{device.ip_address}:{device.port}</span>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-mono text-[11px] text-slate-600">
+                            {device.serial_number || '—'}
+                          </div>
+                          {device.last_adms_at && (
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              Live {formatDateTime(device.last_adms_at)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={!!device.adms_enabled}
+                            onCheckedChange={(checked) => toggleDeviceFlag(device.id, 'adms_enabled', checked)}
+                            aria-label="Live ADMS"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={!!device.agent_sync_enabled}
+                            onCheckedChange={(checked) => toggleDeviceFlag(device.id, 'agent_sync_enabled', checked)}
+                            disabled={!(syncSettings?.agent_sync_enabled ?? true)}
+                            aria-label="Agent sync"
+                          />
                         </TableCell>
                         <TableCell>
                           <div className="scale-90 origin-left">
@@ -380,7 +447,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses }: D
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={11} className="h-24 text-center">
                       No devices found.
                       {(search || branchId || status) && (
                         <Button

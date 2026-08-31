@@ -1453,6 +1453,8 @@ Route::middleware(['auth'])->group(function () {
             // Static paths before {device} so they are never captured as a device id
             Route::get('/biometric-ids', [AttendanceDeviceController::class, 'biometricIds'])->name('biometric-ids');
             Route::get('/sync-report', [AttendanceDeviceController::class, 'syncReport'])->name('sync-report');
+            Route::put('/sync-settings', [AttendanceDeviceController::class, 'updateSyncSettings'])->name('sync-settings');
+            Route::patch('/{device}/sync-flags', [AttendanceDeviceController::class, 'updateSyncFlags'])->name('sync-flags');
             Route::get('/{device}/edit', [AttendanceDeviceController::class, 'edit'])->name('edit');
             Route::put('/{device}', [AttendanceDeviceController::class, 'update'])->name('update');
             Route::delete('/{device}', [AttendanceDeviceController::class, 'destroy'])->name('destroy');

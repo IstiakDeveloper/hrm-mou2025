@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceDevice;
 use App\Models\Branch;
 use App\Models\Employee;
+use App\Models\ZktecoSyncSetting;
 use App\Support\HeadOfficeOrganogram;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class AttendanceDeviceController extends Controller
@@ -24,6 +27,10 @@ class AttendanceDeviceController extends Controller
                     $q->where('name', 'like', "%{$search}%")
                         ->orWhere('device_id', 'like', "%{$search}%")
                         ->orWhere('ip_address', 'like', "%{$search}%");
+
+                    if (Schema::hasColumn('attendance_devices', 'serial_number')) {
+                        $q->orWhere('serial_number', 'like', "%{$search}%");
+                    }
                 });
             })
             ->when($request->branch_id, function ($query, $branchId) {
@@ -43,6 +50,9 @@ class AttendanceDeviceController extends Controller
             'branches' => $branches,
             'filters' => $request->only(['search', 'branch_id', 'status']),
             'statuses' => ['active', 'inactive', 'maintenance'],
+            'syncSettings' => Schema::hasTable('zkteco_sync_settings')
+                ? ZktecoSyncSetting::current()->only(['agent_sync_enabled'])
+                : ['agent_sync_enabled' => true],
         ]);
     }
 
@@ -64,14 +74,28 @@ class AttendanceDeviceController extends Controller
      */
     public function store(Request $request)
     {
+        $request->merge([
+            'serial_number' => filled($request->input('serial_number'))
+                ? strtoupper(trim((string) $request->input('serial_number')))
+                : null,
+        ]);
+
         $data = $request->validate([
             'device_id' => 'required|string|max:50|unique:attendance_devices,device_id',
             'name' => 'required|string|max:255',
             'ip_address' => 'required|ip',
             'port' => 'required|integer|min:1|max:65535',
+            'serial_number' => 'nullable|string|max:64|unique:attendance_devices,serial_number',
             'branch_id' => 'required|exists:branches,id',
             'status' => 'required|in:active,inactive,maintenance',
+            'adms_enabled' => 'sometimes|boolean',
+            'agent_sync_enabled' => 'sometimes|boolean',
         ]);
+
+        $data['adms_enabled'] = $request->boolean('adms_enabled');
+        $data['agent_sync_enabled'] = $request->has('agent_sync_enabled')
+            ? $request->boolean('agent_sync_enabled')
+            : true;
 
         AttendanceDevice::create($data);
 
@@ -98,19 +122,78 @@ class AttendanceDeviceController extends Controller
      */
     public function update(Request $request, AttendanceDevice $device)
     {
+        $request->merge([
+            'serial_number' => filled($request->input('serial_number'))
+                ? strtoupper(trim((string) $request->input('serial_number')))
+                : null,
+        ]);
+
         $data = $request->validate([
             'device_id' => 'required|string|max:50|unique:attendance_devices,device_id,' . $device->getKey(),
             'name' => 'required|string|max:255',
             'ip_address' => 'required|ip',
             'port' => 'required|integer|min:1|max:65535',
+            'serial_number' => [
+                'nullable',
+                'string',
+                'max:64',
+                Rule::unique('attendance_devices', 'serial_number')->ignore($device->getKey()),
+            ],
             'branch_id' => 'required|exists:branches,id',
             'status' => 'required|in:active,inactive,maintenance',
+            'adms_enabled' => 'sometimes|boolean',
+            'agent_sync_enabled' => 'sometimes|boolean',
         ]);
+
+        $data['adms_enabled'] = $request->boolean('adms_enabled');
+        $data['agent_sync_enabled'] = $request->boolean('agent_sync_enabled');
 
         $device->update($data);
 
         return redirect()->route('attendance.devices.index')
             ->with('success', 'Attendance device updated successfully.');
+    }
+
+    /**
+     * Global: allow or block the local PC agent attendance API.
+     */
+    public function updateSyncSettings(Request $request)
+    {
+        $data = $request->validate([
+            'agent_sync_enabled' => 'required|boolean',
+        ]);
+
+        $settings = ZktecoSyncSetting::current();
+        $settings->agent_sync_enabled = $request->boolean('agent_sync_enabled');
+        $settings->save();
+
+        return redirect()->route('attendance.devices.index')
+            ->with('success', $settings->agent_sync_enabled
+                ? 'Local agent API enabled. Devices can push via the office PC again.'
+                : 'Local agent API disabled globally. Live ADMS will be the attendance source.');
+    }
+
+    /**
+     * Per-device live ADMS / agent flags.
+     */
+    public function updateSyncFlags(Request $request, AttendanceDevice $device)
+    {
+        $data = $request->validate([
+            'adms_enabled' => 'sometimes|boolean',
+            'agent_sync_enabled' => 'sometimes|boolean',
+        ]);
+
+        if ($request->has('adms_enabled')) {
+            $device->adms_enabled = $request->boolean('adms_enabled');
+        }
+
+        if ($request->has('agent_sync_enabled')) {
+            $device->agent_sync_enabled = $request->boolean('agent_sync_enabled');
+        }
+
+        $device->save();
+
+        return redirect()->back()->with('success', 'Device sync settings updated.');
     }
 
     /**

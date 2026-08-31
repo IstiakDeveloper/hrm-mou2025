@@ -19,7 +19,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { ArrowLeft, Network } from 'lucide-react';
+import { ArrowLeft, Network, Radio } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 
 /** Laravel validation uses snake_case; form state uses camelCase for some fields */
 function mapServerErrorsToFormErrors(
@@ -29,6 +30,9 @@ function mapServerErrorsToFormErrors(
     device_id: 'deviceId',
     ip_address: 'ipAddress',
     branch_id: 'branchId',
+    serial_number: 'serialNumber',
+    adms_enabled: 'admsEnabled',
+    agent_sync_enabled: 'agentSyncEnabled',
   };
   const out: Record<string, string> = {};
   for (const [key, val] of Object.entries(raw)) {
@@ -50,8 +54,11 @@ interface AttendanceDevice {
   name: string;
   ip_address: string;
   port: number;
+  serial_number: string | null;
   branch_id: number;
   status: string;
+  adms_enabled?: boolean;
+  agent_sync_enabled?: boolean;
 }
 
 interface EditProps {
@@ -67,8 +74,11 @@ export default function Edit({ device, branches, statuses }: EditProps) {
   const [port, setPort] = useState(
     String(device.port != null ? device.port : 4370)
   );
+  const [serialNumber, setSerialNumber] = useState(device.serial_number ?? '');
   const [branchId, setBranchId] = useState(device.branch_id.toString());
   const [status, setStatus] = useState(device.status);
+  const [admsEnabled, setAdmsEnabled] = useState(!!device.adms_enabled);
+  const [agentSyncEnabled, setAgentSyncEnabled] = useState(device.agent_sync_enabled !== false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -105,8 +115,11 @@ export default function Edit({ device, branches, statuses }: EditProps) {
       name,
       ip_address: ipAddress,
       port: parseInt(port),
+      serial_number: serialNumber || null,
       branch_id: parseInt(branchId),
-      status
+      status,
+      adms_enabled: admsEnabled,
+      agent_sync_enabled: agentSyncEnabled,
     }, {
       onError: (errs) => {
         setErrors(mapServerErrorsToFormErrors(errs as Record<string, string | string[]>));
@@ -213,6 +226,55 @@ export default function Edit({ device, branches, statuses }: EditProps) {
                   <p className="text-sm text-muted-foreground">
                     Communication port (default: 4370 for ZKTeco)
                   </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="serialNumber">Device serial (ADMS SN)</Label>
+                <Input
+                  id="serialNumber"
+                  placeholder="QWC5244200223"
+                  value={serialNumber}
+                  onChange={(e) => setSerialNumber(e.target.value)}
+                  className="font-mono"
+                />
+                {errors.serialNumber && (
+                  <p className="text-sm font-medium text-red-500">{errors.serialNumber}</p>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  Head Office unit SN from nginx log: QWC5244200223. Leave blank to auto-bind on first live handshake.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 rounded-lg border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <Label htmlFor="admsEnabled" className="flex items-center gap-2">
+                      <Radio className="h-4 w-4 text-emerald-600" />
+                      Live ADMS
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Machine pushes punches to the VPS as they happen.
+                    </p>
+                  </div>
+                  <Switch
+                    id="admsEnabled"
+                    checked={admsEnabled}
+                    onCheckedChange={setAdmsEnabled}
+                  />
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <Label htmlFor="agentSyncEnabled">Local PC agent</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Office PC still posts to /api/zkteco/sync. Turn off after live ADMS is confirmed.
+                    </p>
+                  </div>
+                  <Switch
+                    id="agentSyncEnabled"
+                    checked={agentSyncEnabled}
+                    onCheckedChange={setAgentSyncEnabled}
+                  />
                 </div>
               </div>
 
