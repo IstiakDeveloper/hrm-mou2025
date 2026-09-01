@@ -61,6 +61,7 @@ export default function Create({ branches, statuses }: CreateProps) {
     const [branchId, setBranchId] = useState('');
     const [status, setStatus] = useState('active');
     const [admsEnabled, setAdmsEnabled] = useState(false);
+    const [attlogKeepDays, setAttlogKeepDays] = useState(7);
     const [agentSyncEnabled, setAgentSyncEnabled] = useState(true);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
@@ -102,6 +103,7 @@ export default function Create({ branches, statuses }: CreateProps) {
             branch_id: parseInt(branchId),
             status,
             adms_enabled: admsEnabled,
+            adms_attlog_keep_days: attlogKeepDays,
             agent_sync_enabled: agentSyncEnabled,
         }, {
             onError: (errs) => {
@@ -254,6 +256,26 @@ export default function Create({ branches, statuses }: CreateProps) {
                                         checked={agentSyncEnabled}
                                         onCheckedChange={setAgentSyncEnabled}
                                     />
+                                </div>
+                                <div className="flex items-start justify-between gap-4 md:col-span-2">
+                                    <div className="flex-1">
+                                        <Label htmlFor="attlogKeepDays">Keep punch logs on device</Label>
+                                        <p className="text-sm text-muted-foreground mt-1">
+                                            Older than this is dropped on the machine. Punch does not wipe logs. Users and faces stay.
+                                        </p>
+                                    </div>
+                                    <Select
+                                        value={String(attlogKeepDays)}
+                                        onValueChange={(value) => setAttlogKeepDays(Number(value))}
+                                    >
+                                        <SelectTrigger id="attlogKeepDays" className="w-[140px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="3">3 days</SelectItem>
+                                            <SelectItem value="7">7 days</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
 

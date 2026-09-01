@@ -88,10 +88,12 @@ class AttendanceDeviceController extends Controller
             'branch_id' => 'required|exists:branches,id',
             'status' => 'required|in:active,inactive,maintenance',
             'adms_enabled' => 'sometimes|boolean',
+            'adms_attlog_keep_days' => 'sometimes|integer|in:3,7',
             'agent_sync_enabled' => 'sometimes|boolean',
         ]);
 
         $data['adms_enabled'] = $request->boolean('adms_enabled');
+        $data['adms_attlog_keep_days'] = (int) ($request->input('adms_attlog_keep_days', 7));
         $data['agent_sync_enabled'] = $request->has('agent_sync_enabled')
             ? $request->boolean('agent_sync_enabled')
             : true;
@@ -141,10 +143,12 @@ class AttendanceDeviceController extends Controller
             'branch_id' => 'required|exists:branches,id',
             'status' => 'required|in:active,inactive,maintenance',
             'adms_enabled' => 'sometimes|boolean',
+            'adms_attlog_keep_days' => 'sometimes|integer|in:3,7',
             'agent_sync_enabled' => 'sometimes|boolean',
         ]);
 
         $data['adms_enabled'] = $request->boolean('adms_enabled');
+        $data['adms_attlog_keep_days'] = (int) ($request->input('adms_attlog_keep_days', 7));
         $data['agent_sync_enabled'] = $request->boolean('agent_sync_enabled');
 
         $device->update($data);

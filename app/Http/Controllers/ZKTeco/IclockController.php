@@ -64,11 +64,48 @@ class IclockController extends Controller
             'info' => $request->query('INFO'),
         ]);
 
+        if ($device) {
+            $command = $device->pullPendingAdmsCommand();
+            if ($command) {
+                Log::info('ADMS command sent', [
+                    'sn' => $sn,
+                    'command' => $command,
+                ]);
+
+                return $this->plain($command);
+            }
+        }
+
         return $this->plain('OK');
     }
 
     public function deviceCmd(Request $request): Response
     {
+        $sn = $this->serialFromRequest($request);
+        $device = $sn !== '' ? $this->resolveDevice($sn, $request) : null;
+
+        $id = (string) ($request->input('ID', $request->query('ID', '')));
+        $return = (string) ($request->input('Return', $request->query('Return', '')));
+        $cmd = (string) ($request->input('CMD', $request->query('CMD', '')));
+
+        if ($id === '' && $request->getContent() !== '') {
+            parse_str((string) $request->getContent(), $parsed);
+            $id = (string) ($parsed['ID'] ?? $id);
+            $return = (string) ($parsed['Return'] ?? $return);
+            $cmd = (string) ($parsed['CMD'] ?? $cmd);
+        }
+
+        Log::info('ADMS deviceCmd', [
+            'sn' => $sn,
+            'id' => $id,
+            'return' => $return,
+            'cmd' => $cmd,
+        ]);
+
+        if ($device) {
+            $device->ackAdmsCommand($id !== '' ? $id : null, $return !== '' ? $return : '0');
+        }
+
         return $this->plain('OK');
     }
 
@@ -176,6 +213,7 @@ class IclockController extends Controller
     private function handshakeBody(string $sn, ?AttendanceDevice $device): string
     {
         $stamp = $device?->adms_attlog_stamp ?: 'None';
+        $keepDays = $device?->attlogKeepDays() ?? 7;
 
         return implode("\n", [
             'GET OPTION FROM: '.$sn,
@@ -187,6 +225,7 @@ class IclockController extends Controller
             'TransTimes=00:00;14:00',
             'TransInterval=1',
             'TransFlag=TransData AttLog OpLog AttPhoto EnrollUser ChgUser EnrollFP ChgFP UserPic',
+            'ResLogDay='.$keepDays,
             'TimeZone=6',
             'Realtime=1',
             'Encrypt=None',

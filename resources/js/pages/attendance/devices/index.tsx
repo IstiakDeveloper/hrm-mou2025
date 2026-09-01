@@ -282,6 +282,7 @@ export default function DevicesIndex({ devices, branches, filters, statuses, syn
               Keep the local PC agent, switch a device to live ADMS, or use both. App punch is unchanged.
               ADMS check = machine → this VPS (<span className="font-mono">/iclock</span>), not VPS → 192.168.x.
               Port <span className="font-mono">80</span>. SN <span className="font-mono">QWC5244200223</span> auto-binds if empty.
+              Punch logs stay on the machine 3 or 7 days (not cleared on each punch).
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 pt-0">
