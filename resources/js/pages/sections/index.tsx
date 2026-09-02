@@ -313,11 +313,7 @@ export default function SectionsIndex() {
                                     );
                                 }
                                 if (section.id === 'leave') {
-                                    return (
-                                        hasAppPermission(auth, 'leave-applications.view') ||
-                                        hasAppPermission(auth, 'leave-balances.view') ||
-                                        hasAppPermission(auth, 'leaves.view')
-                                    );
+                                    return true;
                                 }
                                 return false;
                             }
