@@ -789,6 +789,24 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 const reports = menuItemsForLayout.find((m) => m.menuKey === 'section-reports');
                 return reports ? [reports] : [];
             }
+            if (activeSectionId === 'leave') {
+                const leaveMenu = menuItemsForLayout.find((m) => m.menuKey === 'leave-management');
+                if (!leaveMenu) {
+                    return [];
+                }
+                const allowedPaths = new Set(['/leave/applications', '/leave/balances']);
+                const submenu = (leaveMenu.submenu ?? [])
+                    .filter((sub) => allowedPaths.has(sub.path ?? ''))
+                    .map((sub) => ({ ...sub, hrOnly: false }));
+                return [
+                    {
+                        ...leaveMenu,
+                        submenu,
+                        hasSubmenu: submenu.length > 1,
+                        path: submenu[0]?.path ?? leaveMenu.path,
+                    },
+                ];
+            }
             return [];
         }
 
@@ -961,7 +979,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     ? [{ title: 'Attendance & movement', path: '/sections/attendance-movement' }]
                     : [];
             case 'leave':
-                return hasPermission('leave-applications.view') ? [{ title: 'Leave dashboard', path: '/sections/leave' }] : [];
+                return hasPermission('leave-applications.view')
+                    ? [{ title: branchAccount ? 'Leave Dashboard' : 'Leave dashboard', path: '/sections/leave' }]
+                    : [];
             case 'administration':
                 return hasAnyDashboardPerm(administrationSectionDashboardAny) ? [{ title: 'Administration', path: '/sections/administration' }] : [];
             case 'payroll':

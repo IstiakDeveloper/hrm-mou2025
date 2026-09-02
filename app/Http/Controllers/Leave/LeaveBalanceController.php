@@ -8,6 +8,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -261,6 +262,15 @@ class LeaveBalanceController extends Controller
         $perPage = $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
 
+        /** @var User|null $user */
+        $user = Auth::user();
+        $isBranchAccount = $user instanceof User && $user->isBranchAccount();
+        $lockedBranchId = $isBranchAccount ? (int) ($user->branch_id ?: 0) : null;
+
+        if ($isBranchAccount) {
+            $branchId = $lockedBranchId > 0 ? $lockedBranchId : -1;
+        }
+
         $query = Employee::query()
             ->select([
                 'id',
@@ -282,7 +292,11 @@ class LeaveBalanceController extends Controller
                     $q->where('year', $year)->with('leaveType');
                 },
             ])
-            ->where('status', 'active')
+            ->when($isBranchAccount, function ($q) {
+                $q->whereIn('status', ['active', 'on_leave']);
+            }, function ($q) {
+                $q->where('status', 'active');
+            })
             ->when($branchId, function ($q, $branchId) {
                 $q->where('current_branch_id', $branchId);
             })
@@ -301,10 +315,12 @@ class LeaveBalanceController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        $branches = Branch::query()
-            ->active()
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        $branches = $isBranchAccount
+            ? Branch::query()->whereKey(max(0, (int) $lockedBranchId))->get(['id', 'name'])
+            : Branch::query()
+                ->active()
+                ->orderBy('name')
+                ->get(['id', 'name']);
 
         $leaveTypes = LeaveType::query()
             ->orderBy('name')
@@ -314,6 +330,7 @@ class LeaveBalanceController extends Controller
             'employees' => $employees,
             'branches' => $branches,
             'leaveTypes' => $leaveTypes,
+            'branchLocked' => $isBranchAccount,
             'filters' => [
                 'year' => (string) $year,
                 'branch_id' => $branchId ? (string) $branchId : '',

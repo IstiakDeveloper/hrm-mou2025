@@ -172,6 +172,8 @@ return [
                 'fixed-assets.view',
                 'fixed-assets.create',
                 'payroll.view',
+                'leave-applications.view',
+                'leave-balances.view',
             ],
         ],
         'Department Head' => [

@@ -122,6 +122,7 @@ interface LeaveBalancesIndexProps {
   employees: EmployeesResponse;
   branches: Branch[];
   leaveTypes: LeaveType[];
+  branchLocked?: boolean;
   filters: {
     year: string;
     branch_id: string;
@@ -136,6 +137,7 @@ export default function LeaveBalancesIndex({
   employees,
   branches,
   leaveTypes,
+  branchLocked = false,
   filters,
   year,
   years
@@ -156,11 +158,15 @@ export default function LeaveBalancesIndex({
 
   const leaveTypesForDetails = useMemo(() => leaveTypes || [], [leaveTypes]);
 
+  const resolvedBranchId = branchLocked
+    ? (filters.branch_id || branchId)
+    : (branchId === 'all' ? '' : branchId);
+
   const handleSearch = () => {
     router.get(route('leave.balances.index'), {
       search,
       year: selectedYear,
-      branch_id: branchId === 'all' ? '' : branchId,
+      branch_id: resolvedBranchId === 'all' ? '' : resolvedBranchId,
       per_page: perPage
     }, { preserveState: true });
   };
@@ -170,7 +176,7 @@ export default function LeaveBalancesIndex({
     router.get(route('leave.balances.index'), {
       search,
       year: selectedYear,
-      branch_id: branchId === 'all' ? '' : branchId,
+      branch_id: resolvedBranchId === 'all' ? '' : resolvedBranchId,
       per_page: value
     }, { preserveState: true });
   };
@@ -183,16 +189,22 @@ export default function LeaveBalancesIndex({
 
   const resetFilters = () => {
     setSearch('');
-    setBranchId('all');
+    if (!branchLocked) {
+      setBranchId('all');
+    }
     setPerPage('15');
-    router.get(route('leave.balances.index'), { year: selectedYear, per_page: '15' }, { preserveState: true });
+    router.get(route('leave.balances.index'), {
+      year: selectedYear,
+      per_page: '15',
+      ...(branchLocked && resolvedBranchId && resolvedBranchId !== 'all' ? { branch_id: resolvedBranchId } : {}),
+    }, { preserveState: true });
   };
 
   const handleYearChange = (year: string) => {
     setSelectedYear(year);
     router.get(route('leave.balances.index'), {
       year,
-      branch_id: branchId === 'all' ? '' : branchId,
+      branch_id: resolvedBranchId === 'all' ? '' : resolvedBranchId,
       search,
       per_page: perPage
     }, { preserveState: true });
@@ -271,10 +283,13 @@ export default function LeaveBalancesIndex({
               </Badge>
             </div>
             <p className="mt-1 text-gray-500">
-              Manage employee leave balances and allocations
+              {branchLocked
+                ? 'Leave allocation, days taken and remaining balance for this branch'
+                : 'Manage employee leave balances and allocations'}
             </p>
           </div>
 
+          {!branchLocked && (
           <div className="mt-4 md:mt-0 flex space-x-2">
             <Link href={route('leave.balances.create')}>
               <Button className="flex items-center">
@@ -356,6 +371,7 @@ export default function LeaveBalancesIndex({
               </DialogContent>
             </Dialog>
           </div>
+          )}
         </div>
 
         {/* Filters */}
@@ -403,6 +419,11 @@ export default function LeaveBalancesIndex({
               </div>
 
               <div className="w-full md:w-64">
+                {branchLocked ? (
+                  <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                    {branches[0]?.name ?? 'This branch'}
+                  </div>
+                ) : (
                 <Select
                   value={branchId}
                   onValueChange={setBranchId}
@@ -419,6 +440,7 @@ export default function LeaveBalancesIndex({
                     ))}
                   </SelectContent>
                 </Select>
+                )}
               </div>
 
               <div className="flex space-x-2">

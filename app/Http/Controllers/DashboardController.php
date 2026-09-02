@@ -17,6 +17,7 @@ use App\Models\EmployeeType;
 use App\Models\Holiday;
 use App\Models\LeaveApplication;
 use App\Models\LeaveBalance;
+use App\Models\LeaveType;
 use App\Models\Movement;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
@@ -136,6 +137,15 @@ class DashboardController extends Controller
 
         if (! $user->canAccessSection('leave')) {
             abort(403);
+        }
+
+        if ($user->isBranchAccount()) {
+            $branchDashboard = $this->buildBranchLeaveDashboardProps($user);
+            if ($branchDashboard === null) {
+                return redirect()->route('sections.index');
+            }
+
+            return Inertia::render('sections/leave/branch-dashboard', $branchDashboard);
         }
 
         $hasPermission = static fn (User $u, string $p): bool => (bool) call_user_func([$u, 'hasPermission'], $p);
@@ -1077,6 +1087,218 @@ class DashboardController extends Controller
                 'unpostedSheet' => route('payroll.reports.show', 'salary-sheet-unposted').'?branch_id='.$branchId,
             ],
         ];
+    }
+
+    /**
+     * Branch Account leave desk: allocated vs used vs remaining for this branch only.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function buildBranchLeaveDashboardProps(User $user): ?array
+    {
+        $branchId = (int) ($user->branch_id ?: 0);
+        if ($branchId <= 0) {
+            return null;
+        }
+
+        $branch = Branch::query()->find($branchId);
+        if (! $branch) {
+            return null;
+        }
+
+        $year = (int) Carbon::now()->year;
+        $today = Carbon::today();
+        $currentMonth = (int) Carbon::now()->month;
+
+        $staffQuery = Employee::query()
+            ->where('current_branch_id', $branchId)
+            ->whereIn('status', ['active', 'on_leave']);
+
+        $activeStaff = (clone $staffQuery)->count();
+        $totalStaff = Employee::query()->where('current_branch_id', $branchId)->count();
+
+        $leaveTypes = LeaveType::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'days_allowed']);
+
+        $employees = (clone $staffQuery)
+            ->with([
+                'designation:id,name',
+                'leaveBalances' => function ($q) use ($year) {
+                    $q->where('year', $year)->with('leaveType:id,name');
+                },
+            ])
+            ->orderBy('name_en')
+            ->get([
+                'id',
+                'employee_id',
+                'pin',
+                'name_en',
+                'name_bn',
+                'gender',
+                'designation_id',
+                'status',
+            ]);
+
+        $employeeIds = $employees->pluck('id')->map(fn ($id) => (int) $id)->values();
+
+        $pendingCount = 0;
+        $todayOnLeaveCount = 0;
+        $approvedThisMonth = 0;
+        $pendingByEmployee = collect();
+        $onLeaveTodayIds = [];
+        $pendingApplications = [];
+
+        if ($employeeIds->isNotEmpty()) {
+            $pendingCount = LeaveApplication::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->where('status', 'pending')
+                ->count();
+
+            $todayOnLeaveCount = LeaveApplication::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->where('status', 'approved')
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+                ->count();
+
+            $approvedThisMonth = LeaveApplication::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->where('status', 'approved')
+                ->whereMonth('start_date', $currentMonth)
+                ->whereYear('start_date', $year)
+                ->count();
+
+            $pendingByEmployee = LeaveApplication::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->where('status', 'pending')
+                ->selectRaw('employee_id, COUNT(*) as c')
+                ->groupBy('employee_id')
+                ->pluck('c', 'employee_id');
+
+            $onLeaveTodayIds = LeaveApplication::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->where('status', 'approved')
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+                ->pluck('employee_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            $pendingApplications = LeaveApplication::query()
+                ->with([
+                    'employee:id,employee_id,name_en,name_bn',
+                    'leaveType:id,name',
+                ])
+                ->whereIn('employee_id', $employeeIds)
+                ->where('status', 'pending')
+                ->orderByDesc('applied_at')
+                ->orderByDesc('id')
+                ->take(12)
+                ->get()
+                ->map(function (LeaveApplication $app) {
+                    return [
+                        'id' => $app->id,
+                        'employee' => [
+                            'id' => $app->employee?->id,
+                            'employee_id' => $app->employee?->employee_id,
+                            'name_en' => $app->employee?->name_en,
+                            'name_bn' => $app->employee?->name_bn,
+                        ],
+                        'leave_type' => $app->leaveType?->name,
+                        'start_date' => $app->start_date?->format('Y-m-d'),
+                        'end_date' => $app->end_date?->format('Y-m-d'),
+                        'days' => (int) ($app->days ?? 0),
+                        'applied_at' => $app->applied_at?->format('Y-m-d'),
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        $employeeRows = $employees->map(function (Employee $emp) use ($leaveTypes, $pendingByEmployee, $onLeaveTodayIds) {
+            $balances = $emp->leaveBalances;
+            $typeRows = $leaveTypes
+                ->filter(fn (LeaveType $lt) => $this->leaveTypeAppliesToEmployeeGender($lt, $emp->gender))
+                ->map(function (LeaveType $lt) use ($balances) {
+                    $bal = $balances->firstWhere('leave_type_id', $lt->id);
+                    $allocated = $bal ? (int) $bal->allocated_days : (int) ($lt->days_allowed ?? 0);
+                    $used = $bal ? (int) $bal->used_days : 0;
+                    $remaining = $bal ? (int) $bal->remaining_days : max(0, $allocated - $used);
+
+                    return [
+                        'leave_type_id' => $lt->id,
+                        'name' => $lt->name,
+                        'allocated' => $allocated,
+                        'used' => $used,
+                        'remaining' => $remaining,
+                    ];
+                })
+                ->values();
+
+            return [
+                'id' => $emp->id,
+                'employee_id' => $emp->employee_id,
+                'pin' => $emp->pin,
+                'name_en' => $emp->name_en,
+                'name_bn' => $emp->name_bn,
+                'designation' => $emp->designation?->name,
+                'status' => $emp->status,
+                'on_leave_today' => in_array($emp->id, $onLeaveTodayIds, true),
+                'pending_count' => (int) ($pendingByEmployee[$emp->id] ?? 0),
+                'balances' => $typeRows->all(),
+                'total_allocated' => (int) $typeRows->sum('allocated'),
+                'total_used' => (int) $typeRows->sum('used'),
+                'total_remaining' => (int) $typeRows->sum('remaining'),
+            ];
+        })->values()->all();
+
+        return [
+            'branch' => [
+                'id' => $branch->id,
+                'name' => $branch->name,
+                'branch_code' => $branch->branch_code,
+            ],
+            'year' => $year,
+            'leaveTypes' => $leaveTypes->map(fn (LeaveType $lt) => [
+                'id' => $lt->id,
+                'name' => $lt->name,
+                'days_allowed' => (int) ($lt->days_allowed ?? 0),
+            ])->values()->all(),
+            'stats' => [
+                'activeStaff' => $activeStaff,
+                'totalStaff' => $totalStaff,
+                'pending' => $pendingCount,
+                'todayOnLeave' => $todayOnLeaveCount,
+                'approvedThisMonth' => $approvedThisMonth,
+            ],
+            'employees' => $employeeRows,
+            'pendingApplications' => $pendingApplications,
+            'quickLinks' => [
+                'applications' => route('leave.applications.index', ['section' => 'leave']),
+                'pending' => route('leave.applications.index', ['section' => 'leave', 'status' => 'pending']),
+                'balances' => route('leave.balances.index', ['section' => 'leave', 'branch_id' => $branchId, 'year' => $year]),
+            ],
+        ];
+    }
+
+    private function leaveTypeAppliesToEmployeeGender(LeaveType $type, mixed $gender): bool
+    {
+        $name = strtolower(trim((string) $type->name));
+        $g = strtolower(trim((string) $gender));
+        $isMale = in_array($g, ['male', 'm'], true);
+        $isFemale = in_array($g, ['female', 'f'], true);
+
+        if (str_contains($name, 'maternity')) {
+            return $isFemale;
+        }
+        if (str_contains($name, 'paternity')) {
+            return $isMale;
+        }
+
+        return true;
     }
 
     /**

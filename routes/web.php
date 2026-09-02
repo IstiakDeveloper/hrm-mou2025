@@ -226,6 +226,7 @@ Route::middleware(['auth'])->group(function () {
     Route::redirect('/branch', '/sections')->name('branch.portal');
     Route::redirect('/branch/attendance', '/attendance/daily-branch-summary?section=attendance-movement')->name('branch.portal.attendance');
     Route::redirect('/branch/inventory', '/inventory/operations?section=inventory')->name('branch.portal.inventory');
+    Route::redirect('/branch/leave', '/sections/leave?section=leave')->name('branch.portal.leave');
 
     // Section Landing - Modules (available to all authenticated users)
     Route::get('/sections', function () {

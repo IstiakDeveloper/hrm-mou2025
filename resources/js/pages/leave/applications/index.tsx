@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
     Table,
@@ -52,6 +52,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { isBranchAccount } from '@/lib/permissions';
 
 interface Department {
     id: number;
@@ -172,6 +173,8 @@ export default function ApplicationsIndex({
     userPermissions,
     currentUserId
   }: ApplicationsIndexProps) {
+    const { auth } = usePage().props as { auth?: { user?: { account_type?: string } } };
+    const branchAccount = isBranchAccount(auth);
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || 'all');
     const [departmentId, setDepartmentId] = useState(filters.department_id || 'all');
@@ -271,6 +274,8 @@ export default function ApplicationsIndex({
                     </div>
 
                     <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+                        {!branchAccount && (
+                        <>
                         <Button
                             variant="outline"
                             size="sm"
@@ -284,6 +289,8 @@ export default function ApplicationsIndex({
                             <Plus className="mr-1 h-3 w-3" />
                             Apply for Leave
                         </Button>
+                        </>
+                        )}
                     </div>
                 </div>
 

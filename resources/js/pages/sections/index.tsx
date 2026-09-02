@@ -312,6 +312,13 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'fixed-assets.create')
                                     );
                                 }
+                                if (section.id === 'leave') {
+                                    return (
+                                        hasAppPermission(auth, 'leave-applications.view') ||
+                                        hasAppPermission(auth, 'leave-balances.view') ||
+                                        hasAppPermission(auth, 'leaves.view')
+                                    );
+                                }
                                 return false;
                             }
 
