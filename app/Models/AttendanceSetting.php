@@ -17,12 +17,24 @@ class AttendanceSetting extends Model
         'late_threshold_minutes',
         'half_day_hours',
         'weekend_days',
+        'enable_bulk_attendance',
     ];
 
     protected $casts = [
         // Use string for time fields instead of datetime
         'weekend_days' => 'array',
+        'enable_bulk_attendance' => 'boolean',
     ];
+
+    /**
+     * Check if bulk attendance feature is enabled system-wide.
+     */
+    public static function isBulkAttendanceEnabled(): bool
+    {
+        $setting = static::query()->orderBy('id')->first();
+
+        return $setting ? (bool) ($setting->enable_bulk_attendance ?? true) : true;
+    }
 
     // Add accessor methods to format the time fields properly
     public function getWorkStartTimeAttribute($value)

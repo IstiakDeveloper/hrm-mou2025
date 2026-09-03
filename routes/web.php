@@ -1426,6 +1426,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/sheet-report', [AttendanceController::class, 'sheetReport'])->name('sheet-report');
         Route::get('/pdf', [AttendanceController::class, 'generatePdf'])->name('pdf');
 
+        // Super Admin Bulk Attendance Operations
+        Route::get('/bulk-preview', [AttendanceController::class, 'bulkPreview'])->name('bulk-preview');
+        Route::post('/bulk-store', [AttendanceController::class, 'bulkStore'])->name('bulk-store');
+
         // Attendance CRUD Operations
         Route::middleware(['permission:attendance.create'])->group(function () {
             Route::get('/create', [AttendanceController::class, 'create'])->name('create');
@@ -1465,6 +1469,7 @@ Route::middleware(['auth'])->group(function () {
         // Attendance Settings
         Route::middleware(['permission:attendance.admin'])->prefix('settings')->name('settings.')->group(function () {
             Route::get('/', [AttendanceSettingController::class, 'index'])->name('index');
+            Route::post('/toggle-bulk-attendance', [AttendanceSettingController::class, 'toggleBulkAttendance'])->name('toggle-bulk-attendance');
             Route::get('/create', [AttendanceSettingController::class, 'create'])->name('create');
             Route::post('/', [AttendanceSettingController::class, 'store'])->name('store');
             Route::get('/employee-times', [\App\Http\Controllers\Attendance\EmployeeAttendanceTimeController::class, 'index'])->name('employee-times');

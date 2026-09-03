@@ -337,16 +337,16 @@ export default function MovementIndex({
 
     const hasActiveFilters = Boolean(
         search ||
-            status ||
-            departmentId ||
-            employeeId ||
-            movementType ||
-            zoneId ||
-            regionalOfficeId ||
-            branchId ||
-            fromDate ||
-            toDate ||
-            crossDayOnly,
+        status ||
+        departmentId ||
+        employeeId ||
+        movementType ||
+        zoneId ||
+        regionalOfficeId ||
+        branchId ||
+        fromDate ||
+        toDate ||
+        crossDayOnly,
     );
 
     const activeFilterCount = [
@@ -818,7 +818,7 @@ export default function MovementIndex({
                             className={cn(
                                 'relative h-8 w-8 shrink-0 rounded-lg border-slate-200 md:hidden',
                                 (filterSheetOpen || activeFilterCount > 0) &&
-                                    'border-emerald-200 bg-emerald-50 text-emerald-600',
+                                'border-emerald-200 bg-emerald-50 text-emerald-600',
                             )}
                             onClick={() => setFilterSheetOpen(true)}
                             title="Filters"
@@ -1290,11 +1290,10 @@ export default function MovementIndex({
                                                         key={i}
                                                         href={link.url || '#'}
                                                         preserveState
-                                                        className={`relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-semibold shadow-sm transition-all duration-200 ${
-                                                            link.active
+                                                        className={`relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-semibold shadow-sm transition-all duration-200 ${link.active
                                                                 ? 'z-10 border border-emerald-600 bg-emerald-600 text-white'
                                                                 : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-slate-50 hover:text-emerald-600 focus:z-20'
-                                                        }`}
+                                                            }`}
                                                         dangerouslySetInnerHTML={{ __html: link.label }}
                                                     />
                                                 );

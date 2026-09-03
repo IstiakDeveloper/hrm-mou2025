@@ -350,6 +350,8 @@ class AttendanceController extends Controller
                 'isEmployee' => $user->employee_id ? true : false,
                 'isBranchManager' => $user->hasPermission('branch_manager'),
                 'isDepartmentHead' => $user->hasPermission('department_head'),
+                'isSuperAdmin' => (bool) $user->isSuperAdmin(),
+                'isBulkAttendanceEnabled' => AttendanceSetting::isBulkAttendanceEnabled(),
             ],
         ]);
     }
@@ -823,6 +825,324 @@ class AttendanceController extends Controller
                 'isAdmin' => $user->hasPermission('attendance.admin'),
             ],
         ]);
+    }
+
+    /**
+     * Preview bulk attendance with 1-month average present times (Super Admin Only).
+     */
+    public function bulkPreview(Request $request)
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->isSuperAdmin()) {
+            return response()->json(['message' => 'Unauthorized. Super Admin access required.'], 403);
+        }
+
+        if (! AttendanceSetting::isBulkAttendanceEnabled()) {
+            return response()->json(['message' => 'Bulk attendance feature is currently disabled in Attendance Settings.'], 403);
+        }
+
+        $dateStr = $request->input('date', Carbon::today()->format('Y-m-d'));
+        $targetDate = Carbon::parse($dateStr)->startOfDay();
+        $ymd = $targetDate->format('Y-m-d');
+
+        // 1 Month window (30 days prior to target date)
+        $historyStartDate = $targetDate->copy()->subDays(30)->startOfDay();
+        $historyEndDate = $targetDate->copy()->subDay()->endOfDay();
+
+        $employeesQuery = Employee::with(['department', 'designation', 'branch'])
+            ->where('status', 'active');
+
+        if ($request->filled('branch_id') && $request->branch_id !== 'all') {
+            $employeesQuery->where('current_branch_id', $request->branch_id);
+        }
+
+        if ($request->filled('department_id') && $request->department_id !== 'all') {
+            $employeesQuery->where('department_id', $request->department_id);
+        }
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $employeesQuery->where(function ($q) use ($search) {
+                $q->where('name_en', 'like', "%{$search}%")
+                    ->orWhere('name_bn', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%");
+            });
+        }
+
+        $this->applyOrganogramEmployeeOrder($employeesQuery);
+        $employees = $employeesQuery->get();
+        $employeeIds = $employees->pluck('id')->all();
+
+        // 1. Existing attendance on target date
+        $existingAttendances = Attendance::whereIn('employee_id', $employeeIds)
+            ->whereDate('date', $ymd)
+            ->get()
+            ->keyBy('employee_id');
+
+        // 2. Approved leave applications covering target date
+        $leaveApps = LeaveApplication::with('leaveType')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $ymd)
+            ->whereDate('end_date', '>=', $ymd)
+            ->get();
+
+        $leaveByEmployee = [];
+        foreach ($leaveApps as $app) {
+            $empId = (int) $app->employee_id;
+            if (! method_exists($app, 'coversCalendarDate') || $app->coversCalendarDate($ymd)) {
+                $leaveByEmployee[$empId] = $app->leaveType?->name ?? 'Leave';
+            }
+        }
+
+        // 3. Official Movements covering target date
+        $movementsByEmployee = Movement::whereIn('employee_id', $employeeIds)
+            ->coveringAttendanceDate($ymd)
+            ->get()
+            ->groupBy('employee_id');
+
+        // 4. Branch attendance settings
+        $branchIds = $employees->pluck('current_branch_id')->filter()->unique()->values()->all();
+        $attendanceSettings = AttendanceSetting::whereIn('branch_id', $branchIds)
+            ->get()
+            ->keyBy('branch_id');
+        $globalSetting = AttendanceSetting::global();
+        $defaultWeekendDays = $this->normalizeJsonArray($globalSetting->weekend_days);
+        if (empty($defaultWeekendDays)) {
+            $defaultWeekendDays = [5, 6];
+        }
+
+        // 5. Query 1-month attendance history for average check-in/out
+        $pastAttendances = Attendance::whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$historyStartDate->toDateString(), $historyEndDate->toDateString()])
+            ->whereNotNull('check_in')
+            ->select('employee_id', 'date', 'check_in', 'check_out', 'status')
+            ->get()
+            ->groupBy('employee_id');
+
+        $rows = [];
+        $summary = [
+            'total' => count($employees),
+            'eligible' => 0,
+            'on_leave' => 0,
+            'already_recorded' => 0,
+            'weekend' => 0,
+        ];
+
+        foreach ($employees as $employee) {
+            $empId = (int) $employee->id;
+            $branchId = (int) ($employee->current_branch_id ?? ($employee->branch?->id ?? 0));
+            $setting = $attendanceSettings->get($branchId) ?? $globalSetting;
+
+            // Weekend check
+            $weekendDays = $setting ? $this->normalizeJsonArray($setting->weekend_days) : $defaultWeekendDays;
+            if (empty($weekendDays)) {
+                $weekendDays = $defaultWeekendDays;
+            }
+            $isWeekend = in_array($targetDate->dayOfWeek, array_map('intval', $weekendDays), true);
+
+            // Shift defaults
+            $defaultCheckIn = $setting->work_start_time ? Carbon::parse($setting->work_start_time)->format('H:i') : '09:00';
+            $defaultCheckOut = $setting->work_end_time ? Carbon::parse($setting->work_end_time)->format('H:i') : '17:00';
+
+            // Calculate 1-month average
+            $empHistory = $pastAttendances->get($empId, collect());
+            $validCheckIns = [];
+            $validCheckOuts = [];
+
+            foreach ($empHistory as $att) {
+                if ($att->check_in) {
+                    try {
+                        $ci = Carbon::parse($att->check_in);
+                        $validCheckIns[] = $ci->hour * 3600 + $ci->minute * 60 + $ci->second;
+                    } catch (\Throwable $e) {}
+                }
+                if ($att->check_out) {
+                    try {
+                        $co = Carbon::parse($att->check_out);
+                        $validCheckOuts[] = $co->hour * 3600 + $co->minute * 60 + $co->second;
+                    } catch (\Throwable $e) {}
+                }
+            }
+
+            $hasHistory = count($validCheckIns) > 0;
+            $avgDaysCount = count($validCheckIns);
+
+            if ($hasHistory) {
+                $avgCheckInSec = (int) round(array_sum($validCheckIns) / count($validCheckIns));
+                $avgCheckInHour = str_pad((string) floor($avgCheckInSec / 3600), 2, '0', STR_PAD_LEFT);
+                $avgCheckInMin = str_pad((string) floor(($avgCheckInSec % 3600) / 60), 2, '0', STR_PAD_LEFT);
+                $calculatedCheckIn = "{$avgCheckInHour}:{$avgCheckInMin}";
+
+                if (count($validCheckOuts) > 0) {
+                    $avgCheckOutSec = (int) round(array_sum($validCheckOuts) / count($validCheckOuts));
+                    $avgCheckOutHour = str_pad((string) floor($avgCheckOutSec / 3600), 2, '0', STR_PAD_LEFT);
+                    $avgCheckOutMin = str_pad((string) floor(($avgCheckOutSec % 3600) / 60), 2, '0', STR_PAD_LEFT);
+                    $calculatedCheckOut = "{$avgCheckOutHour}:{$avgCheckOutMin}";
+                } else {
+                    $calculatedCheckOut = $defaultCheckOut;
+                }
+            } else {
+                $calculatedCheckIn = $defaultCheckIn;
+                $calculatedCheckOut = $defaultCheckOut;
+            }
+
+            // Exclusions
+            $leaveType = $leaveByEmployee[$empId] ?? null;
+            $isOnLeave = $leaveType !== null;
+            $existingAtt = $existingAttendances->get($empId);
+            $alreadyRecorded = (bool) ($existingAtt && $existingAtt->check_in);
+            $hasMovement = $movementsByEmployee->has($empId);
+
+            // Determine status and eligibility
+            $exclusionReason = null;
+            if ($isOnLeave) {
+                $exclusionReason = "On Leave ({$leaveType})";
+                $summary['on_leave']++;
+            } elseif ($alreadyRecorded) {
+                $ciFormatted = Carbon::parse($existingAtt->check_in)->format('h:i A');
+                $exclusionReason = "Already Recorded ({$ciFormatted})";
+                $summary['already_recorded']++;
+            } elseif ($isWeekend) {
+                $exclusionReason = 'Weekend';
+                $summary['weekend']++;
+            }
+
+            $isEligible = (! $isOnLeave && ! $alreadyRecorded && ! $isWeekend);
+            if ($isEligible) {
+                $summary['eligible']++;
+            }
+
+            $rows[] = [
+                'employee_id' => $empId,
+                'name_en' => $employee->name_en,
+                'name_bn' => $employee->name_bn,
+                'display_name' => $employee->name_en ?: ($employee->name_bn ?: 'Employee #'.$employee->employee_id),
+                'employee_code' => $employee->employee_id,
+                'branch_name' => $employee->branch?->name ?? 'Main Office',
+                'department_name' => $employee->department?->name ?? '-',
+                'designation_name' => $employee->designation?->name ?? '-',
+                'has_history' => $hasHistory,
+                'history_days_count' => $avgDaysCount,
+                'check_in' => $calculatedCheckIn,
+                'check_out' => $calculatedCheckOut,
+                'is_on_leave' => $isOnLeave,
+                'leave_type' => $leaveType,
+                'already_recorded' => $alreadyRecorded,
+                'existing_check_in' => $existingAtt?->check_in ? Carbon::parse($existingAtt->check_in)->format('H:i') : null,
+                'is_weekend' => $isWeekend,
+                'has_movement' => $hasMovement,
+                'is_eligible' => $isEligible,
+                'exclusion_reason' => $exclusionReason,
+                'selected' => $isEligible, // Checked by default if eligible
+            ];
+        }
+
+        return response()->json([
+            'date' => $ymd,
+            'summary' => $summary,
+            'employees' => $rows,
+        ]);
+    }
+
+    /**
+     * Store bulk attendance records (Super Admin Only).
+     */
+    public function bulkStore(Request $request)
+    {
+        $user = Auth::user();
+        if (! $user || ! $user->isSuperAdmin()) {
+            abort(403, 'Unauthorized. Super Admin access required.');
+        }
+
+        if (! AttendanceSetting::isBulkAttendanceEnabled()) {
+            abort(403, 'Bulk attendance feature is currently disabled in Attendance Settings.');
+        }
+
+        $request->validate([
+            'date' => 'required|date',
+            'attendances' => 'required|array|min:1',
+            'attendances.*.employee_id' => 'required|exists:employees,id',
+            'attendances.*.check_in' => 'required|string',
+            'attendances.*.check_out' => 'nullable|string',
+            'attendances.*.remarks' => 'nullable|string',
+        ]);
+
+        $date = Carbon::parse($request->date)->format('Y-m-d');
+        $attendancesData = $request->input('attendances', []);
+        $savedCount = 0;
+
+        DB::beginTransaction();
+        try {
+            foreach ($attendancesData as $item) {
+                $empId = (int) $item['employee_id'];
+                $checkIn = ! empty($item['check_in']) ? Carbon::parse($item['check_in'])->format('H:i:s') : null;
+                $checkOut = ! empty($item['check_out']) ? Carbon::parse($item['check_out'])->format('H:i:s') : null;
+                $remarks = $item['remarks'] ?? 'Bulk Attendance (Super Admin)';
+
+                if (! $checkIn) {
+                    continue;
+                }
+
+                $attendance = Attendance::where('employee_id', $empId)
+                    ->where('date', $date)
+                    ->first();
+
+                if (! $attendance) {
+                    $attendance = new Attendance();
+                    $attendance->employee_id = $empId;
+                    $attendance->date = $date;
+                    $attendance->created_by = $user->id;
+                }
+
+                $attendance->check_in = $checkIn;
+                $attendance->check_out = $checkOut;
+                $attendance->status = 'present';
+                $attendance->remarks = $remarks;
+                $attendance->updated_by = $user->id;
+
+                // Let generateRemarks determine late / half_day / overtime / regular
+                $this->generateRemarks($attendance);
+
+                // If check-in is late compared to work_start_time + threshold, set status to late
+                $setting = AttendanceSetting::forEmployee($empId);
+                if ($setting && $setting->work_start_time) {
+                    $workStart = Carbon::parse($date.' '.$setting->work_start_time);
+                    $lateThreshold = $workStart->copy()->addMinutes((int) ($setting->late_threshold_minutes ?? 15));
+                    $checkInDt = Carbon::parse($date.' '.$checkIn);
+                    if ($checkInDt->gt($lateThreshold)) {
+                        $attendance->status = 'late';
+                    } else {
+                        $attendance->status = 'present';
+                    }
+                }
+
+                $attendance->save();
+                $savedCount++;
+            }
+
+            DB::commit();
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "{$savedCount} attendance records successfully generated.",
+                    'count' => $savedCount,
+                ]);
+            }
+
+            return redirect()->route('attendance.index', ['date' => $date])
+                ->with('success', "{$savedCount} attendance records successfully generated for {$date}.");
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Error storing bulk attendance: '.$e->getMessage());
+
+            if ($request->wantsJson()) {
+                return response()->json(['message' => 'Failed to save bulk attendance: '.$e->getMessage()], 500);
+            }
+
+            return redirect()->back()->with('error', 'Failed to save bulk attendance: '.$e->getMessage());
+        }
     }
 
     /**

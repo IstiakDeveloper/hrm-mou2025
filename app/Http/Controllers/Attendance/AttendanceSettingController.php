@@ -84,7 +84,42 @@ class AttendanceSettingController extends Controller
         return Inertia::render('attendance/settings/index', [
             'settings' => $settings,
             'branches' => $branches,
+            'isBulkAttendanceEnabled' => AttendanceSetting::isBulkAttendanceEnabled(),
         ]);
+    }
+
+    /**
+     * Toggle bulk attendance feature on or off (Super Admin Only).
+     */
+    public function toggleBulkAttendance(Request $request)
+    {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        abort_unless($user && $user->isSuperAdmin(), 403, 'Super Admin access required.');
+
+        $enabled = (bool) $request->input('enable_bulk_attendance', false);
+
+        $updated = AttendanceSetting::query()->update(['enable_bulk_attendance' => $enabled]);
+        if ($updated === 0) {
+            AttendanceSetting::create([
+                'branch_id' => Branch::first()?->id ?? 1,
+                'work_start_time' => '09:00:00',
+                'work_end_time' => '17:00:00',
+                'late_threshold_minutes' => 15,
+                'half_day_hours' => 4,
+                'weekend_days' => [5, 6],
+                'enable_bulk_attendance' => $enabled,
+            ]);
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'enable_bulk_attendance' => $enabled,
+                'message' => 'Bulk attendance generator button has been ' . ($enabled ? 'enabled' : 'disabled') . '.',
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Bulk attendance generator button has been ' . ($enabled ? 'enabled' : 'disabled') . '.');
     }
 
     /**

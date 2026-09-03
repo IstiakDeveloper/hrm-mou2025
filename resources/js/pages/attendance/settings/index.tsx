@@ -1,5 +1,6 @@
-import React from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import Layout from '@/layouts/AdminLayout';
 import {
   Table,
@@ -35,9 +36,12 @@ import {
   Timer,
   BarChart2,
   AlertCircle,
-  User
+  User,
+  Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { isSuperAdmin } from '@/lib/permissions';
 import { format } from 'date-fns';
 import { PageSurface } from '@/components/page-surface';
 
@@ -54,15 +58,39 @@ interface AttendanceSetting {
   late_threshold_minutes: number;
   half_day_hours: number;
   weekend_days: number[] | string; // Can be either array or JSON string
+  enable_bulk_attendance?: boolean;
   branch: Branch;
 }
 
 interface AttendanceSettingsIndexProps {
   settings: AttendanceSetting[];
   branches: Branch[];
+  isBulkAttendanceEnabled?: boolean;
 }
 
-export default function AttendanceSettingsIndex({ settings, branches }: AttendanceSettingsIndexProps) {
+export default function AttendanceSettingsIndex({ settings, branches, isBulkAttendanceEnabled = true }: AttendanceSettingsIndexProps) {
+  const { auth } = usePage().props as any;
+  const isSuperAdminUser = isSuperAdmin(auth);
+
+  const [bulkEnabled, setBulkEnabled] = useState(isBulkAttendanceEnabled);
+  const [isUpdatingToggle, setIsUpdatingToggle] = useState(false);
+
+  const handleToggleBulk = async (checked: boolean) => {
+    setBulkEnabled(checked);
+    setIsUpdatingToggle(true);
+    try {
+      await axios.post(route('attendance.settings.toggle-bulk-attendance'), {
+        enable_bulk_attendance: checked,
+      });
+      router.reload({ only: ['isBulkAttendanceEnabled'] });
+    } catch (err) {
+      console.error(err);
+      setBulkEnabled(!checked);
+    } finally {
+      setIsUpdatingToggle(false);
+    }
+  };
+
   const handleDelete = (id: number) => {
     if (confirm('Are you sure you want to delete these attendance settings? This action cannot be undone.')) {
       router.delete(route('attendance.settings.destroy', id));
@@ -148,7 +176,50 @@ export default function AttendanceSettingsIndex({ settings, branches }: Attendan
           </div>
         </div>
 
-        {/* Settings Table */}
+        {/* Super Admin Bulk Attendance Generator Toggle */}
+        {isSuperAdminUser && (
+          <Card className="shadow-xs border-indigo-200 bg-gradient-to-r from-indigo-50/70 via-white to-indigo-50/30 rounded-xl overflow-hidden mb-6">
+            <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start space-x-3.5">
+                <div className="p-2.5 bg-indigo-600/10 text-indigo-700 rounded-lg border border-indigo-200/60 shrink-0 mt-0.5 sm:mt-0">
+                  <Sparkles className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                      Super Admin Bulk Attendance Generator
+                    </h3>
+                    {bulkEnabled ? (
+                      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px] font-semibold">
+                        ON (Active)
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-semibold">
+                        OFF (Hidden)
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                    When enabled, Super Admin will see the <strong>"Bulk Attendance"</strong> generator button on the Daily Attendance page to quickly create attendance based on 1-month average present times. Turn this off if you want to temporarily hide the feature.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3 self-end sm:self-center shrink-0 bg-white px-3.5 py-2 rounded-lg border border-slate-200 shadow-xs">
+                <span className="text-xs font-semibold text-slate-700">
+                  {bulkEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <Switch
+                  checked={bulkEnabled}
+                  onCheckedChange={handleToggleBulk}
+                  disabled={isUpdatingToggle}
+                  aria-label="Toggle Bulk Attendance Generator"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Settings Table */}
         <Card className="shadow-sm border-slate-200 rounded-xl overflow-hidden bg-white">
           <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">

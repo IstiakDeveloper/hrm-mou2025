@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import {
     Table,
@@ -49,9 +49,12 @@ import {
     User,
     Building2,
     Navigation,
-    MapPin
+    MapPin,
+    Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { isSuperAdmin } from '@/lib/permissions';
+import BulkAttendanceModal from './components/BulkAttendanceModal';
 
 import {
     Popover,
@@ -174,6 +177,8 @@ interface UserPermissions {
     isEmployee: boolean;
     isBranchManager: boolean;
     isDepartmentHead: boolean;
+    isSuperAdmin?: boolean;
+    isBulkAttendanceEnabled?: boolean;
 }
 
 interface AttendanceIndexProps {
@@ -206,6 +211,12 @@ export default function AttendanceIndex({
     readableDate,
     userPermissions
 }: AttendanceIndexProps) {
+    const { auth } = usePage().props as any;
+    const isSuperAdminUser = Boolean(userPermissions?.isSuperAdmin || isSuperAdmin(auth));
+    const isBulkEnabled = userPermissions?.isBulkAttendanceEnabled !== false;
+    const canShowBulkButton = isSuperAdminUser && isBulkEnabled;
+    const [bulkModalOpen, setBulkModalOpen] = useState(false);
+
     const [search, setSearch] = useState(filters.search || '');
     const [branchId, setBranchId] = useState(filters.branch_id || null);
     const [departmentId, setDepartmentId] = useState(filters.department_id || null);
@@ -455,6 +466,18 @@ export default function AttendanceIndex({
                                         Add Attendance
                                     </Button>
                                 </Link>
+                            )}
+
+                            {canShowBulkButton && (
+                                <Button
+                                    type="button"
+                                    onClick={() => setBulkModalOpen(true)}
+                                    size="sm"
+                                    className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-medium shadow-xs flex items-center"
+                                >
+                                    <Sparkles className="mr-1 h-3 w-3 text-amber-300" />
+                                    Bulk Attendance
+                                </Button>
                             )}
                         </div>
                     </div>
@@ -1177,6 +1200,16 @@ export default function AttendanceIndex({
                             </div>
                         )}
                     </div>
+                )}
+
+                {canShowBulkButton && (
+                    <BulkAttendanceModal
+                        isOpen={bulkModalOpen}
+                        onClose={() => setBulkModalOpen(false)}
+                        currentDate={currentDate}
+                        branches={branches}
+                        departments={departments}
+                    />
                 )}
             </PageSurface>
         </Layout>
