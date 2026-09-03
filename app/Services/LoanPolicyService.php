@@ -28,6 +28,7 @@ class LoanPolicyService
 
         $principal = SalaryStructureCalculator::roundTaka((float) $data['principal_amount']);
         $count = (int) $data['installment_count'];
+        [$minTenure, $maxTenure] = $this->allowedTenureMonths($policy);
 
         if ($principal < (float) $policy->min_amount) {
             throw new InvalidArgumentException(sprintf(
@@ -45,18 +46,18 @@ class LoanPolicyService
             ));
         }
 
-        if ($count < $policy->min_tenure_months) {
+        if ($count < $minTenure) {
             throw new InvalidArgumentException(sprintf(
                 'Tenure must be at least %d month(s) under policy "%s".',
-                $policy->min_tenure_months,
+                $minTenure,
                 $policy->name
             ));
         }
 
-        if ($count > $policy->max_tenure_months) {
+        if ($count > $maxTenure) {
             throw new InvalidArgumentException(sprintf(
                 'Tenure cannot exceed %d month(s) under policy "%s".',
-                $policy->max_tenure_months,
+                $maxTenure,
                 $policy->name
             ));
         }
@@ -83,5 +84,25 @@ class LoanPolicyService
             'interest_rate' => $interestRate,
             'loan_type' => $policy->loan_type,
         ];
+    }
+
+    /**
+     * Policy form hides min/max tenure and defaults max to 12 months. A 5-year
+     * policy with 60 installments must still be allowed when those fields lag.
+     *
+     * @return array{0: int, 1: int}
+     */
+    protected function allowedTenureMonths(LoanPolicy $policy): array
+    {
+        $minTenure = max(1, (int) $policy->min_tenure_months);
+        $maxTenure = max($minTenure, (int) $policy->max_tenure_months);
+        $installments = (int) ($policy->total_installments ?? 0);
+
+        if ($installments > 0) {
+            $minTenure = min($minTenure, $installments);
+            $maxTenure = max($maxTenure, $installments);
+        }
+
+        return [$minTenure, $maxTenure];
     }
 }

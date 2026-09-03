@@ -1769,6 +1769,17 @@ class EmployeeLoanService
                     $rowBalanceTotal = (float) $snap['close_total'];
                 }
 
+                $collectedOnRow = SalaryStructureCalculator::roundTaka((float) ($paidAmount ?? 0));
+                if (
+                    $isPaid
+                    && $collectedOnRow <= 0
+                    && SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance) <= 0
+                ) {
+                    $rowBalancePrincipal = 0.0;
+                    $rowBalanceService = 0.0;
+                    $rowBalanceTotal = 0.0;
+                }
+
                 $scheduledMonth = $this->formatLedgerMonthLabel($installment->due_date);
                 $paymentMonth = null;
                 $paymentBranch = null;
@@ -2893,15 +2904,17 @@ class EmployeeLoanService
         $loan = $tx->loan;
         $amount = SalaryStructureCalculator::roundTaka((float) $tx->credit_amount);
 
-        $this->postTransaction($loan, [
-            'transaction_type' => EmployeeLoanTransaction::TYPE_REVERSAL,
-            'employee_loan_installment_id' => $tx->employee_loan_installment_id,
-            'debit_amount' => $amount,
-            'credit_amount' => 0,
-            'loan_collection_batch_id' => $tx->loan_collection_batch_id,
-            'transaction_date' => now(),
-            'notes' => sprintf('Collection rollback — reversed %s', str_replace('_', ' ', $tx->transaction_type)),
-        ]);
+        if ($amount > 0) {
+            $this->postTransaction($loan, [
+                'transaction_type' => EmployeeLoanTransaction::TYPE_REVERSAL,
+                'employee_loan_installment_id' => $tx->employee_loan_installment_id,
+                'debit_amount' => $amount,
+                'credit_amount' => 0,
+                'loan_collection_batch_id' => $tx->loan_collection_batch_id,
+                'transaction_date' => now(),
+                'notes' => sprintf('Collection rollback — reversed %s', str_replace('_', ' ', $tx->transaction_type)),
+            ]);
+        }
 
         if ($tx->installment) {
             $tx->installment->update([

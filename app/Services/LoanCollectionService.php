@@ -113,6 +113,38 @@ class LoanCollectionService
     }
 
     /**
+     * After an SC rebate, outstanding is smaller than the sum of remaining
+     * installment totals. Collect what is left, then close unfunded rows.
+     *
+     * @param  array{
+     *   collection_date: string,
+     *   reference_no?: string|null,
+     *   notes?: string|null,
+     *   employee_loan_id: int,
+     *   installment_count: int,
+     * }  $data
+     */
+    protected function processAdvanceClosingUnfunded(array $data, ?int $createdBy = null): LoanCollectionBatch
+    {
+        return $this->processBatch(
+            LoanCollectionBatch::TYPE_ADVANCE,
+            [
+                'collection_date' => $data['collection_date'],
+                'reference_no' => $data['reference_no'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'rows' => [[
+                    'employee_loan_id' => $data['employee_loan_id'],
+                    'installment_count' => $data['installment_count'],
+                    'notes' => null,
+                    'settle_unfunded_remainder' => true,
+                ]],
+            ],
+            EmployeeLoanTransaction::TYPE_ADVANCE_COLLECTION,
+            $createdBy
+        );
+    }
+
+    /**
      * @param  array{
      *   collection_date: string,
      *   reference_no?: string|null,
@@ -241,7 +273,8 @@ class LoanCollectionService
                         $row['notes'] ?? $data['notes'] ?? $this->defaultCollectionNote($transactionType),
                         $data['reference_no'] ?? null,
                         $createdBy,
-                        isset($row['amount']) ? (float) $row['amount'] : null
+                        isset($row['amount']) ? (float) $row['amount'] : null,
+                        (bool) ($row['settle_unfunded_remainder'] ?? false)
                     ),
                 };
 
@@ -333,7 +366,8 @@ class LoanCollectionService
         string $notes,
         ?string $referenceNo,
         ?int $createdBy,
-        ?float $expectedAmount = null
+        ?float $expectedAmount = null,
+        bool $settleUnfundedRemainder = false
     ): float {
         $loan->refresh();
 
@@ -354,16 +388,22 @@ class LoanCollectionService
 
         $remaining = SalaryStructureCalculator::roundTaka((float) $loan->outstanding_balance);
         $dues = [];
+        $unfunded = [];
 
         foreach ($pending as $installment) {
             $due = $this->effectiveInstallmentDue($installment, $remaining);
             if ($due <= 0) {
-                throw new InvalidArgumentException(sprintf(
-                    'Loan %s outstanding balance ৳%s is not enough to cover %d installment(s).',
-                    $loan->loan_number,
-                    number_format((float) $loan->outstanding_balance, 2, '.', ''),
-                    $installmentCount
-                ));
+                if (! $settleUnfundedRemainder) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Loan %s outstanding balance ৳%s is not enough to cover %d installment(s).',
+                        $loan->loan_number,
+                        number_format((float) $loan->outstanding_balance, 2, '.', ''),
+                        $installmentCount
+                    ));
+                }
+
+                $unfunded[] = $installment;
+                continue;
             }
 
             $dues[] = ['installment' => $installment, 'due' => $due];
@@ -401,6 +441,31 @@ class LoanCollectionService
             ]);
 
             $totalCollected = SalaryStructureCalculator::roundTaka($totalCollected + $due);
+        }
+
+        foreach ($unfunded as $installment) {
+            $this->loanService->postCollectionTransaction($loan, [
+                'transaction_type' => $transactionType,
+                'employee_loan_installment_id' => $installment->id,
+                'credit_amount' => 0,
+                'debit_amount' => 0,
+                'transaction_date' => $collectionDate,
+                'notes' => sprintf(
+                    '%s — installment %d/%d settled after rebate',
+                    $notes,
+                    $installment->installment_no,
+                    $loan->installment_count
+                ),
+                'reference_no' => $referenceNo ?? $batch->batch_number,
+                'loan_collection_batch_id' => $batch->id,
+                'created_by' => $createdBy ?? auth()->id(),
+            ]);
+
+            $installment->update([
+                'status' => 'paid',
+                'paid_at' => $collectionDate,
+                'paid_amount' => 0,
+            ]);
         }
 
         if ($expectedAmount !== null && abs($expectedAmount - $totalCollected) > 0.02) {
@@ -535,6 +600,15 @@ class LoanCollectionService
             $this->loanService->repairPrincipalOnlyDisbursementLedger($loan);
             $loan->refresh();
 
+            $scheduledCount = $loan->installments()->where('status', 'scheduled')->count();
+            if ($scheduledCount > 0) {
+                throw new InvalidArgumentException(sprintf(
+                    'Loan %s has %d installment(s) locked in payroll. Finish or rollback that salary process before rebate & full payment.',
+                    $loan->loan_number,
+                    $scheduledCount
+                ));
+            }
+
             $collectionDate = Carbon::parse($data['collection_date']);
             $includeCurrentMonth = array_key_exists('include_current_month', $data)
                 ? (bool) $data['include_current_month']
@@ -564,7 +638,7 @@ class LoanCollectionService
             $loan->refresh();
             $pendingCount = $loan->installments()->where('status', 'pending')->count();
             if ($pendingCount > 0) {
-                $collectionBatch = $this->processAdvance([
+                $collectionBatch = $this->processAdvanceClosingUnfunded([
                     'collection_date' => $collectionDate->toDateString(),
                     'reference_no' => $data['reference_no'] ?? null,
                     'notes' => ($data['notes'] ?? 'Loan full paid').' — advance collection',

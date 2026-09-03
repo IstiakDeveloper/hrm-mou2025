@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PayrollComboField, PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
+import { FormErrorBanner } from '@/components/employee-loan/FormErrorBanner';
 import { ArrowLeft, Save } from 'lucide-react';
 
 type Policy = {
@@ -77,6 +78,18 @@ export default function LoanPolicyForm({ policy, loanTypes }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+        const years = parseInt(form.data.tenure_years, 10) || 0;
+        const installments =
+            parseInt(form.data.total_installments, 10) ||
+            (years > 0 ? years * 12 : parseInt(form.data.max_tenure_months, 10) || 12);
+
+        form.transform((data) => ({
+            ...data,
+            total_installments: String(installments),
+            min_tenure_months: String(installments),
+            max_tenure_months: String(installments),
+        }));
+
         if (isEdit && policy) form.put(route('loan-policies.update', policy.id));
         else form.post(route('loan-policies.store'));
     };
@@ -86,7 +99,8 @@ export default function LoanPolicyForm({ policy, loanTypes }: Props) {
             <Link href={employeeLoanPath(route('loan-policies.index'))} className="mb-4 inline-flex items-center text-xs text-zinc-600 hover:text-zinc-900">
                 <ArrowLeft className="mr-1.5 h-4 w-4" /> Policies
             </Link>
-            <form onSubmit={submit}>
+            <form onSubmit={submit} className="space-y-3">
+                <FormErrorBanner errors={form.errors} />
                 <Card className="max-w-4xl border-zinc-200/90 shadow-sm">
                     <CardHeader className="border-b border-zinc-100 py-3">
                         <CardTitle className="text-sm font-semibold text-zinc-900">Policy details</CardTitle>

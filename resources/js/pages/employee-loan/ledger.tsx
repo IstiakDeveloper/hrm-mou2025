@@ -19,6 +19,8 @@ import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { ArrowLeft, Banknote, Pencil, Save } from 'lucide-react';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
+import { FormErrorBanner } from '@/components/employee-loan/FormErrorBanner';
+import { useToast } from '@/components/ui/use-toast';
 import { LoanInstallmentLedgerTable, type LoanInstallmentLedgerRow } from '@/components/employee-loan/LoanInstallmentLedgerTable';
 import {
     LoanTermsEditDialog,
@@ -120,6 +122,7 @@ function LedgerHeaderTable({ rows }: { rows: HeaderRow[] }) {
 }
 
 export default function EmployeeLoanLedger({ loan, schedule, editTerms, policies, employeeLoans, canEdit, defaultIncludeCurrentMonth }: Props) {
+    const { toast } = useToast();
     const [fullPaidOpen, setFullPaidOpen] = useState(false);
     const [termsEditOpen, setTermsEditOpen] = useState(false);
     const [includeCurrentMonth, setIncludeCurrentMonth] = useState(defaultIncludeCurrentMonth);
@@ -228,11 +231,23 @@ export default function EmployeeLoanLedger({ loan, schedule, editTerms, policies
             rebate_amount: preview?.suggested_amount ?? null,
         }));
         fullPaidForm.post(route('employee-loans.full-paid.store', loan.id), {
+            preserveScroll: true,
             onSuccess: () => {
                 setFullPaidOpen(false);
                 fullPaidForm.reset();
                 setIncludeCurrentMonth(defaultIncludeCurrentMonth);
                 setPreview(null);
+            },
+            onError: (errors) => {
+                const message =
+                    errors.full_paid ||
+                    Object.values(errors).find((value) => Boolean(value)) ||
+                    'Could not close the loan.';
+                toast({
+                    title: 'Rebate & full payment failed',
+                    description: message,
+                    variant: 'destructive',
+                });
             },
         });
     };
@@ -324,6 +339,7 @@ export default function EmployeeLoanLedger({ loan, schedule, editTerms, policies
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={submitFullPaid} className="space-y-3">
+                        <FormErrorBanner errors={fullPaidForm.errors} />
                         <PayrollField label="Collection date" error={fullPaidForm.errors.collection_date}>
                             <Input
                                 type="date"
@@ -359,9 +375,6 @@ export default function EmployeeLoanLedger({ loan, schedule, editTerms, policies
 
                         {previewLoading && <p className="text-xs text-zinc-500">Calculating…</p>}
                         {previewError && <p className="text-xs text-rose-600">{previewError}</p>}
-                        {fullPaidForm.errors.full_paid && (
-                            <p className="text-xs text-rose-600">{fullPaidForm.errors.full_paid}</p>
-                        )}
 
                         {preview && !previewLoading && (
                             <div className="rounded-md border border-emerald-100 bg-emerald-50/50 p-3 text-xs">

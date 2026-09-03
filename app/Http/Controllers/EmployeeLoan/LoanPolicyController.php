@@ -145,6 +145,11 @@ class LoanPolicyController extends Controller
             ? (int) $validated['total_installments']
             : ($tenureYears ? $tenureYears * 12 : (int) $validated['max_tenure_months']);
 
+        // Keep tenure bounds in sync with installments. The policy form does not
+        // expose min/max months, so a 5-year policy would otherwise stay at 12.
+        $minTenureMonths = $totalInstallments;
+        $maxTenureMonths = $totalInstallments;
+
         return [
             'code' => $code,
             'name' => $validated['name'],
@@ -152,8 +157,8 @@ class LoanPolicyController extends Controller
             'tenure_years' => $tenureYears,
             'min_amount' => $validated['min_amount'],
             'max_amount' => $validated['max_amount'],
-            'min_tenure_months' => (int) $validated['min_tenure_months'],
-            'max_tenure_months' => (int) $validated['max_tenure_months'],
+            'min_tenure_months' => $minTenureMonths,
+            'max_tenure_months' => $maxTenureMonths,
             'total_installments' => $totalInstallments,
             'default_interest_rate' => (float) ($validated['default_interest_rate'] ?? 0),
             'calculation_method' => $validated['calculation_method'],

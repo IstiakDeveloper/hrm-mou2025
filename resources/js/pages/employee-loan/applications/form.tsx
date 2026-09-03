@@ -10,6 +10,8 @@ import { ComboSelect } from '@/components/ComboSelect';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { useEmployeeLookup } from '@/lib/employee-lookup';
+import { FormErrorBanner } from '@/components/employee-loan/FormErrorBanner';
+import { useToast } from '@/components/ui/use-toast';
 import { ArrowLeft, List, Save, Send, User2 } from 'lucide-react';
 import axios from 'axios';
 
@@ -75,6 +77,7 @@ function employeeLabel(e: { id: number; pin?: string; name_en?: string; employee
 }
 
 export default function LoanApplicationForm({ employees, policies, committees, nextApplicationNumber, application }: Props) {
+    const { toast } = useToast();
     const isEdit = Boolean(application?.id);
     const useLookup = employees.length === 0;
     const [searchQuery, setSearchQuery] = useState('');
@@ -181,10 +184,23 @@ export default function LoanApplicationForm({ employees, policies, committees, n
 
     const submit = (forApproval: boolean) => {
         form.transform((d) => ({ ...d, submit_for_approval: forApproval }));
+        const options = {
+            onError: (errors: Record<string, string>) => {
+                const message =
+                    errors.application ||
+                    Object.values(errors).find((value) => Boolean(value)) ||
+                    'Could not save the loan application.';
+                toast({
+                    title: 'Loan application failed',
+                    description: message,
+                    variant: 'destructive',
+                });
+            },
+        };
         if (isEdit && application) {
-            form.put(route('loan-applications.update', application.id));
+            form.put(route('loan-applications.update', application.id), options);
         } else {
-            form.post(route('loan-applications.store'));
+            form.post(route('loan-applications.store'), options);
         }
     };
 
@@ -217,6 +233,7 @@ export default function LoanApplicationForm({ employees, policies, committees, n
                 className="grid grid-cols-1 gap-5 lg:grid-cols-3"
             >
                 <div className="space-y-5 lg:col-span-2">
+                    <FormErrorBanner errors={form.errors} />
                     <Card className="border-zinc-200/90 shadow-sm">
                         <CardHeader className="border-b border-zinc-100 py-3">
                             <CardTitle className="text-sm font-semibold text-zinc-900">Application details</CardTitle>
@@ -276,6 +293,7 @@ export default function LoanApplicationForm({ employees, policies, committees, n
                                     placeholder="Select policy…"
                                     clearable={false}
                                 />
+                                {form.errors.loan_policy_id && <p className="text-xs text-rose-600">{form.errors.loan_policy_id}</p>}
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs">Loan committee (optional)</Label>

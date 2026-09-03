@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { LoanCollectionFormFields } from './LoanCollectionFormFields';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
+import { FormErrorBanner } from '@/components/employee-loan/FormErrorBanner';
 import { estimateInstallmentCollectionAmount, fmt, type LoanOption } from './types';
 import { ArrowLeft, Save } from 'lucide-react';
 
@@ -97,7 +98,7 @@ export default function LoanCollectionSingle({ filters, branches, employees, loa
                                 <Input readOnly className="h-9 bg-zinc-50 text-xs tabular-nums" value={estimated ? fmt(estimated) : ''} />
                             </PayrollField>
                         </div>
-                        {form.errors.collection && <p className="mt-3 text-xs text-rose-600">{form.errors.collection}</p>}
+                        <FormErrorBanner errors={form.errors} />
                         <div className="mt-5 flex justify-end">
                             <Button type="submit" disabled={form.processing || !loanId} className="bg-emerald-600 hover:bg-emerald-700">
                                 <Save className="mr-2 h-4 w-4" /> Save collection

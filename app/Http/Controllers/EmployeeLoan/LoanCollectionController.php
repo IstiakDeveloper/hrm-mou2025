@@ -8,6 +8,7 @@ use App\Models\EmployeeLoan;
 use App\Models\LoanCollectionBatch;
 use App\Services\LoanCollectionService;
 use App\Services\LoanRebateService;
+use App\Services\SalaryStructureCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -271,20 +272,47 @@ class LoanCollectionController extends Controller
         $validated = $request->validate([
             'collection_date' => 'required|date',
             'reference_no' => 'nullable|string|max:80',
-            'notes' => 'required|string|max:500',
+            'notes' => 'nullable|string|max:500',
             'employee_loan_id' => 'required|integer|exists:employee_loans,id',
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'nullable|numeric|min:0',
+            'include_current_month' => 'nullable|boolean',
         ]);
 
+        $includeCurrentMonth = $request->has('include_current_month')
+            ? $request->boolean('include_current_month')
+            : (bool) config('employee_loans.rebate.default_include_current_month', false);
+
+        $notes = trim((string) ($validated['notes'] ?? ''));
+        if ($notes === '') {
+            $notes = 'Loan full paid with rebate';
+        }
+
         try {
-            $batch = $this->collectionService->processRebate($validated, auth()->id());
+            $result = $this->collectionService->processFullPaidWithRebate([
+                'employee_loan_id' => (int) $validated['employee_loan_id'],
+                'collection_date' => $validated['collection_date'],
+                'reference_no' => $validated['reference_no'] ?? null,
+                'notes' => $notes,
+                'include_current_month' => $includeCurrentMonth,
+                'rebate_amount' => array_key_exists('amount', $validated) ? $validated['amount'] : null,
+            ], auth()->id());
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages(['collection' => $e->getMessage()]);
         }
 
+        $loan = EmployeeLoan::query()->findOrFail((int) $validated['employee_loan_id']);
+        $totalRebate = SalaryStructureCalculator::roundTaka(
+            (float) $result['rebate_amount'] + (float) $result['tail_rebate_amount']
+        );
+
         return redirect()
-            ->route('loan-collection.show', $batch)
-            ->with('success', "Loan rebate {$batch->batch_number} recorded.");
+            ->route('employee-loans.ledger', $loan)
+            ->with('success', sprintf(
+                'Loan %s closed. Rebate ৳%s, collection ৳%s.',
+                $loan->loan_number,
+                number_format($totalRebate, 2, '.', ''),
+                number_format((float) $result['collection_amount'], 2, '.', ''),
+            ));
     }
 
     public function rollback(LoanCollectionBatch $loan_collection)

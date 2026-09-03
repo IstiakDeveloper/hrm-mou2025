@@ -9,8 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PayrollField } from '@/components/payroll/PayrollFilterGrid';
 import { LoanCollectionFormFields } from './LoanCollectionFormFields';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
+import { FormErrorBanner } from '@/components/employee-loan/FormErrorBanner';
+import { useToast } from '@/components/ui/use-toast';
 import { fmt, type LoanOption } from './types';
-import { ArrowLeft, RefreshCw, Save } from 'lucide-react';
+import { ArrowLeft, Banknote, RefreshCw } from 'lucide-react';
 
 type RebatePreview = {
     suggested_amount: number;
@@ -42,6 +44,7 @@ export default function LoanCollectionRebate({
     defaultCollectionDate,
     defaultIncludeCurrentMonth,
 }: Props) {
+    const { toast } = useToast();
     const [branchId, setBranchId] = useState(filters.branch_id || '');
     const [employeeId, setEmployeeId] = useState(filters.employee_id || '');
     const [loanId, setLoanId] = useState('');
@@ -54,9 +57,10 @@ export default function LoanCollectionRebate({
     const form = useForm({
         collection_date: defaultCollectionDate,
         reference_no: '',
-        notes: '',
+        notes: 'Loan full paid with rebate',
         employee_loan_id: '',
         amount: '',
+        include_current_month: defaultIncludeCurrentMonth,
     });
 
     const selectedLoan = loans.find((l) => String(l.id) === loanId);
@@ -84,7 +88,7 @@ export default function LoanCollectionRebate({
                 }
                 setPreview(data);
                 if (!amountTouched) {
-                    form.setData('amount', data.suggested_amount > 0 ? String(data.suggested_amount) : '');
+                    form.setData('amount', data.suggested_amount > 0 ? String(data.suggested_amount) : '0');
                 }
             })
             .catch((error) => {
@@ -107,12 +111,31 @@ export default function LoanCollectionRebate({
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+        const rebateAmount =
+            form.data.amount === ''
+                ? (preview?.suggested_amount ?? 0)
+                : parseFloat(form.data.amount);
+
         form.transform((data) => ({
             ...data,
             employee_loan_id: parseInt(loanId, 10),
-            amount: parseFloat(data.amount),
+            amount: Number.isFinite(rebateAmount) ? rebateAmount : 0,
+            include_current_month: includeCurrentMonth,
+            notes: data.notes.trim() || 'Loan full paid with rebate',
         }));
-        form.post(route('loan-collection.rebate.store'));
+        form.post(route('loan-collection.rebate.store'), {
+            onError: (errors) => {
+                const message =
+                    errors.collection ||
+                    Object.values(errors).find((value) => Boolean(value)) ||
+                    'Could not close the loan.';
+                toast({
+                    title: 'Rebate & full payment failed',
+                    description: message,
+                    variant: 'destructive',
+                });
+            },
+        });
     };
 
     const applySuggested = () => {
@@ -120,19 +143,16 @@ export default function LoanCollectionRebate({
             return;
         }
         setAmountTouched(false);
-        form.setData('amount', preview.suggested_amount > 0 ? String(preview.suggested_amount) : '');
+        form.setData('amount', preview.suggested_amount > 0 ? String(preview.suggested_amount) : '0');
     };
 
-    const outstandingAfterRebate =
-        selectedLoan && form.data.amount
-            ? Math.max(0, selectedLoan.outstanding_balance - parseFloat(form.data.amount || '0'))
-            : preview?.collection_after_rebate ?? selectedLoan?.outstanding_balance;
+    const collectionAfterRebate = preview?.collection_after_rebate ?? selectedLoan?.outstanding_balance ?? 0;
 
     return (
         <EmployeeLoanLayout
-            title="Loan rebate"
+            title="Rebate & full payment"
             activeTab="collection-rebate"
-            description="Grant a rebate / discount on outstanding loan balance."
+            description="Rebate pending service charge and collect the remaining balance in one step to close the loan."
         >
             <div className="mb-4">
                 <Link href={employeeLoanPath(route('loan-collection.index'))} className="inline-flex items-center text-xs text-zinc-600 hover:text-zinc-900">
@@ -143,12 +163,13 @@ export default function LoanCollectionRebate({
             <form onSubmit={submit}>
                 <Card className="border-zinc-200/90 shadow-sm">
                     <CardHeader className="border-b border-zinc-100 py-3">
-                        <CardTitle className="text-sm font-semibold">Rebate</CardTitle>
+                        <CardTitle className="text-sm font-semibold">Rebate & full payment</CardTitle>
                         <CardDescription className="text-xs">
-                            Rebate amount is suggested from pending SC. Choose manually whether this month&apos;s installment SC is included.
+                            একবার Save করলে SC rebate + বাকি installment collection দুটোই হবে। আলাদা করে collection নিতে হবে না।
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-4">
+                        <FormErrorBanner errors={form.errors} />
                         <LoanCollectionFormFields
                             branches={branches}
                             employees={employees}
@@ -182,7 +203,6 @@ export default function LoanCollectionRebate({
                             onReferenceNoChange={(value) => form.setData('reference_no', value)}
                             notes={form.data.notes}
                             onNotesChange={(value) => form.setData('notes', value)}
-                            notesRequired
                             errors={form.errors as Record<string, string>}
                         />
 
@@ -190,18 +210,16 @@ export default function LoanCollectionRebate({
                             <div className="mt-4 space-y-3 rounded-md border border-emerald-100 bg-emerald-50/40 p-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <p className="text-xs font-semibold text-emerald-900">Auto rebate suggestion</p>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-7 text-[11px]"
-                                            disabled={previewLoading || !preview}
-                                            onClick={applySuggested}
-                                        >
-                                            <RefreshCw className="mr-1 h-3 w-3" /> Use suggested
-                                        </Button>
-                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-[11px]"
+                                        disabled={previewLoading || !preview}
+                                        onClick={applySuggested}
+                                    >
+                                        <RefreshCw className="mr-1 h-3 w-3" /> Use suggested
+                                    </Button>
                                 </div>
 
                                 <label className="flex items-start gap-2 text-xs text-zinc-700">
@@ -215,7 +233,7 @@ export default function LoanCollectionRebate({
                                     <span>
                                         এই মাসের installment-এর SC rebate-এ দিন
                                         <span className="mt-0.5 block text-[11px] text-zinc-500">
-                                            Uncheck করলে এই মাসের SC rebate হবে না — পরের মাস থেকে rebate গণনা হবে।
+                                            Uncheck = এই মাসের SC rebate হবে না (month cutoff)। Check = এই মাসসহ সব বাকি SC rebate।
                                         </span>
                                     </span>
                                 </label>
@@ -225,10 +243,10 @@ export default function LoanCollectionRebate({
 
                                 {preview && !previewLoading && (
                                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                                        <PreviewMetric label="Suggested rebate" value={fmt(preview.suggested_amount)} accent="text-emerald-800" />
-                                        <PreviewMetric label="Outstanding SC" value={fmt(preview.outstanding_service_charge)} />
-                                        <PreviewMetric label="Outstanding PR" value={fmt(preview.outstanding_principal)} />
-                                        <PreviewMetric label="Collect after rebate" value={fmt(preview.collection_after_rebate)} accent="text-amber-800" />
+                                        <PreviewMetric label="Rebate" value={fmt(preview.suggested_amount)} accent="text-emerald-800" />
+                                        <PreviewMetric label="Collection" value={fmt(preview.collection_after_rebate)} accent="text-amber-800" />
+                                        <PreviewMetric label="Pending installments" value={String(preview.pending_installments)} />
+                                        <PreviewMetric label="Employee pays" value={fmt(preview.collection_after_rebate)} accent="text-amber-900" />
                                     </div>
                                 )}
 
@@ -248,7 +266,7 @@ export default function LoanCollectionRebate({
                             <PayrollField label="Rebate amount (৳)" error={form.errors.amount}>
                                 <Input
                                     type="number"
-                                    min="0.01"
+                                    min="0"
                                     step="0.01"
                                     className="h-9 text-xs"
                                     value={form.data.amount}
@@ -259,26 +277,22 @@ export default function LoanCollectionRebate({
                                     placeholder={selectedLoan ? `Max ${fmt(selectedLoan.outstanding_balance)}` : ''}
                                 />
                             </PayrollField>
-                            <PayrollField label="Outstanding after rebate (৳)">
+                            <PayrollField label="Employee pays / collection (৳)">
                                 <Input
                                     readOnly
                                     className="h-9 bg-zinc-50 text-xs tabular-nums"
-                                    value={selectedLoan ? fmt(outstandingAfterRebate ?? 0) : ''}
+                                    value={selectedLoan ? fmt(collectionAfterRebate) : ''}
                                 />
                             </PayrollField>
                         </div>
 
-                        {preview && selectedLoan && (
-                            <p className="mt-2 text-[11px] text-zinc-500">
-                                After rebate, use Advance Collection for {preview.pending_installments} pending installment(s) — estimated ৳
-                                {fmt(outstandingAfterRebate ?? 0)}.
-                            </p>
-                        )}
-
-                        {form.errors.collection && <p className="mt-3 text-xs text-rose-600">{form.errors.collection}</p>}
                         <div className="mt-5 flex justify-end">
-                            <Button type="submit" disabled={form.processing || !loanId} className="bg-emerald-600 hover:bg-emerald-700">
-                                <Save className="mr-2 h-4 w-4" /> Save rebate
+                            <Button
+                                type="submit"
+                                disabled={form.processing || !loanId || previewLoading || !preview}
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                            >
+                                <Banknote className="mr-2 h-4 w-4" /> Rebate & close loan
                             </Button>
                         </div>
                     </CardContent>
