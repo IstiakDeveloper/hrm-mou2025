@@ -1076,8 +1076,8 @@ class AttendanceController extends Controller
         try {
             foreach ($attendancesData as $item) {
                 $empId = (int) $item['employee_id'];
-                $checkIn = ! empty($item['check_in']) ? Carbon::parse($item['check_in'])->format('H:i:s') : null;
-                $checkOut = ! empty($item['check_out']) ? Carbon::parse($item['check_out'])->format('H:i:s') : null;
+                $checkIn = ! empty($item['check_in']) ? Carbon::parse($date.' '.$item['check_in'])->format('Y-m-d H:i:s') : null;
+                $checkOut = ! empty($item['check_out']) ? Carbon::parse($date.' '.$item['check_out'])->format('Y-m-d H:i:s') : null;
                 $remarks = $item['remarks'] ?? 'Bulk Attendance (Super Admin)';
 
                 if (! $checkIn) {
@@ -1092,14 +1092,12 @@ class AttendanceController extends Controller
                     $attendance = new Attendance();
                     $attendance->employee_id = $empId;
                     $attendance->date = $date;
-                    $attendance->created_by = $user->id;
                 }
 
                 $attendance->check_in = $checkIn;
                 $attendance->check_out = $checkOut;
                 $attendance->status = 'present';
                 $attendance->remarks = $remarks;
-                $attendance->updated_by = $user->id;
 
                 // Let generateRemarks determine late / half_day / overtime / regular
                 $this->generateRemarks($attendance);
@@ -1109,7 +1107,7 @@ class AttendanceController extends Controller
                 if ($setting && $setting->work_start_time) {
                     $workStart = Carbon::parse($date.' '.$setting->work_start_time);
                     $lateThreshold = $workStart->copy()->addMinutes((int) ($setting->late_threshold_minutes ?? 15));
-                    $checkInDt = Carbon::parse($date.' '.$checkIn);
+                    $checkInDt = Carbon::parse($checkIn);
                     if ($checkInDt->gt($lateThreshold)) {
                         $attendance->status = 'late';
                     } else {
