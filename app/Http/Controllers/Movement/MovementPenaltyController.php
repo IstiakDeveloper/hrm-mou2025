@@ -154,6 +154,8 @@ class MovementPenaltyController extends Controller
                 $sq->whereNotNull('sender_number')->where('sender_number', '!=', '');
             })->orWhere(function ($sq) {
                 $sq->whereNotNull('transaction_id')->where('transaction_id', '!=', '');
+            })->orWhere(function ($sq) {
+                $sq->whereNotNull('payment_method')->where('payment_method', '!=', '');
             });
         });
         $paidStats = [
@@ -171,6 +173,8 @@ class MovementPenaltyController extends Controller
                 $sq->whereNull('sender_number')->orWhere('sender_number', '');
             })->where(function ($sq) {
                 $sq->whereNull('transaction_id')->orWhere('transaction_id', '');
+            })->where(function ($sq) {
+                $sq->whereNull('payment_method')->orWhere('payment_method', '');
             });
         });
         
@@ -210,6 +214,8 @@ class MovementPenaltyController extends Controller
                     $sq->whereNotNull('sender_number')->where('sender_number', '!=', '');
                 })->orWhere(function ($sq) {
                     $sq->whereNotNull('transaction_id')->where('transaction_id', '!=', '');
+                })->orWhere(function ($sq) {
+                    $sq->whereNotNull('payment_method')->where('payment_method', '!=', '');
                 });
             })->count(),
             'waived_count' => (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
@@ -217,6 +223,8 @@ class MovementPenaltyController extends Controller
                     $sq->whereNull('sender_number')->orWhere('sender_number', '');
                 })->where(function ($sq) {
                     $sq->whereNull('transaction_id')->orWhere('transaction_id', '');
+                })->where(function ($sq) {
+                    $sq->whereNull('payment_method')->orWhere('payment_method', '');
                 });
             })->count(),
             'rejected_count' => (clone $baseQuery)->where('status', 'rejected')->count(),
@@ -253,56 +261,150 @@ class MovementPenaltyController extends Controller
     }
 
     /**
-     * Admin approves penalty (or waives fine without payment) and unlocks the user.
+     * Admin approves penalty (as Paid or Waived) and unlocks the user.
      */
     public function approvePenalty(Request $request, $id)
     {
         $this->authorizeAdmin($request);
 
         $penalty = MovementPenalty::with('movement')->findOrFail($id);
-        $wasUnpaidOrRejected = in_array($penalty->status, ['unpaid', 'rejected'], true);
+        $actionType = $request->input('action_type', 'paid');
+        $isWaive = ($actionType === 'waive');
 
         DB::beginTransaction();
         try {
-            $defaultRemark = $wasUnpaidOrRejected
-                ? 'Waived by Admin without payment and account unlocked.'
-                : 'Payment verified and account unlocked.';
-
-            // If waiving a rejected/unpaid penalty, clear invalid transaction details so it ranks as waived
-            if ($wasUnpaidOrRejected) {
+            if ($isWaive) {
                 $penalty->sender_number = null;
                 $penalty->transaction_id = null;
+                $penalty->payment_method = null;
+                $defaultRemark = 'Waived by Admin without payment and account unlocked.';
+            } else {
+                $penalty->payment_method = $request->input('payment_method', $penalty->payment_method ?: 'cash');
+                $penalty->sender_number = $request->input('sender_number', $penalty->sender_number ?: 'Cash Payment');
+                $penalty->transaction_id = $request->input('transaction_id', $penalty->transaction_id ?: ('MANUAL-'.strtoupper(uniqid())));
+                if (! $penalty->payment_submitted_at) {
+                    $penalty->payment_submitted_at = now();
+                }
+                $defaultRemark = 'Penalty payment verified and account unlocked.';
             }
 
-            $penalty->update([
-                'status' => 'approved',
-                'approved_by' => Auth::id(),
-                'approved_at' => now(),
-                'admin_remarks' => $request->input('admin_remarks', $defaultRemark),
-            ]);
+            $penalty->status = 'approved';
+            $penalty->approved_by = Auth::id();
+            $penalty->approved_at = now();
+            $penalty->admin_remarks = $request->input('admin_remarks', $defaultRemark);
+            $penalty->save();
 
             $movement = $penalty->movement;
             if ($movement) {
-                // Note: The movement remains active (open) as per requirements.
-                // The employee will close their movement normally when they complete it.
                 $this->applyAttendanceOnPenaltyApproval(
                     $movement->fresh(),
                     $penalty->fresh(),
-                    $wasUnpaidOrRejected
+                    $isWaive
                 );
             }
 
             DB::commit();
 
-            $message = $wasUnpaidOrRejected
+            $message = $isWaive
                 ? 'Penalty waived without payment and account unlocked successfully.'
-                : 'Penalty payment approved successfully and account unlocked.';
+                : 'Penalty marked as paid and account unlocked successfully.';
 
             return redirect()->back()->with('success', $message);
         } catch (\Exception $e) {
             DB::rollBack();
 
             return redirect()->back()->with('error', 'Error approving penalty: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Admin bulk process penalties (Bulk Paid, Bulk Waive, Bulk Reject).
+     */
+    public function bulkAction(Request $request)
+    {
+        $this->authorizeAdmin($request);
+
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:movement_penalties,id',
+            'action' => 'required|string|in:paid,waive,reject',
+            'payment_method' => 'nullable|string|max:50',
+            'admin_remarks' => 'nullable|string|max:255',
+        ]);
+
+        $ids = $request->input('ids', []);
+        $action = $request->input('action');
+        $paymentMethod = $request->input('payment_method', 'cash');
+        $remarks = $request->input('admin_remarks');
+
+        $processedCount = 0;
+
+        DB::beginTransaction();
+        try {
+            $penalties = MovementPenalty::with('movement')
+                ->whereIn('id', $ids)
+                ->get();
+
+            foreach ($penalties as $penalty) {
+                if ($action === 'reject') {
+                    if ($penalty->status === 'pending_verification') {
+                        $penalty->update([
+                            'status' => 'rejected',
+                            'admin_remarks' => $remarks ?: 'Payment submission rejected by Admin.',
+                        ]);
+                        $processedCount++;
+                    }
+                    continue;
+                }
+
+                $isWaive = ($action === 'waive');
+
+                if ($isWaive) {
+                    $penalty->sender_number = null;
+                    $penalty->transaction_id = null;
+                    $penalty->payment_method = null;
+                    $defaultRemark = 'Waived by Admin in bulk without payment and account unlocked.';
+                } else {
+                    $penalty->payment_method = $paymentMethod ?: ($penalty->payment_method ?: 'cash');
+                    $penalty->sender_number = $penalty->sender_number ?: 'Cash Payment';
+                    $penalty->transaction_id = $penalty->transaction_id ?: ('BULK-'.strtoupper(uniqid()));
+                    if (! $penalty->payment_submitted_at) {
+                        $penalty->payment_submitted_at = now();
+                    }
+                    $defaultRemark = 'Bulk penalty payment verified and account unlocked.';
+                }
+
+                $penalty->status = 'approved';
+                $penalty->approved_by = Auth::id();
+                $penalty->approved_at = now();
+                $penalty->admin_remarks = $remarks ?: $defaultRemark;
+                $penalty->save();
+
+                $movement = $penalty->movement;
+                if ($movement) {
+                    $this->applyAttendanceOnPenaltyApproval(
+                        $movement->fresh(),
+                        $penalty->fresh(),
+                        $isWaive
+                    );
+                }
+
+                $processedCount++;
+            }
+
+            DB::commit();
+
+            $actionText = match ($action) {
+                'paid' => 'marked as paid',
+                'waive' => 'waived without payment',
+                'reject' => 'rejected',
+            };
+
+            return redirect()->back()->with('success', "{$processedCount} penalty records successfully {$actionText} and accounts unlocked.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return redirect()->back()->with('error', 'Error in bulk action: '.$e->getMessage());
         }
     }
 

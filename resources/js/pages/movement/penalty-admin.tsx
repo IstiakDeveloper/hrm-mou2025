@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
@@ -47,18 +47,17 @@ import {
     DollarSign,
     ChevronLeft,
     ChevronRight,
-    Calendar,
-    Building2,
     Phone,
     Printer,
     RefreshCw,
     ShieldOff,
     SlidersHorizontal,
     RotateCcw,
-    UserCheck,
-    ArrowUpRight,
-    Navigation,
-    User,
+    CheckSquare,
+    Square,
+    Layers,
+    CreditCard,
+    Receipt,
 } from 'lucide-react';
 
 interface PenaltyRecord {
@@ -178,11 +177,80 @@ export default function PenaltyAdmin({
     const [perPage, setPerPage] = useState(String(filters.per_page || 15));
     const [showMobileFilters, setShowMobileFilters] = useState(false);
 
+    // Multi-Selection State
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+    // Single Action Modals
+    const [payingPenalty, setPayingPenalty] = useState<PenaltyRecord | null>(null);
+    const [waivingPenalty, setWaivingPenalty] = useState<PenaltyRecord | null>(null);
+    const [rejectingPenalty, setRejectingPenalty] = useState<PenaltyRecord | null>(null);
+
+    // Bulk Action Modals
+    const [isBulkPayOpen, setIsBulkPayOpen] = useState(false);
+    const [isBulkWaiveOpen, setIsBulkWaiveOpen] = useState(false);
+    const [isBulkRejectOpen, setIsBulkRejectOpen] = useState(false);
+
+    const [isSyncing, setIsSyncing] = useState(false);
+
     const printablePaidList = allPaidPenalties && allPaidPenalties.length > 0 ? allPaidPenalties : (paidPenalties?.data || []);
 
-    const [rejectingPenalty, setRejectingPenalty] = useState<PenaltyRecord | null>(null);
-    const [approvingPenalty, setApprovingPenalty] = useState<PenaltyRecord | null>(null);
-    const [isSyncing, setIsSyncing] = useState(false);
+    // Get current tab records for selection
+    const currentTabRecords = useMemo(() => {
+        switch (activeTab) {
+            case 'pending':
+                return pendingPenalties?.data || [];
+            case 'unpaid':
+                return unpaidPenalties?.data || [];
+            case 'rejected':
+                return rejectedPenalties?.data || [];
+            case 'all':
+                return allPenalties?.data || [];
+            default:
+                return [];
+        }
+    }, [activeTab, pendingPenalties, unpaidPenalties, rejectedPenalties, allPenalties]);
+
+    // Actionable items on current page (can be approved, waived, or rejected)
+    const currentActionableRecords = useMemo(() => {
+        return currentTabRecords.filter((item) => item.status !== 'approved');
+    }, [currentTabRecords]);
+
+    // Calculate total fine for selected items
+    const selectedTotalFine = useMemo(() => {
+        const allRecords = [
+            ...(pendingPenalties?.data || []),
+            ...(unpaidPenalties?.data || []),
+            ...(rejectedPenalties?.data || []),
+            ...(allPenalties?.data || []),
+        ];
+        const recordMap = new Map<number, PenaltyRecord>();
+        allRecords.forEach((r) => recordMap.set(r.id, r));
+        return selectedIds.reduce((sum, id) => {
+            const item = recordMap.get(id);
+            return sum + (item ? Number(item.total_fine || 0) : 0);
+        }, 0);
+    }, [selectedIds, pendingPenalties, unpaidPenalties, rejectedPenalties, allPenalties]);
+
+    const handleToggleSelectAll = () => {
+        if (currentActionableRecords.length === 0) return;
+        const currentActionableIds = currentActionableRecords.map((r) => r.id);
+        const allSelected = currentActionableIds.every((id) => selectedIds.includes(id));
+        if (allSelected) {
+            setSelectedIds((prev) => prev.filter((id) => !currentActionableIds.includes(id)));
+        } else {
+            setSelectedIds((prev) => Array.from(new Set([...prev, ...currentActionableIds])));
+        }
+    };
+
+    const handleToggleSelectItem = (id: number) => {
+        setSelectedIds((prev) =>
+            prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+        );
+    };
+
+    const handleClearSelection = () => {
+        setSelectedIds([]);
+    };
 
     const handleSyncPenalties = () => {
         setIsSyncing(true);
@@ -195,6 +263,32 @@ export default function PenaltyAdmin({
         );
     };
 
+    // Forms
+    const {
+        data: payData,
+        setData: setPayData,
+        post: postPay,
+        processing: payProcessing,
+        reset: resetPay,
+    } = useForm({
+        action_type: 'paid',
+        payment_method: 'cash',
+        sender_number: 'Cash Payment',
+        transaction_id: '',
+        admin_remarks: 'Payment verified and user account unlocked.',
+    });
+
+    const {
+        data: waiveData,
+        setData: setWaiveData,
+        post: postWaive,
+        processing: waiveProcessing,
+        reset: resetWaive,
+    } = useForm({
+        action_type: 'waive',
+        admin_remarks: 'Waived by Admin without payment and account unlocked.',
+    });
+
     const {
         data: rejectData,
         setData: setRejectData,
@@ -205,14 +299,19 @@ export default function PenaltyAdmin({
         admin_remarks: '',
     });
 
+    // Bulk form
     const {
-        data: approveData,
-        setData: setApproveData,
-        post: postApprove,
-        processing: approveProcessing,
-        reset: resetApprove,
+        data: bulkData,
+        setData: setBulkData,
+        post: postBulk,
+        processing: bulkProcessing,
+        reset: resetBulk,
     } = useForm({
-        admin_remarks: 'Payment verified and user account unlocked.',
+        ids: [] as number[],
+        action: 'paid' as 'paid' | 'waive' | 'reject',
+        payment_method: 'cash',
+        sender_number: 'Cash Payment',
+        admin_remarks: '',
     });
 
     const formatDateTime = (dtStr?: string | null) => {
@@ -267,6 +366,7 @@ export default function PenaltyAdmin({
         setBranchFilter('all');
         setStartDate('');
         setEndDate('');
+        setSelectedIds([]);
         router.get(
             route('movement-penalties.index'),
             { tab: activeTab },
@@ -284,17 +384,62 @@ export default function PenaltyAdmin({
         handleFilter(activeTab, value);
     };
 
-    const handleApproveSubmit = (e: React.FormEvent) => {
+    // Open Single Paid Modal
+    const openPayModal = (item: PenaltyRecord) => {
+        setPayData({
+            action_type: 'paid',
+            payment_method: item.payment_method || 'cash',
+            sender_number: item.sender_number || (item.payment_method === 'cash' || !item.payment_method ? 'Cash Payment' : ''),
+            transaction_id: item.transaction_id || '',
+            admin_remarks: 'Payment verified and account unlocked.',
+        });
+        setPayingPenalty(item);
+    };
+
+    // Open Single Waive Modal
+    const openWaiveModal = (item: PenaltyRecord) => {
+        setWaiveData({
+            action_type: 'waive',
+            admin_remarks: 'Waived by Admin without payment and account unlocked.',
+        });
+        setWaivingPenalty(item);
+    };
+
+    // Open Single Reject Modal
+    const openRejectModal = (item: PenaltyRecord) => {
+        setRejectData({
+            admin_remarks: '',
+        });
+        setRejectingPenalty(item);
+    };
+
+    // Submit Single Paid
+    const handlePaySubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!approvingPenalty) return;
-        postApprove(route('movement-penalties.approve', approvingPenalty.id), {
+        if (!payingPenalty) return;
+        postPay(route('movement-penalties.approve', payingPenalty.id), {
             onSuccess: () => {
-                setApprovingPenalty(null);
-                resetApprove();
+                setPayingPenalty(null);
+                resetPay();
+                setSelectedIds((prev) => prev.filter((id) => id !== payingPenalty.id));
             },
         });
     };
 
+    // Submit Single Waive
+    const handleWaiveSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!waivingPenalty) return;
+        postWaive(route('movement-penalties.approve', waivingPenalty.id), {
+            onSuccess: () => {
+                setWaivingPenalty(null);
+                resetWaive();
+                setSelectedIds((prev) => prev.filter((id) => id !== waivingPenalty.id));
+            },
+        });
+    };
+
+    // Submit Single Reject
     const handleRejectSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!rejectingPenalty) return;
@@ -302,6 +447,58 @@ export default function PenaltyAdmin({
             onSuccess: () => {
                 setRejectingPenalty(null);
                 resetReject();
+                setSelectedIds((prev) => prev.filter((id) => id !== rejectingPenalty.id));
+            },
+        });
+    };
+
+    // Open Bulk Pay Modal
+    const openBulkPayModal = () => {
+        setBulkData({
+            ids: selectedIds,
+            action: 'paid',
+            payment_method: 'cash',
+            sender_number: 'Cash Payment',
+            admin_remarks: 'Bulk penalty payment verified and accounts unlocked.',
+        });
+        setIsBulkPayOpen(true);
+    };
+
+    // Open Bulk Waive Modal
+    const openBulkWaiveModal = () => {
+        setBulkData({
+            ids: selectedIds,
+            action: 'waive',
+            payment_method: 'cash',
+            sender_number: '',
+            admin_remarks: 'Bulk waived by Admin without payment and accounts unlocked.',
+        });
+        setIsBulkWaiveOpen(true);
+    };
+
+    // Open Bulk Reject Modal
+    const openBulkRejectModal = () => {
+        setBulkData({
+            ids: selectedIds,
+            action: 'reject',
+            payment_method: 'cash',
+            sender_number: '',
+            admin_remarks: 'Bulk rejected by Admin.',
+        });
+        setIsBulkRejectOpen(true);
+    };
+
+    // Submit Bulk Action
+    const handleBulkSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedIds.length === 0) return;
+        postBulk(route('movement-penalties.bulk'), {
+            onSuccess: () => {
+                setIsBulkPayOpen(false);
+                setIsBulkWaiveOpen(false);
+                setIsBulkRejectOpen(false);
+                resetBulk();
+                setSelectedIds([]);
             },
         });
     };
@@ -414,6 +611,11 @@ export default function PenaltyAdmin({
 
     const selectedBranchName = branches?.find((b) => String(b.id) === branchFilter)?.name || 'All Branches';
 
+    // Check if current page is all selected
+    const isAllCurrentActionableSelected =
+        currentActionableRecords.length > 0 &&
+        currentActionableRecords.every((r) => selectedIds.includes(r.id));
+
     return (
         <Layout>
             <Head title="Movement Penalties Verification" />
@@ -487,10 +689,10 @@ export default function PenaltyAdmin({
                         </div>
                         <div>
                             <h1 className="text-base sm:text-xl font-bold tracking-tight text-zinc-900 flex items-center gap-2">
-                                Overdue Movement Penalties Verification
+                                Overdue Movement Penalties & Fine Verification
                             </h1>
                             <p className="text-xs text-zinc-500 mt-1 max-w-xl">
-                                Verify Sender Mobile Numbers, process fine waivers, and manage employee account unlocks. Fines accrue at ৳20/day for unclosed movements.
+                                Verify employee fine payments (Cash/bKash/Nagad), approve direct payments, process fine waivers, and manage account unlocks individually or in bulk.
                             </p>
                         </div>
                     </div>
@@ -701,7 +903,69 @@ export default function PenaltyAdmin({
                     </div>
                 </Card>
 
-                {/* 4. MAIN TABS SECTION */}
+                {/* 4. FLOATING / STICKY BULK ACTION BAR */}
+                {selectedIds.length > 0 && (
+                    <div className="sticky top-4 z-20 bg-zinc-900 text-white p-3 sm:p-4 rounded-2xl shadow-xl border border-zinc-700/80 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-xs border border-emerald-500/30">
+                                {selectedIds.length}
+                            </div>
+                            <div>
+                                <p className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                                    <span>{selectedIds.length} Penalties Selected</span>
+                                    <span className="text-zinc-400 font-normal text-xs">• Total Fine:</span>
+                                    <span className="text-emerald-400 font-black">৳ {selectedTotalFine.toFixed(2)}</span>
+                                </p>
+                                <p className="text-[11px] text-zinc-400 hidden sm:block">
+                                    Perform bulk action on selected overdue penalty records at once.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                            <Button
+                                size="sm"
+                                onClick={openBulkPayModal}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-8 px-3.5 rounded-xl shadow-sm"
+                            >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                                Bulk Mark as Paid
+                            </Button>
+
+                            <Button
+                                size="sm"
+                                onClick={openBulkWaiveModal}
+                                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-8 px-3.5 rounded-xl shadow-sm"
+                            >
+                                <ShieldOff className="w-3.5 h-3.5 mr-1.5" />
+                                Bulk Waive Fine
+                            </Button>
+
+                            {activeTab === 'pending' && (
+                                <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={openBulkRejectModal}
+                                    className="font-bold text-xs h-8 px-3.5 rounded-xl shadow-sm"
+                                >
+                                    <X className="w-3.5 h-3.5 mr-1.5" />
+                                    Bulk Reject
+                                </Button>
+                            )}
+
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleClearSelection}
+                                className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white text-xs h-8 px-2.5 rounded-xl"
+                            >
+                                Clear
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* 5. MAIN TABS SECTION */}
                 <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-4">
                     {/* SLEEK SEGMENTED TAB SWITCHER */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-1.5 rounded-2xl border border-zinc-200/80 shadow-sm">
@@ -804,11 +1068,11 @@ export default function PenaltyAdmin({
                                     Pending Payment Verification (Action Required)
                                 </CardTitle>
                                 <CardDescription className="text-[11px] sm:text-xs text-zinc-500">
-                                    Verify bKash/Nagad Sender Mobile Numbers submitted by employees to approve and unlock account IDs.
+                                    Verify bKash/Nagad/Cash payment details submitted by employees to approve and unlock account IDs.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="p-0">
-                                {/* MOBILE CARDS VIEW (block md:hidden) */}
+                                {/* MOBILE CARDS VIEW */}
                                 <div className="block md:hidden divide-y divide-zinc-100">
                                     {!pendingPenalties?.data || pendingPenalties.data.length === 0 ? (
                                         <div className="p-8 text-center text-zinc-500 text-xs">
@@ -816,68 +1080,94 @@ export default function PenaltyAdmin({
                                             No pending payment verifications found.
                                         </div>
                                     ) : (
-                                        pendingPenalties.data.map((item) => (
-                                            <div key={item.id} className="p-4 space-y-3 bg-white hover:bg-zinc-50/60">
-                                                <div className="flex items-start justify-between">
-                                                    <div>
-                                                        <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
-                                                        <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                            ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
-                                                        </p>
-                                                    </div>
-                                                    <span className="px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-md border border-rose-200/60">
-                                                        ৳ {Number(item.total_fine).toFixed(2)}
-                                                    </span>
-                                                </div>
-
-                                                <div className="bg-zinc-50 p-2.5 rounded-xl space-y-1 text-[11px] border border-zinc-100">
-                                                    <span className="font-semibold text-zinc-900 block">
-                                                        Movement #{item.movement?.id}: {item.movement?.purpose || 'N/A'}
-                                                    </span>
-                                                    <span className="text-zinc-500 block">Start: {formatDateTime(item.movement?.from_datetime)}</span>
-                                                    <span className="text-amber-700 font-medium block">
-                                                        Return: {item.movement?.actual_return_datetime ? formatDateTime(item.movement.actual_return_datetime) : 'Still Open (Not Closed)'}
-                                                    </span>
-                                                </div>
-
-                                                <div className="flex items-center justify-between pt-1">
-                                                    <div className="flex items-center space-x-1.5">
-                                                        <span className="uppercase px-2 py-0.5 bg-pink-50 text-pink-700 font-mono font-bold text-[10px] rounded border border-pink-200/60">
-                                                            {item.payment_method || 'Payment'}
-                                                        </span>
-                                                        <span className="font-mono font-extrabold text-zinc-950 text-xs">
-                                                            {item.sender_number || item.transaction_id || 'N/A'}
+                                        pendingPenalties.data.map((item) => {
+                                            const isSelected = selectedIds.includes(item.id);
+                                            return (
+                                                <div key={item.id} className={`p-4 space-y-3 ${isSelected ? 'bg-emerald-50/40' : 'bg-white'}`}>
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex items-start space-x-2.5">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => handleToggleSelectItem(item.id)}
+                                                                className="mt-0.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                            />
+                                                            <div>
+                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                    ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <span className="px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-md border border-rose-200/60">
+                                                            ৳ {Number(item.total_fine).toFixed(2)}
                                                         </span>
                                                     </div>
 
-                                                    <div className="flex items-center space-x-1.5">
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => setApprovingPenalty(item)}
-                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-3 rounded-lg"
-                                                        >
-                                                            <Unlock className="w-3 h-3 mr-1" /> Approve
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="destructive"
-                                                            onClick={() => setRejectingPenalty(item)}
-                                                            className="text-[11px] h-7 px-2.5 rounded-lg"
-                                                        >
-                                                            <X className="w-3 h-3" />
-                                                        </Button>
+                                                    <div className="bg-zinc-50 p-2.5 rounded-xl space-y-1 text-[11px] border border-zinc-100">
+                                                        <span className="font-semibold text-zinc-900 block">
+                                                            Movement #{item.movement?.id}: {item.movement?.purpose || 'N/A'}
+                                                        </span>
+                                                        <span className="text-zinc-500 block">Start: {formatDateTime(item.movement?.from_datetime)}</span>
+                                                        <span className="text-amber-700 font-medium block">
+                                                            Return: {item.movement?.actual_return_datetime ? formatDateTime(item.movement.actual_return_datetime) : 'Still Open (Not Closed)'}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between pt-1">
+                                                        <div className="flex items-center space-x-1.5">
+                                                            <span className="uppercase px-2 py-0.5 bg-pink-50 text-pink-700 font-mono font-bold text-[10px] rounded border border-pink-200/60">
+                                                                {item.payment_method || 'Payment'}
+                                                            </span>
+                                                            <span className="font-mono font-extrabold text-zinc-950 text-xs">
+                                                                {item.sender_number || item.transaction_id || 'N/A'}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex items-center space-x-1.5">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openPayModal(item)}
+                                                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold shadow-sm"
+                                                            >
+                                                                <Unlock className="w-3 h-3 mr-1" /> Paid
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openWaiveModal(item)}
+                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold shadow-sm"
+                                                            >
+                                                                <ShieldOff className="w-3 h-3 mr-1" /> Waive
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="destructive"
+                                                                onClick={() => openRejectModal(item)}
+                                                                className="text-[11px] h-7 px-2 rounded-lg"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </Button>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     )}
                                 </div>
 
-                                {/* DESKTOP TABLE VIEW (hidden md:block) */}
+                                {/* DESKTOP TABLE VIEW */}
                                 <div className="hidden md:block overflow-x-auto w-full">
                                     <Table className="w-full">
                                         <TableHeader className="bg-zinc-50/80">
                                             <TableRow className="border-zinc-200/80">
+                                                <TableHead className="w-10 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isAllCurrentActionableSelected}
+                                                        onChange={handleToggleSelectAll}
+                                                        className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                    />
+                                                </TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Employee & Branch</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Movement & Return Time</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Overdue & Fine</TableHead>
@@ -888,70 +1178,89 @@ export default function PenaltyAdmin({
                                         <TableBody>
                                             {!pendingPenalties?.data || pendingPenalties.data.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={5} className="text-center py-10 text-zinc-500 text-xs">
+                                                    <TableCell colSpan={6} className="text-center py-10 text-zinc-500 text-xs">
                                                         <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-60" />
                                                         No pending payment verifications found.
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                pendingPenalties.data.map((item) => (
-                                                    <TableRow key={item.id} className="border-zinc-100 hover:bg-zinc-50/60">
-                                                        <TableCell className="font-medium text-zinc-900">
-                                                            <div>
-                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                pendingPenalties.data.map((item) => {
+                                                    const isSelected = selectedIds.includes(item.id);
+                                                    return (
+                                                        <TableRow key={item.id} className={`border-zinc-100 hover:bg-zinc-50/60 ${isSelected ? 'bg-emerald-50/40' : ''}`}>
+                                                            <TableCell className="text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => handleToggleSelectItem(item.id)}
+                                                                    className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell className="font-medium text-zinc-900">
+                                                                <div>
+                                                                    <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                        ID: {item.employee?.employee_id || 'N/A'}{' '}
+                                                                        {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                                    </p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-700 text-xs">
+                                                                <p className="font-semibold text-zinc-900">
+                                                                    #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
+                                                                </p>
                                                                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                                    ID: {item.employee?.employee_id || 'N/A'}{' '}
-                                                                    {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                                    Start: {formatDateTime(item.movement?.from_datetime)}
                                                                 </p>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-700 text-xs">
-                                                            <p className="font-semibold text-zinc-900">
-                                                                #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
-                                                            </p>
-                                                            <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                                Start: {formatDateTime(item.movement?.from_datetime)}
-                                                            </p>
-                                                            <p className="text-[11px] text-amber-700 font-medium">
-                                                                Return: {item.movement?.actual_return_datetime ? formatDateTime(item.movement.actual_return_datetime) : 'Still Open (Not Closed)'}
-                                                            </p>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-900">
-                                                            <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
-                                                            <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-800 text-xs">
-                                                            <div className="space-y-0.5">
-                                                                <span className="uppercase px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-pink-50 text-pink-800 border border-pink-200/60">
-                                                                    {item.payment_method || 'bKash'}
-                                                                </span>
-                                                                <p className="font-mono font-extrabold text-zinc-950 text-sm flex items-center mt-1">
-                                                                    <Phone className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                                                                    {item.sender_number || item.transaction_id || 'N/A'}
+                                                                <p className="text-[11px] text-amber-700 font-medium">
+                                                                    Return: {item.movement?.actual_return_datetime ? formatDateTime(item.movement.actual_return_datetime) : 'Still Open (Not Closed)'}
                                                                 </p>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <div className="flex items-center justify-end space-x-2">
-                                                                <Button
-                                                                    size="sm"
-                                                                    onClick={() => setApprovingPenalty(item)}
-                                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 px-3 rounded-lg"
-                                                                >
-                                                                    <Unlock className="w-3.5 h-3.5 mr-1" /> Approve & Unlock
-                                                                </Button>
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="destructive"
-                                                                    onClick={() => setRejectingPenalty(item)}
-                                                                    className="text-xs h-8 px-3 rounded-lg"
-                                                                >
-                                                                    <X className="w-3.5 h-3.5 mr-1" /> Reject
-                                                                </Button>
-                                                            </div>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-900">
+                                                                <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
+                                                                <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-800 text-xs">
+                                                                <div className="space-y-0.5">
+                                                                    <span className="uppercase px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-pink-50 text-pink-800 border border-pink-200/60">
+                                                                        {item.payment_method || 'bKash'}
+                                                                    </span>
+                                                                    <p className="font-mono font-extrabold text-zinc-950 text-sm flex items-center mt-1">
+                                                                        <Phone className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                                                                        {item.sender_number || item.transaction_id || 'N/A'}
+                                                                    </p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end space-x-1.5">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openPayModal(item)}
+                                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 px-3 rounded-lg shadow-sm font-semibold"
+                                                                    >
+                                                                        <Unlock className="w-3.5 h-3.5 mr-1" /> Paid
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openWaiveModal(item)}
+                                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 rounded-lg shadow-sm font-semibold"
+                                                                    >
+                                                                        <ShieldOff className="w-3.5 h-3.5 mr-1" /> Waive
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="destructive"
+                                                                        onClick={() => openRejectModal(item)}
+                                                                        className="text-xs h-8 px-2.5 rounded-lg"
+                                                                        title="Reject Submission"
+                                                                    >
+                                                                        <X className="w-3.5 h-3.5" />
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })
                                             )}
                                         </TableBody>
                                     </Table>
@@ -971,7 +1280,7 @@ export default function PenaltyAdmin({
                                     Unpaid & Locked Accounts List
                                 </CardTitle>
                                 <CardDescription className="text-[11px] sm:text-xs text-zinc-500">
-                                    Employees with overdue movement penalties whose account IDs are currently locked until payment or fine waiver.
+                                    Employees with overdue movement penalties whose account IDs are currently locked until payment (Cash/Online) or fine waiver.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="p-0">
@@ -982,39 +1291,59 @@ export default function PenaltyAdmin({
                                             No unpaid/locked penalties found.
                                         </div>
                                     ) : (
-                                        unpaidPenalties.data.map((item) => (
-                                            <div key={item.id} className="p-4 space-y-3 bg-white">
-                                                <div className="flex items-start justify-between">
-                                                    <div>
-                                                        <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
-                                                        <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                            ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
-                                                        </p>
+                                        unpaidPenalties.data.map((item) => {
+                                            const isSelected = selectedIds.includes(item.id);
+                                            return (
+                                                <div key={item.id} className={`p-4 space-y-3 ${isSelected ? 'bg-emerald-50/40' : 'bg-white'}`}>
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex items-start space-x-2.5">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => handleToggleSelectItem(item.id)}
+                                                                className="mt-0.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                            />
+                                                            <div>
+                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                    ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <span className="px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-md border border-rose-200/60">
+                                                            ৳ {Number(item.total_fine).toFixed(2)}
+                                                        </span>
                                                     </div>
-                                                    <span className="px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-md border border-rose-200/60">
-                                                        ৳ {Number(item.total_fine).toFixed(2)}
-                                                    </span>
-                                                </div>
 
-                                                <div className="bg-zinc-50 p-2.5 rounded-xl space-y-1 text-[11px] border border-zinc-100">
-                                                    <p className="font-semibold text-zinc-900">
-                                                        Movement #{item.movement?.id}: {item.movement?.purpose || 'N/A'}
-                                                    </p>
-                                                    <p className="text-zinc-500">Start: {formatDateTime(item.movement?.from_datetime)}</p>
-                                                </div>
+                                                    <div className="bg-zinc-50 p-2.5 rounded-xl space-y-1 text-[11px] border border-zinc-100">
+                                                        <p className="font-semibold text-zinc-900">
+                                                            Movement #{item.movement?.id}: {item.movement?.purpose || 'N/A'}
+                                                        </p>
+                                                        <p className="text-zinc-500">Start: {formatDateTime(item.movement?.from_datetime)}</p>
+                                                    </div>
 
-                                                <div className="flex items-center justify-between pt-1">
-                                                    <span className="text-[11px] text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</span>
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => setApprovingPenalty(item)}
-                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-3 rounded-lg"
-                                                    >
-                                                        <Unlock className="w-3 h-3 mr-1" /> Waive Fine
-                                                    </Button>
+                                                    <div className="flex items-center justify-between pt-1">
+                                                        <span className="text-[11px] text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</span>
+                                                        <div className="flex items-center space-x-1.5">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openPayModal(item)}
+                                                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-3 rounded-lg font-semibold"
+                                                            >
+                                                                <Unlock className="w-3 h-3 mr-1" /> Paid
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openWaiveModal(item)}
+                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-3 rounded-lg font-semibold"
+                                                            >
+                                                                <ShieldOff className="w-3 h-3 mr-1" /> Waive
+                                                            </Button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     )}
                                 </div>
 
@@ -1023,6 +1352,14 @@ export default function PenaltyAdmin({
                                     <Table className="w-full">
                                         <TableHeader className="bg-zinc-50/80">
                                             <TableRow className="border-zinc-200/80">
+                                                <TableHead className="w-10 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isAllCurrentActionableSelected}
+                                                        onChange={handleToggleSelectAll}
+                                                        className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                    />
+                                                </TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Employee & Branch</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Movement & Return Time</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Overdue & Fine</TableHead>
@@ -1033,46 +1370,66 @@ export default function PenaltyAdmin({
                                         <TableBody>
                                             {!unpaidPenalties?.data || unpaidPenalties.data.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={5} className="text-center py-8 text-zinc-500 text-xs">
+                                                    <TableCell colSpan={6} className="text-center py-8 text-zinc-500 text-xs">
                                                         No unpaid/locked penalties found.
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                unpaidPenalties.data.map((item) => (
-                                                    <TableRow key={item.id} className="border-zinc-100 hover:bg-zinc-50/60">
-                                                        <TableCell className="font-medium text-zinc-900">
-                                                            <div>
-                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
-                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                                    ID: {item.employee?.employee_id || 'N/A'}{' '}
-                                                                    {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                unpaidPenalties.data.map((item) => {
+                                                    const isSelected = selectedIds.includes(item.id);
+                                                    return (
+                                                        <TableRow key={item.id} className={`border-zinc-100 hover:bg-zinc-50/60 ${isSelected ? 'bg-emerald-50/40' : ''}`}>
+                                                            <TableCell className="text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => handleToggleSelectItem(item.id)}
+                                                                    className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell className="font-medium text-zinc-900">
+                                                                <div>
+                                                                    <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                        ID: {item.employee?.employee_id || 'N/A'}{' '}
+                                                                        {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                                    </p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-700 text-xs">
+                                                                <p className="font-semibold text-zinc-900">
+                                                                    #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
                                                                 </p>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-700 text-xs">
-                                                            <p className="font-semibold text-zinc-900">
-                                                                #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
-                                                            </p>
-                                                            <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                                Start: {formatDateTime(item.movement?.from_datetime)}
-                                                            </p>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-900">
-                                                            <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
-                                                            <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
-                                                        </TableCell>
-                                                        <TableCell>{getStatusBadge(item.status)}</TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => setApprovingPenalty(item)}
-                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 rounded-lg"
-                                                            >
-                                                                <Unlock className="w-3.5 h-3.5 mr-1" /> Waive Fine (Unlock)
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
+                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                    Start: {formatDateTime(item.movement?.from_datetime)}
+                                                                </p>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-900">
+                                                                <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
+                                                                <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
+                                                            </TableCell>
+                                                            <TableCell>{getStatusBadge(item.status)}</TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end space-x-2">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openPayModal(item)}
+                                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 px-3 rounded-lg font-semibold shadow-sm"
+                                                                    >
+                                                                        <Unlock className="w-3.5 h-3.5 mr-1" /> Paid
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openWaiveModal(item)}
+                                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 rounded-lg font-semibold shadow-sm"
+                                                                    >
+                                                                        <ShieldOff className="w-3.5 h-3.5 mr-1" /> Waive Fine
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })
                                             )}
                                         </TableBody>
                                     </Table>
@@ -1126,7 +1483,7 @@ export default function PenaltyAdmin({
                                         Verified Paid Penalty Statement
                                     </CardTitle>
                                     <CardDescription className="text-[11px] sm:text-xs text-zinc-500">
-                                        History of all verified bKash/Nagad penalty payments and approved account unlocks.
+                                        History of all verified Cash & online penalty payments and approved account unlocks.
                                     </CardDescription>
                                 </div>
                                 <Button
@@ -1164,7 +1521,7 @@ export default function PenaltyAdmin({
 
                                                 <div className="flex items-center justify-between text-[11px] text-zinc-600">
                                                     <span className="font-mono font-bold text-zinc-900">
-                                                        Sender: {item.sender_number || item.transaction_id || 'N/A'} ({item.payment_method?.toUpperCase() || '-'})
+                                                        {item.sender_number || item.transaction_id || 'Cash'} ({item.payment_method?.toUpperCase() || '-'})
                                                     </span>
                                                     <span>By {item.approver?.name || 'Admin'}</span>
                                                 </div>
@@ -1181,7 +1538,7 @@ export default function PenaltyAdmin({
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Employee & Branch</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Movement & Return Time</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Fine Amount</TableHead>
-                                                <TableHead className="text-zinc-600 text-xs font-semibold">Sender Mobile & Method</TableHead>
+                                                <TableHead className="text-zinc-600 text-xs font-semibold">Sender / Method</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Approved By</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -1222,7 +1579,7 @@ export default function PenaltyAdmin({
                                                         </TableCell>
                                                         <TableCell className="text-zinc-800 text-xs">
                                                             <span className="font-mono font-bold text-zinc-900">
-                                                                {item.sender_number || item.transaction_id || 'N/A'}
+                                                                {item.sender_number || item.transaction_id || 'Cash'}
                                                             </span>
                                                             <p className="text-zinc-500 text-[11px] uppercase">{item.payment_method || '-'}</p>
                                                         </TableCell>
@@ -1355,9 +1712,6 @@ export default function PenaltyAdmin({
                                                             <p className="font-semibold text-zinc-900">
                                                                 #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
                                                             </p>
-                                                            <p className="text-[11px] text-zinc-500">
-                                                                Start: {formatDateTime(item.movement?.from_datetime)}
-                                                            </p>
                                                         </TableCell>
                                                         <TableCell className="text-zinc-900">
                                                             <p className="text-xs text-indigo-700 font-semibold">{item.overdue_days} Day(s) Waived</p>
@@ -1388,7 +1742,7 @@ export default function PenaltyAdmin({
                                     Rejected Payment Submissions List
                                 </CardTitle>
                                 <CardDescription className="text-[11px] sm:text-xs text-zinc-500">
-                                    Penalties where payment submission was rejected by Admin. Employees can resubmit payment or Admin can waive the fine.
+                                    Penalties where online payment submission was rejected. Admin can mark as Paid (Cash), Waive, or wait for resubmission.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="p-0">
@@ -1399,39 +1753,59 @@ export default function PenaltyAdmin({
                                             No rejected payment submissions found.
                                         </div>
                                     ) : (
-                                        rejectedPenalties.data.map((item) => (
-                                            <div key={item.id} className="p-4 space-y-3 bg-white">
-                                                <div className="flex items-start justify-between">
-                                                    <div>
-                                                        <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
-                                                        <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                            ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
+                                        rejectedPenalties.data.map((item) => {
+                                            const isSelected = selectedIds.includes(item.id);
+                                            return (
+                                                <div key={item.id} className={`p-4 space-y-3 ${isSelected ? 'bg-emerald-50/40' : 'bg-white'}`}>
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex items-start space-x-2.5">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => handleToggleSelectItem(item.id)}
+                                                                className="mt-0.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                            />
+                                                            <div>
+                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                    ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <span className="px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-md border border-rose-200/60">
+                                                            ৳ {Number(item.total_fine).toFixed(2)}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="bg-rose-50/50 p-2.5 rounded-xl space-y-1 text-[11px] border border-rose-100">
+                                                        <p className="font-semibold text-rose-900">Reason: {item.admin_remarks || 'Payment info rejected'}</p>
+                                                        <p className="text-zinc-600 font-mono">
+                                                            Sender: {item.sender_number || item.transaction_id || 'N/A'} ({item.payment_method?.toUpperCase() || '-'})
                                                         </p>
                                                     </div>
-                                                    <span className="px-2 py-0.5 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-md border border-rose-200/60">
-                                                        ৳ {Number(item.total_fine).toFixed(2)}
-                                                    </span>
-                                                </div>
 
-                                                <div className="bg-rose-50/50 p-2.5 rounded-xl space-y-1 text-[11px] border border-rose-100">
-                                                    <p className="font-semibold text-rose-900">Reason: {item.admin_remarks || 'Payment info rejected'}</p>
-                                                    <p className="text-zinc-600 font-mono">
-                                                        Sender: {item.sender_number || item.transaction_id || 'N/A'} ({item.payment_method?.toUpperCase() || '-'})
-                                                    </p>
+                                                    <div className="flex items-center justify-between pt-1">
+                                                        <span className="text-[11px] text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</span>
+                                                        <div className="flex items-center space-x-1.5">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openPayModal(item)}
+                                                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-3 rounded-lg font-semibold"
+                                                            >
+                                                                <Unlock className="w-3 h-3 mr-1" /> Paid
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openWaiveModal(item)}
+                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-3 rounded-lg font-semibold"
+                                                            >
+                                                                <ShieldOff className="w-3 h-3 mr-1" /> Waive
+                                                            </Button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-
-                                                <div className="flex items-center justify-between pt-1">
-                                                    <span className="text-[11px] text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</span>
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => setApprovingPenalty(item)}
-                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-3 rounded-lg"
-                                                    >
-                                                        <Unlock className="w-3 h-3 mr-1" /> Waive Fine
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     )}
                                 </div>
 
@@ -1440,6 +1814,14 @@ export default function PenaltyAdmin({
                                     <Table className="w-full">
                                         <TableHeader className="bg-zinc-50/80">
                                             <TableRow className="border-zinc-200/80">
+                                                <TableHead className="w-10 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isAllCurrentActionableSelected}
+                                                        onChange={handleToggleSelectAll}
+                                                        className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                    />
+                                                </TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Employee & Branch</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Movement & Purpose</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Fine Amount</TableHead>
@@ -1451,54 +1833,74 @@ export default function PenaltyAdmin({
                                         <TableBody>
                                             {!rejectedPenalties?.data || rejectedPenalties.data.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={6} className="text-center py-8 text-zinc-500 text-xs">
+                                                    <TableCell colSpan={7} className="text-center py-8 text-zinc-500 text-xs">
                                                         No rejected payment submissions found.
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                rejectedPenalties.data.map((item) => (
-                                                    <TableRow key={item.id} className="border-zinc-100 hover:bg-zinc-50/60">
-                                                        <TableCell className="font-medium text-zinc-900">
-                                                            <div>
-                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
-                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                                    ID: {item.employee?.employee_id || 'N/A'}{' '}
-                                                                    {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                rejectedPenalties.data.map((item) => {
+                                                    const isSelected = selectedIds.includes(item.id);
+                                                    return (
+                                                        <TableRow key={item.id} className={`border-zinc-100 hover:bg-zinc-50/60 ${isSelected ? 'bg-emerald-50/40' : ''}`}>
+                                                            <TableCell className="text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => handleToggleSelectItem(item.id)}
+                                                                    className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell className="font-medium text-zinc-900">
+                                                                <div>
+                                                                    <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                        ID: {item.employee?.employee_id || 'N/A'}{' '}
+                                                                        {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                                    </p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-700 text-xs">
+                                                                <p className="font-semibold text-zinc-900">
+                                                                    #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
                                                                 </p>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-700 text-xs">
-                                                            <p className="font-semibold text-zinc-900">
-                                                                #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
-                                                            </p>
-                                                            <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                                Start: {formatDateTime(item.movement?.from_datetime)}
-                                                            </p>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-900">
-                                                            <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
-                                                            <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-800 text-xs">
-                                                            <span className="font-mono font-bold text-zinc-900">
-                                                                {item.sender_number || item.transaction_id || 'N/A'}
-                                                            </span>
-                                                            <p className="text-zinc-500 text-[11px] uppercase">{item.payment_method || '-'}</p>
-                                                        </TableCell>
-                                                        <TableCell className="text-rose-700 text-xs font-medium">
-                                                            {item.admin_remarks || 'Payment info rejected'}
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => setApprovingPenalty(item)}
-                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 rounded-lg"
-                                                            >
-                                                                <Unlock className="w-3.5 h-3.5 mr-1" /> Waive Fine
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
+                                                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                    Start: {formatDateTime(item.movement?.from_datetime)}
+                                                                </p>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-900">
+                                                                <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
+                                                                <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-800 text-xs">
+                                                                <span className="font-mono font-bold text-zinc-900">
+                                                                    {item.sender_number || item.transaction_id || 'N/A'}
+                                                                </span>
+                                                                <p className="text-zinc-500 text-[11px] uppercase">{item.payment_method || '-'}</p>
+                                                            </TableCell>
+                                                            <TableCell className="text-rose-700 text-xs font-medium">
+                                                                {item.admin_remarks || 'Payment info rejected'}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end space-x-2">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openPayModal(item)}
+                                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 px-3 rounded-lg font-semibold shadow-sm"
+                                                                    >
+                                                                        <Unlock className="w-3.5 h-3.5 mr-1" /> Paid
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openWaiveModal(item)}
+                                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 rounded-lg font-semibold shadow-sm"
+                                                                    >
+                                                                        <ShieldOff className="w-3.5 h-3.5 mr-1" /> Waive
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })
                                             )}
                                         </TableBody>
                                     </Table>
@@ -1527,68 +1929,98 @@ export default function PenaltyAdmin({
                                     {!allPenalties?.data || allPenalties.data.length === 0 ? (
                                         <div className="p-8 text-center text-zinc-500 text-xs">No movement penalty records found.</div>
                                     ) : (
-                                        allPenalties.data.map((item) => (
-                                            <div key={item.id} className="p-4 space-y-3 bg-white">
-                                                <div className="flex items-start justify-between">
-                                                    <div>
-                                                        <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
-                                                        <p className="text-[11px] text-zinc-500">
-                                                            ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
-                                                        </p>
-                                                    </div>
-                                                    <div>{getStatusBadge(item.status)}</div>
-                                                </div>
-
-                                                <div className="bg-zinc-50 p-2.5 rounded-xl space-y-1 text-[11px] border border-zinc-100">
-                                                    <p className="font-semibold text-zinc-900">
-                                                        Movement #{item.movement?.id}: {item.movement?.purpose || 'N/A'}
-                                                    </p>
-                                                    <p className="text-zinc-500">Start: {formatDateTime(item.movement?.from_datetime)}</p>
-                                                    {item.movement?.actual_return_datetime && (
-                                                        <p className="text-emerald-700 font-medium">Return: {formatDateTime(item.movement?.actual_return_datetime)}</p>
-                                                    )}
-                                                </div>
-
-                                                <div className="flex items-center justify-between pt-1">
-                                                    <div>
-                                                        <p className="text-[11px] text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
-                                                        <p className="text-xs font-black text-rose-600">৳ {Number(item.total_fine).toFixed(2)}</p>
-                                                    </div>
-
-                                                    <div>
-                                                        {item.status === 'pending_verification' ? (
-                                                            <div className="flex items-center space-x-1.5">
-                                                                <Button
-                                                                    size="sm"
-                                                                    onClick={() => setApprovingPenalty(item)}
-                                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 rounded-lg"
-                                                                >
-                                                                    <Unlock className="w-3 h-3 mr-1" /> Approve
-                                                                </Button>
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="destructive"
-                                                                    onClick={() => setRejectingPenalty(item)}
-                                                                    className="text-[11px] h-7 px-2 rounded-lg"
-                                                                >
-                                                                    <X className="w-3 h-3" />
-                                                                </Button>
+                                        allPenalties.data.map((item) => {
+                                            const isSelected = selectedIds.includes(item.id);
+                                            const isActionable = item.status !== 'approved';
+                                            return (
+                                                <div key={item.id} className={`p-4 space-y-3 ${isSelected ? 'bg-emerald-50/40' : 'bg-white'}`}>
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex items-start space-x-2.5">
+                                                            {isActionable && (
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => handleToggleSelectItem(item.id)}
+                                                                    className="mt-0.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                                />
+                                                            )}
+                                                            <div>
+                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                <p className="text-[11px] text-zinc-500">
+                                                                    ID: {item.employee?.employee_id || 'N/A'} {item.employee?.branch?.name ? `• ${item.employee.branch.name}` : ''}
+                                                                </p>
                                                             </div>
-                                                        ) : (item.status === 'unpaid' || item.status === 'rejected') ? (
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => setApprovingPenalty(item)}
-                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-2.5 rounded-lg"
-                                                            >
-                                                                <Unlock className="w-3 h-3 mr-1" /> Waive Fine
-                                                            </Button>
-                                                        ) : (
-                                                            <span className="text-[11px] text-zinc-500">{item.approver ? `By ${item.approver.name}` : '-'}</span>
+                                                        </div>
+                                                        <div>{getStatusBadge(item.status)}</div>
+                                                    </div>
+
+                                                    <div className="bg-zinc-50 p-2.5 rounded-xl space-y-1 text-[11px] border border-zinc-100">
+                                                        <p className="font-semibold text-zinc-900">
+                                                            Movement #{item.movement?.id}: {item.movement?.purpose || 'N/A'}
+                                                        </p>
+                                                        <p className="text-zinc-500">Start: {formatDateTime(item.movement?.from_datetime)}</p>
+                                                        {item.movement?.actual_return_datetime && (
+                                                            <p className="text-emerald-700 font-medium">Return: {formatDateTime(item.movement?.actual_return_datetime)}</p>
                                                         )}
                                                     </div>
+
+                                                    <div className="flex items-center justify-between pt-1">
+                                                        <div>
+                                                            <p className="text-[11px] text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
+                                                            <p className="text-xs font-black text-rose-600">৳ {Number(item.total_fine).toFixed(2)}</p>
+                                                        </div>
+
+                                                        <div>
+                                                            {item.status === 'pending_verification' ? (
+                                                                <div className="flex items-center space-x-1.5">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openPayModal(item)}
+                                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold"
+                                                                    >
+                                                                        <Unlock className="w-3 h-3 mr-1" /> Paid
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openWaiveModal(item)}
+                                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold"
+                                                                    >
+                                                                        <ShieldOff className="w-3 h-3 mr-1" /> Waive
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="destructive"
+                                                                        onClick={() => openRejectModal(item)}
+                                                                        className="text-[11px] h-7 px-2 rounded-lg"
+                                                                    >
+                                                                        <X className="w-3 h-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (item.status === 'unpaid' || item.status === 'rejected') ? (
+                                                                <div className="flex items-center space-x-1.5">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openPayModal(item)}
+                                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold"
+                                                                    >
+                                                                        <Unlock className="w-3 h-3 mr-1" /> Paid
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => openWaiveModal(item)}
+                                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold"
+                                                                    >
+                                                                        <ShieldOff className="w-3 h-3 mr-1" /> Waive
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-[11px] text-zinc-500">{item.approver ? `By ${item.approver.name}` : '-'}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     )}
                                 </div>
 
@@ -1597,6 +2029,14 @@ export default function PenaltyAdmin({
                                     <Table className="w-full">
                                         <TableHeader className="bg-zinc-50/80">
                                             <TableRow className="border-zinc-200/80">
+                                                <TableHead className="w-10 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isAllCurrentActionableSelected}
+                                                        onChange={handleToggleSelectAll}
+                                                        className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                    />
+                                                </TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Employee & Branch</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Movement & Return Time</TableHead>
                                                 <TableHead className="text-zinc-600 text-xs font-semibold">Overdue & Fine</TableHead>
@@ -1608,87 +2048,118 @@ export default function PenaltyAdmin({
                                         <TableBody>
                                             {!allPenalties?.data || allPenalties.data.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={6} className="text-center py-8 text-zinc-500 text-xs">
+                                                    <TableCell colSpan={7} className="text-center py-8 text-zinc-500 text-xs">
                                                         No movement penalty records found.
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                allPenalties.data.map((item) => (
-                                                    <TableRow key={item.id} className="border-zinc-100 hover:bg-zinc-50/60">
-                                                        <TableCell className="font-medium text-zinc-900">
-                                                            <div>
-                                                                <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
-                                                                <p className="text-[11px] text-zinc-500">
-                                                                    ID: {item.employee?.employee_id || 'N/A'}{' '}
-                                                                    {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
-                                                                </p>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-700 text-xs">
-                                                            <p className="font-semibold text-zinc-900">
-                                                                #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
-                                                            </p>
-                                                            <p className="text-zinc-500 text-[11px]">Start: {formatDateTime(item.movement?.from_datetime)}</p>
-                                                            {item.movement?.actual_return_datetime && (
-                                                                <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
-                                                                    Return: {formatDateTime(item.movement.actual_return_datetime)}
-                                                                </p>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-900">
-                                                            <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
-                                                            <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
-                                                        </TableCell>
-                                                        <TableCell className="text-zinc-800 text-xs">
-                                                            {item.sender_number || item.transaction_id ? (
+                                                allPenalties.data.map((item) => {
+                                                    const isSelected = selectedIds.includes(item.id);
+                                                    const isActionable = item.status !== 'approved';
+                                                    return (
+                                                        <TableRow key={item.id} className={`border-zinc-100 hover:bg-zinc-50/60 ${isSelected ? 'bg-emerald-50/40' : ''}`}>
+                                                            <TableCell className="text-center">
+                                                                {isActionable ? (
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isSelected}
+                                                                        onChange={() => handleToggleSelectItem(item.id)}
+                                                                        className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                                                                    />
+                                                                ) : (
+                                                                    <span className="text-zinc-300">-</span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="font-medium text-zinc-900">
                                                                 <div>
-                                                                    <span className="font-mono font-bold text-zinc-900">
-                                                                        {item.sender_number || item.transaction_id}
+                                                                    <p className="font-bold text-zinc-900 text-xs">{getEmployeeName(item.employee)}</p>
+                                                                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                                                                        ID: {item.employee?.employee_id || 'N/A'}{' '}
+                                                                        {item.employee?.branch?.name ? `| ${item.employee.branch.name}` : ''}
+                                                                    </p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-700 text-xs">
+                                                                <p className="font-semibold text-zinc-900">
+                                                                    #{item.movement?.id} - {item.movement?.purpose || 'N/A'}
+                                                                </p>
+                                                                <p className="text-zinc-500 text-[11px]">Start: {formatDateTime(item.movement?.from_datetime)}</p>
+                                                                {item.movement?.actual_return_datetime && (
+                                                                    <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                                                                        Return: {formatDateTime(item.movement.actual_return_datetime)}
+                                                                    </p>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-900">
+                                                                <p className="text-xs text-amber-700 font-semibold">{item.overdue_days} Day(s) Overdue</p>
+                                                                <p className="text-sm font-black text-rose-600 mt-0.5">৳ {Number(item.total_fine).toFixed(2)}</p>
+                                                            </TableCell>
+                                                            <TableCell className="text-zinc-800 text-xs">
+                                                                {item.sender_number || item.transaction_id ? (
+                                                                    <div>
+                                                                        <span className="font-mono font-bold text-zinc-900">
+                                                                            {item.sender_number || item.transaction_id}
+                                                                        </span>
+                                                                        <p className="text-zinc-500 text-[11px] uppercase">{item.payment_method || '-'}</p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-zinc-400 italic">No Payment Info</span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>{getStatusBadge(item.status)}</TableCell>
+                                                            <TableCell className="text-right">
+                                                                {item.status === 'pending_verification' ? (
+                                                                    <div className="flex items-center justify-end space-x-1.5">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            onClick={() => openPayModal(item)}
+                                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold shadow-sm"
+                                                                        >
+                                                                            <Unlock className="w-3 h-3 mr-1" /> Paid
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            onClick={() => openWaiveModal(item)}
+                                                                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold shadow-sm"
+                                                                        >
+                                                                            <ShieldOff className="w-3 h-3 mr-1" /> Waive
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="destructive"
+                                                                            onClick={() => openRejectModal(item)}
+                                                                            className="text-[11px] h-7 px-2 rounded-lg"
+                                                                            title="Reject Submission"
+                                                                        >
+                                                                            <X className="w-3 h-3" />
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (item.status === 'unpaid' || item.status === 'rejected') ? (
+                                                                    <div className="flex items-center justify-end space-x-1.5">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            onClick={() => openPayModal(item)}
+                                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold shadow-sm"
+                                                                        >
+                                                                            <Unlock className="w-3 h-3 mr-1" /> Paid
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            onClick={() => openWaiveModal(item)}
+                                                                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-2.5 rounded-lg font-semibold shadow-sm"
+                                                                        >
+                                                                            <ShieldOff className="w-3 h-3 mr-1" /> Waive Fine
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-xs text-zinc-500">
+                                                                        {item.approver ? `By ${item.approver.name}` : item.admin_remarks || '-'}
                                                                     </span>
-                                                                    <p className="text-zinc-500 text-[11px] uppercase">{item.payment_method || '-'}</p>
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-zinc-400 italic">No Payment Info</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>{getStatusBadge(item.status)}</TableCell>
-                                                        <TableCell className="text-right">
-                                                            {item.status === 'pending_verification' ? (
-                                                                <div className="flex items-center justify-end space-x-1.5">
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => setApprovingPenalty(item)}
-                                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-7 px-2.5 rounded-lg"
-                                                                    >
-                                                                        <Unlock className="w-3 h-3 mr-1" /> Approve & Unlock
-                                                                    </Button>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="destructive"
-                                                                        onClick={() => setRejectingPenalty(item)}
-                                                                        className="text-[11px] h-7 px-2.5 rounded-lg"
-                                                                    >
-                                                                        <X className="w-3 h-3 mr-1" /> Reject
-                                                                    </Button>
-                                                                </div>
-                                                            ) : (item.status === 'unpaid' || item.status === 'rejected') ? (
-                                                                <div className="flex items-center justify-end">
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => setApprovingPenalty(item)}
-                                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] h-7 px-2.5 rounded-lg"
-                                                                    >
-                                                                        <Unlock className="w-3 h-3 mr-1" /> Waive Fine (Unlock)
-                                                                    </Button>
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-xs text-zinc-500">
-                                                                    {item.approver ? `By ${item.approver.name}` : item.admin_remarks || '-'}
-                                                                </span>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })
                                             )}
                                         </TableBody>
                                     </Table>
@@ -1754,7 +2225,7 @@ export default function PenaltyAdmin({
                             <th className="p-1 border border-gray-400">Branch</th>
                             <th className="p-1 border border-gray-400 text-center">Movement ID</th>
                             <th className="p-1 border border-gray-400">Overdue</th>
-                            <th className="p-1 border border-gray-400">Sender Mobile</th>
+                            <th className="p-1 border border-gray-400">Sender / Method</th>
                             <th className="p-1 border border-gray-400 text-right">Fine</th>
                             <th className="p-1 border border-gray-400">Approved</th>
                         </tr>
@@ -1780,11 +2251,11 @@ export default function PenaltyAdmin({
                                         {item.employee?.branch?.name || 'Main Office'}
                                     </td>
                                     <td className="p-1 border border-gray-300 text-center font-mono font-medium">
-                                        #{item.movement?.id || item.movement_id || 'N/A'}
+                                        #{item.movement?.id || (item as any).movement_id || 'N/A'}
                                     </td>
                                     <td className="p-1 border border-gray-300 whitespace-nowrap">{item.overdue_days} Day(s)</td>
                                     <td className="p-1 border border-gray-300 font-mono font-bold whitespace-nowrap">
-                                        {item.sender_number || item.transaction_id || 'N/A'} ({item.payment_method?.toUpperCase() || '-'})
+                                        {item.sender_number || item.transaction_id || 'Cash'} ({item.payment_method?.toUpperCase() || '-'})
                                     </td>
                                     <td className="p-1 border border-gray-300 text-right font-bold whitespace-nowrap">
                                         {Math.round(Number(item.total_fine || 0)).toLocaleString()}
@@ -1817,81 +2288,164 @@ export default function PenaltyAdmin({
                 </div>
             </div>
 
-            {/* APPROVAL MODAL */}
-            <Dialog open={!!approvingPenalty} onOpenChange={(open) => !open && setApprovingPenalty(null)}>
+            {/* 1. SINGLE MARK AS PAID MODAL */}
+            <Dialog open={!!payingPenalty} onOpenChange={(open) => !open && setPayingPenalty(null)}>
                 <DialogContent className="bg-white border-zinc-200 text-zinc-900 max-w-md w-full p-4 sm:p-6 rounded-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold text-emerald-700 flex items-center">
-                            <Unlock className="w-5 h-5 mr-2 flex-shrink-0" />
-                            <span>
-                                {approvingPenalty?.status === 'unpaid' || approvingPenalty?.status === 'rejected'
-                                    ? 'Waive Fine & Unlock Account (Without Payment)'
-                                    : 'Approve Payment & Unlock Account'}
-                            </span>
+                            <CheckCircle2 className="w-5 h-5 mr-2 flex-shrink-0 text-emerald-600" />
+                            <span>Mark Penalty as Paid & Unlock</span>
                         </DialogTitle>
                         <DialogDescription className="text-zinc-600 text-xs">
-                            {approvingPenalty?.status === 'unpaid' || approvingPenalty?.status === 'rejected' ? (
-                                <span>
-                                    You are manually waiving the fine for{' '}
-                                    <strong className="text-zinc-900">{getEmployeeName(approvingPenalty?.employee)}</strong> without payment. Approving will immediately unlock their ID.
-                                </span>
-                            ) : (
-                                <span>
-                                    Confirm that you have verified Sender Mobile Number:{' '}
-                                    <strong className="font-mono text-zinc-900">
-                                        {approvingPenalty?.sender_number || approvingPenalty?.transaction_id || 'N/A'}
-                                    </strong>
-                                    . Approving will mark payment as verified and immediately unlock the employee's ID.
-                                </span>
-                            )}
+                            Record penalty fine as paid for <strong className="text-zinc-900">{getEmployeeName(payingPenalty?.employee)}</strong> (ID: {payingPenalty?.employee?.employee_id}).
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form onSubmit={handleApproveSubmit} className="space-y-4 pt-2">
+                    <form onSubmit={handlePaySubmit} className="space-y-4 pt-2">
+                        <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] font-semibold text-emerald-800">Total Fine to Settle</p>
+                                <p className="text-xs text-emerald-600 font-medium">{payingPenalty?.overdue_days} Day(s) Overdue</p>
+                            </div>
+                            <span className="text-lg font-black text-emerald-700">
+                                ৳ {Number(payingPenalty?.total_fine || 0).toFixed(2)}
+                            </span>
+                        </div>
+
+                        {/* Payment Method Selector */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-zinc-700">Admin Remarks (Optional)</Label>
+                            <Label className="text-xs font-semibold text-zinc-700">Payment Method</Label>
+                            <Select
+                                value={payData.payment_method}
+                                onValueChange={(val) => {
+                                    setPayData((prev) => ({
+                                        ...prev,
+                                        payment_method: val,
+                                        sender_number: val === 'cash' || val === 'direct' ? 'Cash Payment' : prev.sender_number,
+                                    }));
+                                }}
+                            >
+                                <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 rounded-xl text-xs h-9">
+                                    <SelectValue placeholder="Select Method" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border-zinc-200">
+                                    <SelectItem value="cash">Cash (Direct Office Collection)</SelectItem>
+                                    <SelectItem value="bkash">bKash</SelectItem>
+                                    <SelectItem value="nagad">Nagad</SelectItem>
+                                    <SelectItem value="rocket">Rocket</SelectItem>
+                                    <SelectItem value="bank">Bank Transfer</SelectItem>
+                                    <SelectItem value="direct">Direct Settlement</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Sender Number / Receipt Note */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-zinc-700">
+                                {payData.payment_method === 'cash' || payData.payment_method === 'direct'
+                                    ? 'Receipt / Note'
+                                    : 'Sender Mobile / Trx ID'}
+                            </Label>
                             <Input
-                                value={approveData.admin_remarks}
-                                onChange={(e) => setApproveData('admin_remarks', e.target.value)}
-                                className="bg-white border-zinc-300 text-zinc-900 rounded-xl"
+                                value={payData.sender_number}
+                                onChange={(e) => setPayData('sender_number', e.target.value)}
+                                className="bg-white border-zinc-300 text-zinc-900 rounded-xl text-xs h-9"
                                 placeholder={
-                                    approvingPenalty?.status === 'unpaid' || approvingPenalty?.status === 'rejected'
-                                        ? 'e.g. Fine waived by HR admin...'
-                                        : 'e.g. Payment verified via Sender Mobile Number...'
+                                    payData.payment_method === 'cash'
+                                        ? 'e.g. Cash Payment / Receipt #123'
+                                        : 'e.g. 017XXXXXXXX or TrxID'
                                 }
                             />
                         </div>
 
-                        <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+                        {/* Admin Remarks */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-zinc-700">Admin Remarks (Optional)</Label>
+                            <Input
+                                value={payData.admin_remarks}
+                                onChange={(e) => setPayData('admin_remarks', e.target.value)}
+                                className="bg-white border-zinc-300 text-zinc-900 rounded-xl text-xs h-9"
+                                placeholder="e.g. Cash received at office, fine settled."
+                            />
+                        </div>
+
+                        <DialogFooter className="flex-col-reverse sm:flex-row gap-2 pt-2">
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => setApprovingPenalty(null)}
+                                onClick={() => setPayingPenalty(null)}
                                 className="border-zinc-300 text-zinc-700 w-full sm:w-auto rounded-xl"
                             >
                                 Cancel
                             </Button>
                             <Button
                                 type="submit"
-                                disabled={approveProcessing}
-                                className={
-                                    approvingPenalty?.status === 'unpaid' || approvingPenalty?.status === 'rejected'
-                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white w-full sm:w-auto rounded-xl'
-                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto rounded-xl'
-                                }
+                                disabled={payProcessing}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold w-full sm:w-auto rounded-xl shadow-sm"
                             >
-                                {approveProcessing
-                                    ? 'Processing...'
-                                    : approvingPenalty?.status === 'unpaid' || approvingPenalty?.status === 'rejected'
-                                    ? 'Waive Fine & Unlock'
-                                    : 'Approve Payment & Unlock'}
+                                {payProcessing ? 'Processing...' : 'Confirm Paid & Unlock'}
                             </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
 
-            {/* REJECTION MODAL */}
+            {/* 2. SINGLE WAIVE FINE MODAL */}
+            <Dialog open={!!waivingPenalty} onOpenChange={(open) => !open && setWaivingPenalty(null)}>
+                <DialogContent className="bg-white border-zinc-200 text-zinc-900 max-w-md w-full p-4 sm:p-6 rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold text-indigo-700 flex items-center">
+                            <ShieldOff className="w-5 h-5 mr-2 flex-shrink-0 text-indigo-600" />
+                            <span>Waive Penalty Fine (Without Payment)</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-zinc-600 text-xs">
+                            Waive the fine of <strong className="text-zinc-900">{getEmployeeName(waivingPenalty?.employee)}</strong> (Fine: ৳{Number(waivingPenalty?.total_fine || 0).toFixed(2)}) without taking payment. Their account ID will be immediately unlocked.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleWaiveSubmit} className="space-y-4 pt-2">
+                        <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-3 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] font-semibold text-indigo-800">Waived Fine Amount</p>
+                                <p className="text-xs text-indigo-600 font-medium">{waivingPenalty?.overdue_days} Day(s) Overdue</p>
+                            </div>
+                            <span className="text-lg font-black text-indigo-700">
+                                ৳ {Number(waivingPenalty?.total_fine || 0).toFixed(2)}
+                            </span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-zinc-700">Waive Reason / Remarks</Label>
+                            <Input
+                                value={waiveData.admin_remarks}
+                                onChange={(e) => setWaiveData('admin_remarks', e.target.value)}
+                                className="bg-white border-zinc-300 text-zinc-900 rounded-xl text-xs h-9"
+                                placeholder="e.g. Approved exemption by Management..."
+                            />
+                        </div>
+
+                        <DialogFooter className="flex-col-reverse sm:flex-row gap-2 pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setWaivingPenalty(null)}
+                                className="border-zinc-300 text-zinc-700 w-full sm:w-auto rounded-xl"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={waiveProcessing}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold w-full sm:w-auto rounded-xl shadow-sm"
+                            >
+                                {waiveProcessing ? 'Processing...' : 'Confirm Waive & Unlock'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* 3. SINGLE REJECTION MODAL */}
             <Dialog open={!!rejectingPenalty} onOpenChange={(open) => !open && setRejectingPenalty(null)}>
                 <DialogContent className="bg-white border-zinc-200 text-zinc-900 max-w-md w-full p-4 sm:p-6 rounded-2xl">
                     <DialogHeader>
@@ -1899,7 +2453,7 @@ export default function PenaltyAdmin({
                             <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" /> Rejection Confirmation
                         </DialogTitle>
                         <DialogDescription className="text-zinc-600 text-xs">
-                            Provide a reason for rejection so the employee can resubmit correct payment information.
+                            Provide a reason for rejection so the employee can resubmit valid payment information.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -1926,6 +2480,190 @@ export default function PenaltyAdmin({
                             </Button>
                             <Button type="submit" disabled={rejectProcessing} variant="destructive" className="w-full sm:w-auto rounded-xl">
                                 {rejectProcessing ? 'Rejecting...' : 'Reject Submission'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* 4. BULK MARK AS PAID MODAL */}
+            <Dialog open={isBulkPayOpen} onOpenChange={setIsBulkPayOpen}>
+                <DialogContent className="bg-white border-zinc-200 text-zinc-900 max-w-md w-full p-4 sm:p-6 rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold text-emerald-700 flex items-center">
+                            <CheckCircle2 className="w-5 h-5 mr-2 flex-shrink-0 text-emerald-600" />
+                            <span>Bulk Mark as Paid & Unlock ({selectedIds.length})</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-zinc-600 text-xs">
+                            Mark all <strong className="text-zinc-900">{selectedIds.length}</strong> selected penalties as Paid and unlock the respective employee accounts immediately.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleBulkSubmit} className="space-y-4 pt-2">
+                        <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider">Total Bulk Collection</p>
+                                <p className="text-xs text-emerald-700 font-medium">{selectedIds.length} Penalties Selected</p>
+                            </div>
+                            <span className="text-xl font-black text-emerald-700">
+                                ৳ {selectedTotalFine.toFixed(2)}
+                            </span>
+                        </div>
+
+                        {/* Payment Method */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-zinc-700">Payment Method</Label>
+                            <Select
+                                value={bulkData.payment_method}
+                                onValueChange={(val) => setBulkData('payment_method', val)}
+                            >
+                                <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 rounded-xl text-xs h-9">
+                                    <SelectValue placeholder="Select Method" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border-zinc-200">
+                                    <SelectItem value="cash">Cash (Office Direct Collection)</SelectItem>
+                                    <SelectItem value="bkash">bKash</SelectItem>
+                                    <SelectItem value="nagad">Nagad</SelectItem>
+                                    <SelectItem value="rocket">Rocket</SelectItem>
+                                    <SelectItem value="bank">Bank Transfer</SelectItem>
+                                    <SelectItem value="direct">Direct Settlement</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Sender / Note */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-zinc-700">Reference / Note</Label>
+                            <Input
+                                value={bulkData.sender_number}
+                                onChange={(e) => setBulkData('sender_number', e.target.value)}
+                                className="bg-white border-zinc-300 text-zinc-900 rounded-xl text-xs h-9"
+                                placeholder="e.g. Bulk Cash Collection"
+                            />
+                        </div>
+
+                        {/* Remarks */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-zinc-700">Admin Remarks (Optional)</Label>
+                            <Input
+                                value={bulkData.admin_remarks}
+                                onChange={(e) => setBulkData('admin_remarks', e.target.value)}
+                                className="bg-white border-zinc-300 text-zinc-900 rounded-xl text-xs h-9"
+                                placeholder="e.g. Bulk penalty payments verified and accounts unlocked."
+                            />
+                        </div>
+
+                        <DialogFooter className="flex-col-reverse sm:flex-row gap-2 pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsBulkPayOpen(false)}
+                                className="border-zinc-300 text-zinc-700 w-full sm:w-auto rounded-xl"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={bulkProcessing}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold w-full sm:w-auto rounded-xl shadow-sm"
+                            >
+                                {bulkProcessing ? 'Processing Bulk...' : `Confirm Paid (${selectedIds.length})`}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* 5. BULK WAIVE MODAL */}
+            <Dialog open={isBulkWaiveOpen} onOpenChange={setIsBulkWaiveOpen}>
+                <DialogContent className="bg-white border-zinc-200 text-zinc-900 max-w-md w-full p-4 sm:p-6 rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold text-indigo-700 flex items-center">
+                            <ShieldOff className="w-5 h-5 mr-2 flex-shrink-0 text-indigo-600" />
+                            <span>Bulk Waive Fine ({selectedIds.length} Records)</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-zinc-600 text-xs">
+                            Waive fines for all <strong className="text-zinc-900">{selectedIds.length}</strong> selected penalties without taking payment. Their accounts will be unlocked immediately.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleBulkSubmit} className="space-y-4 pt-2">
+                        <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-3.5 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider">Total Fine Waived</p>
+                                <p className="text-xs text-indigo-700 font-medium">{selectedIds.length} Penalties</p>
+                            </div>
+                            <span className="text-xl font-black text-indigo-700">
+                                ৳ {selectedTotalFine.toFixed(2)}
+                            </span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-zinc-700">Waive Reason / Remarks</Label>
+                            <Input
+                                value={bulkData.admin_remarks}
+                                onChange={(e) => setBulkData('admin_remarks', e.target.value)}
+                                className="bg-white border-zinc-300 text-zinc-900 rounded-xl text-xs h-9"
+                                placeholder="e.g. Bulk fine waiver approved by Management..."
+                            />
+                        </div>
+
+                        <DialogFooter className="flex-col-reverse sm:flex-row gap-2 pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsBulkWaiveOpen(false)}
+                                className="border-zinc-300 text-zinc-700 w-full sm:w-auto rounded-xl"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={bulkProcessing}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold w-full sm:w-auto rounded-xl shadow-sm"
+                            >
+                                {bulkProcessing ? 'Processing...' : `Confirm Bulk Waive (${selectedIds.length})`}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* 6. BULK REJECT MODAL */}
+            <Dialog open={isBulkRejectOpen} onOpenChange={setIsBulkRejectOpen}>
+                <DialogContent className="bg-white border-zinc-200 text-zinc-900 max-w-md w-full p-4 sm:p-6 rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold text-rose-700 flex items-center">
+                            <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" /> Bulk Rejection Confirmation ({selectedIds.length})
+                        </DialogTitle>
+                        <DialogDescription className="text-zinc-600 text-xs">
+                            Reject payment submissions for all selected records.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleBulkSubmit} className="space-y-4 pt-2">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-zinc-700">Rejection Reason (Required)</Label>
+                            <Textarea
+                                placeholder="e.g. Invalid payment verification details..."
+                                value={bulkData.admin_remarks}
+                                onChange={(e) => setBulkData('admin_remarks', e.target.value)}
+                                className="bg-white border-zinc-300 text-zinc-900 rounded-xl"
+                                required
+                            />
+                        </div>
+
+                        <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsBulkRejectOpen(false)}
+                                className="border-zinc-300 text-zinc-700 w-full sm:w-auto rounded-xl"
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={bulkProcessing} variant="destructive" className="w-full sm:w-auto rounded-xl font-bold">
+                                {bulkProcessing ? 'Rejecting...' : `Reject Selected (${selectedIds.length})`}
                             </Button>
                         </DialogFooter>
                     </form>
