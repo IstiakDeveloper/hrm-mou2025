@@ -186,15 +186,18 @@ class MovementLogBookController extends Controller
     {
         $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
         if ($ids === null) {
-            return Department::query()->orderBy('name')->get();
+            return Department::query()->select(['id', 'name'])->orderBy('name')->get();
         }
 
-        return $ids === [] ? collect([]) : Department::query()->whereIn('id', $ids)->orderBy('name')->get();
+        return $ids === [] ? collect([]) : Department::query()->select(['id', 'name'])->whereIn('id', $ids)->orderBy('name')->get();
     }
 
     private function getAccessibleEmployees(User $user)
     {
-        $q = Employee::query()->where('status', 'active')->orderBy('name_en');
+        $q = Employee::query()
+            ->select(['id', 'employee_id', 'pin', 'name_en', 'name_bn'])
+            ->where('status', 'active')
+            ->orderBy('name_en');
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->get();
@@ -323,14 +326,22 @@ class MovementLogBookController extends Controller
         $isMine = $scope['view'] === 'mine';
         $query = $this->buildLogBookQuery($request, $user, $scope);
 
-        $summaryQuery = clone $query;
+        $summaryRow = (clone $query)->selectRaw("
+            COUNT(*) as total,
+            SUM(CASE WHEN payment_status = 'unpaid' THEN 1 ELSE 0 END) as unpaid,
+            SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) as paid,
+            COALESCE(SUM(distance_km), 0) as total_km,
+            COALESCE(SUM(official_km), 0) as official_km,
+            COALESCE(SUM(personal_km), 0) as personal_km
+        ")->first();
+
         $summary = [
-            'total' => $summaryQuery->count(),
-            'unpaid' => (clone $summaryQuery)->where('payment_status', 'unpaid')->count(),
-            'paid' => (clone $summaryQuery)->where('payment_status', 'paid')->count(),
-            'totalKm' => round((float) (clone $summaryQuery)->sum('distance_km'), 2),
-            'officialKm' => round((float) (clone $summaryQuery)->sum('official_km'), 2),
-            'personalKm' => round((float) (clone $summaryQuery)->sum('personal_km'), 2),
+            'total' => (int) ($summaryRow->total ?? 0),
+            'unpaid' => (int) ($summaryRow->unpaid ?? 0),
+            'paid' => (int) ($summaryRow->paid ?? 0),
+            'totalKm' => round((float) ($summaryRow->total_km ?? 0), 2),
+            'officialKm' => round((float) ($summaryRow->official_km ?? 0), 2),
+            'personalKm' => round((float) ($summaryRow->personal_km ?? 0), 2),
         ];
 
         $perPage = $this->resolvePerPage($request->get('per_page'), 10);

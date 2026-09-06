@@ -32,6 +32,14 @@ class LeaveApplicationController extends Controller
 
     private ?Collection $cachedExecutiveDirectors = null;
 
+    private array $cachedRankLevels = [];
+
+    private array $cachedTierApprovers = [];
+
+    private array $cachedDesignationFamilies = [];
+
+    private ?Collection $cachedHoDeptHeadUsers = null;
+
     /**
      * Active leave approval tiers (memoized for the request).
      *
@@ -123,14 +131,20 @@ class LeaveApplicationController extends Controller
      */
     private function designationFamilyIds(int $designationId, ?string $designationName): Collection
     {
+        if (isset($this->cachedDesignationFamilies[$designationId])) {
+            return $this->cachedDesignationFamilies[$designationId];
+        }
+
         $ids = collect([(int) $designationId]);
         $name = trim((string) $designationName);
         if ($name === '') {
+            $this->cachedDesignationFamilies[$designationId] = $ids;
             return $ids;
         }
 
         $base = trim((string) preg_replace('/\s*-\s*\d+\s*$/u', '', $name));
         if ($base === '') {
+            $this->cachedDesignationFamilies[$designationId] = $ids;
             return $ids;
         }
 
@@ -142,7 +156,10 @@ class LeaveApplicationController extends Controller
             ->pluck('id')
             ->map(fn ($id) => (int) $id);
 
-        return $ids->merge($family)->unique()->values();
+        $res = $ids->merge($family)->unique()->values();
+        $this->cachedDesignationFamilies[$designationId] = $res;
+
+        return $res;
     }
 
     /**
@@ -153,15 +170,20 @@ class LeaveApplicationController extends Controller
      */
     private function getEmployeeApprovalRankLevel(Employee $applicant): int
     {
+        $empId = (int) $applicant->id;
+        if (isset($this->cachedRankLevels[$empId])) {
+            return $this->cachedRankLevels[$empId];
+        }
+
         $applicant->loadMissing(['designation', 'currentBranch.regionalOffice.zone', 'branch']);
         $designationName = strtolower(trim((string) ($applicant->designation?->name ?? '')));
 
         if (str_contains($designationName, 'executive director')) {
-            return 5;
+            return $this->cachedRankLevels[$empId] = 5;
         }
 
         if (str_contains($designationName, 'deputy executive director') || (str_contains($designationName, 'director') && ! str_contains($designationName, 'assistant director') && ! str_contains($designationName, 'deputy assistant director'))) {
-            return 4;
+            return $this->cachedRankLevels[$empId] = 4;
         }
 
         // Check if applicant is a Head Office Department Head
@@ -169,41 +191,41 @@ class LeaveApplicationController extends Controller
             if ($applicant->department_id) {
                 $dept = Department::find($applicant->department_id);
                 if ($dept && (int) $dept->head_employee_id === (int) $applicant->id) {
-                    return 4;
+                    return $this->cachedRankLevels[$empId] = 4;
                 }
             }
             $user = User::where('employee_id', $applicant->id)->first();
             if ($user && OrganogramAccessService::isHeadOfficeDepartmentHead($user)) {
-                return 4;
+                return $this->cachedRankLevels[$empId] = 4;
             }
         }
 
         // Check if Zonal Manager
         if (str_contains($designationName, 'zonal manager') || str_contains($designationName, 'zone manager') || preg_match('/\bzm\b/', $designationName)) {
-            return 3;
+            return $this->cachedRankLevels[$empId] = 3;
         }
         if (Zone::query()->where('zone_manager_employee_id', $applicant->id)->exists()) {
-            return 3;
+            return $this->cachedRankLevels[$empId] = 3;
         }
 
         // Check if Regional Manager
         if (str_contains($designationName, 'regional manager') || preg_match('/\brm\b/', $designationName)) {
-            return 2;
+            return $this->cachedRankLevels[$empId] = 2;
         }
         if (RegionalOffice::query()->where('regional_manager_employee_id', $applicant->id)->exists()) {
-            return 2;
+            return $this->cachedRankLevels[$empId] = 2;
         }
 
         // Check if Branch Manager / Branch Head
         if (str_contains($designationName, 'branch manager') || preg_match('/\bbm\b/', $designationName)) {
-            return 1;
+            return $this->cachedRankLevels[$empId] = 1;
         }
         $branch = $applicant->currentBranch ?: $applicant->branch;
         if ($branch && $branch->isEmployeeBranchHead($applicant)) {
-            return 1;
+            return $this->cachedRankLevels[$empId] = 1;
         }
 
-        return 0;
+        return $this->cachedRankLevels[$empId] = 0;
     }
 
     /**
@@ -378,6 +400,11 @@ class LeaveApplicationController extends Controller
      */
     private function resolveTierApprovers(Employee $employee, int $leaveDays): array
     {
+        $cacheKey = "{$employee->id}_{$leaveDays}";
+        if (isset($this->cachedTierApprovers[$cacheKey])) {
+            return $this->cachedTierApprovers[$cacheKey];
+        }
+
         $branch = $employee->currentBranch ?: $employee->branch;
         $context = $this->leaveTierContext($employee);
         $applicantLevel = $this->getEmployeeApprovalRankLevel($employee);
@@ -528,7 +555,10 @@ class LeaveApplicationController extends Controller
             return (int) ($u->employee_id ?? 0) !== (int) $employee->id;
         })->values();
 
-        return ['recipients' => $recipients, 'tier' => $tier, 'addressee' => $addressee];
+        $result = ['recipients' => $recipients, 'tier' => $tier, 'addressee' => $addressee];
+        $this->cachedTierApprovers[$cacheKey] = $result;
+
+        return $result;
     }
 
     /**
@@ -716,12 +746,6 @@ class LeaveApplicationController extends Controller
                 });
             });
 
-        // Final SQL query log with all filters
-        \Log::info('Final SQL query with all filters:', [
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
-        ]);
-
         $perPage = $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50, 100, 200, 500]) ? $perPage : 10;
 
@@ -742,7 +766,7 @@ class LeaveApplicationController extends Controller
         $departments = $this->getAccessibleDepartments($user);
 
         // Get employees based on user's permissions
-        $employees = $this->getAccessibleEmployees($user);
+        $employees = $this->getAccessibleEmployees($user, $request);
 
         // Check different approval scenarios
         $canApproveAny = $hasApprovePermission;
@@ -807,15 +831,34 @@ class LeaveApplicationController extends Controller
     /**
      * Get employees accessible to the user based on permissions
      */
-    private function getAccessibleEmployees($user)
+    private function getAccessibleEmployees($user, ?Request $request = null)
     {
         $q = Employee::query()
             ->select(['id', 'employee_id', 'name_en', 'name_bn'])
             ->where('status', 'active')
             ->orderBy('name_en');
+
+        if ($request && $request->filled('department_id') && $request->department_id !== 'all') {
+            $q->where('department_id', $request->department_id);
+        }
+
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
-        return $q->get();
+        $employees = $q->limit(100)->get();
+
+        if ($request && $request->filled('employee_id') && $request->employee_id !== 'all') {
+            $selectedId = (int) $request->employee_id;
+            if (! $employees->contains('id', $selectedId)) {
+                $selected = Employee::query()
+                    ->select(['id', 'employee_id', 'name_en', 'name_bn'])
+                    ->find($selectedId);
+                if ($selected) {
+                    $employees->prepend($selected);
+                }
+            }
+        }
+
+        return $employees;
     }
 
     /**

@@ -84,15 +84,24 @@ class MovementLogBookPaymentController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        $summaryQuery = clone $query;
+        $summaryRow = (clone $query)->selectRaw("
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN status = 'recommended' THEN 1 ELSE 0 END) as recommended,
+            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+            COALESCE(SUM(CASE WHEN status = 'approved' THEN total_amount ELSE 0 END), 0) as total_amount,
+            COALESCE(SUM(CASE WHEN status IN ('pending', 'recommended') THEN total_amount ELSE 0 END), 0) as pending_amount
+        ")->first();
+
         $summary = [
-            'total' => (clone $summaryQuery)->count(),
-            'pending' => (clone $summaryQuery)->where('status', 'pending')->count(),
-            'recommended' => (clone $summaryQuery)->where('status', 'recommended')->count(),
-            'approved' => (clone $summaryQuery)->where('status', 'approved')->count(),
-            'rejected' => (clone $summaryQuery)->where('status', 'rejected')->count(),
-            'totalAmount' => round((float) (clone $summaryQuery)->where('status', 'approved')->sum('total_amount'), 2),
-            'pendingAmount' => round((float) (clone $summaryQuery)->whereIn('status', ['pending', 'recommended'])->sum('total_amount'), 2),
+            'total' => (int) ($summaryRow->total ?? 0),
+            'pending' => (int) ($summaryRow->pending ?? 0),
+            'recommended' => (int) ($summaryRow->recommended ?? 0),
+            'approved' => (int) ($summaryRow->approved ?? 0),
+            'rejected' => (int) ($summaryRow->rejected ?? 0),
+            'totalAmount' => round((float) ($summaryRow->total_amount ?? 0), 2),
+            'pendingAmount' => round((float) ($summaryRow->pending_amount ?? 0), 2),
         ];
 
         foreach ($payments->items() as $payment) {

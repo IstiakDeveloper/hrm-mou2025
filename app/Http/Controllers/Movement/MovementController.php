@@ -192,13 +192,20 @@ class MovementController extends Controller
 
         $query = $this->buildMovementIndexQuery($request, $user);
 
-        $summaryQuery = clone $query;
+        $summaryRow = (clone $query)->selectRaw("
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved
+        ")->first();
+
         $summary = [
-            'total' => $summaryQuery->count(),
-            'active' => (clone $summaryQuery)->where('status', 'active')->count(),
-            'completed' => (clone $summaryQuery)->where('status', 'completed')->count(),
-            'pending' => (clone $summaryQuery)->where('status', 'pending')->count(),
-            'approved' => (clone $summaryQuery)->where('status', 'approved')->count(),
+            'total' => (int) ($summaryRow->total ?? 0),
+            'active' => (int) ($summaryRow->active ?? 0),
+            'completed' => (int) ($summaryRow->completed ?? 0),
+            'pending' => (int) ($summaryRow->pending ?? 0),
+            'approved' => (int) ($summaryRow->approved ?? 0),
         ];
 
         $perPage = $this->resolvePerPage($request->get('per_page'), 10);
@@ -542,13 +549,13 @@ class MovementController extends Controller
     {
         $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
         if ($ids === null) {
-            return Department::query()->orderBy('name')->get();
+            return Department::query()->select(['id', 'name'])->orderBy('name')->get();
         }
         if ($ids === []) {
             return collect([]);
         }
 
-        return Department::query()->whereIn('id', $ids)->orderBy('name')->get();
+        return Department::query()->select(['id', 'name'])->whereIn('id', $ids)->orderBy('name')->get();
     }
 
     /**
@@ -556,7 +563,10 @@ class MovementController extends Controller
      */
     private function getAccessibleEmployees($user)
     {
-        $q = Employee::query()->where('status', 'active')->orderBy('name_en');
+        $q = Employee::query()
+            ->select(['id', 'employee_id', 'pin', 'name_en', 'name_bn'])
+            ->where('status', 'active')
+            ->orderBy('name_en');
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->get();
@@ -613,8 +623,10 @@ class MovementController extends Controller
         }
 
         $employees = $canSelectEmployee
-            ? Employee::where('status', 'active')->with(['department', 'designation'])->get()
-            : ($employee ? collect([$employee->load(['department', 'designation'])]) : collect());
+            ? Employee::where('status', 'active')
+                ->with(['department:id,name', 'designation:id,name'])
+                ->get(['id', 'employee_id', 'pin', 'name_en', 'name_bn', 'department_id', 'designation_id', 'current_branch_id'])
+            : ($employee ? collect([$employee->load(['department:id,name', 'designation:id,name'])]) : collect());
 
         return Inertia::render('movement/create', [
             'employees' => $employees,
