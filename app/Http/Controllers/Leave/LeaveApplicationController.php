@@ -28,6 +28,28 @@ use Inertia\Inertia;
 
 class LeaveApplicationController extends Controller
 {
+    private ?Collection $cachedActiveTiers = null;
+
+    private ?Collection $cachedExecutiveDirectors = null;
+
+    /**
+     * Active leave approval tiers (memoized for the request).
+     *
+     * @return Collection<int, LeaveApprovalTier>
+     */
+    private function getActiveTiers(): Collection
+    {
+        if ($this->cachedActiveTiers === null) {
+            $this->cachedActiveTiers = LeaveApprovalTier::query()
+                ->with('designation')
+                ->where('is_active', true)
+                ->orderBy('max_leave_days', 'asc')
+                ->get();
+        }
+
+        return $this->cachedActiveTiers;
+    }
+
     /**
      * Head office vs branch for leave tier matching.
      * Staff with no branch are treated as head office (common for HO desk employees).
@@ -361,12 +383,9 @@ class LeaveApplicationController extends Controller
         $applicantLevel = $this->getEmployeeApprovalRankLevel($employee);
 
         // Fetch all active tiers for applicant's context
-        $allTiers = LeaveApprovalTier::query()
-            ->with('designation')
+        $allTiers = $this->getActiveTiers()
             ->where('context', $context)
-            ->where('is_active', true)
-            ->orderBy('max_leave_days', 'asc')
-            ->get();
+            ->values();
 
         // Filter out tiers that are at or below the applicant's rank level
         $eligibleTiers = $allTiers->filter(function ($t) use ($applicantLevel) {
@@ -531,7 +550,7 @@ class LeaveApplicationController extends Controller
             return true;
         }
 
-        if (! LeaveApprovalTier::query()->where('is_active', true)->exists()) {
+        if (! $this->getActiveTiers()->isNotEmpty()) {
             return true;
         }
 
@@ -543,12 +562,9 @@ class LeaveApplicationController extends Controller
         $applicantLevel = $this->getEmployeeApprovalRankLevel($applicant);
 
         // Fetch active tiers above the applicant's level
-        $allTiers = LeaveApprovalTier::query()
-            ->with('designation')
+        $allTiers = $this->getActiveTiers()
             ->where('context', $context)
-            ->where('is_active', true)
-            ->orderBy('max_leave_days', 'asc')
-            ->get();
+            ->values();
 
         $tiers = $allTiers->filter(function ($t) use ($applicantLevel, $days) {
             return $this->getTierRankLevel($t) > $applicantLevel && $t->max_leave_days >= $days;
@@ -600,10 +616,9 @@ class LeaveApplicationController extends Controller
         }
 
         // If tiers exist but none cover this duration (or no matching tier), fall back to ED only.
-        $hasAnyTierForContext = LeaveApprovalTier::query()
+        $hasAnyTierForContext = $this->getActiveTiers()
             ->where('context', $context)
-            ->where('is_active', true)
-            ->exists();
+            ->isNotEmpty();
 
         if (($hasAnyTierForContext || $applicantLevel >= 4) && $tiers->isEmpty()) {
             return OrganogramAccessService::isExecutiveDirector($user);
@@ -631,10 +646,12 @@ class LeaveApplicationController extends Controller
         $query = LeaveApplication::with([
             'employee.department',
             'employee.designation',
-            'employee.currentBranch',
+            'employee.currentBranch.regionalOffice.zone',
             'employee.branch',
+            'employee.project',
             'leaveType',
             'approver',
+            'approvals.approver',
         ]);
 
         $userEmployeeId = $user->employee_id;
@@ -778,13 +795,13 @@ class LeaveApplicationController extends Controller
     {
         $ids = OrganogramAccessService::accessibleDepartmentIdList($user);
         if ($ids === null) {
-            return Department::query()->orderBy('name')->get();
+            return Department::query()->select(['id', 'name'])->orderBy('name')->get();
         }
         if ($ids === []) {
             return collect([]);
         }
 
-        return Department::query()->whereIn('id', $ids)->orderBy('name')->get();
+        return Department::query()->select(['id', 'name'])->whereIn('id', $ids)->orderBy('name')->get();
     }
 
     /**
@@ -792,7 +809,10 @@ class LeaveApplicationController extends Controller
      */
     private function getAccessibleEmployees($user)
     {
-        $q = Employee::query()->where('status', 'active')->orderBy('name_en');
+        $q = Employee::query()
+            ->select(['id', 'employee_id', 'name_en', 'name_bn'])
+            ->where('status', 'active')
+            ->orderBy('name_en');
         OrganogramAccessService::constrainVisibleEmployees($q, $user);
 
         return $q->get();
@@ -846,10 +866,10 @@ class LeaveApplicationController extends Controller
         }
 
         if (! $applicant->relationLoaded('currentBranch')) {
-            $applicant->load(['currentBranch', 'branch', 'department', 'designation']);
+            $applicant->load(['currentBranch.regionalOffice.zone', 'branch', 'department', 'designation', 'project']);
         }
 
-        if (! LeaveApprovalTier::query()->where('is_active', true)->exists()) {
+        if (! $this->getActiveTiers()->isNotEmpty()) {
             return [
                 'label' => 'Approver',
                 'title' => 'Approver',
@@ -947,14 +967,13 @@ class LeaveApplicationController extends Controller
             $applicant->load(['currentBranch', 'branch']);
         }
 
-        $globalTiersExist = LeaveApprovalTier::query()->where('is_active', true)->exists();
+        $globalTiersExist = $this->getActiveTiers()->isNotEmpty();
 
         if ($applicant) {
             $context = $this->leaveTierContext($applicant);
-            $hasTiersForContext = LeaveApprovalTier::query()
+            $hasTiersForContext = $this->getActiveTiers()
                 ->where('context', $context)
-                ->where('is_active', true)
-                ->exists();
+                ->isNotEmpty();
 
             if ($hasTiersForContext) {
                 // Apex: Executive Director may approve any pending leave in their visibility,
@@ -1470,6 +1489,10 @@ class LeaveApplicationController extends Controller
      */
     private function getExecutiveDirectors()
     {
+        if ($this->cachedExecutiveDirectors !== null) {
+            return $this->cachedExecutiveDirectors;
+        }
+
         $designationEmployeeIds = Employee::whereHas('designation', function ($q) {
             $q->where(function ($inner) {
                 $inner->where('name', 'Executive Director')
@@ -1496,7 +1519,9 @@ class LeaveApplicationController extends Controller
             ->get()
             ->filter(fn (User $u) => $u->hasDirectPermission('organogram.executive_director'));
 
-        return $users->merge($permissionHolders)->unique('id')->values();
+        $this->cachedExecutiveDirectors = $users->merge($permissionHolders)->unique('id')->values();
+
+        return $this->cachedExecutiveDirectors;
     }
 
     /**

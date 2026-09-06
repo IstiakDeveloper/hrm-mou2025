@@ -29,6 +29,7 @@ import {
     Eye,
     FileText,
     MoreHorizontal,
+    Paperclip,
     Plus,
     Search,
     User,
