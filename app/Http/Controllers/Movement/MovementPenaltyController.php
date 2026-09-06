@@ -92,6 +92,17 @@ class MovementPenaltyController extends Controller
         return redirect()->back()->with('success', 'আপনার জরিমানা পেমেন্ট তথ্য জমা নেওয়া হয়েছে। এডমিন ভেরিফাই করে আপনার আইডি আনলক করবেন।');
     }
 
+    private function emptyPaginator(Request $request, int $perPage, string $pageName): \Illuminate\Pagination\LengthAwarePaginator
+    {
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            collect([]),
+            0,
+            $perPage,
+            1,
+            ['path' => $request->url(), 'pageName' => $pageName, 'query' => $request->query()]
+        );
+    }
+
     /**
      * Admin view to manage and verify all movement penalties.
      */
@@ -101,7 +112,13 @@ class MovementPenaltyController extends Controller
 
         $perPage = $this->resolvePerPage($request->get('per_page'), 15);
 
-        $baseQuery = MovementPenalty::with(['movement', 'employee.branch', 'user', 'approver']);
+        $baseQuery = MovementPenalty::with([
+            'movement:id,purpose,from_datetime,actual_return_datetime',
+            'employee:id,name_en,name_bn,employee_id,pin,current_branch_id',
+            'employee.branch:id,name',
+            'user:id,name',
+            'approver:id,name',
+        ]);
 
         // 1. Search Filter
         if ($request->filled('search')) {
@@ -134,82 +151,64 @@ class MovementPenaltyController extends Controller
             $baseQuery->whereDate('created_at', '<=', $request->end_date);
         }
 
+        // Compute all stats and sub-counts in a single fast aggregate query
+        $aggRow = (clone $baseQuery)->selectRaw("
+            COUNT(*) as total_count,
+            COALESCE(SUM(total_fine), 0) as total_fine_amount,
+            SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) as unpaid_count,
+            SUM(CASE WHEN status = 'pending_verification' THEN 1 ELSE 0 END) as pending_count,
+            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
+            SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count,
+
+            SUM(CASE WHEN status = 'approved' AND ((sender_number IS NOT NULL AND sender_number != '') OR (transaction_id IS NOT NULL AND transaction_id != '') OR (payment_method IS NOT NULL AND payment_method != '')) THEN 1 ELSE 0 END) as paid_count,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND ((sender_number IS NOT NULL AND sender_number != '') OR (transaction_id IS NOT NULL AND transaction_id != '') OR (payment_method IS NOT NULL AND payment_method != '')) THEN total_fine ELSE 0 END), 0) as paid_total_amount,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND ((sender_number IS NOT NULL AND sender_number != '') OR (transaction_id IS NOT NULL AND transaction_id != '') OR (payment_method IS NOT NULL AND payment_method != '')) THEN overdue_days ELSE 0 END), 0) as paid_total_overdue_days,
+
+            SUM(CASE WHEN status = 'approved' AND (sender_number IS NULL OR sender_number = '') AND (transaction_id IS NULL OR transaction_id = '') AND (payment_method IS NULL OR payment_method = '') THEN 1 ELSE 0 END) as waived_count,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND (sender_number IS NULL OR sender_number = '') AND (transaction_id IS NULL OR transaction_id = '') AND (payment_method IS NULL OR payment_method = '') THEN total_fine ELSE 0 END), 0) as waived_total_amount,
+            COALESCE(SUM(CASE WHEN status = 'approved' AND (sender_number IS NULL OR sender_number = '') AND (transaction_id IS NULL OR transaction_id = '') AND (payment_method IS NULL OR payment_method = '') THEN overdue_days ELSE 0 END), 0) as waived_total_overdue_days
+        ")->first();
+
+        $stats = [
+            'unpaid_count' => (int) ($aggRow->unpaid_count ?? 0),
+            'pending_count' => (int) ($aggRow->pending_count ?? 0),
+            'approved_count' => (int) ($aggRow->approved_count ?? 0),
+            'paid_count' => (int) ($aggRow->paid_count ?? 0),
+            'waived_count' => (int) ($aggRow->waived_count ?? 0),
+            'rejected_count' => (int) ($aggRow->rejected_count ?? 0),
+            'total_count' => (int) ($aggRow->total_count ?? 0),
+            'total_fine_amount' => (float) ($aggRow->total_fine_amount ?? 0),
+        ];
+
+        $paidStats = [
+            'count' => (int) ($aggRow->paid_count ?? 0),
+            'total_amount' => (float) ($aggRow->paid_total_amount ?? 0),
+            'total_overdue_days' => (int) ($aggRow->paid_total_overdue_days ?? 0),
+        ];
+
+        $waivedStats = [
+            'count' => (int) ($aggRow->waived_count ?? 0),
+            'total_amount' => (float) ($aggRow->waived_total_amount ?? 0),
+            'total_overdue_days' => (int) ($aggRow->waived_total_overdue_days ?? 0),
+        ];
+
         // Default tab selection
-        $pendingCount = (clone $baseQuery)->where('status', 'pending_verification')->count();
-        $defaultTab = $pendingCount > 0 ? 'pending' : 'all';
+        $defaultTab = $stats['pending_count'] > 0 ? 'pending' : 'all';
         $tab = $request->input('tab', $defaultTab);
 
         if ($request->filled('status') && $request->status !== 'all') {
             $tab = 'all';
         }
 
-        // Tab 1: Pending Payment Submissions Query (tab = pending)
-        $pendingQuery = (clone $baseQuery)->where('status', 'pending_verification');
-        $pendingPaginator = $pendingQuery->orderByDesc('id')->paginate($perPage, ['*'], 'pending_page')->withQueryString();
+        // Tab 1: Pending Payment Submissions Query
+        $pendingPaginator = $stats['pending_count'] > 0
+            ? (clone $baseQuery)->where('status', 'pending_verification')->orderByDesc('id')->paginate($perPage, ['*'], 'pending_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'pending_page');
         $pendingPenalties = $this->inertiaPagination($pendingPaginator);
 
-        // Tab 2: Paid Penalties Query (tab = paid -> approved WITH payment info)
-        $paidQuery = (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
-            $q->where(function ($sq) {
-                $sq->whereNotNull('sender_number')->where('sender_number', '!=', '');
-            })->orWhere(function ($sq) {
-                $sq->whereNotNull('transaction_id')->where('transaction_id', '!=', '');
-            })->orWhere(function ($sq) {
-                $sq->whereNotNull('payment_method')->where('payment_method', '!=', '');
-            });
-        });
-        $paidStats = [
-            'count' => (clone $paidQuery)->count(),
-            'total_amount' => (float) (clone $paidQuery)->sum('total_fine'),
-            'total_overdue_days' => (int) (clone $paidQuery)->sum('overdue_days'),
-        ];
-        $allPaidPenalties = (clone $paidQuery)->orderByDesc('id')->get();
-        $paidPaginator = $paidQuery->orderByDesc('id')->paginate($perPage, ['*'], 'paid_page')->withQueryString();
-        $paidPenalties = $this->inertiaPagination($paidPaginator);
-
-        // Tab 3: Waived Penalties Query (tab = waived -> approved WITHOUT payment info)
-        $waivedQuery = (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
-            $q->where(function ($sq) {
-                $sq->whereNull('sender_number')->orWhere('sender_number', '');
-            })->where(function ($sq) {
-                $sq->whereNull('transaction_id')->orWhere('transaction_id', '');
-            })->where(function ($sq) {
-                $sq->whereNull('payment_method')->orWhere('payment_method', '');
-            });
-        });
-        
-        $waivedStats = [
-            'count' => (clone $waivedQuery)->count(),
-            'total_amount' => (float) (clone $waivedQuery)->sum('total_fine'),
-            'total_overdue_days' => (int) (clone $waivedQuery)->sum('overdue_days'),
-        ];
-        $waivedPaginator = $waivedQuery->orderByDesc('id')->paginate($perPage, ['*'], 'waived_page')->withQueryString();
-        $waivedPenalties = $this->inertiaPagination($waivedPaginator);
-
-        // Tab 4: Rejected Penalties Query (tab = rejected -> status = rejected)
-        $rejectedQuery = (clone $baseQuery)->where('status', 'rejected');
-        $rejectedPaginator = $rejectedQuery->orderByDesc('id')->paginate($perPage, ['*'], 'rejected_page')->withQueryString();
-        $rejectedPenalties = $this->inertiaPagination($rejectedPaginator);
-
-        // Tab 5: Unpaid Penalties Query (tab = unpaid -> status = unpaid)
-        $unpaidQuery = (clone $baseQuery)->where('status', 'unpaid');
-        $unpaidPaginator = $unpaidQuery->orderByDesc('id')->paginate($perPage, ['*'], 'unpaid_page')->withQueryString();
-        $unpaidPenalties = $this->inertiaPagination($unpaidPaginator);
-
-        // Tab 6: All Penalties Query (tab = all)
-        $allQuery = clone $baseQuery;
-        if ($request->filled('status') && $request->status !== 'all') {
-            $allQuery->where('status', $request->status);
-        }
-        $allPaginator = $allQuery->orderByDesc('id')->paginate($perPage, ['*'], 'all_page')->withQueryString();
-        $allPenalties = $this->inertiaPagination($allPaginator);
-
-        // Comprehensive Stats - Using (clone $baseQuery) so filters update counts dynamically
-        $stats = [
-            'unpaid_count' => (clone $baseQuery)->where('status', 'unpaid')->count(),
-            'pending_count' => (clone $baseQuery)->where('status', 'pending_verification')->count(),
-            'approved_count' => (clone $baseQuery)->where('status', 'approved')->count(),
-            'paid_count' => (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
+        // Tab 2: Paid Penalties Query (approved WITH payment info)
+        $paidPaginator = $stats['paid_count'] > 0
+            ? (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
                 $q->where(function ($sq) {
                     $sq->whereNotNull('sender_number')->where('sender_number', '!=', '');
                 })->orWhere(function ($sq) {
@@ -217,8 +216,13 @@ class MovementPenaltyController extends Controller
                 })->orWhere(function ($sq) {
                     $sq->whereNotNull('payment_method')->where('payment_method', '!=', '');
                 });
-            })->count(),
-            'waived_count' => (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
+            })->orderByDesc('id')->paginate($perPage, ['*'], 'paid_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'paid_page');
+        $paidPenalties = $this->inertiaPagination($paidPaginator);
+
+        // Tab 3: Waived Penalties Query (approved WITHOUT payment info)
+        $waivedPaginator = $stats['waived_count'] > 0
+            ? (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
                 $q->where(function ($sq) {
                     $sq->whereNull('sender_number')->orWhere('sender_number', '');
                 })->where(function ($sq) {
@@ -226,11 +230,34 @@ class MovementPenaltyController extends Controller
                 })->where(function ($sq) {
                     $sq->whereNull('payment_method')->orWhere('payment_method', '');
                 });
-            })->count(),
-            'rejected_count' => (clone $baseQuery)->where('status', 'rejected')->count(),
-            'total_count' => (clone $baseQuery)->count(),
-            'total_fine_amount' => (float) (clone $baseQuery)->sum('total_fine'),
-        ];
+            })->orderByDesc('id')->paginate($perPage, ['*'], 'waived_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'waived_page');
+        $waivedPenalties = $this->inertiaPagination($waivedPaginator);
+
+        // Tab 4: Rejected Penalties Query
+        $rejectedPaginator = $stats['rejected_count'] > 0
+            ? (clone $baseQuery)->where('status', 'rejected')->orderByDesc('id')->paginate($perPage, ['*'], 'rejected_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'rejected_page');
+        $rejectedPenalties = $this->inertiaPagination($rejectedPaginator);
+
+        // Tab 5: Unpaid Penalties Query
+        $unpaidPaginator = $stats['unpaid_count'] > 0
+            ? (clone $baseQuery)->where('status', 'unpaid')->orderByDesc('id')->paginate($perPage, ['*'], 'unpaid_page')->withQueryString()
+            : $this->emptyPaginator($request, $perPage, 'unpaid_page');
+        $unpaidPenalties = $this->inertiaPagination($unpaidPaginator);
+
+        // Tab 6: All Penalties Query
+        $allPaginator = $stats['total_count'] > 0
+            ? (function () use ($baseQuery, $request, $perPage) {
+                $q = clone $baseQuery;
+                if ($request->filled('status') && $request->status !== 'all') {
+                    $q->where('status', $request->status);
+                }
+
+                return $q->orderByDesc('id')->paginate($perPage, ['*'], 'all_page')->withQueryString();
+            })()
+            : $this->emptyPaginator($request, $perPage, 'all_page');
+        $allPenalties = $this->inertiaPagination($allPaginator);
 
         // Branches list for filter dropdown
         $branches = \App\Models\Branch::select('id', 'name')->orderBy('name')->get();
@@ -238,7 +265,7 @@ class MovementPenaltyController extends Controller
         return Inertia::render('movement/penalty-admin', [
             'pendingPenalties' => $pendingPenalties,
             'paidPenalties' => $paidPenalties,
-            'allPaidPenalties' => $allPaidPenalties,
+            'allPaidPenalties' => [],
             'waivedPenalties' => $waivedPenalties,
             'rejectedPenalties' => $rejectedPenalties,
             'unpaidPenalties' => $unpaidPenalties,

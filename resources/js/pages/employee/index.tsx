@@ -15,7 +15,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,30 @@ import { employeeDisplayName, employeeInitials, type EmployeeNameFields } from '
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { format, isValid, parseISO } from 'date-fns';
-import { ArrowUpDown, Check, ChevronLeft, ChevronRight, Download, Edit, Eye, Filter, Search, Trash, Upload, UserPlus, Users, X } from 'lucide-react';
+import {
+    ArrowUpDown,
+    CalendarClock,
+    Check,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    ChevronUp,
+    Download,
+    Edit,
+    Eye,
+    Filter,
+    Layers,
+    RotateCcw,
+    Search,
+    SlidersHorizontal,
+    Trash,
+    Upload,
+    UserCheck,
+    UserPlus,
+    Users,
+    UserX,
+    X,
+} from 'lucide-react';
 import React, { useState } from 'react';
 
 interface Employee extends EmployeeNameFields {
@@ -113,10 +136,22 @@ interface PaginationData {
     }[];
 }
 
+interface EmployeeStats {
+    total: number;
+    active: number;
+    on_leave: number;
+    inactive: number;
+    core?: number;
+    project?: number;
+    active_core?: number;
+    active_project?: number;
+}
+
 interface EmployeeIndexProps {
     employees: {
         data: Employee[];
     } & PaginationData;
+    stats?: EmployeeStats;
     departments: Department[];
     branches: Branch[];
     employee_types: EmployeeTypeOption[];
@@ -196,8 +231,66 @@ const GENDER_FILTER_OPTIONS = [
 
 const NOT_ASSIGNED_ITEM = { value: '__null', label: '— Not Assigned —' };
 
+/**
+ * Compact circular radial progress ring component
+ */
+function CircularProgressRing({
+    percentage,
+    size = 42,
+    strokeWidth = 3.5,
+    strokeColor = 'stroke-emerald-500',
+    trackColor = 'stroke-slate-200 dark:stroke-slate-700',
+    textColor = 'text-slate-800 dark:text-slate-100',
+}: {
+    percentage: number;
+    size?: number;
+    strokeWidth?: number;
+    strokeColor?: string;
+    trackColor?: string;
+    textColor?: string;
+}) {
+    const clamped = Math.min(100, Math.max(0, isNaN(percentage) ? 0 : percentage));
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+    return (
+        <div className="relative inline-flex items-center justify-center shrink-0 select-none" style={{ width: size, height: size }}>
+            <svg className="w-full h-full -rotate-90 transform" viewBox={`0 0 ${size} ${size}`}>
+                <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="transparent"
+                    stroke="currentColor"
+                    strokeWidth={strokeWidth}
+                    className={`${trackColor}`}
+                />
+                <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="transparent"
+                    stroke="currentColor"
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                    className={`${strokeColor} transition-all duration-700 ease-out`}
+                />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+                <span className={`text-[10px] font-black tracking-tight ${textColor}`}>
+                    {clamped >= 100 ? '100%' : clamped <= 0 ? '0%' : `${clamped.toFixed(clamped < 10 && clamped > 0 ? 1 : 0)}%`}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 export default function EmployeeIndex({
     employees,
+    stats,
     departments,
     branches,
     employee_types,
@@ -207,7 +300,7 @@ export default function EmployeeIndex({
     filters,
     success,
 }: EmployeeIndexProps) {
-    const { data, setData, get, processing } = useForm({
+    const { data, setData, processing } = useForm({
         search: filters.search || '',
         department_ids: normalizeIdFilter(filters.department_ids, filters.department_id),
         branch_ids: normalizeIdFilter(filters.branch_ids, filters.branch_id),
@@ -241,27 +334,34 @@ export default function EmployeeIndex({
         | undefined;
     const importRowErrors = (page?.props?.flash?.import_row_errors as { row: number; errors: string[] }[] | undefined) ?? [];
 
-    const hasActiveFilters = !!(
-        data.department_ids.length > 0 ||
-        data.branch_ids.length > 0 ||
-        data.statuses.length > 0 ||
-        data.employee_type_ids.length > 0 ||
-        data.designation_ids.length > 0 ||
-        data.project_ids.length > 0 ||
-        data.genders.length > 0
-    );
+    const activeFilterCount =
+        data.department_ids.length +
+        data.branch_ids.length +
+        data.statuses.length +
+        data.employee_type_ids.length +
+        data.designation_ids.length +
+        data.project_ids.length +
+        data.genders.length;
 
-    const [showFilters, setShowFilters] = useState(
-        !!(
-            normalizeIdFilter(filters.department_ids, filters.department_id).length > 0 ||
-            normalizeIdFilter(filters.branch_ids, filters.branch_id).length > 0 ||
-            normalizeStringFilter(filters.statuses, filters.status).length > 0 ||
-            normalizeIdFilter(filters.employee_type_ids, filters.employee_type_id).length > 0 ||
-            normalizeIdFilter(filters.designation_ids, filters.designation_id).length > 0 ||
-            normalizeIdFilter(filters.project_ids, filters.project_id).length > 0 ||
-            normalizeStringFilter(filters.genders, filters.gender).length > 0
-        ),
-    );
+    const hasActiveFilters = activeFilterCount > 0;
+
+    const [showFilters, setShowFilters] = useState(hasActiveFilters);
+
+    // Calculate overall stats for KPI cards
+    const totalCount = stats?.total ?? employees.total;
+    const activeCount = stats?.active ?? employees.data.filter((e) => e.status === 'active').length;
+    const onLeaveCount = stats?.on_leave ?? employees.data.filter((e) => e.status === 'on_leave').length;
+    const inactiveCount = stats?.inactive ?? employees.data.filter((e) => e.status !== 'active' && e.status !== 'on_leave').length;
+    const coreCount = stats?.core ?? totalCount;
+    const projectCount = stats?.project ?? 0;
+    const activeCoreCount = stats?.active_core ?? activeCount;
+    const activeProjectCount = stats?.active_project ?? 0;
+
+    const activePercent = totalCount > 0 ? (activeCount / totalCount) * 100 : 0;
+    const onLeavePercent = totalCount > 0 ? (onLeaveCount / totalCount) * 100 : 0;
+    const inactivePercent = totalCount > 0 ? (inactiveCount / totalCount) * 100 : 0;
+    const corePercent = totalCount > 0 ? (coreCount / totalCount) * 100 : 0;
+    const projectPercent = totalCount > 0 ? (projectCount / totalCount) * 100 : 0;
 
     const buildFilterParams = (merged: typeof data): Record<string, string | string[]> => {
         const params: Record<string, string | string[]> = {};
@@ -349,12 +449,10 @@ export default function EmployeeIndex({
         router.delete(route('employees.destroy', employeeToDelete.id), {
             onSuccess: () => {
                 setEmployeeToDelete(null);
-                // success টোস্ট বা মেসেজ দেখাতে চাইলে এখানে যোগ করুন
             },
             onError: (errors) => {
                 console.error('Delete error:', errors);
                 setEmployeeToDelete(null);
-                // error টোস্ট বা মেসেজ দেখাতে চাইলে এখানে যোগ করুন
             },
         });
     };
@@ -386,13 +484,33 @@ export default function EmployeeIndex({
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'active':
-                return <Badge className="border-emerald-300 bg-emerald-100 text-emerald-950 font-bold dark:bg-emerald-950 dark:text-emerald-300">Active</Badge>;
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Active
+                    </span>
+                );
             case 'inactive':
-                return <Badge className="border-slate-300 bg-slate-100 text-slate-900 font-bold dark:bg-slate-800 dark:text-slate-200">Inactive</Badge>;
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                        Inactive
+                    </span>
+                );
             case 'on_leave':
-                return <Badge className="border-amber-300 bg-amber-100 text-amber-950 font-bold dark:bg-amber-950 dark:text-amber-300">On Leave</Badge>;
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        On Leave
+                    </span>
+                );
             case 'terminated':
-                return <Badge className="border-red-300 bg-red-100 text-red-950 font-bold dark:bg-red-950 dark:text-red-300">Terminated</Badge>;
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200/80 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                        Terminated
+                    </span>
+                );
             default:
                 return <Badge className="border-slate-300 bg-slate-100 text-slate-900 font-bold">{status}</Badge>;
         }
@@ -400,48 +518,67 @@ export default function EmployeeIndex({
 
     return (
         <Layout>
-            <Head title="Employee Management" />
+            <Head title="Employee Directory" />
 
-            <PageSurface className="max-w-[96rem]">
-                <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-slate-300 pb-5">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Employee Directory</h1>
-                        <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-300">Manage all employees across branches and departments with complete control</p>
+            <PageSurface className="max-w-[96rem] px-3 py-3 sm:px-5 sm:py-4 space-y-3">
+                {/* Compact & Ultra-Professional Top Header Bar */}
+                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between pb-2.5 border-b border-slate-200/90 dark:border-slate-800">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                                Employee Directory
+                            </h1>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                {totalCount.toLocaleString()} Total
+                            </span>
+                        </div>
+                        <span className="hidden lg:inline-block text-xs font-medium text-slate-500 dark:text-slate-400">
+                            • Manage workforce, organogram & branches
+                        </span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button type="button" variant="outline" className="flex items-center gap-2 font-bold border-slate-300 hover:bg-slate-100" onClick={() => setExportOpen(true)}>
-                            <Download className="h-4 w-4 text-slate-700" />
-                            <span>Download XLSX</span>
+                    {/* Top Action Toolbar */}
+                    <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                        {/* Download XLSX Button & Dialog */}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs font-semibold px-2.5 sm:px-3 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-2xs gap-1.5"
+                            onClick={() => setExportOpen(true)}
+                        >
+                            <Download className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                            <span className="hidden sm:inline">Export</span> XLSX
                         </Button>
+
                         <Dialog open={exportOpen} onOpenChange={setExportOpen}>
-                            <DialogContent className="max-w-3xl">
+                            <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
                                 <DialogHeader>
-                                    <DialogTitle>Select XLSX Columns</DialogTitle>
+                                    <DialogTitle>Export Employees to XLSX</DialogTitle>
                                     <DialogDescription>
-                                        Select the employee fields you want in the downloaded XLSX. Current directory filters will also be applied.
+                                        Select the columns you want in the export file. Current active search and filters will also be applied.
                                     </DialogDescription>
                                 </DialogHeader>
 
-                                <div className="bg-muted/20 flex items-center justify-between rounded-md border px-3 py-2">
-                                    <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                                <div className="bg-muted/30 flex items-center justify-between rounded-lg border px-3 py-2 shrink-0">
+                                    <label className="flex cursor-pointer items-center gap-2 text-xs sm:text-sm font-medium">
                                         <Checkbox
                                             checked={allExportColumnsSelected}
                                             onCheckedChange={(checked) =>
                                                 setSelectedExportColumns(checked ? export_columns.map((column) => column.key) : [])
                                             }
                                         />
-                                        Select All
+                                        Select All Fields
                                     </label>
-                                    <span className="text-muted-foreground text-sm">
+                                    <span className="text-muted-foreground text-xs font-semibold">
                                         {selectedExportColumns.length} of {export_columns.length} selected
                                     </span>
                                 </div>
 
-                                <div className="max-h-[55vh] space-y-5 overflow-y-auto pr-2">
+                                <div className="space-y-4 overflow-y-auto pr-1 py-1 flex-1 max-h-[50vh]">
                                     {Object.entries(exportColumnGroups).map(([group, columns]) => (
-                                        <section key={group}>
-                                            <label className="mb-2 flex cursor-pointer items-center gap-2">
+                                        <section key={group} className="space-y-2">
+                                            <label className="flex cursor-pointer items-center gap-2">
                                                 <Checkbox
                                                     checked={
                                                         columns.every((column) => selectedExportColumns.includes(column.key))
@@ -452,22 +589,22 @@ export default function EmployeeIndex({
                                                     }
                                                     onCheckedChange={(checked) => toggleExportGroup(columns, checked === true)}
                                                 />
-                                                <h3 className="text-foreground text-sm font-semibold">{columns[0]?.group_label}</h3>
-                                                <span className="text-muted-foreground text-xs">
+                                                <h3 className="text-foreground text-xs sm:text-sm font-bold">{columns[0]?.group_label}</h3>
+                                                <span className="text-muted-foreground text-[11px]">
                                                     ({columns.filter((column) => selectedExportColumns.includes(column.key)).length}/{columns.length})
                                                 </span>
                                             </label>
-                                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                            <div className="grid gap-1.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                                                 {columns.map((column) => (
                                                     <label
                                                         key={column.key}
-                                                        className="hover:bg-muted/40 flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                                                        className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 text-xs transition-colors"
                                                     >
                                                         <Checkbox
                                                             checked={selectedExportColumns.includes(column.key)}
                                                             onCheckedChange={(checked) => toggleExportColumn(column.key, checked === true)}
                                                         />
-                                                        <span>{column.label}</span>
+                                                        <span className="truncate">{column.label}</span>
                                                     </label>
                                                 ))}
                                             </div>
@@ -475,17 +612,25 @@ export default function EmployeeIndex({
                                     ))}
                                 </div>
 
-                                <DialogFooter>
-                                    <Button type="button" variant="outline" onClick={() => setExportOpen(false)}>
+                                <DialogFooter className="border-t pt-3 gap-2">
+                                    <Button type="button" variant="outline" size="sm" onClick={() => setExportOpen(false)}>
                                         Cancel
                                     </Button>
-                                    <Button type="button" disabled={selectedExportColumns.length === 0} onClick={handleExportXlsx}>
-                                        <Download className="mr-2 h-4 w-4" />
-                                        Download Selected
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                        disabled={selectedExportColumns.length === 0}
+                                        onClick={handleExportXlsx}
+                                    >
+                                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                                        Download XLSX ({selectedExportColumns.length})
                                     </Button>
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
+
+                        {/* Import Employees Button & Dialog */}
                         <Dialog
                             open={importOpen}
                             onOpenChange={(open) => {
@@ -499,22 +644,25 @@ export default function EmployeeIndex({
                             }}
                         >
                             <DialogTrigger asChild>
-                                <Button variant="outline" className="flex items-center gap-2 font-bold border-slate-300 hover:bg-slate-100">
-                                    <Upload className="h-4 w-4 text-slate-700" />
-                                    <span>Import Employees</span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs font-semibold px-2.5 sm:px-3 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-2xs gap-1.5"
+                                >
+                                    <Upload className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                                    <span>Import</span>
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent>
+                            <DialogContent className="max-w-md">
                                 <DialogHeader>
                                     <DialogTitle>Import Employees</DialogTitle>
                                     <DialogDescription>
-                                        Download the Excel template, fill employee data, then upload. You will review each row and fix branch,
-                                        department, and designation before saving.
+                                        Upload Excel or CSV file to import employees with validation.
                                     </DialogDescription>
                                 </DialogHeader>
 
                                 <form
-                                    className="space-y-4"
+                                    className="space-y-3.5"
                                     onSubmit={(e) => {
                                         e.preventDefault();
                                         if (!importForm.data.file) {
@@ -540,23 +688,23 @@ export default function EmployeeIndex({
                                             onError: () => {
                                                 setImportStatus('');
                                             },
-                                            onFinish: () => {
-                                                // If redirect did not navigate away, keep dialog open with status cleared by onError/success
-                                            },
                                         });
                                     }}
                                 >
-                                    <div className="bg-muted/20 flex items-center justify-between rounded-md border p-3">
-                                        <div className="text-muted-foreground text-sm">
-                                            Professional Excel template with grouped headers, Bengali labels, and reference data.
+                                    <div className="bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                                        <div className="text-xs text-emerald-900 dark:text-emerald-300 font-medium">
+                                            Need template format?
                                         </div>
-                                        <a href={route('employees.import.example')} className="text-primary text-sm font-medium hover:underline">
-                                            Download Excel template
+                                        <a
+                                            href={route('employees.import.example')}
+                                            className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                                        >
+                                            <Download className="h-3 w-3" /> Template
                                         </a>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <Label htmlFor="importFile">Excel or CSV file</Label>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="importFile" className="text-xs font-semibold">Choose File (.xlsx or .csv)</Label>
                                         <Input
                                             id="importFile"
                                             type="file"
@@ -568,12 +716,13 @@ export default function EmployeeIndex({
                                                 setImportStatus('');
                                                 importForm.clearErrors('file');
                                             }}
+                                            className="text-xs"
                                         />
                                         <InputError message={importForm.errors.file as any} />
                                     </div>
 
                                     {importStatus && (
-                                        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                                        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-800">
                                             {importStatus}
                                         </div>
                                     )}
@@ -584,16 +733,16 @@ export default function EmployeeIndex({
                                         </div>
                                     )}
 
-                                    <div className="bg-muted/30 text-muted-foreground rounded-md border p-3 text-sm">
-                                        Required: PIN, name, employment type, mobile, joining date, department, designation, branch. Use the Excel
-                                        template (row 3 = field keys). Email is optional. Next step: review and confirm.
-                                    </div>
-
-                                    <DialogFooter>
-                                        <Button type="button" variant="outline" onClick={() => setImportOpen(false)} disabled={importForm.processing}>
+                                    <DialogFooter className="gap-2 pt-2">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setImportOpen(false)} disabled={importForm.processing}>
                                             Cancel
                                         </Button>
-                                        <Button type="submit" disabled={importForm.processing || !importForm.data.file}>
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                            disabled={importForm.processing || !importForm.data.file}
+                                        >
                                             {importForm.processing ? 'Working…' : 'Upload & Review'}
                                         </Button>
                                     </DialogFooter>
@@ -601,310 +750,474 @@ export default function EmployeeIndex({
                             </DialogContent>
                         </Dialog>
 
+                        {/* Add Employee Button */}
                         <Link href={route('employees.create')}>
-                            <Button className="flex items-center gap-1 bg-emerald-600 font-bold text-white hover:bg-emerald-700 shadow-sm">
-                                <UserPlus className="h-4 w-4" />
+                            <Button size="sm" className="h-8 text-xs font-bold px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5">
+                                <UserPlus className="h-3.5 w-3.5" />
                                 <span>Add Employee</span>
                             </Button>
                         </Link>
                     </div>
                 </div>
 
-                {/* HR KPI Stat Overview (Shomvob HR style high contrast) */}
-                <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="rounded-xl border border-slate-300 bg-white dark:bg-slate-900 p-4 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Total Employees</p>
-                            <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{employees.total}</p>
+                {/* KPI Overview Cards with Radial Ring Progress Charts & Micro Breakdown */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                    {/* Total Employees with Core vs Project Breakdown */}
+                    <div className="relative overflow-hidden rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between group">
+                        <div className="flex items-center justify-between">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                                        <Users className="h-3.5 w-3.5" />
+                                    </span>
+                                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+                                        Total Staff
+                                    </span>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
+                                    {totalCount.toLocaleString()}
+                                </div>
+                            </div>
+                            <CircularProgressRing
+                                percentage={100}
+                                size={44}
+                                strokeWidth={4}
+                                strokeColor="stroke-indigo-600 dark:stroke-indigo-400"
+                                trackColor="stroke-indigo-100 dark:stroke-indigo-950/80"
+                                textColor="text-indigo-700 dark:text-indigo-300"
+                            />
                         </div>
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
-                            <Users className="h-6 w-6" />
+
+                        {/* Core vs Project Sub-Breakdown */}
+                        <div className="flex items-center justify-between gap-1 mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold">
+                            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                                Core: <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">{coreCount.toLocaleString()}</span>
+                            </span>
+                            <span className="text-slate-300 dark:text-slate-700 font-normal">|</span>
+                            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                                <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                                Project: <span className="text-violet-600 dark:text-violet-400 font-extrabold">{projectCount.toLocaleString()}</span>
+                            </span>
                         </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-300 bg-white dark:bg-slate-900 p-4 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Active Employees</p>
-                            <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
-                                {employees.data.filter((e) => e.status === 'active').length}
-                            </p>
+                    {/* Active Employees */}
+                    <div className="relative overflow-hidden rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between group">
+                        <div className="flex items-center justify-between">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                                        <UserCheck className="h-3.5 w-3.5" />
+                                    </span>
+                                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider truncate">
+                                        Active
+                                    </span>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
+                                    {activeCount.toLocaleString()}
+                                </div>
+                            </div>
+                            <CircularProgressRing
+                                percentage={activePercent}
+                                size={44}
+                                strokeWidth={4}
+                                strokeColor="stroke-emerald-500 dark:stroke-emerald-400"
+                                trackColor="stroke-emerald-100 dark:stroke-emerald-950/80"
+                                textColor="text-emerald-700 dark:text-emerald-300"
+                            />
                         </div>
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-300">
-                            <Check className="h-6 w-6" />
+
+                        {/* Core vs Project Sub-Breakdown for Active */}
+                        <div className="flex items-center justify-between gap-1 mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold">
+                            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                Core: <span className="text-emerald-700 dark:text-emerald-400 font-extrabold">{activeCoreCount.toLocaleString()}</span>
+                            </span>
+                            <span className="text-slate-300 dark:text-slate-700 font-normal">|</span>
+                            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                                <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
+                                Project: <span className="text-teal-700 dark:text-teal-400 font-extrabold">{activeProjectCount.toLocaleString()}</span>
+                            </span>
                         </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-300 bg-white dark:bg-slate-900 p-4 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">On Leave</p>
-                            <p className="text-2xl font-black text-amber-700 dark:text-amber-400 mt-1">
-                                {employees.data.filter((e) => e.status === 'on_leave').length}
-                            </p>
+                    {/* On Leave */}
+                    <div className="relative overflow-hidden rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between group">
+                        <div className="flex items-center justify-between">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+                                        <CalendarClock className="h-3.5 w-3.5" />
+                                    </span>
+                                    <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider truncate">
+                                        On Leave
+                                    </span>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-black text-amber-700 dark:text-amber-400 mt-1">
+                                    {onLeaveCount.toLocaleString()}
+                                </div>
+                            </div>
+                            <CircularProgressRing
+                                percentage={onLeavePercent}
+                                size={44}
+                                strokeWidth={4}
+                                strokeColor="stroke-amber-500 dark:stroke-amber-400"
+                                trackColor="stroke-amber-100 dark:stroke-amber-950/80"
+                                textColor="text-amber-700 dark:text-amber-300"
+                            />
                         </div>
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
-                            <Filter className="h-6 w-6" />
+
+                        <div className="flex items-center gap-1 mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            <span>{onLeavePercent.toFixed(1)}% currently on leave</span>
                         </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-300 bg-white dark:bg-slate-900 p-4 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Inactive / Terminated</p>
-                            <p className="text-2xl font-black text-red-700 dark:text-red-400 mt-1">
-                                {employees.data.filter((e) => e.status !== 'active' && e.status !== 'on_leave').length}
-                            </p>
+                    {/* Inactive / Terminated */}
+                    <div className="relative overflow-hidden rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between group">
+                        <div className="flex items-center justify-between">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                                        <UserX className="h-3.5 w-3.5" />
+                                    </span>
+                                    <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider truncate">
+                                        Inactive
+                                    </span>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400 mt-1">
+                                    {inactiveCount.toLocaleString()}
+                                </div>
+                            </div>
+                            <CircularProgressRing
+                                percentage={inactivePercent}
+                                size={44}
+                                strokeWidth={4}
+                                strokeColor="stroke-rose-500 dark:stroke-rose-400"
+                                trackColor="stroke-rose-100 dark:stroke-rose-950/80"
+                                textColor="text-rose-700 dark:text-rose-300"
+                            />
                         </div>
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300">
-                            <Users className="h-6 w-6" />
+
+                        <div className="flex items-center gap-1 mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold text-rose-700 dark:text-rose-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                            <span>{inactivePercent.toFixed(1)}% inactive / terminated</span>
                         </div>
                     </div>
                 </div>
 
+                {/* Flash Messages */}
                 {flashSuccess && (
-                    <Alert className="mb-6 border-green-200 bg-green-50">
-                        <Check className="h-4 w-4 text-green-600" />
-                        <AlertDescription className="text-green-700">{flashSuccess}</AlertDescription>
+                    <Alert className="border-green-200 bg-green-50/90 dark:bg-green-950/40 dark:border-green-800 py-2.5">
+                        <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <AlertDescription className="text-green-800 dark:text-green-300 text-xs font-semibold">{flashSuccess}</AlertDescription>
                     </Alert>
                 )}
 
                 {flashError && (
-                    <Alert className="mb-6 border-red-200 bg-red-50">
-                        <X className="h-4 w-4 text-red-600" />
-                        <AlertDescription className="text-red-700">{flashError}</AlertDescription>
+                    <Alert className="border-red-200 bg-red-50/90 dark:bg-red-950/40 dark:border-red-800 py-2.5">
+                        <X className="h-4 w-4 text-red-600 dark:text-red-400" />
+                        <AlertDescription className="text-red-800 dark:text-red-300 text-xs font-semibold">{flashError}</AlertDescription>
                     </Alert>
                 )}
 
                 {importSummary && (
-                    <Alert className="mb-6 border-blue-200 bg-blue-50">
-                        <AlertDescription className="text-blue-800">
-                            <div className="font-medium">
+                    <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-800 py-2.5">
+                        <AlertDescription className="text-blue-900 dark:text-blue-300 text-xs">
+                            <div className="font-bold">
                                 Import summary: Created {importSummary.created}, skipped {importSummary.skipped}.
                             </div>
                             {importSummary.branches && importSummary.branches.length > 0 && (
-                                <div className="mt-2 text-sm">
-                                    <div className="font-medium">Branch-wise created</div>
-                                    <ul className="mt-1 list-disc pl-5">
+                                <div className="mt-1.5 text-xs">
+                                    <div className="font-semibold">Branch-wise created:</div>
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
                                         {importSummary.branches.slice(0, 10).map((b) => (
-                                            <li key={b.branch_id}>
+                                            <span key={b.branch_id} className="bg-blue-100/70 dark:bg-blue-900/60 px-2 py-0.5 rounded text-[11px] font-medium">
                                                 {b.branch_name}: {b.created}
-                                            </li>
+                                            </span>
                                         ))}
-                                    </ul>
+                                    </div>
                                 </div>
                             )}
                             {importRowErrors.length > 0 && (
-                                <div className="mt-2 text-sm">
-                                    <div className="font-medium">Row errors</div>
-                                    <ul className="mt-1 list-disc pl-5">
+                                <div className="mt-2 text-xs">
+                                    <div className="font-bold text-red-700 dark:text-red-400">Row errors:</div>
+                                    <ul className="mt-1 list-disc pl-4 space-y-0.5 max-h-32 overflow-y-auto">
                                         {importRowErrors.slice(0, 10).map((re) => (
                                             <li key={re.row}>
                                                 Row {re.row}: {re.errors.join(', ')}
                                             </li>
                                         ))}
                                     </ul>
-                                    {importRowErrors.length > 10 && (
-                                        <div className="mt-1 text-xs text-blue-700">Showing 10 of {importRowErrors.length} errors.</div>
-                                    )}
                                 </div>
                             )}
                         </AlertDescription>
                     </Alert>
                 )}
 
-                <Card className="overflow-hidden rounded-xl border-slate-200 bg-white shadow-sm">
-                    <CardHeader className="border-b border-slate-100 bg-white px-6 pt-6 pb-5">
-                        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                            <CardTitle className="text-lg font-bold tracking-wide text-slate-800">
-                                Employees Directory
-                                {isOrganogramSort && (
-                                    <span className="ml-2 text-[10px] font-semibold tracking-wide text-emerald-700 uppercase">
-                                        · Organogram order
-                                    </span>
-                                )}
-                            </CardTitle>
+                {/* Main Directory Card with Toolbar and Filter Bar */}
+                <Card className="rounded-xl border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                    {/* Toolbar Header */}
+                    <div className="p-3 sm:p-3.5 border-b border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-2.5">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
+                            {/* Left: Search Bar */}
+                            <form onSubmit={handleSearch} className="flex-1 flex items-center gap-2 max-w-lg">
+                                <div className="relative flex-1">
+                                    <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                    <Input
+                                        type="search"
+                                        name="search"
+                                        placeholder="Search by name, PIN, mobile, email..."
+                                        value={data.search}
+                                        onChange={(e) => setData('search', e.target.value)}
+                                        className="h-8.5 text-xs pl-8 pr-7 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-emerald-500 shadow-2xs"
+                                    />
+                                    {data.search && (
+                                        <button
+                                            type="button"
+                                            onClick={() => applyFilters({ search: '' })}
+                                            className="absolute top-1/2 right-2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+                                <Button
+                                    type="submit"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="h-8.5 text-xs font-semibold px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                                    disabled={processing}
+                                >
+                                    Search
+                                </Button>
+                            </form>
 
-                            <div className="flex items-center gap-2">
+                            {/* Right: Controls & Toggles */}
+                            <div className="flex items-center gap-2 flex-wrap self-end md:self-auto">
+                                {/* Organogram sort toggle */}
                                 <Button
                                     type="button"
                                     variant={isOrganogramSort ? 'default' : 'outline'}
                                     size="sm"
-                                    className={`h-9 text-xs ${isOrganogramSort ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+                                    className={`h-8.5 text-xs font-semibold px-2.5 gap-1.5 transition-all ${
+                                        isOrganogramSort
+                                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100'
+                                    }`}
                                     onClick={useOrganogramSort}
+                                    title="Sort in hierarchical Organogram order"
                                 >
-                                    Organogram
+                                    <Layers className="h-3.5 w-3.5" />
+                                    <span>Organogram</span>
                                 </Button>
-                                <form onSubmit={handleSearch} className="flex items-center">
-                                    <div className="relative flex-1">
-                                        <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                        <Input
-                                            type="search"
-                                            name="search"
-                                            placeholder="Search employees..."
-                                            value={data.search}
-                                            onChange={(e) => setData('search', e.target.value)}
-                                            className="h-9 w-[220px] rounded-lg border-slate-200 bg-slate-50 pl-9 text-sm transition-all focus-visible:ring-emerald-500 md:w-[300px]"
-                                        />
-                                    </div>
-                                    <Button
-                                        type="submit"
-                                        variant="secondary"
-                                        className="ml-2 h-9 rounded-lg bg-slate-100 font-medium text-slate-700 hover:bg-slate-200"
-                                        disabled={processing}
-                                    >
-                                        Search
-                                    </Button>
-                                </form>
 
+                                {/* Filters Toggle Button */}
                                 <Button
+                                    type="button"
                                     variant="outline"
-                                    size="icon"
+                                    size="sm"
                                     onClick={() => setShowFilters(!showFilters)}
-                                    className={`h-9 w-9 rounded-lg border-slate-200 transition-colors ${showFilters ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    className={`h-8.5 text-xs font-semibold px-2.5 gap-1.5 border transition-all ${
+                                        hasActiveFilters
+                                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700'
+                                            : showFilters
+                                              ? 'border-slate-300 bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200'
+                                              : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                                    }`}
                                 >
-                                    <Filter className="h-4 w-4" />
+                                    <Filter className="h-3.5 w-3.5" />
+                                    <span>Filters</span>
+                                    {activeFilterCount > 0 && (
+                                        <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 text-[10px] font-black rounded-full bg-emerald-600 text-white">
+                                            {activeFilterCount}
+                                        </span>
+                                    )}
+                                    {showFilters ? <ChevronUp className="h-3 w-3 opacity-60" /> : <ChevronDown className="h-3 w-3 opacity-60" />}
                                 </Button>
+
+                                {/* Quick Clear Button if filters active */}
+                                {hasActiveFilters && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleClearFilters}
+                                        disabled={processing}
+                                        className="h-8.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 font-medium gap-1"
+                                    >
+                                        <RotateCcw className="h-3 w-3" />
+                                        <span>Reset</span>
+                                    </Button>
+                                )}
                             </div>
                         </div>
 
+                        {/* Collapsible Filter Bar with clean, compact responsive grid */}
                         {showFilters && (
-                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-                                <div>
-                                    <MultiSelectFilter
-                                        values={data.department_ids}
-                                        onChange={(values) => applyFilters({ department_ids: values })}
-                                        items={[
-                                            NOT_ASSIGNED_ITEM,
-                                            ...departments.map((d) => ({
-                                                value: String(d.id),
-                                                label: d.name,
-                                            })),
-                                        ]}
-                                        placeholder="Department"
-                                        allLabel="All Departments"
-                                        disabled={processing}
-                                    />
-                                </div>
+                            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Department
+                                        </label>
+                                        <MultiSelectFilter
+                                            values={data.department_ids}
+                                            onChange={(values) => applyFilters({ department_ids: values })}
+                                            items={[
+                                                NOT_ASSIGNED_ITEM,
+                                                ...departments.map((d) => ({
+                                                    value: String(d.id),
+                                                    label: d.name,
+                                                })),
+                                            ]}
+                                            placeholder="Department"
+                                            allLabel="All Departments"
+                                            disabled={processing}
+                                        />
+                                    </div>
 
-                                <div>
-                                    <MultiSelectFilter
-                                        values={data.branch_ids}
-                                        onChange={(values) => applyFilters({ branch_ids: values })}
-                                        items={[
-                                            NOT_ASSIGNED_ITEM,
-                                            ...sortPayrollBranches(branches).map((branch) => ({
-                                                value: String(branch.id),
-                                                label: formatBranchSelectLabel(branch),
-                                            })),
-                                        ]}
-                                        placeholder="Branch"
-                                        allLabel="All Branches"
-                                        disabled={processing}
-                                    />
-                                </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Branch
+                                        </label>
+                                        <MultiSelectFilter
+                                            values={data.branch_ids}
+                                            onChange={(values) => applyFilters({ branch_ids: values })}
+                                            items={[
+                                                NOT_ASSIGNED_ITEM,
+                                                ...sortPayrollBranches(branches).map((branch) => ({
+                                                    value: String(branch.id),
+                                                    label: formatBranchSelectLabel(branch),
+                                                })),
+                                            ]}
+                                            placeholder="Branch"
+                                            allLabel="All Branches"
+                                            disabled={processing}
+                                        />
+                                    </div>
 
-                                <div>
-                                    <MultiSelectFilter
-                                        values={data.designation_ids}
-                                        onChange={(values) => applyFilters({ designation_ids: values })}
-                                        items={[
-                                            NOT_ASSIGNED_ITEM,
-                                            ...designations.map((d) => ({
-                                                value: String(d.id),
-                                                label: d.name,
-                                            })),
-                                        ]}
-                                        placeholder="Designation"
-                                        allLabel="All Designations"
-                                        disabled={processing}
-                                    />
-                                </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Designation
+                                        </label>
+                                        <MultiSelectFilter
+                                            values={data.designation_ids}
+                                            onChange={(values) => applyFilters({ designation_ids: values })}
+                                            items={[
+                                                NOT_ASSIGNED_ITEM,
+                                                ...designations.map((d) => ({
+                                                    value: String(d.id),
+                                                    label: d.name,
+                                                })),
+                                            ]}
+                                            placeholder="Designation"
+                                            allLabel="All Designations"
+                                            disabled={processing}
+                                        />
+                                    </div>
 
-                                <div>
-                                    <MultiSelectFilter
-                                        values={data.project_ids}
-                                        onChange={(values) => applyFilters({ project_ids: values })}
-                                        items={[
-                                            NOT_ASSIGNED_ITEM,
-                                            ...(projects ?? []).map((project) => ({
-                                                value: String(project.id),
-                                                label: project.code ? `${project.code} — ${project.name}` : project.name,
-                                            })),
-                                        ]}
-                                        placeholder="Project"
-                                        allLabel="All Projects"
-                                        disabled={processing}
-                                    />
-                                </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Project
+                                        </label>
+                                        <MultiSelectFilter
+                                            values={data.project_ids}
+                                            onChange={(values) => applyFilters({ project_ids: values })}
+                                            items={[
+                                                NOT_ASSIGNED_ITEM,
+                                                ...(projects ?? []).map((project) => ({
+                                                    value: String(project.id),
+                                                    label: project.code ? `${project.code} — ${project.name}` : project.name,
+                                                })),
+                                            ]}
+                                            placeholder="Project"
+                                            allLabel="All Projects"
+                                            disabled={processing}
+                                        />
+                                    </div>
 
-                                <div>
-                                    <MultiSelectFilter
-                                        values={data.employee_type_ids}
-                                        onChange={(values) => applyFilters({ employee_type_ids: values })}
-                                        items={[
-                                            NOT_ASSIGNED_ITEM,
-                                            ...employee_types.map((type) => ({
-                                                value: String(type.id),
-                                                label: type.name,
-                                            })),
-                                        ]}
-                                        placeholder="Employee Type"
-                                        allLabel="All Employee Types"
-                                        disabled={processing}
-                                    />
-                                </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Type
+                                        </label>
+                                        <MultiSelectFilter
+                                            values={data.employee_type_ids}
+                                            onChange={(values) => applyFilters({ employee_type_ids: values })}
+                                            items={[
+                                                NOT_ASSIGNED_ITEM,
+                                                ...employee_types.map((type) => ({
+                                                    value: String(type.id),
+                                                    label: type.name,
+                                                })),
+                                            ]}
+                                            placeholder="Employee Type"
+                                            allLabel="All Types"
+                                            disabled={processing}
+                                        />
+                                    </div>
 
-                                <div>
-                                    <MultiSelectFilter
-                                        values={data.statuses}
-                                        onChange={(values) => applyFilters({ statuses: values })}
-                                        items={STATUS_FILTER_OPTIONS}
-                                        placeholder="Status"
-                                        allLabel="All Statuses"
-                                        disabled={processing}
-                                    />
-                                </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Status
+                                        </label>
+                                        <MultiSelectFilter
+                                            values={data.statuses}
+                                            onChange={(values) => applyFilters({ statuses: values })}
+                                            items={STATUS_FILTER_OPTIONS}
+                                            placeholder="Status"
+                                            allLabel="All Statuses"
+                                            disabled={processing}
+                                        />
+                                    </div>
 
-                                <div>
-                                    <MultiSelectFilter
-                                        values={data.genders}
-                                        onChange={(values) => applyFilters({ genders: values })}
-                                        items={GENDER_FILTER_OPTIONS}
-                                        placeholder="Gender"
-                                        allLabel="All Genders"
-                                        disabled={processing}
-                                    />
-                                </div>
-
-                                <div className="flex items-center">
-                                    <Button variant="outline" size="sm" onClick={handleClearFilters} disabled={processing}>
-                                        Clear Filters
-                                    </Button>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Gender
+                                        </label>
+                                        <MultiSelectFilter
+                                            values={data.genders}
+                                            onChange={(values) => applyFilters({ genders: values })}
+                                            items={GENDER_FILTER_OPTIONS}
+                                            placeholder="Gender"
+                                            allLabel="All Genders"
+                                            disabled={processing}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}
-                    </CardHeader>
+                    </div>
 
                     <CardContent className="p-0">
                         {/* Mobile Card List View (sm:hidden) */}
-                        <div className="p-2 space-y-2 sm:hidden">
+                        <div className="p-2.5 space-y-2 sm:hidden">
                             {employees.data.length === 0 ? (
-                                <div className="py-10 text-center text-xs text-slate-500">
-                                    <Users className="h-7 w-7 text-slate-400 mx-auto mb-1.5" />
-                                    <p className="font-semibold text-slate-700">No Employees Found</p>
-                                    <p className="text-[11px] text-slate-400 mt-0.5">Try adjusting your search or filters.</p>
+                                <div className="py-12 text-center text-xs text-slate-500 space-y-2">
+                                    <Users className="h-8 w-8 text-slate-400 mx-auto" />
+                                    <p className="font-bold text-slate-800 text-sm">No Employees Found</p>
+                                    <p className="text-[11px] text-slate-400">Try adjusting your search criteria or clear active filters.</p>
+                                    {hasActiveFilters && (
+                                        <Button size="sm" variant="outline" onClick={handleClearFilters} className="mt-2 text-xs">
+                                            Clear Filters
+                                        </Button>
+                                    )}
                                 </div>
                             ) : (
                                 employees.data.map((employee) => (
                                     <div
                                         key={employee.id}
-                                        className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs space-y-2"
+                                        className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-2xs space-y-2.5 transition-all hover:border-slate-300"
                                     >
+                                        {/* Top Row: Avatar + Name + PIN */}
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex items-center space-x-2.5 min-w-0">
-                                                <Avatar className="h-9 w-9 shrink-0">
+                                                <Avatar className="h-9 w-9 shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs">
                                                     {employee.photo ? (
                                                         <AvatarImage src={`/storage/${employee.photo}`} alt={employeeDisplayName(employee)} />
                                                     ) : (
-                                                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                                                        <AvatarFallback className="bg-emerald-50 text-emerald-700 font-bold text-xs dark:bg-emerald-950 dark:text-emerald-300">
                                                             {employeeInitials(employee)}
                                                         </AvatarFallback>
                                                     )}
@@ -912,52 +1225,68 @@ export default function EmployeeIndex({
                                                 <div className="min-w-0">
                                                     <Link
                                                         href={route('employees.show', employee.id)}
-                                                        className="font-bold text-xs text-slate-900 hover:text-emerald-600 block truncate"
+                                                        className="font-bold text-xs text-slate-900 dark:text-white hover:text-emerald-600 block truncate"
                                                     >
                                                         {employeeDisplayName(employee)}
                                                     </Link>
-                                                    <div className="text-[11px] font-medium text-emerald-600 truncate">
+                                                    <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 truncate">
                                                         {employee.designation?.name}
                                                     </div>
                                                 </div>
                                             </div>
                                             <div className="shrink-0">
-                                                <span className="font-mono text-[10px] font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+                                                <span className="font-mono text-[10px] font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                                     {employee.pin || employee.employee_id}
                                                 </span>
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-2 rounded-lg text-xs">
+                                        {/* Middle Info Grid */}
+                                        <div className="grid grid-cols-2 gap-1.5 bg-slate-50/80 dark:bg-slate-800/40 p-2 rounded-lg text-xs border border-slate-100 dark:border-slate-800">
                                             <div>
                                                 <span className="text-[9px] uppercase font-bold text-slate-400 block">Department</span>
-                                                <span className="text-slate-800 font-semibold text-[11px] truncate block">{employee.department?.name || '—'}</span>
+                                                <span className="text-slate-800 dark:text-slate-200 font-semibold text-[11px] truncate block">
+                                                    {employee.department?.name || '—'}
+                                                </span>
                                             </div>
                                             <div>
                                                 <span className="text-[9px] uppercase font-bold text-slate-400 block">Branch</span>
-                                                <span className="text-slate-800 font-semibold text-[11px] truncate block">{employee.branch?.name || '—'}</span>
+                                                <span className="text-slate-800 dark:text-slate-200 font-semibold text-[11px] truncate block">
+                                                    {employee.branch?.name || '—'}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-400 block">Type</span>
+                                                <span className="text-slate-800 dark:text-slate-200 font-semibold text-[11px] truncate block">
+                                                    {employee.employee_type?.name || employee.employeeType?.name || '—'}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-400 block">Confirmation</span>
+                                                <span className="text-slate-800 dark:text-slate-200 font-semibold text-[11px] truncate block">
+                                                    {formatDisplayDate(employee.confirmation_date)}
+                                                </span>
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                                        {/* Bottom Action & Status Row */}
+                                        <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
                                             <div className="flex items-center gap-2">
                                                 <Switch
                                                     checked={employee.status === 'active'}
                                                     onCheckedChange={(checked) => handleStatusChange(employee, checked)}
                                                     aria-label="Toggle active status"
-                                                    className="scale-90"
+                                                    className="scale-85"
                                                 />
-                                                <span className={employee.status === 'active' ? 'font-semibold text-emerald-600 text-[11px]' : 'text-slate-500 text-[11px]'}>
-                                                    {employee.status === 'active' ? 'Active' : 'Inactive'}
-                                                </span>
+                                                {getStatusBadge(employee.status)}
                                             </div>
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex items-center gap-1.5">
                                                 <Link href={route('employees.show', employee.id)}>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-7 w-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
-                                                        title="View"
+                                                        className="h-7 w-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-400"
+                                                        title="View Details"
                                                     >
                                                         <Eye className="h-3.5 w-3.5" />
                                                     </Button>
@@ -966,8 +1295,8 @@ export default function EmployeeIndex({
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                                                        title="Edit"
+                                                        className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400"
+                                                        title="Edit Employee"
                                                     >
                                                         <Edit className="h-3.5 w-3.5" />
                                                     </Button>
@@ -975,8 +1304,8 @@ export default function EmployeeIndex({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-7 w-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
-                                                    title="Delete"
+                                                    className="h-7 w-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-400"
+                                                    title="Delete Employee"
                                                     onClick={() => setEmployeeToDelete(employee)}
                                                 >
                                                     <Trash className="h-3.5 w-3.5" />
@@ -992,47 +1321,47 @@ export default function EmployeeIndex({
                         <div className="hidden sm:block overflow-x-auto">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="border-b border-slate-200 bg-slate-50/80">
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                    <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90">
+                                        <TableHead className="h-9.5 pl-4 text-[11px] font-bold tracking-wider text-slate-700 dark:text-slate-300 uppercase">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleSort('name')}
-                                                className="inline-flex items-center gap-1 hover:text-slate-900"
+                                                className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white transition-colors"
                                             >
-                                                Employee <ArrowUpDown className="h-3.5 w-3.5" />
+                                                Employee <ArrowUpDown className="h-3 w-3" />
                                             </button>
                                         </TableHead>
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                        <TableHead className="h-9.5 text-[11px] font-bold tracking-wider text-slate-700 dark:text-slate-300 uppercase">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleSort('pin')}
-                                                className="inline-flex items-center gap-1 hover:text-slate-900"
+                                                className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white transition-colors"
                                             >
-                                                PIN <ArrowUpDown className="h-3.5 w-3.5" />
+                                                PIN <ArrowUpDown className="h-3 w-3" />
                                             </button>
                                         </TableHead>
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                        <TableHead className="h-9.5 text-[11px] font-bold tracking-wider text-slate-700 dark:text-slate-300 uppercase">
                                             Department
                                         </TableHead>
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                        <TableHead className="h-9.5 text-[11px] font-bold tracking-wider text-slate-700 dark:text-slate-300 uppercase">
                                             Branch
                                         </TableHead>
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
-                                            Employee Type
+                                        <TableHead className="h-9.5 text-[11px] font-bold tracking-wider text-slate-700 dark:text-slate-300 uppercase">
+                                            Type
                                         </TableHead>
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider whitespace-nowrap text-slate-700 uppercase">
+                                        <TableHead className="h-9.5 text-[11px] font-bold tracking-wider whitespace-nowrap text-slate-700 dark:text-slate-300 uppercase">
                                             Confirmation
                                         </TableHead>
-                                        <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                        <TableHead className="h-9.5 text-[11px] font-bold tracking-wider text-slate-700 dark:text-slate-300 uppercase">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleSort('status')}
-                                                className="inline-flex items-center gap-1 hover:text-slate-900"
+                                                className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white transition-colors"
                                             >
-                                                Status <ArrowUpDown className="h-3.5 w-3.5" />
+                                                Status <ArrowUpDown className="h-3 w-3" />
                                             </button>
                                         </TableHead>
-                                        <TableHead className="h-11 pr-6 text-right text-[11px] font-semibold tracking-wider text-slate-700 uppercase">
+                                        <TableHead className="h-9.5 pr-4 text-right text-[11px] font-bold tracking-wider text-slate-700 dark:text-slate-300 uppercase">
                                             Actions
                                         </TableHead>
                                     </TableRow>
@@ -1040,15 +1369,20 @@ export default function EmployeeIndex({
                                 <TableBody>
                                     {employees.data.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="h-32 text-center">
-                                                <div className="flex flex-col items-center justify-center">
-                                                    <Users className="h-8 w-8 text-gray-400" />
-                                                    <h3 className="mt-2 text-lg font-medium text-gray-900">No Employees Found</h3>
-                                                    <p className="mt-1 text-gray-500">
+                                            <TableCell colSpan={8} className="h-40 text-center">
+                                                <div className="flex flex-col items-center justify-center space-y-1.5">
+                                                    <Users className="h-8 w-8 text-slate-400" />
+                                                    <h3 className="text-sm font-bold text-slate-800 dark:text-white">No Employees Found</h3>
+                                                    <p className="text-xs text-slate-500">
                                                         {data.search || hasActiveFilters
-                                                            ? 'Try different search filters'
-                                                            : 'Get started by adding a new employee'}
+                                                            ? 'Try adjusting your search criteria or clearing filters'
+                                                            : 'Get started by creating a new employee'}
                                                     </p>
+                                                    {hasActiveFilters && (
+                                                        <Button size="sm" variant="outline" onClick={handleClearFilters} className="mt-2 text-xs">
+                                                            Clear All Filters
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -1056,91 +1390,92 @@ export default function EmployeeIndex({
                                         employees.data.map((employee) => (
                                             <TableRow
                                                 key={employee.id}
-                                                className="group border-b border-slate-100 transition-colors hover:bg-slate-50"
+                                                className="group border-b border-slate-100 dark:border-slate-800 transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/50"
                                             >
-                                                <TableCell className="pl-6">
+                                                <TableCell className="pl-4 py-2.5">
                                                     <div className="flex items-center space-x-3">
-                                                        <Avatar className="h-9 w-9">
+                                                        <Avatar className="h-8.5 w-8.5 border border-slate-200 dark:border-slate-700 shadow-2xs">
                                                             {employee.photo ? (
                                                                 <AvatarImage src={`/storage/${employee.photo}`} alt={employeeDisplayName(employee)} />
                                                             ) : (
-                                                                <AvatarFallback className="bg-primary/10 text-primary">
+                                                                <AvatarFallback className="bg-emerald-50 text-emerald-700 font-bold text-xs dark:bg-emerald-950 dark:text-emerald-300">
                                                                     {employeeInitials(employee)}
                                                                 </AvatarFallback>
                                                             )}
                                                         </Avatar>
-                                                        <div>
-                                                            <div className="text-[13px] font-semibold text-slate-800">
+                                                        <div className="min-w-0">
+                                                            <Link
+                                                                href={route('employees.show', employee.id)}
+                                                                className="text-xs sm:text-[13px] font-bold text-slate-900 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 block truncate"
+                                                            >
                                                                 {employeeDisplayName(employee)}
-                                                            </div>
-                                                            <div className="mt-0.5 text-[12px] font-medium text-emerald-600/90">
-                                                                {employee.designation.name}
+                                                            </Link>
+                                                            <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400/90 truncate max-w-[220px]">
+                                                                {employee.designation?.name}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-[13px] font-medium text-slate-600">
-                                                    {employee.pin || employee.employee_id}
+                                                <TableCell className="py-2.5">
+                                                    <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                                        {employee.pin || employee.employee_id}
+                                                    </span>
                                                 </TableCell>
-                                                <TableCell className="text-[13px] text-slate-600">{employee.department.name}</TableCell>
-                                                <TableCell className="text-[13px] text-slate-600">{employee.branch.name}</TableCell>
-                                                <TableCell className="text-[13px] text-slate-600">
-                                                    {employee.employee_type?.name || employee.employeeType?.name || '—'}
+                                                <TableCell className="py-2.5 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                                    {employee.department?.name || '—'}
                                                 </TableCell>
-                                                <TableCell className="text-[13px] whitespace-nowrap text-slate-600">
+                                                <TableCell className="py-2.5 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                                    {employee.branch?.name || '—'}
+                                                </TableCell>
+                                                <TableCell className="py-2.5">
+                                                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+                                                        {employee.employee_type?.name || employee.employeeType?.name || '—'}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="py-2.5 text-xs whitespace-nowrap text-slate-600 dark:text-slate-400">
                                                     {formatDisplayDate(employee.confirmation_date)}
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="py-2.5">
                                                     <div className="flex items-center gap-2">
                                                         <Switch
                                                             checked={employee.status === 'active'}
                                                             onCheckedChange={(checked) => handleStatusChange(employee, checked)}
-                                                            aria-label="Toggle employee active status"
+                                                            aria-label="Toggle active status"
+                                                            className="scale-85"
                                                         />
-                                                        <span
-                                                            className={
-                                                                employee.status === 'active'
-                                                                    ? 'text-[13px] font-medium text-emerald-600'
-                                                                    : 'text-[13px] text-slate-500'
-                                                            }
-                                                        >
-                                                            {employee.status === 'active' ? 'Active' : 'Inactive'}
-                                                        </span>
-                                                        {employee.status !== 'active' && employee.status !== 'inactive' && (
-                                                            <span className="ml-1">{getStatusBadge(employee.status)}</span>
-                                                        )}
+                                                        {getStatusBadge(employee.status)}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="pr-6 text-right">
-                                                    <div className="flex items-center justify-end gap-2 transition-opacity duration-200">
+                                                <TableCell className="pr-4 py-2.5 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
                                                         <Link href={route('employees.show', employee.id)}>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
+                                                                className="h-7.5 w-7.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-400"
                                                                 title="View Details"
                                                             >
-                                                                <Eye className="h-4 w-4" />
+                                                                <Eye className="h-3.5 w-3.5" />
                                                             </Button>
                                                         </Link>
                                                         <Link href={route('employees.edit', employee.id)}>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                                                                className="h-7.5 w-7.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400"
                                                                 title="Edit Employee"
                                                             >
-                                                                <Edit className="h-4 w-4" />
+                                                                <Edit className="h-3.5 w-3.5" />
                                                             </Button>
                                                         </Link>
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-8 w-8 rounded-lg bg-red-50 text-red-600 transition-colors hover:bg-red-100 hover:text-red-700"
+                                                            className="h-7.5 w-7.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-400"
                                                             title="Delete Employee"
                                                             onClick={() => setEmployeeToDelete(employee)}
                                                         >
-                                                            <Trash className="h-4 w-4" />
+                                                            <Trash className="h-3.5 w-3.5" />
                                                         </Button>
                                                     </div>
                                                 </TableCell>
@@ -1151,14 +1486,14 @@ export default function EmployeeIndex({
                             </Table>
                         </div>
 
-                        {/* Pagination — use Laravel `link.url` (correct page + query string); never `i + 1` (wrong for ellipses). */}
-                        <div className="flex items-center justify-between rounded-b-xl border-t border-slate-200 bg-slate-50/50 px-6 py-4">
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2 text-[13px] text-slate-500">
-                                    <span className="hidden sm:inline">Rows per page:</span>
+                        {/* Pagination Bar */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 px-4 py-3">
+                            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="font-medium text-slate-500 dark:text-slate-400">Rows:</span>
                                     <Select value={data.per_page} onValueChange={(value) => applyFilters({ per_page: value })}>
-                                        <SelectTrigger className="h-8 w-[70px] border-slate-200 bg-white text-[13px]">
-                                            <SelectValue placeholder="10" />
+                                        <SelectTrigger className="h-7.5 w-[65px] border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold">
+                                            <SelectValue placeholder="100" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="10">10</SelectItem>
@@ -1170,87 +1505,79 @@ export default function EmployeeIndex({
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="hidden sm:block">
-                                    <p className="text-[13px] text-slate-500">
-                                        Showing{' '}
-                                        <span className="font-semibold text-slate-700">
-                                            {employees.total > 0 ? (employees.current_page - 1) * employees.per_page + 1 : 0}
-                                        </span>{' '}
-                                        to{' '}
-                                        <span className="font-semibold text-slate-700">
-                                            {Math.min(employees.current_page * employees.per_page, employees.total)}
-                                        </span>{' '}
-                                        of <span className="font-semibold text-slate-700">{employees.total}</span> entries
-                                    </p>
+                                <span className="text-slate-300 dark:text-slate-700">|</span>
+                                <div>
+                                    Showing{' '}
+                                    <span className="font-bold text-slate-700 dark:text-slate-200">
+                                        {employees.total > 0 ? (employees.current_page - 1) * employees.per_page + 1 : 0}
+                                    </span>{' '}
+                                    to{' '}
+                                    <span className="font-bold text-slate-700 dark:text-slate-200">
+                                        {Math.min(employees.current_page * employees.per_page, employees.total)}
+                                    </span>{' '}
+                                    of <span className="font-bold text-slate-700 dark:text-slate-200">{employees.total}</span> entries
                                 </div>
                             </div>
 
                             {employees.last_page > 1 && (
-                                <div className="flex items-center justify-end">
-                                    <nav className="isolate inline-flex gap-1.5 -space-x-px" aria-label="Pagination">
-                                        {employees.current_page > 1 && employees.links[0]?.url ? (
-                                            <Link
-                                                href={employees.links[0].url}
-                                                preserveState
-                                                className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 hover:border-emerald-200 hover:bg-slate-50 hover:text-emerald-600 focus:z-20"
-                                            >
-                                                <span className="sr-only">Previous</span>
-                                                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                                            </Link>
-                                        ) : null}
+                                <nav className="inline-flex items-center gap-1" aria-label="Pagination">
+                                    {employees.current_page > 1 && employees.links[0]?.url ? (
+                                        <Link
+                                            href={employees.links[0].url}
+                                            preserveState
+                                            className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 text-xs shadow-2xs"
+                                        >
+                                            <ChevronLeft className="h-3.5 w-3.5" />
+                                        </Link>
+                                    ) : null}
 
-                                        {employees.links.slice(1, -1).map((link, i) => {
-                                            const isActive = link.active;
-                                            const isDots = link.label === '...';
+                                    {employees.links.slice(1, -1).map((link, i) => {
+                                        const isActive = link.active;
+                                        const isDots = link.label === '...';
 
-                                            if (isDots) {
-                                                return (
-                                                    <span
-                                                        key={i}
-                                                        className="relative inline-flex h-8 w-8 items-center justify-center text-[13px] font-medium text-slate-400"
-                                                    >
-                                                        ...
-                                                    </span>
-                                                );
-                                            }
-
-                                            if (isActive && !link.url) {
-                                                return (
-                                                    <span
-                                                        key={i}
-                                                        className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-600 bg-emerald-600 text-[13px] font-semibold text-white shadow-sm"
-                                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                                    />
-                                                );
-                                            }
-
+                                        if (isDots) {
                                             return (
-                                                <Link
+                                                <span key={i} className="inline-flex h-7.5 w-7.5 items-center justify-center text-xs font-semibold text-slate-400">
+                                                    ...
+                                                </span>
+                                            );
+                                        }
+
+                                        if (isActive && !link.url) {
+                                            return (
+                                                <span
                                                     key={i}
-                                                    href={link.url || '#'}
-                                                    preserveState
-                                                    className={`relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-semibold shadow-sm transition-all duration-200 ${
-                                                        isActive
-                                                            ? 'z-10 border border-emerald-600 bg-emerald-600 text-white shadow-sm'
-                                                            : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-slate-50 hover:text-emerald-600 focus:z-20'
-                                                    }`}
+                                                    className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-xs shadow-xs"
                                                     dangerouslySetInnerHTML={{ __html: link.label }}
                                                 />
                                             );
-                                        })}
+                                        }
 
-                                        {employees.current_page < employees.last_page && employees.links[employees.links.length - 1]?.url ? (
+                                        return (
                                             <Link
-                                                href={employees.links[employees.links.length - 1].url!}
+                                                key={i}
+                                                href={link.url || '#'}
                                                 preserveState
-                                                className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 hover:border-emerald-200 hover:bg-slate-50 hover:text-emerald-600 focus:z-20"
-                                            >
-                                                <span className="sr-only">Next</span>
-                                                <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                                            </Link>
-                                        ) : null}
-                                    </nav>
-                                </div>
+                                                className={`inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                                                    isActive
+                                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                                        : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-emerald-300 hover:text-emerald-600 shadow-2xs'
+                                                }`}
+                                                dangerouslySetInnerHTML={{ __html: link.label }}
+                                            />
+                                        );
+                                    })}
+
+                                    {employees.current_page < employees.last_page && employees.links[employees.links.length - 1]?.url ? (
+                                        <Link
+                                            href={employees.links[employees.links.length - 1].url!}
+                                            preserveState
+                                            className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 text-xs shadow-2xs"
+                                        >
+                                            <ChevronRight className="h-3.5 w-3.5" />
+                                        </Link>
+                                    ) : null}
+                                </nav>
                             )}
                         </div>
                     </CardContent>
@@ -1261,17 +1588,17 @@ export default function EmployeeIndex({
             <AlertDialog open={!!employeeToDelete} onOpenChange={(open) => !open && setEmployeeToDelete(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogTitle>Delete Employee Record</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This action will permanently delete the employee record for{' '}
-                            <span className="font-medium text-gray-900">{employeeDisplayName(employeeToDelete ?? undefined)}</span>. This action
-                            cannot be undone.
+                            Are you sure you want to permanently delete the employee record for{' '}
+                            <span className="font-bold text-slate-900 dark:text-white">{employeeDisplayName(employeeToDelete ?? undefined)}</span>?
+                            This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteEmployee} className="bg-destructive hover:bg-destructive/50 text-gray-50">
-                            Delete
+                        <AlertDialogAction onClick={handleDeleteEmployee} className="bg-destructive hover:bg-destructive/90 text-white font-bold">
+                            Delete Record
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

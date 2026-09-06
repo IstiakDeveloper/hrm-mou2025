@@ -94,6 +94,10 @@ type HrStats = {
     employeeOnLeave?: number;
     employeesNonActive?: number;
     employeesTransferredPosting?: number;
+    coreTotal?: number;
+    projectTotal?: number;
+    coreActive?: number;
+    projectActive?: number;
 };
 
 type WorkforceBreakdown = {
@@ -131,6 +135,60 @@ function formatShortDate(iso?: string | null): string {
     } catch {
         return '—';
     }
+}
+
+function CircularProgressRing({
+    percentage,
+    size = 42,
+    strokeWidth = 3.5,
+    strokeColor = 'stroke-emerald-500',
+    trackColor = 'stroke-slate-200 dark:stroke-slate-700',
+    textColor = 'text-slate-800 dark:text-slate-100',
+}: {
+    percentage: number;
+    size?: number;
+    strokeWidth?: number;
+    strokeColor?: string;
+    trackColor?: string;
+    textColor?: string;
+}) {
+    const clamped = Math.min(100, Math.max(0, isNaN(percentage) ? 0 : percentage));
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+    return (
+        <div className="relative inline-flex items-center justify-center shrink-0 select-none" style={{ width: size, height: size }}>
+            <svg className="w-full h-full -rotate-90 transform" viewBox={`0 0 ${size} ${size}`}>
+                <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="transparent"
+                    stroke="currentColor"
+                    strokeWidth={strokeWidth}
+                    className={`${trackColor}`}
+                />
+                <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="transparent"
+                    stroke="currentColor"
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                    className={`${strokeColor} transition-all duration-700 ease-out`}
+                />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+                <span className={`text-[10px] font-black tracking-tight ${textColor}`}>
+                    {clamped >= 100 ? '100%' : clamped <= 0 ? '0%' : `${clamped.toFixed(clamped < 10 && clamped > 0 ? 1 : 0)}%`}
+                </span>
+            </div>
+        </div>
+    );
 }
 
 /* ==========================================
@@ -729,9 +787,15 @@ function HrAdminDashboardBody({
     const branchesOp = num(s.branchesOperational);
     const inactiveTerminated = inactiveEmp + terminatedEmp;
 
-    const coreActive = num(workforce?.coreActive);
-    const projectActiveTotal = num(workforce?.projectActiveTotal);
+    const coreTotal = s.coreTotal !== undefined ? num(s.coreTotal) : num(workforce?.coreActive);
+    const projectTotal = s.projectTotal !== undefined ? num(s.projectTotal) : num(workforce?.projectActiveTotal);
+    const coreActive = s.coreActive !== undefined ? num(s.coreActive) : num(workforce?.coreActive);
+    const projectActiveTotal = s.projectActive !== undefined ? num(s.projectActive) : num(workforce?.projectActiveTotal);
     const projectCounts = workforce?.projectCounts ?? [];
+
+    const activePct = totalEmp > 0 ? (activeEmp / totalEmp) * 100 : 0;
+    const onLeavePct = totalEmp > 0 ? (onLeaveEmp / totalEmp) * 100 : 0;
+    const inactivePct = totalEmp > 0 ? (inactiveTerminated / totalEmp) * 100 : 0;
 
     const structureLines = useMemo(() => {
         const list = organizationHierarchy?.zones ?? [];
@@ -782,39 +846,164 @@ function HrAdminDashboardBody({
             <TabsContent value="overview" className="mt-0 space-y-3.5 outline-none">
                 {hasPermission('employees.view') && (
                     <div className="space-y-3.5">
-                        {/* Top statistics bar (dense horizontal row) */}
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-                            <KpiCard
-                                label="Total Employees"
-                                value={totalEmp.toLocaleString()}
+                        {/* Executive KPI Overview Cards with Radial Ring Progress Charts & Core/Project Breakdown */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                            {/* Total Staff Card */}
+                            <Link
                                 href="/employees?section=human-resources"
-                                icon={Users}
-                                accent="emerald"
-                            />
-                            <KpiCard
-                                label="Active"
-                                value={activeEmp.toLocaleString()}
-                                href="/employees?section=human-resources"
-                                icon={UserCheck}
-                                accent="emerald"
-                            />
-                            <KpiCard label="On Leave" value={onLeaveEmp.toLocaleString()} icon={Umbrella} accent="amber" />
-                            <KpiCard
-                                label="Inactive & Out"
-                                value={inactiveTerminated.toLocaleString()}
-                                sub={`Inactive ${inactiveEmp.toLocaleString()} · Terminated ${terminatedEmp.toLocaleString()}`}
-                                href="/employees?section=human-resources"
-                                icon={UserX}
-                                accent="rose"
-                            />
-                            <KpiCard
-                                label="Transferred"
-                                value={transferredEmp.toLocaleString()}
-                                sub="New branch postings"
-                                href={hasPermission('transfers.view') ? '/transfers?section=human-resources' : undefined}
-                                icon={ArrowLeftRight}
-                                accent="sky"
-                            />
+                                className="relative overflow-hidden rounded-xl border border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-zinc-300 transition-all flex flex-col justify-between group"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                                                <Users className="h-3.5 w-3.5" />
+                                            </span>
+                                            <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider truncate">
+                                                Total Staff
+                                            </span>
+                                        </div>
+                                        <div className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-white mt-1">
+                                            {totalEmp.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <CircularProgressRing
+                                        percentage={100}
+                                        size={44}
+                                        strokeWidth={4}
+                                        strokeColor="stroke-indigo-600 dark:stroke-indigo-400"
+                                        trackColor="stroke-indigo-100 dark:stroke-indigo-950/80"
+                                        textColor="text-indigo-700 dark:text-indigo-300"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between gap-1 mt-2 pt-1.5 border-t border-zinc-100 dark:border-zinc-800 text-[10px] font-bold">
+                                    <span className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                                        Core: <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">{coreTotal.toLocaleString()}</span>
+                                    </span>
+                                    <span className="text-zinc-300 dark:text-zinc-700 font-normal">|</span>
+                                    <span className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                                        Project: <span className="text-violet-600 dark:text-violet-400 font-extrabold">{projectTotal.toLocaleString()}</span>
+                                    </span>
+                                </div>
+                            </Link>
+
+                            {/* Active Staff Card */}
+                            <Link
+                                href="/employees?section=human-resources&statuses[]=active"
+                                className="relative overflow-hidden rounded-xl border border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-zinc-300 transition-all flex flex-col justify-between group"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                                                <UserCheck className="h-3.5 w-3.5" />
+                                            </span>
+                                            <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider truncate">
+                                                Active
+                                            </span>
+                                        </div>
+                                        <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
+                                            {activeEmp.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <CircularProgressRing
+                                        percentage={activePct}
+                                        size={44}
+                                        strokeWidth={4}
+                                        strokeColor="stroke-emerald-500 dark:stroke-emerald-400"
+                                        trackColor="stroke-emerald-100 dark:stroke-emerald-950/80"
+                                        textColor="text-emerald-700 dark:text-emerald-300"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between gap-1 mt-2 pt-1.5 border-t border-zinc-100 dark:border-zinc-800 text-[10px] font-bold">
+                                    <span className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                        Core: <span className="text-emerald-700 dark:text-emerald-400 font-extrabold">{coreActive.toLocaleString()}</span>
+                                    </span>
+                                    <span className="text-zinc-300 dark:text-zinc-700 font-normal">|</span>
+                                    <span className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
+                                        Project: <span className="text-teal-700 dark:text-teal-400 font-extrabold">{projectActiveTotal.toLocaleString()}</span>
+                                    </span>
+                                </div>
+                            </Link>
+
+                            {/* On Leave Card */}
+                            <Link
+                                href="/employees?section=human-resources&statuses[]=on_leave"
+                                className="relative overflow-hidden rounded-xl border border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-zinc-300 transition-all flex flex-col justify-between group"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+                                                <Umbrella className="h-3.5 w-3.5" />
+                                            </span>
+                                            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider truncate">
+                                                On Leave
+                                            </span>
+                                        </div>
+                                        <div className="text-xl sm:text-2xl font-black text-amber-700 dark:text-amber-400 mt-1">
+                                            {onLeaveEmp.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <CircularProgressRing
+                                        percentage={onLeavePct}
+                                        size={44}
+                                        strokeWidth={4}
+                                        strokeColor="stroke-amber-500 dark:stroke-amber-400"
+                                        trackColor="stroke-amber-100 dark:stroke-amber-950/80"
+                                        textColor="text-amber-700 dark:text-amber-300"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-1 mt-2 pt-1.5 border-t border-zinc-100 dark:border-zinc-800 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                    <span>{onLeavePct.toFixed(1)}% currently on leave</span>
+                                </div>
+                            </Link>
+
+                            {/* Inactive & Out Card */}
+                            <Link
+                                href="/employees?section=human-resources&statuses[]=inactive&statuses[]=terminated"
+                                className="relative overflow-hidden rounded-xl border border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-2.5 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-zinc-300 transition-all flex flex-col justify-between group"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                                                <UserX className="h-3.5 w-3.5" />
+                                            </span>
+                                            <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider truncate">
+                                                Inactive & Out
+                                            </span>
+                                        </div>
+                                        <div className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400 mt-1">
+                                            {inactiveTerminated.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <CircularProgressRing
+                                        percentage={inactivePct}
+                                        size={44}
+                                        strokeWidth={4}
+                                        strokeColor="stroke-rose-500 dark:stroke-rose-400"
+                                        trackColor="stroke-rose-100 dark:stroke-rose-950/80"
+                                        textColor="text-rose-700 dark:text-rose-300"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between gap-1 mt-2 pt-1.5 border-t border-zinc-100 dark:border-zinc-800 text-[10px] font-bold">
+                                    <span className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                                        Inactive: <span className="text-zinc-800 dark:text-zinc-200 font-extrabold">{inactiveEmp.toLocaleString()}</span>
+                                    </span>
+                                    <span className="text-zinc-300 dark:text-zinc-700 font-normal">|</span>
+                                    <span className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                                        Terminated: <span className="text-rose-600 dark:text-rose-400 font-extrabold">{terminatedEmp.toLocaleString()}</span>
+                                    </span>
+                                </div>
+                            </Link>
                         </div>
 
                         <WorkforceCompositionPanel

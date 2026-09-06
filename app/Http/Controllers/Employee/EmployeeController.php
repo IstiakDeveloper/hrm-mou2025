@@ -2101,8 +2101,55 @@ class EmployeeController extends Controller
         $designations = Designation::query()->orderBy('name')->get(['id', 'name']);
         $projects = Project::query()->orderBy('name')->get(['id', 'name', 'code']);
 
+        $statsBaseQuery = Employee::query();
+        OrganogramAccessService::constrainVisibleEmployees($statsBaseQuery, $user);
+        $this->applyEmployeeDirectoryFilters($statsBaseQuery, $request);
+
+        $mfProjectIds = Project::query()
+            ->where(function ($q) {
+                $q->whereRaw("LOWER(name) LIKE '%microfinance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%micro-finance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%micro finance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%core%'")
+                    ->orWhereRaw("LOWER(code) = 'mf'")
+                    ->orWhereRaw("LOWER(code) = 'core'");
+            })
+            ->pluck('id')
+            ->all();
+
+        $mfCondition = empty($mfProjectIds)
+            ? 'employees.project_id IS NULL'
+            : 'employees.project_id IS NULL OR employees.project_id IN ('.implode(',', array_map('intval', $mfProjectIds)).')';
+
+        $projectCondition = empty($mfProjectIds)
+            ? 'employees.project_id IS NOT NULL'
+            : 'employees.project_id IS NOT NULL AND employees.project_id NOT IN ('.implode(',', array_map('intval', $mfProjectIds)).')';
+
+        $statusCounts = (clone $statsBaseQuery)->reorder()->selectRaw("
+            COUNT(*) as total,
+            SUM(CASE WHEN employees.status = 'active' THEN 1 ELSE 0 END) as active_count,
+            SUM(CASE WHEN employees.status = 'on_leave' THEN 1 ELSE 0 END) as on_leave_count,
+            SUM(CASE WHEN employees.status NOT IN ('active', 'on_leave') THEN 1 ELSE 0 END) as inactive_count,
+            SUM(CASE WHEN {$mfCondition} THEN 1 ELSE 0 END) as core_count,
+            SUM(CASE WHEN {$projectCondition} THEN 1 ELSE 0 END) as project_count,
+            SUM(CASE WHEN employees.status = 'active' AND ({$mfCondition}) THEN 1 ELSE 0 END) as active_core_count,
+            SUM(CASE WHEN employees.status = 'active' AND ({$projectCondition}) THEN 1 ELSE 0 END) as active_project_count
+        ")->first();
+
+        $stats = [
+            'total' => (int) ($statusCounts->total ?? 0),
+            'active' => (int) ($statusCounts->active_count ?? 0),
+            'on_leave' => (int) ($statusCounts->on_leave_count ?? 0),
+            'inactive' => (int) ($statusCounts->inactive_count ?? 0),
+            'core' => (int) ($statusCounts->core_count ?? 0),
+            'project' => (int) ($statusCounts->project_count ?? 0),
+            'active_core' => (int) ($statusCounts->active_core_count ?? 0),
+            'active_project' => (int) ($statusCounts->active_project_count ?? 0),
+        ];
+
         return Inertia::render('employee/index', [
             'employees' => $employees,
+            'stats' => $stats,
             'departments' => $departments,
             'branches' => $branches,
             'employee_types' => $employeeTypes,

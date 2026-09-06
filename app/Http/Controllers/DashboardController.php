@@ -493,23 +493,22 @@ class DashboardController extends Controller
             ? $this->getRecentEmployeesForHr($user)
             : [];
 
-        // Workforce breakdown: Active Core vs Active Project employees (active projects only).
-        $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
-        $branchId = $user->branch_id;
-
-        $activeEmployeeBase = Employee::query()->where('status', 'active');
-        OrganogramAccessService::constrainVisibleEmployees($activeEmployeeBase, $user);
-
-        $activeCoreEmployees = (clone $activeEmployeeBase)
+        $mfProjectIds = Project::query()
             ->where(function ($q) {
-                $q->whereNull('is_project_employee')->orWhere('is_project_employee', false);
+                $q->whereRaw("LOWER(name) LIKE '%microfinance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%micro-finance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%micro finance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%core%'")
+                    ->orWhereRaw("LOWER(code) = 'mf'")
+                    ->orWhereRaw("LOWER(code) = 'core'");
             })
-            ->count();
+            ->pluck('id')
+            ->all();
 
         $activeProjectCounts = Employee::query()
             ->join('projects', 'employees.project_id', '=', 'projects.id')
             ->where('employees.status', 'active')
-            ->where('employees.is_project_employee', true)
+            ->when(! empty($mfProjectIds), fn ($q) => $q->whereNotIn('employees.project_id', $mfProjectIds))
             ->whereNotNull('employees.project_id')
             ->where('projects.is_active', true);
         OrganogramAccessService::constrainVisibleEmployees($activeProjectCounts, $user);
@@ -529,10 +528,13 @@ class DashboardController extends Controller
             ->values()
             ->all();
 
-        $activeProjectEmployeesTotal = array_sum(array_map(fn ($x) => (int) ($x['activeEmployees'] ?? 0), $activeProjectCounts));
+        $activeCoreEmployees = (int) ($stats['coreActive'] ?? 0);
+        $activeProjectEmployeesTotal = (int) ($stats['projectActive'] ?? array_sum(array_map(fn ($x) => (int) ($x['activeEmployees'] ?? 0), $activeProjectCounts)));
 
         $organizationHierarchy = ['zones' => []];
         if ($hasPermission($user, 'zones.view') || $hasPermission($user, 'regional-offices.view') || $hasPermission($user, 'branches.view')) {
+            $isBranchManager = (bool) call_user_func([$user, 'hasPermission'], 'branch_manager');
+            $branchId = $user->branch_id;
             $cacheKey = 'dashboard.hr_org_tree.'.$user->id.'.'.($isBranchManager && $branchId ? $branchId : 'all');
             $organizationHierarchy = Cache::remember($cacheKey, now()->addMinutes(10), fn () => $this->getHrOrganizationZonesTree($user));
         }
@@ -1758,13 +1760,37 @@ class DashboardController extends Controller
         $employeeBase = Employee::query();
         OrganogramAccessService::constrainVisibleEmployees($employeeBase, $user);
 
+        $mfProjectIds = Project::query()
+            ->where(function ($q) {
+                $q->whereRaw("LOWER(name) LIKE '%microfinance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%micro-finance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%micro finance%'")
+                    ->orWhereRaw("LOWER(name) LIKE '%core%'")
+                    ->orWhereRaw("LOWER(code) = 'mf'")
+                    ->orWhereRaw("LOWER(code) = 'core'");
+            })
+            ->pluck('id')
+            ->all();
+
+        $mfCondition = empty($mfProjectIds)
+            ? 'employees.project_id IS NULL'
+            : 'employees.project_id IS NULL OR employees.project_id IN ('.implode(',', array_map('intval', $mfProjectIds)).')';
+
+        $projectCondition = empty($mfProjectIds)
+            ? 'employees.project_id IS NOT NULL'
+            : 'employees.project_id IS NOT NULL AND employees.project_id NOT IN ('.implode(',', array_map('intval', $mfProjectIds)).')';
+
         $employeeStats = (clone $employeeBase)
             ->selectRaw("
                 COUNT(*) as total_employees,
-                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as employee_active,
-                SUM(CASE WHEN status = 'terminated' THEN 1 ELSE 0 END) as employee_terminated,
-                SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as employee_inactive,
-                SUM(CASE WHEN status = 'on_leave' THEN 1 ELSE 0 END) as employee_on_leave,
+                SUM(CASE WHEN employees.status = 'active' THEN 1 ELSE 0 END) as employee_active,
+                SUM(CASE WHEN employees.status = 'terminated' THEN 1 ELSE 0 END) as employee_terminated,
+                SUM(CASE WHEN employees.status = 'inactive' THEN 1 ELSE 0 END) as employee_inactive,
+                SUM(CASE WHEN employees.status = 'on_leave' THEN 1 ELSE 0 END) as employee_on_leave,
+                SUM(CASE WHEN {$mfCondition} THEN 1 ELSE 0 END) as core_total,
+                SUM(CASE WHEN {$projectCondition} THEN 1 ELSE 0 END) as project_total,
+                SUM(CASE WHEN employees.status = 'active' AND ({$mfCondition}) THEN 1 ELSE 0 END) as core_active,
+                SUM(CASE WHEN employees.status = 'active' AND ({$projectCondition}) THEN 1 ELSE 0 END) as project_active,
                 SUM(CASE WHEN last_branch_id IS NOT NULL AND last_branch_id != current_branch_id THEN 1 ELSE 0 END) as employees_transferred_posting
             ")
             ->first();
@@ -1803,6 +1829,10 @@ class DashboardController extends Controller
             'employeeTerminated' => (int) ($employeeStats->employee_terminated ?? 0),
             'employeeInactive' => (int) ($employeeStats->employee_inactive ?? 0),
             'employeeOnLeave' => (int) ($employeeStats->employee_on_leave ?? 0),
+            'coreTotal' => (int) ($employeeStats->core_total ?? 0),
+            'projectTotal' => (int) ($employeeStats->project_total ?? 0),
+            'coreActive' => (int) ($employeeStats->core_active ?? 0),
+            'projectActive' => (int) ($employeeStats->project_active ?? 0),
             'employeesNonActive' => max(0, $totalEmployees - $employeeActive),
             'employeesTransferredPosting' => (int) ($employeeStats->employees_transferred_posting ?? 0),
         ];
