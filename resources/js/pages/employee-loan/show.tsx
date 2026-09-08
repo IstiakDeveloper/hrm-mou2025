@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, BookOpen, XCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, RotateCcw, XCircle } from 'lucide-react';
 import { fmtLoanAmount } from '@/lib/employee-loan-format';
 import { employeeLoanPath } from '@/lib/employee-loan-nav';
 import { hasAppPermission } from '@/lib/permissions';
@@ -85,6 +85,11 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
         router.post(route('employee-loans.cancel', loan.id));
     };
 
+    const restoreLoan = () => {
+        if (!confirm('Restore this loan back to active? Scheduled installments will be re-activated.')) return;
+        router.post(route('employee-loans.restore', loan.id));
+    };
+
     return (
         <EmployeeLoanLayout title={loan.loan_number} activeTab="register" description={loan.loan_type_label}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -103,6 +108,11 @@ export default function EmployeeLoanShow({ loan, schedule }: Props) {
                     {canEdit && loan.status === 'active' && (
                         <Button size="sm" variant="outline" className="h-7 text-xs text-red-600" onClick={cancelLoan}>
                             <XCircle className="mr-1 h-3 w-3" /> Cancel loan
+                        </Button>
+                    )}
+                    {canEdit && loan.status === 'cancelled' && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-600 border-emerald-300 hover:bg-emerald-50" onClick={restoreLoan}>
+                            <RotateCcw className="mr-1 h-3 w-3" /> Restore loan
                         </Button>
                     )}
                 </div>

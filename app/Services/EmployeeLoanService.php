@@ -1509,6 +1509,18 @@ class EmployeeLoanService
         $loan->installments()->whereIn('status', ['pending', 'scheduled'])->update(['status' => 'waived']);
     }
 
+    public function restoreLoan(EmployeeLoan $loan): void
+    {
+        if ($loan->status !== 'cancelled') {
+            throw new InvalidArgumentException('Only cancelled loans can be restored.');
+        }
+
+        $loan->update(['status' => 'active']);
+        $loan->installments()->where('status', 'waived')->update(['status' => 'pending']);
+
+        $this->refreshLoanStatus($loan->fresh());
+    }
+
     public function canRollbackLoan(EmployeeLoan $loan): bool
     {
         if ($loan->status !== 'active') {

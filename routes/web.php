@@ -1044,6 +1044,7 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'updateTransaction'])->name('transactions.update')->middleware('permission:employee-loan.edit');
             Route::delete('/transactions/{transaction}', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'destroyTransaction'])->name('transactions.destroy')->middleware('permission:employee-loan.edit');
             Route::post('/{employee_loan}/cancel', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'cancel'])->name('cancel')->middleware('permission:employee-loan.edit');
+            Route::post('/{employee_loan}/restore', [\App\Http\Controllers\EmployeeLoan\EmployeeLoanController::class, 'restore'])->name('restore')->middleware('permission:employee-loan.edit');
         });
     });
 

@@ -537,6 +537,19 @@ class EmployeeLoanController extends Controller
             ->with('success', 'Loan cancelled.');
     }
 
+    public function restore(EmployeeLoan $employee_loan)
+    {
+        try {
+            $this->loanService->restoreLoan($employee_loan);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['loan' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('employee-loans.show', $employee_loan)
+            ->with('success', 'Loan restored to active.');
+    }
+
     /**
      * @return list<array{value: string, label: string}>
      */
