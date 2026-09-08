@@ -18,12 +18,17 @@ type EmpOption = {
     name_bn?: string | null;
     employee_id?: string | null;
     pf_balance?: number;
+    status?: string | null;
 };
 
 function employeeSelectLabel(e: EmpOption): string {
     const pin = e.pin || e.employee_id || '';
     const name = employeeDisplayName(e, '');
-    return [pin, name].filter(Boolean).join(' — ') || `Employee #${e.id}`;
+    const label = [pin, name].filter(Boolean).join(' — ') || `Employee #${e.id}`;
+    if (e.status && e.status !== 'active') {
+        return `${label} (${e.status.charAt(0).toUpperCase() + e.status.slice(1)})`;
+    }
+    return label;
 }
 
 const ALL_VALUE = '';
@@ -150,6 +155,7 @@ export function PayrollEmployeeSelect({
     payrollReady = false,
     forGratuity = false,
     forPf = false,
+    forLoan = false,
 }: {
     label?: string;
     value: string;
@@ -166,6 +172,7 @@ export function PayrollEmployeeSelect({
     payrollReady?: boolean;
     forGratuity?: boolean;
     forPf?: boolean;
+    forLoan?: boolean;
 }) {
     const useLookup = employees.length === 0;
     const [searchQuery, setSearchQuery] = useState('');
@@ -177,6 +184,7 @@ export function PayrollEmployeeSelect({
         payrollReady,
         forGratuity,
         forPf,
+        forLoan,
     });
     const employeeSource = useLookup ? lookup.employees : employees;
 
@@ -212,7 +220,7 @@ export function PayrollEmployeeSelect({
             list.push({
                 value: String(e.id),
                 label: base + balanceSuffix,
-                keywords: [pin, name, e.name_bn ?? '', String(e.id), String(balance)].filter(Boolean).join(' '),
+                keywords: [pin, name, e.name_bn ?? '', String(e.id), String(balance), e.status ?? ''].filter(Boolean).join(' '),
                 disabled: disableZeroPfBalance && balance <= 0,
             });
         }
@@ -516,6 +524,7 @@ export function PayrollFilterGrid({
     branchAllLabel?: string;
     payrollReadyEmployees?: boolean;
     forGratuityEmployees?: boolean;
+    forLoanEmployees?: boolean;
     fieldErrors?: Record<string, string | undefined>;
     columns?: 3 | 4;
 }) {
@@ -591,6 +600,7 @@ export function PayrollFilterGrid({
                     branchId={filters.branch_id || undefined}
                     payrollReady={payrollReadyEmployees}
                     forGratuity={forGratuityEmployees}
+                    forLoan={forLoanEmployees}
                 />
             )}
         </div>

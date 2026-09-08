@@ -184,7 +184,19 @@ export default function EmployeeLoanReportShow({
             .get(route('employee-loans.ledger-lookup'), { params: { employee_id: filters.employee_id } })
             .then(({ data }) => {
                 if (!cancelled) {
-                    setEmployeeLoans(data.loans ?? []);
+                    const loans: LedgerLookupLoan[] = data.loans ?? [];
+                    setEmployeeLoans(loans);
+                    if (isLedger && loans.length > 0) {
+                        setFilters((f) => {
+                            const hasCurrentType = loans.some((l) => l.loan_type === f.loan_type);
+                            if (!f.loan_type || !hasCurrentType) {
+                                const firstActive = loans.find((l) => l.status === 'active');
+                                const defaultType = firstActive?.loan_type ?? loans[0]?.loan_type ?? '';
+                                return { ...f, loan_type: defaultType };
+                            }
+                            return f;
+                        });
+                    }
                 }
             })
             .catch(() => {
@@ -306,6 +318,7 @@ export default function EmployeeLoanReportShow({
                                     showDesignation={false}
                                     showProgram={false}
                                     showProject={false}
+                                    forLoanEmployees
                                 />
                             )}
 
@@ -317,6 +330,7 @@ export default function EmployeeLoanReportShow({
                                         onChange={(v) => setFilter('employee_id', v)}
                                         required
                                         allowAll={false}
+                                        forLoan
                                     />
                                 )}
                                 {show.asOf && (
@@ -386,6 +400,7 @@ export default function EmployeeLoanReportShow({
                                         onChange={(v) => setFilter('employee_id', v)}
                                         required={report.requireEmployee}
                                         allowAll={!report.requireEmployee}
+                                        forLoan
                                     />
                                 )}
                             </div>

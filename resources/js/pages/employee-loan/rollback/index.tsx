@@ -210,6 +210,7 @@ export default function LoanRollbackIndex({ filters: init, loans, migrations, br
                             employees={employees}
                             value={filters.employee_id}
                             onChange={(v) => setFilters({ ...filters, employee_id: v })}
+                            forLoan
                         />
                     </div>
                     <div className="mt-2 flex justify-end">

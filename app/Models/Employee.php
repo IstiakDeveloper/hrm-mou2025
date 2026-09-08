@@ -555,6 +555,20 @@ class Employee extends Model
     }
 
     /**
+     * Employees in loan scope: active employees OR inactive employees who have active loans or outstanding loan balance.
+     */
+    public function scopeForLoan(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where('status', 'active')
+                ->orWhereHas('loans', function (Builder $lq) {
+                    $lq->where('status', 'active')
+                        ->orWhere('outstanding_balance', '>', 0);
+                });
+        });
+    }
+
+    /**
      * Sync linked login account(s) active/inactive with this employee's employment status.
      */
     public function syncLinkedUserActiveStatus(): void

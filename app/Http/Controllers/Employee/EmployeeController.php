@@ -635,17 +635,20 @@ class EmployeeController extends Controller
             'payroll_ready' => ['nullable', 'boolean'],
             'for_gratuity' => ['nullable', 'boolean'],
             'for_pf' => ['nullable', 'boolean'],
+            'for_loan' => ['nullable', 'boolean'],
         ]);
 
         $search = trim((string) ($validated['q'] ?? ''));
         $limit = (int) ($validated['limit'] ?? 25);
         $selectedEmployeeId = isset($validated['employee_id']) ? (int) $validated['employee_id'] : null;
         $forPf = $request->boolean('for_pf');
+        $forLoan = $request->boolean('for_loan');
 
         $query = Employee::query()
-            ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance'])
-            ->when(! $forPf, fn ($q) => $q->where('status', 'active'))
+            ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance', 'status'])
             ->when($forPf, fn ($q) => $q->forPf())
+            ->when($forLoan, fn ($q) => $q->forLoan())
+            ->when(! $forPf && ! $forLoan, fn ($q) => $q->where('status', 'active'))
             ->when($validated['branch_id'] ?? null, fn ($q, $branchId) => $q->where('current_branch_id', $branchId))
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($inner) use ($search) {
@@ -672,10 +675,11 @@ class EmployeeController extends Controller
 
         if ($selectedEmployeeId && ! $results->contains('id', $selectedEmployeeId)) {
             $selected = Employee::query()
-                ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance'])
+                ->select(['id', 'pin', 'name_en', 'name_bn', 'employee_id', 'pf_balance', 'status'])
                 ->where('id', $selectedEmployeeId)
-                ->when(! $forPf, fn ($q) => $q->where('status', 'active'))
                 ->when($forPf, fn ($q) => $q->forPf())
+                ->when($forLoan, fn ($q) => $q->forLoan())
+                ->when(! $forPf && ! $forLoan, fn ($q) => $q->where('status', 'active'))
                 ->first();
 
             if ($selected) {
@@ -698,6 +702,7 @@ class EmployeeController extends Controller
                 'name_bn' => $employee->name_bn,
                 'employee_id' => $employee->employee_id,
                 'pf_balance' => $employee->pf_balance,
+                'status' => $employee->status,
             ])->values()
         );
     }

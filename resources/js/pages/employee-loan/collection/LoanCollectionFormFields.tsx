@@ -98,6 +98,7 @@ export function LoanCollectionFormFields({
                 }}
                 allowAll={false}
                 allLabel="Select employee"
+                forLoan
             />
             <div className="sm:col-span-2">
                 <PayrollComboField

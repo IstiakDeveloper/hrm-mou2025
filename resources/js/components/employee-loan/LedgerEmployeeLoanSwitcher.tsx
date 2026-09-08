@@ -122,6 +122,7 @@ export function LedgerEmployeeLoanSwitcher({ currentLoanId, currentEmployeeId, e
                     onChange={handleEmployeeChange}
                     allowAll={false}
                     required
+                    forLoan
                 />
                 <PayrollComboField
                     label="Loan"

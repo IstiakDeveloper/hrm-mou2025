@@ -157,6 +157,7 @@ export default function LoanTransferCreate({ filters, branches, employees, loans
                                     required
                                     allowAll={false}
                                     allLabel="Select employee"
+                                    forLoan
                                 />
                                 <div key={`loan-select-${fromEmployeeId}`}>
                                     <PayrollComboField

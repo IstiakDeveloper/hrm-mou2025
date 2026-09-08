@@ -157,6 +157,7 @@ export default function EmployeeLoanIndex({
                             employees={employees}
                             value={filters.employee_id}
                             onChange={(v) => setFilters({ ...filters, employee_id: v })}
+                            forLoan
                         />
                         <PayrollComboField
                             label="Loan type"
