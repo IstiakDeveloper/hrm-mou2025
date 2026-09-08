@@ -117,6 +117,7 @@ class PayrollReportController extends Controller
             ],
             'filterOptions' => $this->reportFilterOptions($config),
             'filters' => array_merge($defaultFilterValues, [
+                'organogram_level' => $request->input('organogram_level', ''),
                 'payscale_id' => $request->input('payscale_id', ''),
                 'date_from' => $request->input('date_from', ''),
                 'date_to' => $request->input('date_to', ''),

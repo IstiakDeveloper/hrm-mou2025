@@ -50,6 +50,7 @@ type Props = {
         payscales: { id: number; name: string; code?: string }[];
         months: { value: number; label: string }[];
         years: number[];
+        organogramLevels?: { value: string; label: string; group?: string }[];
     };
     filters: Record<string, string>;
     generated: boolean;
@@ -710,6 +711,7 @@ export default function PayrollReportShow({
             project: f.includes('project_id'),
             department: f.includes('department_id'),
             designation: f.includes('designation_id'),
+            organogramLevel: f.includes('organogram_level'),
         };
     }, [report.filters]);
 
@@ -916,6 +918,23 @@ export default function PayrollReportShow({
                                     ...filterOptions.designations.map((d) => ({ value: String(d.id), label: d.name ?? '—' })),
                                 ]}
                                 placeholder="All designations"
+                            />
+                        )}
+
+                        {show.organogramLevel && (
+                            <PayrollComboField
+                                label="Organogram level"
+                                value={filters.organogram_level ?? ''}
+                                onChange={(v) => setFilter('organogram_level', v)}
+                                items={[
+                                    { value: '', label: 'All organogram levels' },
+                                    ...(filterOptions.organogramLevels ?? []).map((o) => ({
+                                        value: o.value,
+                                        label: o.label,
+                                        keywords: o.group,
+                                    })),
+                                ]}
+                                placeholder="All organogram levels"
                             />
                         )}
 

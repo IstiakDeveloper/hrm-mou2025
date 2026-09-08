@@ -36,7 +36,7 @@ return [
         'salary-sheet-posted' => [
             'title' => 'Salary Sheet',
             'description' => 'Posted salary payroll for the selected period.',
-            'filters' => ['year', 'month', 'branch_id', 'department_id', 'designation_id', 'program_id', 'project_id'],
+            'filters' => ['year', 'month', 'branch_id', 'department_id', 'designation_id', 'organogram_level', 'program_id', 'project_id'],
             'status' => 'posted',
             'salary_type' => 'salary',
             'template' => 'salary-sheet',
@@ -45,7 +45,7 @@ return [
         'salary-sheet-unposted' => [
             'title' => 'Salary Sheet (Un-posted)',
             'description' => 'Processed but not yet posted salary payroll.',
-            'filters' => ['year', 'month', 'branch_id', 'department_id', 'designation_id', 'program_id', 'project_id'],
+            'filters' => ['year', 'month', 'branch_id', 'department_id', 'designation_id', 'organogram_level', 'program_id', 'project_id'],
             'status' => 'processed',
             'salary_type' => 'salary',
             'template' => 'salary-sheet',
@@ -74,7 +74,7 @@ return [
         'salary-sheet-date-range' => [
             'title' => 'Salary Sheet (Date Range)',
             'description' => 'Salary payroll between process dates.',
-            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'designation_id'],
+            'filters' => ['date_from', 'date_to', 'branch_id', 'department_id', 'designation_id', 'organogram_level'],
             'salary_type' => 'salary',
             'template' => 'salary-sheet',
             'branch_wise' => true,
@@ -101,7 +101,7 @@ return [
         'salary-sheet-designation-wise' => [
             'title' => 'Salary Sheet Report (Designation Wise)',
             'description' => 'Salary sheet grouped by designation.',
-            'filters' => ['year', 'month', 'branch_id', 'designation_id'],
+            'filters' => ['year', 'month', 'branch_id', 'designation_id', 'organogram_level'],
             'status' => 'posted',
             'salary_type' => 'salary',
             'template' => 'salary-sheet-grouped',

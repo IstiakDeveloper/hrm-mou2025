@@ -10,6 +10,7 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\SalaryHead;
 use App\Support\BranchOrganogram;
+use App\Support\HeadOfficeOrganogram;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -70,6 +71,57 @@ trait ProvidesPayrollFilters
     }
 
     /**
+     * @return list<array{value: string, label: string, group: string}>
+     */
+    public static function payrollOrganogramLevelOptions(): array
+    {
+        $options = [];
+
+        foreach (BranchOrganogram::tierCatalog() as $tier) {
+            $level = (int) $tier['level'];
+            $label = (string) $tier['label'];
+            $extra = match ($level) {
+                7 => ' (Field Officer, Sr. Officer, Probationary Officer, etc.)',
+                9 => ' (Cashier, CSO)',
+                default => '',
+            };
+            $options[] = [
+                'value' => "branch_{$level}",
+                'label' => "{$label} (Level {$level}){$extra}",
+                'group' => 'Branch Organogram',
+            ];
+        }
+
+        $fallback = BranchOrganogram::fallbackTier();
+        $fallbackLevel = (int) ($fallback['level'] ?? 999);
+        $options[] = [
+            'value' => "branch_{$fallbackLevel}",
+            'label' => (string) ($fallback['label'] ?? 'Other Staff').' (Branch)',
+            'group' => 'Branch Organogram',
+        ];
+
+        foreach (HeadOfficeOrganogram::tierCatalog() as $tier) {
+            $level = (int) $tier['level'];
+            $label = (string) $tier['label'];
+            $options[] = [
+                'value' => "ho_{$level}",
+                'label' => "HO Level {$level}: {$label}",
+                'group' => 'Head Office Organogram',
+            ];
+        }
+
+        $hoFallback = HeadOfficeOrganogram::fallbackTier();
+        $hoFallbackLevel = (int) ($hoFallback['level'] ?? 999);
+        $options[] = [
+            'value' => "ho_{$hoFallbackLevel}",
+            'label' => (string) ($hoFallback['label'] ?? 'Other Staff').' (Head Office)',
+            'group' => 'Head Office Organogram',
+        ];
+
+        return $options;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function payrollFilterOptions(bool $payrollReadyEmployeesOnly = false, ?int $startMonth = null): array
@@ -105,6 +157,7 @@ trait ProvidesPayrollFilters
             ],
             'months' => self::payrollFilterMonths($startMonth),
             'years' => collect(range((int) date('Y') - 2, (int) date('Y') + 1))->values()->all(),
+            'organogramLevels' => self::payrollOrganogramLevelOptions(),
         ];
     }
 
@@ -128,6 +181,7 @@ trait ProvidesPayrollFilters
             'branch_id' => $branchId,
             'department_id' => $request->input('department_id', ''),
             'designation_id' => $request->input('designation_id', ''),
+            'organogram_level' => $request->input('organogram_level', ''),
             'program_id' => $request->input('program_id', ''),
             'project_id' => $projectId,
             'employee_id' => $request->input('employee_id', ''),

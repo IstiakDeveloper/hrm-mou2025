@@ -28,6 +28,7 @@ class PayrollReportService
             'branch_id' => $request->filled('branch_id') ? (int) $request->input('branch_id') : null,
             'department_id' => $request->filled('department_id') ? (int) $request->input('department_id') : null,
             'designation_id' => $request->filled('designation_id') ? (int) $request->input('designation_id') : null,
+            'organogram_level' => $request->filled('organogram_level') ? (string) $request->input('organogram_level') : null,
             'program_id' => $request->filled('program_id') ? (int) $request->input('program_id') : null,
             'project_id' => $request->has('project_id')
                 ? ($request->filled('project_id') ? (int) $request->input('project_id') : null)
@@ -197,6 +198,18 @@ class PayrollReportService
             return $this->groupSalarySheetRows($sheet, 'branch');
         }
 
+        usort($sheet['rows'], function (array $a, array $b): int {
+            $branchCmp = BranchOrganogram::compareBranchesByCode(
+                $this->resolveSalarySheetBranch($a),
+                $this->resolveSalarySheetBranch($b)
+            );
+            if ($branchCmp !== 0) {
+                return $branchCmp;
+            }
+
+            return BranchOrganogram::compareBranchStaffRow($a, $b);
+        });
+
         return $sheet;
     }
 
@@ -350,6 +363,9 @@ class PayrollReportService
         $sections = [];
         foreach ($groups as $group) {
             $sheet = $this->mapSalarySheet($group['payslips'], $config);
+            if ($groupBy === 'branch') {
+                usort($sheet['rows'], [BranchOrganogram::class, 'compareBranchStaffRow']);
+            }
             $branchDeductionHeads = $this->filterActiveDeductionHeads($sheet['rows'], $sheet['deduction_heads'] ?? []);
             $branchEarningHeads = $sheet['earning_heads'] ?? [];
             $branchHeads = array_merge($branchEarningHeads, $branchDeductionHeads);
@@ -480,6 +496,9 @@ class PayrollReportService
 
         $sections = [];
         foreach ($groups as $group) {
+            if ($groupBy === 'branch') {
+                usort($group['rows'], [BranchOrganogram::class, 'compareBranchStaffRow']);
+            }
             $branchDeductionHeads = $this->filterActiveDeductionHeads($group['rows'], $sheet['deduction_heads'] ?? []);
             $branchEarningHeads = $sheet['earning_heads'] ?? [];
             $branchHeads = array_merge($branchEarningHeads, $branchDeductionHeads);
@@ -1069,27 +1088,51 @@ class PayrollReportService
                 'employee.branch.regionalOffice.zone:id,code,name',
             ])
             ->whereHas('payrollRun', fn (Builder $q) => $runQuery($q))
-            ->when($filters['employee_id'], fn ($q, $id) => $q->where('employee_id', $id))
+            ->when($filters['employee_id'], fn ($q, $id) => $q->where('payslips.employee_id', $id))
             ->when($filters['department_id'], fn ($q, $id) => $q->whereHas(
                 'employee',
-                fn (Builder $eq) => $eq->where('department_id', $id)
+                fn (Builder $eq) => $eq->where('employees.department_id', $id)
             ))
             ->when($filters['designation_id'], function ($q, $id) {
                 $q->where(function (Builder $inner) use ($id) {
-                    $inner->where('designation_id', $id)
+                    $inner->where('payslips.designation_id', $id)
                         ->orWhere(function (Builder $legacy) use ($id) {
-                            $legacy->whereNull('designation_id')
-                                ->whereHas('employee', fn (Builder $eq) => $eq->where('designation_id', $id));
+                            $legacy->whereNull('payslips.designation_id')
+                                ->whereHas('employee', fn (Builder $eq) => $eq->where('employees.designation_id', $id));
                         });
+                });
+            })
+            ->when($filters['organogram_level'] ?? null, function ($q, $levelKey) {
+                $matcher = self::organogramLevelMatcher($levelKey);
+                $ids = $matcher['ids'];
+                $names = $matcher['names'];
+
+                if (empty($ids) && empty($names)) {
+                    $q->whereRaw('0 = 1');
+
+                    return;
+                }
+
+                $q->where(function (Builder $inner) use ($ids, $names) {
+                    if (! empty($ids)) {
+                        $inner->whereIn('payslips.designation_id', $ids)
+                            ->orWhere(function (Builder $legacy) use ($ids) {
+                                $legacy->whereNull('payslips.designation_id')
+                                    ->whereHas('employee', fn (Builder $eq) => $eq->whereIn('employees.designation_id', $ids));
+                            });
+                    }
+                    if (! empty($names)) {
+                        $inner->orWhereIn('payslips.designation_name', $names);
+                    }
                 });
             })
             ->when($filters['program_id'], fn ($q, $id) => $q->whereHas(
                 'employee',
-                fn (Builder $eq) => $eq->where('program_id', $id)
+                fn (Builder $eq) => $eq->where('employees.program_id', $id)
             ))
             ->when($filters['project_id'], fn ($q, $id) => $q->whereHas(
                 'employee',
-                fn (Builder $eq) => $eq->where('project_id', $id)
+                fn (Builder $eq) => $eq->where('employees.project_id', $id)
             ))
             ->whereHas('employee', fn (Builder $eq) => $eq->whereHas(
                 'branch',
@@ -1105,12 +1148,12 @@ class PayrollReportService
         if ($filters['branch_id']) {
             $branchId = $filters['branch_id'];
             $query->where(function (Builder $q) use ($branchId) {
-                $q->where('branch_id', $branchId)
+                $q->where('payslips.branch_id', $branchId)
                     ->orWhere(function (Builder $legacy) use ($branchId) {
-                        $legacy->whereNull('branch_id')
+                        $legacy->whereNull('payslips.branch_id')
                             ->where(function (Builder $fallback) use ($branchId) {
                                 $fallback->whereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId))
-                                    ->orWhereHas('employee', fn (Builder $eq) => $eq->where('current_branch_id', $branchId));
+                                    ->orWhereHas('employee', fn (Builder $eq) => $eq->where('employees.current_branch_id', $branchId));
                             });
                     })
                     ->orWhereHas('payrollRun', fn (Builder $rq) => $rq->where('branch_id', $branchId));
@@ -1118,6 +1161,63 @@ class PayrollReportService
         }
 
         return $query->get();
+    }
+
+    /**
+     * @return array{ids: list<int>, names: list<string>, scope: string, level: int}
+     */
+    public static function organogramLevelMatcher(string|int $levelKey): array
+    {
+        $str = trim((string) $levelKey);
+        if ($str === '') {
+            return ['ids' => [], 'names' => [], 'scope' => 'branch', 'level' => 0];
+        }
+
+        $scope = 'branch';
+        $level = 0;
+
+        if (str_starts_with($str, 'ho_') || str_starts_with($str, 'ho:')) {
+            $scope = 'ho';
+            $level = (int) substr($str, 3);
+        } elseif (str_starts_with($str, 'branch_') || str_starts_with($str, 'branch:')) {
+            $scope = 'branch';
+            $level = (int) substr($str, 7);
+        } else {
+            $scope = 'branch';
+            $level = (int) $str;
+        }
+
+        $allDesignations = \App\Models\Designation::query()->get(['id', 'name']);
+
+        $matchedIds = [];
+        $matchedNames = [];
+        foreach ($allDesignations as $d) {
+            $tier = $scope === 'ho'
+                ? HeadOfficeOrganogram::resolveTier($d->name)
+                : BranchOrganogram::resolveTier($d->name);
+
+            if ((int) ($tier['level'] ?? -1) === $level) {
+                $matchedIds[] = (int) $d->id;
+                $matchedNames[] = (string) $d->name;
+            }
+        }
+
+        if ($scope === 'branch' && $level === 7) {
+            foreach ($allDesignations as $d) {
+                $norm = mb_strtolower(trim((string) $d->name));
+                if (str_contains($norm, 'probationary officer') && ! in_array((int) $d->id, $matchedIds, true)) {
+                    $matchedIds[] = (int) $d->id;
+                    $matchedNames[] = (string) $d->name;
+                }
+            }
+        }
+
+        return [
+            'ids' => $matchedIds,
+            'names' => $matchedNames,
+            'scope' => $scope,
+            'level' => $level,
+        ];
     }
 
     /**

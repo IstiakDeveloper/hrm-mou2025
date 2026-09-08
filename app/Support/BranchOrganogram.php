@@ -473,7 +473,29 @@ final class BranchOrganogram
         };
     }
 
-    private static function compareDesignationSequence(?string $designationA, ?string $designationB): int
+    public static function compareBranchStaffRow(array $a, array $b): int
+    {
+        $tierA = self::resolveTier($a['designation'] ?? null);
+        $tierB = self::resolveTier($b['designation'] ?? null);
+        $levelCmp = ((int) ($tierA['level'] ?? 999)) <=> ((int) ($tierB['level'] ?? 999));
+        if ($levelCmp !== 0) {
+            return $levelCmp;
+        }
+
+        $seqCmp = self::compareDesignationSequence($a['designation'] ?? null, $b['designation'] ?? null);
+        if ($seqCmp !== 0) {
+            return $seqCmp;
+        }
+
+        $pinCmp = HeadOfficeOrganogram::compareEmployeePins($a['pin'] ?? null, $b['pin'] ?? null);
+        if ($pinCmp !== 0) {
+            return $pinCmp;
+        }
+
+        return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    }
+
+    public static function compareDesignationSequence(?string $designationA, ?string $designationB): int
     {
         $rankA = self::designationSequenceRank($designationA);
         $rankB = self::designationSequenceRank($designationB);
