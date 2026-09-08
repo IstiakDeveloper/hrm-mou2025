@@ -63,6 +63,23 @@ interface Employee {
     designation?: { id: number; name: string };
 }
 
+interface ExistingLeave {
+    id: number;
+    start_date: string;
+    end_date: string;
+    days: number;
+    status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+    leave_type_id: number;
+    leave_type?: {
+        id: number;
+        name: string;
+    };
+    leaveType?: {
+        id: number;
+        name: string;
+    };
+}
+
 interface UserPermissions {
     canCreate: boolean;
     canEdit: boolean;
@@ -74,10 +91,11 @@ interface CreateProps {
     employee: Employee;
     leaveTypes: LeaveType[];
     balances: LeaveBalance[];
+    existingLeaves?: ExistingLeave[];
     userPermissions: UserPermissions;
 }
 
-export default function Create({ employee, leaveTypes, balances, userPermissions }: CreateProps) {
+export default function Create({ employee, leaveTypes, balances, existingLeaves = [], userPermissions }: CreateProps) {
     const { auth } = usePage().props as any;
     const [leaveTypeId, setLeaveTypeId] = useState('');
     const [startDate, setStartDate] = useState<Date | null>(null);
@@ -174,6 +192,23 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
         setDocuments(prev => prev.filter((_, i) => i !== index));
     };
 
+    // Find overlapping existing leave application
+    const overlappingLeave = React.useMemo(() => {
+        if (!startDate || !endDate || !existingLeaves || existingLeaves.length === 0) {
+            return null;
+        }
+
+        const selStart = format(startDate, 'yyyy-MM-dd');
+        const selEnd = format(endDate, 'yyyy-MM-dd');
+
+        return existingLeaves.find(leave => {
+            const leaveStart = leave.start_date.substring(0, 10);
+            const leaveEnd = leave.end_date.substring(0, 10);
+            // Overlap condition: selStart <= leaveEnd && selEnd >= leaveStart
+            return selStart <= leaveEnd && selEnd >= leaveStart;
+        }) || null;
+    }, [startDate, endDate, existingLeaves]);
+
     const validateForm = () => {
         const newErrors: Record<string, string> = {};
 
@@ -185,6 +220,13 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
         // Check date order
         if (endDate && startDate && endDate < startDate) {
             newErrors.endDate = 'End date cannot be before start date';
+        }
+
+        // Prevent duplicate/overlapping leaves
+        if (overlappingLeave) {
+            const conflictType = overlappingLeave.leave_type?.name || overlappingLeave.leaveType?.name || 'Leave';
+            const conflictStatus = overlappingLeave.status.toUpperCase();
+            newErrors.startDate = `You already have an active leave application (${conflictStatus} - ${conflictType}) from ${overlappingLeave.start_date.substring(0, 10)} to ${overlappingLeave.end_date.substring(0, 10)}. Duplicate applications are not allowed for the same date.`;
         }
 
         // Mandatory attachment for Medical Leave
@@ -406,6 +448,17 @@ export default function Create({ employee, leaveTypes, balances, userPermissions
                                             {leaveDays} {leaveDays === 1 ? 'day' : 'days'}
                                         </Badge>
                                     </div>
+
+                                    {/* Overlapping Leave Warning Alert */}
+                                    {overlappingLeave && (
+                                        <Alert variant="destructive" className="py-2.5 text-xs bg-red-50 border-red-200 text-red-800">
+                                            <AlertCircle className="h-4 w-4 text-red-600" />
+                                            <AlertDescription className="ml-2">
+                                                <span className="font-semibold">Duplicate/Overlapping Application Detected: </span>
+                                                This employee already has a <span className="font-semibold uppercase">{overlappingLeave.status}</span> leave application ({overlappingLeave.leave_type?.name || overlappingLeave.leaveType?.name || 'Leave'}) from <span className="font-semibold">{overlappingLeave.start_date.substring(0, 10)}</span> to <span className="font-semibold">{overlappingLeave.end_date.substring(0, 10)}</span>. You cannot submit duplicate leave for the same date(s).
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
 
                                     {/* Reason field */}
                                     <div className="space-y-1">

@@ -1099,6 +1099,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/final-payments/{final_payment}', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'show'])->name('final-payments.show');
         Route::post('/final-payments/{final_payment}/refresh', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'refresh'])->name('final-payments.refresh')->middleware('permission:staff-fund.edit');
         Route::post('/final-payments/{final_payment}/mark-paid', [\App\Http\Controllers\Payroll\FinalPaymentController::class, 'markPaid'])->name('final-payments.mark-paid')->middleware('permission:staff-fund.edit');
+
+        Route::get('/employee-financial-statement', [\App\Http\Controllers\Payroll\EmployeeFinancialStatementController::class, 'index'])->name('employee-financial-statement.index');
+        Route::get('/employee-financial-statement/lookup', [\App\Http\Controllers\Payroll\EmployeeFinancialStatementController::class, 'lookup'])->name('employee-financial-statement.lookup');
+        Route::get('/employee-financial-statement/print', [\App\Http\Controllers\Payroll\EmployeeFinancialStatementController::class, 'print'])->name('employee-financial-statement.print');
+        Route::redirect('/final-payments/statement', '/employee-financial-statement');
     });
 
     Route::middleware(['permission:payroll.view'])->group(function () {

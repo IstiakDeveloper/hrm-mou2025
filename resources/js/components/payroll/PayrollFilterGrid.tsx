@@ -498,6 +498,7 @@ export function PayrollFilterGrid({
     branchAllLabel,
     payrollReadyEmployees = false,
     forGratuityEmployees = false,
+    forLoanEmployees = false,
     fieldErrors = {},
     columns = 3,
 }: {

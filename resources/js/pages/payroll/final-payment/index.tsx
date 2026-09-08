@@ -13,7 +13,7 @@ import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-nam
 import { formatTakaWhole } from '@/lib/taka-format';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { Eye, HandCoins, Plus, RotateCcw, Search } from 'lucide-react';
+import { Eye, FileSpreadsheet, HandCoins, Plus, RotateCcw, Search } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 type Employee = EmployeeNameFields & {
@@ -202,12 +202,20 @@ export default function FinalPaymentIndex({ records, pendingCount, filters: init
                     title="Final Payment"
                     description="Separation settlement — PF refund, gratuity eligibility, outstanding loans, and net payable."
                 >
-                    {canGenerate && (
-                        <Button size="sm" onClick={() => setGenerateOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
-                            <Plus className="mr-1.5 h-4 w-4" />
-                            Generate
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={route('employee-financial-statement.index')}>
+                                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+                                Financial Statement
+                            </Link>
                         </Button>
-                    )}
+                        {canGenerate && (
+                            <Button size="sm" onClick={() => setGenerateOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
+                                <Plus className="mr-1.5 h-4 w-4" />
+                                Generate
+                            </Button>
+                        )}
+                    </div>
                 </PayrollPageHeader>
 
                 {pendingCount > 0 && (

@@ -231,22 +231,43 @@ export default function StaffFundDashboard({ stats, userRole, showEmployeeTab: s
                     </section>
                 </div>
 
-                <section className="space-y-2 mt-4">
-                    <div className="flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                        <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Separation Settlement</h2>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {STAFF_FUND_DASHBOARD_SHORTCUTS.settlement.map((item) => (
-                            <ShortcutTile
-                                key={item.href}
-                                href={staffFundPath(item.href)}
-                                title={item.title}
-                                icon={item.icon}
-                            />
-                        ))}
-                    </div>
-                </section>
+                <div className="grid gap-4 md:grid-cols-2 mt-4">
+                    {/* Final Payment */}
+                    <section className="space-y-2">
+                        <div className="flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                            <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Final Payment</h2>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {STAFF_FUND_DASHBOARD_SHORTCUTS.finalPayment.map((item) => (
+                                <ShortcutTile
+                                    key={item.href}
+                                    href={staffFundPath(item.href)}
+                                    title={item.title}
+                                    icon={item.icon}
+                                />
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Financial Statement */}
+                    <section className="space-y-2">
+                        <div className="flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                            <h2 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Financial Statement</h2>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {STAFF_FUND_DASHBOARD_SHORTCUTS.financialStatement.map((item) => (
+                                <ShortcutTile
+                                    key={item.href}
+                                    href={staffFundPath(item.href)}
+                                    title={item.title}
+                                    icon={item.icon}
+                                />
+                            ))}
+                        </div>
+                    </section>
+                </div>
 
                 {/* Quick Map and Info Guide */}
                 <Card className="border-zinc-200/80 bg-white mt-4 shadow-2xs rounded-lg overflow-hidden">

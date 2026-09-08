@@ -79,7 +79,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Provident Fund & Gratuity',
         icon: Coins,
         href: '/sections/staff-fund',
-        menuKeys: ['sf-pf', 'sf-gratuity', 'sf-settlement', 'section-reports'],
+        menuKeys: ['sf-pf', 'sf-gratuity', 'sf-final-payment', 'sf-financial-statement', 'section-reports'],
     },
     {
         id: 'payroll',
@@ -185,6 +185,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         || p.startsWith('/provident-fund')
         || p.startsWith('/gratuity')
         || p.startsWith('/final-payments')
+        || p.startsWith('/employee-financial-statement')
         || p.startsWith('/employee/staff-fund')
         || p === '/payroll/reports/final-payment'
         || p.startsWith('/payroll/reports/final-payment/')

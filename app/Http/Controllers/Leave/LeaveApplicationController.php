@@ -1190,10 +1190,18 @@ class LeaveApplicationController extends Controller
             ->with('leaveType')
             ->get();
 
+        $existingLeaves = LeaveApplication::where('employee_id', $employee->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->select(['id', 'start_date', 'end_date', 'days', 'status', 'leave_type_id'])
+            ->with('leaveType:id,name')
+            ->orderBy('start_date')
+            ->get();
+
         return Inertia::render('leave/applications/create', [
             'employee' => $employee,
             'leaveTypes' => $leaveTypes,
             'balances' => $balances,
+            'existingLeaves' => $existingLeaves,
             'userPermissions' => [
                 'canCreate' => $user->hasPermission('leave-applications.create'),
                 'canEdit' => $user->hasPermission('leave-applications.edit'),
@@ -1243,6 +1251,27 @@ class LeaveApplicationController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->withErrors([
                 'date_calculation' => 'Error calculating leave days. Please check your dates.',
+            ])->withInput();
+        }
+
+        // Prevent duplicate/overlapping leave applications for the same employee
+        $overlappingLeave = LeaveApplication::where('employee_id', $employee->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->where(function ($query) use ($startDate, $endDate) {
+                $query->where('start_date', '<=', $endDate->toDateString())
+                    ->where('end_date', '>=', $startDate->toDateString());
+            })
+            ->with('leaveType')
+            ->first();
+
+        if ($overlappingLeave) {
+            $existingStart = Carbon::parse($overlappingLeave->start_date)->format('d-m-Y');
+            $existingEnd = Carbon::parse($overlappingLeave->end_date)->format('d-m-Y');
+            $leaveTypeName = $overlappingLeave->leaveType->name ?? 'Leave';
+            $statusLabel = ucfirst($overlappingLeave->status);
+
+            return redirect()->back()->withErrors([
+                'start_date' => "An overlapping {$statusLabel} leave application already exists ({$leaveTypeName}: {$existingStart} to {$existingEnd}). Duplicate application is not allowed for the same date(s).",
             ])->withInput();
         }
 

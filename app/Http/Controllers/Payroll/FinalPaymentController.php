@@ -6,9 +6,14 @@ use App\Http\Controllers\Concerns\PaginatesForInertia;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Payroll\Concerns\ProvidesPayrollFilters;
 use App\Models\Employee;
+use App\Models\EmployeeLoan;
+use App\Models\EmployeePfTransaction;
 use App\Models\SeparationFinalPayment;
 use App\Models\User;
+use App\Services\EmployeeProvidentFundService;
 use App\Services\FinalPaymentSettlementService;
+use App\Services\SalaryStructureCalculator;
+use App\Support\AmountInWords;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -299,3 +304,4 @@ class FinalPaymentController extends Controller
             ->with('success', 'Final payment marked as paid.');
     }
 }
+

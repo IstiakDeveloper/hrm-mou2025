@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { FileBarChart2, Gift, HandCoins, Landmark, List, Percent, Wallet } from 'lucide-react';
+import { FileBarChart2, FileSpreadsheet, Gift, HandCoins, Landmark, List, Percent, Wallet } from 'lucide-react';
 
 export const STAFF_FUND_SECTION_ID = 'staff-fund' as const;
 
@@ -11,7 +11,7 @@ export type StaffFundNavItem = {
 };
 
 export type StaffFundNavGroup = {
-    id: 'pf' | 'gratuity' | 'settlement';
+    id: 'pf' | 'gratuity' | 'final-payment' | 'financial-statement';
     title: string;
     icon: LucideIcon;
     defaultPath: string;
@@ -78,15 +78,28 @@ export const STAFF_FUND_NAV_GROUPS: StaffFundNavGroup[] = [
         ],
     },
     {
-        id: 'settlement',
-        title: 'Settlement',
+        id: 'final-payment',
+        title: 'Final Payment',
         icon: HandCoins,
         defaultPath: '/final-payments',
         items: [
             {
                 title: 'Final Payment',
                 path: '/final-payments',
-                description: 'Separation settlement — PF, gratuity & loan clearance',
+                description: 'Separation final payment & settlement records',
+            },
+        ],
+    },
+    {
+        id: 'financial-statement',
+        title: 'Financial Statement',
+        icon: FileSpreadsheet,
+        defaultPath: '/employee-financial-statement',
+        items: [
+            {
+                title: 'Financial Statement',
+                path: '/employee-financial-statement',
+                description: 'Employee financial status — PF, gratuity, active loans & net position',
             },
         ],
     },
@@ -102,6 +115,13 @@ export const STAFF_FUND_DASHBOARD_SHORTCUTS = {
         { title: 'Entitlements', href: '/gratuity', icon: Gift },
         { title: 'Payment records', href: '/gratuity/payments', icon: Wallet },
         { title: 'Gratuity rules', href: '/gratuity/rules', icon: FileBarChart2 },
+    ],
+    finalPayment: [
+        { title: 'Final Payment', href: '/final-payments', icon: HandCoins },
+        { title: 'Final Payment Report', href: '/payroll/reports/final-payment', icon: FileBarChart2 },
+    ],
+    financialStatement: [
+        { title: 'Financial Statement', href: '/employee-financial-statement', icon: FileSpreadsheet },
     ],
     settlement: [
         { title: 'Final Payment', href: '/final-payments', icon: HandCoins },

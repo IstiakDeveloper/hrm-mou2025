@@ -869,7 +869,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
         const globalKeys: string[] = ['change-password'];
         const mergedKeys = [...keys.filter((k) => !globalKeys.includes(k)), ...globalKeys];
-        return mergedKeys.map((key) => menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key)).filter((x): x is MenuItemType => Boolean(x));
+        return mergedKeys
+            .map((key) => {
+                const direct = menuItemsForLayout.find((m) => (m.menuKey ?? m.title) === key);
+                if (direct) return direct;
+                if (key === 'sf-final-payment' || key === 'sf-settlement') {
+                    return menuItemsForLayout.find(
+                        (m) => m.menuKey === 'sf-final-payment' || m.menuKey === 'sf-settlement',
+                    );
+                }
+                return undefined;
+            })
+            .filter((x): x is MenuItemType => Boolean(x));
     }, [activeSectionId, menuItemsForLayout, employee?.id, branchAccount]);
 
     /** Sidebar paths in the current section — longest-prefix wins within visible items only. */
