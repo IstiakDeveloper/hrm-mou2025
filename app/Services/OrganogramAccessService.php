@@ -195,11 +195,17 @@ class OrganogramAccessService
 
     /**
      * HR / leave-desk users who may see all leave applications (not organogram-limited).
+     * Branch terminal accounts stay locked to their own branch even if payroll.view
+     * aliases to employees.view.
      */
     public static function hasUnrestrictedLeaveApplicationAccess(User $user): bool
     {
         if ($user->isSuperAdmin()) {
             return true;
+        }
+
+        if ($user->isBranchAccount()) {
+            return false;
         }
 
         if ($user->hasPermission('employees.admin')
@@ -247,6 +253,12 @@ class OrganogramAccessService
      */
     public static function constrainLeaveApplications(Builder $query, User $user): void
     {
+        if ($user->isBranchAccount()) {
+            self::constrainViaEmployeeRelation($query, $user, 'employee');
+
+            return;
+        }
+
         if (self::hasUnrestrictedLeaveApplicationAccess($user)) {
             return;
         }
@@ -273,6 +285,10 @@ class OrganogramAccessService
     {
         if ($user->isSuperAdmin()) {
             return true;
+        }
+
+        if ($user->isBranchAccount()) {
+            return false;
         }
 
         if ($user->hasPermission('employees.admin')
@@ -444,6 +460,10 @@ class OrganogramAccessService
      */
     public static function userBypassesOrganogramEmployeeScope(User $user): bool
     {
+        if ($user->isBranchAccount()) {
+            return false;
+        }
+
         if ($user->isSuperAdmin() || $user->hasPermission('employees.admin')) {
             return true;
         }
@@ -603,14 +623,14 @@ class OrganogramAccessService
      */
     public static function accessibleBranchIdList(User $user): ?array
     {
-        if ($user->isSuperAdmin() || self::hasGlobalEmployeeDirectoryAccess($user)) {
-            return null;
-        }
-
         if ($user->isBranchAccount()) {
             $bid = (int) ($user->branch_id ?: 0);
 
             return $bid > 0 ? [$bid] : [];
+        }
+
+        if ($user->isSuperAdmin() || self::hasGlobalEmployeeDirectoryAccess($user)) {
+            return null;
         }
 
         $roleNames = self::mergedRoleNames($user);
@@ -691,10 +711,6 @@ class OrganogramAccessService
      */
     public static function accessibleDepartmentIdList(User $user): ?array
     {
-        if ($user->isSuperAdmin() || self::hasGlobalEmployeeDirectoryAccess($user)) {
-            return null;
-        }
-
         if ($user->isBranchAccount()) {
             $bid = (int) ($user->branch_id ?: 0);
             if ($bid <= 0) {
@@ -709,6 +725,10 @@ class OrganogramAccessService
                 ->map(fn ($id) => (int) $id)
                 ->values()
                 ->all();
+        }
+
+        if ($user->isSuperAdmin() || self::hasGlobalEmployeeDirectoryAccess($user)) {
+            return null;
         }
 
         $roleNames = self::mergedRoleNames($user);
@@ -795,6 +815,9 @@ class OrganogramAccessService
     {
         if ($user->isSuperAdmin()) {
             return true;
+        }
+        if ($user->isBranchAccount()) {
+            return false;
         }
         if ($user->hasPermission('attendance.admin')
             || $user->hasPermission('employees.admin')) {
