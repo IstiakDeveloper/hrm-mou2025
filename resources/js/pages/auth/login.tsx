@@ -1,5 +1,5 @@
 import React, { FormEvent, useMemo, useState } from 'react';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import {
   LockIcon,
   UserIcon,
   LayoutGrid,
+  MapPin,
 } from 'lucide-react';
 
 type LoginMode = 'staff' | 'branch';
@@ -95,8 +96,17 @@ export default function Login({ branches, errors }: LoginProps) {
     <>
       <Head title="Log in" />
       <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 px-4 py-10">
-        {/* Top-Right Return to Mousumi Apps Button */}
-        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+        <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between gap-2 sm:top-6 sm:left-6 sm:right-6">
+          <Link
+            href="/office-map"
+            className="group inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 p-2 text-xs font-bold text-white shadow-lg transition-colors hover:bg-emerald-800 sm:px-3.5 sm:py-2"
+            title="Office Map — find branches"
+          >
+            <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-white/20 p-0.5 text-white shadow-sm transition-transform duration-300 group-hover:scale-110">
+              <MapPin className="h-3.5 w-3.5" />
+            </div>
+            <span className="tracking-wide">Office Map</span>
+          </Link>
           <a
             href="https://app.mousumibd.org"
             target="_self"
@@ -284,7 +294,17 @@ export default function Login({ branches, errors }: LoginProps) {
               </form>
             </CardContent>
 
-            <CardFooter className="justify-center border-t border-slate-100 pt-4">
+            <CardFooter className="flex-col gap-3 border-t border-slate-100 pt-4">
+              <Link
+                href="/office-map"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:border-emerald-300 hover:bg-emerald-100"
+              >
+                <MapPin className="h-4 w-4" />
+                View office map
+              </Link>
+              <p className="text-center text-xs text-slate-500">
+                Find Head Office, zones, and branches — no login needed
+              </p>
               <p className="text-xs text-slate-400">
                 © {new Date().getFullYear()} HRM System
               </p>

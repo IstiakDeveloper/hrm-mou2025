@@ -207,3 +207,115 @@
         font-feature-settings: "rlig" 1, "calt" 1;
     }
 }
+
+.office-map-root .leaflet-container {
+    height: 100%;
+    width: 100%;
+    font-family: inherit;
+}
+
+.office-map-pin {
+    background: transparent !important;
+    border: none !important;
+}
+
+.office-map-marker {
+    display: flex;
+    align-items: flex-end;
+    gap: 5px;
+    width: 168px;
+    height: 100%;
+}
+
+.office-map-pin-body {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--pin-size);
+    height: var(--pin-size);
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: var(--pin-color);
+    color: white;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+}
+
+.office-map-pin-is-selected .office-map-pin-body {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pin-color) 35%, white), 0 4px 12px rgba(15, 23, 42, 0.4);
+}
+
+.office-map-pin-logo-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 62%;
+    height: 62%;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: white;
+    transform: rotate(45deg);
+}
+
+.office-map-pin-logo-wrap img {
+    width: 78%;
+    height: 78%;
+    object-fit: contain;
+}
+
+.office-map-pin-caption {
+    display: flex;
+    min-width: 0;
+    max-width: 118px;
+    flex-direction: column;
+    margin-bottom: 3px;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 3px 7px 4px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
+.office-map-pin-is-selected .office-map-pin-caption {
+    border-color: var(--pin-color);
+}
+
+.office-map-pin-caption strong {
+    overflow: hidden;
+    color: rgb(15 23 42);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.office-map-pin-caption em {
+    color: var(--pin-color);
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+
+.office-map-root .leaflet-popup-content-wrapper {
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+}
+
+.office-map-area-label {
+    border: none !important;
+    border-radius: 6px !important;
+    background: rgba(15, 23, 42, 0.88) !important;
+    color: white !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2) !important;
+}
+
+.office-map-root .leaflet-popup-content {
+    margin: 12px 14px;
+    font-family: inherit;
+}

@@ -56,7 +56,7 @@ function getSubNavIcon(title: string, path: string): React.ReactNode {
     if (t.includes('report') || t.includes('summary')) {
         return <BarChart3 className="h-3.5 w-3.5 shrink-0" />;
     }
-    if (t.includes('movement') || t.includes('transfer') || t.includes('location')) {
+    if (t.includes('movement') || t.includes('transfer') || t.includes('location') || t.includes('map')) {
         return <MapPin className="h-3.5 w-3.5 shrink-0" />;
     }
     if (t.includes('device') || t.includes('terminal') || t.includes('sync')) {
@@ -459,6 +459,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 hrOnly: true,
                 submenu: [
                     { title: 'Organization Structure', path: '/organization-structure', permission: 'branches.view' },
+                    { title: 'Office Map', path: '/office-map', permission: 'branches.view' },
                     { title: 'Departments', path: '/departments', permission: 'departments.view' },
                     { title: 'Designations', path: '/designations', permission: 'designations.view' },
                     { title: 'Employee Types', path: '/employee-types', permission: 'departments.view' },
@@ -1710,6 +1711,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                         <Home className="h-5 w-5" />
                                     </Link>
                                 </Button>
+
+                                <Link
+                                    href="/office-map"
+                                    className="inline-flex h-9 items-center gap-1.5 rounded-xl px-2 text-slate-600 transition-colors hover:bg-emerald-50/80 hover:text-emerald-800 sm:px-2.5"
+                                    title="Office Map — find branches"
+                                >
+                                    <MapPin className="h-5 w-5 shrink-0" />
+                                    <span className="hidden text-xs font-semibold sm:inline">Office Map</span>
+                                </Link>
                             </div>
 
                             {/* Right: User Menu, Navigation Switcher & Notifications */}

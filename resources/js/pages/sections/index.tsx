@@ -1,7 +1,7 @@
 import React from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { ADMIN_SECTIONS, type AdminSectionId, storeSection } from '@/lib/admin-sections';
-import { CheckCircle2, KeyRound, Lock, LogOut, XCircle, Sparkles, LayoutGrid } from 'lucide-react';
+import { CheckCircle2, KeyRound, Lock, LogOut, XCircle, Sparkles, LayoutGrid, MapPin } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
@@ -107,16 +107,16 @@ const SECTION_THEMES: Record<string, {
         badgeText: 'text-sky-700',
         glow: 'hover:shadow-sky-500/10',
     },
-    'store': {
-        color: 'blue',
-        bg: 'bg-blue-50/20',
-        border: 'border-blue-100',
-        text: 'text-blue-900',
-        hoverBorder: 'hover:border-blue-300',
-        iconBg: 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20',
-        badgeBg: 'bg-blue-50 border border-blue-200/50',
-        badgeText: 'text-blue-700',
-        glow: 'hover:shadow-blue-500/10',
+    'office-map': {
+        color: 'emerald',
+        bg: 'bg-emerald-50/20',
+        border: 'border-emerald-100',
+        text: 'text-emerald-900',
+        hoverBorder: 'hover:border-emerald-300',
+        iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20',
+        badgeBg: 'bg-emerald-50 border border-emerald-200/50',
+        badgeText: 'text-emerald-700',
+        glow: 'hover:shadow-emerald-500/10',
     },
     'recruitment': {
         color: 'teal',
@@ -211,6 +211,14 @@ export default function SectionsIndex() {
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                            <Link
+                                href="/office-map"
+                                title="Office Map — find branches"
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-2 text-white shadow-md transition-colors hover:bg-emerald-800 sm:h-auto sm:px-3 sm:py-1.5"
+                            >
+                                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                                <span className="hidden text-xs font-bold tracking-wide sm:inline">Office Map</span>
+                            </Link>
                             <a
                                 href="https://app.mousumibd.org"
                                 target="_self"
@@ -291,6 +299,9 @@ export default function SectionsIndex() {
                             }
 
                             if (isBranchAccount(auth)) {
+                                if (section.id === 'office-map') {
+                                    return true;
+                                }
                                 if (section.id === 'attendance-movement') {
                                     return true;
                                 }
@@ -383,6 +394,8 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'admin.access') ||
                                         Boolean(employee?.id)
                                     );
+                                case 'office-map':
+                                    return true;
                                 default:
                                     return false;
                             }
@@ -392,10 +405,15 @@ export default function SectionsIndex() {
                         const theme = getTheme(section.id);
                         const commonCardClasses = "group relative select-none rounded-xl sm:rounded-2xl border p-2 sm:p-3 flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2 transition-all duration-300 ease-out will-change-transform w-full bg-white/90 hover:bg-white border-slate-200/80 shadow-xs hover:-translate-y-1 hover:shadow-md max-w-[110px] sm:max-w-none aspect-square sm:aspect-auto sm:min-h-[120px] md:min-h-[140px]";
 
+                        const href =
+                            section.id === 'office-map'
+                                ? section.href
+                                : `${section.href}?section=${section.id}`;
+
                         return enabled ? (
                             <Link
                                 key={section.id}
-                                href={`${section.href}?section=${section.id}`}
+                                href={href ?? '/sections'}
                                 onClick={() => handleSelect(section.id)}
                                 className={`${commonCardClasses} ${theme.bg} ${theme.border} ${theme.hoverBorder} ${theme.glow}`}
                             >

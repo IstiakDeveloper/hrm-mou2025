@@ -46,6 +46,9 @@ export default defineConfig({
     esbuild: {
         jsx: 'automatic',
     },
+    optimizeDeps: {
+        include: ['leaflet', 'leaflet.markercluster', 'react-leaflet'],
+    },
     build: {
         chunkSizeWarningLimit: 900,
         rollupOptions: {

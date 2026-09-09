@@ -14,6 +14,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Branch\BranchController;
 use App\Http\Controllers\Confirmation\ConfirmationController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Demotion\DemotionController;
 use App\Http\Controllers\Department\DepartmentController;
 use App\Http\Controllers\Designation\DesignationController;
 use App\Http\Controllers\Employee\DisciplinaryActionController;
@@ -65,6 +66,7 @@ use App\Http\Controllers\Movement\MovementPenaltyController;
 use App\Http\Controllers\MyNoticeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Organization\EmployeeTypeController;
+use App\Http\Controllers\Organization\OfficeMapController;
 use App\Http\Controllers\Organization\OrganizationStructureController;
 use App\Http\Controllers\Organization\ProgramController;
 use App\Http\Controllers\Organization\ProjectController;
@@ -79,7 +81,6 @@ use App\Http\Controllers\Payroll\SalaryHeadController;
 use App\Http\Controllers\Payroll\SalaryStepController;
 use App\Http\Controllers\Payroll\SalaryStructureController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\Demotion\DemotionController;
 use App\Http\Controllers\Promotion\PromotionController;
 use App\Http\Controllers\RegionalOffice\RegionalOfficeController;
 use App\Http\Controllers\Report\ReportController;
@@ -214,6 +215,9 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
+
+// Public office locator — no login required
+Route::get('/office-map', [OfficeMapController::class, 'index'])->name('office-map.index');
 
 // ====================
 // PROTECTED ROUTES
@@ -1916,4 +1920,3 @@ Route::middleware(['auth'])->group(function () {
         });
     });
 });
-

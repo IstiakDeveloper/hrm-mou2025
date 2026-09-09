@@ -8,6 +8,7 @@ import {
     Coins,
     GraduationCap,
     HandCoins,
+    MapPin,
     Package,
     Settings,
     Users,
@@ -22,6 +23,7 @@ export type AdminSectionId =
     | 'payroll'
     | 'fixed-asset'
     | 'inventory'
+    | 'office-map'
     | 'store'
     | 'recruitment'
     | 'training'
@@ -106,10 +108,11 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         menuKeys: ['inv-products', 'inv-operations', 'inv-reports'],
     },
     {
-        id: 'store',
-        title: 'STORE',
-        description: 'Inventory & stock',
-        icon: Package,
+        id: 'office-map',
+        title: 'OFFICE MAP',
+        description: 'Find branches, zones & head office',
+        icon: MapPin,
+        href: '/office-map',
     },
     {
         id: 'recruitment',
@@ -218,6 +221,7 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     ) {
         return 'human-resources';
     }
+    if (p.startsWith('/office-map')) return 'office-map';
     if (p.startsWith('/admin/') || p.startsWith('/reports')) return 'administration';
     if (
         p.startsWith('/inventory')
