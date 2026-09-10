@@ -395,6 +395,8 @@ export default function AttendanceMonthly({
     };
 
     const hasMissingCheckout = (employeeId: number, day: number): boolean => {
+        const serverStatus = dailyStatusByEmployee?.[employeeId]?.[day]?.status;
+        if (serverStatus && !['present', 'late', 'half_day'].includes(serverStatus)) return false;
         const serverMissing = dailyStatusByEmployee?.[employeeId]?.[day]?.missing_checkout;
         if (typeof serverMissing === 'boolean') return serverMissing;
         if (!attendances[employeeId]) return false;

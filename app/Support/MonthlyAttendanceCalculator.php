@@ -67,11 +67,16 @@ class MonthlyAttendanceCalculator
                 'holiday' => 0,
             ];
 
+            $joiningYmd = ! empty($employee->joining_date)
+                ? Carbon::parse($employee->joining_date)->toDateString()
+                : null;
+
             for ($day = 1; $day <= $daysInMonth; $day++) {
                 $ymd = $month->copy()->setDay($day)->format('Y-m-d');
 
-                // Future dates should be blank (no status, no counts)
-                if ($maxDate && Carbon::parse($ymd)->gt($maxDate)) {
+                // Future dates and days before joining should be blank (no status, no counts)
+                $isBeforeJoin = $joiningYmd !== null && $ymd < $joiningYmd;
+                if ($isBeforeJoin || ($maxDate && Carbon::parse($ymd)->gt($maxDate))) {
                     $dailyStatusByEmployee[$empId][$day] = [
                         'status' => null,
                         'missing_checkout' => false,
@@ -110,7 +115,7 @@ class MonthlyAttendanceCalculator
                     is_string($attendanceRowStatus) ? $attendanceRowStatus : null
                 );
 
-                $missingCheckout = $hasValidAttendance && (empty($attRow['check_out']));
+                $missingCheckout = in_array($status, ['present', 'late', 'half_day'], true) && $hasValidAttendance && empty($attRow['check_out']);
 
                 $dailyStatusByEmployee[$empId][$day] = [
                     'status' => $status,
@@ -148,6 +153,10 @@ class MonthlyAttendanceCalculator
         }
 
         if ($hasValidAttendance) return 'present';
+        // Already marked present/late/half_day in DB even if punch times were not stored
+        if (in_array($attendanceRowStatus, ['present', 'late', 'half_day'], true)) {
+            return $attendanceRowStatus;
+        }
         if ($isOnLeave) return 'leave';
         if ($hasMovement) return 'on_duty';
         if ($attendanceRowStatus === 'on_duty') return 'on_duty';

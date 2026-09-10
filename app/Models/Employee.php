@@ -488,6 +488,19 @@ class Employee extends Model
         return $this->belongsTo(Branch::class, 'current_branch_id');
     }
 
+    /**
+     * Staff who had already joined by the given date (or have no joining date on file).
+     */
+    public function scopeEmployedAsOf(Builder $query, mixed $date): Builder
+    {
+        $ymd = Carbon::parse($date)->toDateString();
+
+        return $query->where(function (Builder $q) use ($ymd) {
+            $q->whereNull('employees.joining_date')
+                ->orWhereDate('employees.joining_date', '<=', $ymd);
+        });
+    }
+
     public function scopePayrollReady(Builder $query): Builder
     {
         return $query->where(function (Builder $q) {

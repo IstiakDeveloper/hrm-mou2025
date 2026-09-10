@@ -54,6 +54,7 @@ class AttendanceExportController extends Controller
 
             // Apply filters based on user permissions and role
             $this->applyEmployeeFilters($employeesQuery, $user, $request);
+            $employeesQuery->employedAsOf($endDate);
 
             HeadOfficeOrganogram::applyToEmployeeQuery($employeesQuery, 'organogram', 'asc');
 
@@ -220,7 +221,8 @@ class AttendanceExportController extends Controller
                 'employees' => $employeesWithSummary,
                 'month' => $monthLabel,
                 'daysInMonth' => $daysInMonth,
-                'companyName' => 'Mousumi',
+                'companyName' => config('payroll_reports.company_name', config('app.name', 'Mousumi')),
+                'companyAddress' => config('payroll_reports.company_address', ''),
                 'generatedAt' => now()->format('d-m-Y H:i'),
                 'generatedBy' => $user->name,
                 'branchName' => $branchName,

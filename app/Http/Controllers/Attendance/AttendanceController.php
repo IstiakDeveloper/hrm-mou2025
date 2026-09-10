@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Barryvdh\DomPDF\Facade\Pdf;
 use App\Support\ProjectPdf;
 
 class AttendanceController extends Controller
@@ -68,6 +69,10 @@ class AttendanceController extends Controller
 
         if ($hasValidAttendance) {
             return 'present';
+        }
+
+        if (in_array($attendanceRowStatus, ['present', 'late', 'half_day'], true)) {
+            return $attendanceRowStatus;
         }
 
         if ($isOnLeave) {
@@ -594,6 +599,7 @@ class AttendanceController extends Controller
 
         // Apply filters based on user permissions and role
         $this->applyEmployeeFilters($employeesQuery, $user, $request);
+        $employeesQuery->employedAsOf($endDate);
 
         $this->applyOrganogramEmployeeOrder($employeesQuery);
 
@@ -727,11 +733,13 @@ class AttendanceController extends Controller
             }
         }
 
-        // Pre-index attendances by employee_id + date for fast lookup
+        // Pre-index attendances by employee_id + date for fast lookup.
+        // Must keep employee id keys — array_map() would reindex them 0,1,2… and every
+        // day would fall through to Absent in the monthly grid.
         $attendanceByEmployeeDate = [];
         foreach ($attendances as $empId => $rows) {
             foreach ($rows as $row) {
-                $attendanceByEmployeeDate[(string) $empId][$row['date']] = $row;
+                $attendanceByEmployeeDate[(int) $empId][$row['date']] = $row;
             }
         }
 
@@ -750,7 +758,7 @@ class AttendanceController extends Controller
             $movements->toArray(),
             $leaveDays,
             $holidayApplicable,
-            array_map(fn ($rows) => $rows, $attendanceByEmployeeDate),
+            $attendanceByEmployeeDate,
             $defaultWeekendDays
         );
         $dailyStatusByEmployee = $calc['dailyStatusByEmployee'];
@@ -1976,7 +1984,7 @@ class AttendanceController extends Controller
         }
 
         // Create the PDF with enhanced data
-        $pdf = PDF::loadView('reports.attendance-sheet', [
+        $pdf = Pdf::loadView('reports.attendance-sheet', [
             'attendanceByDate' => $attendanceData['attendanceByDate'],
             'dateRange' => $attendanceData['dateRange'],
             'summary' => $attendanceData['summary'],
@@ -1986,6 +1994,8 @@ class AttendanceController extends Controller
             'departmentName' => $departmentName,
             'excludedDepartments' => $excludedDepartmentNames,
             'filterType' => $request->department_id === 'all' || ! $request->department_id ? 'all_with_exclusions' : 'specific_department',
+            'companyName' => config('payroll_reports.company_name', config('app.name', 'Mousumi')),
+            'companyAddress' => config('payroll_reports.company_address', ''),
             'generatedBy' => $user->name,
             'generatedAt' => now(),
         ]);

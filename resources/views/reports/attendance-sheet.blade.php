@@ -195,19 +195,44 @@
         }
     </style>
 </head>
+@php
+    $logoPath = public_path('logo.png');
+    $logoSrc = file_exists($logoPath)
+        ? 'data:image/png;base64,'.base64_encode(file_get_contents($logoPath))
+        : null;
+    $companyName = $companyName ?? config('payroll_reports.company_name', 'Mousumi');
+@endphp
 <body>
     <div class="header">
-        <div class="company-name">HRM - Mousumi NGO</div>
-        <div class="report-title">Daily Attendance Report with Movement Details</div>
-        <div class="report-info">
-            Period: {{ \Carbon\Carbon::parse($startDate)->format('d M, Y') }} to {{ \Carbon\Carbon::parse($endDate)->format('d M, Y') }}
-            @if($branchName)
-                | Branch: {{ $branchName }}
-            @endif
-            @if($departmentName)
-                | Department: {{ $departmentName }}
-            @endif
-        </div>
+        <table style="width: 100%; border: none; margin-bottom: 5px;">
+            <tr>
+                <td style="width: 70px; text-align: left; vertical-align: middle; border: none;">
+                    @if($logoSrc)
+                        <img src="{{ $logoSrc }}" alt="Logo" style="height: 38px; width: auto; max-width: 55px;" />
+                    @endif
+                </td>
+                <td style="text-align: center; vertical-align: middle; border: none;">
+                    <div class="company-name" style="margin: 0; font-size: 16px; font-weight: bold; text-transform: uppercase;">{{ $companyName }}</div>
+                    @if(!empty($companyAddress))
+                        <div style="font-size: 8px; color: #64748b; margin-top: 1px;">{{ $companyAddress }}</div>
+                    @endif
+                    <div class="report-title" style="margin-top: 3px; font-size: 12px;">Daily Attendance Report with Movement Details</div>
+                    <div class="report-info" style="font-size: 8px; color: #64748b; margin-top: 2px;">
+                        Period: {{ \Carbon\Carbon::parse($startDate)->format('d M, Y') }} to {{ \Carbon\Carbon::parse($endDate)->format('d M, Y') }}
+                        @if($branchName) | Branch: {{ $branchName }} @endif
+                        @if($departmentName)
+                            | Department: {{ $departmentName }}
+                        @elseif(!empty($excludedDepartments))
+                            | Excluded: {{ implode(', ', $excludedDepartments) }}
+                        @endif
+                    </div>
+                </td>
+                <td style="width: 140px; text-align: right; vertical-align: middle; border: none; font-size: 7px; color: #64748b;">
+                    <div>Generated: {{ now()->format('d-m-Y H:i') }}</div>
+                    <div>By: {{ $generatedBy ?? 'System' }}</div>
+                </td>
+            </tr>
+        </table>
     </div>
 
 
