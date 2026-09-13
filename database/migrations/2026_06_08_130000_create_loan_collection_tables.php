@@ -47,7 +47,8 @@ return new class extends Migration
                 ->nullOnDelete();
         });
 
-        DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM(
+        if (in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM(
             'disbursement',
             'installment',
             'manual_payment',
@@ -59,6 +60,7 @@ return new class extends Migration
             'adjustment',
             'reversal'
         ) NOT NULL");
+        }
     }
 
     public function down(): void
@@ -70,7 +72,8 @@ return new class extends Migration
         Schema::dropIfExists('loan_collection_items');
         Schema::dropIfExists('loan_collection_batches');
 
-        DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM(
+        if (in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM(
             'disbursement',
             'installment',
             'manual_payment',
@@ -78,5 +81,6 @@ return new class extends Migration
             'adjustment',
             'reversal'
         ) NOT NULL");
+        }
     }
 };

@@ -10,6 +10,7 @@ use App\Models\Branch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Middleware\VerifyZktecoApiKey;
 use Illuminate\Support\Facades\DB;
 
 class EmployeeAPIController extends Controller
@@ -20,7 +21,7 @@ class EmployeeAPIController extends Controller
     public function syncEmployees(Request $request)
     {
         // Validate the API key
-        if ($request->header('Authorization') !== 'Bearer ' . config('app.zkteco_api_key')) {
+        if (! VerifyZktecoApiKey::isValid($request)) {
             Log::warning('Employee sync: Invalid API key used');
             return response()->json([
                 'status' => false,

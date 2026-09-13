@@ -37,7 +37,10 @@ return new class extends Migration
             $table->unsignedTinyInteger('legacy_paid_through_month')->nullable()->after('legacy_paid_through_year');
         });
 
-        if (Schema::hasTable('employee_loan_transactions')) {
+        if (
+            Schema::hasTable('employee_loan_transactions')
+            && in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)
+        ) {
             DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM('disbursement', 'installment', 'manual_payment', 'legacy_payment', 'adjustment', 'reversal') NOT NULL");
         }
 

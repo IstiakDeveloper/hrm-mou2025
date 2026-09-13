@@ -27,7 +27,8 @@ return new class extends Migration
             $table->index(['from_employee_id', 'to_employee_id'], 'loan_xfer_emp_idx');
         });
 
-        DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM(
+        if (in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM(
             'disbursement',
             'installment',
             'manual_payment',
@@ -40,13 +41,15 @@ return new class extends Migration
             'adjustment',
             'reversal'
         ) NOT NULL");
+        }
     }
 
     public function down(): void
     {
         Schema::dropIfExists('loan_transfers');
 
-        DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM(
+        if (in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE employee_loan_transactions MODIFY transaction_type ENUM(
             'disbursement',
             'installment',
             'manual_payment',
@@ -58,5 +61,6 @@ return new class extends Migration
             'adjustment',
             'reversal'
         ) NOT NULL");
+        }
     }
 };

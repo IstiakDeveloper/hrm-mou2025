@@ -12,6 +12,7 @@ use App\Models\Movement;
 use App\Services\ZktecoAttendanceIngestService;
 
 Schedule::command('movements:check-overdue')->dailyAt('00:00');
+Schedule::command('hr:activate-scheduled')->dailyAt('00:05');
 
 Schedule::call(function () {
     $ingest = app(ZktecoAttendanceIngestService::class);

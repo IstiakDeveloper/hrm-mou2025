@@ -1,10 +1,9 @@
 <?php
 
-use App\Http\Middleware\ActivateScheduledHrActions;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureMovementFinePaid;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Http\Middleware\SyncOverdueMovementPenalties;
+use App\Http\Middleware\VerifyZktecoApiKey;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,8 +28,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
-            ActivateScheduledHrActions::class,
-            SyncOverdueMovementPenalties::class,
             EnsureMovementFinePaid::class,
         ]);
 
@@ -41,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'permission' => CheckPermission::class,
             'movement.fine' => EnsureMovementFinePaid::class,
+            'zkteco.api' => VerifyZktecoApiKey::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -34,6 +34,20 @@ class LeaveBalance extends Model
         return $this->remaining_days;
     }
 
+    public function applyUsage(float $days, bool $isPaid = true): void
+    {
+        $this->used_days = (float) $this->used_days + $days;
+        $remaining = (float) $this->allocated_days - (float) $this->used_days;
+        $this->remaining_days = $isPaid ? $remaining : max(0.0, $remaining);
+    }
+
+    public function restoreUsage(float $days, bool $isPaid = true): void
+    {
+        $this->used_days = max(0.0, (float) $this->used_days - $days);
+        $remaining = (float) $this->allocated_days - (float) $this->used_days;
+        $this->remaining_days = $isPaid ? $remaining : max(0.0, $remaining);
+    }
+
     public function leaveApplications()
     {
         return $this->hasMany(LeaveApplication::class, 'leave_type_id', 'leave_type_id')

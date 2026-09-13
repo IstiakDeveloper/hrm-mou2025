@@ -33,8 +33,9 @@ class UpdateMovementsStatusEnum extends Migration
             $table->renameColumn('status_new', 'status');
         });
 
-        // Change the column type to enum
-        DB::statement("ALTER TABLE movements MODIFY status ENUM('active', 'completed') NOT NULL DEFAULT 'active'");
+        if (in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE movements MODIFY status ENUM('active', 'completed') NOT NULL DEFAULT 'active'");
+        }
     }
 
     /**
@@ -63,7 +64,8 @@ class UpdateMovementsStatusEnum extends Migration
             $table->renameColumn('status_old', 'status');
         });
 
-        // Change the column type back to the original enum
-        DB::statement("ALTER TABLE movements MODIFY status ENUM('pending', 'approved', 'rejected', 'completed') NOT NULL DEFAULT 'pending'");
+        if (in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE movements MODIFY status ENUM('pending', 'approved', 'rejected', 'completed') NOT NULL DEFAULT 'pending'");
+        }
     }
 }

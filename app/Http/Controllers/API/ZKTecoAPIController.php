@@ -10,6 +10,7 @@ use App\Models\ZktecoSyncSetting;
 use App\Services\ZktecoAttendanceIngestService;
 use App\Support\EmployeeNameMatcher;
 use App\Support\EmployeePinLookup;
+use App\Http\Middleware\VerifyZktecoApiKey;
 use App\Support\ZktecoEmployeeResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -40,7 +41,7 @@ class ZKTecoAPIController extends Controller
         // Skip API key validation if request is coming directly from device
         $directFromDevice = $this->isRequestFromDevice($request);
 
-        if (!$directFromDevice && $request->header('Authorization') !== 'Bearer ' . config('app.zkteco_api_key')) {
+        if (! $directFromDevice && ! VerifyZktecoApiKey::isValid($request)) {
             Log::warning('ZKTeco sync: Invalid API key used');
             return response()->json([
                 'status' => false,
@@ -386,7 +387,7 @@ class ZKTecoAPIController extends Controller
      */
     public function syncDevicePinMappings(Request $request)
     {
-        if ($request->header('Authorization') !== 'Bearer ' . config('app.zkteco_api_key')) {
+        if (! VerifyZktecoApiKey::isValid($request)) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized access',

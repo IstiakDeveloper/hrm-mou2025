@@ -33,7 +33,9 @@ Route::post('/employees/sync', [EmployeeAPIController::class, 'syncEmployees']);
 Route::get('/sync/organization-structure', [OrganizationSyncAPIController::class, 'organizationStructure']);
 Route::get('/sync/field-officers', [OrganizationSyncAPIController::class, 'fieldOfficers']);
 
-// Branch Employee APIs
-Route::get('/branch/{branchId}/employees', [BranchEmployeeAPIController::class, 'getEmployeesByBranch']);
-Route::get('/device/{deviceId}/employees', [BranchEmployeeAPIController::class, 'getEmployeesByDevice']);
-Route::post('/device/push-employees', [BranchEmployeeAPIController::class, 'pushEmployeesToDevice']);
+// Branch Employee APIs (device agents — same Bearer as ZKTeco)
+Route::middleware('zkteco.api')->group(function () {
+    Route::get('/branch/{branchId}/employees', [BranchEmployeeAPIController::class, 'getEmployeesByBranch']);
+    Route::get('/device/{deviceId}/employees', [BranchEmployeeAPIController::class, 'getEmployeesByDevice']);
+    Route::post('/device/push-employees', [BranchEmployeeAPIController::class, 'pushEmployeesToDevice']);
+});

@@ -2045,12 +2045,7 @@ class LeaveApplicationController extends Controller
             ->first();
 
         if ($balance) {
-            $balance->used_days += $days;
-            if ($leaveType && ! $leaveType->is_paid) {
-                $balance->remaining_days = max(0, $balance->allocated_days - $balance->used_days);
-            } else {
-                $balance->remaining_days = $balance->allocated_days - $balance->used_days;
-            }
+            $balance->applyUsage((float) $days, ! ($leaveType && ! $leaveType->is_paid));
             $balance->save();
         } elseif ($leaveType && ! $leaveType->is_paid) {
             LeaveBalance::create([
