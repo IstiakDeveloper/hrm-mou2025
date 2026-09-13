@@ -1,2 +1,0 @@
-# Install on the VPS (crontab -e as the deploy user, or /etc/cron.d/hrm):
-# * * * * * www-data cd /var/www/HRM && php artisan schedule:run >> /dev/null 2>&1
