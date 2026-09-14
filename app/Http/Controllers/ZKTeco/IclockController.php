@@ -7,6 +7,7 @@ use App\Models\AttendanceDevice;
 use App\Services\ZktecoAttendanceIngestService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -22,14 +23,6 @@ class IclockController extends Controller
     public function cdata(Request $request): Response
     {
         $sn = $this->serialFromRequest($request);
-
-        Log::info('ADMS cdata', [
-            'ip' => $request->ip(),
-            'method' => $request->method(),
-            'sn' => $sn,
-            'query' => $request->query(),
-            'bytes' => strlen((string) $request->getContent()),
-        ]);
 
         if ($sn === '') {
             return $this->plain('OK');
@@ -59,19 +52,9 @@ class IclockController extends Controller
         $device = $sn !== '' ? $this->resolveDevice($sn, $request) : null;
         $this->touchAdms($device);
 
-        Log::debug('ADMS getrequest', [
-            'sn' => $sn,
-            'info' => $request->query('INFO'),
-        ]);
-
         if ($device) {
             $command = $device->pullPendingAdmsCommand();
             if ($command) {
-                Log::info('ADMS command sent', [
-                    'sn' => $sn,
-                    'command' => $command,
-                ]);
-
                 return $this->plain($command);
             }
         }
@@ -95,13 +78,6 @@ class IclockController extends Controller
             $cmd = (string) ($parsed['CMD'] ?? $cmd);
         }
 
-        Log::info('ADMS deviceCmd', [
-            'sn' => $sn,
-            'id' => $id,
-            'return' => $return,
-            'cmd' => $cmd,
-        ]);
-
         if ($device) {
             $device->ackAdmsCommand($id !== '' ? $id : null, $return !== '' ? $return : '0');
         }
@@ -120,16 +96,18 @@ class IclockController extends Controller
         $records = $this->parseAttLog($body);
 
         if ($records === []) {
-            Log::info('ADMS ATTLOG empty or unparsed', [
-                'sn' => $sn,
-                'preview' => substr($body, 0, 300),
-            ]);
+            if (trim($body) !== '') {
+                Log::error('ADMS ATTLOG unparsed', [
+                    'sn' => $sn,
+                    'preview' => substr($body, 0, 300),
+                ]);
+            }
 
             return $this->plain('OK');
         }
 
         if (! $device || ! $device->acceptsAdms()) {
-            Log::warning('ADMS ATTLOG ignored: device missing or live ADMS off', [
+            Log::error('ADMS ATTLOG ignored: device missing or live ADMS off', [
                 'sn' => $sn,
                 'device_id' => $device?->id,
                 'count' => count($records),
@@ -145,11 +123,13 @@ class IclockController extends Controller
 
         $summary = $this->ingest->ingestRecords($device, $records, null, false);
 
-        Log::info('ADMS ATTLOG ingested', [
-            'sn' => $sn,
-            'device' => $device->name,
-            'summary' => $summary,
-        ]);
+        if (($summary['errors'] ?? 0) > 0) {
+            Log::error('ADMS ATTLOG ingest failed', [
+                'sn' => $sn,
+                'device' => $device->name,
+                'summary' => $summary,
+            ]);
+        }
 
         return $this->plain('OK');
     }
@@ -235,7 +215,11 @@ class IclockController extends Controller
     private function resolveDevice(string $sn, Request $request): ?AttendanceDevice
     {
         if (! Schema::hasColumn('attendance_devices', 'serial_number')) {
-            Log::warning('ADMS: serial_number column missing — run php artisan migrate');
+            Cache::remember('adms:log:missing-serial-column', now()->addHour(), function () {
+                Log::error('ADMS: serial_number column missing — run php artisan migrate');
+
+                return true;
+            });
 
             return null;
         }
@@ -265,12 +249,6 @@ class IclockController extends Controller
             $device->serial_number = $sn;
             $device->save();
 
-            Log::info('ADMS bound serial to device', [
-                'sn' => $sn,
-                'device_id' => $device->id,
-                'name' => $device->name,
-            ]);
-
             return $device;
         }
 
@@ -283,18 +261,17 @@ class IclockController extends Controller
             }
             $device->save();
 
-            Log::info('ADMS bound serial to the only active device', [
-                'sn' => $sn,
-                'device_id' => $device->id,
-            ]);
-
             return $device;
         }
 
-        Log::warning('ADMS unknown serial', [
-            'sn' => $sn,
-            'ip' => $request->ip(),
-        ]);
+        Cache::remember('adms:log:unknown-serial:'.$sn, now()->addHour(), function () use ($sn, $request) {
+            Log::error('ADMS unknown serial', [
+                'sn' => $sn,
+                'ip' => $request->ip(),
+            ]);
+
+            return true;
+        });
 
         return null;
     }

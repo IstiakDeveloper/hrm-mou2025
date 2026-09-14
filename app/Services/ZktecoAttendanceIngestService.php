@@ -117,11 +117,7 @@ class ZktecoAttendanceIngestService
     public function ensureHolidayAttendanceBackfilled(): void
     {
         Cache::remember('attendance:holiday-backfill:from-2026', now()->addDay(), function () {
-            $updated = app(HolidayAttendanceSyncService::class)->syncAllStoredHolidays();
-
-            Log::info('Holiday backfill: updated absent attendances to holiday from stored holidays.', [
-                'updated' => $updated,
-            ]);
+            app(HolidayAttendanceSyncService::class)->syncAllStoredHolidays();
 
             return true;
         });

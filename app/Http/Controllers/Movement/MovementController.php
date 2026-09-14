@@ -818,12 +818,6 @@ class MovementController extends Controller
      */
     private function sendNotificationsToManagers(Movement $movement, Employee $employee)
     {
-        \Log::info('Starting sendNotificationsToManagers', [
-            'movement_id' => $movement->id,
-            'employee_id' => $employee->id,
-            'employee_name' => $employee->name_en ?? $employee->full_name_en ?? '',
-        ]);
-
         try {
             // Find department head
             $departmentHeads = collect([]);
@@ -908,8 +902,6 @@ class MovementController extends Controller
     private function getDepartmentHeads($departmentId)
     {
         if (! $departmentId) {
-            \Log::info('No department ID provided');
-
             return collect([]);
         }
 
@@ -925,19 +917,12 @@ class MovementController extends Controller
             })
             ->get(['id', 'name', 'email']);
 
-        \Log::info('Department heads found: '.$heads->count(), [
-            'department_id' => $departmentId,
-            'heads' => $heads->pluck('email')->toArray(),
-        ]);
-
         return $heads;
     }
 
     private function getBranchHeads($branchId)
     {
         if (! $branchId) {
-            \Log::info('No branch ID provided');
-
             return collect([]);
         }
 
@@ -952,11 +937,6 @@ class MovementController extends Controller
                 $query->where('branch_id', $branchId);
             })
             ->get(['id', 'name', 'email']);
-
-        \Log::info('Branch heads found: '.$heads->count(), [
-            'branch_id' => $branchId,
-            'heads' => $heads->pluck('email')->toArray(),
-        ]);
 
         return $heads;
     }

@@ -22,7 +22,13 @@ REDIS_PORT=6379
 REDIS_DB=0
 REDIS_CACHE_DB=1
 ZKTECO_API_KEY=<strong-random-secret>
+LOG_CHANNEL=stack
+LOG_STACK=daily
+LOG_LEVEL=error
+LOG_DAILY_DAYS=14
 ```
+
+Attendance devices poll `/iclock/getrequest` every few seconds. Do not set `LOG_LEVEL=debug` or `info` in production; those levels are ignored and forced to `error` so routine ADMS traffic cannot grow `laravel.log`. After changing log settings: `php artisan config:cache`. To reclaim disk from an already-huge file: `truncate -s 0 storage/logs/laravel.log`.
 
 ## Horizon (Supervisor)
 

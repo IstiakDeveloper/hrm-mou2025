@@ -5,6 +5,15 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
+$logLevel = strtolower((string) env('LOG_LEVEL', 'error'));
+if ($logLevel === '') {
+    $logLevel = 'error';
+}
+// Production must not keep debug/info chatter; device polls would fill laravel.log.
+if (env('APP_ENV') === 'production' && in_array($logLevel, ['debug', 'info', 'notice'], true)) {
+    $logLevel = 'error';
+}
+
 return [
 
     /*
@@ -54,21 +63,21 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', env('LOG_STACK', 'single')),
+            'channels' => explode(',', env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $logLevel,
             'replace_placeholders' => true,
         ],
 
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $logLevel,
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
         ],
@@ -84,7 +93,7 @@ return [
 
         'papertrail' => [
             'driver' => 'monolog',
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $logLevel,
             'handler' => env('LOG_PAPERTRAIL_HANDLER', SyslogUdpHandler::class),
             'handler_with' => [
                 'host' => env('PAPERTRAIL_URL'),
@@ -96,7 +105,7 @@ return [
 
         'stderr' => [
             'driver' => 'monolog',
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $logLevel,
             'handler' => StreamHandler::class,
             'formatter' => env('LOG_STDERR_FORMATTER'),
             'with' => [
@@ -107,14 +116,14 @@ return [
 
         'syslog' => [
             'driver' => 'syslog',
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $logLevel,
             'facility' => env('LOG_SYSLOG_FACILITY', LOG_USER),
             'replace_placeholders' => true,
         ],
 
         'errorlog' => [
             'driver' => 'errorlog',
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $logLevel,
             'replace_placeholders' => true,
         ],
 
