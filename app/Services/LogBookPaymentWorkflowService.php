@@ -161,12 +161,12 @@ class LogBookPaymentWorkflowService
             ];
         }
 
-        // 8. Field Officers & all other branch field staff (Ineligible)
+        // 8. Officers and all lower branch staff (Ineligible). Lowest payable ranks: Accountant / ABM.
         return [
             'eligible' => false,
             'km_limit' => 0.0,
-            'role_label' => 'Field Officer / Branch Staff',
-            'ineligible_reason' => 'Officer-level and field staff are not eligible for monthly log book payment processing.',
+            'role_label' => 'Officer / Lower Staff',
+            'ineligible_reason' => 'Officers and lower staff are not eligible for log book payment. Payment starts from Accountant / Assistant Branch Manager and above.',
         ];
     }
 

@@ -1582,7 +1582,7 @@ export default function EmployeeEdit({
 
     const isSpouseRequired = ['Married', 'Widowed', 'Separated'].includes(data.marital_status);
 
-    const setOpeningDesignation = useCallback(
+    const setJoiningDesignation = useCallback(
         (value: string) => {
             setData((prev) => ({ ...prev, joining_designation_id: value, last_designation_id: value }));
         },
@@ -2263,7 +2263,7 @@ export default function EmployeeEdit({
                                                         <JobHistoryLockedField onClick={() => setShowJobHistoryLockNotice(true)}>
                                                             <ComboSelect
                                                                 value={data.joining_designation_id || null}
-                                                                onChange={(v) => setOpeningDesignation(v ?? '')}
+                                                                onChange={(v) => setJoiningDesignation(v ?? '')}
                                                                 items={desigItems}
                                                                 placeholder="Select Designation"
                                                                 disabled

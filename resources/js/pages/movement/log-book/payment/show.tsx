@@ -235,21 +235,21 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
                                 <p className="text-xs text-slate-500">Processed by</p>
                                 <p>{payment.processor?.name || '—'}</p>
                                 {payment.processed_at && (
-                                    <p className="text-xs text-slate-500">{format(new Date(payment.processed_at), 'dd MMM yyyy, hh:mm a')}</p>
+                                    <p className="text-[11px] tabular-nums text-slate-500">{format(new Date(payment.processed_at), 'dd/MM/yy')}</p>
                                 )}
                             </div>
                             <div>
                                 <p className="text-xs text-slate-500">Recommended by</p>
                                 <p>{payment.recommender?.name || '—'}</p>
                                 {payment.recommended_at && (
-                                    <p className="text-xs text-slate-500">{format(new Date(payment.recommended_at), 'dd MMM yyyy, hh:mm a')}</p>
+                                    <p className="text-[11px] tabular-nums text-slate-500">{format(new Date(payment.recommended_at), 'dd/MM/yy')}</p>
                                 )}
                             </div>
                             <div>
                                 <p className="text-xs text-slate-500">Approved by</p>
                                 <p>{payment.approver?.name || '—'}</p>
                                 {payment.approved_at && (
-                                    <p className="text-xs text-slate-500">{format(new Date(payment.approved_at), 'dd MMM yyyy, hh:mm a')}</p>
+                                    <p className="text-[11px] tabular-nums text-slate-500">{format(new Date(payment.approved_at), 'dd/MM/yy')}</p>
                                 )}
                             </div>
                             {payment.recommendation_remarks && (
@@ -311,11 +311,19 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
                                             <span className="font-bold text-slate-900">{format(new Date(lb.date), 'dd MMM yyyy')}</span>
                                             {paymentBadge(lb.payment_status)}
                                         </div>
-                                        <div className="text-xs text-slate-700 font-medium truncate">
+                                        <div className="whitespace-pre-wrap break-words text-xs font-medium text-slate-700">
                                             {lb.start_place} → {lb.destination || '—'}
                                         </div>
-                                        <div className="text-[10px] text-slate-500 truncate">
+                                        <div className="whitespace-pre-wrap break-words text-[11px] leading-snug text-slate-600">
                                             Purpose: {lb.purpose}
+                                        </div>
+                                        {lb.work_result && (
+                                            <div className="whitespace-pre-wrap break-words text-[11px] leading-snug text-slate-600">
+                                                Work result: {lb.work_result}
+                                            </div>
+                                        )}
+                                        <div className="text-[10px] text-slate-500">
+                                            {format(new Date(lb.start_time), 'dd MMM yyyy HH:mm')} → {format(new Date(lb.return_time), 'dd MMM yyyy HH:mm')}
                                         </div>
                                         <div className="grid grid-cols-3 gap-1 bg-slate-50 p-1.5 rounded text-center text-[10px]">
                                             <div>
@@ -353,17 +361,17 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/80 text-[10px] uppercase">
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Start Place</TableHead>
-                                        <TableHead>Destination</TableHead>
-                                        <TableHead>Purpose</TableHead>
-                                        <TableHead>Start</TableHead>
-                                        <TableHead>Return</TableHead>
-                                        <TableHead className="text-right">Start Meter</TableHead>
-                                        <TableHead className="text-right">End Meter</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
-                                        <TableHead className="text-right">Personal</TableHead>
-                                        <TableHead className="text-right">Official</TableHead>
+                                        <TableHead className="whitespace-nowrap">Date</TableHead>
+                                        <TableHead className="min-w-[160px]">Start Place</TableHead>
+                                        <TableHead className="min-w-[160px]">Destination</TableHead>
+                                        <TableHead className="min-w-[220px]">Purpose</TableHead>
+                                        <TableHead className="whitespace-nowrap">Start</TableHead>
+                                        <TableHead className="whitespace-nowrap">Return</TableHead>
+                                        <TableHead className="whitespace-nowrap text-right">Start Meter</TableHead>
+                                        <TableHead className="whitespace-nowrap text-right">End Meter</TableHead>
+                                        <TableHead className="whitespace-nowrap text-right">Total</TableHead>
+                                        <TableHead className="whitespace-nowrap text-right">Personal</TableHead>
+                                        <TableHead className="whitespace-nowrap text-right">Official</TableHead>
                                         <TableHead>Payment</TableHead>
                                         <TableHead className="text-right">Action</TableHead>
                                     </TableRow>
@@ -373,11 +381,11 @@ export default function LogBookPaymentShow({ payment, canRecommend = false, canA
                                         entries.map((lb) => (
                                             <TableRow key={lb.id}>
                                                 <TableCell className="whitespace-nowrap text-xs">{format(new Date(lb.date), 'dd MMM yyyy')}</TableCell>
-                                                <TableCell className="max-w-[120px] truncate text-xs" title={lb.start_place}>{lb.start_place}</TableCell>
-                                                <TableCell className="max-w-[120px] truncate text-xs" title={lb.destination || ''}>{lb.destination || '—'}</TableCell>
-                                                <TableCell className="max-w-[140px] truncate text-xs" title={lb.purpose}>{lb.purpose}</TableCell>
-                                                <TableCell className="whitespace-nowrap text-xs">{format(new Date(lb.start_time), 'HH:mm')}</TableCell>
-                                                <TableCell className="whitespace-nowrap text-xs">{format(new Date(lb.return_time), 'HH:mm')}</TableCell>
+                                                <TableCell className="min-w-[160px] whitespace-pre-wrap break-words text-xs leading-snug">{lb.start_place || '—'}</TableCell>
+                                                <TableCell className="min-w-[160px] whitespace-pre-wrap break-words text-xs leading-snug">{lb.destination || '—'}</TableCell>
+                                                <TableCell className="min-w-[220px] whitespace-pre-wrap break-words text-xs leading-snug text-slate-700">{lb.purpose || '—'}</TableCell>
+                                                <TableCell className="whitespace-nowrap text-xs">{format(new Date(lb.start_time), 'dd MMM yyyy HH:mm')}</TableCell>
+                                                <TableCell className="whitespace-nowrap text-xs">{format(new Date(lb.return_time), 'dd MMM yyyy HH:mm')}</TableCell>
                                                 <TableCell className="text-right font-mono text-xs">{formatSmartNumber(lb.start_meter_reading)}</TableCell>
                                                 <TableCell className="text-right font-mono text-xs">{formatSmartNumber(lb.end_meter_reading)}</TableCell>
                                                 <TableCell className="text-right text-xs">{formatSmartKm(lb.distance_km)}</TableCell>

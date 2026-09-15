@@ -53,7 +53,14 @@ class MovementLogBookPaymentController extends Controller
         $this->applyLogBookScopeView($query, $user, $scope['view'], $scope['showTabs']);
 
         if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
+            $status = (string) $request->status;
+            if ($status === 'paid') {
+                $query->where('status', 'approved');
+            } elseif ($status === 'in_process') {
+                $query->whereIn('status', ['pending', 'recommended']);
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         if ($request->filled('period_year') && $request->period_year !== 'all') {

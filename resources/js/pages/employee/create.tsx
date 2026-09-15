@@ -794,7 +794,7 @@ export default function EmployeeCreate({
 
     const isSpouseRequired = ['Married', 'Widowed', 'Separated'].includes(data.marital_status);
 
-    const setOpeningDesignation = useCallback(
+    const setJoiningDesignation = useCallback(
         (value: string) => {
             setData((prev) => ({ ...prev, joining_designation_id: value, last_designation_id: value }));
         },
@@ -1415,10 +1415,10 @@ export default function EmployeeCreate({
                                                             placeholder="Select Department"
                                                         />
                                                     </FormField>
-                                                    <FormField label="Opening Designation" required error={errors.joining_designation_id}>
+                                                    <FormField label="Joining Designation" required error={errors.joining_designation_id}>
                                                         <ComboSelect
                                                             value={data.joining_designation_id || null}
-                                                            onChange={(v) => setOpeningDesignation(v ?? '')}
+                                                            onChange={(v) => setJoiningDesignation(v ?? '')}
                                                             items={desigItems}
                                                             placeholder="Select Designation"
                                                         />

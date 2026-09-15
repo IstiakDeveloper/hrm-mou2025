@@ -16,6 +16,7 @@ use App\Models\RegionalOffice;
 use App\Models\User;
 use App\Models\Zone;
 use App\Notifications\HrmNotification;
+use App\Services\LogBookPaymentWorkflowService;
 use App\Services\OrganogramAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -1140,7 +1141,7 @@ class MovementController extends Controller
 
             return redirect()->back()
                 ->with('success', $createLogBook
-                    ? 'Movement closed successfully. Log book entry created and pending approval.'
+                    ? 'Movement closed successfully. Log book entry created.'
                     : 'Movement closed successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1808,7 +1809,7 @@ class MovementController extends Controller
             return;
         }
 
-        $movement->loadMissing('employee.branch');
+        $movement->loadMissing(['employee.branch', 'employee.designation']);
         $branch = $movement->employee?->branch;
         $isHeadOffice = (bool) ($branch?->is_head_office);
 
@@ -1856,8 +1857,23 @@ class MovementController extends Controller
             'personal_km' => $personalKm,
             'official_km' => $officialKm,
             'approval_scope' => $isHeadOffice ? 'head_office' : 'branch',
-            'payment_status' => 'unpaid',
+            'payment_status' => $this->logBookPaymentStatusForEmployee($movement->employee),
         ]);
+    }
+
+    /**
+     * Officers and lower staff never sit in unpaid/pending payment.
+     * Accountant / ABM and above stay unpaid until monthly payment is processed.
+     */
+    private function logBookPaymentStatusForEmployee(?Employee $employee): string
+    {
+        if (! $employee) {
+            return 'paid';
+        }
+
+        $limitInfo = app(LogBookPaymentWorkflowService::class)->resolveKmLimit($employee);
+
+        return $limitInfo['eligible'] ? 'unpaid' : 'paid';
     }
 
     /**
