@@ -67,7 +67,7 @@ type DemotionHistory = {
 };
 
 type Address = { type: 'present' | 'permanent'; division: string; district: string; upazila: string; union: string; village: string; address_details: string; };
-type Education = { degree: string; institute: string; group_name: string; board: string; subject: string; result_type: string; result_value: string; };
+type Education = { degree: string; institute: string; group_name: string; board: string; subject: string; result_type: string; result_value: string; passing_year?: string | number | null; };
 type Nominee = Record<string, string | number | null | undefined> & { name: string; relation?: string; date_of_birth?: string; share?: string | number; share_percentage?: string | number; contact?: string; mobile?: string; };
 type Guarantor = Record<string, string | number | null | undefined> & { name: string; age?: string | number; occupation?: string; profession?: string; relation?: string; phone?: string; mobile?: string; email?: string; father_name?: string; address?: string; organization?: string; designation?: string; nid?: string; };
 type Cheque = { bank_name?: string; branch_name?: string; cheque_no?: string; qty?: string | number; notes?: string; };
@@ -915,6 +915,7 @@ export default function EmployeeShow({
                                                 <th className="px-2.5 py-1.5">Institute</th>
                                                 <th className="px-2.5 py-1.5">Board/Univ</th>
                                                 <th className="px-2.5 py-1.5">Subject</th>
+                                                <th className="px-2.5 py-1.5">Passing Year</th>
                                                 <th className="px-2.5 py-1.5">Result</th>
                                             </tr>
                                         </thead>
@@ -925,6 +926,7 @@ export default function EmployeeShow({
                                                     <td className="px-2.5 py-1.5 text-slate-800 font-medium">{edu.institute}</td>
                                                     <td className="px-2.5 py-1.5 text-slate-800 font-medium">{edu.board}</td>
                                                     <td className="px-2.5 py-1.5 text-slate-800 font-medium">{edu.group_name || edu.subject}</td>
+                                                    <td className="px-2.5 py-1.5 text-slate-800 font-medium">{edu.passing_year || '—'}</td>
                                                     <td className="px-2.5 py-1.5 text-slate-950 font-bold uppercase">{edu.result_type}: {edu.result_value}</td>
                                                 </tr>
                                             ))}

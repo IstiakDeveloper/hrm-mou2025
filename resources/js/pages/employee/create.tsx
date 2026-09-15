@@ -110,6 +110,7 @@ interface Education {
     subject: string;
     result_type: 'gpa' | 'cgpa' | 'other' | '';
     result_value: string;
+    passing_year: string;
 }
 
 type Nominee = NomineeFormRow;
@@ -1976,6 +1977,7 @@ export default function EmployeeCreate({
                                                                 subject: '',
                                                                 result_type: '',
                                                                 result_value: '',
+                                                                passing_year: '',
                                                             },
                                                         ])
                                                     }
@@ -2009,6 +2011,7 @@ export default function EmployeeCreate({
                                                                     subject: '',
                                                                     result_type: '',
                                                                     result_value: '',
+                                                                    passing_year: '',
                                                                 },
                                                             ])
                                                         }
@@ -2148,6 +2151,21 @@ export default function EmployeeCreate({
                                                                             setData('educations', next);
                                                                         }}
                                                                         placeholder="e.g. 5.00"
+                                                                    />
+                                                                </FormField>
+                                                                <FormField label="Passing Year">
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={1900}
+                                                                        max={2100}
+                                                                        step={1}
+                                                                        value={ed.passing_year ?? ''}
+                                                                        onChange={(e) => {
+                                                                            const next = [...data.educations];
+                                                                            next[idx] = { ...next[idx], passing_year: e.target.value };
+                                                                            setData('educations', next);
+                                                                        }}
+                                                                        placeholder="e.g. 2018"
                                                                     />
                                                                 </FormField>
                                                             </div>

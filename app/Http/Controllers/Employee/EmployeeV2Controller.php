@@ -430,6 +430,7 @@ class EmployeeV2Controller extends Controller
                 'educations.*.subject' => 'nullable|string|max:255',
                 'educations.*.result_type' => 'nullable|in:gpa,cgpa,other',
                 'educations.*.result_value' => 'nullable|string|max:50',
+                'educations.*.passing_year' => 'nullable|integer|min:1900|max:2100',
 
                 'bank' => 'nullable|array',
                 'bank.bank_name' => 'nullable|string|max:200',
@@ -860,6 +861,7 @@ class EmployeeV2Controller extends Controller
                 'educations.*.subject' => 'nullable|string|max:255',
                 'educations.*.result_type' => 'nullable|in:gpa,cgpa,other',
                 'educations.*.result_value' => 'nullable|string|max:50',
+                'educations.*.passing_year' => 'nullable|integer|min:1900|max:2100',
 
                 'bank' => 'nullable|array',
                 'bank.bank_name' => 'nullable|string|max:200',

@@ -118,6 +118,7 @@ interface Education {
     subject: string;
     result_type: 'gpa' | 'cgpa' | 'other' | '';
     result_value: string;
+    passing_year: string;
 }
 
 type Nominee = NomineeFormRow;
@@ -836,7 +837,16 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         photo: null,
         signature: null,
         addresses: normalizeEmployeeFormAddresses(employee.addresses),
-        educations: (employee.educations as any[]) ?? [],
+        educations: (((employee.educations as any[]) ?? []).map((ed) => ({
+            degree: ed.degree ?? '',
+            institute: ed.institute ?? '',
+            board: ed.board ?? '',
+            group_name: ed.group_name ?? '',
+            subject: ed.subject ?? '',
+            result_type: ed.result_type ?? '',
+            result_value: ed.result_value ?? '',
+            passing_year: ed.passing_year != null && ed.passing_year !== '' ? String(ed.passing_year) : '',
+        }))) as Education[],
         bank: normalizeEmployeeBankFormFields(employee.bank ?? emptyEmployeeBankFormFields()),
         nominees: hydrateNomineeFormRows(employee.nominees),
         guarantors: hydrateGuarantorFormRows(employee.guarantors),
@@ -3075,6 +3085,7 @@ export default function EmployeeEdit({
                                                                 subject: '',
                                                                 result_type: '',
                                                                 result_value: '',
+                                                                passing_year: '',
                                                             },
                                                         ])
                                                     }
@@ -3108,6 +3119,7 @@ export default function EmployeeEdit({
                                                                     subject: '',
                                                                     result_type: '',
                                                                     result_value: '',
+                                                                    passing_year: '',
                                                                 },
                                                             ])
                                                         }
@@ -3247,6 +3259,21 @@ export default function EmployeeEdit({
                                                                             setData('educations', next);
                                                                         }}
                                                                         placeholder="e.g. 5.00"
+                                                                    />
+                                                                </FormField>
+                                                                <FormField label="Passing Year">
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={1900}
+                                                                        max={2100}
+                                                                        step={1}
+                                                                        value={ed.passing_year ?? ''}
+                                                                        onChange={(e) => {
+                                                                            const next = [...data.educations];
+                                                                            next[idx] = { ...next[idx], passing_year: e.target.value };
+                                                                            setData('educations', next);
+                                                                        }}
+                                                                        placeholder="e.g. 2018"
                                                                     />
                                                                 </FormField>
                                                             </div>
