@@ -23,6 +23,7 @@ type Props = {
         branch: string | null;
         department: string | null;
         joining_date: string | null;
+        confirmation_date: string | null;
         employment_status: string | null;
         resignation_date: string | null;
         dropout_date: string | null;
@@ -111,6 +112,10 @@ export default function GratuityShow({ employee, filters, calculation, payments,
                                     <dt className="text-slate-500">Joining date</dt>
                                     <dd>{employee.joining_date || '—'}</dd>
                                 </div>
+                                <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">Confirmation date</dt>
+                                    <dd className="font-medium">{employee.confirmation_date || '—'}</dd>
+                                </div>
                                 {employee.resignation_date && (
                                     <div className="flex justify-between gap-4">
                                         <dt className="text-slate-500">Resignation</dt>
@@ -129,8 +134,7 @@ export default function GratuityShow({ employee, filters, calculation, payments,
                                 </div>
                             </dl>
                             <p className="mt-3 text-xs text-slate-500">
-                                Service end uses dropout or resignation date when set; otherwise the &quot;as of&quot; date below
-                                (e.g. last working day).
+                                Completed years are counted from confirmation date to service end (dropout/resignation, otherwise the &quot;as of&quot; date).
                             </p>
                         </CardContent>
                     </Card>

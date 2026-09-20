@@ -310,8 +310,8 @@
             <tr>
                 <td class="label">Separation Date</td>
                 <td class="val">{{ $statement['employee']['separation_date'] ?? 'Active / In Service' }}</td>
-                <td class="label">Service Length</td>
-                <td class="val">{{ $statement['employee']['tenure_joining'] ?? '—' }}</td>
+                <td class="label">Service Length (from confirmation)</td>
+                <td class="val">{{ $statement['employee']['tenure_confirmation'] ?? '—' }}</td>
             </tr>
         </table>
 

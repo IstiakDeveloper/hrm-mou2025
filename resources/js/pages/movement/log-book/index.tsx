@@ -163,8 +163,8 @@ function getPaymentBadge(row: LogBook) {
     return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">Unpaid</Badge>;
 }
 
-function canManageRow(row: LogBook, canManageLogBook: boolean) {
-    return canManageLogBook && row.payment_status === 'unpaid';
+function canManageRow(_row: LogBook, canManageLogBook: boolean) {
+    return canManageLogBook;
 }
 
 function LogBookActionButtons({ row, canManageLogBook }: { row: LogBook; canManageLogBook: boolean }) {

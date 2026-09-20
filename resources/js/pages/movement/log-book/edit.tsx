@@ -27,6 +27,7 @@ interface LogBook {
     distance_km: string | number;
     personal_km: string | number | null;
     official_km: string | number;
+    payment_status?: 'unpaid' | 'paid';
     employee: Employee;
 }
 
@@ -87,6 +88,11 @@ export default function MovementLogBookEdit({ logBook, ratePerKm }: Props) {
                             {logBook.employee.pin || logBook.employee.employee_id ? ` · ${logBook.employee.pin || logBook.employee.employee_id}` : ''}
                             {logBook.employee.branch?.name ? ` · ${logBook.employee.branch.name}` : ''}
                         </p>
+                        {logBook.payment_status === 'paid' && (
+                            <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                                This entry is marked paid (officers/staff are auto-paid). Super Admin can still correct it.
+                            </p>
+                        )}
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-4">

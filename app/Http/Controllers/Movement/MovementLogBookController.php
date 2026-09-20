@@ -643,7 +643,8 @@ class MovementLogBookController extends Controller
 
     private function userCanManageLogBook(User $user, MovementLogBook $logBook): bool
     {
-        return $user->isSuperAdmin() && $logBook->payment_status === 'unpaid';
+        // Super Admin may correct paid entries too (officers/staff are auto-paid and otherwise locked).
+        return $user->isSuperAdmin();
     }
 
     private function syncPendingPaymentBatch(MovementLogBookPayment $payment): void

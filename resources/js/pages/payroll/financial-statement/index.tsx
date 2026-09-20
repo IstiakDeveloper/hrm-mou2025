@@ -330,12 +330,12 @@ export default function EmployeeFinancialStatementPage({
                                     <span className="font-semibold text-slate-700 font-mono text-sm">৳{formatTakaWhole(statement.employee.gross_salary)}</span>
                                 </div>
                                 <div className="rounded-lg bg-slate-50 p-2 border border-slate-100">
-                                    <span className="text-slate-400 text-[10px] block font-medium">Joining Date</span>
-                                    <span className="font-semibold text-slate-700">{statement.employee.joining_date || '—'}</span>
+                                    <span className="text-slate-400 text-[10px] block font-medium">Confirmation Date</span>
+                                    <span className="font-semibold text-slate-700">{statement.employee.confirmation_date || '—'}</span>
                                 </div>
                                 <div className="rounded-lg bg-slate-50 p-2 border border-slate-100">
                                     <span className="text-slate-400 text-[10px] block font-medium">Service Length</span>
-                                    <span className="font-semibold text-slate-700">{statement.employee.tenure_joining || '—'}</span>
+                                    <span className="font-semibold text-slate-700">{statement.employee.tenure_confirmation || '—'}</span>
                                 </div>
                             </div>
                         </div>
@@ -441,7 +441,7 @@ export default function EmployeeFinancialStatementPage({
                                     <div className="space-y-2 text-xs text-slate-600">
                                         <div className="flex justify-between">
                                             <span>Qualifying Tenure:</span>
-                                            <span className="font-medium">{statement.gratuity.completed_years} Years</span>
+                                            <span className="font-medium">{statement.gratuity.completed_years} Years from confirmation</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span>Formula:</span>

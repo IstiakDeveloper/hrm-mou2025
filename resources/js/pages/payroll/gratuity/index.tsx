@@ -26,6 +26,7 @@ type Row = {
     department: string | null;
     designation: string | null;
     joining_date: string | null;
+    confirmation_date: string | null;
     completed_years: number;
     basic_salary: number;
     basic_multiplier: number;
@@ -294,7 +295,7 @@ export default function GratuityIndex({ filters: init, rows, tiers, branches, de
                                     <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50 border-b border-zinc-200/60">
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider pl-3">Employee</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Service End</TableHead>
-                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Joining Date</TableHead>
+                                        <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider">Confirmation Date</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Service Tenure</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-right">Basic Salary</TableHead>
                                         <TableHead className="font-bold text-zinc-600 h-8 py-1 uppercase text-[9px] tracking-wider text-center">Multiplier</TableHead>
@@ -322,7 +323,7 @@ export default function GratuityIndex({ filters: init, rows, tiers, branches, de
                                                     <span className="block text-[9px] text-amber-700 font-medium">{r.service_end_hint}</span>
                                                 ) : null}
                                             </TableCell>
-                                            <TableCell className="py-1.5 text-zinc-500 whitespace-nowrap">{r.joining_date || '—'}</TableCell>
+                                            <TableCell className="py-1.5 text-zinc-500 whitespace-nowrap">{r.confirmation_date || '—'}</TableCell>
                                             <TableCell className="text-right py-1.5 tabular-nums">
                                                 <span className="font-bold text-zinc-800">{r.completed_years}</span>
                                                 <span className="text-[10px] text-zinc-400"> yrs</span>
