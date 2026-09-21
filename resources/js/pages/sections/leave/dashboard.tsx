@@ -9,6 +9,7 @@ import {
     Clock,
     FileText,
     Layers,
+    LayoutDashboard,
     ListChecks,
     Settings2,
     User,
@@ -21,8 +22,6 @@ import { type SharedData } from '@/types';
 import { cn } from '@/lib/utils';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LeaveEmployeeDashboardView, type LeaveEmployeeDashboardProps } from '@/pages/sections/leave/employee-dashboard';
 
@@ -44,74 +43,85 @@ type Props = {
     employeeDashboard?: LeaveEmployeeDashboardProps | null;
 };
 
-const kpiGrid = 'grid grid-cols-1 min-[340px]:grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
-const shortcutGrid = 'grid grid-cols-1 min-[320px]:grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
-
 function leaveTypeLabel(x: LeaveApplication): string {
     return x.leave_type?.name ?? x.leaveType?.name ?? '—';
 }
 
+/* ── KPI STAT CARD ─────────────────────────────────────────────────────── */
 function KpiCard({
     label,
     value,
     sub,
     href,
     icon: Icon,
-    accent = 'amber',
+    accent,
 }: {
     label: string;
     value: number;
     sub?: string;
     href?: string;
     icon: LucideIcon;
-    accent?: 'emerald' | 'sky' | 'amber' | 'rose' | 'violet' | 'zinc';
+    accent: 'emerald' | 'amber' | 'sky' | 'rose';
 }) {
-    const accentBar = {
-        emerald: 'from-emerald-500 to-teal-500',
-        sky: 'from-sky-500 to-blue-600',
-        amber: 'from-amber-500 to-orange-500',
-        rose: 'from-rose-500 to-red-500',
-        violet: 'from-violet-500 to-purple-600',
-        zinc: 'from-zinc-400 to-zinc-600',
-    }[accent];
-
-    const iconBg = {
-        emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-600/15',
-        sky: 'bg-sky-50 text-sky-700 ring-sky-600/15',
-        amber: 'bg-amber-50 text-amber-800 ring-amber-600/15',
-        rose: 'bg-rose-50 text-rose-700 ring-rose-600/15',
-        violet: 'bg-violet-50 text-violet-700 ring-violet-600/15',
-        zinc: 'bg-zinc-100 text-zinc-600 ring-zinc-500/10',
+    const colors = {
+        emerald: {
+            iconBg: 'bg-emerald-100 text-emerald-700',
+            bar: 'bg-emerald-500',
+            arrow: 'group-hover:text-emerald-600',
+            val: 'text-emerald-700',
+        },
+        amber: {
+            iconBg: 'bg-amber-100 text-amber-700',
+            bar: 'bg-amber-400',
+            arrow: 'group-hover:text-amber-600',
+            val: 'text-amber-700',
+        },
+        sky: {
+            iconBg: 'bg-sky-100 text-sky-700',
+            bar: 'bg-sky-400',
+            arrow: 'group-hover:text-sky-600',
+            val: 'text-sky-700',
+        },
+        rose: {
+            iconBg: 'bg-rose-100 text-rose-700',
+            bar: 'bg-rose-400',
+            arrow: 'group-hover:text-rose-600',
+            val: 'text-rose-700',
+        },
     }[accent];
 
     const inner = (
         <div
             className={cn(
-                'group relative flex min-h-[5.25rem] flex-col overflow-hidden rounded-xl border border-zinc-200/90 bg-white p-3 shadow-sm',
-                'transition-all duration-200 hover:border-zinc-300 hover:shadow-md',
+                'group relative flex flex-col gap-1.5 overflow-hidden rounded-lg border border-slate-200 bg-white px-3.5 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:border-slate-300',
                 href && 'cursor-pointer',
             )}
         >
-            <div className={cn('absolute left-0 top-0 h-full w-0.5 bg-gradient-to-b', accentBar)} />
-            <div className="flex items-start justify-between gap-2 pl-1">
-                <div className={cn('rounded-lg p-1.5 ring-1 ring-inset', iconBg)}>
+            {/* accent bar left */}
+            <div className={cn('absolute left-0 top-0 h-full w-[3px] rounded-l-lg', colors.bar)} />
+
+            <div className="flex items-center justify-between pl-1">
+                <div className={cn('flex h-7 w-7 items-center justify-center rounded-md', colors.iconBg)}>
                     <Icon className="h-3.5 w-3.5" strokeWidth={2} />
                 </div>
-                {href ? (
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-300 transition-colors group-hover:text-amber-600" />
-                ) : null}
+                {href && (
+                    <ArrowUpRight className={cn('h-3.5 w-3.5 text-slate-300 transition-colors', colors.arrow)} />
+                )}
             </div>
-            <p className="mt-2 pl-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-            <p className="pl-1 text-xl font-bold tabular-nums tracking-tight text-zinc-900 sm:text-2xl">
-                {Number(value || 0).toLocaleString()}
-            </p>
-            {sub ? <p className="mt-auto pl-1 pt-1 text-[10px] leading-tight text-zinc-500">{sub}</p> : null}
+
+            <div className="pl-1">
+                <p className={cn('text-xl font-bold tabular-nums leading-none', colors.val)}>
+                    {Number(value || 0).toLocaleString()}
+                </p>
+                <p className="mt-0.5 text-[11px] font-medium text-slate-500">{label}</p>
+                {sub && <p className="mt-0.5 text-[10px] text-slate-400">{sub}</p>}
+            </div>
         </div>
     );
 
     if (href) {
         return (
-            <Link href={href} className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40">
+            <Link href={href} className="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
                 {inner}
             </Link>
         );
@@ -119,27 +129,184 @@ function KpiCard({
     return inner;
 }
 
-function ShortcutTile({ href, title, icon: Icon }: { href: string; title: string; icon: LucideIcon }) {
+/* ── QUICK ACTION TILE ─────────────────────────────────────────────────── */
+function QuickTile({ href, title, icon: Icon }: { href: string; title: string; icon: LucideIcon }) {
     return (
         <Link
             href={href}
-            className="flex items-center gap-2.5 rounded-xl border border-zinc-200/90 bg-white px-3 py-2.5 text-xs font-medium text-zinc-800 shadow-sm transition-all hover:border-amber-200 hover:bg-amber-50/50 hover:text-amber-950"
+            className="group flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 shadow-sm transition-all duration-150 hover:border-emerald-300 hover:bg-emerald-50/60 hover:text-emerald-800"
         >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200/80">
-                <Icon className="h-4 w-4" />
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 group-hover:bg-emerald-200">
+                <Icon className="h-3.5 w-3.5" />
             </span>
-            <span className="min-w-0 flex-1 leading-snug">{title}</span>
-            <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+            <span className="min-w-0 flex-1 truncate">{title}</span>
+            <ArrowUpRight className="h-3 w-3 shrink-0 text-slate-300 group-hover:text-emerald-500" />
         </Link>
     );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-    return <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{children}</h2>;
+/* ── STATUS BADGE ──────────────────────────────────────────────────────── */
+function StatusPill({ status }: { status: string }) {
+    const s = (status ?? '').toLowerCase();
+    const cls: Record<string, string> = {
+        pending:   'bg-amber-50 text-amber-700 ring-amber-300/60',
+        approved:  'bg-emerald-50 text-emerald-700 ring-emerald-300/60',
+        rejected:  'bg-rose-50 text-rose-700 ring-rose-300/60',
+        cancelled: 'bg-slate-100 text-slate-500 ring-slate-200',
+    };
+    return (
+        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ring-1 ring-inset', cls[s] ?? 'bg-slate-100 text-slate-600 ring-slate-200')}>
+            {status}
+        </span>
+    );
 }
 
+/* ── SECTION LABEL ─────────────────────────────────────────────────────── */
+function SLabel({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="mb-2 flex items-center gap-1.5">
+            <span className="h-3 w-0.5 rounded-full bg-emerald-500" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{children}</span>
+        </div>
+    );
+}
+
+/* ── ADMIN BODY ────────────────────────────────────────────────────────── */
+function LeaveAdminBody({ leaveStats, recentLeaves, hasPermission }: Props & { hasPermission: (p?: string) => boolean }) {
+    return (
+        <div className="space-y-5">
+            {/* KPI */}
+            <section>
+                <SLabel>Overview</SLabel>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                    <KpiCard
+                        label="Pending Approvals"
+                        value={leaveStats.pending}
+                        href="/leave/applications?section=leave&status=pending"
+                        icon={Clock}
+                        accent="amber"
+                        sub="Awaiting action"
+                    />
+                    <KpiCard
+                        label="Approved (Month)"
+                        value={leaveStats.approved}
+                        href="/leave/applications?section=leave"
+                        icon={CheckCircle2}
+                        accent="emerald"
+                        sub="Calendar month"
+                    />
+                    <KpiCard
+                        label="On Leave Today"
+                        value={leaveStats.todayOnLeave}
+                        href="/leave/applications?section=leave"
+                        icon={CalendarDays}
+                        accent="sky"
+                        sub="Active absences"
+                    />
+                </div>
+            </section>
+
+            {/* Quick Actions */}
+            <section>
+                <SLabel>Quick Actions</SLabel>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {hasPermission('leave-applications.view') && (
+                        <QuickTile href="/leave/applications?section=leave" title="Applications" icon={FileText} />
+                    )}
+                    {hasPermission('leave-balances.view') && (
+                        <QuickTile href="/leave/balances?section=leave" title="Balances" icon={Wallet} />
+                    )}
+                    {hasPermission('leave-types.view') && (
+                        <>
+                            <QuickTile href="/leave/types?section=leave" title="Leave Types" icon={Layers} />
+                            <QuickTile href="/leave/settings?section=leave" title="Approval Settings" icon={Settings2} />
+                        </>
+                    )}
+                    {hasPermission('leave-balances.admin') && (
+                        <QuickTile href="/leave/balances/allocate-bulk?section=leave" title="Bulk Allocate" icon={ListChecks} />
+                    )}
+                    {hasPermission('reports.view') && (
+                        <QuickTile href="/leave/applications/report?section=leave" title="Leave Report" icon={BarChart3} />
+                    )}
+                </div>
+            </section>
+
+            {/* Recent Applications */}
+            <section>
+                <div className="mb-2 flex items-center justify-between">
+                    <SLabel>Recent Applications</SLabel>
+                    {hasPermission('leave-applications.view') && (
+                        <Link
+                            href="/leave/applications?section=leave"
+                            className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-800 transition-colors flex items-center gap-0.5"
+                        >
+                            View all <ArrowUpRight className="h-2.5 w-2.5" />
+                        </Link>
+                    )}
+                </div>
+
+                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                    {recentLeaves?.length ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[520px] text-left">
+                                <thead>
+                                    <tr className="border-b border-slate-100 bg-slate-50/80">
+                                        <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Employee</th>
+                                        <th className="hidden px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:table-cell">Type</th>
+                                        <th className="px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Dates</th>
+                                        <th className="px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                                        <th className="w-8 px-2.5 py-2" />
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {recentLeaves.map((x) => (
+                                        <tr key={x.id} className="group transition-colors hover:bg-emerald-50/30">
+                                            <td className="px-3 py-2">
+                                                <Link
+                                                    href={`/leave/applications/${x.id}?section=leave`}
+                                                    className="text-xs font-medium text-slate-800 hover:text-emerald-700 transition-colors"
+                                                >
+                                                    {employeeDisplayName(x.employee)}
+                                                </Link>
+                                                <p className="truncate text-[10px] text-slate-400 sm:hidden">{leaveTypeLabel(x)}</p>
+                                            </td>
+                                            <td className="hidden max-w-[130px] truncate px-2.5 py-2 text-[11px] text-slate-500 sm:table-cell">
+                                                {leaveTypeLabel(x)}
+                                            </td>
+                                            <td className="whitespace-nowrap px-2.5 py-2 text-[11px] tabular-nums text-slate-500">
+                                                {new Date(x.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                                                {' – '}
+                                                {new Date(x.end_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </td>
+                                            <td className="px-2.5 py-2">
+                                                <StatusPill status={x.status} />
+                                            </td>
+                                            <td className="px-2.5 py-2">
+                                                <Link href={`/leave/applications/${x.id}?section=leave`}>
+                                                    <ArrowUpRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-all group-hover:opacity-100 group-hover:text-emerald-500" />
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-10 text-center">
+                            <FileText className="mb-2 h-7 w-7 text-slate-300" />
+                            <p className="text-xs font-medium text-slate-400">No recent leave applications.</p>
+                        </div>
+                    )}
+                </div>
+            </section>
+        </div>
+    );
+}
+
+/* ── PAGE ROOT ─────────────────────────────────────────────────────────── */
 export default function LeaveDashboard(props: Props) {
-    const { auth } = usePage<SharedData>().props;
+    const { auth, pendingLeaveCount } = usePage<SharedData>().props;
+    const pendingLeave = (pendingLeaveCount as number) ?? props.leaveStats.pending;
     const { userRole, showEmployeeTab: showEmployeeTabProp, employeeDashboard } = props;
     const showEmployeeTab = Boolean(showEmployeeTabProp && employeeDashboard);
     const [dashboardMode, setDashboardMode] = useState<'admin' | 'employee'>('admin');
@@ -147,54 +314,81 @@ export default function LeaveDashboard(props: Props) {
 
     return (
         <Layout>
-            <Head title="Leave" />
+            <Head title="Leave Dashboard" />
 
-            <PageSurface className="max-w-7xl bg-zinc-50/40 py-5 md:py-6 px-3 sm:px-4">
-                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-sm sm:text-base font-semibold tracking-tight text-zinc-900 md:text-lg">Leave</h1>
-                        <p className="text-xs text-zinc-500">
-                            {userRole || 'User'} · {auth?.user?.name}
-                        </p>
+            <PageSurface className="max-w-7xl bg-slate-50/40 px-3 py-4 sm:px-4 sm:py-5">
+                {/* Header */}
+                <div className="mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50">
+                            <LayoutDashboard className="h-4 w-4 text-emerald-600" />
+                        </div>
+                        <div>
+                            <h1 className="text-sm font-semibold text-slate-900">Leave Dashboard</h1>
+                            <p className="text-[10px] text-slate-500">{userRole || 'User'} · {auth?.user?.name}</p>
+                        </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs border-zinc-200 bg-white">
-                            <Link href="/sections">Sections</Link>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="h-7 border-slate-200 bg-white px-2.5 text-[11px] text-slate-600 hover:border-slate-300"
+                        >
+                            <Link href="/sections">← Sections</Link>
                         </Button>
+
+                        {pendingLeave > 0 && hasPermission('leave-applications.view') && (
+                            <Button
+                                asChild
+                                size="sm"
+                                className="h-7 gap-1 bg-amber-500 px-2.5 text-[11px] font-semibold text-white shadow-sm hover:bg-amber-600"
+                            >
+                                <Link href="/leave/applications?section=leave&status=pending">
+                                    <Clock className="h-3 w-3" />
+                                    {pendingLeave > 99 ? '99+' : pendingLeave} Pending
+                                </Link>
+                            </Button>
+                        )}
+
                         {hasPermission('leave-applications.create') && (
-                            <Button asChild size="sm" className="h-7 px-2.5 text-[10px] sm:h-8 sm:px-3 sm:text-xs bg-amber-600 text-white hover:bg-amber-700">
-                                <Link href="/leave/applications/create?section=leave">Apply leave</Link>
+                            <Button
+                                asChild
+                                size="sm"
+                                className="h-7 bg-emerald-600 px-2.5 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-700"
+                            >
+                                <Link href="/leave/applications/create?section=leave">+ Apply Leave</Link>
                             </Button>
                         )}
                     </div>
                 </div>
 
+                {/* Tabs or direct body */}
                 {showEmployeeTab ? (
                     <Tabs
                         value={dashboardMode}
                         onValueChange={(v) => setDashboardMode(v as 'admin' | 'employee')}
                         className="w-full"
                     >
-                        <TabsList className="mb-4 h-9 w-fit min-w-0 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
+                        <TabsList className="mb-4 h-8 w-fit gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
                             <TabsTrigger
                                 value="admin"
-                                className="h-8 min-w-[5.5rem] flex-none rounded-md px-3 text-xs data-[state=active]:bg-zinc-900 data-[state=active]:text-white"
+                                className="h-7 min-w-[5.5rem] rounded-md px-3 text-[11px] font-medium data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
                             >
-                                Admin
+                                Admin View
                             </TabsTrigger>
                             <TabsTrigger
                                 value="employee"
-                                className="h-8 min-w-[5.5rem] flex-none gap-1.5 rounded-md px-3 text-xs data-[state=active]:bg-amber-600 data-[state=active]:text-white"
+                                className="h-7 min-w-[5.5rem] gap-1.5 rounded-md px-3 text-[11px] font-medium data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
                             >
-                                <User className="h-3.5 w-3.5" />
-                                Employee
+                                <User className="h-3 w-3" />
+                                My Leave
                             </TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="employee" className="mt-0 outline-none">
-                            {employeeDashboard ? (
-                                <LeaveEmployeeDashboardView embedded {...employeeDashboard} />
-                            ) : null}
+                            {employeeDashboard ? <LeaveEmployeeDashboardView embedded {...employeeDashboard} /> : null}
                         </TabsContent>
 
                         <TabsContent value="admin" className="mt-0 outline-none">
@@ -206,128 +400,5 @@ export default function LeaveDashboard(props: Props) {
                 )}
             </PageSurface>
         </Layout>
-    );
-}
-
-function LeaveAdminBody({
-    leaveStats,
-    recentLeaves,
-    hasPermission,
-}: Props & { hasPermission: (permission?: string) => boolean }) {
-    return (
-        <>
-                <section className="mb-6">
-                    <SectionLabel>Today &amp; pipeline</SectionLabel>
-                    <div className={kpiGrid}>
-                        <KpiCard
-                            label="Pending"
-                            value={leaveStats.pending}
-                            href="/leave/applications?section=leave"
-                            icon={Clock}
-                            accent="amber"
-                        />
-                        <KpiCard
-                            label="Approved (month)"
-                            value={leaveStats.approved}
-                            sub="This calendar month"
-                            href="/leave/applications?section=leave"
-                            icon={CheckCircle2}
-                            accent="emerald"
-                        />
-                        <KpiCard
-                            label="On leave today"
-                            value={leaveStats.todayOnLeave}
-                            href="/leave/applications?section=leave"
-                            icon={CalendarDays}
-                            accent="sky"
-                        />
-                    </div>
-                </section>
-
-                <section className="mb-6">
-                    <SectionLabel>Quick actions</SectionLabel>
-                    <div className={shortcutGrid}>
-                        {hasPermission('leave-applications.view') && (
-                            <ShortcutTile href="/leave/applications?section=leave" title="Applications" icon={FileText} />
-                        )}
-                        {hasPermission('leave-balances.view') && (
-                            <ShortcutTile href="/leave/balances?section=leave" title="Balances" icon={Wallet} />
-                        )}
-                        {hasPermission('leave-types.view') && (
-                            <>
-                                <ShortcutTile href="/leave/types?section=leave" title="Leave types" icon={Layers} />
-                                <ShortcutTile href="/leave/settings?section=leave" title="Approval settings" icon={Settings2} />
-                            </>
-                        )}
-                        {hasPermission('leave-balances.admin') && (
-                            <ShortcutTile href="/leave/balances/allocate-bulk?section=leave" title="Bulk allocate" icon={ListChecks} />
-                        )}
-                        {hasPermission('reports.view') && (
-                            <ShortcutTile href="/leave/applications/report?section=leave" title="Leave report" icon={BarChart3} />
-                        )}
-                    </div>
-                </section>
-
-                <section>
-                    <SectionLabel>Recent applications</SectionLabel>
-                    <Card className="border-zinc-200/90 shadow-sm">
-                        <CardHeader className="border-b border-zinc-100 py-3">
-                            <CardTitle className="text-sm font-semibold text-zinc-900">Latest requests</CardTitle>
-                            <CardDescription className="text-xs text-zinc-500">Newest leave applications in your scope</CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {recentLeaves?.length ? (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[550px] text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-zinc-100 bg-zinc-50/80 text-[10px] uppercase tracking-wide text-zinc-500">
-                                                <th className="px-3 py-2 font-medium">Employee</th>
-                                                <th className="hidden px-2 py-2 font-medium sm:table-cell">Type</th>
-                                                <th className="px-2 py-2 font-medium">Dates</th>
-                                                <th className="px-2 py-2 font-medium">Status</th>
-                                                <th className="w-8 px-2 py-2" />
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {recentLeaves.map((x) => (
-                                                <tr key={x.id} className="border-b border-zinc-50 last:border-0 hover:bg-zinc-50/60">
-                                                    <td className="px-3 py-2">
-                                                        <Link
-                                                            href={`/leave/applications/${x.id}?section=leave`}
-                                                            className="font-medium text-zinc-900 hover:text-amber-700"
-                                                        >
-                                                            {employeeDisplayName(x.employee)}
-                                                        </Link>
-                                                        <p className="truncate text-[10px] text-zinc-500 sm:hidden">{leaveTypeLabel(x)}</p>
-                                                    </td>
-                                                    <td className="hidden max-w-[140px] truncate px-2 py-2 text-zinc-600 sm:table-cell">
-                                                        {leaveTypeLabel(x)}
-                                                    </td>
-                                                    <td className="whitespace-nowrap px-2 py-2 tabular-nums text-zinc-600">
-                                                        {new Date(x.start_date).toLocaleDateString()} –{' '}
-                                                        {new Date(x.end_date).toLocaleDateString()}
-                                                    </td>
-                                                    <td className="px-2 py-2">
-                                                        <Badge variant="outline" className="text-[10px] font-normal">
-                                                            {x.status}
-                                                        </Badge>
-                                                    </td>
-                                                    <td className="px-2 py-2">
-                                                        <Link href={`/leave/applications/${x.id}?section=leave`}>
-                                                            <ArrowUpRight className="h-3.5 w-3.5 text-zinc-400 hover:text-amber-600" />
-                                                        </Link>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <p className="px-4 py-8 text-center text-xs text-zinc-500">No recent leave applications.</p>
-                            )}
-                        </CardContent>
-                    </Card>
-                </section>
-        </>
     );
 }

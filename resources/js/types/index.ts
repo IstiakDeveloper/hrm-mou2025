@@ -35,8 +35,14 @@ export interface SharedData {
         success?: string | null;
         error?: string | null;
         warning?: string | null;
-        info?: string | null;
     };
+    assetFinancialYear?: {
+        id: number;
+        label: string;
+        start_date: string;
+        end_date: string;
+    } | null;
+    pendingLeaveCount?: number;
     [key: string]: unknown;
 }
 

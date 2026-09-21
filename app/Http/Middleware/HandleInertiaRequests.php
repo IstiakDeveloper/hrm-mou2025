@@ -2,10 +2,12 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\LeaveApplication;
 use App\Models\Movement;
 use App\Models\MovementLogBook;
 use App\Models\User;
 use App\Services\AssetFinancialYearService;
+use App\Services\OrganogramAccessService;
 use App\Services\WebPushService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -129,6 +131,13 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        $pendingLeaveCount = 0;
+        if ($user) {
+            $leaveQuery = LeaveApplication::query()->where('status', 'pending');
+            OrganogramAccessService::constrainLeaveApplications($leaveQuery, $user);
+            $pendingLeaveCount = $leaveQuery->count();
+        }
+
         return [
             ...parent::share($request),
             'csrf_token' => csrf_token(),
@@ -169,6 +178,7 @@ class HandleInertiaRequests extends Middleware
                 'import_row_errors' => $request->session()->get('import_row_errors'),
             ],
             'assetFinancialYear' => $assetFinancialYear,
+            'pendingLeaveCount' => $pendingLeaveCount,
         ];
     }
 

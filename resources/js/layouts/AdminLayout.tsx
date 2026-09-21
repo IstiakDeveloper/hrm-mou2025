@@ -255,7 +255,8 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const page = usePage();
-    const { auth, notifications, activeMovement } = page.props as any;
+    const { auth, notifications, activeMovement, pendingLeaveCount } = page.props as any;
+    const pendingLeave = (pendingLeaveCount as number) ?? 0;
     const inertiaUrl = page.url;
     const { navLayout, setNavLayout, toggleNavLayout, isTopNav, isSidebarNav } = useNavLayout();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -1147,7 +1148,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <div className={`${submenuSectionActive || isActive(item.path) ? 'text-emerald-600' : 'text-slate-500'}`}>
                             {React.cloneElement(item.icon as React.ReactElement, { className: 'w-[18px] h-[18px]' })}
                         </div>
-                        {(isSidebarOpen || isMobileSidebarOpen) && <span className="truncate tracking-wide">{item.title}</span>}
+                        {(isSidebarOpen || isMobileSidebarOpen) && (
+                            <span className="truncate tracking-wide flex items-center gap-2">
+                                {item.title}
+                                {item.menuKey === 'leave-management' && pendingLeave > 0 && (
+                                    <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 py-0.5 text-[9px] font-bold leading-none text-white shadow-sm">
+                                        {pendingLeave > 99 ? '99+' : pendingLeave}
+                                    </span>
+                                )}
+                            </span>
+                        )}
                     </div>
                     {(isSidebarOpen || isMobileSidebarOpen) && (
                         <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-300 ${isMenuOpen ? 'rotate-90' : ''}`} />
@@ -1284,7 +1294,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                 <div className={cn(isItemActive ? 'text-emerald-600' : 'text-slate-500')}>
                                     {React.cloneElement(item.icon as React.ReactElement, { className: 'w-3.5 h-3.5' })}
                                 </div>
-                                <span className="whitespace-nowrap">{item.title}</span>
+                                <span className="whitespace-nowrap flex items-center gap-1.5">
+                                    {item.title}
+                                    {item.menuKey === 'leave-management' && pendingLeave > 0 && (
+                                        <span className="inline-flex min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 py-0.5 text-[8px] font-bold leading-none text-white shadow-sm">
+                                            {pendingLeave > 99 ? '99+' : pendingLeave}
+                                        </span>
+                                    )}
+                                </span>
                                 <ChevronDown
                                     className={cn(
                                         'h-3 w-3 text-slate-400 opacity-80 transition-transform duration-200',

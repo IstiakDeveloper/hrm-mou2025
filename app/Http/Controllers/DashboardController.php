@@ -167,11 +167,16 @@ class DashboardController extends Controller
         }
 
         // Admin/HR leave overview (reuse existing logic)
-        $leaveStats = $hasPermission($user, 'leaves.view')
+        $canSeeLeaveOverview = $hasPermission($user, 'leaves.view')
+            || $hasPermission($user, 'leave-applications.view')
+            || $hasPermission($user, 'leave-applications.approve')
+            || $hasPermission($user, 'admin.access');
+
+        $leaveStats = $canSeeLeaveOverview
             ? $this->getLeaveStats($user, $today, $currentMonth, $currentYear)
             : ['pending' => 0, 'approved' => 0, 'todayOnLeave' => 0];
 
-        $recentLeaves = $hasPermission($user, 'leaves.view')
+        $recentLeaves = $canSeeLeaveOverview
             ? $this->getRecentLeaves($user)
             : [];
 

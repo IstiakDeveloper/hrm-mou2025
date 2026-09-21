@@ -168,7 +168,8 @@ const getTheme = (id: string) => {
 };
 
 export default function SectionsIndex() {
-    const { auth } = usePage().props as any;
+    const { auth, pendingLeaveCount } = usePage().props as any;
+    const pendingLeave = (pendingLeaveCount as number) ?? 0;
 
     const handleSelect = (sectionId: AdminSectionId) => {
         storeSection(sectionId);
@@ -417,9 +418,15 @@ export default function SectionsIndex() {
                                 onClick={() => handleSelect(section.id)}
                                 className={`${commonCardClasses} ${theme.bg} ${theme.border} ${theme.hoverBorder} ${theme.glow}`}
                             >
-                                {/* Top-right Indicator */}
+                                {/* Top-right Indicator: pending badge for leave, checkmark for others */}
                                 <div className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 z-10">
-                                    <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-600 bg-white rounded-full" />
+                                    {section.id === 'leave' && pendingLeave > 0 ? (
+                                        <span className="inline-flex min-w-[18px] sm:min-w-[22px] items-center justify-center rounded-full bg-rose-600 px-1 py-0.5 text-[9px] sm:text-[10px] font-bold leading-none text-white shadow-md shadow-rose-600/40 ring-2 ring-white animate-pulse">
+                                            {pendingLeave > 99 ? '99+' : pendingLeave}
+                                        </span>
+                                    ) : (
+                                        <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-600 bg-white rounded-full" />
+                                    )}
                                 </div>
 
                                 {/* Highlighted Bold Icon Container */}
