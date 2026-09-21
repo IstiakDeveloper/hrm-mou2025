@@ -385,7 +385,7 @@ function AttendanceMovementAdminBody({ attendanceStats, movementStats, recentMov
                     label="Present"
                     value={attendanceStats.present}
                     sub={activeSub}
-                    href="/attendance?section=attendance-movement"
+                    href="/attendance?section=attendance-movement&status=present"
                     icon={Users}
                     accent="emerald"
                 />
@@ -393,7 +393,7 @@ function AttendanceMovementAdminBody({ attendanceStats, movementStats, recentMov
                     label="Absent"
                     value={attendanceStats.absent}
                     sub="Incl. no punch"
-                    href="/attendance?section=attendance-movement"
+                    href="/attendance?section=attendance-movement&status=absent"
                     icon={UserX}
                     accent="rose"
                 />
@@ -401,7 +401,7 @@ function AttendanceMovementAdminBody({ attendanceStats, movementStats, recentMov
                     label="Late"
                     value={attendanceStats.late}
                     sub={activeSub}
-                    href="/attendance?section=attendance-movement"
+                    href="/attendance?section=attendance-movement&status=late"
                     icon={Timer}
                     accent="amber"
                 />
