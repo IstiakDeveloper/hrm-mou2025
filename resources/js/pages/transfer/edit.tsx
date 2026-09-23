@@ -20,6 +20,7 @@ import {
     Building,
     Briefcase,
     User,
+    Calendar,
     FileText,
     CornerDownRight,
     AlertTriangle
