@@ -475,6 +475,17 @@ final class BranchOrganogram
 
     public static function compareBranchStaffRow(array $a, array $b): int
     {
+        $isHoA = self::isHeadOfficeStaffRow($a);
+        $isHoB = self::isHeadOfficeStaffRow($b);
+
+        if ($isHoA && $isHoB) {
+            return HeadOfficeOrganogram::compareHeadOfficeStaffRow($a, $b);
+        }
+
+        if ($isHoA !== $isHoB) {
+            return $isHoA ? -1 : 1;
+        }
+
         $tierA = self::resolveTier($a['designation'] ?? null);
         $tierB = self::resolveTier($b['designation'] ?? null);
         $levelCmp = ((int) ($tierA['level'] ?? 999)) <=> ((int) ($tierB['level'] ?? 999));
@@ -493,6 +504,26 @@ final class BranchOrganogram
         }
 
         return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    }
+
+    public static function isHeadOfficeStaffRow(array $row): bool
+    {
+        if (! empty($row['is_head_office'])) {
+            return true;
+        }
+
+        if (! empty($row['branch_model']) && $row['branch_model'] instanceof \App\Models\Branch) {
+            return (bool) $row['branch_model']->is_head_office;
+        }
+
+        $code = (string) ($row['branch_code'] ?? '');
+        if ($code === '0000') {
+            return true;
+        }
+
+        $name = strtolower((string) ($row['branch'] ?? ''));
+
+        return str_contains($name, 'head office');
     }
 
     public static function compareDesignationSequence(?string $designationA, ?string $designationB): int

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import Layout from '@/layouts/AdminLayout';
@@ -17,12 +17,20 @@ import { formatTakaWithSymbol } from '@/lib/taka-format';
 
 type Row = {
     employee_id: number;
+    salary_head_id: number;
+    head_name?: string;
+    head_type?: string;
     pin: string;
     name: string;
+    branch?: string;
+    department?: string;
+    designation?: string;
+    basic_salary?: number;
     amount_type: string;
     amount: string;
     computed: number;
     has_modification: boolean;
+    is_dirty?: boolean;
 };
 
 type Props = {
@@ -54,6 +62,7 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
     const [rows, setRows] = useState(initialRows);
     const [saving, setSaving] = useState(false);
     const [clientErrors, setClientErrors] = useState<string[]>([]);
+    const [tableSearch, setTableSearch] = useState('');
 
     React.useEffect(() => setRows(initialRows), [initialRows]);
 
@@ -61,7 +70,6 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
 
     const loadEmployees = () => {
         const msgs: string[] = [];
-        if (!filters.salary_head_id) msgs.push('Select a salary component.');
         if (!filters.effective_from?.trim()) msgs.push('Select an effective from date.');
         if (msgs.length) {
             setClientErrors(msgs);
@@ -73,16 +81,51 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
         });
     };
 
+    const dirtyRows = rows.filter((r) => r.is_dirty);
+    const rowsToSave = dirtyRows.length > 0 ? dirtyRows : rows;
+
     const save = () => {
         setSaving(true);
-        router.post(route('salary-head-modifications.store'), { ...filters, rows }, { onFinish: () => setSaving(false) });
+        router.post(
+            route('salary-head-modifications.store'),
+            { ...filters, rows: rowsToSave },
+            { onFinish: () => setSaving(false) }
+        );
     };
 
-    const patchRow = (id: number, patch: Partial<Row>) => {
-        setRows((r) => r.map((row) => (row.employee_id === id ? { ...row, ...patch } : row)));
+    const patchRow = (employeeId: number, salaryHeadId: number, patch: Partial<Row>) => {
+        setRows((r) =>
+            r.map((row) => {
+                if (row.employee_id === employeeId && row.salary_head_id === salaryHeadId) {
+                    const updated = { ...row, ...patch, is_dirty: true };
+                    if (patch.amount !== undefined || patch.amount_type !== undefined) {
+                        const amt = parseFloat(updated.amount) || 0;
+                        if (updated.amount_type === 'percentage') {
+                            updated.computed = Math.round(((updated.basic_salary ?? 0) * amt) / 100);
+                        } else {
+                            updated.computed = Math.round(amt);
+                        }
+                    }
+                    return updated;
+                }
+                return row;
+            })
+        );
     };
 
+    const isAllHeads = !filters.salary_head_id;
     const selectedHead = options.salaryHeads.find((h) => String(h.id) === filters.salary_head_id);
+
+    const filteredRows = useMemo(() => {
+        if (!tableSearch.trim()) return rows;
+        const q = tableSearch.toLowerCase();
+        return rows.filter(
+            (r) =>
+                r.pin.toLowerCase().includes(q) ||
+                r.name.toLowerCase().includes(q) ||
+                (r.head_name && r.head_name.toLowerCase().includes(q))
+        );
+    }, [rows, tableSearch]);
 
     const selectItems = (optionsList: { id: number; name: string }[], allLabel: string) => [
         { value: '', label: allLabel },
@@ -169,18 +212,17 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                         />
                         <PayrollComboField
                             label="Salary component"
-                            required
                             value={filters.salary_head_id}
                             onChange={(v) => setFilter('salary_head_id', v)}
                             items={[
-                                { value: '', label: 'Select component', disabled: true },
+                                { value: '', label: 'All components' },
                                 ...options.salaryHeads.map((h) => ({
                                     value: String(h.id),
                                     label: h.short_name || h.name,
                                     keywords: h.name,
                                 })),
                             ]}
-                            placeholder="Search component…"
+                            placeholder="All components"
                         />
                         <PayrollField label="Effective from" required>
                             <DatePicker
@@ -203,7 +245,7 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                             </Button>
                             {rows.length > 0 && (
                                 <Button type="button" size="sm" onClick={save} disabled={saving} className="cursor-pointer h-8.5 text-xs">
-                                    <Save className="mr-1.5 h-3.5 w-3.5" /> Save overrides
+                                    <Save className="mr-1.5 h-3.5 w-3.5" /> Save overrides{dirtyRows.length > 0 ? ` (${dirtyRows.length})` : ''}
                                 </Button>
                             )}
                         </div>
@@ -212,23 +254,36 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
 
                 {rows.length > 0 ? (
                     <PayrollSectionCard
-                        title={`Amounts — ${selectedHead?.name ?? 'Component'}`}
-                        description={`${rows.length} employee(s). “Calculated” shows the value at payroll time.`}
+                        title={isAllHeads ? 'Amounts — All components' : `Amounts — ${selectedHead?.name ?? 'Component'}`}
+                        description={`${filteredRows.length} item(s). “Calculated” shows the value at payroll time.`}
                     >
+                        {rows.length > 10 && (
+                            <div className="mb-3 max-w-xs">
+                                <Input
+                                    value={tableSearch}
+                                    onChange={(e) => setTableSearch(e.target.value)}
+                                    placeholder="Filter by PIN, name, or component…"
+                                    className="h-8 text-xs bg-white"
+                                />
+                            </div>
+                        )}
                         <div className="overflow-x-auto -mx-4.5 sm:-mx-4.5">
                             <Table className="min-w-full">
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/40 border-b border-slate-100 hover:bg-slate-50/40">
                                         <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 pl-5 w-28">PIN</TableHead>
                                         <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5">Name</TableHead>
+                                        {isAllHeads && (
+                                            <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 w-44">Component</TableHead>
+                                        )}
                                         <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 w-44">Calculation</TableHead>
                                         <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 text-right w-36">Value</TableHead>
                                         <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-400 py-2.5 text-right pr-5 w-36">Calculated (৳)</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {rows.map((row) => (
-                                        <TableRow key={row.employee_id} className="border-b border-slate-100/70 hover:bg-slate-50/30">
+                                    {filteredRows.map((row) => (
+                                        <TableRow key={`${row.employee_id}-${row.salary_head_id}`} className="border-b border-slate-100/70 hover:bg-slate-50/30">
                                             <TableCell className="font-mono text-xs text-slate-500 py-2 pl-5">{row.pin}</TableCell>
                                             <TableCell className="text-xs font-semibold text-slate-800 py-2">
                                                 <div className="flex items-center gap-1.5">
@@ -236,12 +291,34 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                                     {row.has_modification && (
                                                         <Badge variant="outline" className="text-[8px] px-1 py-0 font-bold uppercase tracking-wider text-emerald-600 border-emerald-200 bg-emerald-50/50">Saved</Badge>
                                                     )}
+                                                    {row.is_dirty && (
+                                                        <Badge variant="outline" className="text-[8px] px-1 py-0 font-bold uppercase tracking-wider text-amber-600 border-amber-200 bg-amber-50/50">Modified</Badge>
+                                                    )}
                                                 </div>
                                             </TableCell>
+                                            {isAllHeads && (
+                                                <TableCell className="py-2 text-xs font-medium text-slate-700">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span>{row.head_name}</span>
+                                                        {row.head_type && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={`text-[8px] px-1 py-0 font-bold uppercase tracking-wider ${
+                                                                    row.head_type === 'deduction'
+                                                                        ? 'text-amber-700 border-amber-200 bg-amber-50/50'
+                                                                        : 'text-blue-700 border-blue-200 bg-blue-50/50'
+                                                                }`}
+                                                            >
+                                                                {row.head_type}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            )}
                                             <TableCell className="py-1.5">
                                                 <ComboSelect
                                                     value={row.amount_type}
-                                                    onChange={(v) => patchRow(row.employee_id, { amount_type: v ?? 'fixed' })}
+                                                    onChange={(v) => patchRow(row.employee_id, row.salary_head_id, { amount_type: v ?? 'fixed' })}
                                                     items={[
                                                         { value: 'percentage', label: 'Percent of basic' },
                                                         { value: 'fixed', label: 'Fixed amount' },
@@ -252,7 +329,14 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                             <TableCell className="py-1.5 text-right">
                                                 <div className="relative flex items-center justify-end">
                                                     <span className="absolute left-2.5 text-xs text-slate-400 font-medium">৳</span>
-                                                    <Input className="h-8 w-28 pl-5.5 pr-2.5 text-right font-mono text-xs bg-white" type="number" min={0} step="any" value={row.amount} onChange={(e) => patchRow(row.employee_id, { amount: e.target.value })} />
+                                                    <Input
+                                                        className="h-8 w-28 pl-5.5 pr-2.5 text-right font-mono text-xs bg-white"
+                                                        type="number"
+                                                        min={0}
+                                                        step="any"
+                                                        value={row.amount}
+                                                        onChange={(e) => patchRow(row.employee_id, row.salary_head_id, { amount: e.target.value })}
+                                                    />
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right font-mono text-xs text-slate-700 font-semibold pr-5 py-2">{formatTakaWithSymbol(row.computed)}</TableCell>

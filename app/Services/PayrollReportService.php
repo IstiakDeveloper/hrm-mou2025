@@ -653,6 +653,7 @@ class PayrollReportService
                 'branch_code' => $branchCode,
                 'branch_id' => $payslip->displayBranchId(),
                 'branch_model' => $branch,
+                'is_head_office' => (bool) ($branch?->is_head_office || $branchCode === '0000' || str_contains(strtolower($branchName ?? ''), 'head office')),
                 'branch_label' => $this->formatBranchLabel($branchName, $branchCode),
                 'grade' => $payslip->grade_label,
                 'step' => $payslip->step_number,

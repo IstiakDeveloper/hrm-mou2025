@@ -307,6 +307,32 @@ final class HeadOfficeOrganogram
     }
 
     /**
+     * Compare two staff rows for Head Office organogram ordering:
+     * 1. Designation tier level (Advisor -> ED -> DED -> Director -> ... -> CSO -> Other)
+     * 2. PIN serial order
+     * 3. Name alphabetical fallback
+     *
+     * @param  array<string, mixed>  $a
+     * @param  array<string, mixed>  $b
+     */
+    public static function compareHeadOfficeStaffRow(array $a, array $b): int
+    {
+        $tierA = self::resolveTier($a['designation'] ?? null);
+        $tierB = self::resolveTier($b['designation'] ?? null);
+        $levelCmp = ((int) ($tierA['level'] ?? 999)) <=> ((int) ($tierB['level'] ?? 999));
+        if ($levelCmp !== 0) {
+            return $levelCmp;
+        }
+
+        $pinCmp = self::compareEmployeePins($a['pin'] ?? null, $b['pin'] ?? null);
+        if ($pinCmp !== 0) {
+            return $pinCmp;
+        }
+
+        return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    }
+
+    /**
      * @param  Builder<Employee>  $query
      */
     public static function applyPinSortToQuery(Builder $query, string $sortDir = 'asc', ?string $whenSql = null): void
@@ -435,8 +461,7 @@ final class HeadOfficeOrganogram
             'Deputy Director' => "({$like('deputy director')} AND {$normalizedExpr} NOT LIKE '%deputy assistant director%' AND {$normalizedExpr} NOT LIKE '%deputy executive director%')",
             'Assistant Director' => "({$like('assistant director')} AND {$normalizedExpr} NOT LIKE '%deputy assistant director%')",
             'Deputy Assistant Director' => $like('deputy assistant director'),
-            'Senior Manager' => $like('senior manager'),
-            'Manager' => "({$normalizedExpr} LIKE '%manager%' AND {$normalizedExpr} NOT LIKE '%senior manager%' AND {$normalizedExpr} NOT LIKE '%assistant manager%' AND {$normalizedExpr} NOT LIKE '%branch manager%' AND {$normalizedExpr} NOT LIKE '%junior branch manager%')",
+            'Manager' => "({$normalizedExpr} LIKE '%manager%' AND {$normalizedExpr} NOT LIKE '%senior manager%' AND {$normalizedExpr} NOT LIKE '%assistant manager%' AND {$normalizedExpr} NOT LIKE '%asst manager%' AND {$normalizedExpr} NOT LIKE '%branch manager%' AND {$normalizedExpr} NOT LIKE '%junior branch manager%')",
             'Resident Physician' => $like('resident physician'),
             'Agriculture Officer' => "({$like('agriculture officer')} AND {$normalizedExpr} NOT LIKE '%assistant%' AND {$normalizedExpr} NOT LIKE '%asst%')",
             'Livestock Officer' => "({$like('livestock officer')} AND {$normalizedExpr} NOT LIKE '%assistant%' AND {$normalizedExpr} NOT LIKE '%asst%')",
@@ -592,6 +617,8 @@ final class HeadOfficeOrganogram
             'Manager' => self::containsManager($normalized)
                 && ! self::containsPhrase($normalized, 'senior manager')
                 && ! self::containsPhrase($normalized, 'assistant manager')
+                && ! self::containsPhrase($normalized, 'asst manager')
+                && ! self::containsPhrase($normalized, 'asst  manager')
                 && ! self::containsPhrase($normalized, 'branch manager')
                 && ! self::containsPhrase($normalized, 'junior branch manager'),
             'Resident Physician' => self::containsPhrase($normalized, 'resident physician'),
