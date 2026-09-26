@@ -20,6 +20,7 @@ type Row = {
     salary_head_id: number;
     head_name?: string;
     head_type?: string;
+    is_basic_head?: boolean;
     pin: string;
     name: string;
     branch?: string;
@@ -43,7 +44,7 @@ type Props = {
     programs: { id: number; name: string }[];
     projects: { id: number; name: string }[];
     employees: { id: number; pin?: string; name_en?: string }[];
-    salaryHeads: { id: number; name: string; short_name?: string }[];
+    salaryHeads: { id: number; name: string; short_name?: string; is_basic_head?: boolean }[];
 };
 
 export default function SalaryHeadModificationIndex({ filters: initialFilters, rows: initialRows, searchNotice, ...options }: Props) {
@@ -94,23 +95,46 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
     };
 
     const patchRow = (employeeId: number, salaryHeadId: number, patch: Partial<Row>) => {
-        setRows((r) =>
-            r.map((row) => {
-                if (row.employee_id === employeeId && row.salary_head_id === salaryHeadId) {
-                    const updated = { ...row, ...patch, is_dirty: true };
-                    if (patch.amount !== undefined || patch.amount_type !== undefined) {
-                        const amt = parseFloat(updated.amount) || 0;
-                        if (updated.amount_type === 'percentage') {
-                            updated.computed = Math.round(((updated.basic_salary ?? 0) * amt) / 100);
-                        } else {
-                            updated.computed = Math.round(amt);
-                        }
-                    }
-                    return updated;
+        setRows((prevRows) => {
+            const target = prevRows.find((r) => r.employee_id === employeeId && r.salary_head_id === salaryHeadId);
+            if (!target) return prevRows;
+
+            const isBasic = target.is_basic_head;
+            const updatedTarget = { ...target, ...patch, is_dirty: true };
+
+            let newBasic: number | null = null;
+            if (isBasic) {
+                updatedTarget.amount_type = 'fixed';
+                if (patch.amount !== undefined) {
+                    const amt = parseFloat(patch.amount) || 0;
+                    updatedTarget.computed = Math.round(amt);
+                    updatedTarget.basic_salary = amt;
+                    newBasic = amt;
                 }
-                return row;
-            })
-        );
+            } else if (patch.amount !== undefined || patch.amount_type !== undefined) {
+                const amt = parseFloat(updatedTarget.amount) || 0;
+                if (updatedTarget.amount_type === 'percentage') {
+                    updatedTarget.computed = Math.round(((updatedTarget.basic_salary ?? 0) * amt) / 100);
+                } else {
+                    updatedTarget.computed = Math.round(amt);
+                }
+            }
+
+            return prevRows.map((r) => {
+                if (r.employee_id === employeeId && r.salary_head_id === salaryHeadId) {
+                    return updatedTarget;
+                }
+                if (isBasic && newBasic !== null && r.employee_id === employeeId) {
+                    const nextRow = { ...r, basic_salary: newBasic };
+                    if (nextRow.amount_type === 'percentage') {
+                        const amt = parseFloat(nextRow.amount) || 0;
+                        nextRow.computed = Math.round((newBasic * amt) / 100);
+                    }
+                    return nextRow;
+                }
+                return r;
+            });
+        });
     };
 
     const isAllHeads = !filters.salary_head_id;
@@ -218,8 +242,8 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                 { value: '', label: 'All components' },
                                 ...options.salaryHeads.map((h) => ({
                                     value: String(h.id),
-                                    label: h.short_name || h.name,
-                                    keywords: h.name,
+                                    label: h.short_name && h.short_name !== h.name ? `${h.name} (${h.short_name})` : h.name,
+                                    keywords: `${h.name} ${h.short_name ?? ''}`,
                                 })),
                             ]}
                             placeholder="All components"
@@ -300,7 +324,14 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                                 <TableCell className="py-2 text-xs font-medium text-slate-700">
                                                     <div className="flex items-center gap-1.5">
                                                         <span>{row.head_name}</span>
-                                                        {row.head_type && (
+                                                        {row.is_basic_head ? (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="text-[8px] px-1.5 py-0 font-bold uppercase tracking-wider text-purple-700 border-purple-200 bg-purple-50/50"
+                                                            >
+                                                                Basic
+                                                            </Badge>
+                                                        ) : row.head_type ? (
                                                             <Badge
                                                                 variant="outline"
                                                                 className={`text-[8px] px-1 py-0 font-bold uppercase tracking-wider ${
@@ -311,20 +342,26 @@ export default function SalaryHeadModificationIndex({ filters: initialFilters, r
                                                             >
                                                                 {row.head_type}
                                                             </Badge>
-                                                        )}
+                                                        ) : null}
                                                     </div>
                                                 </TableCell>
                                             )}
                                             <TableCell className="py-1.5">
-                                                <ComboSelect
-                                                    value={row.amount_type}
-                                                    onChange={(v) => patchRow(row.employee_id, row.salary_head_id, { amount_type: v ?? 'fixed' })}
-                                                    items={[
-                                                        { value: 'percentage', label: 'Percent of basic' },
-                                                        { value: 'fixed', label: 'Fixed amount' },
-                                                    ]}
-                                                    className="h-8 w-40 bg-white text-xs"
-                                                />
+                                                {row.is_basic_head ? (
+                                                    <span className="inline-flex items-center px-2 py-1 text-[11px] font-medium text-slate-600 bg-slate-100/80 rounded border border-slate-200/60">
+                                                        Fixed amount
+                                                    </span>
+                                                ) : (
+                                                    <ComboSelect
+                                                        value={row.amount_type}
+                                                        onChange={(v) => patchRow(row.employee_id, row.salary_head_id, { amount_type: v ?? 'fixed' })}
+                                                        items={[
+                                                            { value: 'percentage', label: 'Percent of basic' },
+                                                            { value: 'fixed', label: 'Fixed amount' },
+                                                        ]}
+                                                        className="h-8 w-40 bg-white text-xs"
+                                                    />
+                                                )}
                                             </TableCell>
                                             <TableCell className="py-1.5 text-right">
                                                 <div className="relative flex items-center justify-end">

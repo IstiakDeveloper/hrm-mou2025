@@ -41,13 +41,14 @@ class SalaryHeadModificationController extends Controller
                     ?? throw ValidationException::withMessages(['effective_from' => 'Invalid date. Use dd-mm-yyyy.'])
             );
 
+            $basicHead = $this->calculator->resolveBasicHead();
+
             if ($request->filled('salary_head_id')) {
                 $head = SalaryHead::findOrFail($request->integer('salary_head_id'));
                 $heads = collect([$head]);
             } else {
                 $heads = SalaryHead::query()
                     ->where('is_active', true)
-                    ->where('is_basic_head', false)
                     ->orderBy('sort_order')
                     ->orderBy('name')
                     ->get();
@@ -63,6 +64,11 @@ class SalaryHeadModificationController extends Controller
             if ($employees->isEmpty()) {
                 return Inertia::render('payroll/head-modifications/index', [
                     ...$this->payrollFilterOptions(payrollReadyEmployeesOnly: true),
+                    'salaryHeads' => SalaryHead::query()
+                        ->where('is_active', true)
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->get(['id', 'name', 'short_name', 'type', 'is_basic_head']),
                     'filters' => array_merge($filters, ['searched' => $searched]),
                     'rows' => [],
                     'searchNotice' => 'No active employees with payscale, grade, and step match your filters.',
@@ -91,7 +97,11 @@ class SalaryHeadModificationController extends Controller
                     $mod = $mods->get($employee->id . '_' . $head->id);
                     $line = $linesByHead->get($head->id);
 
-                    if ($mod) {
+                    if ($head->is_basic_head) {
+                        $amountType = 'fixed';
+                        $amount = $mod ? (string) $mod->amount : (string) $basic;
+                        $computed = (float) $amount;
+                    } elseif ($mod) {
                         $amountType = $mod->amount_type ?? 'fixed';
                         $amount = (string) $mod->amount;
                         $computed = \App\Services\SalaryStructureCalculator::computeLineAmount(
@@ -121,6 +131,7 @@ class SalaryHeadModificationController extends Controller
                         'salary_head_id' => $head->id,
                         'head_name' => $head->short_name ?: $head->name,
                         'head_type' => $head->type,
+                        'is_basic_head' => (bool) $head->is_basic_head,
                         'pin' => $employee->pin,
                         'name' => $employee->full_name_en ?? $employee->name_en,
                         'branch' => $employee->branch?->name,
@@ -138,6 +149,11 @@ class SalaryHeadModificationController extends Controller
 
         return Inertia::render('payroll/head-modifications/index', [
             ...$this->payrollFilterOptions(payrollReadyEmployeesOnly: true),
+            'salaryHeads' => SalaryHead::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'short_name', 'type', 'is_basic_head']),
             'filters' => array_merge($filters, ['searched' => $searched]),
             'rows' => $rows,
             'searchNotice' => null,
@@ -161,6 +177,8 @@ class SalaryHeadModificationController extends Controller
             ?? throw ValidationException::withMessages(['effective_from' => 'Invalid date.']);
 
         DB::transaction(function () use ($validated, $effectiveFrom) {
+            $basicHead = $this->calculator->resolveBasicHead();
+
             foreach ($validated['rows'] as $row) {
                 $headId = $row['salary_head_id'] ?? ($validated['salary_head_id'] ?? null);
                 if (! $headId) {
@@ -181,6 +199,14 @@ class SalaryHeadModificationController extends Controller
                         'created_by' => auth()->id(),
                     ]
                 );
+
+                // When Basic Salary head is modified, also sync employee's basic_salary
+                if ((int) $headId === (int) $basicHead->id) {
+                    Employee::query()->where('id', $row['employee_id'])->update([
+                        'basic_salary' => $row['amount'],
+                        'custom_salary_assigned_at' => $effectiveFrom,
+                    ]);
+                }
             }
         });
 

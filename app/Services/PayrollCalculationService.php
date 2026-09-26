@@ -15,6 +15,8 @@ class PayrollCalculationService
     /** @var Collection<int, SalaryHead>|null */
     protected ?Collection $activeComponentHeads = null;
 
+    protected ?SalaryHead $basicHead = null;
+
     protected ?SalaryHead $pfHead = null;
 
     protected ?SalaryHead $taxHead = null;
@@ -143,10 +145,17 @@ class PayrollCalculationService
             $warnings[] = 'Employee missing payscale/grade/step assignment.';
         }
 
+        $basicHead = $this->resolveBasicHead();
+        $modifications = $this->activeModifications($employee->id, $processDate);
+        $basicMod = $basicHead ? $modifications->get($basicHead->id) : null;
+        if ($basicMod) {
+            $basic = (float) $basicMod->amount;
+        }
+
         $basic = SalaryStructureCalculator::roundTaka($basic);
 
         $lines[] = [
-            'salary_head_id' => null,
+            'salary_head_id' => $basicHead?->id,
             'head_name' => 'Basic',
             'type' => 'earning',
             'amount_type' => 'fixed',
@@ -171,8 +180,6 @@ class PayrollCalculationService
                 );
             }
         } else {
-            $modifications = $this->activeModifications($employee->id, $processDate);
-
             if ($structure) {
                 foreach ($structure->lines as $line) {
                     $head = $line->head;
@@ -645,6 +652,39 @@ class PayrollCalculationService
         }
 
         return $this->activeComponentHeads;
+    }
+
+    public function resolveBasicHead(): SalaryHead
+    {
+        if ($this->basicHead === null) {
+            $this->basicHead = SalaryHead::query()
+                ->where('is_basic_head', true)
+                ->first();
+
+            if ($this->basicHead === null) {
+                $this->basicHead = SalaryHead::query()->firstOrCreate(
+                    ['code' => 'BASIC'],
+                    [
+                        'name' => 'Basic Salary',
+                        'short_name' => 'Basic',
+                        'type' => 'earning',
+                        'default_amount_type' => 'fixed',
+                        'default_amount' => 0,
+                        'sort_order' => 0,
+                        'is_active' => true,
+                        'is_basic_head' => true,
+                        'is_taxable_head' => true,
+                        'is_gross_pay_head' => true,
+                        'is_bonus_head' => true,
+                    ]
+                );
+                if (! $this->basicHead->is_basic_head) {
+                    $this->basicHead->update(['is_basic_head' => true]);
+                }
+            }
+        }
+
+        return $this->basicHead;
     }
 
     protected function resolvePfHead(): SalaryHead
