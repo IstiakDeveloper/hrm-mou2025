@@ -190,7 +190,9 @@ use Inertia\Inertia;
         Route::post('/bonus-post/{payroll_run}', [BonusPostController::class, 'post'])->name('bonus-post.post')->middleware('permission:payroll.edit');
 
         Route::get('/salary-head-modifications', [\App\Http\Controllers\Payroll\SalaryHeadModificationController::class, 'index'])->name('salary-head-modifications.index');
+        Route::get('/salary-head-modifications/create', [\App\Http\Controllers\Payroll\SalaryHeadModificationController::class, 'create'])->name('salary-head-modifications.create');
         Route::post('/salary-head-modifications', [\App\Http\Controllers\Payroll\SalaryHeadModificationController::class, 'store'])->name('salary-head-modifications.store')->middleware('permission:payroll.edit');
+        Route::delete('/salary-head-modifications/employee/{employee}', [\App\Http\Controllers\Payroll\SalaryHeadModificationController::class, 'destroy'])->name('salary-head-modifications.destroy')->middleware('permission:payroll.delete');
 
         Route::get('/probation-salary', [\App\Http\Controllers\Payroll\ProbationSalaryController::class, 'index'])->name('probation-salary.index');
         Route::post('/probation-salary/rules', [\App\Http\Controllers\Payroll\ProbationSalaryController::class, 'storeRules'])->name('probation-salary.rules.store')->middleware('permission:payroll.edit');
