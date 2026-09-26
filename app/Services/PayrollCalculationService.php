@@ -217,6 +217,30 @@ class PayrollCalculationService
                     );
                 }
             }
+
+            // Include any active modifications for heads that are not part of the standard structure
+            $processedHeadIds = collect($lines)->pluck('salary_head_id')->filter()->map(fn ($id) => (int) $id)->all();
+            foreach ($modifications as $headId => $mod) {
+                if ($mod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
+                    continue;
+                }
+                if (in_array((int) $headId, $processedHeadIds, true)) {
+                    continue;
+                }
+                $extraHead = $mod->relationLoaded('head') ? $mod->head : SalaryHead::find($headId);
+                if (! $extraHead || $extraHead->is_basic_head || $this->isStatutoryHead($extraHead)) {
+                    continue;
+                }
+
+                $lines[] = $this->buildComponentLine(
+                    $extraHead,
+                    $mod->amount_type ?? 'fixed',
+                    (float) $mod->amount,
+                    $basic,
+                    $sort++
+                );
+                $processedHeadIds[] = (int) $headId;
+            }
         }
 
         $gross = 0.0;
@@ -245,9 +269,32 @@ class PayrollCalculationService
                 }
             }
         } else {
-            if ($this->pfService->isEligible($employee)) {
+            $pfHead = $this->resolvePfHead();
+            $pfMod = $pfHead ? $modifications->get($pfHead->id) : null;
+            if ($pfMod && $pfMod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
+                $pfMod = null;
+            }
+
+            if ($pfMod) {
+                $pfAmountType = $pfMod->amount_type ?? 'percentage';
+                if ($pfAmountType === 'percentage') {
+                    $pf['employee'] = SalaryStructureCalculator::roundTaka(($basic * (float) $pfMod->amount) / 100);
+                } else {
+                    $pf['employee'] = SalaryStructureCalculator::roundTaka((float) $pfMod->amount);
+                }
+                $pf['employer'] = $this->pfService->employerMatchingContribution($pf['employee']);
+
+                $lines[] = [
+                    'salary_head_id' => $pfHead->id,
+                    'head_name' => $pfHead->short_name ?? $pfHead->name,
+                    'type' => 'deduction',
+                    'amount_type' => $pfAmountType,
+                    'input_value' => (float) $pfMod->amount,
+                    'computed_amount' => $pf['employee'],
+                    'sort_order' => $sort++,
+                ];
+            } elseif ($this->pfService->isEligible($employee)) {
                 $pf = $this->pfService->contributionFromBasic($basic);
-                $pfHead = $this->resolvePfHead();
                 $lines[] = [
                     'salary_head_id' => $pfHead->id,
                     'head_name' => $pfHead->short_name ?? $pfHead->name,
@@ -259,18 +306,42 @@ class PayrollCalculationService
                 ];
             }
 
-            $incomeTax = $this->taxSlabService->taxForGross($gross);
-            if ($incomeTax > 0) {
-                $taxHead = $this->resolveTaxHead();
+            $taxHead = $this->resolveTaxHead();
+            $taxMod = $taxHead ? $modifications->get($taxHead->id) : null;
+            if ($taxMod && $taxMod->reason === EmployeeSalaryAssignmentService::ASSIGNMENT_REASON) {
+                $taxMod = null;
+            }
+
+            if ($taxMod) {
+                $taxAmountType = $taxMod->amount_type ?? 'fixed';
+                if ($taxAmountType === 'percentage') {
+                    $incomeTax = SalaryStructureCalculator::roundTaka(($gross * (float) $taxMod->amount) / 100);
+                } else {
+                    $incomeTax = SalaryStructureCalculator::roundTaka((float) $taxMod->amount);
+                }
+
                 $lines[] = [
                     'salary_head_id' => $taxHead->id,
                     'head_name' => $taxHead->short_name ?? $taxHead->name,
                     'type' => 'deduction',
-                    'amount_type' => 'fixed',
-                    'input_value' => $incomeTax,
+                    'amount_type' => $taxAmountType,
+                    'input_value' => (float) $taxMod->amount,
                     'computed_amount' => $incomeTax,
                     'sort_order' => $sort++,
                 ];
+            } else {
+                $incomeTax = $this->taxSlabService->taxForGross($gross);
+                if ($incomeTax > 0) {
+                    $lines[] = [
+                        'salary_head_id' => $taxHead->id,
+                        'head_name' => $taxHead->short_name ?? $taxHead->name,
+                        'type' => 'deduction',
+                        'amount_type' => 'fixed',
+                        'input_value' => $incomeTax,
+                        'computed_amount' => $incomeTax,
+                        'sort_order' => $sort++,
+                    ];
+                }
             }
         }
 
