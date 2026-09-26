@@ -288,13 +288,13 @@ export default function SalaryHeadModificationCreate({
     return (
         <Layout>
             <Head title="Modify Salary Components" />
-            <PayrollPage>
+            <PayrollPage className="py-2 max-w-[1400px] mx-auto">
                 {/* Header with Navigation */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2.5">
                     <div>
                         <Link
                             href={route('salary-head-modifications.index')}
-                            className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors mb-1.5"
+                            className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors mb-1"
                         >
                             <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Back to modifications list
                         </Link>
@@ -312,7 +312,7 @@ export default function SalaryHeadModificationCreate({
                                 size="sm"
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="cursor-pointer gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 h-9 shadow-sm"
+                                className="cursor-pointer gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 h-8 text-xs shadow-xs"
                             >
                                 <Save className="h-4 w-4" />
                                 Save Modifications {modifiedCount > 0 ? `(${modifiedCount})` : ''}
@@ -323,19 +323,19 @@ export default function SalaryHeadModificationCreate({
 
                 {/* Alerts */}
                 {warning && (
-                    <Alert className="mb-5 border-amber-200 bg-amber-50/70 text-amber-900 rounded-xl shadow-xs">
+                    <Alert className="mb-2.5 py-2 px-3 border-amber-200 bg-amber-50/70 text-amber-900 rounded-xl shadow-xs text-xs">
                         <ShieldAlert className="h-4 w-4 text-amber-600" />
                         <AlertTitle className="text-xs font-bold uppercase tracking-wider text-amber-800">Notice</AlertTitle>
-                        <AlertDescription className="text-xs text-amber-700/90 mt-1">{warning}</AlertDescription>
+                        <AlertDescription className="text-xs text-amber-700/90 mt-0.5">{warning}</AlertDescription>
                     </Alert>
                 )}
 
                 {(clientErrors.length > 0 || Object.keys(pageErrors).length > 0) && (
-                    <Alert variant="destructive" className="mb-5 rounded-xl border-red-200 bg-red-50/60">
+                    <Alert variant="destructive" className="mb-2.5 py-2 px-3 rounded-xl border-red-200 bg-red-50/60 text-xs">
                         <AlertCircle className="h-4 w-4" />
                         <AlertTitle className="text-xs font-bold uppercase tracking-wider text-red-800">Action Required</AlertTitle>
                         <AlertDescription>
-                            <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-red-700">
+                            <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs text-red-700">
                                 {[...clientErrors, ...Object.values(pageErrors).filter(Boolean)].map((msg) => (
                                     <li key={msg}>{msg}</li>
                                 ))}
@@ -345,8 +345,8 @@ export default function SalaryHeadModificationCreate({
                 )}
 
                 {/* Top Selector Card: Branch, Single Employee, Effective Date, Reason */}
-                <div className="rounded-xl border border-slate-200/90 bg-white p-4.5 shadow-xs mb-5">
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
+                <div className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-xs mb-2.5">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
                         <Search className="h-3.5 w-3.5 text-indigo-600" />
                         Select Employee & Effective Date
                     </div>
@@ -407,40 +407,40 @@ export default function SalaryHeadModificationCreate({
 
                 {/* If employee is loaded */}
                 {employee ? (
-                    <div className="space-y-6">
+                    <div className="space-y-2.5">
                         {/* Employee Profile Card */}
-                        <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/50 via-white to-slate-50 p-4 shadow-xs">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-11 w-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                        <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/50 via-white to-slate-50 p-2.5 px-3.5 shadow-xs">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="h-9 w-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
                                         {employee.pin}
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <h2 className="text-sm font-bold text-slate-900">{employee.name}</h2>
-                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold uppercase text-indigo-700 border-indigo-200 bg-indigo-50">
+                                            <h2 className="text-xs font-bold text-slate-900">{employee.name}</h2>
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-bold uppercase text-indigo-700 border-indigo-200 bg-indigo-50">
                                                 Active Staff
                                             </Badge>
                                         </div>
-                                        <div className="text-xs text-slate-500 font-medium mt-0.5">
+                                        <div className="text-[11px] text-slate-500 font-medium">
                                             {employee.designation} &bull; {employee.department} &bull; {employee.branch}
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-3 text-xs bg-white px-3.5 py-2 rounded-lg border border-slate-200/80 shadow-2xs">
+                                <div className="flex flex-wrap items-center gap-3 text-[11px] bg-white px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-2xs">
                                     <div>
-                                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Payscale</span>
+                                        <span className="text-slate-400 block text-[9px] uppercase font-bold">Payscale</span>
                                         <span className="font-semibold text-slate-700">{employee.payscale}</span>
                                     </div>
-                                    <div className="h-6 w-px bg-slate-200" />
+                                    <div className="h-5 w-px bg-slate-200" />
                                     <div>
-                                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Grade & Step</span>
+                                        <span className="text-slate-400 block text-[9px] uppercase font-bold">Grade & Step</span>
                                         <span className="font-semibold text-slate-700">{employee.grade} ({employee.step})</span>
                                     </div>
-                                    <div className="h-6 w-px bg-slate-200" />
+                                    <div className="h-5 w-px bg-slate-200" />
                                     <div>
-                                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Grade Standard Basic</span>
+                                        <span className="text-slate-400 block text-[9px] uppercase font-bold">Grade Standard Basic</span>
                                         <span className="font-mono font-bold text-slate-900">{formatTakaWithSymbol(employee.step_basic)}</span>
                                     </div>
                                 </div>
@@ -448,23 +448,25 @@ export default function SalaryHeadModificationCreate({
                         </div>
 
                         {/* 2-Column Split: Allowances & Basic on Left | Deductions on Right */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
                             {/* LEFT COLUMN: Allowance & Earnings Part */}
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between pb-2 border-b-2 border-emerald-500">
+                            <div className="flex flex-col">
+                                <div className="flex items-center justify-between pb-1.5 mb-2 border-b-2 border-emerald-500">
                                     <div className="flex items-center gap-2">
-                                        <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
-                                            <TrendingUp className="h-4 w-4" />
+                                        <div className="p-1 rounded-md bg-emerald-100 text-emerald-700">
+                                            <TrendingUp className="h-3.5 w-3.5" />
                                         </div>
                                         <div>
-                                            <h3 className="text-sm font-bold text-slate-900">Allowances & Earnings</h3>
-                                            <p className="text-[11px] text-slate-500">Basic salary and monthly allowances</p>
+                                            <h3 className="text-xs font-bold text-slate-900">Allowances & Earnings</h3>
+                                            <p className="text-[10px] text-slate-500">Basic salary and monthly allowances</p>
                                         </div>
                                     </div>
-                                    <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200 font-mono text-xs font-bold">
+                                    <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200 font-mono text-[11px] font-bold py-0.5 px-2">
                                         Total: {formatTakaWithSymbol(liveTotalAllowances)}
                                     </Badge>
                                 </div>
+
+                                <div className="space-y-2 max-h-[calc(100vh-330px)] min-h-[280px] overflow-y-auto pr-1">
 
                                 {/* Prominent Basic Salary Card */}
                                 {basicItem && (
@@ -646,38 +648,39 @@ export default function SalaryHeadModificationCreate({
                                         </div>
                                     ))}
                                 </div>
+                            </div>
 
-                                {/* Allowances Subtotal Card */}
-                                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 flex items-center justify-between shadow-2xs">
+                            {/* Allowances Subtotal Card */}
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-2.5 mt-2 flex items-center justify-between shadow-2xs">
                                     <div className="flex items-center gap-1.5">
-                                        <TrendingUp className="h-4 w-4 text-emerald-600" />
+                                        <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
                                         <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">Gross Allowances Total</span>
                                     </div>
-                                    <span className="text-base font-mono font-bold text-emerald-800">
+                                    <span className="text-sm font-mono font-bold text-emerald-800">
                                         {formatTakaWithSymbol(liveTotalAllowances)}
                                     </span>
                                 </div>
                             </div>
 
                             {/* RIGHT COLUMN: Deductions Part */}
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between pb-2 border-b-2 border-rose-500">
+                            <div className="flex flex-col">
+                                <div className="flex items-center justify-between pb-1.5 mb-2 border-b-2 border-rose-500">
                                     <div className="flex items-center gap-2">
-                                        <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700">
-                                            <TrendingDown className="h-4 w-4" />
+                                        <div className="p-1 rounded-md bg-rose-100 text-rose-700">
+                                            <TrendingDown className="h-3.5 w-3.5" />
                                         </div>
                                         <div>
-                                            <h3 className="text-sm font-bold text-slate-900">Deductions & Statutory</h3>
-                                            <p className="text-[11px] text-slate-500">Provident fund, income tax, loans, and welfare</p>
+                                            <h3 className="text-xs font-bold text-slate-900">Deductions & Statutory</h3>
+                                            <p className="text-[10px] text-slate-500">Provident fund, income tax, loans, and welfare</p>
                                         </div>
                                     </div>
-                                    <Badge className="bg-rose-50 text-rose-800 border-rose-200 font-mono text-xs font-bold">
+                                    <Badge className="bg-rose-50 text-rose-800 border-rose-200 font-mono text-[11px] font-bold py-0.5 px-2">
                                         Total: {formatTakaWithSymbol(liveTotalDeductions)}
                                     </Badge>
                                 </div>
 
                                 {/* Deduction Heads List */}
-                                <div className="space-y-2.5">
+                                <div className="space-y-2 max-h-[calc(100vh-330px)] min-h-[280px] overflow-y-auto pr-1">
                                     {deductionItems.map((head) => (
                                         <div
                                             key={head.salary_head_id}
@@ -778,12 +781,12 @@ export default function SalaryHeadModificationCreate({
                                 </div>
 
                                 {/* Deductions Subtotal Card */}
-                                <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3.5 flex items-center justify-between shadow-2xs">
+                                <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-2.5 mt-2 flex items-center justify-between shadow-2xs">
                                     <div className="flex items-center gap-1.5">
-                                        <TrendingDown className="h-4 w-4 text-rose-600" />
+                                        <TrendingDown className="h-3.5 w-3.5 text-rose-600" />
                                         <span className="text-xs font-bold text-rose-950 uppercase tracking-wider">Total Deductions</span>
                                     </div>
-                                    <span className="text-base font-mono font-bold text-rose-800">
+                                    <span className="text-sm font-mono font-bold text-rose-800">
                                         {formatTakaWithSymbol(liveTotalDeductions)}
                                     </span>
                                 </div>
@@ -791,35 +794,35 @@ export default function SalaryHeadModificationCreate({
                         </div>
 
                         {/* Sticky Bottom Summary & Save Bar */}
-                        <div className="rounded-2xl border border-slate-300/80 bg-white p-4.5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="flex flex-wrap items-center gap-6">
+                        <div className="rounded-xl border border-slate-300/80 bg-white px-4 py-2.5 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3 sticky bottom-1 z-10">
+                            <div className="flex flex-wrap items-center gap-5">
                                 <div>
                                     <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Gross Allowances</span>
-                                    <span className="text-base font-mono font-bold text-emerald-700">
+                                    <span className="text-sm font-mono font-bold text-emerald-700">
                                         {formatTakaWithSymbol(liveTotalAllowances)}
                                     </span>
                                 </div>
 
-                                <span className="text-slate-300 text-lg font-light hidden sm:inline">&minus;</span>
+                                <span className="text-slate-300 text-base font-light hidden sm:inline">&minus;</span>
 
                                 <div>
                                     <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Deductions</span>
-                                    <span className="text-base font-mono font-bold text-rose-700">
+                                    <span className="text-sm font-mono font-bold text-rose-700">
                                         {formatTakaWithSymbol(liveTotalDeductions)}
                                     </span>
                                 </div>
 
-                                <span className="text-slate-300 text-lg font-light hidden sm:inline">&equals;</span>
+                                <span className="text-slate-300 text-base font-light hidden sm:inline">&equals;</span>
 
                                 <div>
                                     <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Net Salary Payable</span>
-                                    <span className="text-lg font-mono font-black text-indigo-900">
+                                    <span className="text-base font-mono font-black text-indigo-900">
                                         {formatTakaWithSymbol(liveNetSalary)}
                                     </span>
                                 </div>
 
                                 {netDifference !== 0 && (
-                                    <div className="hidden lg:block pl-2 border-l border-slate-200">
+                                    <div className="hidden lg:block pl-3 border-l border-slate-200">
                                         <span className="block text-[10px] uppercase font-bold text-slate-400">Impact vs Standard</span>
                                         <span className={`text-xs font-mono font-bold ${netDifference > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                             {netDifference > 0 ? `+${formatTakaWithSymbol(netDifference)}` : formatTakaWithSymbol(netDifference)}
@@ -828,9 +831,9 @@ export default function SalaryHeadModificationCreate({
                                 )}
                             </div>
 
-                            <div className="flex items-center gap-2.5 justify-end">
+                            <div className="flex items-center gap-2 justify-end">
                                 <Link href={route('salary-head-modifications.index')}>
-                                    <Button type="button" variant="outline" size="sm" className="cursor-pointer h-9 px-4 text-xs font-semibold">
+                                    <Button type="button" variant="outline" size="sm" className="cursor-pointer h-8 px-3 text-xs font-semibold">
                                         Cancel
                                     </Button>
                                 </Link>
@@ -840,9 +843,9 @@ export default function SalaryHeadModificationCreate({
                                     size="sm"
                                     onClick={handleSave}
                                     disabled={saving}
-                                    className="cursor-pointer gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 h-9 shadow-xs"
+                                    className="cursor-pointer gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 h-8 text-xs shadow-xs"
                                 >
-                                    <Save className="h-4 w-4" />
+                                    <Save className="h-3.5 w-3.5" />
                                     {saving ? 'Saving...' : 'Save Modifications'}
                                 </Button>
                             </div>
