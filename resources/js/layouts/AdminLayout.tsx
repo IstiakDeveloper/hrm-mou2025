@@ -183,8 +183,8 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
             ];
         case 'attendance-movement':
             return [
-                { title: 'Monthly View', path: '/attendance/monthly', permission: 'attendance.view' },
                 { title: 'Daily branch summary', path: '/attendance/daily-branch-summary', permission: 'attendance.view' },
+                { title: 'Monthly View', path: '/attendance/monthly', permission: 'attendance.view' },
                 { title: 'Attendance Report', path: '/attendance/report', permission: 'attendance.view' },
                 { title: 'Attendance sheet report', path: '/attendance/sheet-report', permission: 'attendance.view' },
             ];
@@ -735,7 +735,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                           item.path === '/payroll/reports/salary-sheet-posted' ||
                           item.path === '/payroll/reports/salary-sheet-unposted',
                   )
-                : sub.filter((item) => item.path === '/attendance/daily-branch-summary')
+                : sub.filter(
+                      (item) =>
+                          item.path === '/attendance/daily-branch-summary' ||
+                          item.path === '/attendance/monthly',
+                  )
             : sub;
 
         if (reportsSub.length === 0) {

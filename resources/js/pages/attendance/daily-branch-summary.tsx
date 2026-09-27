@@ -549,6 +549,16 @@ export default function DailyBranchSummary({
                                             Reset
                                         </Button>
                                     )}
+                                    <Link href="/attendance/monthly?section=attendance-movement">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="h-8 border-slate-200 text-slate-700 hover:bg-slate-50 px-3 text-xs font-bold rounded-xl shadow-xs inline-flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
+                                        >
+                                            <CalendarDays className="h-3.5 w-3.5 text-slate-500" />
+                                            <span>Monthly View</span>
+                                        </Button>
+                                    </Link>
                                     <Button
                                         type="button"
                                         onClick={() => window.print()}

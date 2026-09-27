@@ -38,9 +38,20 @@ class Attendance extends Model
         'location_coordinates' => 'array',
     ];
 
+    protected $appends = [
+        'work_hours',
+        'auto_remarks',
+    ];
+
+    /**
+     * Non-persisted / runtime auto-generated remarks.
+     */
+    protected ?string $autoRemarksRuntime = null;
+
     protected static function booted(): void
     {
         static::saving(function (Attendance $attendance) {
+            unset($attendance->attributes['auto_remarks']);
             $attendance->applyPunchStatus();
         });
     }
@@ -67,6 +78,17 @@ class Attendance extends Model
         }
 
         return 0;
+    }
+
+    public function getAutoRemarksAttribute(): ?string
+    {
+        return $this->autoRemarksRuntime ?? ($this->attributes['auto_remarks'] ?? null);
+    }
+
+    public function setAutoRemarksAttribute(?string $value): void
+    {
+        $this->autoRemarksRuntime = $value;
+        unset($this->attributes['auto_remarks']);
     }
 
     public function isOnDuty()

@@ -776,6 +776,11 @@ class AttendanceController extends Controller
 
         $projects = Project::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
 
+        $filters = array_merge(['per_page' => $perPageInput], $request->only(['month', 'branch_id', 'department_id', 'project_id', 'search', 'per_page']));
+        if ($user->isBranchAccount() && $user->branch_id) {
+            $filters['branch_id'] = (string) $user->branch_id;
+        }
+
         return Inertia::render('attendance/monthly', [
             'employees' => $employees,
             'attendances' => $attendances,
@@ -785,7 +790,7 @@ class AttendanceController extends Controller
             'branches' => $branches,
             'departments' => $departments,
             'projects' => $projects,
-            'filters' => array_merge(['per_page' => $perPageInput], $request->only(['month', 'branch_id', 'department_id', 'project_id', 'search', 'per_page'])),
+            'filters' => $filters,
             'month' => $month->format('Y-m'),
             'daysInMonth' => $daysInMonth,
             'holidays' => $holidays,
@@ -1106,9 +1111,6 @@ class AttendanceController extends Controller
                 $attendance->check_out = $checkOut;
                 $attendance->status = 'present';
                 $attendance->remarks = $remarks;
-
-                // Let generateRemarks determine late / half_day / overtime / regular
-                $this->generateRemarks($attendance);
 
                 // If check-in is late compared to work_start_time + threshold, set status to late
                 $setting = AttendanceSetting::forEmployee($empId);
@@ -2199,7 +2201,7 @@ class AttendanceController extends Controller
 
         OrganogramAccessService::constrainVisibleEmployees($query, $user);
 
-        if ($request->filled('branch_id') && $request->branch_id !== 'all') {
+        if (! $user->isBranchAccount() && $request->filled('branch_id') && $request->branch_id !== 'all') {
             $query->where('employees.current_branch_id', $request->branch_id);
         }
         if ($request->filled('department_id') && $request->department_id !== 'all') {

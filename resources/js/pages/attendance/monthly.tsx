@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import React, { useState, useMemo } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { isBranchAccount } from '@/lib/permissions';
 import { formatBranchSelectLabel, sortPayrollBranches } from '@/lib/payroll-branches';
 import { Input } from '@/components/ui/input';
 import {
@@ -42,7 +43,9 @@ import {
     Clock,
     AlertCircle,
     Info,
-    Download
+    Download,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format, parse } from 'date-fns';
@@ -172,6 +175,24 @@ interface AttendanceMonthlyProps {
     attendanceSettings: Record<number, AttendanceSetting>;
 }
 
+const MONTH_OPTIONS = [
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' },
+];
+
+const currentCalendarYear = new Date().getFullYear();
+const BASE_YEAR_OPTIONS = Array.from({ length: 16 }, (_, i) => String(currentCalendarYear - 8 + i));
+
 export default function AttendanceMonthly({
     employees,
     attendances,
@@ -188,6 +209,9 @@ export default function AttendanceMonthly({
     dailyStatusByEmployee = {},
     summaryByEmployee = {}
 }: AttendanceMonthlyProps) {
+    const { auth } = usePage().props as any;
+    const branchAccount = isBranchAccount(auth);
+
     const [search, setSearch] = useState(filters.search || '');
     const [branchId, setBranchId] = useState(filters.branch_id && filters.branch_id !== 'all' ? filters.branch_id : null);
     const [departmentId, setDepartmentId] = useState(filters.department_id && filters.department_id !== 'all' ? filters.department_id : null);
@@ -205,16 +229,45 @@ export default function AttendanceMonthly({
     // Generate array of days for the month
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-    // Parse month to get year and month
-    const monthDate = parse(month, 'yyyy-MM', new Date());
-    const monthLabel = format(monthDate, 'MMMM yyyy');
+    // Parse current selected month
+    const parsedCurrentDate = useMemo(() => {
+        try {
+            return parse(currentMonth, 'yyyy-MM', new Date());
+        } catch {
+            return new Date();
+        }
+    }, [currentMonth]);
+
+    const [selectedYear, selectedMonthNumber] = useMemo(() => {
+        const parts = currentMonth.split('-');
+        if (parts.length === 2) {
+            return [parts[0], parts[1]];
+        }
+        return [format(parsedCurrentDate, 'yyyy'), format(parsedCurrentDate, 'MM')];
+    }, [currentMonth, parsedCurrentDate]);
+
+    const years = useMemo(() => {
+        const list = [...BASE_YEAR_OPTIONS];
+        if (selectedYear && !list.includes(selectedYear)) {
+            list.push(selectedYear);
+            list.sort();
+        }
+        return list;
+    }, [selectedYear]);
+
+    const monthLabel = useMemo(() => format(parsedCurrentDate, 'MMMM yyyy'), [parsedCurrentDate]);
 
     // Get previous and next month
-    const prevMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() - 1);
-    const nextMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1);
+    const prevMonth = useMemo(() => new Date(parsedCurrentDate.getFullYear(), parsedCurrentDate.getMonth() - 1), [parsedCurrentDate]);
+    const nextMonth = useMemo(() => new Date(parsedCurrentDate.getFullYear(), parsedCurrentDate.getMonth() + 1), [parsedCurrentDate]);
 
-    const prevMonthString = format(prevMonth, 'yyyy-MM');
-    const nextMonthString = format(nextMonth, 'yyyy-MM');
+    const prevMonthString = useMemo(() => format(prevMonth, 'yyyy-MM'), [prevMonth]);
+    const nextMonthString = useMemo(() => format(nextMonth, 'yyyy-MM'), [nextMonth]);
+
+    const handleMonthYearChange = (m: string, y: string) => {
+        const nextTarget = `${y}-${m}`;
+        handleMonthChange(nextTarget);
+    };
 
     const toYmd = (day: number) => `${month}-${day.toString().padStart(2, '0')}`;
 
@@ -277,12 +330,21 @@ export default function AttendanceMonthly({
     };
 
     const resetFilters = () => {
+        const defaultBranchId = branchAccount && filters.branch_id ? filters.branch_id : null;
         setSearch('');
-        setBranchId(null);
+        setBranchId(defaultBranchId);
         setDepartmentId(null);
         setProjectId(null);
         setPerPage('20');
-        router.get(route('attendance.monthly'), { month: currentMonth, per_page: '20' }, { preserveState: true, preserveScroll: true });
+        router.get(
+            route('attendance.monthly'),
+            {
+                month: currentMonth,
+                per_page: '20',
+                ...(defaultBranchId ? { branch_id: defaultBranchId } : {}),
+            },
+            { preserveState: true, preserveScroll: true }
+        );
     };
 
     const handleMonthChange = (month: string) => {
@@ -574,13 +636,23 @@ export default function AttendanceMonthly({
 
             <PageSurface className="max-w-none w-full space-y-3 px-1.5 py-1.5 sm:px-3 sm:py-2.5">
                 <div className="mb-2">
-                    <Link
-                        href={route('attendance.index')}
-                        className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
-                    >
-                        <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-                        <span>Back to Daily Attendance</span>
-                    </Link>
+                    {branchAccount ? (
+                        <Link
+                            href="/attendance/daily-branch-summary?section=attendance-movement"
+                            className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                            <span>Back to Daily Branch Summary</span>
+                        </Link>
+                    ) : (
+                        <Link
+                            href={route('attendance.index')}
+                            className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                            <span>Back to Daily Attendance</span>
+                        </Link>
+                    )}
                 </div>
 
                 <div className="mb-4 space-y-3">
@@ -595,43 +667,87 @@ export default function AttendanceMonthly({
 
                         {/* Month navigation & quick actions */}
                         <div className="flex flex-col gap-2 w-full sm:w-auto">
-                            <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs bg-white border-slate-200 text-slate-700 shadow-xs font-medium px-2"
-                                    onClick={() => handleMonthChange(prevMonthString)}
-                                >
-                                    <Calendar className="mr-1 h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <span>{format(prevMonth, 'MMM')}</span>
-                                </Button>
+                            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+                                {/* Month & Year Combo Selector */}
+                                <div className="inline-flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg shrink-0"
+                                        onClick={() => handleMonthChange(prevMonthString)}
+                                        title="Previous Month"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
 
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs bg-blue-50 border-blue-200 text-blue-700 shadow-xs font-bold pointer-events-none px-2"
-                                >
-                                    <span>{format(monthDate, 'MMM yyyy')}</span>
-                                </Button>
+                                    <Select
+                                        value={selectedMonthNumber}
+                                        onValueChange={(val) => handleMonthYearChange(val, selectedYear)}
+                                    >
+                                        <SelectTrigger className="h-8 w-[118px] sm:w-[128px] text-xs font-semibold bg-slate-50/80 border-slate-200 rounded-lg focus:ring-emerald-500">
+                                            <Calendar className="mr-1.5 h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                            <SelectValue placeholder="Month" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-[300px]">
+                                            {MONTH_OPTIONS.map((m) => (
+                                                <SelectItem key={m.value} value={m.value} className="text-xs font-medium">
+                                                    {m.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
 
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs bg-white border-slate-200 text-slate-700 shadow-xs font-medium px-2"
-                                    onClick={() => handleMonthChange(nextMonthString)}
-                                >
-                                    <span>{format(nextMonth, 'MMM')}</span>
-                                    <Calendar className="ml-1 h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                </Button>
+                                    <Select
+                                        value={selectedYear}
+                                        onValueChange={(val) => handleMonthYearChange(selectedMonthNumber, val)}
+                                    >
+                                        <SelectTrigger className="h-8 w-[84px] sm:w-[92px] text-xs font-semibold bg-slate-50/80 border-slate-200 rounded-lg focus:ring-emerald-500">
+                                            <SelectValue placeholder="Year" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-[300px]">
+                                            {years.map((y) => (
+                                                <SelectItem key={y} value={y} className="text-xs font-medium">
+                                                    {y}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg shrink-0"
+                                        onClick={() => handleMonthChange(nextMonthString)}
+                                        title="Next Month"
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                </div>
+
+                                {currentMonth !== format(new Date(), 'yyyy-MM') && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-semibold text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 rounded-xl px-2.5 shadow-2xs"
+                                        onClick={() => handleMonthChange(format(new Date(), 'yyyy-MM'))}
+                                    >
+                                        Current Month
+                                    </Button>
+                                )}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-1.5 w-full">
-                                <Link href={route('attendance.report')} className="flex-1 sm:flex-none">
-                                    <Button variant="outline" size="sm" className="h-8 text-xs w-full sm:w-auto bg-white border-slate-200 text-slate-700 shadow-xs font-medium">
-                                        <BarChart className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
-                                        Report
-                                    </Button>
-                                </Link>
+                                {!branchAccount && (
+                                    <Link href={route('attendance.report')} className="flex-1 sm:flex-none">
+                                        <Button variant="outline" size="sm" className="h-8 text-xs w-full sm:w-auto bg-white border-slate-200 text-slate-700 shadow-xs font-medium">
+                                            <BarChart className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                                            Report
+                                        </Button>
+                                    </Link>
+                                )}
 
                                 <Button
                                     variant="outline"
@@ -647,6 +763,15 @@ export default function AttendanceMonthly({
                     </div>
 
                     {/* Role-based Context Message */}
+                    {branchAccount && (
+                        <Alert className="bg-emerald-50 text-emerald-800 border-emerald-200 py-2">
+                            <Info className="h-4 w-4 text-emerald-600" />
+                            <AlertDescription className="text-xs">
+                                Showing monthly attendance report for your branch.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
                     {userPermissions.isEmployee && !userPermissions.isBranchManager && !userPermissions.isDepartmentHead && (
                         <Alert className="bg-blue-50 text-blue-800 border-blue-200 py-2">
                             <Info className="h-4 w-4 text-blue-600" />

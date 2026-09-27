@@ -296,8 +296,17 @@ class AttendanceExportController extends Controller
     {
         $deptHeadScope = OrganogramAccessService::departmentIdsForDepartmentHeadScope($user);
 
+        // If user is a branch account, restrict strictly to their branch
+        if ($user->isBranchAccount()) {
+            $bid = (int) ($user->branch_id ?: 0);
+            if ($bid > 0) {
+                $query->where('employees.current_branch_id', $bid);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
         // If user is an employee, show only their data unless they have manager permissions
-        if ($user->employee_id && ! $user->hasPermission('branch_manager') && $deptHeadScope === []) {
+        elseif ($user->employee_id && ! $user->hasPermission('branch_manager') && $deptHeadScope === []) {
             $query->where('employees.id', $user->employee_id);
         }
         // If user is a branch manager, show only employees from their branch
@@ -319,8 +328,8 @@ class AttendanceExportController extends Controller
             });
         }
 
-        // Apply branch filter if provided and user has permission
-        if ($request->filled('branch_id') && $request->branch_id !== 'all' && ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager'))) {
+        // Apply branch filter if provided and user has permission (and not branch account)
+        if (! $user->isBranchAccount() && $request->filled('branch_id') && $request->branch_id !== 'all' && ($user->hasPermission('admin.access') || $user->hasPermission('branch_manager'))) {
             $query->where('employees.current_branch_id', $request->branch_id);
         }
 
