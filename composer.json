@@ -20,7 +20,7 @@
         "mpdf/mpdf": "^8.2",
         "shuchkin/simplexlsxgen": "^1.5",
         "spatie/browsershot": "^5.4",
-        "spatie/laravel-activitylog": "^5.1",
+        "spatie/laravel-activitylog": "^4.12",
         "tightenco/ziggy": "^2.4"
     },
     "require-dev": {
@@ -83,6 +83,7 @@
             "php-http/discovery": true
         },
         "platform": {
+            "php": "8.3.0",
             "ext-pcntl": "8.3.0",
             "ext-posix": "8.3.0"
         }
