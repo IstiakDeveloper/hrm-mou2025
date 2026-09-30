@@ -118,6 +118,17 @@ const SECTION_THEMES: Record<string, {
         badgeText: 'text-emerald-700',
         glow: 'hover:shadow-emerald-500/10',
     },
+    'documents': {
+        color: 'teal',
+        bg: 'bg-teal-50/20',
+        border: 'border-teal-100',
+        text: 'text-teal-900',
+        hoverBorder: 'hover:border-teal-300',
+        iconBg: 'bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20',
+        badgeBg: 'bg-teal-50 border border-teal-200/50',
+        badgeText: 'text-teal-700',
+        glow: 'hover:shadow-teal-500/10',
+    },
     'recruitment': {
         color: 'teal',
         bg: 'bg-teal-50/20',
@@ -327,6 +338,9 @@ export default function SectionsIndex() {
                                 if (section.id === 'leave') {
                                     return true;
                                 }
+                                if (section.id === 'documents') {
+                                    return true;
+                                }
                                 return false;
                             }
 
@@ -396,6 +410,8 @@ export default function SectionsIndex() {
                                         Boolean(employee?.id)
                                     );
                                 case 'office-map':
+                                    return true;
+                                case 'documents':
                                     return true;
                                 default:
                                     return false;

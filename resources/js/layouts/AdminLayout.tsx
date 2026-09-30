@@ -17,6 +17,7 @@ import {
     Clock,
     Coins,
     FileSpreadsheet,
+    FolderArchive,
     HandCoins,
     Home,
     KeyRound,
@@ -248,6 +249,8 @@ function buildReportsSubmenu(sectionId: AdminSectionId | null): NonNullable<Menu
                 { title: 'Bonus Register', path: '/payroll/reports/bonus-register', permission: 'payroll.view' },
                 { title: 'Salary Certificate', path: '/payroll/reports/salary-certificate', permission: 'payroll.view' },
             ];
+        case 'documents':
+            return [];
         default:
             return [{ title: 'Reports overview', path: '/reports', permission: 'reports.view' }];
     }
@@ -380,6 +383,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     // Organized Menu Structure with EXACT permission names matching web.php
     const baseMenuItems = useMemo<MenuItemType[]>(
         () => [
+            {
+                title: 'Document Center',
+                menuKey: 'documents-dashboard',
+                icon: <FolderArchive className="h-5 w-5" />,
+                path: '/sections/documents',
+                hasSubmenu: false,
+            },
             {
                 title: 'My Notices',
                 menuKey: 'my-notices',
@@ -722,6 +732,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     { title: 'Notifications', path: withSectionParam('/settings/notifications', 'administration') },
                 ],
             },
+            {
+                title: 'Document Dashboard',
+                menuKey: 'documents-dashboard',
+                icon: <FolderArchive className="h-5 w-5" />,
+                path: withSectionParam('/sections/documents', 'documents'),
+                hasSubmenu: false,
+            },
         ],
         [],
     );
@@ -812,6 +829,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         path: submenu[0]?.path ?? leaveMenu.path,
                     },
                 ];
+            }
+            if (activeSectionId === 'documents') {
+                const docsItem = menuItemsForLayout.find((m) => m.menuKey === 'documents-dashboard');
+                return docsItem ? [docsItem] : [];
             }
             return [];
         }

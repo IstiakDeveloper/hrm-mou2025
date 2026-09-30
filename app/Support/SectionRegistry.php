@@ -48,9 +48,9 @@ class SectionRegistry
                 'label' => 'Store',
                 'description' => 'Store-facing inventory area.',
             ],
-            'recruitment' => [
-                'label' => 'Recruitment',
-                'description' => 'Hiring pipeline and recruitment workflows.',
+            'documents' => [
+                'label' => 'Document Center',
+                'description' => 'Policies, forms, SOPs and official files repository.',
             ],
             'training' => [
                 'label' => 'Training',

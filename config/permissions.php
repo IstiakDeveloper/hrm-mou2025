@@ -91,6 +91,11 @@ return [
             'description' => 'Stock in, disbursement, and stock reports',
             'color' => 'sky',
         ],
+        'documents' => [
+            'label' => 'Document Center',
+            'description' => 'Document repository and file management',
+            'color' => 'teal',
+        ],
     ],
 
     'permissions' => [
@@ -231,6 +236,9 @@ return [
         'inventory.create' => ['label' => 'Stock In & Disburse', 'category' => 'inventory'],
         'inventory.edit' => ['label' => 'Edit Inventory Master', 'category' => 'inventory'],
         'inventory.delete' => ['label' => 'Delete Inventory Records', 'category' => 'inventory'],
+
+        'documents.view' => ['label' => 'View & Download Documents', 'category' => 'documents'],
+        'documents.manage' => ['label' => 'Upload, Edit, Pin & Delete Documents', 'category' => 'documents'],
     ],
 
     /** Map legacy role JSON keys to current catalog keys. */

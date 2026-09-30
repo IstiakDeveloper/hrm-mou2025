@@ -585,11 +585,10 @@ export default function PenaltyAdmin({
                                 key={i}
                                 href={link.url || '#'}
                                 preserveState
-                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                                    link.active
+                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${link.active
                                         ? 'bg-emerald-600 text-white shadow-sm'
                                         : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                                }`}
+                                    }`}
                                 dangerouslySetInnerHTML={{ __html: link.label }}
                             />
                         ))}
@@ -697,7 +696,7 @@ export default function PenaltyAdmin({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                    {/* <div className="flex items-center gap-2 w-full sm:w-auto">
                         <Button
                             size="sm"
                             onClick={handleSyncPenalties}
@@ -707,7 +706,7 @@ export default function PenaltyAdmin({
                             <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncing ? 'animate-spin' : ''}`} />
                             {isSyncing ? 'Syncing Penalties...' : 'Sync Overdue Penalties'}
                         </Button>
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* 2. STATS KPI CARDS */}

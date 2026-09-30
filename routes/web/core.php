@@ -17,6 +17,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Demotion\DemotionController;
 use App\Http\Controllers\Department\DepartmentController;
 use App\Http\Controllers\Designation\DesignationController;
+use App\Http\Controllers\Document\DocumentCategoryController;
+use App\Http\Controllers\Document\DocumentController;
 use App\Http\Controllers\Employee\DisciplinaryActionController;
 use App\Http\Controllers\Employee\EmployeeAssetController;
 use App\Http\Controllers\Employee\EmployeeController;
@@ -142,6 +144,18 @@ use Inertia\Inertia;
         ->middleware('permission:inventory.view')
         ->name('sections.inventory');
 
+    // Document Center (View/Download for all authenticated users; Upload/Edit/Delete/Pin for Admin, Super Admin, Department Head)
+    Route::get('/sections/documents', [DocumentController::class, 'index'])->name('sections.documents');
+    Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');
+    Route::match(['put', 'patch', 'post'], '/documents/{document}', [DocumentController::class, 'update'])->name('documents.update');
+    Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+    Route::post('/documents/{document}/toggle-pin', [DocumentController::class, 'togglePin'])->name('documents.toggle-pin');
+    Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
+    Route::get('/documents/{document}/preview', [DocumentController::class, 'preview'])->name('documents.preview');
+
+    Route::post('/document-categories', [DocumentCategoryController::class, 'store'])->name('document-categories.store');
+    Route::delete('/document-categories/{category}', [DocumentCategoryController::class, 'destroy'])->name('document-categories.destroy');
+
     // Section Dashboard (Overview) - role-aware (employee vs admin)
     Route::get('/sections/{section}', function (Request $request, string $section) {
         $allowed = [
@@ -154,7 +168,7 @@ use Inertia\Inertia;
             'fixed-asset',
             'inventory',
             'store',
-            'recruitment',
+            'documents',
             'training',
             'administration',
         ];

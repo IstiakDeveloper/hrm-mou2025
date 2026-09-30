@@ -6,6 +6,7 @@ import {
     CalendarDays,
     ClipboardList,
     Coins,
+    FolderArchive,
     GraduationCap,
     HandCoins,
     MapPin,
@@ -25,6 +26,7 @@ export type AdminSectionId =
     | 'inventory'
     | 'office-map'
     | 'store'
+    | 'documents'
     | 'recruitment'
     | 'training'
     | 'administration';
@@ -115,10 +117,12 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         href: '/office-map',
     },
     {
-        id: 'recruitment',
-        title: 'RECRUITMENT',
-        description: 'Hiring pipeline',
-        icon: Building2,
+        id: 'documents',
+        title: 'DOCUMENT CENTER',
+        description: 'Policies, templates & official files',
+        icon: FolderArchive,
+        href: '/sections/documents',
+        menuKeys: ['documents-dashboard'],
     },
     {
         id: 'training',
@@ -197,6 +201,9 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
     }
     if (p.startsWith('/sections/payroll') || p.startsWith('/employee/payroll')) {
         return 'payroll';
+    }
+    if (p.startsWith('/sections/documents') || p.startsWith('/documents')) {
+        return 'documents';
     }
     if (p.startsWith('/employee/loan')) {
         return 'employee-loan';
