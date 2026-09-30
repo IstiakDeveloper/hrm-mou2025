@@ -50,6 +50,11 @@ class PfInterestDistributionService
             throw new InvalidArgumentException('Invalid interest year.');
         }
 
+        $totalInterest = SalaryStructureCalculator::roundTaka($totalInterest);
+        if ((int) $totalInterest % 2 !== 0) {
+            $totalInterest -= 1;
+        }
+
         $employees = $this->eligibleEmployees();
         $allocations = $this->allocateProportional($totalInterest, $employees);
 
@@ -62,11 +67,20 @@ class PfInterestDistributionService
             ? round(($totalInterest / $eligibleBalanceTotal) * 100, 4)
             : 0.0;
 
+        $executiveDirector = $this->findExecutiveDirectorEmployee($employees);
+
         $rows = [];
         foreach ($employees as $employee) {
             $interestTotal = $allocations[$employee->id] ?? 0.0;
             if ($interestTotal <= 0) {
                 continue;
+            }
+
+            // Ensure non-ED employees receive an even amount so Own and Org are identical
+            if ($executiveDirector && (int) $employee->id !== (int) $executiveDirector->id) {
+                if ((int) $interestTotal % 2 !== 0) {
+                    $interestTotal -= 1;
+                }
             }
 
             $split = $this->splitOwnOrg($interestTotal);
@@ -335,10 +349,16 @@ class PfInterestDistributionService
         }
 
         return Employee::query()
+            ->where('status', 'active')
             ->with('designation')
             ->orderBy('id')
             ->get()
-            ->first(fn (Employee $employee) => $this->isExecutiveDirectorDesignation($employee->designation?->name));
+            ->first(fn (Employee $employee) => $this->isExecutiveDirectorDesignation($employee->designation?->name))
+            ?: Employee::query()
+                ->with('designation')
+                ->orderBy('id')
+                ->get()
+                ->first(fn (Employee $employee) => $this->isExecutiveDirectorDesignation($employee->designation?->name));
     }
 
     protected function isExecutiveDirectorDesignation(?string $designationName): bool

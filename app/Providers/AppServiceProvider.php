@@ -77,5 +77,30 @@ class AppServiceProvider extends ServiceProvider
                     ->log('User logged out from system');
             }
         });
+
+        // Global Automatic Activity Tracking for ANY model in the project
+        \Illuminate\Support\Facades\Event::listen('eloquent.updating: *', function (string $event, array $data) {
+            if (isset($data[0]) && $data[0] instanceof \Illuminate\Database\Eloquent\Model) {
+                \App\Services\SystemActivityTracker::onUpdating($data[0]);
+            }
+        });
+
+        \Illuminate\Support\Facades\Event::listen('eloquent.updated: *', function (string $event, array $data) {
+            if (isset($data[0]) && $data[0] instanceof \Illuminate\Database\Eloquent\Model) {
+                \App\Services\SystemActivityTracker::log('updated', $data[0]);
+            }
+        });
+
+        \Illuminate\Support\Facades\Event::listen('eloquent.created: *', function (string $event, array $data) {
+            if (isset($data[0]) && $data[0] instanceof \Illuminate\Database\Eloquent\Model) {
+                \App\Services\SystemActivityTracker::log('created', $data[0]);
+            }
+        });
+
+        \Illuminate\Support\Facades\Event::listen('eloquent.deleted: *', function (string $event, array $data) {
+            if (isset($data[0]) && $data[0] instanceof \Illuminate\Database\Eloquent\Model) {
+                \App\Services\SystemActivityTracker::log('deleted', $data[0]);
+            }
+        });
     }
 }
