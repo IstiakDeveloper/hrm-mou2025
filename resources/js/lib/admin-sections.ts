@@ -136,7 +136,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'System & access control',
         icon: Settings,
         href: '/sections/administration',
-        menuKeys: ['admin-user-management', 'section-reports', 'admin-settings'],
+        menuKeys: ['admin-user-management', 'admin-activity-logs', 'section-reports', 'admin-settings'],
     },
 ];
 

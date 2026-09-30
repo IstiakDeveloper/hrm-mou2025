@@ -50,5 +50,32 @@ class AppServiceProvider extends ServiceProvider
         Validator::replacer('english_only', function ($message, $attribute, $rule, $parameters) {
             return str_replace(':attribute', $attribute, 'The :attribute must contain English characters only. Bangla, Arabic, or other non-English characters are not allowed.');
         });
+
+        // Activity log for Authentication Events
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Login::class, function ($event) {
+            if ($event->user) {
+                activity('auth')
+                    ->causedBy($event->user)
+                    ->withProperties([
+                        'ip' => request()->ip(),
+                        'user_agent' => request()->userAgent(),
+                    ])
+                    ->event('login')
+                    ->log('User logged in to system');
+            }
+        });
+
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Logout::class, function ($event) {
+            if ($event->user) {
+                activity('auth')
+                    ->causedBy($event->user)
+                    ->withProperties([
+                        'ip' => request()->ip(),
+                        'user_agent' => request()->userAgent(),
+                    ])
+                    ->event('logout')
+                    ->log('User logged out from system');
+            }
+        });
     }
 }

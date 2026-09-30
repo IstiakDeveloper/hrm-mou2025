@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActiveSessionController;
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AdminNoticeController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
@@ -253,5 +254,7 @@ use Inertia\Inertia;
         Route::post('notices', [AdminNoticeController::class, 'store'])->name('notices.store');
         Route::get('notices/{notice}', [AdminNoticeController::class, 'show'])->name('notices.show');
         Route::delete('notices/{notice}', [AdminNoticeController::class, 'destroy'])->name('notices.destroy');
+
+        Route::get('activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');
     });
 

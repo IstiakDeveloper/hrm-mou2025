@@ -7,11 +7,12 @@ use App\Services\WebPushService;
 use App\Support\SectionRegistry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use App\Traits\TracksActivity;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, TracksActivity;
 
     protected $fillable = [
         'name',

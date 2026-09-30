@@ -2,9 +2,11 @@ import React from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
 import {
+    Activity,
     ArrowUpRight,
     BarChart3,
     Bell,
+    History,
     KeyRound,
     Megaphone,
     Monitor,
@@ -17,6 +19,7 @@ import {
 } from 'lucide-react';
 import Layout from '@/layouts/AdminLayout';
 import { PageSurface } from '@/components/page-surface';
+import { SectionSubNav, ADMINISTRATION_NAV_ITEMS } from '@/components/sections/section-sub-nav';
 import { hasAppPermission } from '@/lib/permissions';
 import { type SharedData } from '@/types';
 import { cn } from '@/lib/utils';
@@ -34,6 +37,7 @@ type RecentUser = {
 type Props = {
     userCount: number;
     roleCount: number;
+    activityCount?: number;
     recentUsers: RecentUser[];
     userRole: string;
     sessionStats: {
@@ -128,7 +132,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     return <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{children}</h2>;
 }
 
-export default function AdministrationDashboard({ userCount, roleCount, recentUsers, userRole, sessionStats }: Props) {
+export default function AdministrationDashboard({ userCount, roleCount, activityCount = 0, recentUsers, userRole, sessionStats }: Props) {
     const { auth } = usePage<SharedData>().props;
     const hasPermission = (permission?: string): boolean => hasAppPermission(auth, permission);
 
@@ -157,6 +161,10 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
                             </Button>
                         )}
                     </div>
+                </div>
+
+                <div className="mb-5">
+                    <SectionSubNav items={ADMINISTRATION_NAV_ITEMS} />
                 </div>
 
                 <section className="mb-6">
@@ -190,6 +198,16 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
                                 accent="sky"
                             />
                         )}
+                        {hasPermission('admin.access') && (
+                            <KpiCard
+                                label="Activity logs"
+                                value={activityCount}
+                                sub="Last 30 days"
+                                href="/admin/activity-logs?section=administration"
+                                icon={Activity}
+                                accent="emerald"
+                            />
+                        )}
                     </div>
                 </section>
 
@@ -207,6 +225,7 @@ export default function AdministrationDashboard({ userCount, roleCount, recentUs
                         )}
                         {hasPermission('admin.access') && (
                             <>
+                                <ShortcutTile href="/admin/activity-logs?section=administration" title="Activity logs & audit" icon={History} />
                                 <ShortcutTile href="/admin/notices?section=administration" title="Notices" icon={Megaphone} />
                                 <ShortcutTile href="/admin/notices/create?section=administration" title="Send notice" icon={Send} />
                                 <ShortcutTile href="/movement-penalties" title="Movement Penalties" icon={ShieldAlert} />

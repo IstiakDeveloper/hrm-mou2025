@@ -219,6 +219,52 @@ class EmployeeProvidentFundService
         ]);
     }
 
+    public function recordSideReconciliation(
+        Employee $employee,
+        int $employeeDelta,
+        int $employerDelta,
+        Carbon $transactionDate,
+        string $notes,
+        string $referenceNo,
+        ?int $createdBy = null
+    ): EmployeePfTransaction {
+        if ($employeeDelta === 0 && $employerDelta === 0) {
+            throw new InvalidArgumentException('PF side reconciliation must change at least one side.');
+        }
+
+        return DB::transaction(function () use ($employee, $employeeDelta, $employerDelta, $transactionDate, $notes, $referenceNo, $createdBy) {
+            $locked = Employee::query()->whereKey($employee->id)->lockForUpdate()->firstOrFail();
+
+            if (EmployeePfTransaction::query()->where('reference_no', $referenceNo)->exists()) {
+                throw new InvalidArgumentException('PF side reconciliation reference already exists.');
+            }
+
+            $net = SalaryStructureCalculator::roundTaka($employeeDelta + $employerDelta);
+            $newBalance = SalaryStructureCalculator::roundTaka((float) $locked->pf_balance + $net);
+            if ($newBalance < 0) {
+                throw new InvalidArgumentException('PF balance cannot go negative after side reconciliation.');
+            }
+
+            $transaction = EmployeePfTransaction::query()->create([
+                'employee_id' => $locked->id,
+                'transaction_type' => self::TYPE_ADJUSTMENT,
+                'employee_contribution' => $employeeDelta,
+                'employer_contribution' => $employerDelta,
+                'credit_amount' => max($net, 0),
+                'debit_amount' => max(-$net, 0),
+                'balance_after' => $newBalance,
+                'transaction_date' => $transactionDate->toDateString(),
+                'notes' => $notes,
+                'reference_no' => $referenceNo,
+                'created_by' => $createdBy,
+            ]);
+
+            $this->recalculateEmployeeBalances($locked);
+
+            return $transaction->fresh();
+        });
+    }
+
     public function recordInterest(
         Employee $employee,
         float $employeeAmount,

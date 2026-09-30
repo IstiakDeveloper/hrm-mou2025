@@ -20,6 +20,7 @@
         "mpdf/mpdf": "^8.2",
         "shuchkin/simplexlsxgen": "^1.5",
         "spatie/browsershot": "^5.4",
+        "spatie/laravel-activitylog": "^5.1",
         "tightenco/ziggy": "^2.4"
     },
     "require-dev": {

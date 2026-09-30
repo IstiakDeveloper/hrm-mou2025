@@ -6,9 +6,12 @@ import {
     CalendarDays,
     Clock,
     FileSpreadsheet,
+    History,
     LayoutDashboard,
     MapPin,
+    Megaphone,
     MonitorSmartphone,
+    Shield,
     Users,
 } from 'lucide-react';
 
@@ -80,6 +83,40 @@ export const ATTENDANCE_MOVEMENT_NAV_ITEMS: SubNavItem[] = [
         title: 'Sync Devices',
         href: '/attendance/devices?section=attendance-movement',
         icon: MonitorSmartphone,
+    },
+];
+
+export const ADMINISTRATION_NAV_ITEMS: SubNavItem[] = [
+    {
+        title: 'Dashboard',
+        href: '/sections/administration',
+        icon: LayoutDashboard,
+        exact: true,
+    },
+    {
+        title: 'Users',
+        href: '/admin/users?section=administration',
+        icon: Users,
+    },
+    {
+        title: 'Active Sessions',
+        href: '/admin/sessions?section=administration',
+        icon: MonitorSmartphone,
+    },
+    {
+        title: 'Roles & Permissions',
+        href: '/admin/roles?section=administration',
+        icon: Shield,
+    },
+    {
+        title: 'Activity Logs',
+        href: '/admin/activity-logs?section=administration',
+        icon: History,
+    },
+    {
+        title: 'Notices',
+        href: '/admin/notices?section=administration',
+        icon: Megaphone,
     },
 ];
 

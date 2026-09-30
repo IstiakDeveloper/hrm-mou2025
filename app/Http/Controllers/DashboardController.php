@@ -245,9 +245,14 @@ class DashboardController extends Controller
             $sessionStats = app(ActiveSessionService::class)->stats();
         }
 
+        $activityCount = \Spatie\Activitylog\Models\Activity::query()
+            ->whereDate('created_at', '>=', Carbon::now()->subDays(30))
+            ->count();
+
         return Inertia::render('sections/administration/dashboard', [
             'userCount' => $userCount,
             'roleCount' => $roleCount,
+            'activityCount' => $activityCount,
             'recentUsers' => $recentUsers,
             'userRole' => $role?->name ?? 'User',
             'sessionStats' => $sessionStats,

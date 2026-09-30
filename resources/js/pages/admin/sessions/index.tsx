@@ -32,6 +32,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { PageSurface } from '@/components/page-surface';
+import { SectionSubNav, ADMINISTRATION_NAV_ITEMS } from '@/components/sections/section-sub-nav';
 import { hasAppPermission } from '@/lib/permissions';
 import { usePage } from '@inertiajs/react';
 import type { SharedData } from '@/types';
@@ -148,6 +149,10 @@ export default function ActiveSessionsIndex({ sessions, stats, sessionLifetimeDa
             <Head title="Active Sessions" />
 
             <PageSurface className="max-w-7xl py-5 md:py-6 px-3 sm:px-4">
+                <div className="mb-5">
+                    <SectionSubNav items={ADMINISTRATION_NAV_ITEMS} />
+                </div>
+
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-zinc-900">

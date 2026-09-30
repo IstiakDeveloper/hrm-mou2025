@@ -19,6 +19,7 @@ import {
     FileSpreadsheet,
     FolderArchive,
     HandCoins,
+    History,
     Home,
     KeyRound,
     LayoutDashboard,
@@ -86,6 +87,9 @@ function getSubNavIcon(title: string, path: string): React.ReactNode {
     }
     if (t.includes('password')) {
         return <KeyRound className="h-3.5 w-3.5 shrink-0" />;
+    }
+    if (t.includes('activity') || t.includes('audit') || t.includes('history')) {
+        return <History className="h-3.5 w-3.5 shrink-0" />;
     }
     if (t.includes('admin') || t.includes('role') || t.includes('setting')) {
         return <Settings className="h-3.5 w-3.5 shrink-0" />;
@@ -715,10 +719,23 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         anyPermissions: ['admin.access', 'users.view'],
                     },
                     { title: 'Roles & Permissions', path: withSectionParam('/admin/roles', 'administration'), permission: 'roles.view' },
+                    {
+                        title: 'Activity Logs',
+                        path: withSectionParam('/admin/activity-logs', 'administration'),
+                        anyPermissions: ['admin.access', 'users.view'],
+                    },
                     { title: 'Notices', path: withSectionParam('/admin/notices', 'administration'), permission: 'admin.access' },
                     { title: 'Send notice', path: withSectionParam('/admin/notices/create', 'administration'), permission: 'admin.access' },
                     { title: 'Movement Penalties', path: '/movement-penalties', anyPermissions: ['admin.access', 'movements.approve', 'movements.view'] },
                 ],
+            },
+            {
+                title: 'Activity Logs',
+                menuKey: 'admin-activity-logs',
+                icon: <History className="h-5 w-5" />,
+                path: withSectionParam('/admin/activity-logs', 'administration'),
+                hasSubmenu: false,
+                anyPermissions: ['admin.access', 'users.view'],
             },
             {
                 title: 'Settings',
