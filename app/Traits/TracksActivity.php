@@ -2,8 +2,8 @@
 
 namespace App\Traits;
 
-use Spatie\Activitylog\Models\Concerns\LogsActivity;
-use Spatie\Activitylog\Support\LogOptions;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 trait TracksActivity
 {
@@ -18,7 +18,7 @@ trait TracksActivity
             ->logAll()
             ->logExcept(['password', 'remember_token'])
             ->logOnlyDirty()
-            ->dontLogEmptyChanges()
+            ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(function (string $eventName): string {
                 $modelName = class_basename(static::class);
                 return "{$modelName} has been {$eventName}";
