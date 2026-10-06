@@ -135,6 +135,18 @@ export function hasAppPermission(
   const granted = collectGrantedPermissions(auth);
   if (granted.has(permission)) return true;
 
+  if (permission.startsWith('promotion-evaluations.')) {
+    if (hasOrganogramLineRole(auth)) {
+      return true;
+    }
+    const names = new Set<string>();
+    if (auth?.user?.role?.name) names.add(auth.user.role.name);
+    auth?.user?.roles?.forEach((r) => r.name && names.add(r.name));
+    if (names.has('Director Finance and Accounts') || names.has('Director Finance and Account')) {
+      return true;
+    }
+  }
+
   if (isDepartmentHead(auth) && PAYROLL_MODULE_PERMISSIONS.has(permission)) {
     return false;
   }

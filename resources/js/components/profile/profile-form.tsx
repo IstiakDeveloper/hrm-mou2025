@@ -22,6 +22,7 @@ import {
   Building,
   Shield
 } from 'lucide-react';
+import SignatureCard from '@/components/profile/signature-card';
 
 interface ProfileFormProps {
   user: {

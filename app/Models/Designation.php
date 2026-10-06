@@ -15,6 +15,15 @@ class Designation extends Model
         'rank',
     ];
 
+    protected $appends = [
+        'title',
+    ];
+
+    public function getTitleAttribute(): ?string
+    {
+        return $this->name;
+    }
+
     public function employees()
     {
         return $this->hasMany(Employee::class);

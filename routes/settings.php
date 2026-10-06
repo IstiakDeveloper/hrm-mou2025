@@ -16,6 +16,8 @@ Route::redirect('settings', 'settings/profile');
 
 Route::get('settings/profile', [ProfileController::class, 'edit'])->name('settings.profile.edit');
 Route::patch('settings/profile', [ProfileController::class, 'update'])->name('settings.profile.update');
+Route::post('settings/profile/signature', [ProfileController::class, 'updateSignature'])->name('settings.profile.signature');
+Route::delete('settings/profile/signature', [ProfileController::class, 'destroySignature'])->name('settings.profile.signature.destroy');
 
 Route::get('settings/password', [PasswordController::class, 'edit'])->name('settings.password.edit');
 Route::put('settings/password', [PasswordController::class, 'update'])->name('settings.password.update');

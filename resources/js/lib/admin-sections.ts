@@ -51,7 +51,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
         description: 'Employee, organization & transfers',
         icon: Users,
         href: '/sections/human-resources',
-        menuKeys: ['my-notices', 'employee-management', 'organization-setup', 'holidays', 'transfer-promotion', 'section-reports'],
+        menuKeys: ['my-notices', 'employee-management', 'organization-setup', 'holidays', 'transfer-promotion', 'performance-appraisal', 'section-reports'],
     },
     {
         id: 'attendance-movement',

@@ -10,8 +10,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AdminLayout from '@/layouts/AdminLayout';
 import SettingsLayout from '@/layouts/settings/layout';
+import SignatureCard from '@/components/profile/signature-card';
 
-export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: boolean; status?: string }) {
+export default function Profile({ 
+    mustVerifyEmail, 
+    status,
+    signature,
+    employee
+}: { 
+    mustVerifyEmail: boolean; 
+    status?: string;
+    signature?: string | null;
+    employee?: any;
+}) {
     const { auth } = usePage<SharedData>().props;
 
     const { data, setData, patch, errors, processing, recentlySuccessful } = useForm({
@@ -105,6 +116,14 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                             </Transition>
                         </div>
                     </form>
+
+                    <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                        <SignatureCard 
+                            currentSignature={signature ?? (auth.user?.signature as string | null) ?? (auth.employee?.signature as string | null)} 
+                            actionRoute="settings.profile.signature"
+                            destroyRoute="settings.profile.signature.destroy"
+                        />
+                    </div>
                 </div>
             </SettingsLayout>
         </AdminLayout>

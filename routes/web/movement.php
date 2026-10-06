@@ -187,6 +187,7 @@ use Inertia\Inertia;
 
     // Movement Penalty & Account Lock Payment routes
     Route::get('/movement/penalty-payment', [MovementPenaltyController::class, 'showPaymentPage'])->name('movement.penalty.payment');
+    Route::get('/movement/penalty-status', [MovementPenaltyController::class, 'checkPenaltyStatus'])->name('movement.penalty.status');
     Route::post('/movement/penalty-submit', [MovementPenaltyController::class, 'submitTransaction'])->name('movement.penalty.submit');
 
     Route::prefix('movement-penalties')->name('movement-penalties.')->group(function () {

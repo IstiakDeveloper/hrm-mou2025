@@ -92,6 +92,57 @@ class MovementPenaltyController extends Controller
         return redirect()->back()->with('success', 'আপনার জরিমানা পেমেন্ট তথ্য জমা নেওয়া হয়েছে। এডমিন ভেরিফাই করে আপনার আইডি আনলক করবেন।');
     }
 
+    /**
+     * Check current penalty status via light JSON endpoint for live polling.
+     */
+    public function checkPenaltyStatus(Request $request)
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return response()->json(['status' => 'unauthenticated', 'active' => false], 401);
+        }
+
+        $activePenalty = MovementPenalty::query()
+            ->where(function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+                if ($user->employee_id) {
+                    $query->orWhere('employee_id', $user->employee_id);
+                }
+            })
+            ->whereIn('status', ['unpaid', 'pending_verification', 'rejected'])
+            ->latest()
+            ->first();
+
+        if (! $activePenalty) {
+            $recentlyApproved = MovementPenalty::query()
+                ->where(function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                    if ($user->employee_id) {
+                        $query->orWhere('employee_id', $user->employee_id);
+                    }
+                })
+                ->where('status', 'approved')
+                ->where('approved_at', '>=', now()->subHours(2))
+                ->latest('approved_at')
+                ->first();
+
+            return response()->json([
+                'status' => 'approved',
+                'active' => false,
+                'penalty_id' => $recentlyApproved?->id,
+                'message' => 'জরিমানা সফলভাবে অনুমোদিত হয়েছে এবং একাউন্ট আনলক করা হয়েছে।',
+            ]);
+        }
+
+        return response()->json([
+            'status' => $activePenalty->status,
+            'active' => true,
+            'penalty_id' => $activePenalty->id,
+            'admin_remarks' => $activePenalty->admin_remarks,
+        ]);
+    }
+
     private function emptyPaginator(Request $request, int $perPage, string $pageName): \Illuminate\Pagination\LengthAwarePaginator
     {
         return new \Illuminate\Pagination\LengthAwarePaginator(

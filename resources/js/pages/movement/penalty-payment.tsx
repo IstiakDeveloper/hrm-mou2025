@@ -1,11 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Head, useForm, router } from '@inertiajs/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Clock, Lock, Smartphone, Send, ShieldAlert, LogOut, CheckCircle2, Copy, Check, MessageCircle, HelpCircle, Info } from 'lucide-react';
+import {
+    Clock,
+    Lock,
+    Smartphone,
+    Send,
+    ShieldAlert,
+    LogOut,
+    CheckCircle2,
+    Copy,
+    Check,
+    MessageCircle,
+    HelpCircle,
+    Info,
+    RefreshCw,
+    Sparkles,
+} from 'lucide-react';
 
 interface MovementPenaltyProps {
     penalty: {
@@ -42,6 +57,9 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
     const numberToCopy = merchantNumbers?.bkash || '01717893432';
     const [copied, setCopied] = useState(false);
     const [hasPaid, setHasPaid] = useState<boolean>(!!penalty?.sender_number);
+    const [liveApproved, setLiveApproved] = useState(false);
+    const [redirectCountdown, setRedirectCountdown] = useState(3);
+    const [isChecking, setIsChecking] = useState(false);
 
     const [selectedMethod, setSelectedMethod] = useState<'bkash' | 'nagad'>(
         (penalty?.payment_method as 'bkash' | 'nagad') || 'bkash'
@@ -78,6 +96,134 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
     const handleLogout = () => {
         router.post(route('logout'));
     };
+
+    // Check penalty status function for polling
+    const checkPenaltyStatus = useCallback(async (isManual = false) => {
+        if (!penalty || liveApproved) return;
+        if (isManual) setIsChecking(true);
+
+        try {
+            const res = await fetch(route('movement.penalty.status'), {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!res.ok) return;
+
+            const json = await res.json();
+
+            // When admin approves or penalty is no longer active
+            if (json.status === 'approved' || json.active === false) {
+                setLiveApproved(true);
+                return;
+            }
+
+            // If admin rejected previously submitted transaction
+            if (json.status === 'rejected' && penalty.status !== 'rejected') {
+                router.reload();
+            }
+        } catch {
+            // Network glitch ignore
+        } finally {
+            if (isManual) {
+                setTimeout(() => setIsChecking(false), 500);
+            }
+        }
+    }, [penalty, liveApproved]);
+
+    // Live background polling (every 4 seconds + tab visibility switch)
+    useEffect(() => {
+        if (!penalty || liveApproved) return;
+
+        const interval = setInterval(() => {
+            checkPenaltyStatus();
+        }, 4000);
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                checkPenaltyStatus();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [penalty, liveApproved, checkPenaltyStatus]);
+
+    // Countdown and automatic redirect after live approval
+    useEffect(() => {
+        if (!liveApproved) return;
+
+        const timer = setInterval(() => {
+            setRedirectCountdown((prev) => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    router.visit(route('dashboard'));
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [liveApproved]);
+
+    // Live Approval Celebratory Screen
+    if (liveApproved) {
+        return (
+            <div className="min-h-screen bg-zinc-50 text-zinc-900 flex flex-col justify-center items-center p-4 sm:p-6">
+                <Head title="জরিমানা অনুমোদিত - অ্যাকাউন্ট আনলক" />
+                <Card className="w-full max-w-md bg-white border-emerald-300 shadow-xl overflow-hidden rounded-2xl text-center">
+                    <div className="bg-gradient-to-b from-emerald-500 to-emerald-600 p-6 text-white relative">
+                        <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner ring-8 ring-white/10 animate-pulse">
+                            <CheckCircle2 className="w-12 h-12 text-white" />
+                        </div>
+                        <CardTitle className="text-xl font-black tracking-wide text-white">
+                            অনুমোদন সম্পন্ন!
+                        </CardTitle>
+                        <p className="text-emerald-100 text-xs mt-1 font-medium">
+                            আপনার জরিমানা সফলভাবে অনুমোদিত হয়েছে
+                        </p>
+                    </div>
+                    <CardContent className="p-6 space-y-4">
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-xs text-emerald-900 space-y-1">
+                            <p className="font-bold flex items-center justify-center gap-1.5">
+                                <Sparkles className="w-4 h-4 text-emerald-600" />
+                                আপনার অ্যাকাউন্ট আনলক করা হয়েছে
+                            </p>
+                            <p className="text-emerald-700 text-[11px]">
+                                আপনি এখন স্বাভাবিকভাবে সিস্টেমের সকল ফিচার ব্যবহার করতে পারবেন।
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <p className="text-xs text-zinc-500 font-medium">
+                                <span className="font-bold text-emerald-600">{redirectCountdown}</span> সেকেন্ডের মধ্যে ড্যাশবোর্ডে প্রবেশ করানো হচ্ছে...
+                            </p>
+                            <div className="w-full bg-zinc-100 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                    className="bg-emerald-500 h-full transition-all duration-1000 ease-linear rounded-full"
+                                    style={{ width: `${((3 - redirectCountdown) / 3) * 100}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        <Button
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 shadow-sm transition-all"
+                            onClick={() => router.visit(route('dashboard'))}
+                        >
+                            এখনই ড্যাশবোর্ডে প্রবেশ করুন
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
     if (!penalty) {
         return (
@@ -140,6 +286,24 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                             <p className="text-xs text-amber-800 mt-1">
                                 পেমেন্ট তথ্য জমা নেওয়া হয়েছে। এডমিন ভেরিফাই সম্পন্ন করলেই একাউন্ট সক্রিয় করা হবে।
                             </p>
+
+                            {/* Live Status Sync Indicator */}
+                            <div className="mt-3.5 inline-flex items-center gap-2 px-3 py-1 bg-white/90 border border-amber-300 rounded-full text-[11px] text-amber-900 shadow-xs">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span>অটো লাইভ সিঙ্ক সক্রিয় (অ্যাডমিন অ্যাপ্রুভ করলে নিজে থেকেই আনলক হবে)</span>
+                                <button
+                                    type="button"
+                                    onClick={() => checkPenaltyStatus(true)}
+                                    disabled={isChecking}
+                                    title="ম্যানুয়ালি চেক করুন"
+                                    className="ml-1 text-amber-700 hover:text-amber-950 disabled:opacity-50 transition-colors"
+                                >
+                                    <RefreshCw className={`w-3 h-3 ${isChecking ? 'animate-spin' : ''}`} />
+                                </button>
+                            </div>
                         </div>
 
                         <CardContent className="p-4 space-y-3">

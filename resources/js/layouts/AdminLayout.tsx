@@ -538,6 +538,17 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 ],
             },
             {
+                title: 'Performance Appraisal',
+                menuKey: 'performance-appraisal',
+                icon: <ClipboardList className="h-5 w-5" />,
+                path: '/promotion-evaluations',
+                hasSubmenu: true,
+                permission: 'promotion-evaluations.view',
+                submenu: [
+                    { title: 'Promotion Evaluation', path: '/promotion-evaluations', permission: 'promotion-evaluations.view' },
+                ],
+            },
+            {
                 title: 'Holidays',
                 menuKey: 'holidays',
                 icon: <Award className="h-5 w-5" />,

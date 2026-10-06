@@ -9,28 +9,32 @@ import { CheckCircle } from 'lucide-react';
 import AppearanceLightOnly from '@/components/appearance-light-only';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { type EmployeeNameFields } from '@/lib/employee-name';
+import SignatureCard from '@/components/profile/signature-card';
 
 interface User {
   id: number;
   name: string;
   email: string;
+  signature?: string | null;
   role?: {
     name: string;
   };
   employee?: EmployeeNameFields & {
     employee_id: string;
+    signature?: string | null;
   };
 }
 
 interface ProfileEditProps {
   user: User;
+  signature?: string | null;
   success?: string;
   errors: {
     [key: string]: string;
   };
 }
 
-export default function ProfileEdit({ user, success, errors }: ProfileEditProps) {
+export default function ProfileEdit({ user, signature, success, errors }: ProfileEditProps) {
   return (
     <Layout>
       <Head title="Profile" />
@@ -57,10 +61,15 @@ export default function ProfileEdit({ user, success, errors }: ProfileEditProps)
             <TabsTrigger value="appearance" className="w-1/3">Appearance</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="profile" className="w-full max-w-3xl">
+          <TabsContent value="profile" className="w-full max-w-3xl space-y-6">
             <ProfileForm
               user={user}
               errors={errors}
+            />
+            <SignatureCard
+              currentSignature={signature ?? user.signature ?? user.employee?.signature}
+              actionRoute="profile.signature"
+              destroyRoute="profile.signature.destroy"
             />
           </TabsContent>
 

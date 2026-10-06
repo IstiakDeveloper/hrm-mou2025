@@ -230,3 +230,30 @@ use Inertia\Inertia;
         });
     });
 
+    // PROMOTION EVALUATIONS
+    // ====================
+    Route::middleware(['permission:promotion-evaluations.view'])->prefix('promotion-evaluations')->name('promotions.evaluations.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'index'])->name('index');
+
+        Route::middleware(['permission:promotion-evaluations.create'])->group(function () {
+            Route::get('/create', [\App\Http\Controllers\PromotionEvaluationController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'store'])->name('store');
+        });
+
+        Route::get('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'show'])->name('show');
+        Route::get('/{evaluation}/print', [\App\Http\Controllers\PromotionEvaluationController::class, 'print'])->name('print');
+        Route::get('/{evaluation}/edit', [\App\Http\Controllers\PromotionEvaluationController::class, 'edit'])->name('edit');
+        Route::put('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'update'])->name('update');
+        Route::delete('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'destroy'])->name('destroy');
+
+        Route::post('/{evaluation}/forward', [\App\Http\Controllers\PromotionEvaluationController::class, 'forward'])->name('forward');
+        Route::post('/{evaluation}/send-back', [\App\Http\Controllers\PromotionEvaluationController::class, 'sendBack'])->name('sendBack');
+
+        Route::middleware(['permission:promotion-evaluations.hr_verify'])->group(function () {
+            Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\PromotionEvaluationController::class, 'hrVerify'])->name('hrVerify');
+        });
+
+        Route::middleware(['permission:promotion-evaluations.approve'])->group(function () {
+            Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\PromotionEvaluationController::class, 'edApprove'])->name('edApprove');
+        });
+    });

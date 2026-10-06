@@ -36,6 +36,7 @@ class EnsureMovementFinePaid
         // Allowed routes when locked for fine payment
         $allowedRouteNames = [
             'movement.penalty.payment',
+            'movement.penalty.status',
             'movement.penalty.submit',
             'logout',
         ];

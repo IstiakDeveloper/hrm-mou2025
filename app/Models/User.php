@@ -24,6 +24,7 @@ class User extends Authenticatable
         'branch_id',
         'active_status',
         'account_type',
+        'signature',
     ];
 
     protected $hidden = [
@@ -45,6 +46,16 @@ class User extends Authenticatable
     public function employee()
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function hasSignature(): bool
+    {
+        return !empty($this->signature) || !empty($this->employee?->signature);
+    }
+
+    public function getSignaturePath(): ?string
+    {
+        return $this->signature ?: $this->employee?->signature;
     }
 
     public function branch()
@@ -230,6 +241,37 @@ class User extends Authenticatable
 
         if ($this->isAccountant() && str_starts_with($permission, 'fixed-assets.')) {
             return true;
+        }
+
+        if (str_starts_with($permission, 'promotion-evaluations.')) {
+            $roleNames = OrganogramAccessService::mergedRoleNames($this);
+            if (
+                OrganogramAccessService::hasOrganogramLineRole($this) ||
+                OrganogramAccessService::isZonalManager($this) ||
+                OrganogramAccessService::isRegionalManager($this) ||
+                OrganogramAccessService::shouldApplyBranchOnlyEmployeeScope($this) ||
+                in_array('Director Finance and Accounts', $roleNames, true) ||
+                in_array('Director Finance and Account', $roleNames, true) ||
+                in_array('HR Manager', $roleNames, true) ||
+                in_array('HR Admin', $roleNames, true) ||
+                in_array('Assistant Director (HR)', $roleNames, true)
+            ) {
+                return true;
+            }
+
+            // Also check employee designation title for any manager/director
+            $this->loadMissing('employee.designation');
+            $desigName = mb_strtolower(trim((string) optional($this->employee?->designation)->name));
+            if ($desigName !== '') {
+                if (
+                    str_contains($desigName, 'manager') ||
+                    str_contains($desigName, 'ব্যবস্থাপক') ||
+                    str_contains($desigName, 'director') ||
+                    str_contains($desigName, 'পরিচালক')
+                ) {
+                    return true;
+                }
+            }
         }
 
         // Check payroll guard first — short-circuit before calling isDepartmentHead / hasOrganogramLineRole.

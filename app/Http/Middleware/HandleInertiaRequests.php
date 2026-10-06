@@ -63,7 +63,7 @@ class HandleInertiaRequests extends Middleware
         $activeMovement = null;
         if ($user?->employee_id) {
             $employee = $user->employee()
-                ->select(['id', 'employee_id', 'pin', 'name_en', 'photo', 'department_id', 'current_branch_id'])
+                ->select(['id', 'employee_id', 'pin', 'name_en', 'photo', 'signature', 'department_id', 'current_branch_id'])
                 ->with([
                     'department:id,name',
                     'branch:id,name,branch_code',
@@ -160,6 +160,7 @@ class HandleInertiaRequests extends Middleware
                     'blocked_sections' => $user->effectiveBlockedSections(),
                     'role' => $user->role,
                     'roles' => $user->roles,
+                    'signature' => $user->getSignaturePath(),
                 ] : null,
                 'employee' => $employee,
             ],

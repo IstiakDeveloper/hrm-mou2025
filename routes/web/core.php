@@ -241,6 +241,8 @@ use Inertia\Inertia;
     Route::prefix('profile')->name('profile.')->middleware(['permission:profile.view'])->group(function () {
         Route::get('/', [ProfileController::class, 'edit'])->name('edit');
         Route::patch('/', [ProfileController::class, 'update'])->name('update')->middleware('permission:profile.edit');
+        Route::post('/signature', [ProfileController::class, 'updateSignature'])->name('signature')->middleware('permission:profile.edit');
+        Route::delete('/signature', [ProfileController::class, 'destroySignature'])->name('signature.destroy')->middleware('permission:profile.edit');
         Route::patch('/password', [ProfileController::class, 'updatePassword'])->name('password.update')->middleware('permission:profile.edit');
     });
 
