@@ -32,10 +32,10 @@ import FormA from './components/FormA';
 import FormB from './components/FormB';
 import FormC from './components/FormC';
 import OfficialFormDocument from './components/OfficialFormDocument';
-import { evalTranslations, getFormName, getInitialScoresForForm, getOperationalLabels } from './evaluation-config';
+import { evalTranslations, getFormName, getInitialScoresForForm, getStructureForForm, getOperationalLabels } from './evaluation-config';
 import { format } from 'date-fns';
 
-export default function PromotionEvaluationCreate({ employees = [] }: any) {
+export default function PromotionEvaluationCreate({ employees = [], templates = [] }: any) {
     const { auth } = usePage<SharedData>().props;
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
         if (typeof window !== 'undefined') {
@@ -166,17 +166,22 @@ export default function PromotionEvaluationCreate({ employees = [] }: any) {
         }
     };
 
+    const dynamicStructure = useMemo(
+        () => getStructureForForm(formType, templates),
+        [formType, templates]
+    );
+
     // Auto-populate scores when form type changes
     useEffect(() => {
         if (formType) {
             setData(d => ({
                 ...d,
-                scores: getInitialScoresForForm(formType)
+                scores: getInitialScoresForForm(formType, templates)
             }));
         } else {
             setData(d => ({ ...d, scores: [] }));
         }
-    }, [formType]);
+    }, [formType, templates]);
 
     // Calculate total score & grade
     useEffect(() => {
@@ -823,6 +828,7 @@ export default function PromotionEvaluationCreate({ employees = [] }: any) {
                                         {formType === 'officer_abm' && (
                                             <FormA 
                                                 scores={data.scores} 
+                                                structure={dynamicStructure}
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
                                                     setData('scores', newScores);
@@ -850,6 +856,7 @@ export default function PromotionEvaluationCreate({ employees = [] }: any) {
                                         {formType === 'accountant' && (
                                             <FormB 
                                                 scores={data.scores} 
+                                                structure={dynamicStructure}
                                                 hasCashier={data.has_cashier} 
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
@@ -878,6 +885,7 @@ export default function PromotionEvaluationCreate({ employees = [] }: any) {
                                         {((formType as string) === 'bm_and_above' || (formType as string) === 'bm_above') && (
                                             <FormC 
                                                 scores={data.scores} 
+                                                structure={dynamicStructure}
                                                 lang={lang}
                                                 setScores={(newScores: any) => {
                                                     setData('scores', newScores);
@@ -1072,32 +1080,39 @@ export default function PromotionEvaluationCreate({ employees = [] }: any) {
                                 </Card>
 
                                 {/* Bottom Sticky Bar */}
-                                <div className="sticky bottom-4 z-20 bg-white/95 backdrop-blur-md p-4 rounded-xl border border-slate-200 shadow-lg flex items-center justify-between gap-4">
-                                    <div className="hidden sm:block">
-                                        <div className="text-xs text-slate-500">{t.selectedStaff}</div>
-                                        <div className="text-sm font-bold text-slate-800">
-                                            [{selectedEmployee?.pin}] {lang === 'bn' ? (selectedEmployee?.name_bn || selectedEmployee?.name_en) : selectedEmployee?.name_en} — {t.score} <span className="text-emerald-600">{Number(data.total_score || 0)}/100</span>
+                                <div className="sticky bottom-3 z-30 bg-white/95 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                    <div className="flex items-center justify-between sm:justify-start gap-3">
+                                        <div className="min-w-0">
+                                            <div className="text-[11px] text-slate-500 font-medium">{t.selectedStaff}</div>
+                                            <div className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[200px] sm:max-w-none">
+                                                [{selectedEmployee?.pin}] {lang === 'bn' ? (selectedEmployee?.name_bn || selectedEmployee?.name_en) : selectedEmployee?.name_en}
+                                            </div>
                                         </div>
+                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold px-2.5 py-1 text-xs shrink-0">
+                                            {t.score}: <span className="text-emerald-700 ml-1">{Number(data.total_score || 0)}/100</span>
+                                        </Badge>
                                     </div>
-                                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                                    <div className="flex items-center gap-2 justify-end">
                                         <Button 
                                             type="button" 
                                             variant="outline" 
+                                            size="sm"
                                             onClick={() => setViewMode('preview')}
-                                            className="border-slate-300 text-slate-700 text-xs font-semibold h-10 px-4 flex items-center gap-1.5 hover:bg-slate-50"
+                                            className="border-slate-300 text-slate-700 text-xs font-semibold h-9 px-3 flex items-center gap-1.5 hover:bg-slate-50 flex-1 sm:flex-initial"
                                         >
                                             <Eye className="h-4 w-4 text-emerald-600" />
                                             <span>{t.livePreviewTab}</span>
                                         </Button>
-                                        <Link href="/promotion-evaluations">
-                                            <Button type="button" variant="ghost" className="text-xs h-10 text-slate-600">
+                                        <Link href="/promotion-evaluations" className="hidden sm:inline-block">
+                                            <Button type="button" variant="ghost" size="sm" className="text-xs h-9 text-slate-600">
                                                 {t.cancel}
                                             </Button>
                                         </Link>
                                         <Button 
                                             type="submit" 
+                                            size="sm"
                                             disabled={processing} 
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-10 px-5 shadow-sm flex items-center gap-2"
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-4 shadow-sm flex items-center gap-1.5 flex-1 sm:flex-initial"
                                         >
                                             <Send className="h-4 w-4" />
                                             {processing ? t.submitting : t.submit}

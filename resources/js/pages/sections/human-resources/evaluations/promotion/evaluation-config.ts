@@ -287,13 +287,35 @@ export const formCStructure: SectionStructure[] = [
     }
 ];
 
-export const getInitialScoresForForm = (type: string | null) => {
+export const getStructureForForm = (type: string | null, customTemplates?: any[]): SectionStructure[] => {
+    if (!type) return formAStructure;
+
+    if (customTemplates && customTemplates.length > 0) {
+        const found = customTemplates.find((t: any) => t.code === type);
+        if (found && found.sections && found.sections.length > 0) {
+            return found.sections.map((sec: any) => ({
+                section_key: sec.section_key,
+                section_name_en: sec.name_en,
+                section_name_bn: sec.name_bn,
+                items: (sec.criteria || []).map((crit: any) => ({
+                    key: crit.criteria_key,
+                    name_en: crit.name_en,
+                    name_bn: crit.name_bn,
+                    max: Number(crit.max_score),
+                })),
+            }));
+        }
+    }
+
+    if (type === 'officer_abm') return formAStructure;
+    if (type === 'accountant') return formBStructure;
+    if (type === 'bm_and_above' || type === 'bm_above') return formCStructure;
+    return formAStructure;
+};
+
+export const getInitialScoresForForm = (type: string | null, customTemplates?: any[]) => {
     if (!type) return [];
-    let structure: SectionStructure[] = [];
-    if (type === 'officer_abm') structure = formAStructure;
-    else if (type === 'accountant') structure = formBStructure;
-    else if (type === 'bm_and_above' || type === 'bm_above') structure = formCStructure;
-    else structure = formAStructure;
+    const structure = getStructureForForm(type, customTemplates);
     
     const initialScores: any[] = [];
     structure.forEach(section => {

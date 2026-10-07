@@ -32,7 +32,7 @@ import FormA from './components/FormA';
 import FormB from './components/FormB';
 import FormC from './components/FormC';
 import OfficialFormDocument from './components/OfficialFormDocument';
-import { evalTranslations, getFormName, getOperationalLabels } from './evaluation-config';
+import { evalTranslations, getFormName, getStructureForForm, getOperationalLabels } from './evaluation-config';
 import { format } from 'date-fns';
 
 export default function PromotionEvaluationEdit({ 
@@ -40,6 +40,7 @@ export default function PromotionEvaluationEdit({
     isReviewerEdit = false,
     returnComment = null,
     userHasSignature = false,
+    templates = [],
 }: any) {
     const [lang, setLang] = useState<'bn' | 'en'>(() => {
         if (typeof window !== 'undefined') {
@@ -99,6 +100,10 @@ export default function PromotionEvaluationEdit({
     const selectedEmployee = evaluation.employee || {};
     const formType = evaluation.form_type;
     const opLabels = useMemo(() => getOperationalLabels(formType, lang), [formType, lang]);
+    const dynamicStructure = useMemo(
+        () => getStructureForForm(formType, templates),
+        [formType, templates]
+    );
 
     // Calculate total score & grade when scores change
     useEffect(() => {
@@ -656,6 +661,7 @@ export default function PromotionEvaluationEdit({
                                 {formType === 'officer_abm' && (
                                     <FormA 
                                         scores={data.scores} 
+                                        structure={dynamicStructure}
                                         lang={lang}
                                         setScores={(newScores: any[]) => {
                                             setData('scores', newScores);
@@ -683,6 +689,7 @@ export default function PromotionEvaluationEdit({
                                 {formType === 'accountant' && (
                                     <FormB 
                                         scores={data.scores} 
+                                        structure={dynamicStructure}
                                         hasCashier={data.has_cashier} 
                                         lang={lang}
                                         setScores={(newScores: any[]) => {
@@ -711,6 +718,7 @@ export default function PromotionEvaluationEdit({
                                 {(formType === 'bm_and_above' || formType === 'bm_above') && (
                                     <FormC 
                                         scores={data.scores} 
+                                        structure={dynamicStructure}
                                         lang={lang}
                                         setScores={(newScores: any[]) => {
                                             setData('scores', newScores);
@@ -1009,46 +1017,66 @@ export default function PromotionEvaluationEdit({
                             </Card>
                         )}
 
-                        {/* Submit Actions */}
-                        <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4">
-                            <Link href={`/promotion-evaluations/${evaluation.id}`}>
+                        {/* Bottom Sticky Action Bar */}
+                        <div className="sticky bottom-3 z-30 bg-white/95 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                            <div className="flex items-center justify-between sm:justify-start gap-3">
+                                <div className="min-w-0">
+                                    <div className="text-[11px] text-slate-500 font-medium">
+                                        {lang === 'bn' ? 'বর্তমান মূল্যায়ন' : 'Current Evaluation'}
+                                    </div>
+                                    <div className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                                        [{evaluation.employee?.pin}] {lang === 'bn' ? (evaluation.employee?.name_bn || evaluation.employee?.name_en) : evaluation.employee?.name_en}
+                                    </div>
+                                </div>
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold px-2.5 py-1 text-xs shrink-0">
+                                    {lang === 'bn' ? 'মোট নম্বর: ' : 'Score: '}
+                                    <span className="text-emerald-700 ml-1">{Number(data.total_score || 0)}/100</span>
+                                </Badge>
+                            </div>
+
+                            <div className="flex items-center gap-2 justify-end">
+                                <Link href={`/promotion-evaluations/${evaluation.id}`}>
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        size="sm"
+                                        className="h-9 px-3 border-slate-300 text-slate-700 text-xs font-semibold"
+                                    >
+                                        {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                                    </Button>
+                                </Link>
+
                                 <Button 
                                     type="button" 
-                                    variant="outline" 
-                                    className="w-full sm:w-auto h-11 px-5 border-slate-300 text-slate-700 font-medium"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSave(false)} 
+                                    disabled={processing} 
+                                    className="h-9 px-3.5 border-slate-300 text-slate-800 bg-white hover:bg-slate-50 text-xs font-semibold shadow-xs flex items-center gap-1.5"
                                 >
-                                    {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                                    <Save className="h-3.5 w-3.5 text-slate-600" />
+                                    <span>
+                                        {isReviewerEdit
+                                            ? (lang === 'bn' ? 'সংরক্ষণ' : 'Save Changes')
+                                            : (lang === 'bn' ? 'খসড়া সংরক্ষণ' : 'Save Draft')}
+                                    </span>
                                 </Button>
-                            </Link>
 
-                            <Button 
-                                type="button" 
-                                variant="outline"
-                                onClick={() => handleSave(false)} 
-                                disabled={processing} 
-                                className="w-full sm:w-auto h-11 px-6 border-slate-300 text-slate-800 bg-white hover:bg-slate-50 font-semibold shadow-sm flex items-center gap-2"
-                            >
-                                <Save className="h-4 w-4 text-slate-600" />
-                                <span>
-                                    {isReviewerEdit
-                                        ? (lang === 'bn' ? 'পরিবর্তন সংরক্ষণ করুন' : 'Save Changes')
-                                        : (lang === 'bn' ? 'খসড়া সংরক্ষণ করুন' : 'Save Draft')}
-                                </span>
-                            </Button>
-
-                            <Button 
-                                type="button" 
-                                onClick={() => handleSave(true)} 
-                                disabled={processing} 
-                                className="w-full sm:w-auto h-11 px-7 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 flex items-center gap-2"
-                            >
-                                <CheckCircle2 className="h-4 w-4" />
-                                <span>
-                                    {isReviewerEdit
-                                        ? (lang === 'bn' ? 'সংরক্ষণ ও অনুমোদন করুন' : 'Save & Approve')
-                                        : (lang === 'bn' ? 'সংরক্ষণ ও আরএম সমীপে দাখিল করুন' : 'Save & Submit to RM')}
-                                </span>
-                            </Button>
+                                <Button 
+                                    type="button" 
+                                    size="sm"
+                                    onClick={() => handleSave(true)} 
+                                    disabled={processing} 
+                                    className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5"
+                                >
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    <span>
+                                        {isReviewerEdit
+                                            ? (lang === 'bn' ? 'অনুমোদন করুন' : 'Approve')
+                                            : (lang === 'bn' ? 'দাখিল করুন' : 'Submit')}
+                                    </span>
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 )}

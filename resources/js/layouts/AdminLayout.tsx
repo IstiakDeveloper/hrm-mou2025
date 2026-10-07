@@ -127,7 +127,7 @@ import { EMPLOYEE_LOAN_REPORT_NAV, employeeLoanReportPath } from '@/lib/employee
 import { FIXED_ASSET_NAV_GROUPS, fixedAssetPath, isBranchFixedAssetMenuPath } from '@/lib/fixed-asset-nav';
 import { GRATUITY_REPORT_NAV, gratuityReportPath } from '@/lib/gratuity-reports';
 import { INVENTORY_NAV_GROUPS, inventoryPath } from '@/lib/inventory-nav';
-import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead } from '@/lib/permissions';
+import { hasAppPermission, isAccountant, isBranchAccount, isDepartmentHead, isSuperAdmin } from '@/lib/permissions';
 import { PF_REPORT_NAV, pfReportPath } from '@/lib/pf-reports';
 import { STAFF_FUND_NAV_GROUPS, staffFundPath } from '@/lib/staff-fund-nav';
 import { useNavLayout } from '@/lib/nav-layout';
@@ -148,6 +148,7 @@ interface MenuItemType {
     hasSubmenu: boolean;
     permission?: string;
     hrOnly?: boolean;
+    superAdminOnly?: boolean;
     /** Show if user has ANY of these permissions (top-level menu). */
     anyPermissions?: string[];
     /** Visible only when the logged-in user has a linked employee profile. */
@@ -157,6 +158,7 @@ interface MenuItemType {
         path: string;
         permission?: string;
         hrOnly?: boolean;
+        superAdminOnly?: boolean;
         isGroupLabel?: boolean;
         /** Show if user has ANY of these permissions (omit to ignore). */
         anyPermissions?: string[];
@@ -546,6 +548,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 permission: 'promotion-evaluations.view',
                 submenu: [
                     { title: 'Promotion Evaluation', path: '/promotion-evaluations', permission: 'promotion-evaluations.view' },
+                    { title: 'Evaluation Rubrics', path: '/promotion-evaluations/templates', superAdminOnly: true },
                 ],
             },
             {
@@ -1100,6 +1103,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         });
 
         visibleMenuItems.forEach((item) => {
+            if (item.superAdminOnly && !isSuperAdmin(auth)) return;
             if (item.hrOnly && !canSeeHrOnlyMenu) return;
             if (item.employeeOnly && !employee?.id) return;
             if (item.anyPermissions?.length) {
@@ -1112,6 +1116,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 const permittedSubmenu = item.submenu.filter(
                     (subItem) =>
                         !subItem.isGroupLabel &&
+                        (!subItem.superAdminOnly || isSuperAdmin(auth)) &&
                         (!subItem.hrOnly || canSeeHrOnlyMenu) &&
                         (!subItem.permission || hasPermission(subItem.permission)) &&
                         (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
@@ -1153,6 +1158,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     }, [currentPath, currentSearch, visibleMenuItems, isActive]);
 
     const MobileMenuItem = ({ item }: { item: MenuItemType }) => {
+        if (item.superAdminOnly && !isSuperAdmin(auth)) return null;
         if (item.hrOnly && !canSeeHrOnlyMenu) return null;
         if (item.employeeOnly && !employee?.id) return null;
         if (item.anyPermissions?.length) {
@@ -1165,7 +1171,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             ?.filter(
                 (subItem) =>
                     subItem.isGroupLabel ||
-                    ((!subItem.hrOnly || canSeeHrOnlyMenu) &&
+                    ((!subItem.superAdminOnly || isSuperAdmin(auth)) &&
+                        (!subItem.hrOnly || canSeeHrOnlyMenu) &&
                         (!subItem.permission || hasPermission(subItem.permission)) &&
                         (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
                         (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p)))),
@@ -1297,6 +1304,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             };
         }, []);
 
+        if (item.superAdminOnly && !isSuperAdmin(auth)) return null;
         if (item.hrOnly && !canSeeHrOnlyMenu) return null;
         if (item.employeeOnly && !employee?.id) return null;
         if (item.anyPermissions?.length) {
@@ -1309,7 +1317,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             ?.filter(
                 (subItem) =>
                     subItem.isGroupLabel ||
-                    ((!subItem.hrOnly || canSeeHrOnlyMenu) &&
+                    ((!subItem.superAdminOnly || isSuperAdmin(auth)) &&
+                        (!subItem.hrOnly || canSeeHrOnlyMenu) &&
                         (!subItem.permission || hasPermission(subItem.permission)) &&
                         (!subItem.anyPermissions?.length || subItem.anyPermissions.some((p) => hasPermission(p))) &&
                         (!subItem.allPermissions?.length || subItem.allPermissions.every((p) => hasPermission(p)))),

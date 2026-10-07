@@ -240,6 +240,18 @@ use Inertia\Inertia;
             Route::post('/', [\App\Http\Controllers\PromotionEvaluationController::class, 'store'])->name('store');
         });
 
+        // Rubrics & Templates Management
+        Route::prefix('templates')->name('templates.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\EvaluationTemplateController::class, 'index'])->name('index');
+            Route::put('/{template}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateTemplate'])->name('update');
+            Route::post('/{template}/sections', [\App\Http\Controllers\EvaluationTemplateController::class, 'storeSection'])->name('sections.store');
+            Route::put('/sections/{section}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateSection'])->name('sections.update');
+            Route::delete('/sections/{section}', [\App\Http\Controllers\EvaluationTemplateController::class, 'destroySection'])->name('sections.destroy');
+            Route::put('/criteria/{criterion}', [\App\Http\Controllers\EvaluationTemplateController::class, 'updateCriterion'])->name('criteria.update');
+            Route::post('/sections/{section}/criteria', [\App\Http\Controllers\EvaluationTemplateController::class, 'storeCriterion'])->name('criteria.store');
+            Route::delete('/criteria/{criterion}', [\App\Http\Controllers\EvaluationTemplateController::class, 'destroyCriterion'])->name('criteria.destroy');
+        });
+
         Route::get('/{evaluation}', [\App\Http\Controllers\PromotionEvaluationController::class, 'show'])->name('show');
         Route::get('/{evaluation}/print', [\App\Http\Controllers\PromotionEvaluationController::class, 'print'])->name('print');
         Route::get('/{evaluation}/edit', [\App\Http\Controllers\PromotionEvaluationController::class, 'edit'])->name('edit');

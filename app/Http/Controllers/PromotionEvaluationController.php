@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
+use App\Models\EvaluationTemplate;
 use App\Models\PromotionEvaluation;
 use App\Models\User;
 use App\Services\PromotionEvaluationWorkflowService;
@@ -233,8 +234,13 @@ class PromotionEvaluationController extends Controller
                 ];
             });
 
+        $templates = EvaluationTemplate::with(['sections.criteria' => function ($q) {
+            $q->where('is_active', true)->orderBy('order');
+        }])->where('is_active', true)->get();
+
         return Inertia::render('sections/human-resources/evaluations/promotion/create', [
             'employees' => $employees,
+            'templates' => $templates,
         ]);
     }
 
@@ -437,11 +443,16 @@ class PromotionEvaluationController extends Controller
 
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
+        $templates = EvaluationTemplate::with(['sections.criteria' => function ($q) {
+            $q->where('is_active', true)->orderBy('order');
+        }])->where('is_active', true)->get();
+
         return Inertia::render('sections/human-resources/evaluations/promotion/edit', [
             'evaluation' => $evaluation,
             'isReviewerEdit' => $evaluation->status !== 'draft',
             'returnComment' => $sentBackSig?->comments,
             'userHasSignature' => $user->hasSignature(),
+            'templates' => $templates,
         ]);
     }
 
@@ -599,6 +610,12 @@ class PromotionEvaluationController extends Controller
                 ]);
             }
         });
+
+        if ($isSubmitting) {
+            $this->workflowService->notifyStakeholders($evaluation, 'submitted');
+        } elseif ($isApproving) {
+            $this->workflowService->notifyStakeholders($evaluation, 'forwarded');
+        }
 
         $msg = 'মূল্যায়নের পরিবর্তনসমূহ সফলভাবে সংরক্ষণ করা হয়েছে।';
         if ($isSubmitting) {

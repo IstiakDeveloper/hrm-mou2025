@@ -6,7 +6,10 @@ use App\Models\Employee;
 use App\Models\PromotionEvaluation;
 use App\Models\PromotionEvaluationSignature;
 use App\Models\User;
+use App\Notifications\PromotionEvaluationNotification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class PromotionEvaluationWorkflowService
 {
@@ -89,6 +92,8 @@ class PromotionEvaluationWorkflowService
 
             $evaluation->save();
         });
+
+        $this->notifyStakeholders($evaluation, $evaluation->status === 'submitted_to_rm' ? 'submitted' : 'forwarded', $comments);
     }
 
     /**
@@ -114,6 +119,8 @@ class PromotionEvaluationWorkflowService
             $evaluation->status = 'draft';
             $evaluation->save();
         });
+
+        $this->notifyStakeholders($evaluation, 'sent_back', $comments);
     }
 
     public function hrVerify(PromotionEvaluation $evaluation, User $user, array $verificationData, string $comments): void
@@ -138,6 +145,8 @@ class PromotionEvaluationWorkflowService
 
             $evaluation->save();
         });
+
+        $this->notifyStakeholders($evaluation, 'forwarded', $comments);
     }
 
     public function edApprove(PromotionEvaluation $evaluation, User $user, string $comments, bool $isApproved): void
@@ -155,6 +164,8 @@ class PromotionEvaluationWorkflowService
 
             $evaluation->save();
         });
+
+        $this->notifyStakeholders($evaluation, $isApproved ? 'approved' : 'rejected', $comments);
     }
 
     /**
@@ -480,5 +491,152 @@ class PromotionEvaluationWorkflowService
         ];
 
         return $lang === 'bn' ? ($labelsBn[$status] ?? $status) : ($labelsEn[$status] ?? $status);
+    }
+
+    /**
+     * Send in-app notification to the relevant stakeholders based on the workflow action.
+     */
+    public function notifyStakeholders(PromotionEvaluation $evaluation, string $action, ?string $comments = null): void
+    {
+        try {
+            $evaluation->loadMissing(['employee.designation', 'employee.branch.regionalOffice.zone', 'signatures']);
+            $emp = $evaluation->employee;
+            $empName = $emp?->name_bn ?: ($emp?->name_en ?: 'কর্মী');
+            $pin = $emp?->pin ? "({$emp->pin})" : '';
+            $link = "/promotion-evaluations/{$evaluation->id}";
+
+            if ($action === 'submitted' || $action === 'forwarded') {
+                $stageLabel = $this->getStageLabel($evaluation->status, 'bn');
+                $title = "পদোন্নতি মূল্যায়ন: {$stageLabel}";
+                $message = "কর্মী {$empName} {$pin}-এর পদোন্নতি মূল্যায়ন আপনার পর্যালোচনার জন্য অপেক্ষমাণ।";
+                
+                $targets = $this->getTargetReviewerUsers($evaluation, $evaluation->status);
+                if (!empty($targets)) {
+                    Notification::send($targets, new PromotionEvaluationNotification($title, $message, 'info', $link, $evaluation->id));
+                }
+            } elseif ($action === 'sent_back') {
+                $initiator = User::find($evaluation->initiator_id);
+                if ($initiator) {
+                    $title = 'পদোন্নতি মূল্যায়ন ফেরত পাঠানো হয়েছে ⚠️';
+                    $reason = $comments ? "কারণ: {$comments}" : 'সংশোধনের জন্য ফেরত পাঠানো হয়েছে।';
+                    $message = "কর্মী {$empName} {$pin}-এর পদোন্নতি মূল্যায়ন সংশোধনের জন্য ফেরত পাঠানো হয়েছে। {$reason}";
+                    $initiator->notify(new PromotionEvaluationNotification($title, $message, 'warning', $link, $evaluation->id));
+                }
+            } elseif ($action === 'approved') {
+                $title = 'পদোন্নতি মূল্যায়ন চূড়ান্তভাবে অনুমোদিত 🎉';
+                $message = "কর্মী {$empName} {$pin}-এর পদোন্নতি মূল্যায়ন নির্বাহী পরিচালক কর্তৃক চূড়ান্ত অনুমোদন পেয়েছে।";
+                
+                $recipients = collect();
+                if ($evaluation->initiator_id) {
+                    $initiatorUser = User::find($evaluation->initiator_id);
+                    if ($initiatorUser) $recipients->push($initiatorUser);
+                }
+                $signerIds = $evaluation->signatures->pluck('user_id')->unique()->all();
+                if (!empty($signerIds)) {
+                    $recipients = $recipients->merge(User::whereIn('id', $signerIds)->get());
+                }
+                $recipients = $recipients->filter()->unique('id')->values();
+                if ($recipients->isNotEmpty()) {
+                    Notification::send($recipients, new PromotionEvaluationNotification($title, $message, 'success', $link, $evaluation->id));
+                }
+            } elseif ($action === 'rejected') {
+                $initiator = User::find($evaluation->initiator_id);
+                if ($initiator) {
+                    $title = 'পদোন্নতি মূল্যায়ন নামঞ্জুর করা হয়েছে';
+                    $message = "কর্মী {$empName} {$pin}-এর পদোন্নতি মূল্যায়নটি নামঞ্জুর করা হয়েছে।";
+                    $initiator->notify(new PromotionEvaluationNotification($title, $message, 'error', $link, $evaluation->id));
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Failed to send promotion evaluation notification: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Resolve users authorized to review at the specified stage.
+     */
+    public function getTargetReviewerUsers(PromotionEvaluation $evaluation, string $status): array
+    {
+        $users = collect();
+        $evaluation->loadMissing(['employee.branch.regionalOffice.zone']);
+
+        switch ($status) {
+            case 'submitted_to_rm':
+                $regOfficeId = $evaluation->regional_office_id ?? $evaluation->employee?->branch?->regional_office_id;
+                if ($regOfficeId) {
+                    $ro = \App\Models\RegionalOffice::find($regOfficeId);
+                    if ($ro?->regional_manager_employee_id) {
+                        $u = User::where('employee_id', $ro->regional_manager_employee_id)->first();
+                        if ($u) $users->push($u);
+                    }
+                }
+                $rms = User::whereHas('role', fn($q) => $q->where('name', 'Regional Manager'))
+                    ->orWhereHas('roles', fn($q) => $q->where('name', 'Regional Manager'))
+                    ->with('employee.branch')
+                    ->get()
+                    ->filter(function ($u) use ($regOfficeId) {
+                        if (!$regOfficeId) return true;
+                        return (int) $u->employee?->branch?->regional_office_id === (int) $regOfficeId;
+                    });
+                $users = $users->merge($rms);
+                break;
+
+            case 'submitted_to_zm':
+                $zoneId = $evaluation->zone_id ?? $evaluation->employee?->branch?->regionalOffice?->zone_id;
+                if ($zoneId) {
+                    $z = \App\Models\Zone::find($zoneId);
+                    if ($z?->zone_manager_employee_id) {
+                        $u = User::where('employee_id', $z->zone_manager_employee_id)->first();
+                        if ($u) $users->push($u);
+                    }
+                }
+                $zms = User::whereHas('role', fn($q) => $q->where('name', 'Zonal Manager'))
+                    ->orWhereHas('roles', fn($q) => $q->where('name', 'Zonal Manager'))
+                    ->with('employee.branch.regionalOffice')
+                    ->get()
+                    ->filter(function ($u) use ($zoneId) {
+                        if (!$zoneId) return true;
+                        return (int) $u->employee?->branch?->regionalOffice?->zone_id === (int) $zoneId;
+                    });
+                $users = $users->merge($zms);
+                break;
+
+            case 'submitted_to_director':
+                $directors = User::whereHas('role', fn($q) => $q->whereIn('name', ['Director (Microfinance)', 'Assistant Director (Microfinance)']))
+                    ->orWhereHas('roles', fn($q) => $q->whereIn('name', ['Director (Microfinance)', 'Assistant Director (Microfinance)']))
+                    ->get();
+                $users = $users->merge($directors);
+                break;
+
+            case 'submitted_to_director_fa':
+                $directorsFa = User::whereHas('role', fn($q) => $q->whereIn('name', ['Director Finance and Accounts', 'Director Finance and Account', 'Director (Finance & Accounts)']))
+                    ->orWhereHas('roles', fn($q) => $q->whereIn('name', ['Director Finance and Accounts', 'Director Finance and Account', 'Director (Finance & Accounts)']))
+                    ->get();
+                $users = $users->merge($directorsFa);
+                break;
+
+            case 'submitted_to_hr':
+                $hrs = User::whereHas('role', fn($q) => $q->whereIn('name', ['HR Manager', 'HR Admin', 'Assistant Director (HR)']))
+                    ->orWhereHas('roles', fn($q) => $q->whereIn('name', ['HR Manager', 'HR Admin', 'Assistant Director (HR)']))
+                    ->orWhereHas('employee', fn($q) => $q->where('department_id', 5))
+                    ->get();
+                $users = $users->merge($hrs);
+                break;
+
+            case 'submitted_to_ed':
+                $eds = User::whereHas('role', fn($q) => $q->where('name', 'Executive Director'))
+                    ->orWhereHas('roles', fn($q) => $q->where('name', 'Executive Director'))
+                    ->get();
+                if ($eds->isEmpty()) {
+                    $eds = User::whereHas('role', fn($q) => $q->where('name', 'Super Admin'))->get();
+                }
+                $users = $users->merge($eds);
+                break;
+        }
+
+        return $users->unique('id')
+            ->reject(fn($u) => (int) $u->id === (int) $evaluation->initiator_id)
+            ->values()
+            ->all();
     }
 }

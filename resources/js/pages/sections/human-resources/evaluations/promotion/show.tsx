@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { evalTranslations } from './evaluation-config';
 import OfficialFormDocument from './components/OfficialFormDocument';
+import WorkflowTimelineStepper from './components/WorkflowTimelineStepper';
 
 export default function PromotionEvaluationShow({ 
     evaluation,
@@ -237,6 +238,9 @@ export default function PromotionEvaluationShow({
                         </Button>
                     </div>
                 </div>
+
+                {/* Visual Workflow Timeline Stepper */}
+                <WorkflowTimelineStepper evaluation={evaluation} lang={lang} />
 
                 {/* Sent Back Alert (If Returned to Creator) */}
                 {evaluation.status === 'draft' && sentBackReason && (
