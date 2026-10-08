@@ -258,18 +258,24 @@ class MovementPenaltyController extends Controller
         $pendingPenalties = $this->inertiaPagination($pendingPaginator);
 
         // Tab 2: Paid Penalties Query (approved WITH payment info)
+        $paidQuery = (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
+            $q->where(function ($sq) {
+                $sq->whereNotNull('sender_number')->where('sender_number', '!=', '');
+            })->orWhere(function ($sq) {
+                $sq->whereNotNull('transaction_id')->where('transaction_id', '!=', '');
+            })->orWhere(function ($sq) {
+                $sq->whereNotNull('payment_method')->where('payment_method', '!=', '');
+            });
+        })->orderByDesc('id');
+
         $paidPaginator = $stats['paid_count'] > 0
-            ? (clone $baseQuery)->where('status', 'approved')->where(function ($q) {
-                $q->where(function ($sq) {
-                    $sq->whereNotNull('sender_number')->where('sender_number', '!=', '');
-                })->orWhere(function ($sq) {
-                    $sq->whereNotNull('transaction_id')->where('transaction_id', '!=', '');
-                })->orWhere(function ($sq) {
-                    $sq->whereNotNull('payment_method')->where('payment_method', '!=', '');
-                });
-            })->orderByDesc('id')->paginate($perPage, ['*'], 'paid_page')->withQueryString()
+            ? (clone $paidQuery)->paginate($perPage, ['*'], 'paid_page')->withQueryString()
             : $this->emptyPaginator($request, $perPage, 'paid_page');
         $paidPenalties = $this->inertiaPagination($paidPaginator);
+
+        $allPaidPenalties = $stats['paid_count'] > 0
+            ? (clone $paidQuery)->get()
+            : [];
 
         // Tab 3: Waived Penalties Query (approved WITHOUT payment info)
         $waivedPaginator = $stats['waived_count'] > 0
@@ -316,7 +322,7 @@ class MovementPenaltyController extends Controller
         return Inertia::render('movement/penalty-admin', [
             'pendingPenalties' => $pendingPenalties,
             'paidPenalties' => $paidPenalties,
-            'allPaidPenalties' => [],
+            'allPaidPenalties' => $allPaidPenalties,
             'waivedPenalties' => $waivedPenalties,
             'rejectedPenalties' => $rejectedPenalties,
             'unpaidPenalties' => $unpaidPenalties,
