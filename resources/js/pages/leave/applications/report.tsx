@@ -56,6 +56,11 @@ interface Department {
   name: string;
 }
 
+interface BranchInfo {
+  id: number;
+  name: string;
+}
+
 interface Employee extends EmployeeNameFields {
   id: number;
   employee_id: string;
@@ -64,6 +69,9 @@ interface Employee extends EmployeeNameFields {
     id: number;
     name: string;
   };
+  branch?: BranchInfo | null;
+  current_branch?: BranchInfo | null;
+  currentBranch?: BranchInfo | null;
 }
 
 interface LeaveType {
@@ -534,6 +542,7 @@ export default function Report({
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
+                  <TableHead>Branch</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Leave Type</TableHead>
                   <TableHead>From</TableHead>
@@ -554,6 +563,9 @@ export default function Report({
                         <div className="text-xs text-gray-500">
                           {application.employee.employee_id}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-700">
+                        {application.employee.branch?.name ?? application.employee.current_branch?.name ?? (application.employee as any).currentBranch?.name ?? '—'}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
@@ -576,7 +588,7 @@ export default function Report({
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={9} className="h-24 text-center">
                       No leave applications found for the selected period.
                       {(status !== 'all' || departmentId !== 'all' || leaveTypeId !== 'all' || employeeId !== 'all') && (
                         <Button

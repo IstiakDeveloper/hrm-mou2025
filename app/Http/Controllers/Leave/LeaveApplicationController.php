@@ -742,7 +742,10 @@ class LeaveApplicationController extends Controller
                 $query->whereHas('employee', function ($q) use ($search) {
                     $q->where('name_en', 'like', "%{$search}%")
                         ->orWhere('name_bn', 'like', "%{$search}%")
-                        ->orWhere('employee_id', 'like', "%{$search}%");
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhereHas('currentBranch', function ($bq) use ($search) {
+                            $bq->where('name', 'like', "%{$search}%");
+                        });
                 });
             });
 
@@ -1946,7 +1949,13 @@ class LeaveApplicationController extends Controller
         $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::today()->subDays(30);
         $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::today();
 
-        $query = LeaveApplication::with(['employee.department', 'employee.designation', 'leaveType'])
+        $query = LeaveApplication::with([
+            'employee.department',
+            'employee.designation',
+            'employee.currentBranch',
+            'employee.branch',
+            'leaveType',
+        ])
             ->whereBetween('start_date', [$startDate, $endDate]);
 
         OrganogramAccessService::constrainLeaveApplications($query, $user);
@@ -2077,6 +2086,8 @@ class LeaveApplicationController extends Controller
             $application->load([
                 'employee.department',
                 'employee.designation',
+                'employee.currentBranch',
+                'employee.branch',
                 'leaveType',
                 'approver',
                 'approvals.approver',

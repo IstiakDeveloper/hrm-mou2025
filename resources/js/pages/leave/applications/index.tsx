@@ -60,6 +60,11 @@ interface Department {
     name: string;
 }
 
+interface BranchInfo {
+    id: number;
+    name: string;
+}
+
 interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
@@ -68,7 +73,14 @@ interface Employee extends EmployeeNameFields {
         id: number;
         name: string;
     };
+    branch?: BranchInfo | null;
+    current_branch?: BranchInfo | null;
+    currentBranch?: BranchInfo | null;
 }
+
+const getEmployeeBranchName = (emp?: Employee | null): string => {
+    return emp?.branch?.name || emp?.current_branch?.name || emp?.currentBranch?.name || '';
+};
 
 interface LeaveType {
     id: number;
@@ -451,9 +463,15 @@ export default function ApplicationsIndex({
                                                 <div className="h-6 w-6 rounded bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
                                                     <User className="h-3 w-3" />
                                                 </div>
-                                                <span className="font-bold text-xs text-slate-900 truncate">
-                                                    {employeeDisplayName(application.employee)}
-                                                </span>
+                                                <div className="min-w-0">
+                                                    <span className="font-bold text-xs text-slate-900 truncate block">
+                                                        {employeeDisplayName(application.employee)}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500 truncate block">
+                                                        ID: {application.employee.employee_id}
+                                                        {getEmployeeBranchName(application.employee) ? ` • ${getEmployeeBranchName(application.employee)}` : ''}
+                                                    </span>
+                                                </div>
                                             </div>
                                             {getStatusBadge(application.status)}
                                         </div>
@@ -559,6 +577,7 @@ export default function ApplicationsIndex({
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/80 border-b border-slate-200">
                                         <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider pl-4">Employee</TableHead>
+                                        <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Branch</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Leave Type</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Duration</TableHead>
                                         <TableHead className="font-semibold text-slate-700 h-10 uppercase text-[10px] tracking-wider">Days</TableHead>
@@ -588,6 +607,11 @@ export default function ApplicationsIndex({
                                                             </div>
                                                         </div>
                                                     </div>
+                                                </TableCell>
+                                                <TableCell className="py-2">
+                                                    <span className="text-xs text-slate-700 font-medium">
+                                                        {getEmployeeBranchName(application.employee) || '—'}
+                                                    </span>
                                                 </TableCell>
                                                 <TableCell className="py-2">
                                                     <div className="flex items-center space-x-1.5">
@@ -698,7 +722,7 @@ export default function ApplicationsIndex({
                                         ))
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="h-20 text-center text-xs">
+                                            <TableCell colSpan={9} className="h-20 text-center text-xs">
                                                 No leave applications found.
                                                 {(search || status !== 'all' || departmentId !== 'all' || employeeId !== 'all' || fromDate || toDate) && (
                                                     <Button

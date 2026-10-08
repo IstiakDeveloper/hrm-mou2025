@@ -7,6 +7,11 @@ interface Department {
     name: string;
 }
 
+interface BranchInfo {
+    id: number;
+    name: string;
+}
+
 interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
@@ -16,6 +21,9 @@ interface Employee extends EmployeeNameFields {
         id: number;
         name: string;
     };
+    branch?: BranchInfo | null;
+    current_branch?: BranchInfo | null;
+    currentBranch?: BranchInfo | null;
 }
 
 interface LeaveType {
@@ -442,6 +450,10 @@ export default function Pdf({ application, currentDate, addressee }: PdfProps) {
                                 <div className="detail-item">
                                     <span className="detail-label">Employee ID:</span>
                                     <span className="detail-value">{application.employee?.employee_id || ''}</span>
+                                </div>
+                                <div className="detail-item">
+                                    <span className="detail-label">Branch:</span>
+                                    <span className="detail-value">{application.employee?.branch?.name || application.employee?.current_branch?.name || (application.employee as any)?.currentBranch?.name || '—'}</span>
                                 </div>
                                 <div className="detail-item">
                                     <span className="detail-label">Department:</span>

@@ -33,6 +33,11 @@ interface Department {
     name: string;
 }
 
+interface BranchInfo {
+    id: number;
+    name: string;
+}
+
 interface Employee extends EmployeeNameFields {
     id: number;
     employee_id: string;
@@ -41,6 +46,9 @@ interface Employee extends EmployeeNameFields {
         id: number;
         name: string;
     };
+    branch?: BranchInfo | null;
+    current_branch?: BranchInfo | null;
+    currentBranch?: BranchInfo | null;
 }
 
 interface LeaveType {
@@ -448,6 +456,12 @@ export default function Show({ application, canApprove }: ShowProps) {
                                     <div>
                                         <p className="text-sm font-medium text-gray-500">Employee ID</p>
                                         <p>{application.employee.employee_id}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-500">Branch</p>
+                                        <p className="font-medium text-gray-800">
+                                            {application.employee.branch?.name ?? application.employee.current_branch?.name ?? (application.employee as any).currentBranch?.name ?? '—'}
+                                        </p>
                                     </div>
                                     <div>
                                         <p className="text-sm font-medium text-gray-500">Department</p>
