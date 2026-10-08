@@ -68,13 +68,25 @@ interface PageProps {
 }
 
 export default function EvaluationTemplatesIndex({ templates = [], canManage = true }: PageProps) {
+    const [selectedCategory, setSelectedCategory] = useState<'all' | 'promotion' | 'confirmation'>('all');
     const [selectedTemplateCode, setSelectedTemplateCode] = useState<string>(
         templates[0]?.code || 'officer_abm'
     );
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
+    const filteredTemplates = React.useMemo(() => {
+        if (selectedCategory === 'all') return templates;
+        return templates.filter(t => (t.appraisal_type || 'promotion') === selectedCategory);
+    }, [templates, selectedCategory]);
+
+    React.useEffect(() => {
+        if (filteredTemplates.length > 0 && !filteredTemplates.some(t => t.code === selectedTemplateCode)) {
+            setSelectedTemplateCode(filteredTemplates[0].code);
+        }
+    }, [filteredTemplates, selectedTemplateCode]);
+
     // Active Template
-    const activeTemplate = templates.find(t => t.code === selectedTemplateCode) || templates[0];
+    const activeTemplate = templates.find(t => t.code === selectedTemplateCode) || filteredTemplates[0] || templates[0];
 
     // Modals state
     const [editingCriterion, setEditingCriterion] = useState<Criterion | null>(null);
@@ -274,7 +286,12 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                     <div className="flex items-center gap-2">
                         <Link href="/promotion-evaluations">
                             <Button variant="outline" size="sm" className="h-9 text-xs border-slate-300 font-medium">
-                                মূল্যায়ন তালিকায় ফিরে যান
+                                পদোন্নতি মূল্যায়ন তালিকা
+                            </Button>
+                        </Link>
+                        <Link href="/confirmation-evaluations">
+                            <Button variant="outline" size="sm" className="h-9 text-xs border-slate-300 font-medium">
+                                স্থায়ীকরণ মূল্যায়ন তালিকা
                             </Button>
                         </Link>
                     </div>
@@ -287,17 +304,54 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                             মূল্যায়ন ক্যাটাগরি:
                         </span>
                         
-                        {/* Current Active Category: Promotion Evaluation */}
-                        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-emerald-300 shadow-2xs font-semibold text-xs sm:text-sm text-emerald-900">
-                            <TrendingUp className="h-4 w-4 text-emerald-600" />
-                            <span>পদোন্নতি মূল্যায়ন (Promotion Evaluation)</span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span className="text-[11px] font-normal text-slate-500">
-                                {templates.length} টি ফরম
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCategory('all')}
+                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
+                                selectedCategory === 'all'
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                            }`}
+                        >
+                            <span>সব ফরম (All Rubrics)</span>
+                            <span className="text-[11px] opacity-80 font-normal">
+                                ({templates.length})
                             </span>
-                        </div>
+                        </button>
 
-                        {/* Future Extensibility: Add New Category Button */}
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCategory('promotion')}
+                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
+                                selectedCategory === 'promotion'
+                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                    : 'bg-white text-emerald-900 border-emerald-200 hover:border-emerald-300'
+                            }`}
+                        >
+                            <TrendingUp className="h-4 w-4" />
+                            <span>পদোন্নতি মূল্যায়ন (Promotion)</span>
+                            <span className="text-[11px] opacity-80 font-normal">
+                                ({templates.filter(t => (t.appraisal_type || 'promotion') === 'promotion').length})
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCategory('confirmation')}
+                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
+                                selectedCategory === 'confirmation'
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                    : 'bg-white text-blue-900 border-blue-200 hover:border-blue-300'
+                            }`}
+                        >
+                            <Layers className="h-4 w-4" />
+                            <span>শিক্ষানবিশকাল স্থায়ীকরণ (Confirmation)</span>
+                            <span className="text-[11px] opacity-80 font-normal">
+                                ({templates.filter(t => t.appraisal_type === 'confirmation').length})
+                            </span>
+                        </button>
+
+                        {/* Extensibility: Add New Category Button */}
                         {canManage && (
                             <button
                                 type="button"
@@ -311,31 +365,37 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                     </div>
 
                     <span className="text-[11px] text-slate-500">
-                        পদোন্নতির সকল অফিসিয়াল ফরম নিচে তালিকাভুক্ত
+                        নির্বাচিত ক্যাটাগরির অফিসিয়াল ফরম ও প্রশ্নাবলী নিচে প্রদর্শিত
                     </span>
                 </div>
 
                 {/* 3. SUB-FORMS SELECTOR (Form A, Form B, Form C) */}
                 <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
-                    {templates.map(tmpl => {
+                    {filteredTemplates.map(tmpl => {
                         const isCurrent = selectedTemplateCode === tmpl.code;
+                        const isConf = tmpl.appraisal_type === 'confirmation';
                         return (
                             <button
                                 key={tmpl.code}
                                 type="button"
                                 onClick={() => setSelectedTemplateCode(tmpl.code)}
-                                className={`flex-1 min-w-[200px] px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-between gap-2 ${
+                                className={`flex-1 min-w-[220px] px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-between gap-2 ${
                                     isCurrent
                                         ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-bold'
                                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                                 }`}
                             >
                                 <div className="flex items-center gap-2 truncate">
-                                    <Layers className={`h-4 w-4 shrink-0 ${isCurrent ? 'text-emerald-600' : 'text-slate-400'}`} />
-                                    <span className="truncate">{tmpl.title_bn}</span>
+                                    <Layers className={`h-4 w-4 shrink-0 ${isCurrent ? (isConf ? 'text-blue-600' : 'text-emerald-600') : 'text-slate-400'}`} />
+                                    <div className="flex flex-col text-left truncate">
+                                        <span className="truncate">{tmpl.title_bn}</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">
+                                            {isConf ? 'শিক্ষানবিশকাল স্থায়ীকরণ' : 'পদোন্নতি মূল্যায়ন'}
+                                        </span>
+                                    </div>
                                 </div>
                                 <span className={`text-[11px] px-2 py-0.5 rounded-md font-mono shrink-0 ${
-                                    isCurrent ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-400'
+                                    isCurrent ? (isConf ? 'bg-blue-50 text-blue-700 font-bold' : 'bg-emerald-50 text-emerald-700 font-bold') : 'text-slate-400'
                                 }`}>
                                     {Number(tmpl.total_marks)} নম্বর
                                 </span>
@@ -350,8 +410,12 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                        পদোন্নতি মূল্যায়ন
+                                    <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                        activeTemplate.appraisal_type === 'confirmation'
+                                            ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                                            : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    }`}>
+                                        {activeTemplate.category_name_bn || (activeTemplate.appraisal_type === 'confirmation' ? 'শিক্ষানবিশকাল স্থায়ীকরণ' : 'পদোন্নতি মূল্যায়ন')}
                                     </span>
                                     <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                                         {activeTemplate.code}

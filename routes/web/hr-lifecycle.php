@@ -269,3 +269,90 @@ use Inertia\Inertia;
             Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\PromotionEvaluationController::class, 'edApprove'])->name('edApprove');
         });
     });
+
+    // CONFIRMATION EVALUATIONS
+    // ========================
+    Route::middleware(['permission:confirmation-evaluations.view'])->prefix('confirmation-evaluations')->name('confirmation.evaluations.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'index'])->name('index');
+
+        Route::middleware(['permission:confirmation-evaluations.create'])->group(function () {
+            Route::get('/create', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'store'])->name('store');
+        });
+
+        Route::get('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'show'])->name('show');
+        Route::get('/{evaluation}/print', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'print'])->name('print');
+        Route::get('/{evaluation}/edit', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'edit'])->name('edit');
+        Route::put('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'update'])->name('update');
+        Route::delete('/{evaluation}', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'destroy'])->name('destroy');
+
+        Route::post('/{evaluation}/forward', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'forward'])->name('forward');
+        Route::post('/{evaluation}/send-back', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'sendBack'])->name('sendBack');
+
+        Route::middleware(['permission:confirmation-evaluations.hr_verify'])->group(function () {
+            Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'hrVerify'])->name('hrVerify');
+        });
+
+        Route::middleware(['permission:confirmation-evaluations.approve'])->group(function () {
+            Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\ConfirmationEvaluationController::class, 'edApprove'])->name('edApprove');
+        });
+    });
+
+    // PROBATION INCREMENT EVALUATIONS
+    // ===============================
+    Route::middleware(['permission:probation-increment-evaluations.view'])->prefix('probation-increment-evaluations')->name('probation-increment-evaluations.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'index'])->name('index');
+
+        Route::middleware(['permission:probation-increment-evaluations.create'])->group(function () {
+            Route::get('/create', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'store'])->name('store');
+        });
+
+        Route::get('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'show'])->name('show');
+        Route::get('/{evaluation}/print', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'print'])->name('print');
+        Route::get('/{evaluation}/edit', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'edit'])->name('edit');
+        Route::put('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'update'])->name('update');
+        Route::delete('/{evaluation}', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'destroy'])->name('destroy');
+
+        Route::post('/{evaluation}/forward', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'forward'])->name('forward');
+        Route::post('/{evaluation}/send-back', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'sendBack'])->name('sendBack');
+        Route::post('/{evaluation}/quick-approve', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'quickApprove'])->name('quickApprove');
+
+        Route::middleware(['permission:probation-increment-evaluations.hr_verify'])->group(function () {
+            Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'hrVerify'])->name('hrVerify');
+        });
+
+        Route::middleware(['permission:probation-increment-evaluations.approve'])->group(function () {
+            Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\ProbationIncrementEvaluationController::class, 'edApprove'])->name('edApprove');
+        });
+    });
+
+    // TRAINEE EVALUATIONS (প্রশিক্ষণার্থী মূল্যায়ন)
+    // ==============================================
+    Route::middleware(['permission:trainee-evaluations.view'])->prefix('trainee-evaluations')->name('trainee-evaluations.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\TraineeEvaluationController::class, 'index'])->name('index');
+
+        Route::middleware(['permission:trainee-evaluations.create'])->group(function () {
+            Route::get('/create', [\App\Http\Controllers\TraineeEvaluationController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\TraineeEvaluationController::class, 'store'])->name('store');
+        });
+
+        Route::get('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'show'])->name('show');
+        Route::get('/{evaluation}/print', [\App\Http\Controllers\TraineeEvaluationController::class, 'print'])->name('print');
+        Route::get('/{evaluation}/edit', [\App\Http\Controllers\TraineeEvaluationController::class, 'edit'])->name('edit');
+        Route::put('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'update'])->name('update');
+        Route::delete('/{evaluation}', [\App\Http\Controllers\TraineeEvaluationController::class, 'destroy'])->name('destroy');
+
+        Route::post('/{evaluation}/forward', [\App\Http\Controllers\TraineeEvaluationController::class, 'forward'])->name('forward');
+        Route::post('/{evaluation}/send-back', [\App\Http\Controllers\TraineeEvaluationController::class, 'sendBack'])->name('sendBack');
+        Route::post('/{evaluation}/quick-approve', [\App\Http\Controllers\TraineeEvaluationController::class, 'quickApprove'])->name('quickApprove');
+
+        Route::middleware(['permission:trainee-evaluations.hr_verify'])->group(function () {
+            Route::post('/{evaluation}/hr-verify', [\App\Http\Controllers\TraineeEvaluationController::class, 'hrVerify'])->name('hrVerify');
+        });
+
+        Route::middleware(['permission:trainee-evaluations.approve'])->group(function () {
+            Route::post('/{evaluation}/ed-approve', [\App\Http\Controllers\TraineeEvaluationController::class, 'edApprove'])->name('edApprove');
+        });
+    });
+

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { format } from 'date-fns';
 import { usePage } from '@inertiajs/react';
 import { type SharedData } from '@/types';
-import { formAStructure, criteriaMetaMap } from '../evaluation-config';
+import { formAStructure, criteriaMetaMap, formatClosingMonth } from '../evaluation-config';
 import { CheckCircle2, Clock } from 'lucide-react';
 
 interface OfficerAbmFormDocumentProps {
@@ -230,7 +230,7 @@ export default function OfficerAbmFormDocument({
                             <span>
                                 {lang === 'bn' ? 'ক্লোজিং মাসের নাম:' : 'Closing Month Name:'}{' '}
                                 <span className="font-semibold underline decoration-dotted ml-1">
-                                    {evaluation.closing_month || '___________'}
+                                    {formatClosingMonth(evaluation.closing_month, lang)}
                                 </span>
                             </span>
                         </div>

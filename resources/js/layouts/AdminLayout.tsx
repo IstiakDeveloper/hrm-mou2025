@@ -545,9 +545,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 icon: <ClipboardList className="h-5 w-5" />,
                 path: '/promotion-evaluations',
                 hasSubmenu: true,
-                permission: 'promotion-evaluations.view',
+                anyPermissions: ['promotion-evaluations.view', 'confirmation-evaluations.view', 'probation-increment-evaluations.view', 'trainee-evaluations.view'],
                 submenu: [
                     { title: 'Promotion Evaluation', path: '/promotion-evaluations', permission: 'promotion-evaluations.view' },
+                    { title: 'Confirmation Evaluation', path: '/confirmation-evaluations', permission: 'confirmation-evaluations.view' },
+                    { title: 'Probation Increment Evaluation', path: '/probation-increment-evaluations', permission: 'probation-increment-evaluations.view' },
+                    { title: 'Trainee Evaluation', path: '/trainee-evaluations', permission: 'trainee-evaluations.view' },
                     { title: 'Evaluation Rubrics', path: '/promotion-evaluations/templates', superAdminOnly: true },
                 ],
             },

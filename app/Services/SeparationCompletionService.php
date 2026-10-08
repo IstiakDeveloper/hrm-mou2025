@@ -34,7 +34,8 @@ class SeparationCompletionService
 
         $employee->status = 'inactive';
         $employee->dropout_date = $separationDate;
-        $employee->dropout_reason = $separation->reason;
+        $employee->dropout_reason = $separation->type_of_separation;
+        $employee->cause_of_separation = $separation->cause_of_separation;
         if ($separation->final_payment_date) {
             $employee->final_payment_date = Carbon::parse($separation->final_payment_date);
         }
@@ -55,6 +56,8 @@ class SeparationCompletionService
             'separation_id' => $separation->id,
             'employee_id' => $employee->id,
             'separation_date' => $separationDate,
+            'type_of_separation' => $separation->type_of_separation,
+            'cause_of_separation' => $separation->cause_of_separation,
             'reason' => $separation->reason,
             'final_payment_date' => $separation->final_payment_date
                 ? Carbon::parse($separation->final_payment_date)
@@ -144,6 +147,7 @@ class SeparationCompletionService
         $employee->status = 'active';
         $employee->dropout_date = null;
         $employee->dropout_reason = null;
+        $employee->cause_of_separation = null;
         $employee->final_payment_date = null;
 
         app(EmployeeAssignmentHistoryService::class)->queueContext($employee, [

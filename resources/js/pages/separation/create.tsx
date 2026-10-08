@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as UiCalendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { SEPARATION_CAUSES, SEPARATION_TYPES } from '@/lib/separation-options';
 
 type Employee = EmployeeNameFields & {
     id: number;
@@ -30,6 +31,8 @@ export default function CreateSeparation({ employees }: Props) {
     const [separationDate, setSeparationDate] = useState<Date | undefined>(new Date());
     const [separationDateOpen, setSeparationDateOpen] = useState(false);
     const [finalPaymentDate, setFinalPaymentDate] = useState('');
+    const [typeOfSeparation, setTypeOfSeparation] = useState('');
+    const [causeOfSeparation, setCauseOfSeparation] = useState('');
     const [reason, setReason] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
@@ -40,6 +43,7 @@ export default function CreateSeparation({ employees }: Props) {
         const e: Record<string, string> = {};
         if (!employeeId) e.employee_id = 'Employee is required';
         if (!separationDate) e.separation_date = 'Separation date is required';
+        if (!typeOfSeparation) e.type_of_separation = 'Type of Separation is required';
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -54,6 +58,8 @@ export default function CreateSeparation({ employees }: Props) {
                 employee_id: employeeId,
                 separation_date: separationDate ? format(separationDate, 'yyyy-MM-dd') : '',
                 final_payment_date: finalPaymentDate || null,
+                type_of_separation: typeOfSeparation,
+                cause_of_separation: causeOfSeparation || null,
                 reason,
             },
             { onError: (errs) => setErrors(errs), onFinish: () => setSubmitting(false) },
@@ -123,9 +129,32 @@ export default function CreateSeparation({ employees }: Props) {
                                         </div>
                                     </div>
 
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs">Type of Separation</Label>
+                                            <ComboSelect<string>
+                                                value={typeOfSeparation || null}
+                                                onChange={(value) => setTypeOfSeparation(value ?? '')}
+                                                items={SEPARATION_TYPES.map((type) => ({ value: type, label: type }))}
+                                                placeholder="Select Type"
+                                            />
+                                            {errors.type_of_separation && <p className="text-xs text-rose-600">{errors.type_of_separation}</p>}
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs">Cause of Separation</Label>
+                                            <ComboSelect<string>
+                                                value={causeOfSeparation || null}
+                                                onChange={(value) => setCauseOfSeparation(value ?? '')}
+                                                items={SEPARATION_CAUSES.map((cause) => ({ value: cause, label: cause }))}
+                                                placeholder="Select Cause"
+                                            />
+                                            {errors.cause_of_separation && <p className="text-xs text-rose-600">{errors.cause_of_separation}</p>}
+                                        </div>
+                                    </div>
+
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs">Reason / notes</Label>
-                                        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={4} className="text-xs" placeholder="Reason for separation (obbahoti)..." />
+                                        <Label className="text-xs">Additional notes (optional)</Label>
+                                        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={4} className="text-xs" placeholder="Add any additional notes..." />
                                     </div>
 
                                     <div className="flex justify-end gap-2">

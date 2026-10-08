@@ -12,6 +12,8 @@ class Separation extends Model
     protected $fillable = [
         'employee_id',
         'separation_date',
+        'type_of_separation',
+        'cause_of_separation',
         'reason',
         'final_payment_date',
         'status',

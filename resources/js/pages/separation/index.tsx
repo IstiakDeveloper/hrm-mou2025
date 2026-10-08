@@ -18,6 +18,8 @@ type Separation = {
     id: number;
     employee_id: number;
     separation_date: string;
+    type_of_separation: string | null;
+    cause_of_separation: string | null;
     final_payment_date: string | null;
     status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
     reason: string | null;
@@ -143,7 +145,8 @@ export default function SeparationIndex({ separations, employees, filters, canEd
                                 <TableRow className="border-b border-slate-200 bg-slate-50/80">
                                     <TableHead className="h-11 pl-6 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Employee</TableHead>
                                     <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Separation Date</TableHead>
-                                    <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Reason</TableHead>
+                                    <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Type of Separation</TableHead>
+                                    <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Cause of Separation</TableHead>
                                     <TableHead className="h-11 text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Status</TableHead>
                                     <TableHead className="h-11 pr-6 text-right text-[11px] font-semibold tracking-wider text-slate-700 uppercase">Actions</TableHead>
                                 </TableRow>
@@ -161,7 +164,8 @@ export default function SeparationIndex({ separations, employees, filters, canEd
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-[13px] font-medium text-slate-600">{format(new Date(s.separation_date), 'dd MMM yyyy')}</TableCell>
-                                        <TableCell className="max-w-[200px] truncate text-[13px] text-slate-600">{s.reason ?? '—'}</TableCell>
+                                        <TableCell className="max-w-[200px] truncate text-[13px] text-slate-600">{s.type_of_separation || s.reason || '—'}</TableCell>
+                                        <TableCell className="max-w-[220px] truncate text-[13px] text-slate-600">{s.cause_of_separation || '—'}</TableCell>
                                         <TableCell>{statusBadge(s.status)}</TableCell>
                                         <TableCell className="pr-6 text-right">
                                             <div className="flex items-center justify-end gap-2">
@@ -179,7 +183,7 @@ export default function SeparationIndex({ separations, employees, filters, canEd
                                         </TableCell>
                                     </TableRow>
                                 )) : (
-                                    <TableRow><TableCell colSpan={5} className="h-24 text-center">No separation requests found.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">No separation requests found.</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>

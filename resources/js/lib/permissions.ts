@@ -135,14 +135,42 @@ export function hasAppPermission(
   const granted = collectGrantedPermissions(auth);
   if (granted.has(permission)) return true;
 
-  if (permission.startsWith('promotion-evaluations.')) {
+  if (
+    permission.startsWith('promotion-evaluations.') || 
+    permission.startsWith('confirmation-evaluations.') ||
+    permission.startsWith('probation-increment-evaluations.') ||
+    permission.startsWith('trainee-evaluations.')
+  ) {
     if (hasOrganogramLineRole(auth)) {
       return true;
     }
     const names = new Set<string>();
     if (auth?.user?.role?.name) names.add(auth.user.role.name);
     auth?.user?.roles?.forEach((r) => r.name && names.add(r.name));
-    if (names.has('Director Finance and Accounts') || names.has('Director Finance and Account')) {
+    if (
+      names.has('Director Finance and Accounts') || 
+      names.has('Director Finance and Account') ||
+      names.has('Branch Manager') ||
+      names.has('Regional Manager') ||
+      names.has('Zonal Manager') ||
+      names.has('Director (Microfinance)') ||
+      names.has('Assistant Director (Microfinance)') ||
+      names.has('Executive Director') ||
+      names.has('HR Manager') ||
+      names.has('HR Admin') ||
+      names.has('Administrator')
+    ) {
+      return true;
+    }
+
+    // Check designation for Manager or Director
+    const desig = (((auth?.user as any)?.employee?.designation?.name || '') as string).toLowerCase();
+    if (
+      desig.includes('manager') ||
+      desig.includes('director') ||
+      desig.includes('ব্যবস্থাপক') ||
+      desig.includes('পরিচালক')
+    ) {
       return true;
     }
   }

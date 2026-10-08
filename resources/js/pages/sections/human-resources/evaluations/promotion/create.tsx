@@ -32,6 +32,7 @@ import FormA from './components/FormA';
 import FormB from './components/FormB';
 import FormC from './components/FormC';
 import OfficialFormDocument from './components/OfficialFormDocument';
+import MonthPickerSelect from '@/components/MonthPickerSelect';
 import { evalTranslations, getFormName, getInitialScoresForForm, getStructureForForm, getOperationalLabels } from './evaluation-config';
 import { format } from 'date-fns';
 
@@ -656,11 +657,10 @@ export default function PromotionEvaluationCreate({ employees = [], templates = 
                                                 <Label className="text-slate-700 text-xs font-semibold">
                                                     {opLabels.closingMonth} <span className="text-red-500">*</span>
                                                 </Label>
-                                                <Input 
-                                                    type="month" 
+                                                <MonthPickerSelect 
                                                     value={data.closing_month} 
-                                                    onChange={e => {
-                                                        setData('closing_month', e.target.value);
+                                                    onChange={val => {
+                                                        setData('closing_month', val);
                                                         if (clientErrors.closing_month) {
                                                             setClientErrors(ce => {
                                                                 const copy = { ...ce };
@@ -669,7 +669,8 @@ export default function PromotionEvaluationCreate({ employees = [], templates = 
                                                             });
                                                         }
                                                     }} 
-                                                    className={`bg-white ${mergedErrors.closing_month ? 'border-red-400 focus:border-red-500 ring-1 ring-red-400' : 'border-slate-300'}`}
+                                                    lang={lang}
+                                                    className={`bg-white w-full h-9 ${mergedErrors.closing_month ? 'border-red-400 ring-1 ring-red-400' : 'border-slate-300'}`}
                                                 />
                                                 {mergedErrors.closing_month && (
                                                     <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">

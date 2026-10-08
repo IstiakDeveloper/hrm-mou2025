@@ -363,6 +363,10 @@ export default function SectionsIndex() {
                                         hasAppPermission(auth, 'departments.view') ||
                                         hasAppPermission(auth, 'designations.view') ||
                                         hasAppPermission(auth, 'attendance.admin') ||
+                                        hasAppPermission(auth, 'promotion-evaluations.view') ||
+                                        hasAppPermission(auth, 'confirmation-evaluations.view') ||
+                                        hasAppPermission(auth, 'probation-increment-evaluations.view') ||
+                                        hasAppPermission(auth, 'trainee-evaluations.view') ||
                                         hasAppPermission(auth, 'admin.access')
                                     );
                                 case 'attendance-movement':

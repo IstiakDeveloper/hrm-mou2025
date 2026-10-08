@@ -723,3 +723,34 @@ export const criteriaMetaMap: Record<string, { name_bn: string; name_en: string;
     });
     return map;
 })();
+
+export const toBengaliNumber = (num: number | string | null | undefined) => {
+    if (num === null || num === undefined || num === '') return '';
+    const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    return String(num).replace(/\d/g, d => bnDigits[Number(d)]);
+};
+
+export const formatClosingMonth = (val?: string | null, targetLang: 'bn' | 'en' = 'bn') => {
+    if (!val) return '__________________';
+    const str = String(val).trim();
+    if (/^\d{4}-\d{2}$/.test(str)) {
+        const [year, monthStr] = str.split('-');
+        const monthNum = parseInt(monthStr, 10);
+        const bnMonths = [
+            'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
+            'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'
+        ];
+        const enMonths = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        if (monthNum >= 1 && monthNum <= 12) {
+            if (targetLang === 'bn') {
+                return `${bnMonths[monthNum - 1]} ${toBengaliNumber(year)}`;
+            } else {
+                return `${enMonths[monthNum - 1]} ${year}`;
+            }
+        }
+    }
+    return targetLang === 'bn' ? toBengaliNumber(str) : str;
+};

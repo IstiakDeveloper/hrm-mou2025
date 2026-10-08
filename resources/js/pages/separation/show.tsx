@@ -14,6 +14,8 @@ type Employee = EmployeeNameFields & { id: number; employee_id: string; joining_
 type Separation = {
     id: number;
     separation_date: string;
+    type_of_separation: string | null;
+    cause_of_separation: string | null;
     final_payment_date: string | null;
     status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
     reason: string | null;
@@ -126,10 +128,22 @@ export default function SeparationShow({ separation, canEdit = false, canDelete 
                                     )}
                                     <p className="mt-2 rounded-md border border-rose-100 bg-rose-50 p-2 text-rose-800">On apply, employee status becomes inactive and dropout date is recorded.</p>
                                 </div>
-                                <div>
-                                    <p className="mb-2 font-medium text-zinc-900">Reason / notes</p>
-                                    <div className="rounded-lg border border-zinc-200 bg-white p-3 text-zinc-700">{separation.reason?.trim() || '—'}</div>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <p className="mb-2 font-medium text-zinc-900">Type of Separation</p>
+                                        <div className="rounded-lg border border-zinc-200 bg-white p-3 text-zinc-700">{separation.type_of_separation || separation.reason?.trim() || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <p className="mb-2 font-medium text-zinc-900">Cause of Separation</p>
+                                        <div className="rounded-lg border border-zinc-200 bg-white p-3 text-zinc-700">{separation.cause_of_separation || '—'}</div>
+                                    </div>
                                 </div>
+                                {separation.reason?.trim() && separation.reason !== separation.type_of_separation && (
+                                    <div>
+                                        <p className="mb-2 font-medium text-zinc-900">Additional notes</p>
+                                        <div className="rounded-lg border border-zinc-200 bg-white p-3 text-zinc-700">{separation.reason}</div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>

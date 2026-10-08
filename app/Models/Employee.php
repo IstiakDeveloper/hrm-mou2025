@@ -433,6 +433,26 @@ class Employee extends Model
         return $this->hasMany(LeaveApplication::class);
     }
 
+    public function educations()
+    {
+        return $this->hasMany(EmployeeEducation::class);
+    }
+
+    public function resolveEducationalQualification(): ?string
+    {
+        if (!empty($this->educational_qualification)) {
+            return trim($this->educational_qualification);
+        }
+
+        $this->loadMissing('educations');
+        $degrees = $this->educations->pluck('degree')->filter()->values();
+        if ($degrees->isNotEmpty()) {
+            return $degrees->last(); // or highest/latest degree
+        }
+
+        return null;
+    }
+
     public function transfers()
     {
         return $this->hasMany(Transfer::class);

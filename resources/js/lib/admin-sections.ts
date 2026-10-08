@@ -209,6 +209,10 @@ export function inferSectionFromPath(pathname: string): AdminSectionId | null {
         return 'employee-loan';
     }
     if (
+        p.startsWith('/promotion-evaluations') ||
+        p.startsWith('/confirmation-evaluations') ||
+        p.startsWith('/probation-increment-evaluations') ||
+        p.startsWith('/trainee-evaluations') ||
         p.startsWith('/employees') ||
         p.startsWith('/confirmations') ||
         p.startsWith('/separations') ||

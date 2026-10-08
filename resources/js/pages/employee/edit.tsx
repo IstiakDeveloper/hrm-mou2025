@@ -56,6 +56,7 @@ import {
 } from '@/lib/employee-v2-form-persist';
 import { useLocationCascade, usePrefetchLocationCascade, type LocationUnion } from '@/lib/location-cascade';
 import { branchComboSelectItems } from '@/lib/payroll-branches';
+import { SEPARATION_CAUSES, SEPARATION_TYPES } from '@/lib/separation-options';
 import { cn } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
@@ -180,38 +181,6 @@ const JOB_HISTORY_SECTIONS = [
     { value: 'left', label: 'Left / Separation', multiple: false },
     { value: 'final_payment', label: 'Final Payment', multiple: false },
 ] as const;
-
-const SEPARATION_TYPES = [
-    'Death',
-    'Dismissal',
-    'End of Contract',
-    'Honorary',
-    'Medical Grounds/Unfit for work',
-    'Not Joined',
-    'Project Closing',
-    'Released',
-    'Resigned',
-    'Retirement',
-    'Termination',
-];
-
-const SEPARATION_CAUSES = [
-    'Anti-Social Activities',
-    'Better Opportunity',
-    'Corruption',
-    'Corruption & Unauthorized Leave',
-    'Death',
-    'End of Contract',
-    'Fake Documents/Certificates',
-    'Family Problem',
-    'Indiscipline/Anti-Organizational Activities',
-    'Not joined after posting',
-    'Performance Issue',
-    'Personal Problem',
-    'Project Closing',
-    'Retirement',
-    'Unauthorized Leave',
-];
 
 const GENERIC_LEFT_REMARKS = new Set(['', 'Left Service', 'Left Organization', 'Voluntary']);
 

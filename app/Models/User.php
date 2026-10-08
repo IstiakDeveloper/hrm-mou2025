@@ -243,7 +243,12 @@ class User extends Authenticatable
             return true;
         }
 
-        if (str_starts_with($permission, 'promotion-evaluations.')) {
+        if (
+            str_starts_with($permission, 'promotion-evaluations.') || 
+            str_starts_with($permission, 'confirmation-evaluations.') ||
+            str_starts_with($permission, 'probation-increment-evaluations.') ||
+            str_starts_with($permission, 'trainee-evaluations.')
+        ) {
             $roleNames = OrganogramAccessService::mergedRoleNames($this);
             if (
                 OrganogramAccessService::hasOrganogramLineRole($this) ||
@@ -297,6 +302,11 @@ class User extends Authenticatable
         }
 
         return false;
+    }
+
+    public function hasPermissionTo($permission): bool
+    {
+        return (bool) $this->hasPermission($permission);
     }
 
     public function isBranchAccount(): bool

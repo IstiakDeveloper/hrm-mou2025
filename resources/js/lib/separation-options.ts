@@ -1,0 +1,31 @@
+export const SEPARATION_TYPES: string[] = [
+    'Death',
+    'Dismissal',
+    'End of Contract',
+    'Honorary',
+    'Medical Grounds/Unfit for work',
+    'Not Joined',
+    'Project Closing',
+    'Released',
+    'Resigned',
+    'Retirement',
+    'Termination',
+] as const;
+
+export const SEPARATION_CAUSES: string[] = [
+    'Anti-Social Activities',
+    'Better Opportunity',
+    'Corruption',
+    'Corruption & Unauthorized Leave',
+    'Death',
+    'End of Contract',
+    'Fake Documents/Certificates',
+    'Family Problem',
+    'Indiscipline/Anti-Organizational Activities',
+    'Not joined after posting',
+    'Performance Issue',
+    'Personal Problem',
+    'Project Closing',
+    'Retirement',
+    'Unauthorized Leave',
+] as const;

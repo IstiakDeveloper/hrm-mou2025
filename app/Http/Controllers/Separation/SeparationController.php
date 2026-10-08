@@ -8,10 +8,12 @@ use App\Models\Employee;
 use App\Models\Separation;
 use App\Models\User;
 use App\Services\SeparationCompletionService;
+use App\Support\SeparationOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class SeparationController extends Controller
@@ -98,6 +100,8 @@ class SeparationController extends Controller
             'employee_id' => 'required|exists:employees,id',
             'separation_date' => 'required|date',
             'final_payment_date' => 'nullable|date|after_or_equal:separation_date',
+            'type_of_separation' => ['required', 'string', Rule::in(SeparationOptions::TYPES)],
+            'cause_of_separation' => ['nullable', 'string', Rule::in(SeparationOptions::CAUSES)],
             'reason' => 'nullable|string',
         ]);
 
@@ -122,6 +126,8 @@ class SeparationController extends Controller
             $separation = Separation::create([
                 'employee_id' => $employee->id,
                 'separation_date' => $request->separation_date,
+                'type_of_separation' => $request->type_of_separation,
+                'cause_of_separation' => $request->cause_of_separation,
                 'final_payment_date' => $request->final_payment_date,
                 'reason' => $request->reason,
                 'status' => 'approved',
@@ -175,6 +181,8 @@ class SeparationController extends Controller
         $request->validate([
             'separation_date' => 'required|date',
             'final_payment_date' => 'nullable|date|after_or_equal:separation_date',
+            'type_of_separation' => ['required', 'string', Rule::in(SeparationOptions::TYPES)],
+            'cause_of_separation' => ['nullable', 'string', Rule::in(SeparationOptions::CAUSES)],
             'reason' => 'nullable|string',
         ]);
 
@@ -182,6 +190,8 @@ class SeparationController extends Controller
             $wasCompleted = $separation->status === 'completed';
 
             $separation->separation_date = $request->separation_date;
+            $separation->type_of_separation = $request->type_of_separation;
+            $separation->cause_of_separation = $request->cause_of_separation;
             $separation->final_payment_date = $request->final_payment_date;
             $separation->reason = $request->reason;
             $separation->save();
@@ -337,7 +347,8 @@ class SeparationController extends Controller
             : now();
 
         $employee->dropout_date = $separationDate;
-        $employee->dropout_reason = $separation->reason;
+        $employee->dropout_reason = $separation->type_of_separation;
+        $employee->cause_of_separation = $separation->cause_of_separation;
         $employee->final_payment_date = $separation->final_payment_date
             ? Carbon::parse($separation->final_payment_date)
             : null;
@@ -355,6 +366,8 @@ class SeparationController extends Controller
             'separation_date' => $separation->separation_date
                 ? Carbon::parse($separation->separation_date)
                 : now(),
+            'type_of_separation' => $separation->type_of_separation,
+            'cause_of_separation' => $separation->cause_of_separation,
             'reason' => $separation->reason,
             'final_payment_date' => $separation->final_payment_date
                 ? Carbon::parse($separation->final_payment_date)

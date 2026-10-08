@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ComboSelect } from '@/components/ComboSelect';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
@@ -14,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as UiCalendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { employeeDisplayName, type EmployeeNameFields } from '@/lib/employee-name';
+import { SEPARATION_CAUSES, SEPARATION_TYPES } from '@/lib/separation-options';
 
 type Employee = EmployeeNameFields & { id: number; employee_id: string };
 
@@ -22,6 +24,8 @@ type Separation = {
     status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
     separation_date: string;
     final_payment_date: string | null;
+    type_of_separation: string | null;
+    cause_of_separation: string | null;
     reason: string | null;
     employee: Employee;
 };
@@ -48,6 +52,10 @@ export default function EditSeparation({ separation }: Props) {
         separation.final_payment_date ? new Date(separation.final_payment_date) : undefined,
     );
     const [finalPaymentDateOpen, setFinalPaymentDateOpen] = useState(false);
+    const [typeOfSeparation, setTypeOfSeparation] = useState(
+        separation.type_of_separation || (SEPARATION_TYPES.includes(separation.reason ?? '') ? separation.reason ?? '' : ''),
+    );
+    const [causeOfSeparation, setCauseOfSeparation] = useState(separation.cause_of_separation ?? '');
     const [reason, setReason] = useState(separation.reason ?? '');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
@@ -61,6 +69,8 @@ export default function EditSeparation({ separation }: Props) {
             {
                 separation_date: separationDate ? format(separationDate, 'yyyy-MM-dd') : '',
                 final_payment_date: finalPaymentDate ? format(finalPaymentDate, 'yyyy-MM-dd') : null,
+                type_of_separation: typeOfSeparation,
+                cause_of_separation: causeOfSeparation || null,
                 reason,
             },
             {
@@ -160,8 +170,31 @@ export default function EditSeparation({ separation }: Props) {
                                 </div>
                             </div>
 
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Type of Separation</Label>
+                                    <ComboSelect<string>
+                                        value={typeOfSeparation || null}
+                                        onChange={(value) => setTypeOfSeparation(value ?? '')}
+                                        items={SEPARATION_TYPES.map((type) => ({ value: type, label: type }))}
+                                        placeholder="Select Type"
+                                    />
+                                    {errors.type_of_separation && <p className="text-xs text-rose-600">{errors.type_of_separation}</p>}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Cause of Separation</Label>
+                                    <ComboSelect<string>
+                                        value={causeOfSeparation || null}
+                                        onChange={(value) => setCauseOfSeparation(value ?? '')}
+                                        items={SEPARATION_CAUSES.map((cause) => ({ value: cause, label: cause }))}
+                                        placeholder="Select Cause"
+                                    />
+                                    {errors.cause_of_separation && <p className="text-xs text-rose-600">{errors.cause_of_separation}</p>}
+                                </div>
+                            </div>
+
                             <div className="space-y-1.5">
-                                <Label className="text-xs">Reason / notes (optional)</Label>
+                                <Label className="text-xs">Additional notes (optional)</Label>
                                 <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={4} className="text-xs" />
                             </div>
 

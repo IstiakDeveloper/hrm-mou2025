@@ -29,7 +29,7 @@ import {
     Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { evalTranslations } from './evaluation-config';
+import { evalTranslations, formatClosingMonth } from './evaluation-config';
 
 interface PromotionEvaluationIndexProps {
     evaluations: any;
@@ -562,7 +562,7 @@ export default function PromotionEvaluationIndex({
                                                 </div>
                                                 {ev.closing_month && (
                                                     <div className="text-[10px] text-slate-400 truncate">
-                                                        {ev.closing_month}
+                                                        {formatClosingMonth(ev.closing_month, lang)}
                                                     </div>
                                                 )}
                                             </TableCell>
