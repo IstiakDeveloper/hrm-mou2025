@@ -262,8 +262,14 @@ class ProbationIncrementEvaluationController extends Controller
                 ];
             });
 
+        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'probation_increment')
+            ->with(['sections.criteria' => function ($q) {
+                $q->orderBy('order');
+            }])->get();
+
         return Inertia::render('sections/human-resources/evaluations/probation-increment/create', [
             'employees' => $employees,
+            'templates' => $templates,
             'isSuperAdmin' => $isSuperAdmin,
         ]);
     }
@@ -556,8 +562,14 @@ class ProbationIncrementEvaluationController extends Controller
 
         $sentBackSig = $evaluation->signatures->where('action', 'sent_back')->last();
 
+        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'probation_increment')
+            ->with(['sections.criteria' => function ($q) {
+                $q->orderBy('order');
+            }])->get();
+
         return Inertia::render('sections/human-resources/evaluations/probation-increment/edit', [
             'evaluation' => $evaluation,
+            'templates' => $templates,
             'isSuperAdmin' => $isSuperAdmin,
             'isReviewerEdit' => !$isInitiator && $canReview,
             'sentBackReason' => $sentBackSig?->comments,

@@ -349,6 +349,18 @@ export default function TraineeEvaluationIndex({
                             </button>
                         </div>
 
+                        {/* Evaluation Rubrics Setup Button */}
+                        <Link href="/promotion-evaluations/templates">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-10 text-xs font-semibold border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-2xs rounded-xl"
+                            >
+                                <SlidersHorizontal className="h-3.5 w-3.5 text-blue-600" />
+                                <span>{lang === 'bn' ? 'মূল্যায়ন রুব্রিক্স' : 'Rubrics'}</span>
+                            </Button>
+                        </Link>
+
                         {/* Create Button */}
                         {canCreate && (
                             <Link href="/trainee-evaluations/create">

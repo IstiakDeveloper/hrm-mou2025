@@ -126,6 +126,104 @@ class EmployeeLookupController extends EmployeeController
         );
     }
 
+    /**
+     * Fast live search for global employee search with PIN priority ranking.
+     */
+    public function globalSearch(Request $request)
+    {
+        $this->authorizeEmployeeDirectoryAccess($request);
+
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:1', 'max:100'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $search = trim((string) $validated['q']);
+        $limit = (int) ($validated['limit'] ?? 10);
+
+        if ($search === '') {
+            return response()->json([]);
+        }
+
+        $query = Employee::query()
+            ->select([
+                'id',
+                'pin',
+                'employee_id',
+                'name_en',
+                'name_bn',
+                'mobile_personal',
+                'mobile_official',
+                'photo',
+                'status',
+                'department_id',
+                'designation_id',
+                'current_branch_id',
+            ])
+            ->with([
+                'designation:id,name',
+                'department:id,name',
+                'branch:id,name',
+            ])
+            ->where(function ($inner) use ($search) {
+                $inner->where('pin', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%")
+                    ->orWhere('name_en', 'like', "%{$search}%")
+                    ->orWhere('name_bn', 'like', "%{$search}%")
+                    ->orWhere('mobile_personal', 'like', "%{$search}%")
+                    ->orWhere('mobile_official', 'like', "%{$search}%");
+            });
+
+        OrganogramAccessService::constrainVisibleEmployees($query, $request->user());
+
+        $likeStart = $search.'%';
+        $likeContain = '%'.$search.'%';
+
+        $query->orderByRaw(
+            "CASE
+                WHEN pin = ? OR employee_id = ? THEN 1
+                WHEN pin LIKE ? OR employee_id LIKE ? THEN 2
+                WHEN pin LIKE ? OR employee_id LIKE ? THEN 3
+                WHEN name_en LIKE ? OR name_bn LIKE ? THEN 4
+                WHEN name_en LIKE ? OR name_bn LIKE ? THEN 5
+                WHEN mobile_personal LIKE ? OR mobile_official LIKE ? THEN 6
+                ELSE 7
+            END",
+            [
+                $search, $search,
+                $likeStart, $likeStart,
+                $likeContain, $likeContain,
+                $likeStart, $likeStart,
+                $likeContain, $likeContain,
+                $likeContain, $likeContain,
+            ]
+        )
+        ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
+        ->orderBy('pin', 'asc')
+        ->limit($limit);
+
+        $employees = $query->get()->map(function (Employee $emp) {
+            return [
+                'id' => $emp->id,
+                'pin' => $emp->pin,
+                'employee_id' => $emp->employee_id,
+                'name_en' => $emp->name_en,
+                'name_bn' => $emp->name_bn,
+                'display_name' => $emp->full_name_en ?: ($emp->name_bn ?: 'Employee #'.$emp->id),
+                'mobile_personal' => $emp->mobile_personal,
+                'mobile_official' => $emp->mobile_official,
+                'photo_url' => $emp->photo ? '/storage/'.ltrim($emp->photo, '/') : null,
+                'status' => $emp->status,
+                'designation' => $emp->designation?->name,
+                'department' => $emp->department?->name,
+                'branch' => $emp->branch?->name,
+                'url' => route('employees.show', ['employee' => $emp->id, 'section' => 'human-resources']),
+            ];
+        });
+
+        return response()->json($employees);
+    }
+
     public function pinSuggestion(Request $request)
     {
         $pins = Employee::query()

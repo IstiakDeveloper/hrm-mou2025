@@ -32,6 +32,7 @@ import {
 
 interface CreateProps {
     employees: any[];
+    templates?: any[];
     branches: any[];
     regionalOffices: any[];
     zones: any[];
@@ -41,6 +42,7 @@ interface CreateProps {
 
 export default function TraineeEvaluationCreate({
     employees = [],
+    templates = [],
     branches = [],
     regionalOffices = [],
     zones = [],
@@ -53,10 +55,38 @@ export default function TraineeEvaluationCreate({
 
     const config = TRAINEE_FORM_CONFIGS[formType] || TRAINEE_FORM_CONFIGS.officer_abm;
 
+    // Helper to get rubrics dynamically from database templates if available, falling back to static config
+    const getRubricsForType = (type: string) => {
+        const codeMap: Record<string, string> = {
+            officer_abm: 'trainee_officer_abm',
+            accountant: 'trainee_accountant',
+            bm_and_above: 'trainee_bm_and_above',
+        };
+        const templateCode = codeMap[type] || `trainee_${type}`;
+        const template = templates?.find((t: any) => t.code === templateCode);
+        if (template && template.sections && template.sections.length > 0) {
+            const allCriteria = template.sections.flatMap((s: any) => s.criteria || []);
+            if (allCriteria.length > 0) {
+                return allCriteria.map((c: any, idx: number) => ({
+                    sl_no: c.order || idx + 1,
+                    key: c.key || `crit_${c.id}`,
+                    nameBn: c.title_bn,
+                    maxScore: Number(c.max_marks),
+                }));
+            }
+        }
+        const conf = TRAINEE_FORM_CONFIGS[type] || TRAINEE_FORM_CONFIGS.officer_abm;
+        return conf.rubrics;
+    };
+
+    const currentRubrics = useMemo(() => {
+        return getRubricsForType(formType);
+    }, [templates, formType]);
+
     // Helper to build initial scores array
     const buildInitialScores = (type: string) => {
-        const conf = TRAINEE_FORM_CONFIGS[type] || TRAINEE_FORM_CONFIGS.officer_abm;
-        return conf.rubrics.map((r) => ({
+        const rubrics = getRubricsForType(type);
+        return rubrics.map((r: any) => ({
             sl_no: r.sl_no,
             criteria_key: r.key,
             criteria_name: r.nameBn,
@@ -220,7 +250,7 @@ export default function TraineeEvaluationCreate({
     }, [data.scores]);
 
     const handleScoreChange = (criteriaKey: string, val: string) => {
-        const foundRubric = config.rubrics.find((r) => r.key === criteriaKey);
+        const foundRubric = currentRubrics.find((r: any) => r.key === criteriaKey);
         const maxScore = foundRubric?.maxScore || 100;
         let numVal = val === '' ? '' : Math.max(0, Math.min(maxScore, parseFloat(val) || 0));
 
@@ -630,7 +660,7 @@ export default function TraineeEvaluationCreate({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
-                                            {config.rubrics.map((rubric) => {
+                                            {currentRubrics.map((rubric: any) => {
                                                 const currentScore = data.scores.find((s) => s.criteria_key === rubric.key)?.score ?? '';
                                                 return (
                                                     <tr key={rubric.key} className="hover:bg-slate-50/50">
@@ -663,7 +693,7 @@ export default function TraineeEvaluationCreate({
                                                     <span className="text-sm font-bold text-emerald-950">সর্বমোট (Total Score)</span>
                                                 </td>
                                                 <td className="p-3 text-center text-slate-800">
-                                                    ১০০
+                                                    {currentRubrics.reduce((sum: number, r: any) => sum + (Number(r.maxScore) || 0), 0)}
                                                 </td>
                                                 <td className="p-3 text-center">
                                                     <span className="text-base font-extrabold text-emerald-800">

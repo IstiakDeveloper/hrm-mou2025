@@ -105,6 +105,9 @@ use Inertia\Inertia;
     Route::get('employees/lookup', [EmployeeLookupController::class, 'lookup'])
         ->name('employees.lookup');
 
+    Route::get('employees/global-search', [EmployeeLookupController::class, 'globalSearch'])
+        ->name('employees.global-search');
+
     Route::get('employees/locations/upazilas', [EmployeeLookupController::class, 'locationsUpazilas'])
         ->name('employees.locations.upazilas');
 

@@ -176,8 +176,14 @@ class TraineeEvaluationController extends Controller
 
         $currentUserBranch = $user->employee?->branch;
 
+        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'trainee')
+            ->with(['sections.criteria' => function ($q) {
+                $q->orderBy('order');
+            }])->get();
+
         return Inertia::render('sections/human-resources/evaluations/trainee/create', [
             'employees' => $employees,
+            'templates' => $templates,
             'branches' => Branch::with('regionalOffice.zone')->select('id', 'name', 'regional_office_id')->orderBy('name')->get(),
             'regionalOffices' => RegionalOffice::select('id', 'name', 'zone_id')->orderBy('name')->get(),
             'zones' => Zone::select('id', 'name')->orderBy('name')->get(),
@@ -343,8 +349,14 @@ class TraineeEvaluationController extends Controller
     {
         $evaluation->load(['scores', 'ratings', 'signatures.user', 'employee.designation', 'employee.branch']);
 
+        $templates = \App\Models\EvaluationTemplate::where('appraisal_type', 'trainee')
+            ->with(['sections.criteria' => function ($q) {
+                $q->orderBy('order');
+            }])->get();
+
         return Inertia::render('sections/human-resources/evaluations/trainee/edit', [
             'evaluation' => $evaluation,
+            'templates' => $templates,
             'branches' => Branch::with('regionalOffice.zone')->select('id', 'name', 'regional_office_id')->orderBy('name')->get(),
             'regionalOffices' => RegionalOffice::select('id', 'name', 'zone_id')->orderBy('name')->get(),
             'zones' => Zone::select('id', 'name')->orderBy('name')->get(),

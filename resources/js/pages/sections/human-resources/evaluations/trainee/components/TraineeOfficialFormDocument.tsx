@@ -41,6 +41,18 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
         }
     };
 
+    const displayRubrics = useMemo(() => {
+        if (scores && scores.length > 0 && scores[0]?.criteria_name) {
+            return scores.map((s: any, idx: number) => ({
+                sl_no: s.sl_no || idx + 1,
+                key: s.criteria_key || `crit_${idx}`,
+                nameBn: s.criteria_name,
+                maxScore: Number(s.max_score || 0),
+            }));
+        }
+        return config.rubrics;
+    }, [scores, config.rubrics]);
+
     const getScoreFor = (key: string, defaultMax: number) => {
         const found = scores.find((s: any) => s.criteria_key === key);
         return found ? found.score : 0;
@@ -166,7 +178,7 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                             </tr>
                         </thead>
                         <tbody>
-                            {config.rubrics.map((rubric) => {
+                            {displayRubrics.map((rubric: any) => {
                                 const scoreVal = getScoreFor(rubric.key, rubric.maxScore);
                                 return (
                                     <tr key={rubric.key} className="border-b border-black">
@@ -190,7 +202,7 @@ export default function TraineeOfficialFormDocument({ evaluation, lang = 'bn' }:
                                     সর্বমোট
                                 </td>
                                 <td className="border-r border-black p-1.5 text-center">
-                                    {formatNum(100)}
+                                    {formatNum(displayRubrics.reduce((sum: number, r: any) => sum + (Number(r.maxScore) || 0), 0))}
                                 </td>
                                 <td className="p-1.5 text-center text-sm font-extrabold text-emerald-950">
                                     {formatNum(totalScore)}

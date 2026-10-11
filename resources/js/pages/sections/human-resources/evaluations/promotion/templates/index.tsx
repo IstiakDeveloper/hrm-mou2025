@@ -23,7 +23,10 @@ import {
     TrendingUp,
     SlidersHorizontal,
     Sparkles,
-    FolderPlus
+    FolderPlus,
+    Award,
+    GraduationCap,
+    ShieldCheck
 } from 'lucide-react';
 
 interface Criterion {
@@ -68,11 +71,48 @@ interface PageProps {
 }
 
 export default function EvaluationTemplatesIndex({ templates = [], canManage = true }: PageProps) {
-    const [selectedCategory, setSelectedCategory] = useState<'all' | 'promotion' | 'confirmation'>('all');
+    const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [selectedTemplateCode, setSelectedTemplateCode] = useState<string>(
         templates[0]?.code || 'officer_abm'
     );
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
+    const getCategoryDetails = (type?: string) => {
+        switch (type) {
+            case 'confirmation':
+                return {
+                    labelBn: 'শিক্ষানবিশকাল স্থায়ীকরণ',
+                    badgeClass: 'bg-blue-50 text-blue-800 border-blue-200',
+                    activeText: 'text-blue-700',
+                    activeBg: 'bg-blue-50',
+                    icon: ShieldCheck,
+                };
+            case 'probation_increment':
+                return {
+                    labelBn: 'শিক্ষানবিস বেতন বৃদ্ধি',
+                    badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+                    activeText: 'text-amber-700',
+                    activeBg: 'bg-amber-50',
+                    icon: Award,
+                };
+            case 'trainee':
+                return {
+                    labelBn: 'প্রশিক্ষণার্থী মূল্যায়ন',
+                    badgeClass: 'bg-indigo-50 text-indigo-800 border-indigo-200',
+                    activeText: 'text-indigo-700',
+                    activeBg: 'bg-indigo-50',
+                    icon: GraduationCap,
+                };
+            default:
+                return {
+                    labelBn: 'পদোন্নতি মূল্যায়ন',
+                    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                    activeText: 'text-emerald-700',
+                    activeBg: 'bg-emerald-50',
+                    icon: TrendingUp,
+                };
+        }
+    };
 
     const filteredTemplates = React.useMemo(() => {
         if (selectedCategory === 'all') return templates;
@@ -304,6 +344,7 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                             মূল্যায়ন ক্যাটাগরি:
                         </span>
                         
+                        {/* 1. All */}
                         <button
                             type="button"
                             onClick={() => setSelectedCategory('all')}
@@ -319,6 +360,7 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                             </span>
                         </button>
 
+                        {/* 2. Promotion */}
                         <button
                             type="button"
                             onClick={() => setSelectedCategory('promotion')}
@@ -335,6 +377,7 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                             </span>
                         </button>
 
+                        {/* 3. Confirmation */}
                         <button
                             type="button"
                             onClick={() => setSelectedCategory('confirmation')}
@@ -344,10 +387,44 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                                     : 'bg-white text-blue-900 border-blue-200 hover:border-blue-300'
                             }`}
                         >
-                            <Layers className="h-4 w-4" />
+                            <ShieldCheck className="h-4 w-4" />
                             <span>শিক্ষানবিশকাল স্থায়ীকরণ (Confirmation)</span>
                             <span className="text-[11px] opacity-80 font-normal">
                                 ({templates.filter(t => t.appraisal_type === 'confirmation').length})
+                            </span>
+                        </button>
+
+                        {/* 4. Probation Increment */}
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCategory('probation_increment')}
+                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
+                                selectedCategory === 'probation_increment'
+                                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                                    : 'bg-white text-amber-900 border-amber-200 hover:border-amber-300'
+                            }`}
+                        >
+                            <Award className="h-4 w-4" />
+                            <span>শিক্ষানবিস বেতন বৃদ্ধি (Probation Increment)</span>
+                            <span className="text-[11px] opacity-80 font-normal">
+                                ({templates.filter(t => t.appraisal_type === 'probation_increment').length})
+                            </span>
+                        </button>
+
+                        {/* 5. Trainee Evaluation */}
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCategory('trainee')}
+                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
+                                selectedCategory === 'trainee'
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                                    : 'bg-white text-indigo-900 border-indigo-200 hover:border-indigo-300'
+                            }`}
+                        >
+                            <GraduationCap className="h-4 w-4" />
+                            <span>প্রশিক্ষণার্থী মূল্যায়ন (Trainee)</span>
+                            <span className="text-[11px] opacity-80 font-normal">
+                                ({templates.filter(t => t.appraisal_type === 'trainee').length})
                             </span>
                         </button>
 
@@ -373,7 +450,8 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                 <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
                     {filteredTemplates.map(tmpl => {
                         const isCurrent = selectedTemplateCode === tmpl.code;
-                        const isConf = tmpl.appraisal_type === 'confirmation';
+                        const details = getCategoryDetails(tmpl.appraisal_type);
+                        const IconComponent = details.icon;
                         return (
                             <button
                                 key={tmpl.code}
@@ -386,16 +464,16 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                                 }`}
                             >
                                 <div className="flex items-center gap-2 truncate">
-                                    <Layers className={`h-4 w-4 shrink-0 ${isCurrent ? (isConf ? 'text-blue-600' : 'text-emerald-600') : 'text-slate-400'}`} />
+                                    <IconComponent className={`h-4 w-4 shrink-0 ${isCurrent ? details.activeText : 'text-slate-400'}`} />
                                     <div className="flex flex-col text-left truncate">
                                         <span className="truncate">{tmpl.title_bn}</span>
                                         <span className="text-[10px] text-slate-400 font-normal">
-                                            {isConf ? 'শিক্ষানবিশকাল স্থায়ীকরণ' : 'পদোন্নতি মূল্যায়ন'}
+                                            {tmpl.category_name_bn || details.labelBn}
                                         </span>
                                     </div>
                                 </div>
                                 <span className={`text-[11px] px-2 py-0.5 rounded-md font-mono shrink-0 ${
-                                    isCurrent ? (isConf ? 'bg-blue-50 text-blue-700 font-bold' : 'bg-emerald-50 text-emerald-700 font-bold') : 'text-slate-400'
+                                    isCurrent ? `${details.activeBg} ${details.activeText} font-bold` : 'text-slate-400'
                                 }`}>
                                     {Number(tmpl.total_marks)} নম্বর
                                 </span>
@@ -410,12 +488,8 @@ export default function EvaluationTemplatesIndex({ templates = [], canManage = t
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                                        activeTemplate.appraisal_type === 'confirmation'
-                                            ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                                            : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                    }`}>
-                                        {activeTemplate.category_name_bn || (activeTemplate.appraisal_type === 'confirmation' ? 'শিক্ষানবিশকাল স্থায়ীকরণ' : 'পদোন্নতি মূল্যায়ন')}
+                                    <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${getCategoryDetails(activeTemplate.appraisal_type).badgeClass}`}>
+                                        {activeTemplate.category_name_bn || getCategoryDetails(activeTemplate.appraisal_type).labelBn}
                                     </span>
                                     <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                                         {activeTemplate.code}

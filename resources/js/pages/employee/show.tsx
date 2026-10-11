@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import React, { useMemo, useState } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
 import Layout from '@/layouts/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 import {
     ArrowLeft, Phone, MapPin, Calendar, Briefcase, Building, User,
     AlertTriangle, Pencil, FileText, Clock, CheckCircle, AlertCircle,
@@ -371,6 +373,21 @@ export default function EmployeeShow({
         [employee.collateral?.certificate_levels],
     );
 
+    const [statusUpdating, setStatusUpdating] = useState(false);
+
+    const handleStatusChange = (active: boolean) => {
+        setStatusUpdating(true);
+        router.patch(
+            route('employees.update-status', employee.id),
+            { active },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setStatusUpdating(false),
+            },
+        );
+    };
+
     const handlePrintIdCard = () => {
         document.body.classList.add('print-id-card');
         setTimeout(() => {
@@ -482,7 +499,16 @@ export default function EmployeeShow({
                                     <span className="text-slate-800">{employee.branch?.name || 'Branch N/A'}</span>
                                 </div>
                                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 pt-0.5">
-                                    {getStatusBadge()}
+                                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300/80 rounded-md px-1.5 py-0.5">
+                                        <Switch
+                                            checked={employee.status === 'active'}
+                                            disabled={statusUpdating}
+                                            onCheckedChange={handleStatusChange}
+                                            aria-label="Toggle active status"
+                                            className="scale-75 origin-left"
+                                        />
+                                        {getStatusBadge()}
+                                    </div>
                                     <Badge variant="outline" className="font-mono text-[10px] bg-slate-100 text-slate-900 border-slate-300 py-0 px-2 font-bold">PIN: {employee.pin || employee.employee_id || 'N/A'}</Badge>
                                     {employee.is_project_employee && <Badge variant="secondary" className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] py-0 px-1.5 font-bold">Project Staff</Badge>}
                                     {employee.is_custodian && <Badge variant="secondary" className="bg-sky-100 text-sky-900 border border-sky-300 text-[10px] py-0 px-1.5 font-bold">Custodian</Badge>}
@@ -491,7 +517,21 @@ export default function EmployeeShow({
                         </div>
 
                         {/* Top Actions */}
-                        <div className="flex flex-wrap gap-1.5 justify-center md:justify-end no-print self-center md:self-start pt-1.5">
+                        <div className="flex flex-wrap gap-1.5 justify-center md:justify-end no-print self-center md:self-start pt-1.5 items-center">
+                            {/* Active / Deactive Button */}
+                            <div className="flex items-center gap-2 border border-slate-300 rounded-lg px-2.5 h-8 bg-white shadow-2xs">
+                                <Switch
+                                    checked={employee.status === 'active'}
+                                    disabled={statusUpdating}
+                                    onCheckedChange={handleStatusChange}
+                                    aria-label="Toggle active status"
+                                    className="scale-85"
+                                />
+                                <span className={cn('text-xs font-bold select-none', employee.status === 'active' ? 'text-emerald-700' : 'text-slate-600')}>
+                                    {employee.status === 'active' ? 'Active' : 'Deactive'}
+                                </span>
+                            </div>
+
                             <Button variant="outline" size="sm" onClick={handlePrintIdCard} className="h-8 text-xs border-slate-300 text-slate-800 font-bold hover:bg-emerald-50 px-2.5">
                                 <User className="w-3.5 h-3.5 mr-1 text-emerald-700" /> ID Card
                             </Button>

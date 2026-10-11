@@ -215,8 +215,27 @@ export default function ProbationIncrementEvaluationCreate({ employees = [], tem
     }, [selectedEmployee]);
 
     const dynamicStructure = useMemo(() => {
+        const codeMap: Record<string, string> = {
+            officer_abm: 'prob_officer_abm',
+            accountant: 'prob_accountant',
+            bm_and_above: 'prob_bm_and_above',
+        };
+        const dbTemplate = templates.find((t: any) => t.code === codeMap[formType] || t.code === formType);
+        if (dbTemplate && dbTemplate.sections && dbTemplate.sections.length > 0) {
+            return dbTemplate.sections.map((sec: any) => ({
+                section_key: sec.section_key,
+                section_name_en: sec.name_en,
+                section_name_bn: sec.name_bn,
+                items: sec.criteria.map((crit: any) => ({
+                    key: crit.criteria_key,
+                    name_en: crit.name_en,
+                    name_bn: crit.name_bn,
+                    max: Number(crit.max_score),
+                }))
+            }));
+        }
         return getFormStructure(formType);
-    }, [formType]);
+    }, [templates, formType]);
 
     // Keep total score & grade updated in real time
     useEffect(() => {
