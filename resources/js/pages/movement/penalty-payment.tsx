@@ -49,12 +49,19 @@ interface MovementPenaltyProps {
     } | null;
     merchantNumbers: {
         bkash: string;
-        nagad: string;
+        nagad?: string;
     };
+    whatsappNumber?: string;
 }
 
-export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPenaltyProps) {
+export default function PenaltyPayment({ penalty, merchantNumbers, whatsappNumber }: MovementPenaltyProps) {
     const numberToCopy = merchantNumbers?.bkash || '01717893432';
+    const whatsappDisplay = whatsappNumber || '01717893432';
+    const cleanWaDigits = whatsappDisplay.replace(/\D/g, '');
+    const whatsappWaLink = cleanWaDigits.startsWith('88')
+        ? cleanWaDigits
+        : (cleanWaDigits.startsWith('0') ? `88${cleanWaDigits}` : `880${cleanWaDigits}`);
+
     const [copied, setCopied] = useState(false);
     const [hasPaid, setHasPaid] = useState<boolean>(!!penalty?.sender_number);
     const [liveApproved, setLiveApproved] = useState(false);
@@ -332,13 +339,13 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                             </div>
 
                             <a
-                                href="https://wa.me/8801717893432?text=Assalamu%20Alaikum,%20I%20have%20submitted%20my%20movement%20penalty%20TrxID.%20Please%20approve%20and%20unlock%20my%20ID."
+                                href={`https://wa.me/${whatsappWaLink}?text=Assalamu%20Alaikum,%20I%20have%20submitted%20my%20movement%20penalty%20TrxID.%20Please%20approve%20and%20unlock%20my%20ID.`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="w-full bg-[#25D366] hover:bg-[#1ebd59] text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center space-x-2 shadow-sm transition-all text-xs"
                             >
                                 <MessageCircle className="w-4 h-4 text-white" />
-                                <span>জরুরী প্রয়োজনে হোয়াটসঅ্যাপে মেসেজ দিন (01717893432)</span>
+                                <span>জরুরী প্রয়োজনে হোয়াটসঅ্যাপে মেসেজ দিন ({whatsappDisplay})</span>
                             </a>
                         </CardContent>
                     </Card>

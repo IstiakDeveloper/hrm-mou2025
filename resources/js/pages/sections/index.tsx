@@ -5,6 +5,7 @@ import { CheckCircle2, KeyRound, Lock, LogOut, XCircle, Sparkles, LayoutGrid, Ma
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationDropdown from '@/components/notification-dropdown';
+import NoticeNewsTicker from '@/components/sections/notice-news-ticker';
 import { hasAppPermission, isBranchAccount, isSuperAdmin } from '@/lib/permissions';
 
 // Curated themes for each module to create a vibrant, professional layout
@@ -179,7 +180,7 @@ const getTheme = (id: string) => {
 };
 
 export default function SectionsIndex() {
-    const { auth, pendingLeaveCount } = usePage().props as any;
+    const { auth, pendingLeaveCount, recentNotices } = usePage().props as any;
     const pendingLeave = (pendingLeaveCount as number) ?? 0;
 
     const handleSelect = (sectionId: AdminSectionId) => {
@@ -288,7 +289,9 @@ export default function SectionsIndex() {
 
             {/* Main Sections Grid */}
             <main className="flex-1 flex flex-col items-center justify-center px-3 py-4 sm:px-6 sm:py-8 max-w-5xl mx-auto w-full relative z-10">
-                
+                {/* 3-Day Recent Notices Live News Ticker */}
+                <NoticeNewsTicker notices={recentNotices || []} />
+
                 {/* Hero Header */}
                 <div className="text-center max-w-2xl mx-auto mb-4 sm:mb-6">
                     <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/50 rounded-full px-2.5 py-0.5 text-[9px] sm:text-[10px] font-semibold text-emerald-800 mb-2 shadow-xs">

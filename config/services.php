@@ -43,6 +43,7 @@ return [
 
     'payment' => [
         'bkash_number' => env('BKASH_PAYMENT_NUMBER', '01717893432'),
+        'whatsapp_number' => env('WHATSAPP_NUMBER', env('WHATSAPP_SUPPORT_NUMBER', '01717893432')),
     ],
 
 ];

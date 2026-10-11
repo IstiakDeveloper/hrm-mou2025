@@ -49,6 +49,7 @@ class MovementPenaltyController extends Controller
                 'bkash' => config('services.payment.bkash_number', '01717893432'),
                 'nagad' => config('services.payment.nagad_number', '01717893432'),
             ],
+            'whatsappNumber' => config('services.payment.whatsapp_number', '01717893432'),
         ]);
     }
 

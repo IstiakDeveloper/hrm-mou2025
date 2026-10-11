@@ -51,6 +51,97 @@ use Inertia\Inertia;
 class DashboardController extends Controller
 {
     /**
+     * Section Landing - Modules (with 3-day recent notices formatted for news ticker)
+     */
+    public function sections(Request $request)
+    {
+        $user = $request->user();
+        $recentNotices = [];
+
+        if ($user instanceof User) {
+            $cutoff = Carbon::now()->subDays(3);
+
+            // 1. Fetch user's delivered notices from notifications
+            $delivered = $user->notifications()
+                ->where('type', \App\Notifications\AdminNoticeNotification::class)
+                ->where('created_at', '>=', $cutoff)
+                ->latest('created_at')
+                ->take(10)
+                ->get();
+
+            $deliveredNoticeIds = [];
+            foreach ($delivered as $n) {
+                $data = $n->data ?? [];
+                if (! empty($data['admin_notice_id'])) {
+                    $deliveredNoticeIds[] = (int) $data['admin_notice_id'];
+                }
+                $recentNotices[] = [
+                    'id' => (string) $n->id,
+                    'admin_notice_id' => $data['admin_notice_id'] ?? null,
+                    'title' => (string) ($data['title'] ?? '(no title)'),
+                    'message' => (string) ($data['message'] ?? ''),
+                    'type' => (string) ($data['type'] ?? 'info'),
+                    'link' => $data['link'] ?? null,
+                    'attachment_url' => $data['attachment_url'] ?? null,
+                    'attachment_name' => $data['attachment_name'] ?? null,
+                    'read_at' => $n->read_at ? $n->read_at->toISOString() : null,
+                    'created_at' => $n->created_at ? $n->created_at->toISOString() : null,
+                ];
+            }
+
+            // 2. Fetch directly from AdminNotice if not delivered/queued yet
+            $deptId = $user->employee?->department_id;
+            $adminNotices = \App\Models\AdminNotice::query()
+                ->where('created_at', '>=', $cutoff)
+                ->where(function ($q) use ($user, $deptId) {
+                    $q->where('audience', 'all')
+                        ->orWhere('sender_id', $user->id);
+                    if ($deptId) {
+                        $q->orWhere(function ($dq) use ($deptId) {
+                            $dq->where('audience', 'departments')
+                                ->whereJsonContains('department_ids', $deptId);
+                        });
+                    }
+                    $q->orWhere(function ($uq) use ($user) {
+                        $uq->where('audience', 'users')
+                            ->whereJsonContains('user_ids', $user->id);
+                    });
+                })
+                ->latest('id')
+                ->take(10)
+                ->get();
+
+            foreach ($adminNotices as $an) {
+                if (in_array($an->id, $deliveredNoticeIds, true)) {
+                    continue;
+                }
+                $recentNotices[] = [
+                    'id' => 'admin-notice-'.$an->id,
+                    'admin_notice_id' => $an->id,
+                    'title' => (string) $an->title,
+                    'message' => (string) $an->message,
+                    'type' => (string) ($an->type ?? 'info'),
+                    'link' => $an->link,
+                    'attachment_url' => $an->attachment_url,
+                    'attachment_name' => $an->attachment_original_name,
+                    'read_at' => null,
+                    'created_at' => $an->created_at ? $an->created_at->toISOString() : null,
+                ];
+            }
+
+            // Sort by created_at descending
+            usort($recentNotices, function ($a, $b) {
+                return strcmp($b['created_at'] ?? '', $a['created_at'] ?? '');
+            });
+            $recentNotices = array_slice($recentNotices, 0, 10);
+        }
+
+        return Inertia::render('sections/index', [
+            'recentNotices' => $recentNotices,
+        ]);
+    }
+
+    /**
      * Attendance & Movement section dashboard (new UI, existing data).
      * Admin-like users see operational overview; employees see a personal dashboard.
      */

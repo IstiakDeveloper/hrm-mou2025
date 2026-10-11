@@ -106,9 +106,7 @@ use Inertia\Inertia;
     Route::redirect('/branch/leave', '/sections/leave?section=leave')->name('branch.portal.leave');
 
     // Section Landing - Modules (available to all authenticated users)
-    Route::get('/sections', function () {
-        return Inertia::render('sections/index');
-    })->name('sections.index');
+    Route::get('/sections', [DashboardController::class, 'sections'])->name('sections.index');
 
     // Human Resources - dedicated dashboard (new design, old data)
     Route::get('/sections/human-resources', [DashboardController::class, 'humanResources'])
