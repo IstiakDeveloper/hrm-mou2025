@@ -338,11 +338,51 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const canSeeHrOnlyMenu = isHRUser || isAccountsDeskUser;
 
-    const isOrdinaryEmployee =
-        auth?.user?.role?.name?.toLowerCase() === 'employee' ||
-        (!isSuperAdmin(auth) && !isHRUser && !hasPermission('employees.view'));
+    // Collect all unique role names (primary role + pivot roles)
+    const allRoleNames = useMemo(() => {
+        const set = new Set<string>();
+        if (auth?.user?.role?.name) {
+            set.add(auth.user.role.name.trim());
+        }
+        if (Array.isArray(auth?.user?.roles)) {
+            auth.user.roles.forEach((r: any) => {
+                if (r?.name) set.add(r.name.trim());
+            });
+        }
+        return Array.from(set);
+    }, [auth?.user?.role, auth?.user?.roles]);
 
-    const canSearchEmployees = !isOrdinaryEmployee && (isSuperAdmin(auth) || isHRUser || hasPermission('employees.view'));
+    // Check if user has multiple roles (ekadhik role)
+    const hasMultipleRoles = allRoleNames.length > 1;
+
+    // Check if user has ANY administrative/management or non-"Employee" role
+    const hasAdminOrSpecialRole = allRoleNames.some(
+        (name) => name.toLowerCase() !== 'employee'
+    );
+
+    // Is the user purely a single-role basic employee (only 'Employee' role and no admin role/permission)
+    const isPureSingleEmployee =
+        !hasMultipleRoles &&
+        allRoleNames.length === 1 &&
+        allRoleNames[0].toLowerCase() === 'employee' &&
+        !isSuperAdmin(auth) &&
+        !isHRUser &&
+        !hasPermission('employees.view');
+
+    // Show search box for:
+    // 1. Any admin (Super Admin, HR, Branch Manager, Accountant, Department Head, or any non-Employee role)
+    // 2. Any employee who has multiple roles (ekadhik role)
+    // 3. Any user with employee/admin permissions
+    const canSearchEmployees = Boolean(
+        isSuperAdmin(auth) ||
+        hasMultipleRoles ||
+        hasAdminOrSpecialRole ||
+        isHRUser ||
+        branchAccount ||
+        departmentHead ||
+        hasPermission('employees.view') ||
+        hasPermission('admin.access')
+    ) && !isPureSingleEmployee;
 
     const hasOwnActiveMovement = Boolean(activeMovement?.id && auth?.employee?.id && activeMovement.employee_id === auth.employee.id);
 

@@ -61,13 +61,9 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
     const [redirectCountdown, setRedirectCountdown] = useState(3);
     const [isChecking, setIsChecking] = useState(false);
 
-    const [selectedMethod, setSelectedMethod] = useState<'bkash' | 'nagad'>(
-        (penalty?.payment_method as 'bkash' | 'nagad') || 'bkash'
-    );
-
     const { data, setData, post, processing, errors } = useForm({
         penalty_id: penalty?.id || '',
-        payment_method: selectedMethod,
+        payment_method: 'bkash',
         sender_number: penalty?.sender_number || '',
         transaction_id: penalty?.transaction_id || '',
     });
@@ -76,11 +72,6 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
         navigator.clipboard.writeText(numberToCopy);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-    };
-
-    const handleMethodSelect = (method: 'bkash' | 'nagad') => {
-        setSelectedMethod(method);
-        setData('payment_method', method);
     };
 
     const isFormValid = () => {
@@ -267,6 +258,30 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                     </Button>
                 </div>
 
+                {/* STRICT RED WARNING: SEND MONEY STOPPED, PAYMENT ONLY */}
+                <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-4 shadow-sm text-rose-950 space-y-2">
+                    <div className="flex items-center space-x-2 text-rose-700">
+                        <ShieldAlert className="w-5 h-5 flex-shrink-0 text-rose-600 animate-pulse" />
+                        <h2 className="text-sm font-black tracking-wide uppercase text-rose-700">
+                            জরুরি সতর্কতা: সেন্ড মানি (Send Money) সম্পূর্ণ বন্ধ!
+                        </h2>
+                    </div>
+                    <div className="text-xs text-rose-900 space-y-2 leading-relaxed">
+                        <p className="font-bold">
+                            ⛔ পূর্বে সেন্ড মানি (Send Money) করা যেত, তবে এখন সেন্ড মানি অপশন সম্পূর্ণভাবে বন্ধ করা হয়েছে। কোনো অবস্থাতেই সেন্ড মানি করবেন না।
+                        </p>
+                        <p className="text-zinc-800">
+                            👉 বিকাশ অ্যাপে প্রবেশ করে সরাসরি <strong className="text-rose-700 font-black underline decoration-rose-500 decoration-2">"Payment" (পেমেন্ট)</strong> অপশন ব্যবহার করে নিচের মার্চেন্ট নম্বরে নির্ধারিত জরিমানা পরিশোধ করুন।
+                        </p>
+                        <div className="bg-rose-100/90 border border-rose-300 rounded-lg p-2.5 text-[11px] font-bold text-rose-950 flex items-start space-x-1.5">
+                            <span className="text-rose-600 font-black text-sm leading-none">⚠️</span>
+                            <span>
+                                শুধুমাত্র সফলভাবে বিকাশ পেমেন্ট করার পরই নিচে আপনার প্রেরকের নম্বর প্রদান করুন। পেমেন্ট না করে নম্বর জমা দিলে বা সেন্ড মানি করলে আবেদন বাতিল করা হবে এবং আইডি আনলক হবে না।
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Rejected Warning Alert */}
                 {penalty.status === 'rejected' && (
                     <Alert className="bg-rose-50 border-rose-300 text-rose-900 text-xs">
@@ -316,7 +331,7 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                                 )}
                                 <div className="flex justify-between">
                                     <span className="text-zinc-500">পেমেন্ট মেথড:</span>
-                                    <span className="font-bold text-pink-700 uppercase">{penalty.payment_method}</span>
+                                    <span className="font-bold text-pink-700">bKash Payment (বিকাশ মার্চেন্ট পেমেন্ট)</span>
                                 </div>
                             </div>
 
@@ -337,7 +352,7 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                 {penalty.status !== 'pending_verification' && (
                     <Card className="bg-white border-zinc-200 shadow-sm text-zinc-900 overflow-hidden">
                         <div className="bg-zinc-100 border-b border-zinc-200 px-5 py-2.5 flex items-center justify-between text-xs font-semibold">
-                            <span className="text-emerald-700 font-bold">পেমেন্ট নম্বর জমা ও আনলক আবেদন</span>
+                            <span className="text-pink-700 font-bold">বিকাশ পেমেন্ট নম্বর জমা ও আনলক আবেদন</span>
                             <span className="text-zinc-500 text-[11px]">জরিমানা: ৳{Number(penalty.total_fine).toFixed(2)}</span>
                         </div>
 
@@ -350,74 +365,73 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                                         <span className="text-lg font-black text-rose-600">৳ {Number(penalty.total_fine).toFixed(2)}</span>
                                     </div>
 
-                                    {/* Merchant Send Money Box */}
-                                    <div className="space-y-1.5">
-                                        <p className="text-xs text-zinc-700 font-bold flex items-center">
-                                            <Smartphone className="w-4 h-4 text-emerald-600 mr-1.5" />
-                                            bKash / Nagad Send Money করার নম্বর:
-                                        </p>
-                                        <div className="flex items-center justify-between bg-white border border-zinc-300 rounded-lg p-2.5 shadow-sm">
-                                            <span className="text-base font-mono font-extrabold text-zinc-950">{numberToCopy}</span>
-                                            <Button type="button" size="sm" onClick={handleCopyNumber} className="h-7 text-xs bg-zinc-800 hover:bg-zinc-900 text-white font-semibold">
+                                    {/* Merchant bKash Payment Box */}
+                                    <div className="space-y-2 bg-pink-50/70 border border-pink-200 rounded-xl p-3.5">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs text-pink-950 font-black flex items-center">
+                                                <Smartphone className="w-4 h-4 text-[#E2136E] mr-1.5" />
+                                                বিকাশ পেমেন্ট (bKash Payment) নম্বর:
+                                            </p>
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-[#E2136E] text-white shadow-2xs">
+                                                Payment Only
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between bg-white border border-pink-300 rounded-lg p-2.5 shadow-2xs">
+                                            <span className="text-base font-mono font-black text-pink-950">{numberToCopy}</span>
+                                            <Button type="button" size="sm" onClick={handleCopyNumber} className="h-7 text-xs bg-[#E2136E] hover:bg-[#c10e5d] text-white font-bold">
                                                 {copied ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-                                                {copied ? 'কপি হয়েছে' : 'কপি করুন'}
+                                                {copied ? 'কপি হয়েছে' : 'নম্বর কপি করুন'}
                                             </Button>
                                         </div>
-                                        <p className="text-[11px] text-zinc-500 pt-0.5">
-                                            * বিকাশ বা নগদ অ্যাপ থেকে <strong className="text-zinc-800">{numberToCopy}</strong> নম্বরে <strong>৳{Number(penalty.total_fine).toFixed(2)}</strong> Send Money করুন।
-                                        </p>
+                                        <div className="bg-white/80 border border-pink-200 rounded-lg p-2 text-[11px] text-pink-900 leading-relaxed space-y-1">
+                                            <p>
+                                                * বিকাশ অ্যাপে গিয়ে <strong>"Payment" (পেমেন্ট)</strong> অপশন সিলেক্ট করুন।
+                                            </p>
+                                            <p>
+                                                * মার্চেন্ট নম্বর হিসেবে <strong className="text-pink-950 font-bold">{numberToCopy}</strong> দিন এবং <strong>৳{Number(penalty.total_fine).toFixed(2)}</strong> পেমেন্ট করুন।
+                                            </p>
+                                            <p className="text-rose-700 font-black">
+                                                * সতর্কবার্তা: কোনো অবস্থাতেই সেন্ড মানি (Send Money) করবেন না।
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* INTERACTIVE QUESTION: HAVE YOU PAID? */}
                                 {!hasPaid ? (
-                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center space-y-3">
-                                        <HelpCircle className="w-8 h-8 text-emerald-600 mx-auto" />
+                                    <div className="bg-pink-50/60 border border-pink-200 rounded-xl p-4 text-center space-y-3">
+                                        <HelpCircle className="w-8 h-8 text-[#E2136E] mx-auto" />
                                         <div>
-                                            <h3 className="text-sm font-bold text-emerald-950">আপনি কি জরিমানা সেন্ড মানি করেছেন?</h3>
-                                            <p className="text-xs text-emerald-800 mt-0.5">
-                                                উপরে বর্ণিত নম্বরে টাকা পাঠালে নিচে ক্লিক করে প্রেরকের মোবাইল নম্বর প্রদান করুন।
+                                            <h3 className="text-sm font-bold text-pink-950">আপনি কি বিকাশ পেমেন্ট সম্পন্ন করেছেন?</h3>
+                                            <p className="text-xs text-pink-800 mt-0.5">
+                                                উপরের নম্বরে বিকাশ "পেমেন্ট" অপশনের মাধ্যমে টাকা পরিশোধ করে থাকলে নিচের বাটনে ক্লিক করুন।
                                             </p>
                                         </div>
                                         <Button
                                             type="button"
                                             onClick={() => setHasPaid(true)}
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm"
+                                            className="bg-[#E2136E] hover:bg-[#c10e5d] text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm"
                                         >
-                                            <Check className="w-4 h-4 mr-1.5" /> হ্যাঁ, আমি টাকা পাঠিয়েছি
+                                            <Check className="w-4 h-4 mr-1.5" /> হ্যাঁ, আমি বিকাশ পেমেন্ট সম্পন্ন করেছি
                                         </Button>
                                     </div>
                                 ) : (
                                     <div className="space-y-4 pt-1 animate-in fade-in-50 duration-200">
-                                        {/* Method Select */}
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs text-zinc-700 font-bold">কোন মাধ্যমে টাকা পাঠিয়েছেন?</Label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleMethodSelect('bkash')}
-                                                    className={`py-2.5 rounded-lg border text-xs font-bold transition-all ${
-                                                        selectedMethod === 'bkash' ? 'bg-pink-100 border-pink-500 text-pink-900 shadow-sm' : 'bg-white border-zinc-200 text-zinc-600'
-                                                    }`}
-                                                >
-                                                    bKash (বিকাশ)
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleMethodSelect('nagad')}
-                                                    className={`py-2.5 rounded-lg border text-xs font-bold transition-all ${
-                                                        selectedMethod === 'nagad' ? 'bg-orange-100 border-orange-500 text-orange-900 shadow-sm' : 'bg-white border-zinc-200 text-zinc-600'
-                                                    }`}
-                                                >
-                                                    Nagad (নগদ)
-                                                </button>
+                                        {/* Method Indicator: Only bKash Payment */}
+                                        <div className="p-3 bg-pink-50 border border-pink-200 rounded-lg flex items-center justify-between">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-[#E2136E] animate-pulse"></span>
+                                                <span className="text-xs font-bold text-pink-950">পেমেন্ট মেথড: bKash (বিকাশ মার্চেন্ট পেমেন্ট)</span>
                                             </div>
+                                            <span className="text-[10px] font-black text-[#E2136E] bg-white px-2 py-0.5 rounded border border-pink-200">
+                                                Payment Only
+                                            </span>
                                         </div>
 
                                         {/* SENDER MOBILE NUMBER ONLY */}
                                         <div className="space-y-1.5">
                                             <Label htmlFor="sender_number" className="text-xs font-bold text-zinc-800">
-                                                কোন নম্বর থেকে টাকা পাঠিয়েছেন (প্রেরকের মোবাইল নম্বর) <span className="text-rose-500">*</span>
+                                                যে বিকাশ নম্বর থেকে পেমেন্ট করেছেন (প্রেরকের মোবাইল নম্বর) <span className="text-rose-500">*</span>
                                             </Label>
                                             <Input
                                                 id="sender_number"
@@ -447,10 +461,10 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                                         <Button
                                             type="submit"
                                             disabled={!isFormValid() || processing}
-                                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-10 font-bold transition-all disabled:opacity-50"
+                                            className="w-full bg-[#E2136E] hover:bg-[#c10e5d] text-white text-xs h-10 font-bold transition-all disabled:opacity-50 shadow-sm"
                                         >
                                             <Send className="w-4 h-4 mr-2" />
-                                            {processing ? 'জমা হচ্ছে...' : 'পেমেন্ট নম্বর জমা দিন & আনলক করুন'}
+                                            {processing ? 'জমা হচ্ছে...' : 'পেমেন্ট নম্বর জমা দিন & আনলক আবেদন করুন'}
                                         </Button>
                                     </div>
                                 )}

@@ -573,6 +573,27 @@ class EmployeeController extends Controller
             abort(403);
         }
 
+        if ($user->isSuperAdmin()) {
+            return;
+        }
+
+        $user->loadMissing(['role', 'roles']);
+        $roleNames = collect([$user->role?->name])
+            ->merge($user->roles->pluck('name'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        // Any user with multiple roles (ekadhik role)
+        if ($roleNames->count() > 1) {
+            return;
+        }
+
+        // Any admin/manager (any role other than pure Employee)
+        if ($roleNames->isNotEmpty() && ! $roleNames->every(fn ($name) => strcasecmp((string) $name, 'Employee') === 0)) {
+            return;
+        }
+
         $permissions = [
             'employees.view',
             'employees.create',
@@ -581,6 +602,7 @@ class EmployeeController extends Controller
             'reports.view',
             'loan-applications.view',
             'loan-committees.view',
+            'admin.access',
         ];
 
         foreach ($permissions as $permission) {

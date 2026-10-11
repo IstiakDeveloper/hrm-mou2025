@@ -41,4 +41,8 @@ return [
         'token' => env('MISLOAN_API_TOKEN'),
     ],
 
+    'payment' => [
+        'bkash_number' => env('BKASH_PAYMENT_NUMBER', '01717893432'),
+    ],
+
 ];
