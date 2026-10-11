@@ -2494,6 +2494,10 @@ class EmployeeController extends Controller
                 ];
             }),
             'statuses' => ['active', 'inactive'],
+            'managers' => Employee::query()
+                ->where('status', 'active')
+                ->orderBy('name_en')
+                ->get(['id', 'employee_id', 'pin', 'name_en']),
             'employeeTypes' => $employeeTypes,
             'programs' => $programs,
             'projects' => $projects,
@@ -2564,6 +2568,7 @@ class EmployeeController extends Controller
 
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
+                'reporting_to' => 'nullable|exists:employees,id',
 
                 'nid_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid_number')],
                 'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number')],
@@ -2780,6 +2785,13 @@ class EmployeeController extends Controller
                 $createdEmployee->load('designation');
                 $this->syncZoneRegionalManagerAssignment($createdEmployee);
                 $this->syncUserAccountForEmployee($createdEmployee);
+
+                if (! empty($employeeData['reporting_to'])) {
+                    $createdEmployee->reporting_to = $employeeData['reporting_to'];
+                    $createdEmployee->saveQuietly();
+                } else {
+                    app(\App\Services\EmployeeReportingToService::class)->syncEmployee($createdEmployee);
+                }
 
                 $eid = $createdEmployee->id;
 
@@ -3202,6 +3214,11 @@ class EmployeeController extends Controller
                 ];
             }),
             'statuses' => ['active', 'inactive'],
+            'managers' => Employee::query()
+                ->where('status', 'active')
+                ->where('id', '!=', $employee->id)
+                ->orderBy('name_en')
+                ->get(['id', 'employee_id', 'pin', 'name_en']),
             'employeeTypes' => $employeeTypes,
             'programs' => $programs,
             'projects' => $projects,
@@ -3266,6 +3283,7 @@ class EmployeeController extends Controller
 
                 'program_id' => 'nullable|exists:programs,id',
                 'project_id' => 'nullable|exists:projects,id',
+                'reporting_to' => 'nullable|exists:employees,id',
 
                 'nid_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('nid_number', $employee->id)],
                 'smart_card_number' => ['nullable', 'string', 'max:50', $this->uniqueAmongEmployed('smart_card_number', $employee->id)],
@@ -3480,8 +3498,12 @@ class EmployeeController extends Controller
                     );
                 }
 
-                if (! $request->boolean('sync_salary_components')) {
-                    unset($employeeData['basic_salary']);
+                if (! empty($validated['reporting_to'])) {
+                    $employeeData['reporting_to'] = $validated['reporting_to'];
+                } elseif ($request->has('reporting_to') || empty($employee->reporting_to)) {
+                    // Explicitly cleared or empty: auto-resolve according to organogram
+                    $autoManager = app(\App\Services\EmployeeReportingToService::class)->resolveReportingManager($employee);
+                    $employeeData['reporting_to'] = $autoManager?->id;
                 }
 
                 $employee->update($employeeData);

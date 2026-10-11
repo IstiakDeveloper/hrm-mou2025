@@ -167,6 +167,7 @@ interface EmployeeCreateFormData {
     last_designation_id: string;
     program_id: string;
     project_id: string;
+    reporting_to: string;
     payscale_id: string;
     salary_grade_id: string;
     salary_step_id: string;
@@ -279,6 +280,7 @@ function getCreateFormDefaults(): EmployeeCreateFormData {
         last_designation_id: '',
         program_id: '',
         project_id: '',
+        reporting_to: '',
         payscale_id: '',
         salary_grade_id: '',
         salary_step_id: '',
@@ -558,6 +560,7 @@ interface EmployeeCreateProps {
     departments: Department[];
     designations: Designation[];
     branches: Branch[];
+    managers?: { id: number; employee_id?: string; pin?: string; name_en: string }[];
     statuses: string[];
     employeeTypes: { id: number; name: string; probation_months: number }[];
     programs: { id: number; name: string; type: 'core' | 'project' }[];
@@ -582,6 +585,7 @@ export default function EmployeeCreate({
     departments,
     designations,
     branches,
+    managers = [],
     employeeTypes,
     programs,
     projects,
@@ -711,6 +715,13 @@ export default function EmployeeCreate({
     const employeeTypeItems: ComboSelectItem<string>[] = employeeTypes.map((t) => ({ value: String(t.id), label: t.name }));
     const programItems: ComboSelectItem<string>[] = programs.map((p) => ({ value: String(p.id), label: p.name }));
     const projectItems: ComboSelectItem<string>[] = projects.map((p) => ({ value: String(p.id), label: p.name }));
+    const managerItems: ComboSelectItem<string>[] = useMemo(() => [
+        { value: '', label: 'Auto (According to Department / Branch / Organogram)' },
+        ...(managers ?? []).map((m) => ({
+            value: String(m.id),
+            label: `${m.pin || m.employee_id ? `[${m.pin || m.employee_id}] ` : ''}${m.name_en}`,
+        })),
+    ], [managers]);
 
     const locationCascade = useLocationCascade();
     const presentDistrict = data.addresses[0]?.district ?? '';
@@ -1446,6 +1457,14 @@ export default function EmployeeCreate({
                                                             onChange={(v) => setData('project_id', v ?? '')}
                                                             items={projectItems}
                                                             placeholder="Select Project"
+                                                        />
+                                                    </FormField>
+                                                    <FormField label="Reporting To / Supervisor" error={errors.reporting_to} hint="Leave empty or set to Auto for organogram-based automatic mapping">
+                                                        <ComboSelect
+                                                            value={data.reporting_to || null}
+                                                            onChange={(v) => setData('reporting_to', v ?? '')}
+                                                            items={managerItems}
+                                                            placeholder="Auto (According to Department / Branch / Organogram)"
                                                         />
                                                     </FormField>
                                                     <FormField label="Employee PIN" required error={errors.pin}>

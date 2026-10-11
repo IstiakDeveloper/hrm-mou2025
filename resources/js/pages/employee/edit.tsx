@@ -540,6 +540,7 @@ interface EmployeeEditFormData {
     last_designation_id: string;
     program_id: string;
     project_id: string;
+    reporting_to: string;
     payscale_id: string;
     salary_grade_id: string;
     salary_step_id: string;
@@ -667,6 +668,7 @@ interface Employee {
     last_designation_id?: number;
     program_id?: number | null;
     project_id?: number | null;
+    reporting_to?: number | string | null;
     payscale_id?: number | null;
     salary_grade_id?: number | null;
     salary_step_id?: number | null;
@@ -784,6 +786,7 @@ function employeeToFormBase(employee: Employee): EmployeeEditFormData {
         last_designation_id: employee.last_designation_id ? String(employee.last_designation_id) : '',
         program_id: employee.program_id ? String(employee.program_id) : '',
         project_id: employee.project_id ? String(employee.project_id) : '',
+        reporting_to: employee.reporting_to ? String(employee.reporting_to) : '',
         payscale_id: employee.payscale_id ? String(employee.payscale_id) : '',
         salary_grade_id: employee.salary_grade_id ? String(employee.salary_grade_id) : '',
         salary_step_id: employee.salary_step_id ? String(employee.salary_step_id) : '',
@@ -1271,6 +1274,7 @@ interface EmployeeEditProps {
     departments: Department[];
     designations: Designation[];
     branches: Branch[];
+    managers?: { id: number; employee_id?: string; pin?: string; name_en: string }[];
     employeeTypes: { id: number; name: string; probation_months: number }[];
     programs: { id: number; name: string; type: 'core' | 'project' }[];
     projects: { id: number; name: string }[];
@@ -1296,6 +1300,7 @@ export default function EmployeeEdit({
     departments,
     designations,
     branches,
+    managers = [],
     employeeTypes,
     programs,
     projects,
@@ -1475,6 +1480,13 @@ export default function EmployeeEdit({
     const employeeTypeItems: ComboSelectItem<string>[] = employeeTypes.map((t) => ({ value: String(t.id), label: t.name }));
     const programItems: ComboSelectItem<string>[] = programs.map((p) => ({ value: String(p.id), label: p.name }));
     const projectItems: ComboSelectItem<string>[] = projects.map((p) => ({ value: String(p.id), label: p.name }));
+    const managerItems: ComboSelectItem<string>[] = useMemo(() => [
+        { value: '', label: 'Auto (According to Department / Branch / Organogram)' },
+        ...(managers ?? []).map((m) => ({
+            value: String(m.id),
+            label: `${m.pin || m.employee_id ? `[${m.pin || m.employee_id}] ` : ''}${m.name_en}`,
+        })),
+    ], [managers]);
 
     const locationCascade = useLocationCascade();
     const presentDistrict = data.addresses[0]?.district ?? '';
@@ -2274,6 +2286,14 @@ export default function EmployeeEdit({
                                                             onChange={(v) => setData('project_id', v ?? '')}
                                                             items={projectItems}
                                                             placeholder="Select Project"
+                                                        />
+                                                    </FormField>
+                                                    <FormField label="Reporting To / Supervisor" error={errors.reporting_to} hint="Leave empty or set to Auto for organogram-based automatic mapping">
+                                                        <ComboSelect
+                                                            value={data.reporting_to || null}
+                                                            onChange={(v) => setData('reporting_to', v ?? '')}
+                                                            items={managerItems}
+                                                            placeholder="Auto (According to Department / Branch / Organogram)"
                                                         />
                                                     </FormField>
                                                     <FormField label="Employee PIN" required error={errors.pin}>
