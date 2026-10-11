@@ -263,22 +263,18 @@ export default function PenaltyPayment({ penalty, merchantNumbers }: MovementPen
                     <div className="flex items-center space-x-2 text-rose-700">
                         <ShieldAlert className="w-5 h-5 flex-shrink-0 text-rose-600 animate-pulse" />
                         <h2 className="text-sm font-black tracking-wide uppercase text-rose-700">
-                            জরুরি সতর্কতা: সেন্ড মানি (Send Money) সম্পূর্ণ বন্ধ!
+                            জরুরি সতর্কতা:
+
                         </h2>
                     </div>
-                    <div className="text-xs text-rose-900 space-y-2 leading-relaxed">
+                    <div className="text-medium text-rose-900 space-y-2 leading-relaxed">
                         <p className="font-bold">
-                            ⛔ পূর্বে সেন্ড মানি (Send Money) করা যেত, তবে এখন সেন্ড মানি অপশন সম্পূর্ণভাবে বন্ধ করা হয়েছে। কোনো অবস্থাতেই সেন্ড মানি করবেন না।
+                            ⛔ সেন্ড মানি (Send Money) সম্পূর্ণ বন্ধ!
                         </p>
-                        <p className="text-zinc-800">
-                            👉 বিকাশ অ্যাপে প্রবেশ করে সরাসরি <strong className="text-rose-700 font-black underline decoration-rose-500 decoration-2">"Payment" (পেমেন্ট)</strong> অপশন ব্যবহার করে নিচের মার্চেন্ট নম্বরে নির্ধারিত জরিমানা পরিশোধ করুন।
+                        <p className="font-bold">
+                            ✅ এখন থেকে শুধু পেমেন্ট অপশন থেকে পেমেন্ট করতে হবে।
                         </p>
-                        <div className="bg-rose-100/90 border border-rose-300 rounded-lg p-2.5 text-[11px] font-bold text-rose-950 flex items-start space-x-1.5">
-                            <span className="text-rose-600 font-black text-sm leading-none">⚠️</span>
-                            <span>
-                                শুধুমাত্র সফলভাবে বিকাশ পেমেন্ট করার পরই নিচে আপনার প্রেরকের নম্বর প্রদান করুন। পেমেন্ট না করে নম্বর জমা দিলে বা সেন্ড মানি করলে আবেদন বাতিল করা হবে এবং আইডি আনলক হবে না।
-                            </span>
-                        </div>
+
                     </div>
                 </div>
 
